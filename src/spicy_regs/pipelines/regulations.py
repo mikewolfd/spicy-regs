@@ -319,7 +319,9 @@ class RegulationsPipeline(Pipeline):
             since_year=self.since_year,
             verbose=self.verbose,
         )["comments"]
-        transform = self._transform_for(comment_rt)
+        # Each chunk checkpoints the manifest; an attribute row merged only at the end could be lost with a crash, so
+        # this manual path stages none (the full comment re-read seeds comment_attributes, and the scheduled ETL feeds it).
+        transform = self._transform_for(comment_rt, attributes=False)
         total = len(keys)
         logger.info("[{}] comments: {} files, ingesting in chunks of {}", agency, total, self.chunk_size)
 
@@ -351,22 +353,22 @@ class RegulationsPipeline(Pipeline):
 
     # -- regulations-specific wiring ---------------------------------------
 
-    def _transform_for(self, record_type: RecordType) -> Transform:
+    def _transform_for(self, record_type: RecordType, *, attributes: bool = True) -> Transform:
         """Build the staging transform for one record type.
 
-        All agencies share the run's bounded comment-text pool and retry state.
+        All agencies share the run's bounded comment-text pool and retry state. Decisions 65-67: the same read also
+        yields the record's attributes row, for comments after the reviewed exclusions so an excluded comment gets
+        none. ``attributes=False`` (the chunked comments path) stages no attribute rows.
         """
         extract: Transform = ExtractRecords(record_type)
-        table = ATTRIBUTE_TABLES.get(record_type.name)
-        if table is not None and self._staging_dir is not None:
-            # Decisions 65-67: the same read also yields the record's attributes row.
-            return Chain(TeeAttributes(table, self._staging_dir), extract)
+        table = ATTRIBUTE_TABLES.get(record_type.name) if attributes else None
+        tee = TeeAttributes(table, self._staging_dir) if table is not None and self._staging_dir is not None else None
         if record_type.name != "comments":
-            return extract
-        extract = Chain(ExcludeReviewedComments(), extract)
+            return Chain(tee, extract) if tee is not None else extract
+        steps: list[Transform] = [ExcludeReviewedComments(keyed=tee is not None), *([tee] if tee else []), extract]
         if self._text_pool is not None and self._pending_text is not None:
-            return Chain(extract, EnrichCommentText(self._text_pool, observe=self._pending_text.observe))
-        return extract
+            steps.append(EnrichCommentText(self._text_pool, observe=self._pending_text.observe))
+        return Chain(*steps)
 
     def _record_types(self) -> list[RecordType]:
         """The record types to process, honoring skip/only-comments."""
@@ -410,14 +412,12 @@ class RegulationsPipeline(Pipeline):
     def _download_existing(self, output_dir: Path, record_types: list[RecordType]) -> None:
         """Fetch existing output from R2 so an incremental run appends to it.
 
-        Monolithic ``{type}.parquet`` files are pulled whole. Comments live in
-        the catalog, so nothing is fetched for them.
+        Monolithic ``{type}.parquet`` files are pulled whole, with each record type's attribute table. Comments live
+        in the catalog, so only ``comment_attributes`` is fetched for them.
         """
         for rt in record_types:
-            if rt.name == "comments":
-                continue
             local = output_dir / f"{rt.name}.parquet"
-            if not local.exists():
+            if rt.name != "comments" and not local.exists():
                 r2.download_working_copy(f"{rt.name}.parquet", local)
             table = ATTRIBUTE_TABLES.get(rt.name)
             if table is not None and not (output_dir / f"{table}.parquet").exists():
@@ -426,7 +426,8 @@ class RegulationsPipeline(Pipeline):
     def _merge_attributes(self, staging_dir: Path, output_dir: Path, table: str) -> bool:
         """Merge this run's attribute rows into the table's working copy, once the full sweep has seeded it.
 
-        Before ``run-attributes-sweep`` seeds a working copy, a daily run's rows would publish a table of only
+        Before a working copy is seeded (``run-attributes-sweep`` for documents and dockets, the comment re-read's
+        ``fill-comment-fields attributes`` for comments), a daily run's rows would publish a table of only
         that day's changes, so they are dropped with a warning and the sweep's pass covers them.
         """
         parts = staging_dir / table
@@ -434,7 +435,8 @@ class RegulationsPipeline(Pipeline):
             return False
         prior = output_dir / f"{table}.parquet"
         if not prior.exists():
-            logger.warning("{}: no seeded working copy yet; this run's rows wait for run-attributes-sweep", table)
+            seeder = "fill-comment-fields attributes" if table == ATTRIBUTE_TABLES["comments"] else "run-attributes-sweep"
+            logger.warning("{}: no seeded working copy yet; this run's rows are dropped until {} seeds it", table, seeder)
             return False
         rows = merge_attribute_parts(table, parts, prior, prior)
         logger.info("{}: {:,} rows after this run's merge", table, rows)

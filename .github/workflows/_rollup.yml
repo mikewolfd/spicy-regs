@@ -153,6 +153,11 @@ on:
         required: false
         default: false
         type: boolean
+      gao_allow_mass_close_reason:
+        description: "gao_recommendations: why this run may retire more than half the open recommendations (dispatch only)"
+        required: false
+        default: ''
+        type: string
       lda_filing_year:
         description: 'Optional LDA filing year to read whole, instead of the posted-date window (history backfill)'
         required: false
@@ -287,6 +292,7 @@ jobs:
           FEC_COMMITTEES_FULL_WALK: ${{ inputs.fec_committees_full_walk }}
           GAO_GOVINFO_HISTORY: ${{ inputs.gao_govinfo_history }}
           GAO_GOVINFO_MODS: ${{ inputs.gao_govinfo_mods }}
+          GAO_ALLOW_MASS_CLOSE_REASON: ${{ inputs.gao_allow_mass_close_reason }}
           FCC_PROCEEDINGS: ${{ inputs.fcc_proceedings }}
           # Only the court_dockets rollup gets the CourtListener token: its daily
           # delta is a few search pages, and keyless runs were timing out on 429s
@@ -295,6 +301,9 @@ jobs:
           # rollup's ~660-page keyless search catch-up needs, so every other
           # rollup stays keyless.
           COURTLISTENER_API_TOKEN: ${{ inputs.command == 'run-rollup-courtlistener' && secrets.COURTLISTENER_API_TOKEN || '' }}
+          # Zyte is a paid proxy; only the one rollup that reads www.gao.gov through it gets the token (one
+          # request a run).
+          ZYTE_TOKEN: ${{ inputs.command == 'run-rollup-gao-recommendations' && secrets.ZYTE_TOKEN || '' }}
           # Passed via env (not interpolated into the command) to keep the run
           # step free of any templated string in an executable position.
           COMMAND: ${{ inputs.command }}

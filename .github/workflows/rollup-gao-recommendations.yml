@@ -1,0 +1,28 @@
+name: Rollup — gao_recommendations
+on:
+  schedule:
+    # 17:10 UTC, beside gao_reports — one Zyte request for GAO's open-recommendations export, folded
+    # into the accumulator (a recommendation that leaves the export stays, marked no longer listed).
+    - cron: '10 17 * * *'
+  workflow_dispatch:
+    inputs:
+      skip_upload:
+        description: 'Skip R2 upload (dry run)'
+        required: false
+        default: false
+        type: boolean
+      allow_mass_close_reason:
+        description: 'Only when GAO really closed more than half the open recommendations at once: why. Lets the run past its guard; the reason is journaled.'
+        required: false
+        default: ''
+        type: string
+jobs:
+  run:
+    uses: ./.github/workflows/_rollup.yml
+    secrets: inherit
+    with:
+      command: run-rollup-gao-recommendations
+      skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
+      # A scheduled run never states a reason, so the guard always holds for it.
+      gao_allow_mass_close_reason: ${{ github.event_name == 'workflow_dispatch' && inputs.allow_mass_close_reason || '' }}
+      timeout_minutes: 15

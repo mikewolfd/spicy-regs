@@ -237,8 +237,8 @@ def test_the_staged_order_is_the_write_time_and_spicy_docs_record_digest(tmp_pat
             MODIFIED, int(WRITTEN.timestamp()) + 5, digest(payload))
 
 
-def test_documents_and_dockets_read_keyed_and_comments_bare(tmp_path):
-    """The ETL's one factory serves every type; only the attribute tee asks for the keyed stream."""
+def test_every_base_type_reads_keyed_for_its_attribute_tee_and_the_chunked_comment_path_reads_bare(tmp_path):
+    """The ETL's one factory serves every type; the attribute tee asks for the keyed stream, comments included."""
     calls = []
 
     class Reader:
@@ -260,7 +260,54 @@ def test_documents_and_dockets_read_keyed_and_comments_bare(tmp_path):
     pipeline._staging_dir = tmp_path / "staging"
     stage_agencies(["EPA"], list(RECORD_TYPES.values()), tmp_path / "staging", lambda agency, kind: Reader(kind.name),
                    transform_for=pipeline._transform_for)
-    assert sorted(calls) == [("comments", "bare"), ("dockets", "keyed"), ("documents", "keyed")]
+    assert sorted(calls) == [("comments", "keyed"), ("dockets", "keyed"), ("documents", "keyed")]
+    assert not pipeline._transform_for(RECORD_TYPES["comments"], attributes=False).keyed
+
+
+def test_the_etl_factory_gives_an_excluded_comment_no_row_in_either_table(tmp_path, monkeypatch):
+    """Through RegulationsPipeline._transform_for, the factory the ETL stages with, not a hand-built chain."""
+    import hashlib
+    import json
+
+    from spicy_regs.transforms import reviewed_comments
+
+    kept = {"data": {"id": "EPA-1-0001", "attributes": {"trackingNbr": "t", "withdrawn": False}}}
+    excluded = {"data": {"id": "EPA-1-0002", "attributes": {"trackingNbr": "x", "withdrawn": False}}}
+    digest = hashlib.sha256(json.dumps(excluded, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    real_init = reviewed_comments.ExcludeReviewedComments.__init__
+
+    def init(self, *, keyed=False):
+        real_init(self, keyed=keyed)
+        self.decisions = {"EPA-1-0002": {"canonical_sha256": digest, "reason": "reviewed"}}
+
+    monkeypatch.setattr(reviewed_comments.ExcludeReviewedComments, "__init__", init)
+    pipeline = RegulationsPipeline(output_dir=tmp_path)
+    pipeline._staging_dir = tmp_path / "staging"
+    transform = pipeline._transform_for(RECORD_TYPES["comments"])
+    rows = list(transform.apply([KeyedPayload("k1", None, kept), KeyedPayload("k2", None, excluded)]))
+    assert [row["comment_id"] for row in rows] == ["EPA-1-0001"]
+    (part,) = (tmp_path / "staging" / "comment_attributes").glob("*.parquet")
+    assert [r["comment_id"] for r in pq.read_table(part).to_pylist()] == ["EPA-1-0001"]
+
+
+def test_a_reviewed_exclusion_gets_no_comment_attributes_row(tmp_path):
+    """The exclusion runs ahead of the tee, so an excluded comment is in neither the thin table nor its attributes."""
+    import hashlib
+    import json
+
+    from spicy_regs.transforms import Chain, ExtractRecords
+    from spicy_regs.transforms.reviewed_comments import ExcludeReviewedComments
+
+    kept = {"data": {"id": "EPA-1-0001", "attributes": {"trackingNbr": "t", "withdrawn": False}}}
+    excluded = {"data": {"id": "EPA-1-0002", "attributes": {"trackingNbr": "x", "withdrawn": False}}}
+    exclusion = ExcludeReviewedComments(keyed=True)
+    digest = hashlib.sha256(json.dumps(excluded, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    exclusion.decisions = {"EPA-1-0002": {"canonical_sha256": digest, "reason": "reviewed"}}
+    chain = Chain(exclusion, TeeAttributes("comment_attributes", tmp_path), ExtractRecords(RECORD_TYPES["comments"]))
+    rows = list(chain.apply([KeyedPayload("k1", None, kept), KeyedPayload("k2", None, excluded)]))
+    assert [row["comment_id"] for row in rows] == ["EPA-1-0001"]
+    (part,) = (tmp_path / "comment_attributes").glob("*.parquet")
+    assert [r["comment_id"] for r in pq.read_table(part).to_pylist()] == ["EPA-1-0001"]
 
 
 def test_a_refused_record_loses_only_its_attributes_row(tmp_path):

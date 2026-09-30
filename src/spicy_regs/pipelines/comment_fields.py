@@ -5,8 +5,8 @@ ingested before a field was retained keep it NULL: the four comment-reference co
 ``duplicate_comments`` (``iceberg._COMMENT_ADDED_COLUMNS``), and ``attachments_json`` wherever the row's first read
 lacked the attachments. One pass keeps, per object: its key and the GET's ETag and size; the whole thin-table row
 through ``COMMENT.extract`` (one spelling), with the body as its SHA-256 and length; and every other stated attribute
-as compact JSON (``attributes_json``: the keys the extract does not map, non-null only), which the later ``comment_attributes``
-table is built from.
+as compact JSON (``attributes_json``: the keys the extract does not map, non-null only), which ``comment_attributes``
+is built from.
 
 Two phases, so the long read holds no lock and the catalog write holds it briefly:
 
@@ -240,6 +240,65 @@ def status(workdir: Path) -> dict:
 
 
 
+def build_attributes(workdir: Path, out: Path | None = None, *, fetch=None) -> dict:
+    """Seed ``comment_attributes.parquet`` from the re-read parts; return counts and write refusals beside it.
+
+    Every read copy is projected by SpicyDocs' ``project_comment_attributes`` from its ``attributes_json`` (the keys
+    the extract does not map, which are the contract's columns) and merged by the ETL's own copy rule
+    (:func:`~spicy_regs.transforms.regulations_attributes.merge_attribute_parts`): newest ``modifyDate``, then the
+    smallest digest among tied copies. The parts keep no write time and no canonical record digest, so a tie takes the
+    object's ETag (its MD5) as the content digest. Reviewed exclusions get no row, by the ETL's own check
+    (``ExcludeReviewedComments.excludes``): the parts keep no payload, so each copy of a reviewed comment is fetched
+    again by its key (``fetch``, the anonymous reader by default), and a reviewed comment whose content changed refuses
+    the seed. A record the contract refuses loses only its attributes row and is listed in ``attribute_refusals.json``.
+    """
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    from spicy_docs.schemas.regulations_attribute_tables import project_comment_attributes
+    from spicy_docs.schemas.tables import TableContractError
+
+    from spicy_regs.contract_types import arrow_schema
+    from spicy_regs.transforms.regulations_attributes import _with_order_columns, contract, merge_attribute_parts
+    from spicy_regs.transforms.reviewed_comments import ExcludeReviewedComments
+
+    table = "comment_attributes"
+    out = out or workdir / f"{table}.parquet"
+    staging = workdir / "attributes-staging" / table
+    shutil.rmtree(staging, ignore_errors=True)
+    staging.mkdir(parents=True)
+    schema = _with_order_columns(arrow_schema(contract(table)))
+    exclusion = ExcludeReviewedComments()
+    if fetch is None:
+        from spicy_docs.sources import mirrulations
+
+        resource = mirrulations.s3_resource()
+        fetch = lambda key: mirrulations.download_and_parse(resource, mirrulations.BUCKET, key, lambda d: d)  # noqa: E731
+    refused: list[dict] = []
+    projected = 0
+    for index, part in enumerate(sorted((workdir / "parts").glob("*/*.parquet"))):
+        batch = []
+        columns = ["key", "etag", "comment_id", "modify_date", "attributes_json"]
+        for row in pq.read_table(part, columns=columns).to_pylist():
+            if row["comment_id"] in exclusion.decisions and exclusion.excludes(fetch(row["key"])):
+                continue
+            try:
+                projected_row = project_comment_attributes(row["comment_id"], json.loads(row["attributes_json"]))
+            except TableContractError as error:
+                refused.append({"key": row["key"], "id": row["comment_id"], "reason": str(error)[:300]})
+                continue
+            batch.append({**projected_row, "_modify_date": row["modify_date"], "_written_at": None,
+                          "_record_digest": row["etag"]})
+        if batch:
+            pq.write_table(pa.Table.from_pylist(batch, schema=schema), staging / f"part-{index:05d}.parquet",
+                           compression="zstd")
+            projected += len(batch)
+    rows = merge_attribute_parts(table, staging, None, out)
+    shutil.rmtree(staging.parent, ignore_errors=True)
+    receipt = {"projected_copies": projected, "rows": rows, "refused": refused}
+    (out.parent / "attribute_refusals.json").write_text(json.dumps({"refused": refused}, indent=2) + "\n")
+    return {k: v for k, v in receipt.items() if k != "refused"} | {"refused": len(refused)}
+
+
 app = App(name="fill-comment-fields", help=__doc__)
 
 
@@ -319,6 +378,12 @@ def undo_command(*, workdir: Path, batch: str, expected_snapshot: int) -> None:
 
     load_dotenv()
     print(json.dumps(undo(workdir, batch, expected_snapshot=expected_snapshot), indent=2))
+
+
+@app.command(name="attributes")
+def attributes_command(*, workdir: Path) -> None:
+    """Seed comment_attributes.parquet from the re-read parts (no upload)."""
+    print(json.dumps(build_attributes(workdir), indent=2))
 
 
 @app.command(name="status")

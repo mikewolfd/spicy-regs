@@ -5,7 +5,13 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- `spicy_docs-0.52.0`: released from SpicyDocs `main` at `b08ac1b`, September 28, 2026:
+- `spicy_docs-0.53.0`: released from SpicyDocs `main` at `4bf3d04`, September 29, 2026.
+  The adopted wheel is 1,770,670 bytes, SHA-256
+  `2ec43dcec80aa65d14db0c6fb9138bd1e6c17bcfc62b0065cbab2c5aa5bfce52`.
+  It adds the `comment_attributes` and `gao_recommendations` readers and table
+  definitions. The adoption retains the existing source-reader extras.
+
+- Previously adopted `spicy_docs-0.52.0`: released from SpicyDocs `main` at `b08ac1b`, September 28, 2026:
   **1,757,380 bytes**, SHA-256 `374b8c208018d1964007b9e78c4c9ab6beedaafab2cca96fb93a4acbc2b26684`,
   byte-identical across the release's two builds and rechecked against its `SHA256SUMS` on
   adoption. It adopts 0.51.0 (never vendored here) with it: 0.51.0 reads bill stage in

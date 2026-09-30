@@ -1436,6 +1436,24 @@
       }
     },
     {
+      "child": "comment_attributes",
+      "child_columns": [
+        "comment_id"
+      ],
+      "parent": "comments",
+      "parent_columns": [
+        "comment_id"
+      ],
+      "kind": "empty",
+      "reason": "Unpublished until the comment re-read (fill-comment-fields attributes) seeds it; every row is a comment the thin table holds, baselined at the first publication.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
       "child": "fec_committee_history",
       "child_columns": [
         "committee_id"
@@ -1468,6 +1486,24 @@
       "baseline_keys": 647,
       "baseline_missing": 0,
       "floor_pct": 100.0,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
+      "child": "gao_recommendations",
+      "child_columns": [
+        "report_id"
+      ],
+      "parent": "gao_reports",
+      "parent_columns": [
+        "report_id"
+      ],
+      "kind": "empty",
+      "reason": "New output, not yet published. Built offline from GAO's export of 2026-09-28: against the live gao_reports ac08f37f (GovInfo's 1989-2008 history and the feed's weeks) 89 of 1,802 publications resolved; against the offline build with GAO's 2009-2026 listing (Track B, 26,183 rows, 13,437 listed; af306786…) 1,798 publications and 5,374 of 5,379 rows. The 4 orphans are plain numbers absent from that build under any spelling: gao-02-817, gao-08-956 and gao-09-133 (issued between GovInfo's last package and the listing's first year) and gao-21-265. Receipts supply-2026-09-02/receipts/gao-recommendations-20260928/offline-build/join-track-b-2026-09-28.json and offline-measure-2026-09-28.json.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
       "expected_cardinality": "unspecified",
       "measurement": null
     },
@@ -2317,6 +2353,17 @@
         ]
       }
     ],
+    "comment_attributes": [
+      {
+        "child_columns": [
+          "comment_id"
+        ],
+        "parent_table": "comments",
+        "parent_columns": [
+          "comment_id"
+        ]
+      }
+    ],
     "fec_committee_history": [
       {
         "child_columns": [
@@ -2336,6 +2383,17 @@
         "parent_table": "fec_collections",
         "parent_columns": [
           "collection_id"
+        ]
+      }
+    ],
+    "gao_recommendations": [
+      {
+        "child_columns": [
+          "report_id"
+        ],
+        "parent_table": "gao_reports",
+        "parent_columns": [
+          "report_id"
         ]
       }
     ],

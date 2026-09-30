@@ -55,6 +55,7 @@ jobs:
           - run-rollup-documents
           - run-rollup-docket-attributes
           - run-rollup-document-attributes
+          - run-rollup-comment-attributes
     uses: ./.github/workflows/_rollup.yml
     secrets: inherit
     with:

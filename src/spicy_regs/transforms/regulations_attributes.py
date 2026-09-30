@@ -1,6 +1,6 @@
 """Project each Regulations.gov record's attributes while the ETL reads it (owner decisions 65-67).
 
-The ETL's document and docket passes read each Mirrulations record, a Regulations.gov API detail response, once.
+The ETL's document, docket and comment passes read each Mirrulations record, a Regulations.gov API detail response, once.
 :class:`TeeAttributes` reads the keyed stream, passes each raw payload on to the thin-table extract and projects its
 ``data.attributes`` through SpicyDocs' contract projection into a part file of the attributes table under the staging
 directory, in bounded batches: one read, two rows. The part files merge with the table's working copy like any other
@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     from spicy_docs.sources.mirrulations import KeyedPayload
 
 #: The attributes table each base record type feeds, keyed by that record type's name.
-ATTRIBUTE_TABLES = {"documents": "document_attributes", "dockets": "docket_attributes"}
+ATTRIBUTE_TABLES = {"documents": "document_attributes", "dockets": "docket_attributes", "comments": "comment_attributes"}
 #: Part-file columns that order a record's copies in the merge, with their Arrow types; never published.
 ORDER_COLUMNS = {"_modify_date": "string", "_written_at": "int64", "_record_digest": "string"}
 
@@ -47,12 +47,21 @@ def _with_order_columns(schema: pa.Schema) -> pa.Schema:
 
 def _projection_and_digest(table: str):
     """The table's contract projection and SpicyDocs' record digest for its collection."""
-    from spicy_docs.schemas.regulations_attribute_tables import project_docket_attributes, project_document_attributes
-    from spicy_docs.source_native.regulations_gov import docket_source_record_digest, document_source_record_digest
+    from spicy_docs.schemas.regulations_attribute_tables import (
+        project_comment_attributes,
+        project_docket_attributes,
+        project_document_attributes,
+    )
+    from spicy_docs.source_native.regulations_gov import (
+        comment_source_record_digest,
+        docket_source_record_digest,
+        document_source_record_digest,
+    )
 
     return {
         "document_attributes": (project_document_attributes, document_source_record_digest),
         "docket_attributes": (project_docket_attributes, docket_source_record_digest),
+        "comment_attributes": (project_comment_attributes, comment_source_record_digest),
     }[table]
 
 

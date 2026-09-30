@@ -3,6 +3,7 @@
 from collections.abc import Iterable, Iterator
 from hashlib import sha256
 from importlib.resources import files
+from typing import Any
 import json
 
 from loguru import logger
@@ -20,20 +21,27 @@ class ExcludeReviewedComments(Transform):
     successful batch checkpoints deliberate exclusions rather than retrying them.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, *, keyed: bool = False) -> None:
+        # Keyed ahead of the attribute tee, so an excluded comment gets no attribute row either.
+        self.keyed = keyed
         decisions = json.loads(files("spicy_regs").joinpath("reviewed_comment_exclusions.json").read_text())
         self.decisions = {item["comment_id"]: item for item in decisions}
         if len(self.decisions) != len(decisions):
             raise ValueError("Duplicate reviewed comment exclusion")
 
-    def apply(self, records: Iterable[dict]) -> Iterator[dict]:
-        for payload in records:
-            identity = payload.get("data", {}).get("id")
-            decision = self.decisions.get(identity)
-            if decision is None:
-                yield payload
-                continue
-            digest = sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-            if digest != decision["canonical_sha256"]:
-                raise ValueError(f"Reviewed comment {identity} changed; recheck its exclusion before ingestion")
-            logger.info("Excluded reviewed comment {} (sha256:{}): {}", identity, digest, decision["reason"])
+    def excludes(self, payload: dict) -> bool:
+        """Whether ``payload`` is a reviewed exclusion; a reviewed comment whose content changed raises."""
+        identity = payload.get("data", {}).get("id")
+        decision = self.decisions.get(identity)
+        if decision is None:
+            return False
+        digest = sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        if digest != decision["canonical_sha256"]:
+            raise ValueError(f"Reviewed comment {identity} changed; recheck its exclusion before ingestion")
+        logger.info("Excluded reviewed comment {} (sha256:{}): {}", identity, digest, decision["reason"])
+        return True
+
+    def apply(self, records: Iterable[Any]) -> Iterator[Any]:
+        for record in records:
+            if not self.excludes(record.payload if self.keyed else record):
+                yield record
