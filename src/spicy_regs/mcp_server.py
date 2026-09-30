@@ -74,6 +74,7 @@ TABLES = (
     "lobbying_activity_lobbyists",
     "fec_committees",
     "fec_committee_history",
+    "fec_candidate_history",
     "document_attributes",
     "docket_attributes",
     "comment_attributes",

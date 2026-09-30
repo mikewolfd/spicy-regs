@@ -2697,7 +2697,7 @@
       {
         "column_name": "profile",
         "column_type": "VARCHAR",
-        "description": "Provider reader profile used for this collection: committee, candidate, filing, legal, audit, bulk or positional records."
+        "description": "Provider reader profile used for this collection: committee, candidate, filing, legal, audit, bulk, positional or agency-report records."
       },
       {
         "column_name": "source_system_id",
@@ -2777,7 +2777,7 @@
       {
         "column_name": "source_record_id",
         "column_type": "VARCHAR",
-        "description": "Provider source-record identity, native API identity, bulk file key or byte-evidenced positional observation ID, scoped to collection_id."
+        "description": "Provider source-record identity, native API identity, bulk file key or byte-evidenced positional/agency-report observation ID, scoped to collection_id."
       },
       {
         "column_name": "committee_id",
@@ -2827,7 +2827,7 @@
       {
         "column_name": "metadata_json",
         "column_type": "VARCHAR",
-        "description": "Complete provider-native metadata, or literal positional values named by an explicitly selected verified source header or ordered HTML field dictionary. In transaction files, leave out memo lines (MEMO_CD 'X') before summing TRANSACTION_AMT: they repeat money reported on another line. Header and blank rows retain positional metadata; source_record_json always retains the full native wrapper."
+        "description": "Complete provider-native metadata or agency-report record, or literal positional values named by an explicitly selected verified source header or ordered HTML field dictionary. In transaction files, leave out memo lines (MEMO_CD 'X') before summing TRANSACTION_AMT: they repeat money reported on another line. Header and blank rows retain positional metadata; source_record_json always retains the full native wrapper."
       },
       {
         "column_name": "assets_json",
@@ -7842,6 +7842,102 @@
     "grain": "One row per FEC committee per two-year cycle, as that cycle's bulk committee master states it.",
     "identity_columns": [
       "committee_id",
+      "cycle"
+    ]
+  },
+  "fec_candidate_history": {
+    "table": "fec_candidate_history",
+    "label": "FEC candidates by cycle",
+    "summary": "One row per FEC candidate per two-year cycle, as that cycle's bulk candidate master states it: name, party, election year, office, status and principal committee. Read by the `fec-candidate-history` rollup through SpicyDocs' candidate-master reader, which verifies each file by digest and checks the publisher's header. Codes stay literal. All columns are stored as VARCHAR.",
+    "coverage": "True range. Every cycle from 1980 through the current one: each run reads every cycle's bulk candidate master whole and publishes every row. The current cycle's file is republished daily, so its rows change.",
+    "kind": "true_range",
+    "measured_on": "2026-09-30",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "candidate_id",
+        "column_type": "VARCHAR",
+        "description": "The FEC candidate id (`CAND_ID`)."
+      },
+      {
+        "column_name": "cycle",
+        "column_type": "VARCHAR",
+        "description": "The two-year cycle the file covers, as its closing even year."
+      },
+      {
+        "column_name": "name",
+        "column_type": "VARCHAR",
+        "description": "The candidate's name as that cycle's file states it (`CAND_NAME`); NULL when blank."
+      },
+      {
+        "column_name": "party",
+        "column_type": "VARCHAR",
+        "description": "The party affiliation code (`CAND_PTY_AFFILIATION`), literal; NULL when blank."
+      },
+      {
+        "column_name": "election_year",
+        "column_type": "VARCHAR",
+        "description": "The candidate's election year as filed (`CAND_ELECTION_YR`); NULL when blank."
+      },
+      {
+        "column_name": "office_state",
+        "column_type": "VARCHAR",
+        "description": "The office's state code (`CAND_OFFICE_ST`); NULL when blank."
+      },
+      {
+        "column_name": "office",
+        "column_type": "VARCHAR",
+        "description": "The office sought code (`CAND_OFFICE`), literal; NULL when blank."
+      },
+      {
+        "column_name": "office_district",
+        "column_type": "VARCHAR",
+        "description": "The office's district (`CAND_OFFICE_DISTRICT`); NULL when blank."
+      },
+      {
+        "column_name": "incumbent_challenger_status",
+        "column_type": "VARCHAR",
+        "description": "The incumbent/challenger/open code (`CAND_ICI`), literal; NULL when blank."
+      },
+      {
+        "column_name": "status",
+        "column_type": "VARCHAR",
+        "description": "The candidate status code (`CAND_STATUS`), literal; NULL when blank."
+      },
+      {
+        "column_name": "principal_committee_id",
+        "column_type": "VARCHAR",
+        "description": "The candidate's principal campaign committee (`CAND_PCC`); NULL when none."
+      },
+      {
+        "column_name": "street_1",
+        "column_type": "VARCHAR",
+        "description": "The first street line of the candidate's address (`CAND_ST1`); NULL when blank."
+      },
+      {
+        "column_name": "street_2",
+        "column_type": "VARCHAR",
+        "description": "The second street line (`CAND_ST2`); NULL when blank."
+      },
+      {
+        "column_name": "city",
+        "column_type": "VARCHAR",
+        "description": "The address city (`CAND_CITY`); NULL when blank."
+      },
+      {
+        "column_name": "state",
+        "column_type": "VARCHAR",
+        "description": "The address state (`CAND_ST`); NULL when blank."
+      },
+      {
+        "column_name": "zip",
+        "column_type": "VARCHAR",
+        "description": "The address ZIP code as filed (`CAND_ZIP`); NULL when blank."
+      }
+    ],
+    "grain": "One row per FEC candidate per two-year cycle, as that cycle's bulk candidate master states it.",
+    "identity_columns": [
+      "candidate_id",
       "cycle"
     ]
   },

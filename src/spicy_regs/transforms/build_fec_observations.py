@@ -65,6 +65,11 @@ _PROFILES = {
     "audit": ("audit_profile", "FEC_AUDIT_QUERY_PROFILE", "iter_retained_audit_pages"),
     "bulk": ("bulk_profile", "FEC_BULK_FILES_PROFILE", None),
     "positional": ("row_profile", "FEC_POSITIONAL_ROWS_PROFILE", None),
+    "agency": ("agency_profile", "FEC_AGENCY_REPORT_PROFILE", None),
+}
+_ORIGINAL_ITERATORS = {
+    "positional": "iter_retained_positional_rows",
+    "agency": "iter_retained_agency_originals",
 }
 
 
@@ -124,8 +129,8 @@ def _load_manifest(path):
             raise ValueError("unknown official FEC source family or reader profile")
         if "captures" in item and _PROFILES[item["profile"]][2] is None:
             raise ValueError("direct captures support API query profiles only")
-        if "scope" in item and item["profile"] != "positional":
-            raise ValueError("direct scope supports the positional row profile only")
+        if "scope" in item and item["profile"] not in _ORIGINAL_ITERATORS:
+            raise ValueError("direct scope supports positional and agency profiles only")
         if "field_mapping" in item:
             mapping = item["field_mapping"]
             if item["profile"] != "positional" or not isinstance(mapping, dict):
@@ -241,11 +246,12 @@ def _query(item, base, profile, iterator):
     return records(), outcome
 
 
-def _positional(item, base, profile):
-    """Iterate a retained positional row stream, refusing an ordinal that skips or repeats."""
-    from spicy_docs.sources.fec.row_profile import iter_retained_positional_rows
+def _original(item, base, profile):
+    """Iterate one complete retained original, refusing an ordinal that skips or repeats."""
     from spicy_docs.storage.blobs import LocalSourceNativeBlobStore, iter_verified_blob
 
+    module = importlib.import_module("spicy_docs.sources.fec." + _PROFILES[item["profile"]][0])
+    iterator = getattr(module, _ORIGINAL_ITERATORS[item["profile"]])
     scope = profile.validate_query_scope(item["scope"])
     outcome = {
         "requestedScope": scope,
@@ -256,7 +262,7 @@ def _positional(item, base, profile):
 
     def records():
         store = LocalSourceNativeBlobStore(_path(item["blob_root"], base))
-        (page,) = iter_retained_positional_rows(scope, blob_source=store)
+        (page,) = iterator(scope, blob_source=store)
         count = 0
         traversal = profile.traversal_check()
         # Verify the entire original before parsing. The provider verifies ZIP
@@ -280,7 +286,7 @@ def _positional(item, base, profile):
                     record = profile.classify_record(value)
                     profile.validate_record_scope(record, query_scope=scope, page_window=0)
                     if record["ordinal"] != count:
-                        raise ValueError("FEC positional stream skips or repeats an ordinal")
+                        raise ValueError(f"FEC {item['profile']} stream skips or repeats an ordinal")
                     count += 1
                     yield profile.wrap_record(record, schema_digest=profile.source_schema_digest())
             traversal.finish()
@@ -311,11 +317,15 @@ def _shape(item, wrapped, outcome):
         else:
             locator["embedded_bodies"] = metadata["embedded_bodies"]
         locator.update(member=record["member"], ordinal=record["ordinal"])
+    elif item["profile"] == "agency":
+        metadata = record["record"]
+        locator.update(ordinal=record["ordinal"], format=record["format"])
     elif "source_pointer" in record:
         locator["json_pointer"] = record["source_pointer"]
     else:
         locator["object_key"] = capture["objectKey"]
     row = dict.fromkeys(RECORD_COLUMNS)
+    agency = item["profile"] == "agency"
     row.update(
         collection_id=item["collection_id"],
         source_family=item["source_family"],
@@ -326,8 +336,13 @@ def _shape(item, wrapped, outcome):
         observed_at=capture["observedAt"],
         source_locator_json=_json(locator),
         metadata_json=_json(metadata),
-        assets_json=_json(record.get("assets", [])),
-        embedded_bodies_json=_json(metadata.get("embedded_bodies", record.get("embedded_bodies", []))),
+        assets_json=_json(
+            [metadata["asset"]] if agency and metadata.get("kind") == "oversight-asset" else record.get("assets", [])
+        ),
+        embedded_bodies_json=_json(
+            [metadata["body"]] if agency and metadata.get("kind") == "oversight-body"
+            else metadata.get("embedded_bodies", record.get("embedded_bodies", []))
+        ),
         source_record_json=_json(wrapped),
     )
     for column, field in (
@@ -482,7 +497,7 @@ def build_fec_observations(manifest: Path, output_dir: Path, *, batch_size: int 
                     else (None, None)
                 )
                 if "scope" in item:
-                    records, outcome = _positional(item, manifest.parent, profile)
+                    records, outcome = _original(item, manifest.parent, profile)
                 elif "captures" in item:
                     records, outcome = _query(item, manifest.parent, profile, iterator)
                 else:

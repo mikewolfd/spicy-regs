@@ -171,6 +171,8 @@ CONTRACT_TABLES: tuple[str, ...] = (
     "federal_register",
     # The FEC bulk committee master, every cycle (spicy-docs 0.43.0, decision 53).
     "fec_committee_history",
+    # The FEC bulk candidate master, every cycle.
+    "fec_candidate_history",
     # The Regulations.gov attributes the thin documents/dockets/comments lack, typed (decisions 65-67); the
     # regulations ETL writes them and the refresh's base families publish them. comment_attributes is seeded by
     # the comment re-read (fill-comment-fields attributes).

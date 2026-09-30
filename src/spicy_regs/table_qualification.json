@@ -307,6 +307,14 @@
       "statement": "published by run 36286703784 (2026-09-27), not yet qualified: FG03 from the bulk committee master (`cm<yy>.zip`, all 24 cycles) through spicy-docs 0.43.0's reader and contract, not the PostgreSQL dump (decision 53). 298,395 rows over 89,710 committees, the receipt's count; every `fec_committees` committee appears, and 21 history committees absent from the OpenFEC registry make it a declared scope join."
     },
     {
+      "task": "T05",
+      "tables": [
+        "fec_candidate_history"
+      ],
+      "audits": [],
+      "statement": "Local generation `dc9634ba…` (2026-09-30) passed independent comparison of all 130,562 rows from the selected 1980–2026 bulk candidate masters and ordinary local MCP readback. Inputs mix retained September 12 header/2024/2026 bytes and newly retained September 30 historical-cycle bytes. Publication has not been performed or verified. See [local qualification](fec-publish-qualification-2026-09-30.md) and `fec-publish-completion-20260930/consumer/`. Older PostgreSQL-dump cycles are outside this source selection."
+    },
+    {
       "task": "T04",
       "tables": [
         "fec_source_catalog"

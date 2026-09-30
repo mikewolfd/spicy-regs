@@ -5,6 +5,17 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
+- `spicy_docs-0.53.0+fec.3fc8388b368b`: local FEC candidate build from source commit
+  `3fc8388b368b204a57f6ea4029e26eadb132cfad`, September 30, 2026. SHA-256
+  `9b1b944f1dce879310d1bf37cbb4c9ae560dceb70d7eb9816d0862eb11b700b8`.
+  Two independent archive builds were byte-identical. Only the archive's package
+  version changes to distinguish this build from released 0.53.0; the source
+  checkout keeps its release version. It adds candidate history and retained
+  agency-report profiles with their source validation fixes. The `html` extra
+  supplies the qualified Oversight parser dependency. Receipt and build recipe:
+  `fec-publish-completion-20260930/source/wheel.json` and `build_wheel.py`.
+  This is a vendored local candidate; no registry publication is asserted.
+
 - `spicy_docs-0.53.0`: released from SpicyDocs `main` at `4bf3d04`, September 29, 2026.
   The adopted wheel is 1,770,670 bytes, SHA-256
   `2ec43dcec80aa65d14db0c6fb9138bd1e6c17bcfc62b0065cbab2c5aa5bfce52`.

@@ -17,7 +17,7 @@ Collection-level scope, counts and evidence for fec_source_records. Join collect
 | --- | --- | --- |
 | `collection_id` | `VARCHAR` | Caller-supplied label unique within the selected manifest. Join to fec_source_records.collection_id. |
 | `source_family` | `VARCHAR` | Caller-selected official FEC source-family identifier, checked against the inventory. Join to fec_source_catalog.source_family; this classification is not independently inferred from source content. |
-| `profile` | `VARCHAR` | Provider reader profile used for this collection: committee, candidate, filing, legal, audit, bulk or positional records. |
+| `profile` | `VARCHAR` | Provider reader profile used for this collection: committee, candidate, filing, legal, audit, bulk, positional or agency-report records. |
 | `source_system_id` | `VARCHAR` | Provider identifier for the source system represented by this collection. |
 | `source_state_scope` | `VARCHAR` | Provider observation scope, such as observed-crawl; this does not imply a frozen publisher snapshot. |
 | `record_count` | `VARCHAR` | Number of verified source records emitted for this selected collection, stored as a decimal integer string. |

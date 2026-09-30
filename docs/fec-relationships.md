@@ -45,9 +45,15 @@ resolve beside the manifest. Choose one input mode:
   selects format, encoding, delimiter, quoting and optional ZIP member ordinal
   and name. Complete source bytes are verified before parsing. Header rows,
   blank rows, duplicates, signed amounts and amendment flags survive.
+- **Retained agency original:** `profile` is `agency`; `source_family` is
+  `fec_agency_reports`; `scope` is the result of SpicyDocs `agency_report_scope`.
+  The selected FOIA XML or Oversight HTML original must match its digest and size.
+  Every native report record, field, body and asset remains in `source_record_json`
+  and `metadata_json`, with its ordinal and format in `source_locator_json`.
+  Agency records produce no inferred candidate/committee relationships.
 - **Existing source release:** `release_path`, `artifact_sha256` and
   `verifier_implementation_id` pin an existing SpicyDocs release. Supported
-  profiles additionally include `bulk`. The source reader checks artifact
+  profiles additionally include `bulk`; `agency` also accepts a pinned release. The source reader checks artifact
   membership and replays source evidence. Releases with rejected or discarded
   observations refuse this complete companion delivery.
 

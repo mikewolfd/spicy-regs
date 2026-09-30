@@ -2134,6 +2134,33 @@
       ]
     },
     {
+      "table": "fec_candidate_history",
+      "label": "FEC candidates by cycle",
+      "summary": "One row per FEC candidate per two-year cycle, as that cycle's bulk candidate master states it: name, party, election year, office, status and principal committee. Read by the `fec-candidate-history` rollup through SpicyDocs' candidate-master reader, which verifies each file by digest and checks the publisher's header. Codes stay literal. All columns are stored as VARCHAR.",
+      "coverage": "True range. Every cycle from 1980 through the current one: each run reads every cycle's bulk candidate master whole and publishes every row. The current cycle's file is republished daily, so its rows change.",
+      "kind": "true_range",
+      "measured_on": "2026-09-30",
+      "data_quality": null,
+      "columns": [
+        "candidate_id",
+        "cycle",
+        "name",
+        "party",
+        "election_year",
+        "office_state",
+        "office",
+        "office_district",
+        "incumbent_challenger_status",
+        "status",
+        "principal_committee_id",
+        "street_1",
+        "street_2",
+        "city",
+        "state",
+        "zip"
+      ]
+    },
+    {
       "table": "document_attributes",
       "label": "Regulations.gov document attributes",
       "summary": "One row per Regulations.gov document, keyed by `document_id`, with the attributes the thin `documents` table does not carry: abstract, authors, topics, dates, page count, comment-window flags, the submitter's stated contact details (decision 66) and the agency's display properties. Typed where the value is (decision 67): flags BOOLEAN, `page_count` INTEGER, dates TIMESTAMPTZ, authors and topics string lists. Projected from each record's API attributes by SpicyDocs' contract.",

@@ -1,0 +1,14 @@
+[
+  {
+    "file": "oversight-data-act.html",
+    "url": "https://www.oversight.gov/reports/evaluation-fecs-data-act-compliance",
+    "sha256": "727b012b6f02c5297f56342a65d9dee224de9ae3e51e236ba07417f934e9904b",
+    "bytes": 44102
+  },
+  {
+    "file": "foia-fec-2010.xml",
+    "url": "https://beta.fec.gov/resources/foia/foiareport2010.xml",
+    "sha256": "2054df8816bb665f84a0a780d417211c14b12a9bfad5f80fc940634fc32c4b75",
+    "bytes": 29995
+  }
+]

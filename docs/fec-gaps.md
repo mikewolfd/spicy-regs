@@ -122,11 +122,18 @@ contain later candidate/sponsor/cycle information. Evidence: E3 and the
 
 **Open adoption / expansion of selection · SpicyDocs and SpicyRegs.** Remaining
 inputs include the **32,034,987-row individual-contribution main member**;
-retained 2026 candidate/committee masters, candidate links, candidate/committee
+retained committee masters, candidate links, candidate/committee
 summaries and leadership PACs; presidential map detail exports; other retained
 communication-cost/electioneering periods; and daily/paper archive populations.
 Individual insert/delete rows are already delivered. Main and `by_date` layouts
 may overlap and cannot be summed without reconciliation.
+
+**Bounded local completion, September 30, 2026:** `fec_candidate_history` now
+builds every bulk candidate-master cycle from 1980 through 2026. The exact
+retained-file selection, mixed acquisition dates, complete field comparison and
+local MCP check are recorded in the [qualification receipt](research/fec-publish-qualification-2026-09-30.md#candidate-master).
+Remote publication remains unperformed. This closes the local candidate-master
+receiver path only; the other bulk populations above remain separate work.
 
 **Complete when:** each chosen object/member has bounded native rows, exact
 field/member audits, source coordinates and a delivered selection record. Track
@@ -237,9 +244,14 @@ supporting-document history remains a separate collection selection under FG13.
 **Open adoption / expansion · SpicyDocs, then receiving tables/catalogs.** Native
 Freedom of Information Act (FOIA) XML parsers for the National Information
 Exchange Model (NIEM) 1.02/1.03 and Oversight report parsers exist. Selected XML-linked FOIA
-history and Oversight records are retained, but the current FEC generation has
-no agency-report or inspector-general collections. PDF-only years, other report
-types, public FOIA releases, broader Oversight years and current recommendation
+history and Oversight records are retained. The September 30 local qualification
+admits all 119 successful selected agency releases through `profile: agency`
+into the existing observation tables, preserving native fields, bodies, assets
+and source positions. The selected 2009 Word Flat OPC original remains an
+explicit refusal. See the [exact selection and receiver receipt](research/fec-publish-qualification-2026-09-30.md#agency-reports).
+Remote publication remains unperformed; the agency-only qualification generation
+must be combined with the intended existing collection selection before publication.
+PDF-only years, other report types, public FOIA releases, broader Oversight years and current recommendation
 status remain outside the qualified selection. Word Flat OPC is a distinct
 unsupported representation; paired XML creation dates and report/export dates
 must remain separate.
