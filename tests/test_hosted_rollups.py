@@ -70,6 +70,7 @@ OWN_TABLES = BILL_OWN_TABLES | {READS_TABLE: READ_COLUMNS}
 #: refresh's base families like ``documents`` itself, not by a standalone rollup (decisions 65-67).
 ETL_TABLES = {"document_attributes", "docket_attributes", "comment_attributes"}
 
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = REPO_ROOT / ".github" / "workflows"
 

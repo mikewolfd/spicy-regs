@@ -115,7 +115,8 @@ def test_refresh_publishes_the_families_before_the_mirror_captures_base_versions
     workflow = yaml.safe_load((REPO_ROOT / ".github/workflows/_regulations-refresh.yml").read_text())
     jobs = workflow["jobs"]
     assert jobs["base-families"]["strategy"]["matrix"]["command"] == [
-        "run-rollup-dockets", "run-rollup-documents", "run-rollup-docket-attributes", "run-rollup-document-attributes"]
+        "run-rollup-dockets", "run-rollup-documents", "run-rollup-docket-attributes", "run-rollup-document-attributes",
+        "run-rollup-comment-attributes"]
     assert jobs["base-families"]["with"]["skip_upload"] == "${{ inputs.skip_upload }}"
     assert jobs["mirror"]["needs"] == "base-families"
     assert jobs["derived"]["needs"] == "mirror" and jobs["org-links"]["needs"] == "mirror"

@@ -294,7 +294,7 @@ with a warning. So seed it while the ETL is paused:
 3. Run `attributes`.
 4. Upload `comment_attributes.parquet` as the working copy.
 5. Run `run-rollup-comment-attributes`.
-6. Add that command to the base families in `_regulations-refresh.yml`.
+6. Deploy the matching ETL and `_regulations-refresh.yml`, whose base families include that command.
 
 Only then re-enable the workflows. From then on, the scheduled ETL's comment
 passes merge their rows into the working copy, like `document_attributes`. The
