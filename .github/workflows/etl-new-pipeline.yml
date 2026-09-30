@@ -45,9 +45,9 @@ on:
         default: false
         type: boolean
       timeout_minutes:
-        description: 'Job timeout in minutes for this dispatch (default 60, at most 360)'
+        description: 'Job timeout in minutes for this dispatch (default 120, at most 360)'
         required: false
-        default: '60'
+        default: '120'
         type: string
 
 env:
@@ -110,7 +110,7 @@ jobs:
             BATCH_NUMBER=all
             SKIP_UPLOAD=false
           else
-            TIMEOUT="${TIMEOUT_MINUTES:-60}"
+            TIMEOUT="${TIMEOUT_MINUTES:-120}"
           fi
           if ! printf '%s' "$TIMEOUT" | grep -Eq '^[1-9][0-9]*$' || [ "$TIMEOUT" -gt 360 ]; then
             echo "timeout_minutes must be an integer in 1..360" >&2; exit 1

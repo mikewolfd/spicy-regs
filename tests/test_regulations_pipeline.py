@@ -662,7 +662,7 @@ def test_scheduled_workflow_derives_batches_and_never_starts_fresh() -> None:
     [
         ("schedule", "", "", {"timeout_minutes": "360", "batch": "all"}),
         ("workflow_dispatch", "all", "240", {"timeout_minutes": "240"}),
-        ("workflow_dispatch", "14", "", {"timeout_minutes": "60", "batch": "14"}),
+        ("workflow_dispatch", "14", "", {"timeout_minutes": "120", "batch": "14"}),
         ("workflow_dispatch", "14", "361", None),
         ("workflow_dispatch", "14", "060", None),
         ("workflow_dispatch", "15", "60", None),

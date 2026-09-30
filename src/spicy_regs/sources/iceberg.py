@@ -30,7 +30,8 @@ Credentials are read from the environment, alongside the existing ``R2_*`` vars:
 
 import json
 import time
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass
 from os import getenv
 from pathlib import Path
@@ -231,6 +232,21 @@ def _staging_files(staging_dir: Path, record_type: RecordType) -> list[Path]:
     return sorted(staging_type_dir.glob("*.parquet"))
 
 
+@contextmanager
+def _transaction(con) -> Iterator[None]:
+    """Commit every enclosed write together; roll back even on interruption."""
+    con.execute("BEGIN")
+    try:
+        yield
+        con.execute("COMMIT")
+    except BaseException:
+        try:
+            con.execute("ROLLBACK")
+        except Exception as rollback_exc:
+            logger.warning("iceberg: ROLLBACK failed after an aborted write: {}", rollback_exc)
+        raise
+
+
 def _scope_predicate(record_type: RecordType, scope: Mapping[str, str] | None, alias: str = "") -> str:
     """Render column-equals-literal constraints as a trusted SQL predicate (``TRUE`` when unscoped)."""
     if not scope:
@@ -322,7 +338,7 @@ def replace_rows(
         if found != count or matching != count:
             raise RuntimeError("Catalog replacement did not preserve one exact row per source identity")
         con.execute("COMMIT")
-    except Exception:
+    except BaseException:
         try:
             con.execute("ROLLBACK")
             # ROLLBACK normally discards the copy; drop any survivor explicitly.
@@ -521,8 +537,6 @@ def seed_comments_from_parquet(
     if replace and agency is None:
         raise ValueError("replace needs the agency whose rows it replaces")
     agency_filter = "" if agency is None else f"WHERE agency_code = '{_sql_str(agency)}'"
-    if replace:
-        con.execute(f"DELETE FROM {_qualified(record_type)} {agency_filter};")
     present = {
         row[0]
         for row in con.execute(
@@ -533,14 +547,17 @@ def seed_comments_from_parquet(
         f'CAST("{c}" AS VARCHAR) AS "{c}"' if c in present else f'CAST(NULL AS VARCHAR) AS "{c}"' for c in columns
     )
     col_list = ", ".join(f'"{c}"' for c in columns)
-    con.execute(
-        f"""
-        INSERT INTO {_qualified(record_type)} ({col_list})
-        SELECT {projection}
-        FROM read_parquet('{esc}', union_by_name=true, hive_partitioning=false)
-        {agency_filter};
-        """
-    )
+    with _transaction(con):
+        if replace:
+            con.execute(f"DELETE FROM {_qualified(record_type)} {agency_filter};")
+        con.execute(
+            f"""
+            INSERT INTO {_qualified(record_type)} ({col_list})
+            SELECT {projection}
+            FROM read_parquet('{esc}', union_by_name=true, hive_partitioning=false)
+            {agency_filter};
+            """
+        )
     return con.execute(f"SELECT count(*) FROM {_qualified(record_type)}").fetchone()[0]
 
 

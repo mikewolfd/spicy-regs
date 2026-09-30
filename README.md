@@ -189,14 +189,16 @@ and writes Parquet to `./output/`. Scope your first run tight so it finishes in
 minutes instead of hours:
 
 ```bash
-# Smallest useful run: one agency, recent dockets, comments only, no upload.
+# Smallest useful run: one agency, recent dockets + documents, no upload.
 # The first run has no manifest yet, so it must be allowed to start empty.
-uv run run-pipeline --agency EPA --only-comments --since-year 2025 --allow-fresh-start
+uv run run-pipeline --agency EPA --skip-comments --since-year 2025 --allow-fresh-start
 ```
+
+Comments require `--use-iceberg` and the `R2_CATALOG_*` credentials in `.env`.
 
 What you get:
 
-- `output/comments.parquet` — merged and deduplicated comments
+- `output/dockets.parquet` / `output/documents.parquet` — merged and deduplicated
 - `output/manifest.parquet` — a Bloom filter of already-processed source keys,
   so the next run is incremental. Pass `--full-refresh` to rebuild from scratch.
   Without a manifest (locally or on R2) a run refuses to start unless given
