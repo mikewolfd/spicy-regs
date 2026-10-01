@@ -54,6 +54,24 @@ npm run deploy         # builds the image, pushes it, rolls out the container
 
 `wrangler` prints a `*.workers.dev` URL; smoke-test the MCP handshake against `/mcp`.
 
+### Qualified FEC views
+
+After the retained FEC data and archive pass their release checks, set
+`SPICY_REGS_FEC_RELEASE_SHA256` to the published release receipt's SHA-256 and
+`SPICY_REGS_CONSUMER_IMAGE_DIGEST` to the digest of the actual deployed image.
+Both use `sha256:<hex>` values and belong in deployment configuration. The
+Worker forwards them through the container's
+[`envVars`](https://developers.cloudflare.com/containers/examples/env-vars-and-secrets/).
+
+Build the image first, create the receipt with that image identity, then inject
+the two pins when deploying that same image. Keep the receipt outside the image
+and the generations it references to avoid circular hashes. The server reads
+the receipt from the configured data base and checks its exact data, code,
+dictionary and policy dependencies. Empty or mismatched pins leave qualified
+FEC views disabled. Verify the returned release identities and refusal behavior
+against the running service before declaring delivery complete; see the
+[FEC release checks](../../docs/fec-delivery-plan.md#compatible-release-and-deployment-checkpoint).
+
 ### Catalog and public reads
 
 The MCP reads the configured bucket's published Parquet, including the comments
