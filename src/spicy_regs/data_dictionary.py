@@ -217,6 +217,67 @@ RULEMAKING_TABLES: tuple[str, ...] = (
     "agency_lifecycle_stats",
 )
 
+# These are supported retained observation tables, not a publication claim.
+# Exact Arrow union bytes and DuckDB types are qualified together in the checked
+# schema resource; the MCP consumes generated table_metadata.json only.
+FEC_TYPED_TABLES: tuple[str, ...] = (
+    "fec_account_transfers",
+    "fec_agency_mapping_dispositions",
+    "fec_agency_report_documents",
+    "fec_agency_report_text",
+    "fec_agency_reports",
+    "fec_allocated_disbursements",
+    "fec_allocation_bases",
+    "fec_api_response_controls",
+    "fec_audit_findings",
+    "fec_bundled_contributions",
+    "fec_candidate_api_observations",
+    "fec_collection_selection",
+    "fec_committee_master_observations",
+    "fec_committee_observations",
+    "fec_communication_costs",
+    "fec_contribution_aggregates",
+    "fec_coordinated_party_expenditures",
+    "fec_debts",
+    "fec_disbursements",
+    "fec_electioneering_communications",
+    "fec_filing_definition_evidence",
+    "fec_filing_definitions",
+    "fec_filing_header_associations",
+    "fec_filing_links",
+    "fec_filing_report_observations",
+    "fec_filing_text_observations",
+    "fec_filings",
+    "fec_historical_ie_statistics",
+    "fec_inaugural_donations",
+    "fec_independent_expenditures",
+    "fec_intercommittee_transactions",
+    "fec_legal_documents",
+    "fec_legal_events",
+    "fec_legal_matters",
+    "fec_legal_parties",
+    "fec_loan_guarantors",
+    "fec_loan_terms",
+    "fec_loans",
+    "fec_lobbyist_registrations",
+    "fec_oversight_recommendations",
+    "fec_postgres_committee_history_observations",
+    "fec_quality_notices",
+    "fec_receipts",
+    "fec_record_evidence",
+    "fec_registration_statements",
+    "fec_report_metrics",
+    "fec_reported_financial_summaries",
+    "fec_research_context_dispositions",
+    "fec_research_document_observations",
+    "fec_research_filing_feed_items",
+    "fec_research_meeting_observations",
+    "fec_research_response_outcomes",
+    "fec_research_source_pages",
+    "fec_retained_csv_observations",
+)
+
+
 # Display order for the dictionary. The first three are the core record types;
 # the rest are derived rollups. This is the full public R2 surface.
 TABLES: tuple[str, ...] = (
@@ -243,6 +304,7 @@ TABLES: tuple[str, ...] = (
     "fec_collections",
     "fec_source_records",
     "fec_relationships",
+    *FEC_TYPED_TABLES,
     "org_committee_links",
     "gao_reports",
     "gao_decisions",
@@ -304,6 +366,7 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "fec_collections",
         "fec_source_records",
         "fec_relationships",
+        *FEC_TYPED_TABLES,
         "org_committee_links",
         "gao_reports",
         "gao_decisions",
@@ -710,10 +773,35 @@ def contract_grain(table: str) -> str:
     return _contracts()[table].grain
 
 
+def fec_typed_schemas() -> dict[str, list[tuple[str, str]]]:
+    """Read the qualified retained union declaration without importing its producers.
+
+    This resource retains exact Arrow schema bytes and their digest beside the
+    DuckDB spelling measured from those bytes. The dictionary tests reconcile
+    both and check producer schema compatibility. The generating receipt binds
+    the complete selected union, including the declared bulk schemas. It makes
+    no assertion that any table is currently published or fully populated.
+    """
+    path = REPO_ROOT / "data_dictionary" / "fec_typed_schemas.json"
+    document = json.loads(path.read_text(encoding="utf-8"))
+    if document.get("format_version") != 1 or set(document.get("tables", {})) != set(FEC_TYPED_TABLES):
+        raise ValueError("Retained FEC schema declaration differs from the supported table set")
+    result = {}
+    for table, entry in document["tables"].items():
+        columns = entry["columns"]
+        if (not columns or any(not isinstance(pair, list) or len(pair) != 2
+                               or not all(isinstance(value, str) and value for value in pair) for pair in columns)
+                or len({pair[0] for pair in columns}) != len(columns)):
+            raise ValueError(f"Invalid retained FEC declared columns: {table}")
+        result[table] = [tuple(pair) for pair in columns]
+    return result
+
+
 def expected_schemas() -> dict[str, list[tuple[str, str]]]:
     """Return ``{table: [(column, type_label), ...]}`` for all tables (offline)."""
     schemas: dict[str, list[tuple[str, str]]] = {}
     from_contracts = contract_schemas()
+    from_fec = fec_typed_schemas()
     from spicy_regs.contract_types import described_schema
     from spicy_regs.transforms.build_agency_lifecycle_stats import SCHEMA as AGENCY_LIFECYCLE_STATS_SCHEMA
     from spicy_regs.transforms.build_comment_periods import COLUMNS as COMMENT_PERIOD_COLUMNS
@@ -772,6 +860,8 @@ def expected_schemas() -> dict[str, list[tuple[str, str]]]:
             schemas[name] = [(column, "VARCHAR") for column in builder_columns[name]]
         elif name in builder_schemas:
             schemas[name] = described_schema(builder_schemas[name])
+        elif name in from_fec:
+            schemas[name] = from_fec[name]
         elif name in from_contracts:
             schemas[name] = list(from_contracts[name])
         elif name in RECORD_TYPES:

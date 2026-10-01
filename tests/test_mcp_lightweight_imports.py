@@ -17,12 +17,17 @@ class BlockSourceDependencies(importlib.abc.MetaPathFinder):
 
 sys.meta_path.insert(0, BlockSourceDependencies())
 from spicy_regs import acquisition_queue, citation_resolution, relationship_views
+from spicy_regs.relationship_views import fec_typed
+assert fec_typed.INDIVIDUAL_SNAPSHOT_POLICY
 from spicy_regs.identifiers import action_evidence_rin, normalize_rin
 assert normalize_rin(' 0648-ac64 ') == '0648-AC64'
 assert action_evidence_rin('0648-XC39') is None
 assert citation_resolution.normalize_rin is normalize_rin
 assert acquisition_queue.QUEUE_RULE
 assert relationship_views.install_relationship_views
+from spicy_regs import mcp_server
+assert len(mcp_server.FEC_QUALIFIED_VIEWS) == 72
+assert not any(name.startswith("spicy_regs.transforms") for name in sys.modules)
 assert 'spicy_regs.ontology' not in sys.modules
 from spicy_regs.vocabulary_mapping import lookup_agency
 assert lookup_agency('regulations.gov:agency', 'OPM')['status'] == 'reviewed_mapping'

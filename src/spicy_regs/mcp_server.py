@@ -42,6 +42,7 @@ from starlette.responses import Response
 from spicy_regs._icon import ICON_DATA_URI
 from spicy_regs.duckdb_settings import INTERACTIVE_HTTP_RETRIES, load_public_http, memory_limit
 from spicy_regs.public_url import resolve_r2_base_url
+from spicy_regs.relationship_views.fec_query_views import fec_query_views
 
 TABLES = (
     "dockets",
@@ -82,6 +83,60 @@ TABLES = (
     "fec_collections",
     "fec_source_records",
     "fec_relationships",
+    "fec_account_transfers",
+    "fec_agency_mapping_dispositions",
+    "fec_agency_report_documents",
+    "fec_agency_report_text",
+    "fec_agency_reports",
+    "fec_allocated_disbursements",
+    "fec_allocation_bases",
+    "fec_api_response_controls",
+    "fec_audit_findings",
+    "fec_bundled_contributions",
+    "fec_candidate_api_observations",
+    "fec_collection_selection",
+    "fec_committee_master_observations",
+    "fec_committee_observations",
+    "fec_communication_costs",
+    "fec_contribution_aggregates",
+    "fec_coordinated_party_expenditures",
+    "fec_debts",
+    "fec_disbursements",
+    "fec_electioneering_communications",
+    "fec_filing_definition_evidence",
+    "fec_filing_definitions",
+    "fec_filing_header_associations",
+    "fec_filing_links",
+    "fec_filing_report_observations",
+    "fec_filing_text_observations",
+    "fec_filings",
+    "fec_historical_ie_statistics",
+    "fec_inaugural_donations",
+    "fec_independent_expenditures",
+    "fec_intercommittee_transactions",
+    "fec_legal_documents",
+    "fec_legal_events",
+    "fec_legal_matters",
+    "fec_legal_parties",
+    "fec_loan_guarantors",
+    "fec_loan_terms",
+    "fec_loans",
+    "fec_lobbyist_registrations",
+    "fec_oversight_recommendations",
+    "fec_postgres_committee_history_observations",
+    "fec_quality_notices",
+    "fec_receipts",
+    "fec_record_evidence",
+    "fec_registration_statements",
+    "fec_report_metrics",
+    "fec_reported_financial_summaries",
+    "fec_research_context_dispositions",
+    "fec_research_document_observations",
+    "fec_research_filing_feed_items",
+    "fec_research_meeting_observations",
+    "fec_research_response_outcomes",
+    "fec_research_source_pages",
+    "fec_retained_csv_observations",
     "org_committee_links",
     "gao_reports",
     "gao_decisions",
@@ -169,6 +224,12 @@ STATEMENT_TIMEOUT = os.environ.get("SPICY_REGS_STATEMENT_TIMEOUT", "790s")
 logger = logging.getLogger(__name__)
 
 DEFAULT_CATALOG_NAMESPACE = "default"
+# Trusted installed scope and SQL declare the candidate views. Release checks
+# keep them disabled until exact data, interpretation and consumer pins match.
+# A receipt cannot populate this registry, change scope or supply executable SQL.
+FEC_QUALIFIED_VIEWS: tuple = fec_query_views(
+    **json.loads(files("spicy_regs").joinpath("fec_query_scope.json").read_text(encoding="utf-8"))
+)
 
 
 def _parse_timeout_seconds(raw: str) -> float | None:
@@ -588,12 +649,52 @@ def _connection_relationships(cursor: duckdb.DuckDBPyConnection) -> dict:
     return _pinned_record(cursor, "_spicy_relationships") or {}
 
 
+def _fec_release_configuration(con, publication):
+    """Deployment chooses the receipt after image build; runtime identities are measured here."""
+    if not FEC_QUALIFIED_VIEWS:
+        return None
+    from spicy_regs.fec_release import capture_configuration
+
+    path = os.environ.get("SPICY_REGS_FEC_RELEASE_FILE")
+    return capture_configuration(
+        FEC_QUALIFIED_VIEWS,
+        receipt_digest=os.environ.get("SPICY_REGS_FEC_RELEASE_SHA256"),
+        image_digest=os.environ.get("SPICY_REGS_CONSUMER_IMAGE_DIGEST"),
+        base_url=R2_BASE_URL, local_path=Path(path) if path else None,
+        local_mode=DATA_DIR is not None, publication=publication,
+    )
+
+
+def _fec_release_reply(cursor):
+    """Only the identities and per-view outcomes captured by this connection."""
+    selected = _pinned_record(cursor, "_spicy_fec_release")
+    return {
+        "receipt_sha256": selected.get("receipt_sha256") if selected else None,
+        "consumer": selected.get("consumer") if selected else None,
+        "views": {name: info["release_compatibility"] for name, info in _connection_relationships(cursor).items()
+                  if "release_compatibility" in info},
+        "raw_query_financial_qualification": "not_inferred",
+    }
+
+
 def _install_relationship_views(con: duckdb.DuckDBPyConnection) -> None:
     """Bind trusted SQL definitions before locking the connection; no source row scan."""
     from spicy_regs.relationship_views import install_relationship_views
 
     status = _publication_status(con)
     relationships = install_relationship_views(con, status["tables"], publication=status["publication"])
+    selected = _fec_release_configuration(con, status["publication"])
+    if selected is not None:
+        from spicy_regs.fec_release import install_views
+
+        if any(spec.view.name in {*status["tables"], *relationships} for spec in FEC_QUALIFIED_VIEWS):
+            raise ValueError("Qualified FEC view collides with an existing table or relationship view")
+        relationships.update(install_views(
+            con, FEC_QUALIFIED_VIEWS, selected, _connection_index(con), status["tables"], status["publication"],
+            read_tables=_tables_named,
+        ))
+        con.execute("CREATE TABLE _spicy_fec_release (snapshot VARCHAR)")
+        con.execute("INSERT INTO _spicy_fec_release VALUES (?)", [json.dumps(selected)])
     con.execute("CREATE TABLE _spicy_relationships (snapshot VARCHAR)")
     con.execute("INSERT INTO _spicy_relationships VALUES (?)", [json.dumps(relationships)])
 
@@ -635,6 +736,7 @@ def _publication_status(cursor: duckdb.DuckDBPyConnection) -> dict:
             "rule_version": value["metadata"]["rule_version"],
             "dependencies": value["dependencies"],
             "input_publications": value["metadata"]["input_publications"],
+            **({"release_compatibility": value["release_compatibility"]} if "release_compatibility" in value else {}),
         }
         for name, value in _connection_relationships(cursor).items() if value["status"] == "available"
     }
@@ -743,7 +845,12 @@ def _refreshed(current: duckdb.DuckDBPyConnection) -> duckdb.DuckDBPyConnection:
     if DATA_DIR is not None:
         return _build_connection()
     publication = _read_publication()
-    return current if publication == _pinned_publication(current) else _build_connection(publication)
+    if publication != _pinned_publication(current):
+        return _build_connection(publication)
+    selected = _fec_release_configuration(current, _publication_status(current)["publication"])
+    if selected != _pinned_record(current, "_spicy_fec_release"):
+        return _build_connection(publication)
+    return current
 
 
 def _reset_connection_cache() -> None:
@@ -1004,6 +1111,7 @@ def _register_tools(mcp: MCPServer) -> None:
             ],
             "relationship_views": [{"views": names, "summary": summary} for summary, names in views.items()],
             "unavailable_tables": [name for name in (*TABLES, *relationships) if name not in available],
+            "fec_release": _fec_release_reply(cursor),
         }
 
     @tool
@@ -1108,6 +1216,11 @@ def _register_tools(mcp: MCPServer) -> None:
             raise ValueError(f"query_sql is read-only; refusing {write_statement} statement")
 
         with _statement_timeout(cursor):
+            relationships = _connection_relationships(cursor)
+            for name in _tables_named(cursor, sql):
+                release = relationships.get(name, {}).get("release_compatibility")
+                if release is not None and release["status"] != "compatible":
+                    raise ValueError(f"Qualified FEC view {name} is disabled: {relationships[name]['reason']}")
             cursor.execute(sql)
             columns = [desc[0] for desc in cursor.description] if cursor.description else []
             duplicates = [name for name, count in Counter(columns).items() if count > 1]
