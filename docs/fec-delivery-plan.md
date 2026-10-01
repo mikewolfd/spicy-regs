@@ -1,6 +1,6 @@
 # FEC delivery plan and tasks
 
-Saved September 30, 2026. This plan finishes the retained Federal Election
+Saved September 30, 2026; task status updated October 1, 2026. This plan finishes the retained Federal Election
 Commission (FEC) data, makes useful tables available through SpicyRegs, and moves
 recoverable originals to R2 before reclaiming local space. It also preserves the
 later historical expansion plan for the 2007–2008 through 2025–2026 cycles.
@@ -11,18 +11,41 @@ archive the complete inputs, publish the tables, and then delete only verified
 local source copies. The [data model](fec-data-model.md) defines the row meanings,
 keys, relationships, financial rules and proposed tables.
 
-**This is the implementation design and task register.** Execution has started;
-see the [verified checkpoint](research/fec-retained-delivery-execution-2026-09-30.md)
-for completed mappings, assembled tables and remaining validation. Full release
-validation, archive, publication and cleanup remain pending. PDF processing remains deferred by the
-user. The existing [FG gap register](fec-gaps.md) remains the canonical record of
-cross-cutting gaps; the task IDs here specify execution order and completion
-evidence, without renumbering or closing FG items.
+**This is the implementation design and task register. Retained-data execution is active.**
+The implementation checkpoint is committed locally on `fec-publish`:
 
-The September 30 review revisions strengthen correction and amendment rules,
-collection-context evidence, compatible query releases, deployment and early
-capacity checks. These are requirements for the implementation tasks below;
-revising this plan does not mark those tasks complete.
+- `87f7d66` — streaming evidence retention and publication readback.
+- `935b300` — retained FEC tables and query integration.
+- `26d2761` — delivery design and execution checkpoint.
+
+These commits have not been pushed. The SpicyDocs source work is already
+committed through `bcdde5431fac`. Subsequent fixture, typing and source-parent
+corrections are local changes.
+
+**FR08 is complete at the selected retained non-PDF local boundary.** The
+[combined receipt](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-validation-finish-20261001/fr08-complete.json) binds the final composition and successful complete
+key, evidence, financial and actual local MCP checks. The existing archive
+owner accepts that receipt's metadata. The source-parent correction now refuses
+missing or advanced evidence generations through real connection and refresh
+checks; captured connections retain their original state and rollback works.
+The separately sealed candidate history and retained catalog also pass local
+MCP acceptance through their existing family owners. See the
+[completion checkpoint](research/fec-retained-delivery-execution-2026-09-30.md#complete-local-validation-2026-10-01) for exact coverage, test results and limits.
+
+Current/net financial totals and unsupported amendment or correction claims
+remain unqualified. Local acceptance uses explicit candidate image/archive/typed
+generation descriptors; final sealed identities and deployed acceptance remain
+FR12–FR13. Source inputs and table values were preserved. PDF corpus processing
+remains deferred.
+
+Archive preparation and the replay environment are ready, but the final archive
+selection must incorporate the applied consumer correction, actual acceptance
+receipts and separate identity-family recovery inputs before admission. Full
+archive admission, upload, fresh restore/replay, publication, deployment and
+verified source cleanup remain pending. Follow the
+[next execution checkpoint](#next-execution-checkpoint). The [FG gap register](fec-gaps.md)
+continues to own source, semantic and operational gaps; successful local
+validation does not close those separate boundaries.
 
 ## Scope and release choice
 
@@ -150,27 +173,28 @@ rewriting an earlier completion claim.
 Execute these in order. Within a task, independent source families may run in
 parallel after their shared schema and checks are fixed. Use separate outputs
 and integrate centrally; do not allow concurrent writers to the publication
-index or the same generation directory. Every task below is pending unless its
-status explicitly identifies a completed preliminary check.
+index or the same generation directory. Read each status at its stated boundary:
+committed code, verified local components and public delivery are separate
+results. Tasks with unfinished acceptance checks remain open.
 
 | ID | Task and owner | Depends on | Current status and completion evidence |
 | --- | --- | --- | --- |
 | FR01 | Pin the release scope and baseline — SpicyRegs | None | **Verified starting checkpoint:** typed retained-data scope selected; baseline verified; expected R2 account/bucket reached; stored and public indices agree. Exact bytes, pins and conditional-write tokens are retained in the [execution evidence](research/fec-retained-delivery-execution-2026-09-30.md). Refresh mutable remote state again before publication. |
-| FR02 | Enumerate dependencies and qualify capacity — SpicyDocs and operator | FR01 | **Verified for bounded mapping trials:** selected direct files and contexts match their pins; derivations, aliases and historical citations have explicit dispositions. The measured resource budget permits bounded trials only. Complete portable-reference checks and refine whole-build size estimates before scaling; see the [checkpoint](research/fec-retained-delivery-execution-2026-09-30.md). |
-| FR03 | Qualify the proposed schema against retained records — SpicyRegs and SpicyDocs | FR02 | **In progress:** complete collection work register and source membership census saved. Receipt, committee-transaction and spending mappings pass bounded native-field checks; derived evidence matches the stored oracle. The full operating-expense width census supports mapping named positions while preserving its extra empty position. The retained summary/aggregate selection and captured financial API results pass complete field mapping. Exact-version 8.5 financial filing observations also pass complete field mapping, with pinned workbook/header evidence and explicit partial values. Supported retained electronic and paper financial formats also pass complete field mapping. Selected legal, agency and registry populations now also pass whole-selected field mapping and evidence checks. All useful native filing rows and selected standalone context facts now have qualified mappings or explicit source dispositions. Additional committee API samples pass independent review. The retained API census and committee master/PostgreSQL histories now pass full selected native-value and readback checks. The remaining reference, alias and candidate-history populations have exact reuse proofs. Bulk completion, runtime financial interpretation and combined release validation remain in progress. See the [checkpoint](research/fec-retained-delivery-execution-2026-09-30.md). |
-| FR04 | Complete identity and filing joins — SpicyRegs | FR03 | **In progress:** selected registry and filing metadata maps retain exact native IDs and unresolved identities. All retained filing references pass target-membership and cardinality checks. Corrected physical-header associations and native file-number SQL pass bounded full-cell replay. Unknown target mapper identities refuse resolution while retaining their witnesses; whole-release integration remains pending. Replacement scope remains unqualified. Preserve histories and reported relationships. Build evidenced filing/version links with separate native identifier namespaces. Establish each amendment's replacement scope and the completeness of the affected report/schedule membership, including deletions by omission and partial amendments; retain unknown scope and unresolved joins. |
-| FR05 | Build typed financial tables from retained inputs — SpicyRegs | FR04 | **Written; full verification pending:** the bulk writer exited at the free-space floor during final readback. Completed collection receipts and the closed main Parquet output remain intact. Recovery compares the existing output against native fields and mapper results without rewriting it; bounded comparison passed, while the corrected recovery runner still needs qualification and a full run. Exact filing-reference resolution is verified. Source versions, correction roles and evidence are preserved; amendment and current-total semantics remain unqualified. See the [execution evidence](research/fec-retained-delivery-execution-2026-09-30.md). |
-| FR06 | Build non-PDF matter, document and agency queries — SpicyRegs and DocSpec | FR05 | **Selected mappings qualified:** legal, agency and standalone context populations pass complete selected replay; the combined release remains in progress. Supported legal metadata, HTML/XML/Word content, FOIA metrics, oversight facts and filing narratives retain separate grains and source limits. Linked PDF body status remains deferred; structural Word tokens are not automatically semantic metrics. |
-| FR07 | Qualify current-record selection and aggregation — SpicyRegs | FR05, FR06 | **In progress:** complete main/date-member byte equivalence and source membership prove the individual-snapshot representation choice. Bounded scope-selection tests cover correction and amendment hard cases; retained correction applicability remains unqualified. Reported-measure policy `/2` fixes the authority/version applicability findings and passes retained decision replay plus refusal probes. Lightweight SQL now matches the retained Python decisions; runtime view binding is being integrated for MCP use. Version family-specific correction, overlap, amendment, memo, refund, allocation and balance policies. Prove correction base/window/order and repeat-application behavior; distinguish complete replacements from partial amendments. Retain inclusion/removal/unresolved decisions and their scope evidence. Pass the model's mandatory hard cases against exact membership. |
-| FR08 | Verify the complete retained release locally — SpicyRegs and SpicyDocs | FR07 | **In progress:** completed schemas pass strict union preflight; filing definitions and their retained workbook witnesses are unified; mixed bulk/filing evidence and lightweight serving imports pass focused checks. Exact release-dependency checks now pass local MCP compatibility, refusal and rollback tests. The final runtime registry and release receipt remain unbound. Known completed table inputs have fresh full hashes and strict schemas; assembly review found overwrite and post-readback mutation paths, now fixed and independently replayed. Completed non-bulk tables pass full-cell assembly and whole-table key/evidence-target checks; the bulk-dependent financial assembly remains pending. Reconcile selected membership and mapped fields, keys, evidence endpoints, join cardinality and compatible totals. Independently check correction/deletion cases and incompatible dependency/policy refusal through local MCP, using a draft of the release dependency receipt defined below. Stay within the resource bound; exclude PDF fixtures and processing. |
-| FR09 | Prepare the portable archive and refresh the capacity estimate — operator | FR02, FR08 | **Candidate prepared; admission awaits FR08 and refreshed capacity.** The portable manifest and direct-object selection are pinned. Selected metadata credential flags are classified against exact captured official FEC browser scripts; originals remain unchanged. Enumerate exact archive and replay dependencies, distinguishing descriptive source paths from paths the reader dereferences. Produce a pinned archive manifest, path relocation map, access policy, credential scan and remote object keys. Update FR02's budget with measured output sizes and transfer/readback/restore needs before staging. Preserve exact originals and distinguish public metadata from credential-bearing material. |
-| FR10 | Upload immutable originals and context to R2 — operator | FR09 | **Transfer code prepared and checked locally; no upload yet.** Existing retention and publication now stream bounded chunks without accumulating readback scratch. Reuse the existing source-evidence publisher. Verify the remote bytes of every object that could later authorize local deletion; record size and full SHA-256 readback, not just an ETag or successful upload response. |
-| FR11 | Restore and replay from R2 — SpicyDocs and operator | FR10 | **Planned.** Restore into a fresh location with portable manifests, independently verify membership and digests, and replay representative formats plus every special dependency path. Prove there is no fallback to original workstation paths. |
-| FR12 | Prepare compatible data and consumer releases — SpicyRegs | FR08, FR11 | **Planned.** Seal the selected typed outputs together in the proposed `fec-query` family; preserve existing family ownership and broader committee coverage. Finalize the release dependency receipt after sealing, including exact parent/data/archive pins and policy/definition digests. Build and pin the matching consumer image/code/dictionary, bind its expected receipt digest through deployment configuration, retain dependency generations and rollback versions, and validate that no member embeds its own final generation hash. |
+| FR02 | Enumerate dependencies and qualify capacity — SpicyDocs and operator | FR01 | **Selected accounting and expanded archive preparation verified; refresh capacity before admission.** Selected input/context pins, derivations, aliases and reference/history dispositions are recorded. The [expanded archive handoff](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr09-final-replay-closure-preparation-20261001/handoff.json) includes the filing-body witnesses, qualified non-PDF reference members and measured replay environment. Its capacity check reserves separate staging and restore copies, failure recovery, PostgreSQL scratch and replay metadata. Refresh free space at FR09; preparation does not establish full-source admission. |
+| FR03 | Qualify the proposed schema against retained records — SpicyRegs and SpicyDocs | FR02 | **Selected retained schemas verified locally.** The collection register and source census account for the selected financial, legal, agency, registry, filing, context and history populations through qualified mappings or explicit source dispositions. Native-field and stored-cell bulk recovery, exact final composition and the complete local acceptance now pass. Retained definitions preserve unknown and extra positions. See the [completion checkpoint](research/fec-retained-delivery-execution-2026-09-30.md#complete-local-validation-2026-10-01). |
+| FR04 | Complete identity and filing joins — SpicyRegs | FR03 | **Retained joins verified locally; amendment replacement remains source-limited.** Full evidence checks verify filing targets, cardinality, exact source coordinates, physical-header associations and native file-number links. Unknown namespaces, unsupported mapper identities and unresolved joins remain explicit. Replacement scope, amendment completeness and deletion-by-omission claims remain unqualified where retained evidence cannot establish them. See the [completion checkpoint](research/fec-retained-delivery-execution-2026-09-30.md#complete-local-validation-2026-10-01). |
+| FR05 | Build typed financial tables from retained inputs — SpicyRegs | FR04 | **Complete at the retained bulk-output boundary.** The [V7 terminal receipt](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr05-bulk-readback-recovery-v7/verification.json) proves complete native-field and stored-cell comparison of the main output, unchanged code and bytes, and exact reuse of the other completed collections. The process exited successfully. Final composition also passes; whole-release acceptance remains under FR08. |
+| FR06 | Build non-PDF matter, document and agency queries — SpicyRegs and DocSpec | FR05 | **Selected local tables and combined local acceptance verified.** Legal, agency, filing-text and standalone context populations pass their selected replay, assembly and complete key/evidence checks; integration passes under FR08. Keep document, metric and narrative meanings separate. PDF processing remains deferred, and Word structure does not establish rendered-page fidelity. See the [completion checkpoint](research/fec-retained-delivery-execution-2026-09-30.md#complete-local-validation-2026-10-01). |
+| FR07 | Qualify current-record selection and aggregation — SpicyRegs | FR05, FR06 | **Reported-measure rules and local runtime verified; broader semantics source-limited.** The full selected populations pass decision/cardinality checks, every observed interpretation/source class is covered by the independent Python comparison, and real MCP binding/refusal works. Current/net totals, transaction deduplication, amendment replacement, cross-row spending aggregation and transfer pairing remain unqualified. Quality notices do not automatically exclude observations. See the [financial receipt](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-final-evidence-financial-v3-20261001/output/financial.json). |
+| FR08 | Verify the complete retained release locally — SpicyRegs and SpicyDocs | FR07 | **Complete locally for the selected retained non-PDF release.** The [combined receipt](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-validation-finish-20261001/fr08-complete.json) binds final composition and complete keys, evidence, financial and actual local MCP acceptance to the same source selection. The source-parent fix is integrated, exact view SQL is preserved, and missing/advanced parent, typed dependency, policy/image mismatch, refresh and rollback checks pass. Full baseline unit tests, focused post-change tests, lint/type checks, dictionary validation and generated pages pass at their recorded scopes. The existing archive owner accepts the metadata gate; full archive admission and final sealed/deployed release identities remain later tasks. |
+| FR09 | Prepare the portable archive and refresh the capacity estimate — operator | FR02, FR08 | **Expanded selection and replay dependencies ready; actual admission awaits FR08.** The [final archive handoff](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr09-final-replay-closure-preparation-20261001/handoff.json) preserves the previous selection and classifications and adds filing-body witnesses, qualified non-PDF reference members, replay code and measured runtime evidence. Existing owner metadata checks and the capacity estimate pass, including separate staging/restore copies, failure margin and replay scratch. Refresh free space and pass the actual full-source scan, hash and staged-copy checks after FR08. Real admission and staging remain unperformed. |
+| FR10 | Upload immutable originals and context to R2 — operator | FR09 | **Streaming code committed and locally checked; no upload.** `87f7d66` saves bounded retention and remote artifact readback through the existing publisher. After FR09 admission, upload selected bytes and verify every remote object that could authorize local deletion by full SHA-256, including reused objects. An ETag match or successful upload response alone does not qualify cleanup. |
+| FR11 | Restore and replay from R2 — SpicyDocs and operator | FR10 | **Replay preparation qualified; runtime and selected reference members ready; real restore pending.** The [latest recovery checkpoint](research/fec-retained-delivery-execution-2026-09-30.md#source-availability-and-acceptance-memory-limit-2026-10-01) records exact source availability, isolated reader provisioning and selective non-PDF materialization. The [required PostgreSQL tool](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr11-runtime-readiness-20261001/pg-restore.json) is installed with its exact retained version and binary digest. Prepare replay for representative non-PDF formats and every special dependency route, including PostgreSQL derivation and filing bodies/ZIP members; record the macOS runtime required for retained Word/RTF routes. After FR10, restore separately, verify complete membership/digests and reproduce source results without original workstation paths or network fallback. Restored bytes alone do not pass semantic replay. |
+| FR12 | Prepare compatible data and consumer releases — SpicyRegs | FR08, FR11 | **Parent checks integrated and qualified locally; archive, sealing and image build pending.** [Actual local MCP acceptance](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-final-parent-bound-mcp-acceptance-v2-20261001/output/local-mcp-role.json) includes the exact retained source-parent descriptors, candidate history and catalog. It verifies missing/advanced parent refusal, compatible captured connections and rollback. After FR11, reuse the sealed source and candidate generations, seal `fec-query`, bind the actual archive and matching image, and repeat acceptance with those final identities. Candidate descriptors do not establish final image or public release acceptance. |
 | FR13 | Publish deploy and verify the consumer — operator and SpicyRegs | FR12 | **Planned.** Publish immutable data/receipt and conditionally update existing family indices without changing unrelated families. Deploy the pinned consumer image/configuration, or prove the running image already matches. Verify public bytes, CLI downloads, deployed views/descriptions and version-bearing responses. Exercise dependency advancement, incompatible-policy refusal and rollback as specified below. Documentation-site deployment is separately scoped; a local or raw-table-only check does not pass the typed release. |
 | FR14 | Produce the exact local deletion manifest — operator | FR11, FR13 | **Planned.** For each eligible non-PDF source copy, record its unchanged local digest, remote object and restore receipt, size, inode/link information and ownership. Exclude shared, in-use, deferred, unarchived and unresolved files. |
 | FR15 | Reclaim and measure local space — operator | FR14 | **Planned.** Recheck the deletion manifest immediately before removing only those copies. Record paths removed, preserved exceptions and actual free-space change; keep queryable tables, code, credentials, manifests and receipts. |
-| FR16 | Save the release and recovery handoff — SpicyRegs and operator | FR15 | **Planned.** Record public generation pins, working queries, archive locations, restore instructions, deleted-copy receipt, refresh policy and remaining historical/PDF tasks. Update FG statuses only for the boundaries actually verified. |
+| FR16 | Save the release and recovery handoff — SpicyRegs and operator | FR15 | **Implementation checkpoint committed; release handoff pending.** `26d2761` saves the design and earlier execution checkpoint. Subsequent fixture/type corrections pass selected checks and remain local changes. After delivery and eligible cleanup, record public pins, working queries, archive locations, restore instructions, deletion receipts, refresh policy and remaining historical/PDF work. Close FG items only at their verified boundaries. |
 
 The selected release includes typed query tables, so FR03–FR08 remain required
 before archive publication and cleanup. Existing evidence tables alone do not
@@ -469,19 +493,33 @@ selection; a live landing page is not its immutable inventory.
 
 ## Next execution checkpoint
 
-The bulk writer has stopped at its disk floor after writing the selected rows;
-its final full readback remains pending. Qualify the corrected read-only recovery
-runner, then validate the existing output once the capacity bound fits. Committee
-API and history observations have qualified outputs, and the remaining reference
-and alias populations have exact reuse dispositions. Canonical column ordering
-allows verified bulk files to be reused while only smaller inputs need alignment.
-The financial SQL fixes have passed focused checks; actual registry wiring is
-prepared but its checks are held below the disk floor. Assembly review fixes have
-passed independent replay, and completed non-bulk tables pass full assembly and
-key/evidence-target checks. Complete local release verification and portable
-recovery preparation before uploading or publishing. Filing definitions have
-been unified with verified source witnesses. The
-[execution checkpoint](research/fec-retained-delivery-execution-2026-09-30.md)
-separates verified trials from full-corpus work. Refresh mutable remote state
-before publication. The input inventory does not permit source deletion; keep
-historical acquisition and PDF processing deferred while completing this release.
+The [FR08 completion receipt](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-validation-finish-20261001/fr08-complete.json) closes complete local key, evidence,
+financial and actual MCP acceptance. The integrated parent correction preserves
+all registered SQL and the accepted table values. Full baseline unit tests and
+focused post-change checks pass at their recorded scopes. The documentation-site
+build remains unrun because MkDocs is absent from this environment.
+
+1. **FR02/FR09–FR11 — Admit, upload and restore the portable archive.** Use the
+   expanded selection and recipe containing the qualified replay dependencies.
+   Refresh it with final consumer code, the completed validation receipts and
+   separate candidate/catalog recovery inputs before actual archive admission.
+   Exact non-PDF members and derivation evidence from `eFilingFormats.zip` are
+   now retained separately; preserve the mixed parent with deferred PDFs and
+   exclude it from deletion. Refresh capacity
+   for staging, a separate restore, replay scratch and failure recovery. Pass
+   actual admission, upload the selected bytes, and verify every remote object
+   by full SHA-256. Then prove both a clean restore and semantic replay without
+   original workstation paths or network fallback. Preserve earlier candidates.
+2. **FR12–FR13 — Seal, publish and verify the matching consumer.** Bind exact
+   table, required source-parent, archive, policy, dictionary and image identities;
+   reuse the sealed source-parent and candidate-history generations. Reconcile
+   the retained source catalog with its published family and preserve its useful
+   updates. Publish these identity/discovery families alongside the typed release
+   without rebuilding its accepted table composition. Deploy with both Worker release pins;
+   then pass public queries, dependency-drift refusal and rollback checks.
+3. **FR14–FR16 — Reclaim eligible sources and record the release handoff.** Build
+   and recheck the exact deletion manifest, remove only verified eligible copies,
+   measure recovered space and save restore instructions and remaining gaps.
+
+PDF processing and historical acquisition remain deferred. Public activation and
+source cleanup still require their explicit release, restore and deletion gates.

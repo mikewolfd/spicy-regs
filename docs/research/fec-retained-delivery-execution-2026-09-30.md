@@ -576,11 +576,14 @@ clean restore, public query acceptance and source cleanup have not run.
 
 ### Commit checkpoint — 2026-10-01
 
-The retained-data execution remains paused. This checkpoint saves the current
+The retained-data execution was paused at this commit checkpoint. It saved the
 implementation and documentation; it does not admit the bulk output or publish
 the expanded FEC release. The SpicyDocs source worktree is already committed
-through `bcdde5431fac`; the pending SpicyRegs work is grouped into streaming
-evidence storage, typed FEC tables and query integration, and delivery notes.
+through `bcdde5431fac`. SpicyRegs now records streaming evidence storage in
+`87f7d66`, typed FEC tables and query integration in `935b300`, and delivery notes
+in `26d2761`. These are local commits; they have not been pushed. The
+[task register](../fec-delivery-plan.md#next-execution-checkpoint) records the
+remaining fixes and resume order.
 
 The [commit-check evidence](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/commit-checkpoint-20261001/)
 records fresh checks after storage cleanup restored enough space for local tests.
@@ -604,3 +607,457 @@ bulk recovery runner, complete full readback and combined-release validation,
 and refresh the capacity budget for sealing and restore. R2 transfer, clean
 restore, deployment, public-query acceptance and eligible source deletion
 remain outstanding. PDF processing and historical acquisition remain deferred.
+
+### Resumed validation 2026-10-01
+
+Retained-data execution has resumed. The commit-time test failures were stale
+fixtures: the import test expected an empty FEC view registry, while cache tests
+omitted the release configuration now stored alongside publication metadata.
+The corrected fixtures preserve lightweight imports, the populated registry,
+connection reuse for unchanged releases and serving during refresh. Production
+MCP behavior did not change for these fixes. The
+[registry-fix receipt](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-registry-fixes-20261001/completion.json)
+records their focused validation and file pins.
+
+Explicit internal types now describe context cells, links, headings and feed
+items; test fixtures also preserve their heterogeneous value types. A fresh
+[selected suite and static checks](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-local-checks-20261001/results.json)
+pass: `pytest.log` reports 1,281 passed and one live test deselected. Repository
+Ruff, ty and offline dictionary checks pass. The separate generated-page receipt
+reports no mismatches. These results supersede the commit-time failures above;
+the fixes remain local uncommitted changes. MkDocs remains unavailable, so the
+documentation build is unverified.
+
+Because the mapper file changed, the
+[context replay](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-context-type-replay-20261001/integrity.json)
+binds the new code pin and proves complete ordered field equality against the
+previously qualified stored Parquet for the selected context population. It
+preserves the prior immutable receipt and outputs. Selected unit tests and this
+component replay do not establish full combined-release acceptance.
+
+The independent [v4 recovery review](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr05-recovery-v4-qualification-20261001/review.json)
+reproduced three defects with bounded synthetic files: replacement of a reused
+completed Parquet after hashing; reuse of journal checkpoints from an attempt
+whose held file changed; and mutation of journal bytes after parsing. The v4
+runner is rejected. The v5 runner holds completed files through hashing and
+footer validation, binds file identities across resumes, checks those identities
+before appending progress, and tracks exact journal bytes through its own writes.
+The [v5 qualification](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr05-recovery-v5-qualification-20261001/review.json)
+confirms those failures now refuse and valid resume works, but also shows that
+edited checkpoint counts can enter a success receipt. V6 validates counter types
+and mapper states and atomically records each committed journal prefix by exact
+length, digest and group count. It preserves an interrupted uncommitted tail
+before replay and rejects changes within the committed prefix. Independent v6
+qualification is in progress. Full bulk recovery has
+not started, and no success receipt admits the existing bulk output.
+
+The [capacity refresh](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr02-capacity-refresh-20261001/capacity.json)
+measures the closed bulk files and available space. Readback, assembly, clean
+restore and a conservative provisional sealing copy fit above the free-space
+floor at that snapshot. This removes the previous capacity hold for those
+bounded phases; phase guards and final member-size measurement remain required.
+
+Next, qualify v6 and complete bulk readback, then assemble and verify the whole
+retained release. Archive transfer, full remote hashes, clean restore, matching
+deployment, public-query checks and eligible source deletion remain unfinished.
+PDF processing and historical acquisition remain deferred.
+
+### Bulk readback and release preparation 2026-10-01
+
+This checkpoint supersedes the recovery status immediately above. The
+[V7 qualification](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr05-recovery-v7-qualification-20261001/review.json)
+passes the previous recovery and journal-integrity probes plus the retained
+operating-expense metadata cases. The only change from V6 permits a missing,
+null or empty `field_mapping` to mean no header row, matching the retained
+selection and producer receipt; invalid types still refuse. The
+[bounded retained-data trial](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr05-bulk-readback-recovery-v7/bounded-trial-000016.json)
+passes complete ordered comparison for its selected groups. Neither receipt
+claims full-output acceptance.
+
+Full readback is running with the same pinned V7 runner and committed journal.
+The [14:32 UTC progress snapshot](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/task-list-refresh-20261001/readback-snapshot.json)
+records 13,890,512 compared rows and 1,700 of 3,917 source groups; the
+[live log](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr05-bulk-readback-recovery-v7/full-readback.log)
+is the source for subsequent progress. No terminal success receipt exists at
+that snapshot. Preserve the process and its proof files until it finishes.
+
+The [final composition preparation](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-final-assembly-preparation-20261001/completion.json)
+passes bounded synthetic qualification and metadata preflight. The
+[key-checker qualification](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-final-release-checks-preparation-20261001/synthetic-v1/qualification.json)
+passes synthetic membership, identity, namespace and rejection cases; independent
+review is in progress. These checks read no real corpus data pages. Real final
+assembly and archive staging have not started. The archive will use the existing evidence owner's
+normal staged copy; refresh capacity for both that copy and a separate clean
+restore before staging. Complete keys, evidence, financial and local MCP checks
+must bind the same exact final table-member receipt before archive admission.
+
+Archive preparation also found a
+[classification-evidence selection gap](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr09-archive-admission-preparation-20261001/classification-selection-gap.json):
+the candidate omitted original HTML captures used to classify selected browser
+configuration metadata. Add those exact witnesses to the supplementary selection
+with their existing qualified digests, sizes and reason for inclusion. Preserve
+the original candidate and gap receipt; final admission must rehash and scan the
+complete expanded selection.
+
+The [Worker preparation receipt](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr12-deployment-preparation-20261001/completion.json)
+records forwarding of `SPICY_REGS_FEC_RELEASE_SHA256` and
+`SPICY_REGS_CONSUMER_IMAGE_DIGEST` into the container. Type checking and Worker
+dry-run bundling pass. These values remain unset pending the admitted release
+and actual image identities; no image build or deployment occurred.
+
+The [public-index refresh](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr01-public-index-refresh-20261001/receipt.json)
+retains both current public indices and their matching FEC family pins. The
+required local `fec-observations` generation differs from the currently public
+parent, so final publication must include the required parent as well as
+`fec-query`. This read-only public check does not refresh authenticated R2 state
+or conditional-write tokens; refresh those before publication. Archive upload,
+remote full hashes, clean restore, public release acceptance and eligible source
+deletion remain open. PDFs and historical acquisition remain deferred.
+
+### Bulk recovery passed and final composition started 2026-10-01
+
+Full V7 readback exited successfully. Its [terminal receipt](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr05-bulk-readback-recovery-v7/verification.json)
+records complete native-field and stored-cell comparison for the main
+32,034,987-row file, with every selected source group checked. Its exact reuse
+of the other completed collections accounts for 45,014,959 selected bulk rows.
+Peak process RSS was 834,125,824 bytes. The main amount values all retain exact
+decimal meaning; source-empty dates remain distinct from exact dates. This
+receipt admits the bulk-output component, not a complete published release.
+
+The [prepared final selection](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-final-assembly-20261001/selection.json)
+binds the successful recovery receipt, qualified non-bulk outputs, canonical
+schemas and ordered financial pieces. Metadata review accounts for 49,357,527
+rows across the selected tables; these include evidence and association rows
+and must not be interpreted as a count of distinct financial transactions.
+The [composition launch](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-final-assembly-20261001/launch.json)
+started only after recovery closed, with an explicit memory/new-output budget
+and the free-space floor. Final composition is in progress at this checkpoint.
+
+Independent key-checker probes reproduced parent-directory replacement during
+SQL, late extra files, a success receipt left by a final resource refusal and
+mismatched source-generation metadata. The fixed checker reads held file
+descriptors, repeats complete member inventory, binds the exact reviewed source
+scope and promotes success exclusively after checks close. Its
+[final independent review](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-final-assembly-preparation-20261001/checker-review-v3/completion.json)
+passes the valid cases and rejects each reproduced failure, including receipt
+collision. This qualifies the checker; it has not yet checked the actual final
+tables.
+
+The [archive-adapter handoff](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr09-archive-admission-preparation-20261001/handoff.json)
+passes synthetic admission/readback/restore tests and metadata preflight. It
+includes the missing original HTML witnesses and separately reserves staging,
+fresh restore and failure-recovery space. Actual credential scanning, archive
+admission, remote verification and restored-source replay remain pending.
+Complete evidence/financial acceptance and local MCP checks are being prepared.
+Local MCP checks will use explicitly labeled candidate release identities;
+sealed generation, archive and image acceptance still belongs to FR12/FR13.
+
+### Final composition and complete key checks passed 2026-10-01
+
+The [final composition receipt](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-final-assembly-20261001/output/verification.json)
+passes with exact final membership, rechecked input/output hashes and complete
+stored-cell comparison for schema-aligned pieces. Reused files retain their
+previously qualified bytes. The composition created 173,757,848 new logical
+payload bytes for alignment; linked files share original storage and are not
+independent backup copies.
+
+The [complete key-check receipt](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-final-key-checks-20261001/output/verification.json)
+passes across every selected final table and row. It binds the composition
+digest `sha256:b38326f56bfd364fbd3e12c280a0abd378adadee7edcedf249e87ed158cab4d0`,
+exact source-selection/generation pins, canonical schemas and every member hash.
+Checks cover row counts, unique row identities or complete evidence-association
+keys, actual namespace values and complete member inventory. Peak RSS was
+1,947,205,632 bytes and peak temporary spill was 3,171,483,648 bytes, within the
+explicit bounds. The process exited successfully and closed all held files.
+
+This completes the key/membership component of FR08. Complete evidence endpoints,
+financial decisions and draft local MCP acceptance remain required; neither
+receipt admits the archive or establishes a public release. Their executable
+checks are being prepared through existing table, query and policy owners.
+
+The [read-only Wrangler account check](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr12-deployment-preparation-20261001/account-check-20261001.json)
+matches the configured Cloudflare account and reports container/deployment
+permissions. The Docker daemon responds locally. These readiness checks do not
+establish R2 admission, a built consumer image or deployment. No source originals
+were deleted, and PDF processing and historical acquisition remain deferred.
+
+The subsequent [authenticated R2 refresh](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr01-authenticated-index-refresh-20261001/receipt.json)
+confirms read access to the configured `spicy-regs` bucket. Both stored
+publication indices match their public copies byte-for-byte and preserve the
+previous FEC family versions. The receipt retains exact bytes and ETags. This
+was read-only; publication must refresh conditional-write state when it runs.
+
+### Acceptance and restore preparation task update 2026-10-01
+
+This task update supersedes the earlier statements that bulk recovery or final
+composition remain in progress. The [receipt snapshot](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/task-list-refresh-20261001/task-status-snapshot-after-mcp-preparation.json)
+rehashes the successful bulk recovery, final composition and complete key
+receipts. Their exact digests still match the completed checkpoints above.
+The delivery plan and gap register now distinguish those completed checks from
+whole-release evidence, financial and MCP acceptance.
+
+The [evidence/financial runner handoff](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-evidence-financial-preparation-20261001/completion.json)
+was frozen after that snapshot. Its [qualification](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-evidence-financial-preparation-20261001/synthetic-qualified-v2/qualification.json)
+passes synthetic positive/refusal probes and admits the exact composition/key
+metadata. No production table payload was read and no acceptance receipt was
+issued. The next full run checks evidence endpoints, filing associations,
+representation choices and financial decisions through the existing owners.
+Both successful role receipts must include the exact source and composition
+pins and references to their evidence. Unsupported current totals and amendment
+replacement remain explicitly unqualified.
+
+The [local MCP handoff](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-local-mcp-preparation-20261001/handoff.json)
+passes synthetic runner and existing-owner checks. It binds the final table
+metadata but has not read or linked real payloads. Actual acceptance requires
+the successful key, evidence and financial receipts and confirmation that all
+checkers have closed their held files. It will verify member bytes, bind the
+registered views, exercise representative queries, and check refusal, refresh
+and local rollback. Its candidate descriptors support local checks only;
+FR12/FR13 still require actual sealed generation, archive and image identities.
+Any archived candidate receipts remain historical local-check evidence.
+
+Restored-source replay preparation is in progress. It found that the earlier
+archive candidate omitted filing-body reference metadata and associated
+qualification evidence. Add those dependencies and the replay plan/code pins
+to a newly pinned selection and recipe before staging; preserve the earlier
+candidate. The replay must cover representative non-PDF formats and every
+special dependency route, including PostgreSQL derivation and filing bodies
+or ZIP members, with original workstation paths unavailable and no network
+fallback. The [PostgreSQL runtime receipt](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr11-runtime-readiness-20261001/pg-restore.json)
+confirms that the exact required executable version and digest are installed.
+Retained Word/RTF routes require the macOS runtime; this preparation does not
+establish replay on arbitrary operating systems. Refresh capacity for replay
+scratch as well as separate staging, fresh restore and failure recovery.
+
+The replay agent subsequently identified another explicit dependency: the
+candidate does not contain `eFilingFormats.zip`, whose contexts describe retained
+spreadsheet and Word/RTF reference members. That parent also contains deferred
+PDFs. Account for exact qualified non-PDF member bytes, parent/member identities
+and derivation evidence in the expanded selection; preserve the mixed parent
+and exclude it from deletion. Member-byte availability is still being checked.
+This finding does not establish those reference-format replay checks as passed.
+
+The [current container receipt](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr12-deployment-preparation-20261001/current-container-20261001.json)
+saves the deployed image identity for rollback planning. It does not verify a
+matching new release or a completed rollback exercise. Actual archive staging,
+upload, full remote readback, clean restore/replay, final sealing, expanded
+publication, matching deployment and eligible FEC source deletion remain open.
+PDF processing and historical acquisition remain deferred.
+
+### Source availability and acceptance memory limit 2026-10-01
+
+The first complete evidence/financial attempt stopped before table scans because
+a retained reference original was a cloud placeholder whose read timed out.
+The [namespace availability receipt](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-source-availability-20261001/verification.json)
+records restored local access and exact digest agreement for the required
+originals. A subsequent [archive-selection check](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-source-availability-20261001/archive-selection-availability.json)
+found further cloud placeholders, with no missing or size-mismatched selected
+objects. Their [readback receipt](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-source-availability-20261001/archive-placeholder-verification.json)
+confirms restored local access and exact retained hashes. These checks restore
+availability of existing evidence; they do not replace archive admission or R2
+verification.
+
+The [second full attempt](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-final-evidence-financial-retry-20261001/process-result.json)
+reached the intercommittee evidence comparison, then stopped at DuckDB's memory
+limit while joining the original locator values. It emitted no evidence or
+financial success receipt. This resource failure does not establish a data
+mismatch. The next checker retains exact comparisons and divides large joins
+into exhaustive partitions; a bounded real-data probe will select the partition
+size before complete acceptance resumes.
+
+The [isolated replay environment](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr11-replay-runtime-20261001/verification.json)
+now has the required Python and source/workbook readers. Its
+[runtime identity](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr11-replay-runtime-20261001/environment.json)
+pins the interpreter, installed distribution contents and external tools.
+Repository dependency files remain unchanged. The initial provisioning attempt
+encountered a missing shared cache entry; the successful retry used an independent
+temporary cache and retained both logs.
+
+The mixed reference ZIP also became readable and matched its retained digest.
+The [selective materialization receipt](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr11-nonpdf-member-materialization-20261001/nonpdf-member-materialization.json)
+proves exact extraction of the selected non-PDF reference members, with the
+parent held and rehashed before and after extraction. The process exited
+successfully and the decoded files passed a separate digest check. It opened
+only the selected spreadsheet, Word and RTF members; the parent ZIP remains
+preserved and ineligible for deletion. Native semantic replay still awaits the
+expanded archive, complete remote readback and fresh restore.
+
+### Partitioned acceptance running and archive preparation ready 2026-10-01
+
+The [revised checker qualification](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-evidence-financial-preparation-v3-20261001/completion.json)
+passes synthetic probes, including a reproduced memory failure in the old wide
+join, exact partitioned comparisons under the same bound, and the actual archive
+adapter's JSON receipt checks. Hashes assign every row to a partition; comparisons
+inside each partition still use original IDs and complete field values. Separate
+JSON detail receipts preserve the results within the downstream control budget.
+
+Real-data readiness probes passed on intercommittee transactions and receipts
+for both proposed partition sizes. The larger size reduced repeated scans with
+similar time per comparison and stayed within the unchanged memory/spill limits.
+The [measured configuration](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-final-evidence-financial-v3-20261001/measured-config-selection.json)
+pins those successful bounded probes. They prove readiness, not complete
+evidence or financial acceptance. The [full launch](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-final-evidence-financial-v3-20261001/launch.json)
+started the complete run with that configuration. Follow its
+[live log](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-final-evidence-financial-v3-20261001/full-check.log)
+and terminal process/role receipts before claiming completion or creating the
+local MCP prior-check closure.
+
+The [expanded archive handoff](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr09-final-replay-closure-preparation-20261001/handoff.json)
+preserves the original selection and classified occurrences and adds the final
+replay dependencies, actual reference-member proof and measured runtime evidence.
+Existing owner metadata checks pass. Capacity includes separate staged and
+restored copies, failure recovery, PostgreSQL scratch and replay metadata; the
+measured free space fits that budget. Root independently loaded the final job
+through the existing adapter and confirmed its canonical selection digest.
+Actual source scanning, archive admission and staging still await successful
+FR08 evidence, financial and local MCP receipts.
+
+### Required source-parent refusal gap 2026-10-01
+
+The full partitioned checker completed exact primary-evidence comparisons for
+the intercommittee population, clearing the comparison that exhausted memory
+in the previous attempt. Its [live log](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-final-evidence-financial-v3-20261001/full-check.log)
+records continued processing; this checkpoint does not establish terminal
+evidence or financial acceptance.
+
+The [consumer review](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr12-final-release-preparation-20261001/parent-scope-review.json)
+found that the actual view registry remained compatible after the required
+`fec-observations` parent advanced or was removed from the captured index.
+Existing checks compare SQL-table dependencies. These evidence routes emit or
+filter an immutable source-generation pin without reading parent tables, so
+their required evidence parent needs a separate application-declared check.
+This finding leaves the explicit FR13 parent-advance requirement open; changing
+only the typed-table family does not test that requirement.
+
+Prepare the correction separately while the full checker holds its pinned
+implementation files. After that process closes, integrate the correction,
+verify unchanged SQL/data interpretation, and refresh local MCP acceptance to
+cover the matching, missing, advanced and restored parent states. Preserve
+earlier receipts at their actual scope. A change to generic publication policy
+is not required by this finding.
+
+A [bounded authenticated R2 check](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr12-required-parent-presence-20261001/receipt.json)
+also found the required source-generation and associated evidence artifact roots
+absent remotely. The current published source family remains the earlier
+selection. Reuse and publish the exact already sealed local source generation;
+resealing it would change the pin carried by typed evidence. This read checked
+metadata presence only and made no remote changes.
+
+### Parent check reviewed and retained identity delivery reconciled 2026-10-01
+
+The [isolated parent-check handoff](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr12-parent-pin-fix-preparation-20261001/HANDOFF.md)
+and its focused checks qualify application-declared evidence parents separately
+from SQL dependencies. Each qualified view requires agreement between its
+application declaration, release receipt and captured source-family pin, plus
+recovery retention. Missing, advanced or malformed parents disable affected
+views; existing captured connections, unrelated queries and rollback retain
+their declared behavior.
+
+The [root review](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr12-parent-pin-fix-preparation-20261001/root-review.json)
+rechecked the actual live/isolated file hashes and patch applicability and
+independently compared every before/after view definition. SQL bytes, required
+tables/columns, meanings, population/as-of and non-factory interpretation pins
+match exactly. The intended changes are the explicit evidence-parent declaration
+and factory file digest. The patch remains unapplied while the full checker holds
+the original implementation. Successful original value-check receipts may be
+paired with this preservation proof; they do not replace fresh actual MCP
+acceptance against the corrected consumer.
+
+The [full inventory](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/inventory-20261001/inventory-workbook-verification.json)
+also distinguishes useful retained outputs outside the new typed composition.
+Candidate history already has a qualified sealed generation, but the captured
+public index has no candidate-history family. The retained source-catalog member
+also differs from the published member and requires explicit reconciliation.
+FR12/FR13 must account for both through their existing publication owners.
+Preserve the accepted typed composition and current checker inputs; this is
+delivery closure for retained data, not historical acquisition.
+
+The [fresh identity verification](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr12-retained-identity-preparation-20261001/verification.json)
+passes the existing generation/evidence owners, member hashes, decoded pages,
+schemas, rows and query-bundle aliases for the sealed candidate and catalog
+outputs. Candidate identities and cycle counts pass, and the earlier independent
+whole-cell proof names the same unchanged member bytes. Catalog contents match
+the retained provider declarations and pagination modes; different published
+bytes alone are not claimed as a semantic change.
+
+The [archive closure check](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr12-retained-identity-preparation-20261001/closure.json)
+finds the original candidate-master payloads already selected, but additional
+generation/evidence metadata, the candidate replay manifest/journal and small
+query members are needed to recover these exact existing artifacts. Refresh the
+final archive selection with the reviewed additive preservation list, final
+consumer code and actual MCP evidence before admission. The closure inventory
+also includes inspected proof/runtime references; it is not itself the minimum
+addition list or a deletion manifest. No generation was resealed or published.
+
+### Inventory publication comparison and identity acceptance preparation 2026-10-01
+
+The [authenticated catalog comparison](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr12-source-catalog-comparison-20261001/comparison.json)
+read the current stored index and small published catalog member, verified its
+declared byte size and SHA-256, and compared every row and column with the
+retained member. Only `provider_version` and `catalogued_at` differ. Source
+families, routes, reference definitions, catalog digest and coverage text agree.
+A retained-catalog publication therefore changes provenance, without adding
+source coverage. The current index still lacks the candidate-history and typed
+query families. This check made no remote changes.
+
+The [additive MCP preparation](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-parent-bound-mcp-preparation-20261001/identity-revision/HANDOFF.md)
+includes candidate history and the retained catalog through their separate
+family owners. Its preservation proof keeps the accepted typed composition,
+view definitions and actual source-parent descriptors unchanged. Synthetic
+checks and metadata-only preparation pass; no actual payloads were linked or
+real MCP role emitted. After the full checker closes and the parent correction
+is integrated, prepare a fresh candidate from the installed runtime and execute
+it against real successful prior-role receipts.
+
+The [clean-restore supplement](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr12-retained-identity-preparation-20261001/RESTORED-PATHS.md)
+provides existing-owner verification and the independent candidate comparison
+using only restored paths. Preserve its pinned support scripts with the additive
+archive selection. The commands retain the original manifest and make explicit
+path-only substitutions in fresh scratch copies of the historical oracle.
+Preparation checks do not establish clean-restore execution; that remains FR11.
+
+### Complete local validation 2026-10-01
+
+**FR08 is complete for the selected retained non-PDF local release.** The
+[combined receipt](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-validation-finish-20261001/fr08-complete.json) has SHA-256
+`3be3b5685972f4ba7b95ab70d3a164e95c9428364a886f5fa1ce810ab768a8c5`.
+The [existing-owner gate check](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-validation-finish-20261001/gate-verification.json)
+accepts its source scope, exact table composition and all four role/evidence
+pins. This is the local admission prerequisite, not full-source archive
+admission, upload, restore or deployed acceptance.
+
+| Measured check | Result and evidence |
+| --- | --- |
+| Complete typed composition and keys | The unchanged selected bundle contains 54 tables, 180 members and 49,357,527 physical rows. Existing exact composition and complete key receipts remain pinned in the combined receipt. |
+| Complete evidence and financial checks | The [terminal run](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-final-evidence-financial-v3-20261001/process-result.json) exited successfully after 12,932 seconds. It completed all 46 derived evidence/association views, both stored evidence tables and 26 financial decision views. The independent Python comparison covered 363 representative decisions across every observed interpretation and source class. Peak RSS was 2,471,264,256 bytes and peak spill 2,276,392,960 bytes, within the declared bounds. |
+| Applied source-parent correction | [Integration proof](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-validation-finish-20261001/parent-patch-integration.json) binds the exact reviewed patch. Every SQL digest in the completed value checks matches both the preserved view definitions and the fresh candidate release. Original value receipts retain their original code pins. |
+| Product checks | [Full baseline unit suite](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-validation-finish-20261001/unit-tests-before-parent-patch.json): 4,553 passed, two skipped and 14 live integration tests deselected. [Post-patch checks](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-validation-finish-20261001/post-patch-checks.json): 133 focused tests passed; Ruff, type checks, dictionary validation, generated-page comparison and diff checks passed. The full suite preceded the parent patch; its affected release/view/MCP paths were rerun afterward. |
+| Actual local MCP | [Successful role](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-final-parent-bound-mcp-acceptance-v2-20261001/output/local-mcp-role.json): all 56 selected tables described, all 72 qualified views bound, 15 representative row queries exercised, all 182 selected members verified by the existing owner. Candidate history has 130,562 unique candidate/cycle keys and the catalog has 26 distinct families. Source-parent payload links remain zero. |
+| Actual compatibility scenarios | [Scenario receipt](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-final-parent-bound-mcp-acceptance-v2-20261001/output/compatibility-scenarios.json): missing receipt, absent/advanced source parent, advanced typed dependency, policy and image mismatch all refuse affected qualified queries; raw queries remain usable, captured connections retain their pins and exact local rollback succeeds. |
+
+The first MCP launch counted shared-parent outputs against its task budget and
+stopped before opening data. The isolated retry reached the 512 MiB synthetic
+RSS cap. Both failures remain in their original receipts. The
+[revised runner](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-parent-bound-mcp-preparation-20261001/identity-revision-v2/verification.json)
+retains every prior correctness check, adds explicit actual absent-parent
+connection/refresh scenarios and progress logging, and raises only the process
+RSS cap to 1 GiB. Its 27 synthetic checks pass; DuckDB remains limited to 160 MiB,
+one thread, no spill and 60-second statements. The successful real run used
+640,516,096 bytes peak RSS and completed in 55.93 seconds. Linked Parquet files
+share existing storage; no source bytes were deleted or reclaimed.
+
+Current/net totals, transaction deduplication, amendment replacement, cross-row
+spending aggregation and transfer pairing remain unqualified. Quality notices
+do not automatically exclude observations. Candidate image/archive/typed
+identity descriptors remain explicit local test identities. FR09 must refresh
+its selection with final code, validation controls and separate identity-family
+recovery inputs; FR10–FR13 still require remote SHA verification, clean restore
+and semantic replay, final seals/image and public consumer acceptance. No push,
+remote mutation, deployment or source deletion occurred in this checkpoint.
+
+The user's PDF inventory question was answered with a
+[metadata-only presence refresh](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-validation-finish-20261001/pdf-presence-refresh.json):
+777 locally present paths, 102 cloud placeholders and 10 recorded archive-member
+references. These include duplicates, test/derived pages and partial captures;
+unique official documents were not counted. No PDF bodies were opened by that
+refresh, and corpus PDF processing remains deferred.

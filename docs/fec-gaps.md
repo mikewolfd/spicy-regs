@@ -1,6 +1,9 @@
 # FEC remaining work and discovered gaps
 
-Updated September 30, 2026 for the [retained non-PDF corpus qualification](research/fec-retained-corpus-qualification-2026-09-30.md).
+Updated October 1, 2026 for the committed retained-data implementation and its
+[completed local validation](research/fec-retained-delivery-execution-2026-09-30.md#complete-local-validation-2026-10-01).
+The [September 30 retained non-PDF qualification](research/fec-retained-corpus-qualification-2026-09-30.md)
+still owns the baseline input selection.
 The dated September 21 delivery at SpicyRegs `7b174f1` and its receipts remain
 the historical publication baseline. The user deferred PDF processing; retained
 PDF originals and pre-deferral native/OCR evidence remain inventoried. Retained
@@ -22,6 +25,24 @@ sequence, R2 archive and cleanup checks, and later historical backfill. Its FR
 and FH task IDs map to this register without changing FG identifiers or marking
 unimplemented work complete. The [data model](fec-data-model.md) defines the
 proposed table grains, keys, relationships and interpretation rules.
+
+The implementation is committed locally through `26d2761`, following streaming
+storage commit `87f7d66` and typed-table/query checkpoint `935b300`; these commits
+have not been pushed. Subsequent fixture, typing and source-parent corrections
+are local changes. Complete bulk recovery, final composition, keys, evidence,
+financial checks and actual local MCP acceptance now pass under the
+[FR08 combined receipt](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-validation-finish-20261001/fr08-complete.json). Missing or advanced evidence parents now disable
+qualified views, and actual refresh/rollback checks pass. Candidate history and
+the retained catalog are included through their existing local family owners.
+
+The expanded release remains unpublished. Final archive admission must use the
+updated code, acceptance controls and identity-family recovery inputs. Upload,
+clean restore/replay, final generation/image acceptance, deployment and verified
+source deletion remain open. Follow the
+[execution list](fec-delivery-plan.md#next-execution-checkpoint) and
+[completion checkpoint](research/fec-retained-delivery-execution-2026-09-30.md#complete-local-validation-2026-10-01). Current financial totals and unsupported
+amendment/correction meanings remain source-limited despite successful local
+validation.
 
 The reusable path works for the selected inputs: source discovery, retained
 records, reported relationships, verified table generations, CLI downloads and
@@ -103,6 +124,18 @@ caller decisions. Evidence: [observation builder](https://github.com/mikewolfd/s
 
 ### FG02 — Distribute recoverable input and audit evidence
 
+**October 1 update:** archive admission/restore and local MCP preparation pass
+synthetic checks, and bounded transfer code is committed. The candidate includes
+the missing HTML classification witnesses. Restored-source replay preparation
+subsequently found missing filing-body reference and qualification metadata;
+the [expanded archive preparation](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr09-final-replay-closure-preparation-20261001/handoff.json)
+now includes those dependencies and passes owner metadata/capacity checks. The
+exact PostgreSQL tool and isolated replay environment are ready. Qualified
+non-PDF members from `eFilingFormats.zip` are retained separately with derivation
+evidence; the mixed parent stays preserved and ineligible for deletion. Actual
+admission, upload, full remote hashes, clean restore and semantic replay remain
+open under FR09–FR11.
+
 **Open distribution · Publication operator, SpicyRegs and SpicyDocs.** Table
 generations bind output bytes, schemas and implementation identity. The retained
 observation generation now also binds its exact selected manifest, including
@@ -125,6 +158,12 @@ the long-term evidence store. Evidence: [generation format](generation-publicati
 
 ### FG03 — Adopt the assessed PostgreSQL committee history
 
+**October 1 update:** typed committee-master and PostgreSQL history observations
+also pass complete selected native-value/readback and local combined-table
+checks. See the [reference/history closure](research/fec-retained-delivery-execution-2026-09-30.md#retained-reference-and-history-closure).
+This extends local adoption; current-registry identity and remote delivery
+remain separate.
+
 **Retained native reader and local receiving path qualified · SpicyDocs and SpicyRegs.**
 The September 30 selection includes the original dump's native committee-history
 rows and literal README lines through the existing observation tables. The
@@ -146,6 +185,14 @@ contain later candidate/sponsor/cycle information. Evidence: E3 and the
 
 ### FG04 — Finish adoption of already retained bulk populations
 
+**October 1 update:** the [V7 terminal recovery receipt](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr05-bulk-readback-recovery-v7/verification.json)
+passes complete native-field and stored-cell comparison of the main bulk output
+and binds the other completed collections for exact reuse. This resolves the
+earlier readback interruption at FR05's output boundary. Final composition and
+complete keys, evidence, financial and actual local MCP acceptance now pass under
+FR08. Public adoption remains open under FR13. The [recovery checkpoint](research/fec-retained-delivery-execution-2026-09-30.md#bulk-readback-and-release-preparation-2026-10-01)
+preserves earlier findings and subsequent evidence.
+
 **Retained selection qualified locally; unacquired history remains expansion ·
 SpicyDocs and SpicyRegs.** The September 30 manifest combines the previously
 selected bulk populations with all retained native master snapshots, individual
@@ -160,7 +207,9 @@ builds every bulk candidate-master cycle from 1980 through 2026. The exact
 retained-file selection, mixed acquisition dates, complete field comparison and
 local MCP check are recorded in the [qualification receipt](research/fec-publish-qualification-2026-09-30.md#candidate-master).
 Remote publication remains unperformed. This closes the local candidate-master
-receiver path. The later [retained-corpus receipt](research/fec-retained-corpus-qualification-2026-09-30.md)
+receiver path. FR12/FR13 must publish this already sealed generation through its
+existing family owner; the new typed-table bundle does not replace or include
+it. The later [retained-corpus receipt](research/fec-retained-corpus-qualification-2026-09-30.md)
 records the combined native adoption; neither selection claims unrelated
 unacquired official history.
 
@@ -172,14 +221,21 @@ the exact dispositions and links to FG03/FG05/FG06 where another gap applies.
 
 ### FG05 — Resolve the operating-expenditure field definitions
 
-**Source-limited · SpicyDocs qualification, SpicyRegs mapping.** All 1,620,229
+**Named-field mapping qualified; extra position source-limited · SpicyDocs and SpicyRegs.**
+The retained whole-population width census supports mapping the named native
+positions while preserving the extra blank position without an invented name.
+Complete typed bulk readback passes under FR05, and combined local acceptance
+now passes under FR08. Publication remains separate. See the
+[execution evidence](research/fec-retained-delivery-execution-2026-09-30.md).
+All 1,620,229
 selected `oppexp26` rows have 26 positions, including a final blank. The official
 CSV header supplies 25 names; the HTML dictionary also has inconsistent row
-width and repeated/missing positions. Literal positional rows are delivered.
+width and repeated/missing positions. Literal positional rows remain retained.
 
 **Complete when:** authoritative evidence establishes the matching field layout
-and a whole-population audit supports a named mapping. Until then, expose the
-positional-only status. Do not invent a name, shift fields or drop a source
+and a whole-population audit supports a named mapping. Expose qualified named
+fields separately from the unresolved extra position. Do not invent a name,
+shift fields or drop a source
 position. Evidence: E4 `oppexp-second-audit.json` and
 [bulk audit](research/fec-bulk-continuation-2026-09-21.md).
 
@@ -270,6 +326,12 @@ supporting-document history remains a separate collection selection under FG13.
 
 ### FG11 — Adopt agency-report evidence and extend declared collections
 
+**October 1 update:** selected typed agency report, metric, document and narrative
+tables pass complete local replay, assembly and evidence checks. This advances
+FR06; combined release acceptance and public delivery remain open. The
+[execution checkpoint](research/fec-retained-delivery-execution-2026-09-30.md)
+records the selected scope and preserves deferred PDF and source limits.
+
 **Open adoption / expansion · SpicyDocs, then receiving tables/catalogs.** Native
 Freedom of Information Act (FOIA) XML parsers for the National Information
 Exchange Model (NIEM) 1.02/1.03 and Oversight report parsers exist. Selected XML-linked FOIA
@@ -343,6 +405,14 @@ and [mapper](https://github.com/mikewolfd/spicy-regs/blob/7b174f1/src/spicy_regs
 
 ### FG15 — Declare financial inclusion rules before deriving totals or paths
 
+**October 1 update:** the retained reported-measure policy and SQL implementation
+pass full-population decision/cardinality checks and independent Python
+comparisons covering every observed interpretation and source class. Actual
+local MCP acceptance also passes under [FR08](research/fec-retained-delivery-execution-2026-09-30.md#complete-local-validation-2026-10-01). Current/net economic
+totals, transaction deduplication, correction/amendment applicability, cross-row
+spending aggregation and transfer pairing remain unqualified. Quality notices
+remain observations rather than automatic exclusion rules.
+
 **Consumer policy / expansion · SpicyRegs financial-view owner.** Literal rows
 do not settle amendments, insert/delete corrections, memo attribution, refunds,
 negative values, duplicate representations, partial amendments, notices repeated
@@ -357,6 +427,15 @@ filter. Raw acquisition and metadata delivery can proceed without adopting one
 universal financial policy. Evidence: research T07 and [integration limits](fec-integration.md).
 
 ### FG16 — Operate repeatable refresh and durable recovery
+
+**October 1 update:** the source-parent refusal gap is fixed and
+[verified through actual local MCP](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-final-parent-bound-mcp-acceptance-v2-20261001/output/local-mcp-role.json).
+Missing and advanced `fec-observations` parents disable qualified views before
+new connections and refresh. Captured connections retain their original pins,
+raw tables remain usable, and exact local rollback passes. Typed-dependency,
+policy and image mismatch checks also pass. FR08 is complete locally; final
+archive/generation/image identities, clean restore, deployed rollback and
+recurring source refresh remain open under FR11–FR13 and later operations.
 
 **Open operations / wider qualification · Acquisition operator and SpicyDocs.**
 The retained observation builder consumes a caller manifest; it does not download
@@ -391,6 +470,15 @@ the repository's `DATA_GOV_API_KEY` secret to the reader. Qualify a complete
 traversal and its publication before claiming the fork's refresh is operational.
 
 ### FG17 — Measure and improve bulk scale where needed
+
+**October 1 update:** the retained financial writer completed its output phase
+within its memory bound, then stopped at the free-space floor during final
+readback. Storage cleanup allowed local checks to run. The refreshed capacity
+budget permitted complete V7 readback, which now passes within its memory and
+free-space limits. Final composition has an explicit resource budget. The
+archive preparation also budgets its staged copy separately from clean restore;
+refresh free space before real admission. Broader historical-scale claims remain
+unqualified.
 
 **Open capacity qualification / conditional optimization · SpicyDocs and operators.**
 The retained builder now uses session-scoped verified archive inventories.
@@ -456,6 +544,13 @@ building an FEC search service. Evidence: research T09/T19 and the
 
 ### FG21 — Publish the selected FEC data and qualify the hosted reader
 
+**October 1 update:** complete retained local validation now passes under
+[FR08](research/fec-retained-delivery-execution-2026-09-30.md#complete-local-validation-2026-10-01), including evidence, financial decisions, actual MCP queries
+and the applied source-parent correction. The expanded typed release has not
+been sealed, uploaded or deployed. Worker preparation and the rollback image
+identity remain available. FR12–FR13 must bind and verify final table, source,
+archive, interpretation, dictionary and image identities after fresh restore.
+
 **Selected data published; hosted-service deployment open · Data/MCP operator.**
 The September 21 fork execution published three complete selected families: `fec-observations`,
 `fec-source-catalog` and `fec-committees`. Full public downloads passed digest,
@@ -469,8 +564,9 @@ The larger September 30 retained selection and its research correction are
 verified locally and remain unpublished. The earlier publication receipt does
 not establish delivery of those additions.
 
-**Complete when:** publish the chosen `fec-observations` and `fec-source-catalog`
-families through the existing generation path, verify remote bytes and one
+**Complete when:** publish the chosen families, including `fec-query` for the
+retained typed release and its exact parent dependencies, through the existing
+generation path. Verify remote bytes and one
 captured publication index, and check externally observed table pins, schemas,
 counts and raw-audited queries in the deployed reader. Make evidence accessibility
 and scope limitations explicit. An absent family is unavailable, not an empty
@@ -580,16 +676,20 @@ completion criterion.
 
 ## Suggested execution order
 
-1. Make current scope, mapping status and original evidence usable by remote
-   consumers (FG01–FG02), then publish the selected audited families (FG21).
-2. In parallel, adopt the assessed history and remaining selected retained bulk
-   inputs (FG03–FG04), qualify the existing cross-source join (FG18), and finish
-   the independently owned hosting/source repairs (FG22–FG23).
-3. Select the next source populations, then resolve their native evidence,
-   interfaces, scale and refresh requirements (FG05–FG13, FG16–FG17).
-4. Add relationship interpretations, financial views, documents/search and
-   adjacent sources as concrete consumer needs require (FG14–FG15, FG19–FG20,
-   FG24). Preserve source observations throughout.
+Follow the [retained-data task sequence](fec-delivery-plan.md#next-execution-checkpoint)
+for the active delivery:
+
+1. Finish whole-release evidence, financial and local MCP acceptance using the
+   completed composition and key checks (FG01, FG03–FG05, FG07, FG11, FG14–FG15).
+2. Complete archive dependencies, admission, remote full hashes and clean
+   restore with semantic replay (FG02, FG08, FG16).
+3. Seal and publish the typed family and required parent, deploy the matching
+   consumer, and verify public queries, refusal and rollback (FG16, FG21).
+4. Remove only eligible verified source copies and save the recovery handoff.
+
+Historical acquisition, PDF processing, further cross-source joins, search
+adoption and separately scoped shared repairs remain distinct follow-up work.
+Their presence in this register does not expand the retained-data release.
 
 ## Evidence index
 
