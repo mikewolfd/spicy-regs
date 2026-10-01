@@ -10,8 +10,8 @@
   "main": "worker/index.ts",
   "compatibility_date": "2026-08-01",
   "compatibility_flags": ["nodejs_compat"],
-  // The fork serves MCP at its workers.dev address (no custom domain). Per-version
-  // preview URLs would only add unlisted public copies of the same server.
+  // The fork serves MCP at the custom domain and its workers.dev address.
+  // Per-version preview URLs would add unlisted public copies of the server.
   "workers_dev": true,
   "routes": [{ "pattern": "mcp.spicygov.ai", "custom_domain": true }],
   "preview_urls": false,
@@ -21,8 +21,8 @@
     "SPICY_REGS_R2_URL": "https://data.spicygov.ai",
     // Set these to the admitted release receipt and actual deployed image pins.
     // Empty values keep qualified FEC views disabled until release acceptance.
-    "SPICY_REGS_FEC_RELEASE_SHA256": "",
-    "SPICY_REGS_CONSUMER_IMAGE_DIGEST": "",
+    "SPICY_REGS_FEC_RELEASE_SHA256": "sha256:6ae87a6ad5057c653641a16f345db8a7139090f78dd95e18dfffe1367f4dc554",
+    "SPICY_REGS_CONSUMER_IMAGE_DIGEST": "sha256:1d16dad0e38cf84b5457d79fc353c9c62b973dbcdbbcd8dede8804c571e25615",
     "R2_CATALOG_URI": "",
     "R2_CATALOG_WAREHOUSE": "",
     "R2_CATALOG_NAMESPACE": "default"
@@ -30,10 +30,9 @@
   "containers": [
     {
       "class_name": "McpContainer",
-      "image": "./Dockerfile",
-      // Build context is the repo root: the Dockerfile COPYs pyproject.toml + src/
-      // from there (and uses the repo-root .dockerignore). Path is relative to
-      // this wrangler config file.
+      // Build and push Dockerfile from the repo root before binding a new release.
+      // Deploy the measured image digest so the receipt and runtime stay matched.
+      "image": "registry.cloudflare.com/174055408ff1560e60601c4d12c561c4/spicy-regs-fec@sha256:1d16dad0e38cf84b5457d79fc353c9c62b973dbcdbbcd8dede8804c571e25615",
       "image_build_context": "../../",
       "instance_type": "standard-4",
       "max_instances": 10
