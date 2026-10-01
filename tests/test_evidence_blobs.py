@@ -1,5 +1,8 @@
 """Shared content-addressed evidence blobs: stored once, verified once, refused when damaged."""
 
+from io import BytesIO
+import tempfile
+
 import pytest
 from rulespec_artifacts import ArtifactVerificationError
 
@@ -123,3 +126,87 @@ def test_blob_requests_run_concurrently(tmp_path):
     publish(store, directory, evidence)
     assert not both.broken, "no two blob requests were in flight together"
     assert all(store.writes.count(key) == 1 and store.reads[key] == 1 for key in blob_keys(evidence))
+
+
+@pytest.mark.parametrize("already_present", [False, True])
+def test_untrusted_blobs_stream_into_admission_without_local_scratch(tmp_path, monkeypatch, already_present):
+    (tmp_path / "one").mkdir()
+    directory, evidence = evidence_run(tmp_path, "one", BODY * 1024, b"a second response" * 80_000)
+    local_files = sorted(path.relative_to(tmp_path) for path in tmp_path.rglob("*") if path.is_file())
+    bodies, active, peak = [], 0, 0
+
+    class Bounded(BytesIO):
+        def read(self, size=-1):
+            assert 0 < size <= 1024 * 1024, "Admission must request bounded chunks"
+            return super().read(size)
+
+        def close(self):
+            nonlocal active
+            if not self.closed:
+                active -= 1
+            super().close()
+
+    class Streaming(Store):
+        def get_object(self, *, Bucket, Key):
+            nonlocal active, peak
+            result = super().get_object(Bucket=Bucket, Key=Key)
+            if Key in blob_keys(evidence):
+                result["Body"].close()
+                result["Body"] = Bounded(self.objects[Key])
+                bodies.append(result["Body"])
+                active += 1
+                peak = max(peak, active)
+            return result
+
+        def put_object(self, **kwargs):
+            if kwargs["Key"] in blob_keys(evidence):
+                assert kwargs["IfNoneMatch"] == "*"
+            return super().put_object(**kwargs)
+
+    store = Streaming()
+    if already_present:
+        for key in blob_keys(evidence):
+            store.objects[key] = (evidence.artifact_dir / key.removeprefix("source-evidence/")).read_bytes()
+            store.etags[key] = '"different-etag-requires-readback"'
+
+    def no_scratch(*args, **kwargs):
+        raise AssertionError("Publication must not create a verification scratch directory")
+
+    monkeypatch.setattr(tempfile, "TemporaryDirectory", no_scratch)
+    publish(store, directory, evidence)
+    assert peak == 1 and active == 0 and all(body.closed for body in bodies)
+    assert all(store.reads[key] == 1 for key in blob_keys(evidence))
+    assert all(store.writes.count(key) == (0 if already_present else 1) for key in blob_keys(evidence))
+    assert sorted(path.relative_to(tmp_path) for path in tmp_path.rglob("*") if path.is_file()) == local_files
+
+
+@pytest.mark.parametrize("failure", ["interrupted-body", "extra-metadata"])
+def test_remote_stream_or_membership_failure_closes_body_and_never_publishes(tmp_path, failure):
+    (tmp_path / "one").mkdir()
+    directory, evidence = evidence_run(tmp_path, "one", BODY)
+    opened = []
+
+    class Interrupted(BytesIO):
+        def read(self, size=-1):
+            if self.tell():
+                raise OSError("interrupted read")
+            return super().read(min(size, 3))
+
+    class Failing(Store):
+        def get_object(self, *, Bucket, Key):
+            result = super().get_object(Bucket=Bucket, Key=Key)
+            if failure == "interrupted-body" and Key in blob_keys(evidence):
+                result["Body"].close()
+                result["Body"] = Interrupted(self.objects[Key])
+                opened.append(result["Body"])
+            return result
+
+    store = Failing()
+    if failure == "extra-metadata":
+        prefix = "source-evidence/" + evidence.artifact.pin.artifact_digest.removeprefix("sha256:")
+        store.objects[prefix + "/undeclared.json"] = b"undeclared"
+    with pytest.raises((ArtifactVerificationError, OSError)):
+        publish(store, directory, evidence)
+    assert all(body.closed for body in opened)
+    assert pub.INDEX_KEY not in store.objects and pub.INDEX_V2_KEY not in store.objects
+    assert not any(key.startswith("generations/") for key in store.writes)

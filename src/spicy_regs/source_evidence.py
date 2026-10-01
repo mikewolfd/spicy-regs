@@ -194,25 +194,52 @@ class CaptureEvidence:
             raise SourceEvidenceError("Cannot append to sealed source evidence")
         if status_code in (401, 403) or (self.credential and request_body and self.credential.encode() in request_body):
             raise CredentialRefusedError("Source response refused; credential-bearing bytes were not retained")
-        stream.seek(0)
-        try:
-            self.store.put_blob(sha256, byte_size, iter(lambda: stream.read(_CHUNK), b""))
-        except Exception as error:
-            raise self._failure("Cannot retain source file bytes") from error
-        response = {"sha256": sha256, "byte_size": byte_size}
+        response = self._file_blob(stream, sha256=sha256, byte_size=byte_size)
         request = self._blob(request_body) if request_body is not None else None
         self.event("capture", stage=stage, requested_url=requested_url, resolved_url=resolved_url,
                    observed_at=observed_at, status_code=status_code, content_type=content_type,
                    content_encoding=content_encoding, method=method, request_body=request, **response)
         return response
 
+    def _file_blob(self, stream: IO[bytes], *, sha256: str, byte_size: int) -> dict:
+        """Store bounded chunks, checking the complete bytes against their selected identity."""
+        if self.artifact is not None:
+            raise SourceEvidenceError("Cannot append to sealed source evidence")
+        try:
+            stream.seek(0)
+            self.store.put_blob(sha256, byte_size, iter(lambda: stream.read(_CHUNK), b""))
+        except Exception as error:
+            raise self._failure("Cannot retain source file bytes") from error
+        return {"sha256": sha256, "byte_size": byte_size}
+
     def retain_file(self, path: Path, *, stage: str, **fields) -> dict:
         """Retain a local file the run read rather than fetched, its exact bytes and digest, and journal it.
 
         For a one-time input kept outside the repository, such as a converted table, so the generation's evidence
-        holds the bytes its rows came from.
+        holds the bytes its rows came from. Hash and scan bounded chunks, then let the existing store verify
+        them again while retaining them. A changed file cannot be journaled as a successful retention.
         """
-        blob = self._blob(path.read_bytes())
+        if self.artifact is not None:
+            raise SourceEvidenceError("Cannot append to sealed source evidence")
+
+        def identity(info):
+            return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns
+
+        try:
+            with path.open("rb") as stream:
+                before = identity(os.fstat(stream.fileno()))
+                check = _StreamCheck(self, before[2])
+                for chunk in iter(lambda: stream.read(_CHUNK), b""):
+                    check.update(chunk)
+                if check.size != before[2] or identity(os.fstat(stream.fileno())) != before or identity(path.stat()) != before:
+                    raise self._failure("Source file changed during retention")
+                blob = self._file_blob(stream, sha256=check.sha256, byte_size=check.size)
+                if identity(os.fstat(stream.fileno())) != before or identity(path.stat()) != before:
+                    raise self._failure("Source file changed during retention")
+        except (SourceEvidenceError, CredentialRefusedError):
+            raise
+        except Exception as error:
+            raise self._failure("Cannot retain source file bytes") from error
         self.event("retained-file", stage=stage, name=path.name, **blob, **fields)
         return blob
 
