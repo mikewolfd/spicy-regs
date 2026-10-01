@@ -5,6 +5,14 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
+- `spicy_docs-0.53.0+fec.69964fe27c6d`: reviewed FEC source at
+  commit `69964fe27c6ddc437e817041a3c5cca57a02723c`.
+  SHA-256 `824296eed3c333277feaa4dca03a2dc8faec437d803c374186d61c8761bf8c7b`. Repeated committed-archive
+  builds are byte-identical. Production package files are identical to
+  `0.53.0+fec.bcdde5431fac`; this repin includes the reviewed PostgreSQL
+  rejection/cleanup and API shape-refusal regression tests. Build and comparison
+  receipts: `hosted-release-20261001/reviewed-release/source/`.
+
 - `spicy_docs-0.53.0+fec.bcdde5431fac`: research-coverage correction from
   source commit `bcdde5431fac89799f0f3f76400dfacbc661399f`.
   SHA-256 `364a220975c868cc6ea67809f4064c09b9efd72ec54ba02166a95f38bdd29099`.
