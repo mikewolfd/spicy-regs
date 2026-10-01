@@ -15,6 +15,11 @@
   "workers_dev": true,
   "routes": [{ "pattern": "mcp.spicygov.ai", "custom_domain": true }],
   "preview_urls": false,
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true, "head_sampling_rate": 1 },
+    "traces": { "enabled": true, "head_sampling_rate": 0.01 }
+  },
   // Set these for the selected account before deploying a fork. The Worker
   // forwards them to Python; secrets belong in Wrangler's secret store.
   "vars": {

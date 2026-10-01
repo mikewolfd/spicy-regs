@@ -180,6 +180,31 @@ def test_missing_formula_cache_is_not_evaluated_or_zero_filled():
     assert total["amount_formula"] == "SUM(E7:E7)"
 
 
+@pytest.mark.parametrize(
+    "native_type, decoded_type, decoded",
+    [
+        ("s", "s", "Donation"),
+        ("b", "b", True),
+        ("str", "f", "=TEXT(E7,0)"),
+        ("e", "f", "=1/0"),
+        ("inlineStr", "s", "123"),
+        ("d", "d", {"type": "datetime", "iso8601": "1976-04-09T00:00:00"}),
+        ("n", "d", {"type": "datetime", "iso8601": "1976-04-09T00:00:00"}),
+    ],
+)
+def test_nonnumeric_workbook_tokens_cannot_be_reported_as_money(native_type, decoded_type, decoded):
+    def change(parsing):
+        amount = parsing["worksheets"][0]["rows"][5]["cells"][4]
+        amount.update(data_type=decoded_type, value=decoded)
+        amount["native_cell"]["attributes"]["t"] = native_type
+        amount["native_cell"]["children"] = [dict(tag="v", text="12"), dict(tag="f", text="source formula")]
+
+    detail = run(modify(workbook(), change)).tables["fec_historical_ie_statistics"][0]
+    assert detail["amount"] is None
+    assert detail["amount_status"] == "unsupported_native_numeric_type"
+    assert detail["amount_raw"] == "12" and detail["amount_formula"] == "source formula"
+
+
 def test_changed_workbook_header_is_explicitly_unsupported():
     row = modify(workbook(), lambda p: p["worksheets"][0]["rows"][4]["cells"][4].update(value="New Amount Meaning"))
     result = run(row)

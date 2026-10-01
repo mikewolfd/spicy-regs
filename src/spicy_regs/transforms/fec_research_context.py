@@ -198,10 +198,24 @@ def _native_number(cell):
             formulas[0] if len(formulas) == 1 else None,
         )
     raw = values[0]
+    formula = formulas[0] if len(formulas) == 1 else None
+    # OOXML <v> also stores shared-string indices, booleans and error caches.
+    # Dates can use a numeric XML cell while the workbook reader marks them as
+    # dates. Neither encoding establishes a reported monetary amount.
+    native_type = native.get("attributes", {}).get("t")
+    decoded_type = cell.get("data_type")
+    decoded = cell.get("value")
+    if (
+        native_type not in (None, "n")
+        or decoded_type not in (None, "n", "f")
+        or isinstance(decoded, bool)
+        or isinstance(decoded, dict)
+    ):
+        return None, "unsupported_native_numeric_type", raw, formula
     value, status = exact_amount(raw)
     if formulas and status == "exact":
         status = "source_formula_cache"
-    return value, status, raw, formulas[0] if len(formulas) == 1 else None
+    return value, status, raw, formula
 
 
 def _cell_text(cell):
