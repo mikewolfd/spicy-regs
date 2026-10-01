@@ -666,13 +666,26 @@ def _fec_release_configuration(con, publication):
 
 
 def _fec_release_reply(cursor):
-    """Only the identities and per-view outcomes captured by this connection."""
+    """Discovery summary; describe_table and query replies retain full evidence.
+
+    Repeating every dependency descriptor here can exceed an MCP client's SSE
+    event limit before it can discover which table to describe.
+    """
     selected = _pinned_record(cursor, "_spicy_fec_release")
+    views = {}
+    for name, info in _connection_relationships(cursor).items():
+        release = info.get("release_compatibility")
+        if release is not None:
+            views[name] = {
+                key: release[key]
+                for key in ("status", "sql_sha256", "evidence_generations", "required_evidence_generations")
+            }
+            views[name]["reasons"] = [{"path": reason["path"], "reason": reason["reason"]}
+                                     for reason in release["reasons"]]
     return {
         "receipt_sha256": selected.get("receipt_sha256") if selected else None,
         "consumer": selected.get("consumer") if selected else None,
-        "views": {name: info["release_compatibility"] for name, info in _connection_relationships(cursor).items()
-                  if "release_compatibility" in info},
+        "views": views,
         "raw_query_financial_qualification": "not_inferred",
     }
 

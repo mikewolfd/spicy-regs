@@ -6,10 +6,12 @@ import json
 
 import duckdb
 import pytest
+from starlette.testclient import TestClient
 
 from spicy_regs import fec_release as release, mcp_server as server
 from tests.test_fec_release import capture, digest, fixture
 from tests.test_mcp_server import _tool_data
+from tests.test_mcp_query_results import call
 
 
 def configure(tmp_path, monkeypatch):
@@ -58,6 +60,40 @@ def test_compatible_mcp_responses_include_exact_receipt_dependency_and_consumer_
         assert attestation["sql_sha256"] and attestation["interpretation"]["policies"]
         raw = _tool_data(mcp, "query_sql", {"sql": "SELECT * FROM fec_receipts"})
         assert "release_compatibility" not in raw["publication"]["fec_receipts"]
+
+
+def test_discovery_fits_sse_limit_with_many_views_and_partitioned_dependencies(tmp_path, monkeypatch):
+    registry_size = len(server.FEC_QUALIFIED_VIEWS)
+    specs, index, receipt, _, path = configure(tmp_path, monkeypatch)
+    base = specs[0]
+    specs = tuple(replace(base, view=replace(base.view, name=f"fec_test_partitioned_{i}"))
+                  for i in range(registry_size))
+    table = index["families"]["fec-query"]["tables"]["fec_receipts.parquet"]
+    del table["sha256"]
+    table.update(rows=50, byteSize=5000, partitionColumns=["id"], members=[
+        {"key": f"fec_receipts/id=1/part-{i:06}.parquet", "sha256": digest(str(i)),
+         "rows": 1, "byteSize": 100, "partition": {"id": "1"}}
+        for i in range(50)
+    ])
+    receipt["output_membership"]["fec_receipts"] = release.captured_table(index, "fec_receipts")
+    view_receipt = receipt["views"][base.view.name]
+    view_receipt["dependencies"]["fec_receipts"] = release.captured_table(index, "fec_receipts")
+    receipt["views"] = {s.view.name: deepcopy(view_receipt) for s in specs}
+    raw = json.dumps(receipt).encode()
+    path.write_bytes(raw)
+    monkeypatch.setenv("SPICY_REGS_FEC_RELEASE_SHA256", release.sha256(raw))
+    monkeypatch.setattr(server, "FEC_QUALIFIED_VIEWS", specs)
+    with connection(index) as con:
+        monkeypatch.setattr(server, "_get_connection", lambda: con)
+        with TestClient(server.build_app()) as client:
+            listed = call(client, "list_sources", {})
+            # MCP sends both text and structured content in the same SSE event.
+            assert len(json.dumps(listed).encode()) < 1024 * 1024
+            summary = listed["structuredContent"]["fec_release"]["views"]
+            assert set(summary) == {s.view.name for s in specs}
+            assert all(v["status"] == "compatible" for v in summary.values()), summary[specs[0].view.name]
+            described = call(client, "describe_table", {"table": specs[0].view.name})["structuredContent"]
+            assert described["publication"]["release_compatibility"]["dependencies"] == view_receipt["dependencies"]
 
 
 def test_parent_advancement_refuses_affected_query_but_keeps_old_connection_and_unrelated_views(tmp_path, monkeypatch):
