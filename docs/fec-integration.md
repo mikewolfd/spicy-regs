@@ -10,6 +10,12 @@ and completion checks. Its [coverage census](research/fec-coverage-2026-09-21.md
 separates all 26 broad source families from all 26 official bulk-page groups and
 reconciles the original research backlog with the selected delivery.
 
+The [delivery plan and tasks](fec-delivery-plan.md) sequence the retained-data
+release, recoverable R2 archive, local cleanup and later historical expansion.
+The [table ontology and relationships](fec-data-model.md) distinguish the
+existing evidence/history foundation from proposed financial, filing, legal
+and agency query tables. Both are implementation plans, not publication claims.
+
 ## Outputs
 
 | Table | What one row means | How to use it |

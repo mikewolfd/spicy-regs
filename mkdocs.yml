@@ -32,7 +32,11 @@ markdown_extensions:
   - admonition
   - tables
   - pymdownx.highlight
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
 
 nav:
   - Overview: index.md
@@ -46,6 +50,8 @@ nav:
   - Querying with Python: querying-python.md
   - FEC:
       - Integration: fec-integration.md
+      - Delivery plan and tasks: fec-delivery-plan.md
+      - Table ontology and relationships: fec-data-model.md
       - Reported relationships: fec-relationships.md
       - Retained-input workflows: fec-retained-workflows.md
       - Remaining work: fec-gaps.md

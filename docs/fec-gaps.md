@@ -17,6 +17,12 @@ adds the loose bulk-download page and retained range evidence. Its receipt owns
 the current local selection and counts. One historical API original remains
 explicitly unavailable; PDF processing and external delivery remain separate.
 
+The [delivery plan and tasks](fec-delivery-plan.md) save the retained-data release
+sequence, R2 archive and cleanup checks, and later historical backfill. Its FR
+and FH task IDs map to this register without changing FG identifiers or marking
+unimplemented work complete. The [data model](fec-data-model.md) defines the
+proposed table grains, keys, relationships and interpretation rules.
+
 The reusable path works for the selected inputs: source discovery, retained
 records, reported relationships, verified table generations, CLI downloads and
 local Model Context Protocol (MCP) queries. Remaining work concerns coverage,
