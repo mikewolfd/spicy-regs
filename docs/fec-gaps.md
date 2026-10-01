@@ -26,18 +26,19 @@ and FH task IDs map to this register without changing FG identifiers or marking
 unimplemented work complete. The [data model](fec-data-model.md) defines the
 proposed table grains, keys, relationships and interpretation rules.
 
-The implementation is committed locally through `26d2761`, following streaming
-storage commit `87f7d66` and typed-table/query checkpoint `935b300`; these commits
-have not been pushed. Subsequent fixture, typing and source-parent corrections
-are local changes. Complete bulk recovery, final composition, keys, evidence,
+The implementation and completed local validation are committed locally through
+`7df589a`, including query/evidence-parent corrections in `cccda24` and deployment
+configuration in `91dd82b`. These commits have not been pushed. Complete bulk
+recovery, final composition, keys, evidence,
 financial checks and actual local MCP acceptance now pass under the
 [FR08 combined receipt](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-validation-finish-20261001/fr08-complete.json). Missing or advanced evidence parents now disable
 qualified views, and actual refresh/rollback checks pass. Candidate history and
 the retained catalog are included through their existing local family owners.
 
-The expanded release remains unpublished. Final archive admission must use the
-updated code, acceptance controls and identity-family recovery inputs. Upload,
-clean restore/replay, final generation/image acceptance, deployment and verified
+The expanded table release remains unpublished. FR09 has admitted the final
+archive with updated code, acceptance controls and identity-family recovery
+inputs. FR10 upload and complete public byte readback now pass. Clean
+restore/replay, final generation/image acceptance, deployment and verified
 source deletion remain open. Follow the
 [execution list](fec-delivery-plan.md#next-execution-checkpoint) and
 [completion checkpoint](research/fec-retained-delivery-execution-2026-09-30.md#complete-local-validation-2026-10-01). Current financial totals and unsupported
@@ -132,9 +133,10 @@ the [expanded archive preparation](/Users/mikewolfd/Work/corpora/fec-corpus-comp
 now includes those dependencies and passes owner metadata/capacity checks. The
 exact PostgreSQL tool and isolated replay environment are ready. Qualified
 non-PDF members from `eFilingFormats.zip` are retained separately with derivation
-evidence; the mixed parent stays preserved and ineligible for deletion. Actual
-admission, upload, full remote hashes, clean restore and semantic replay remain
-open under FR09–FR11.
+evidence; the mixed parent stays preserved and ineligible for deletion.
+[Actual FR09 admission](research/fec-retained-delivery-execution-2026-09-30.md#complete-archive-admission-2026-10-01) now passes for the final selection. [FR10 upload and full public hashes](research/fec-retained-delivery-execution-2026-09-30.md#verified-r2-archive-upload-2026-10-01)
+also pass. Clean restore and semantic replay remain open under FR11; this gap
+stays open until recovery is demonstrated.
 
 **Open distribution · Publication operator, SpicyRegs and SpicyDocs.** Table
 generations bind output bytes, schemas and implementation identity. The retained

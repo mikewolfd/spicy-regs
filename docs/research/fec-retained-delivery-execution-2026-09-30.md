@@ -1061,3 +1061,74 @@ The user's PDF inventory question was answered with a
 references. These include duplicates, test/derived pages and partial captures;
 unique official documents were not counted. No PDF bodies were opened by that
 refresh, and corpus PDF processing remains deferred.
+
+### Complete archive admission 2026-10-01
+
+**FR09 passed full local admission for the final non-PDF archive.** The
+[admission receipt](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr09-final-admission-20261001/source-evidence/e14ed13a37104bae99f5b34ef4bc9db9/archive-admission.json)
+binds 15,681 distinct objects totaling 3,869,779,618 bytes. Its sealed evidence
+artifact is `sha256:a287b2727bc56a7db652f40ab4b82733725c422f84d82d364533d299aa48adbf`;
+the exact selected-object manifest is
+`sha256:a668232d0cc7089f5133fdbd5b0d1841cffde73ba3ff0379153dfb7594f68b8e`.
+The [final preparation](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr09-final-admission-20261001/candidate-v3/verification.json)
+records the replay recipe, actual FR08 gate, capacity reservation and source
+scope. Final code and validation receipts, the existing candidate-history and
+catalog seals, and their recovery dependencies are included. Previous source
+objects and preparation records remain preserved. The admitted recipe restores
+qualified consumer code at active paths and older code under historical paths.
+
+The first admission attempt correctly stopped on credential-like Python names
+in replay support code. The [exact support classification](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr09-final-admission-20261001/support-classification-v3.json)
+qualifies 17 matches in 15 pinned files as Python identifier expressions, using
+Python parsing and token positions. It grants no allowance to string literals,
+comments, numeric literals or other files. No configured-secret value matched.
+The [adapter boundary checks](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr09-final-admission-20261001/support-boundary-tests/verification.json)
+verify exact selection/disposition binding, count-drift refusal and continued
+configured-secret refusal. Existing source-browser classifications retain their
+exact object hashes, sizes and occurrence counts. Full admission then scanned,
+hashed, copied, sealed and verified every selected object successfully.
+
+Commits `cccda24`, `91dd82b` and `7df589a` save the validated implementation,
+deployment configuration and local validation records. R2 upload began through
+the existing immutable evidence publisher; its [initial progress receipt](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr09-final-admission-20261001/upload/progress.json)
+preserves that phase. The next checkpoint records completed public readback;
+fresh restore and semantic replay remain pending. The archive does not activate the typed
+tables or deployed consumer. PDF processing and source deletion remain deferred.
+
+### Verified R2 archive upload 2026-10-01
+
+**FR10 is complete for the admitted non-PDF archive.** The
+[completion receipt](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr09-final-admission-20261001/completion.json) binds the local admission,
+implementation commits, R2 destination and complete public readback. The
+`spicy-regs` bucket holds 15,681 selected digest objects totaling
+3,869,779,618 bytes, plus the archive's controls. Its
+[public artifact root](https://data.spicygov.ai/source-evidence/a287b2727bc56a7db652f40ab4b82733725c422f84d82d364533d299aa48adbf/artifact.json)
+binds `sha256:a287b2727bc56a7db652f40ab4b82733725c422f84d82d364533d299aa48adbf`.
+
+The existing publisher completed every immutable object write. After transfer,
+its serial readback was deliberately stopped and replaced by the
+[qualified four-stream public reader](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr09-final-admission-20261001/parallel-readback-v2-qualification.json).
+The [switch receipt](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr09-final-admission-20261001/readback-switch.json) preserves the exact prior
+progress and reason; the interrupted serial run is not claimed as completed.
+Fourteen hermetic checks cover full coverage, same-size/same-ETag corruption,
+missing data, selection mismatch, changed remote controls, local drift,
+interrupted responses, bounded concurrency, transport retries and exact receipt
+resumption. Basic lint checks pass. The first public attempt stopped on an HTTP
+connection interruption; its completed per-object SHA receipts remain pinned.
+The successful pass reused only exact complete records and re-read every
+remaining object. Partial reads never qualify for reuse.
+
+The [full public receipt](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr09-final-admission-20261001/public-readback-v2/verification.json)
+confirms fresh anonymous GETs, complete SHA-256 and size verification for every
+selected blob, including reused objects. The existing artifact owner then
+verified the remote control bytes and exact artifact identity against the
+byte-identical admitted local blobs. This proves remote byte membership and
+binding; it creates no payload scratch and does not substitute for a fresh
+relocated source replay. The resumed public pass completed in
+481.51 seconds with 227,033,088 bytes peak RSS.
+
+No publication pointer was written by this operation, no typed query family
+was activated, and no consumer deployment was performed. FR11 fresh restore
+and semantic replay are next; final table/image publication and public consumer
+acceptance remain FR12–FR13. Source files and deferred PDFs remain preserved.
+The Git commits are local; this operation performed no Git push.
