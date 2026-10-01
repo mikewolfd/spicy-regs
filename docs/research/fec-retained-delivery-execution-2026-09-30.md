@@ -1132,3 +1132,36 @@ was activated, and no consumer deployment was performed. FR11 fresh restore
 and semantic replay are next; final table/image publication and public consumer
 acceptance remain FR12–FR13. Source files and deferred PDFs remain preserved.
 The Git commits are local; this operation performed no Git push.
+
+
+### Query-table publication 2026-10-01
+
+The retained query tables are public in the `spicy-regs` R2 bucket. The owner
+requested the smallest restore/replay smoke, then continuation to query-table
+publication. The [smoke receipt](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr11-smoke-20261001/receipt.json) establishes sample recovery; full recovery remains open before source deletion.
+
+The [publication receipt](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/query-publication-20261001/completion.json) records the exact public families:
+
+| Family | Artifact digest | Result |
+| --- | --- | --- |
+| `fec-query` | `d76de786fccdd502efc8f20b65cc38863cce0084defad63770fb1f2b997a3153` | Sealed the accepted composition without rewriting table values; published its complete member set |
+| `fec-observations` | `9c289dfec822ff7e54f9d5719276579452a7b35cad573e701a51e0a15c2a06c0` | Published the exact existing source-parent generation |
+| `fec-candidate-history` | `dc9634bae8e1e0d881e34487c4d7115915ba281972dfff98a41426b657ec9ec0` | Published the qualified retained candidate history |
+| `fec-source-catalog` | `167fc868d0c8c81540f819692f8347c64ada48a21cf695e975f6013d7f48a8ae` | Published the retained catalog; its source definitions match the previous catalog, with updated provider/capture metadata |
+
+The [seal receipt](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/query-publication-20261001/seal.json) measures 54 query tables, 180 members, 49,357,527 physical rows and 4,062,162,305 bytes. These are overlapping observations and subject tables, not a unique-transaction count or qualified net financial total. The seal binds the accepted composition, archive `a287b272…`, and source-parent descriptors.
+
+The existing publisher verified local files, uploaded immutable objects, read
+back every remote member and compared exact hashes before each conditional
+pointer update. A concurrent `bill-subjects` update caused the source publication
+to reread the index; the publisher preserved that update. The other writes
+changed only their selected family. Current descriptors are in the
+[public publication index](https://data.spicygov.ai/publication.v2.json).
+
+[Anonymous public checks](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/query-publication-20261001/public-check.json) verified exact root/manifest bytes, schemas, row counts and sample-data reads for all 59 tables across these families. Full member hash verification belongs to the authenticated publisher; the public SQL check did not download every data byte a second time.
+[Managed CLI downloads](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/query-publication-20261001/cli-check.json) passed for a partitioned query table, a single-file query table, candidate history and the catalog; local reads matched the published counts and pins.
+
+FR12 data sealing and FR13 table publication are complete. Final consumer-image
+measurement, release-receipt binding, hosted qualified-view activation and
+external refusal/rollback acceptance remain open. Source originals are
+preserved, and PDF processing remains deferred.
