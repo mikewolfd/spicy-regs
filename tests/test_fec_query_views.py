@@ -62,6 +62,7 @@ def test_all_views_bind_with_exact_declared_tables_and_columns(installed):
     root, schemas = installed
     specs = factory(root)
     assert len({s.view.name for s in specs}) == len(specs)
+    assert all(s.evidence_generations == {"fec-observations": SOURCE} for s in specs)
     for spec in specs:
         with duckdb.connect(config={"threads": 1, "memory_limit": "128MB", "max_temp_directory_size": "0B"}) as con:
             for table, columns in spec.view.required.items():

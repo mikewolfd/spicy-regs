@@ -358,7 +358,9 @@ def test_undeclared_source_columns_cannot_override_rule_facts():
     with duckdb.connect(config={"threads": 1, "memory_limit": "64MB", "max_temp_directory_size": "0B"}) as con:
         con.register("observations", table)
         cursor = con.execute(financial_rule_sql("observations", "bulk_source_analysis", columns=list(observation)))
-        actual = dict(zip([item[0] for item in cursor.description], cursor.fetchone(), strict=True))
+        row = cursor.fetchone()
+        assert row is not None
+        actual = dict(zip([item[0] for item in cursor.description], row, strict=True))
     assert actual["status"] == "refused"
     assert actual["value"] is None
     assert actual["reason"] == oracle(observation, "bulk_source_analysis")["reason"]

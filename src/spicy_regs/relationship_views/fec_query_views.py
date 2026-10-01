@@ -203,6 +203,7 @@ def fec_query_views(
                 },
                 population,
                 as_of,
+                {"fec-observations": source_generation_pin},
             )
         )
 

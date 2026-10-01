@@ -64,8 +64,10 @@ def master():
     )
     fields = dict.fromkeys(COMMITTEE_MASTER_FIELDS, "")
     fields.update(CMTE_ID="C00000001", CMTE_NM="  Native name  ", CONNECTED_ORG_NM="Company name, not an ID")
-    endpoint = {k: header[k] for k in ("collection_id", "source_record_id", "source_sha256", "source_url")}
-    endpoint["source_locator"] = header_locator
+    endpoint = {
+        **{k: header[k] for k in ("collection_id", "source_record_id", "source_sha256", "source_url")},
+        "source_locator": header_locator,
+    }
     locator = dict(
         collection_id="master",
         source_record_id=f"{PIN}/0/{0:020d}",
@@ -97,15 +99,16 @@ def postgres():
         representation="opaque",
         observedAt="2026-09-30T00:00:00Z",
     )
+    columns = [
+        dict(name=n, sql_type="text") for n in ("committee_id", "cycle", "empty", "nullable", "array", "escaped")
+    ]
     derivation = dict(
         table=TABLE,
         toolVersion="pg_restore (PostgreSQL) 16.14",
         arguments=decoder_arguments(PIN),
         originalSha256=PIN,
         outputs={n: dict(sha256=p, byteSize=1234) for n, p in [("toc", GEN), ("schema", SCHEMA), ("data", DATA)]},
-        columns=[
-            dict(name=n, sql_type="text") for n in ("committee_id", "cycle", "empty", "nullable", "array", "escaped")
-        ],
+        columns=columns,
     )
     entry = dict(
         collection_id="pg",
@@ -120,7 +123,7 @@ def postgres():
         kind="postgres-copy",
         fields=raw,
         values=values,
-        named_fields=dict(zip([c["name"] for c in derivation["columns"]], values)),
+        named_fields=dict(zip([c["name"] for c in columns], values)),
         source=source,
     )
     locator = dict(

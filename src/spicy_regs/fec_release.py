@@ -20,6 +20,7 @@ FORMAT = "spicy-regs-fec-release"
 VERSION = 1
 LIMIT = 1024 * 1024
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
+_FAMILY = re.compile(r"[a-z][a-z0-9_-]*\Z")
 _IDENTITY_GROUPS = ("policies", "dictionaries", "definitions")
 
 
@@ -106,6 +107,17 @@ def parse_receipt(raw: bytes, expected_digest: str) -> dict:
     return receipt
 
 
+def _evidence_generations(value):
+    """Application and receipt declarations use explicit family/digest pairs."""
+    if not isinstance(value, Mapping) or any(
+        not isinstance(family, str) or not _FAMILY.fullmatch(family)
+        or not isinstance(pin, str) or not _DIGEST.fullmatch(pin)
+        for family, pin in value.items()
+    ):
+        raise ValueError("Invalid evidence generation declarations")
+    return dict(value)
+
+
 def load_receipt(expected_digest: str, base_url: str, *, local_path: Path | None = None) -> dict:
     """Read a selected immutable evidence blob through the publication owner's bounded I/O."""
     if not _DIGEST.fullmatch(expected_digest):
@@ -162,6 +174,9 @@ class QualifiedView:
     identities: Mapping[str, Mapping[str, Path]]
     population: str
     as_of: str
+    # These generations provide evidence for interpretation without being SQL
+    # inputs. Keep this declaration separate from SQLView.required.
+    evidence_generations: Mapping[str, str]
 
 
 def capture_configuration(specs, *, receipt_digest, image_digest, base_url, local_path=None,
@@ -203,6 +218,7 @@ def capture_configuration(specs, *, receipt_digest, image_digest, base_url, loca
             if (set(spec.identities) != set(_IDENTITY_GROUPS) or not spec.mapping_version
                     or not spec.identity_version or not spec.population or not spec.as_of):
                 raise ValueError("Application interpretation identities are incomplete")
+            evidence_generations = _evidence_generations(spec.evidence_generations)
             files = {}
             for group, named in spec.identities.items():
                 if not named or any(not isinstance(name, str) or not name for name in named):
@@ -211,7 +227,7 @@ def capture_configuration(specs, *, receipt_digest, image_digest, base_url, loca
             sql = spec.view.query(publication or {})
             state.update(sql=sql, sql_sha256=sha256(sql.encode()), interpretation={
                 "mapping_version": spec.mapping_version, "identity_version": spec.identity_version, **files,
-            }, population=spec.population, as_of=spec.as_of)
+            }, population=spec.population, as_of=spec.as_of, evidence_generations=evidence_generations)
         except Exception as exc:
             state["error"] = f"application_identity_unavailable: {type(exc).__name__}: {exc}"
         config["views"][name] = state
@@ -237,10 +253,25 @@ def check_view(spec: QualifiedView, configuration: dict, index: Mapping, availab
     receipt = configuration["receipt"]
     expected = receipt["views"].get(name) if receipt else None
     tables = {table: captured_table(index, table) for table in spec.view.required}
+    required_evidence = actual.get("evidence_generations", {})
+    evidence = {}
     issues = []
 
     def issue(path, reason, expected=None, actual=None):
         issues.append(dict(path=path, reason=reason, expected=expected, actual=actual))
+
+    # The captured publication index is immutable for this connection. A new
+    # connection/refresh checks its new index, including non-SQL evidence parents.
+    for family, required_pin in required_evidence.items():
+        entry = index.get("families", {}).get(family)
+        pin = entry.get("artifactDigest") if isinstance(entry, Mapping) else None
+        valid = (isinstance(pin, str) and _DIGEST.fullmatch(pin)
+                 and entry.get("prefix") == f"generations/{family}/{pin[7:]}")
+        evidence[family] = pin if valid else None
+        if not valid:
+            issue("evidence_generations." + family, "captured_evidence_generation_unavailable_or_invalid", required_pin, pin)
+        elif pin != required_pin:
+            issue("evidence_generations." + family, "exact_evidence_generation_mismatch", required_pin, pin)
 
     if configuration["receipt_error"]:
         issue("receipt", configuration["receipt_error"])
@@ -253,10 +284,21 @@ def check_view(spec: QualifiedView, configuration: dict, index: Mapping, availab
             required, running = receipt["consumer"][field], configuration["consumer"].get(field)
             if required != running or (field == "package_versions" and any(v is None for v in running.values())):
                 issue("consumer." + field, "consumer_identity_mismatch", required, running)
-        fields = {"dependencies", "sql_sha256", "interpretation", "population", "as_of", "acceptance_receipts"}
+        fields = {"dependencies", "sql_sha256", "interpretation", "population", "as_of", "acceptance_receipts", "evidence_generations"}
         if not isinstance(expected, dict) or set(expected) != fields:
             issue("views." + name, "view_receipt_missing_or_invalid")
         else:
+            try:
+                declared_evidence = _evidence_generations(expected["evidence_generations"])
+            except ValueError:
+                issue("evidence_generations", "view_evidence_declaration_invalid")
+            else:
+                if declared_evidence != required_evidence:
+                    issue("evidence_generations", "application_and_receipt_evidence_generations_differ",
+                          required_evidence, declared_evidence)
+            for family, pin in required_evidence.items():
+                if pin not in receipt["recovery"]["retained_generations"].get(family, []):
+                    issue("recovery." + family, "required_evidence_generation_not_retained", pin)
             dependencies = expected["dependencies"]
             if not isinstance(dependencies, dict) or set(dependencies) != set(tables):
                 issue("dependencies", "application_and_receipt_dependency_sets_differ", list(tables), dependencies)
@@ -280,6 +322,7 @@ def check_view(spec: QualifiedView, configuration: dict, index: Mapping, availab
     return dict(
         status="compatible" if not issues else "disabled", reasons=issues,
         receipt_sha256=configuration["receipt_sha256"], dependencies=tables,
+        evidence_generations=evidence, required_evidence_generations=required_evidence,
         consumer=configuration["consumer"], sql_sha256=actual.get("sql_sha256"),
         interpretation=actual.get("interpretation"), population=actual.get("population"), as_of=actual.get("as_of"),
         image_identity_basis="deployment_assertion_requires_FR13_external_running_image_verification",

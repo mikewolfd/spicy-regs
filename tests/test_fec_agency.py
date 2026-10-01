@@ -216,7 +216,7 @@ def oversight_rows(*, heading="This report has 1 open recommendations. "):
             ),
         ]
     )
-    native = [
+    native: list[dict[str, object]] = [
         dict(
             kind="oversight-report",
             report=dict(
@@ -299,7 +299,7 @@ def word_rows():
         element(WORD + "r", 10),
         element(WORD + "t", 11, "300,611.00"),
     ]
-    native = [
+    native: list[dict[str, object]] = [
         dict(kind="word-report", report=dict(metadata=dict(representation="word-flat-opc"), source=dict(sha256=DIGEST)))
     ]
     native += [dict(kind="word-element", ordinal_in_report=i, element=e) for i, e in enumerate(elements)]

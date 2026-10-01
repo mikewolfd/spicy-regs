@@ -535,10 +535,10 @@ class _Publisher:
 def _make_local_connection(monkeypatch, module) -> _Publisher:
     """Stand in a bare in-memory DuckDB for ``_build_connection`` and a settable publisher for the live pointers.
 
-    Keeps these tests hermetic: no httpfs, no R2. A build pins the pointers it is
-    given, as the real one does, so a refresh compares like with like. Set
-    ``publication`` to move the publisher, or to an exception to fail its read;
-    set ``fail`` to fail builds.
+    Keeps these tests hermetic: no httpfs, no R2. A build pins the pointers and
+    release configuration, as the real one does, so a refresh compares like
+    with like. Set ``publication`` to move the publisher, or to an exception
+    to fail its read; set ``fail`` to fail builds.
     """
     state = _Publisher(module._Publication({"families": {}, "run": 1}, None))
 
@@ -556,6 +556,7 @@ def _make_local_connection(monkeypatch, module) -> _Publisher:
         con.execute("CREATE TABLE agency_stats AS SELECT 1 AS docket_count")
         con.execute("CREATE TABLE _spicy_publication (snapshot VARCHAR)")
         con.execute("INSERT INTO _spicy_publication VALUES (?)", [json.dumps((publication or read()).index)])
+        module._install_relationship_views(con)
         return con
 
     monkeypatch.setattr(module, "_build_connection", build)
@@ -579,6 +580,9 @@ def test_an_unmoved_publication_keeps_the_connection_past_the_ttl(monkeypatch):
     """A remote connection pins immutable URLs, so an expired one is polled, not rebuilt."""
     state = _make_local_connection(monkeypatch, mcp_server)
     first = mcp_server._get_connection()
+    captured = mcp_server._pinned_record(first, "_spicy_fec_release")
+    assert captured is not None
+    assert set(captured["views"]) == {spec.view.name for spec in mcp_server.FEC_QUALIFIED_VIEWS}
     monkeypatch.setattr(mcp_server, "_CONNECTION_TTL_SECONDS", 0.0)
 
     assert mcp_server._get_connection() is first

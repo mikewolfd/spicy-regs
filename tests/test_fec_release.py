@@ -42,19 +42,20 @@ def fixture(tmp_path):
         SQLView("fec_test_reports", {"fec_reports": ("id",)}, lambda _: "SELECT id FROM fec_reports",
                 "Synthetic reported records", ("id",), "synthetic/1"),
     ]
-    specs = tuple(release.QualifiedView(v, "mapping/1", "identity/1", identity_files, "selected-fixture", "fixture-as-of") for v in views)
+    specs = tuple(release.QualifiedView(v, "mapping/1", "identity/1", identity_files, "selected-fixture", "fixture-as-of", {}) for v in views)
     configuration = release.capture_configuration(specs, receipt_digest=None, image_digest=None, base_url="unused",
                                                   consumer=consumer)
+    view_receipts = {}
     receipt = dict(format=release.FORMAT, version=release.VERSION,
                    output_membership={table: release.captured_table(index, table) for table in ["fec_receipts", "fec_reports"]},
                    consumer=consumer, recovery={"source_archive_sha256": digest("archive"),
                                                 "retained_generations": {family: [entry["artifactDigest"]] for family, entry in index["families"].items()},
-                                                "rollback_receipts": []}, views={})
+                                                "rollback_receipts": []}, views=view_receipts)
     for spec in specs:
         state = configuration["views"][spec.view.name]
-        receipt["views"][spec.view.name] = {
+        view_receipts[spec.view.name] = {
             "dependencies": {name: release.captured_table(index, name) for name in spec.view.required},
-            **{key: state[key] for key in ["sql_sha256", "interpretation", "population", "as_of"]},
+            **{key: state[key] for key in ["sql_sha256", "interpretation", "population", "as_of", "evidence_generations"]},
             "acceptance_receipts": [digest("synthetic-acceptance")],
         }
     return specs, index, receipt, consumer
@@ -236,7 +237,9 @@ class Block(importlib.abc.MetaPathFinder):
 sys.meta_path.insert(0, Block())
 from spicy_regs import fec_release, mcp_server
 assert fec_release.VERSION == 1
-assert mcp_server.FEC_QUALIFIED_VIEWS == ()
+assert mcp_server.FEC_QUALIFIED_VIEWS
+assert all(isinstance(spec, fec_release.QualifiedView) for spec in mcp_server.FEC_QUALIFIED_VIEWS)
+assert not any(name.startswith('spicy_regs.transforms') for name in sys.modules)
 '''
     result = subprocess.run([sys.executable, "-c", program], capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stdout + result.stderr
@@ -255,3 +258,55 @@ def test_each_capture_remeasures_changed_shared_interpretation_file(tmp_path):
         current = second["views"][name]["interpretation"]["dictionaries"]
         assert previous != current
         assert current["dictionaries/1"] == release.sha256(shared.read_bytes())
+
+
+def evidence_fixture(tmp_path):
+    specs, index, receipt, consumer = fixture(tmp_path)
+    pin = digest('synthetic-non-sql-parent')
+    evidence = {'source-proof': pin}
+    specs = (replace(specs[0], evidence_generations=evidence), specs[1])
+    index['families']['source-proof'] = {
+        'artifactDigest': pin, 'prefix': 'generations/source-proof/' + pin[7:],
+        'logicalId': 'urn:test:source-proof', 'tables': {},
+    }
+    receipt['views'][specs[0].view.name]['evidence_generations'] = dict(evidence)
+    receipt['recovery']['retained_generations']['source-proof'] = [pin]
+    return specs, index, receipt, consumer
+
+
+def test_non_sql_parent_is_captured_and_requires_matching_family_and_recovery(tmp_path):
+    specs, index, receipt, consumer = evidence_fixture(tmp_path)
+    config = capture(tmp_path, specs, receipt, consumer)
+    good = check(specs[0], config, index)
+    assert good['status'] == 'compatible'
+    assert good['evidence_generations'] == good['required_evidence_generations'] == specs[0].evidence_generations
+    assert 'source-proof' not in good['dependencies']
+    # Caller mutation does not rewrite the selected application's captured pin.
+    specs[0].evidence_generations['source-proof'] = digest('later')
+    assert check(specs[0], config, index)['status'] == 'compatible'
+    later = capture(tmp_path, specs, receipt, consumer)
+    assert check(specs[0], later, index)['status'] == 'disabled'
+    assert check(specs[1], later, index)['status'] == 'compatible'
+
+
+@pytest.mark.parametrize('change', ['absent', 'advanced', 'wrong-family', 'malformed', 'prefix', 'unretained', 'missing-declaration'])
+def test_non_sql_parent_failure_keeps_unrelated_spec_available(tmp_path, change):
+    specs, index, receipt, consumer = evidence_fixture(tmp_path)
+    if change == 'absent':
+        del index['families']['source-proof']
+    elif change == 'advanced':
+        pin = digest('advanced')
+        index['families']['source-proof'].update(artifactDigest=pin, prefix='generations/source-proof/' + pin[7:])
+    elif change == 'wrong-family':
+        index['families']['other-proof'] = index['families'].pop('source-proof')
+    elif change == 'malformed':
+        index['families']['source-proof']['artifactDigest'] = None
+    elif change == 'prefix':
+        index['families']['source-proof']['prefix'] = 'generations/other-proof/' + digest('synthetic-non-sql-parent')[7:]
+    elif change == 'unretained':
+        del receipt['recovery']['retained_generations']['source-proof']
+    else:
+        del receipt['views'][specs[0].view.name]['evidence_generations']
+    config = capture(tmp_path, specs, receipt, consumer)
+    assert check(specs[0], config, index)['status'] == 'disabled'
+    assert check(specs[1], config, index)['status'] == 'compatible'

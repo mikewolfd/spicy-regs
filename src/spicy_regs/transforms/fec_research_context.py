@@ -11,6 +11,7 @@ from datetime import datetime
 import hashlib
 import json
 import re
+from typing import NotRequired, TypedDict
 from urllib.parse import urljoin, urlsplit
 
 import pyarrow as pa
@@ -450,6 +451,38 @@ def _meeting_dates(text):
         return "[]", "invalid_date"
 
 
+class _ContextLink(TypedDict):
+    href: str
+    url: str
+    source_fact_index: int
+    body_status: NotRequired[str]
+
+
+class _MeetingCell(TypedDict):
+    text: str
+    links: list[_ContextLink]
+    attributes: object
+    source_fact_indices: list[int]
+
+
+class _PageHeading(TypedDict):
+    tag: str
+    text: str
+    source_fact_index: int
+
+
+class _PageLink(_ContextLink):
+    label: str
+    label_status: str
+
+
+class _FeedItem(TypedDict):
+    anchor: _Context
+    index: int
+    fields: dict[str, list[str]]
+    parts: dict[str, list[int]]
+
+
 def _meetings(ctx):
     events = ctx.parsing.get("facts", [])
     table = -1
@@ -459,8 +492,8 @@ def _meetings(ctx):
     current_heading = None
     heading_pointer = None
     heading_context = []
-    cell = None
-    cells = []
+    cell: _MeetingCell | None = None
+    cells: list[_MeetingCell] = []
     row_pointer = None
     row_number = 0
     count = 0
@@ -472,6 +505,7 @@ def _meetings(ctx):
             heading_text.append(e.get("text") or "")
         if kind == "end" and name == heading:
             current_heading, heading = "".join(heading_text).strip(), None
+            assert heading_pointer is not None
             heading_context = list(range(heading_pointer, i + 1))
         if kind == "start" and name == "table":
             if in_table:
@@ -491,7 +525,7 @@ def _meetings(ctx):
         if cell is not None and kind == "start" and name == "a":
             attrs = dict(e.get("attributes", []))
             if "href" in attrs:
-                link = dict(href=attrs["href"], url=urljoin(ctx.url, attrs["href"]), source_fact_index=i)
+                link: _ContextLink = dict(href=attrs["href"], url=urljoin(ctx.url, attrs["href"]), source_fact_index=i)
                 link["body_status"] = (
                     "deferred_pdf"
                     if urlsplit(link["url"]).path.lower().endswith(".pdf")
@@ -546,9 +580,11 @@ def _source_page(ctx, page_type):
             "requires_native_reader",
             "Only original HTML bytes or non-markup facts retained; source-native parsing belongs to SpicyDocs",
         )
-    headings, links, times, texts = [], [], [], []
-    active_heading = None
-    active_link = None
+    headings: list[_PageHeading] = []
+    links: list[_PageLink] = []
+    times, texts = [], []
+    active_heading: _PageHeading | None = None
+    active_link: _PageLink | None = None
     ignored = []
     for i, event in enumerate(events):
         kind, tag = event.get("kind"), event.get("name")
@@ -666,7 +702,7 @@ def map_filing_feed_contexts(collections, source_generation_pin):
     observations.sort(key=lambda item: item[0])
     if len({item[0] for item in observations}) != len(observations):
         raise ValueError("Filing feed parts overlap native event addresses")
-    item = None
+    item: _FeedItem | None = None
     field_name = None
     fragments = 0
     for _, ctx, index, event in observations:

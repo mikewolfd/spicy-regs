@@ -180,7 +180,12 @@ def test_refresh_parent_change_and_partial_rollback_wait_for_all_pins(tmp_path, 
     live = deepcopy(index)
     live["families"]["members"]["artifactDigest"] = digest("advanced-parent")
     monkeypatch.setattr(server, "_read_publication", lambda: server._Publication(live, None))
-    monkeypatch.setattr(server, "_build_connection", lambda selected=None: connection(selected.index))
+
+    def build(selected=None):
+        assert selected is not None
+        return connection(selected.index)
+
+    monkeypatch.setattr(server, "_build_connection", build)
     advanced = server._refreshed(old)
     name = specs[0].view.name
     assert server._connection_relationships(advanced)[name]["release_compatibility"]["status"] == "disabled"
