@@ -37,6 +37,25 @@ from .fec_typed import (
 from .sql_views import SQLView
 
 VIEW_VERSION = "fec-qualified-query-views/1"
+_FINANCIAL_COLUMN_DESCRIPTIONS = {
+    "source_table": "Typed source table holding the observation; not an economic-event population.",
+    "requested_fields": "Native measure fields selected by this rule; an empty list means no field selector applies.",
+    "target_record_id": "Exact typed source-observation record_id, scoped to source_table and its input publication.",
+    "status": "Decision for the named purpose: eligible accepts this observation's measure; excluded leaves it out "
+              "of that purpose; refused means the rule cannot qualify its interpretation. None qualifies a current total.",
+    "reason": "Why the rule accepted, excluded or refused this observation; read with status and warnings.",
+    "record_ids": "Source-observation IDs supporting this decision; not deduplicated transaction or donor identities.",
+    "value": "Exact decimal measure allowed for query and requested_fields; NULL when excluded or refused. "
+             "Not permission to add observations as current money.",
+    "measure_basis": "Source-defined measure used by this decision. signed_reported_observation preserves the "
+                     "reported sign and amount; it is not a current/net contribution or a deduplicated economic event.",
+    "definitions_json": "JSON list of retained publisher-definition witnesses used by this rule, not a fresh source audit.",
+    "layout_pins": "Retained source-layout identities used for interpretation where applicable; not population coverage.",
+    "warnings": "Interpretation limits that still apply when status is eligible, including unresolved current/net money.",
+    "policy_version": "Version of the per-observation financial-purpose rule, separate from release compatibility.",
+    "current_financial_total_qualified": "Always false for these per-observation decisions, including eligible ones. "
+                                         "Current financial totals and group additivity require separate qualification.",
+}
 _FINANCIAL_TABLES = (
     "fec_account_transfers",
     "fec_allocated_disbursements",
@@ -182,7 +201,8 @@ def fec_query_views(
         return tuple(columns)
 
     def add(
-        name, requirements, sql, meaning, keys, version, helper, *, definitions=(), identity_version=IDENTITY_VERSION
+        name, requirements, sql, meaning, keys, version, helper, *, definitions=(), identity_version=IDENTITY_VERSION,
+        column_descriptions=None,
     ):
         checked = {table: required(table, columns) for table, columns in requirements.items()}
         policies = {VIEW_VERSION: root / "relationship_views/fec_query_views.py", version: root / helper}
@@ -190,7 +210,8 @@ def fec_query_views(
         # semantics in the helper. Financial rules additionally bind finite
         # retained source definitions; these are actual files, not fake table reads.
         defs = {Path(path).stem: root / path for path in (definitions or (helper,))}
-        spec = SQLView(name, checked, lambda _publication, sql=sql: sql, meaning, tuple(keys), version)
+        spec = SQLView(name, checked, lambda _publication, sql=sql: sql, meaning, tuple(keys), version,
+                       column_descriptions=dict(column_descriptions or {}))
         specs.append(
             QualifiedView(
                 spec,
@@ -442,6 +463,11 @@ def fec_query_views(
             FINANCIAL_POLICY,
             "relationship_views/fec_financial_meaning.py",
             definitions=("fec_financial_rules.py",),
+            column_descriptions={
+                **_FINANCIAL_COLUMN_DESCRIPTIONS,
+                "query": f"Named analytic purpose {query}; eligibility applies only to this purpose and requested_fields, "
+                         "not to current totals, ledger audit coverage or release compatibility.",
+            },
         )
 
     for table in ("fec_receipts", "fec_intercommittee_transactions"):

@@ -1,6 +1,6 @@
 """Small registry for multi-table navigation that cannot be expressed as one array."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import json
 from typing import Any, Callable, Iterable, Mapping
 
@@ -15,6 +15,7 @@ class SQLView:
     meaning: str
     identity_columns: tuple[str, ...]
     rule_version: str = "held-navigation-v1"
+    column_descriptions: Mapping[str, str] = field(default_factory=dict)
 
 
 def pin(publication: Mapping[str, object], table: str) -> str:
@@ -48,6 +49,7 @@ def install_sql_views(connection: Any, available_tables: Iterable[str], specs: I
                 'label': spec.name.replace('_', ' '), 'summary': spec.meaning, 'kind': 'derived',
                 'rule_version': spec.rule_version, 'identity_columns': list(spec.identity_columns),
                 'input_publications': {table: publication.get(table) for table in spec.required},
+                **({'column_descriptions': dict(spec.column_descriptions)} if spec.column_descriptions else {}),
                 'coverage': 'Bounded by each selected input independently. A found target establishes a lookup, '
                             'not population completeness, legal applicability, or common-person identity.',
             },
@@ -70,16 +72,17 @@ _COLUMN_DESCRIPTIONS = {
 }
 
 
-def view_columns(described: Iterable[tuple]) -> list[dict[str, str]]:
+def view_columns(described: Iterable[tuple], descriptions: Mapping[str, str] | None = None) -> list[dict[str, str]]:
     """Declare a bound view's columns from its ``DESCRIBE`` rows, with this registry's meanings.
 
     Callers describe a view when asked (``describe_table``), not at
     installation: binding each of the registry's views again over remote
     Parquet doubled the serving connection's build time.
     """
+    meanings = {**_COLUMN_DESCRIPTIONS, **(descriptions or {})}
     return [
         {'column_name': row[0], 'column_type': row[1],
-         'description': _COLUMN_DESCRIPTIONS.get(row[0], row[0].replace('_', ' ').capitalize() +
+         'description': meanings.get(row[0], row[0].replace('_', ' ').capitalize() +
                                                  '; its meaning and source grain are described by this view.')}
         for row in described
     ]

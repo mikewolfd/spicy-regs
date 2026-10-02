@@ -5,6 +5,11 @@ from .sql_views import SQLView, pin
 _FIELDS = "(VALUES ('proceedings'),('filers'),('authors'),('lawfirms'),('bureaus'),('documents'))"
 _REQUIRED = {'fcc_filings': ('id_submission', 'native_fields_json', 'native_fields_sha256')}
 _RULE = 'fcc-native-fields/1'
+_PROCEEDING_COLUMNS = {
+    'native_proceeding_id': "Publisher numeric proceeding ID, which can be reused across observed names. "
+                            "Match BOTH observed_name and native_proceeding_id to fcc_proceedings.name AND "
+                            "id_proceeding; the numeric ID alone is not a unique proceeding key.",
+}
 
 
 def field_states(p):
@@ -68,9 +73,9 @@ FCC_NATIVE_VIEWS = (
         'Every native array element retains role, ordinal and raw JSON. Names do not resolve people; proceeding IDs '
         'are FCC-only. Offered artifact URLs do not establish acquisition, format, size, redirect or retained bytes. '
         'Those unsupported fields remain in raw JSON when supplied; retained_digest stays null.',
-        ('id_submission','source_field','source_ordinal'), rule_version=_RULE),
+        ('id_submission','source_field','source_ordinal'), rule_version=_RULE, column_descriptions=_PROCEEDING_COLUMNS),
     SQLView('fcc_native_proceeding_links', {**_REQUIRED,'fcc_proceedings': ('name','id_proceeding')}, proceeding_links,
         'Native FCC name and proceeding ID must both match the selected proceeding population. All source occurrences '
         'remain, duplicate target identities are ambiguous, and no other docket namespace is searched.',
-        ('id_submission','source_field','source_ordinal'), rule_version=_RULE),
+        ('id_submission','source_field','source_ordinal'), rule_version=_RULE, column_descriptions=_PROCEEDING_COLUMNS),
 )

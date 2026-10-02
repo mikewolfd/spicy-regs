@@ -3,6 +3,7 @@
 import asyncio
 from copy import deepcopy
 import json
+import hashlib
 
 import duckdb
 import pytest
@@ -64,7 +65,10 @@ def test_selected_description_carries_evidence_once_without_changing_pinned_stat
         if available:
             assert description["columns"]
             queried = _tool_data(mcp, "query_sql", {"sql": f"SELECT * FROM {name}"})
-            assert queried["publication"][name] == description["publication"]
+            pin = queried["publication"][name]
+            assert pin["input_publications"] == description["publication"]["input_publications"]
+            assert "dependencies" not in pin["release_compatibility"]
+            assert pin["release_compatibility"]["receipt_sha256"] == expected["release_compatibility"]["receipt_sha256"]
             assert queried["rows"] == [{"id": 1}]
         else:
             assert description["publication"] == {"status": "unavailable"}
@@ -93,6 +97,12 @@ def test_reflected_descriptions_explain_summary_and_selected_evidence():
     assert "describe_table" in descriptions["list_sources"]
     assert "release_compatibility" in descriptions["describe_table"]
     assert "unavailable" in descriptions["describe_table"]
+    assert "not_in_ledger" in descriptions["describe_table"]
+    assert "bundled output ledger" in descriptions["describe_table"]
+    assert "named purpose" in descriptions["describe_table"]
+    assert "current/net money" in descriptions["describe_table"]
+    assert "describe_table" in descriptions["query_sql"]
+    assert "Compare" in descriptions["query_sql"] and "after refresh" in descriptions["query_sql"]
 
 
 def test_release_summary_size_does_not_expand_with_dependency_evidence(tmp_path, monkeypatch):
@@ -114,3 +124,67 @@ def test_release_summary_size_does_not_expand_with_dependency_evidence(tmp_path,
         changed.execute("CREATE TABLE _spicy_fec_release(snapshot VARCHAR)")
         changed.execute("INSERT INTO _spicy_fec_release VALUES (?)", [json.dumps(captured)])
         assert server._fec_release_reply(changed) == before
+
+
+def test_query_size_is_independent_of_inventory_and_does_not_mutate_pins(tmp_path, monkeypatch):
+    specs, index, _, _, _ = configure(tmp_path, monkeypatch)
+    with connection(index) as con:
+        monkeypatch.setattr(server, "_get_connection", lambda: con)
+        mcp = server.build_server()
+        name = specs[0].view.name
+        sql = f"SELECT * FROM {name}"
+        before = _tool_data(mcp, "query_sql", {"sql": sql})
+        relationships = deepcopy(server._connection_relationships(con))
+        release = relationships[name]["release_compatibility"]
+        release["dependencies"]["fec_receipts"]["descriptor"]["members"] = [
+            {"key": "évidence" * 1000, "sha256": digest("inventoried-member")}
+        ] * 100
+        release["future_audit_detail"] = "verbose" * 1000
+        con.execute("UPDATE _spicy_relationships SET snapshot = ?", [json.dumps(relationships)])
+        # Inject expanded captured audit detail, not new data/admission: only presentation is under test.
+        after = _tool_data(mcp, "query_sql", {"sql": sql})
+        assert after == before
+        full = _tool_data(mcp, "describe_table", {"table": name})
+        assert full["publication"]["release_compatibility"] == release
+        pins = server._reply_pins(con, server._publication_status(con)["publication"], [name])
+        saved = deepcopy(pins)
+        projected = server._query_reply_pins(pins, relationships)
+        projected[name]["input_publications"]["members"]["artifact_digest"] = "edited"
+        assert pins == saved
+        assert server._connection_relationships(con) == relationships
+
+
+def test_later_description_can_name_a_different_receipt_after_refresh(tmp_path, monkeypatch):
+    specs, index, receipt, _, path = configure(tmp_path, monkeypatch)
+    name = specs[0].view.name
+    with connection(index) as old:
+        monkeypatch.setattr(server, "_get_connection", lambda: old)
+        mcp = server.build_server()
+        prior = _tool_data(mcp, "query_sql", {"sql": f"SELECT * FROM {name}"})
+        prior_pin = deepcopy(prior["publication"][name])
+        receipt["views"][name]["acceptance_receipts"] = [digest("new-acceptance")]
+        raw = json.dumps(receipt).encode()
+        path.write_bytes(raw)
+        monkeypatch.setenv("SPICY_REGS_FEC_RELEASE_SHA256", "sha256:" + hashlib.sha256(raw).hexdigest())
+        snapshot = server._Publication(index, None)
+        monkeypatch.setattr(server, "_read_publication", lambda: snapshot)
+
+        def build(selected=None):
+            assert selected == snapshot
+            return connection(index)
+
+        monkeypatch.setattr(server, "_build_connection", build)
+        with server._refreshed(old) as new:
+            assert new is not old
+            monkeypatch.setattr(server, "_get_connection", lambda: new)
+            full = _tool_data(mcp, "describe_table", {"table": name})
+            current = _tool_data(mcp, "query_sql", {"sql": f"SELECT * FROM {name}"})
+            assert current["rows"] == prior["rows"] == [{"id": 1}]
+            assert current["publication"][name]["release_compatibility"]["receipt_sha256"] == (
+                full["publication"]["release_compatibility"]["receipt_sha256"]
+            )
+            assert full["publication"]["release_compatibility"]["receipt_sha256"] != (
+                prior_pin["release_compatibility"]["receipt_sha256"]
+            )
+            assert prior["publication"][name] == prior_pin
+            assert "refresh" in prior_pin["details"]
