@@ -15,7 +15,7 @@ The source wheel is `spicy-docs==0.53.0+fec.3fc8388b368b`, built from
 `9b1b944f1dce879310d1bf37cbb4c9ae560dceb70d7eb9816d0862eb11b700b8`.
 Independent archive builds produced identical bytes. The local version
 identifies this candidate separately from released `0.53.0`; see
-[`vendor/README.md`](../../vendor/README.md).
+`vendor/README.md` in the repository.
 
 ## Candidate master
 
@@ -77,7 +77,7 @@ the existing public `fec-observations` family, prepare and qualify the intended
 complete manifest that preserves the existing selected collections alongside
 these additions. This local generation alone is not a replacement for that
 larger published family. PDF-only years, other report types, broader enumeration
-and current recommendation status remain open under [FG11](../fec-gaps.md#fg11--adopt-agency-report-evidence-and-extend-declared-collections).
+and current recommendation status remain open under [FG11](../fec-gaps.md#fg11-adopt-agency-report-evidence-and-extend-declared-collections).
 
 ## Retained evidence
 
