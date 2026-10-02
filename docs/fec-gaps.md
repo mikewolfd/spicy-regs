@@ -26,16 +26,14 @@ and FH task IDs map to this register without changing FG identifiers or marking
 unimplemented work complete. The [data model](fec-data-model.md) defines the
 proposed table grains, keys, relationships and interpretation rules.
 
-The implementation and completed local validation are committed locally through
-`7df589a`, including query/evidence-parent corrections in `cccda24` and deployment
-configuration in `91dd82b`. These commits have not been pushed. Complete bulk
+The implementation and subsequent review fixes are committed; see the [reviewed release checkpoint](research/fec-reviewed-release-2026-10-01.md). Complete bulk
 recovery, final composition, keys, evidence,
 financial checks and actual local MCP acceptance now pass under the
 [FR08 combined receipt](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-validation-finish-20261001/fr08-complete.json). Missing or advanced evidence parents now disable
 qualified views, and actual refresh/rollback checks pass. Candidate history and
 the retained catalog are included through their existing local family owners.
 
-The expanded tables are now [published and verified](research/fec-retained-delivery-execution-2026-09-30.md#query-table-publication-2026-10-01) through `fec-query`, the exact source parent, candidate history and the retained catalog. FR09/FR10 archive admission and full public byte readback pass, and the requested sample restore/replay smoke passed. Full recovery, final consumer image/receipt binding, hosted activation and source deletion remain open. Follow the
+The expanded tables are now [published and verified](research/fec-retained-delivery-execution-2026-09-30.md#query-table-publication-2026-10-01) through `fec-query`, the exact source parent, candidate history and the retained catalog. FR09/FR10 archive admission and full public byte readback pass, and the requested sample restore/replay smoke passed. Image/receipt binding and public hosted activation pass. Full recovery, the live mutation/rollback drill and source deletion remain open. Follow the
 [execution list](fec-delivery-plan.md#next-execution-checkpoint) and
 [completion checkpoint](research/fec-retained-delivery-execution-2026-09-30.md#complete-local-validation-2026-10-01). Current financial totals and unsupported
 amendment/correction meanings remain source-limited despite successful local
@@ -187,7 +185,7 @@ passes complete native-field and stored-cell comparison of the main bulk output
 and binds the other completed collections for exact reuse. This resolves the
 earlier readback interruption at FR05's output boundary. Final composition and
 complete keys, evidence, financial and actual local MCP acceptance now pass under
-FR08. [Table publication and public SQL/CLI checks now pass](research/fec-retained-delivery-execution-2026-09-30.md#query-table-publication-2026-10-01); matching hosted qualified-view activation remains open under FR13. The [recovery checkpoint](research/fec-retained-delivery-execution-2026-09-30.md#bulk-readback-and-release-preparation-2026-10-01)
+FR08. [Table publication and public SQL/CLI checks now pass](research/fec-retained-delivery-execution-2026-09-30.md#query-table-publication-2026-10-01); matching hosted qualified-view activation now passes; the live mutation/rollback drill remains open under FR13. The [recovery checkpoint](research/fec-retained-delivery-execution-2026-09-30.md#bulk-readback-and-release-preparation-2026-10-01)
 preserves earlier findings and subsequent evidence.
 
 **Retained selection qualified locally; unacquired history remains expansion ·
@@ -427,7 +425,7 @@ universal financial policy. Evidence: research T07 and [integration limits](fec-
 Missing and advanced `fec-observations` parents disable qualified views before
 new connections and refresh. Captured connections retain their original pins,
 raw tables remain usable, and exact local rollback passes. Typed-dependency,
-policy and image mismatch checks also pass. FR08 is complete locally, and the archive and table generations are now published. Actual consumer-image binding, full restore, deployed rollback and recurring source refresh remain open under FR11–FR13 and later operations.
+policy and image mismatch checks also pass. FR08 is complete locally, and the archive and table generations are now published. Actual consumer-image binding and hosted queries now pass. Full restore, deployed rollback and recurring source refresh remain open under FR11–FR13 and later operations.
 
 **Open operations / wider qualification · Acquisition operator and SpicyDocs.**
 The retained observation builder consumes a caller manifest; it does not download
@@ -538,16 +536,17 @@ building an FEC search service. Evidence: research T09/T19 and the
 
 **October 1 update:** complete retained local validation now passes under
 [FR08](research/fec-retained-delivery-execution-2026-09-30.md#complete-local-validation-2026-10-01), including evidence, financial decisions, actual MCP queries
-and the applied source-parent correction. The expanded query tables, source parent, candidate history and catalog are now [sealed, published and publicly verified](research/fec-retained-delivery-execution-2026-09-30.md#query-table-publication-2026-10-01). Worker preparation and the rollback image identity remain available. FR12–FR13 still must bind the actual consumer image and final release receipt, activate hosted qualified views, and verify deployed refusal/rollback behavior.
+and the applied source-parent correction. The expanded query tables, source parent, candidate history and catalog are now [sealed, published and publicly verified](research/fec-retained-delivery-execution-2026-09-30.md#query-table-publication-2026-10-01). The actual consumer image and release receipt are now bound and deployed; public qualified-view checks pass. See the [reviewed release checkpoint](research/fec-reviewed-release-2026-10-01.md). A live mutation/rollback drill remains separate; prior compatible image and receipt identities are retained.
 
-**Selected data published; hosted-service deployment open · Data/MCP operator.**
+**Selected data and hosted queries verified; operational drill open · Data/MCP operator.**
 The September 21 fork execution published three complete selected families: `fec-observations`,
 `fec-source-catalog` and `fec-committees`. Full public downloads passed digest,
 size, schema and row-count checks. Actual stdio MCP passed both those downloads
 and direct fork R2 queries, preserving generation pins. All selected relationship
 parents resolve; nine raw-audited witnesses survive unchanged. This establishes
-public selected-data delivery. A matching hosted MCP service, canonical domain
-and documentation deployment remain separate work. Evidence:
+public selected-data delivery at that historical checkpoint. The current hosted
+MCP service and canonical domain are verified in the newer release checkpoint;
+documentation hosting remains a separate boundary. Evidence:
 [fork execution receipts](/Users/mikewolfd/Work/corpora/fork-execution-2026-09-21).
 The larger September 30 retained selection and its research correction now have their own [October 1 publication receipt](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/query-publication-20261001/completion.json). The September 21 evidence remains historical.
 

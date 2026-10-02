@@ -12,18 +12,8 @@ local source copies. The [data model](fec-data-model.md) defines the row meaning
 keys, relationships, financial rules and proposed tables.
 
 **This is the implementation design and task register. Retained-data execution is active.**
-The implementation checkpoint is committed locally on `fec-publish`:
-
-- `87f7d66` — streaming evidence retention and publication readback.
-- `935b300` — retained FEC tables and query integration.
-- `26d2761` — delivery design and execution checkpoint.
-- `cccda24` — completed FEC query, evidence-parent and fixture corrections.
-- `91dd82b` — deployment configuration for the release and image pins.
-- `7df589a` — completed local validation records.
-
-These commits have not been pushed. The SpicyDocs source work is already
-committed through `bcdde5431fac`. The validated fixture, typing and source-parent
-corrections are now committed.
+The FEC source and consumer changes have been reviewed, fixed and committed.
+See the [reviewed release checkpoint](research/fec-reviewed-release-2026-10-01.md) for merge, package, image, receipt and live verification evidence.
 
 **FR08 is complete at the selected retained non-PDF local boundary.** The
 [combined receipt](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-validation-finish-20261001/fr08-complete.json) binds the final composition and successful complete
@@ -37,7 +27,7 @@ MCP acceptance through their existing family owners. See the
 
 Current/net financial totals and unsupported amendment or correction claims
 remain unqualified. Local acceptance uses explicit candidate image/archive/typed
-generation descriptors; the final table generations are now sealed and published, while consumer image/receipt binding and deployed acceptance remain FR12–FR13. Source inputs and table values were preserved. PDF corpus processing
+generation descriptors; the final table generations are now sealed and published, and the matching consumer is deployed with verified public queries. The live mutation/rollback drill remains under FR13. Source inputs and table values were preserved. PDF corpus processing
 remains deferred.
 
 **FR09 archive admission is complete.** The final selection includes the applied
@@ -46,7 +36,7 @@ recovery inputs. Every selected source passed its exact hash, size, credential
 disposition and staged-copy checks. See the [archive admission checkpoint](research/fec-retained-delivery-execution-2026-09-30.md#complete-archive-admission-2026-10-01).
 **FR10 upload and full public SHA-256 readback are complete.** See the
 [verified upload checkpoint](research/fec-retained-delivery-execution-2026-09-30.md#verified-r2-archive-upload-2026-10-01).
-The requested [sample restore and reader smoke](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr11-smoke-20261001/receipt.json) passed. The owner then requested query-table publication without expanding that smoke into full recovery. The query generation is sealed and published with its required source generation, candidate history and catalog. [Public SQL and CLI checks passed](research/fec-retained-delivery-execution-2026-09-30.md#query-table-publication-2026-10-01). Full restore, matching consumer deployment and verified source cleanup remain open. Follow the
+The requested [sample restore and reader smoke](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr11-smoke-20261001/receipt.json) passed. The owner then requested query-table publication without expanding that smoke into full recovery. The query generation is sealed and published with its required source generation, candidate history and catalog. [Public SQL and CLI checks passed](research/fec-retained-delivery-execution-2026-09-30.md#query-table-publication-2026-10-01). The matching consumer is deployed and verified; full restore, the live mutation/rollback drill and verified source cleanup remain open. Follow the
 [next execution checkpoint](#next-execution-checkpoint). The [FG gap register](fec-gaps.md)
 continues to own source, semantic and operational gaps; successful local
 validation does not close those separate boundaries.
@@ -194,11 +184,11 @@ results. Tasks with unfinished acceptance checks remain open.
 | FR09 | Prepare the portable archive and refresh the capacity estimate — operator | FR02, FR08 | **Complete.** Final code, completed validation controls and candidate/catalog recovery inputs are selected. Full source scanning, exact hashes/sizes, staged copies, artifact sealing and complete selected membership passed. [Archive admission checkpoint](research/fec-retained-delivery-execution-2026-09-30.md#complete-archive-admission-2026-10-01). PDFs and the mixed PDF-bearing archive remain deferred. |
 | FR10 | Upload immutable originals and context to R2 — operator | FR09 | **Complete.** Every selected object is stored in the `spicy-regs` bucket and passed fresh public SHA-256/size readback, including reused objects. The existing artifact owner verified the remote controls, exact membership and archive identity. [Verified upload checkpoint](research/fec-retained-delivery-execution-2026-09-30.md#verified-r2-archive-upload-2026-10-01). |
 | FR11 | Restore and replay from R2 — SpicyDocs and operator | FR10 | **Requested sample restore/replay smoke passed; full recovery remains open.** The [smoke receipt](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr11-smoke-20261001/receipt.json) records fresh public downloads, exact hashes, CSV/ZIP/native filing replay and a catalog query. The owner requested this bounded smoke, then query-table publication. Full selected membership restoration and every special dependency route remain required before deleting source originals. |
-| FR12 | Prepare compatible data and consumer releases — SpicyRegs | FR08, FR10, requested FR11 smoke | **Data generations sealed and published; consumer binding pending.** `fec-query` exactly matches the accepted composition and names the admitted archive and source-parent generation. Existing source, candidate and catalog seals were reused. See the [publication checkpoint](research/fec-retained-delivery-execution-2026-09-30.md#query-table-publication-2026-10-01). Bind the actual consumer image and final release receipt, then repeat acceptance with those identities. |
-| FR13 | Publish deploy and verify the consumer — operator and SpicyRegs | FR12 | **Table publication and public/CLI checks complete; hosted qualified views pending.** Four FEC families passed full remote byte verification through the existing conditional publisher. Anonymous reads checked all published schemas, counts and sample data; managed CLI downloads checked single-file and partitioned tables. See the [completion receipt](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/query-publication-20261001/completion.json). Deploy the matching image and receipt configuration, then verify hosted views, identity-bearing responses, dependency/policy refusal and rollback. |
+| FR12 | Prepare compatible data and consumer releases — SpicyRegs | FR08, FR10, requested FR11 smoke | **Complete.** Public table/source generations, exact reviewed consumer image and immutable release receipt are bound and verified. See the [reviewed release checkpoint](research/fec-reviewed-release-2026-10-01.md). |
+| FR13 | Publish deploy and verify the consumer — operator and SpicyRegs | FR12 | **Hosted deployment and positive queries verified; live mutation/rollback drill open.** Exact-image local and public MCP checks pass, and authenticated Cloudflare state independently confirms the running image and Worker pins. Isolated negative compatibility checks pass; no live parent/policy mutation or production rollback drill is claimed. See the [reviewed release checkpoint](research/fec-reviewed-release-2026-10-01.md). |
 | FR14 | Produce the exact local deletion manifest — operator | FR11, FR13 | **Planned.** For each eligible non-PDF source copy, record its unchanged local digest, remote object and restore receipt, size, inode/link information and ownership. Exclude shared, in-use, deferred, unarchived and unresolved files. |
 | FR15 | Reclaim and measure local space — operator | FR14 | **Planned.** Recheck the deletion manifest immediately before removing only those copies. Record paths removed, preserved exceptions and actual free-space change; keep queryable tables, code, credentials, manifests and receipts. |
-| FR16 | Save the release and recovery handoff — SpicyRegs and operator | FR15 | **Validated implementation and local acceptance committed; full release handoff pending.** See the commit list above. After delivery and eligible cleanup, record public pins, working queries, archive locations, restore instructions, deletion receipts, refresh policy and remaining historical/PDF work. Close FG items only at their verified boundaries. |
+| FR16 | Save the release and recovery handoff — SpicyRegs and operator | FR15 | **Reviewed deployment handoff saved; cleanup handoff remains pending.** The [reviewed release checkpoint](research/fec-reviewed-release-2026-10-01.md) records review fixes, source/package/image/receipt pins, public checks and retained rollback identities. Add complete restore and deletion receipts after their separate tasks pass. |
 
 The selected release includes typed query tables, so FR03–FR08 remain required
 before archive publication and cleanup. Existing evidence tables alone do not
@@ -279,6 +269,7 @@ consumer needs an update and retain the resulting deployment evidence.
 | FR09–FR11, FR14–FR15 | FG02 portable evidence; FG08 storage capacity |
 | FR12–FR13 | FG16 compatible refresh/recovery; FG20 document/search adoption where selected; FG21 publication and consumer deployment; FG23 only if documentation hosting is explicitly selected |
 | FR16 | FG16 refresh/recovery, plus the unresolved gaps carried forward |
+
 
 ## Archive publication and deletion design
 
@@ -500,16 +491,14 @@ selection; a live landing page is not its immutable inventory.
 The [FR08 completion receipt](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-validation-finish-20261001/fr08-complete.json) closes complete local key, evidence,
 financial and actual MCP acceptance. The integrated parent correction preserves
 all registered SQL and the accepted table values. Full baseline unit tests and
-focused post-change checks pass at their recorded scopes. The documentation-site
-build remains unrun because MkDocs is absent from this environment.
+focused post-change checks pass at their recorded scopes. The strict documentation-site
+build and fork Pages deployment now pass; see the reviewed release checkpoint.
 
 The [query-table publication](research/fec-retained-delivery-execution-2026-09-30.md#query-table-publication-2026-10-01) is complete. Remaining work:
 
-1. **FR12–FR13 — Bind and activate the matching consumer.** The exact source,
-   query, candidate and catalog generations are public and verified. Build or
-   verify the consumer image, bind its actual digest and the final release
-   receipt, deploy both Worker pins, and check hosted queries, dependency/policy
-   refusal and rollback.
+1. **FR13 — Finish the live operational drill.** Image/receipt binding and
+   public qualified-view activation pass. Isolated dependency/policy refusals
+   pass; a live mutation and rollback exercise remains separate.
 2. **FR11 — Complete recovery before source deletion.** The requested small
    restore/replay smoke passed. Full selected restoration and replay of every
    special route remain open. Preserve the mixed `eFilingFormats.zip` parent
@@ -519,4 +508,4 @@ The [query-table publication](research/fec-retained-delivery-execution-2026-09-3
    manifest, remove only eligible copies, and measure recovered space.
 
 PDF processing and historical acquisition remain deferred. Hosted qualified-view
-activation and source cleanup still require their release, restore and deletion checks.
+activation is verified; source cleanup still requires complete restore and deletion checks.

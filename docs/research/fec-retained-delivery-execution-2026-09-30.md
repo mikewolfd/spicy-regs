@@ -1165,3 +1165,12 @@ FR12 data sealing and FR13 table publication are complete. Final consumer-image
 measurement, release-receipt binding, hosted qualified-view activation and
 external refusal/rollback acceptance remain open. Source originals are
 preserved, and PDF processing remains deferred.
+
+
+## Reviewed hosted release — 2026-10-01
+
+The source and consumer branches were reviewed and fixed. The reviewed image and
+receipt pass exact local and public MCP acceptance, with authenticated Cloudflare
+running-image verification. See [the release handoff](fec-reviewed-release-2026-10-01.md)
+for pins, review findings, validation and remaining recovery/drill limits. This
+supersedes earlier pending image-binding and hosted-activation statements.
