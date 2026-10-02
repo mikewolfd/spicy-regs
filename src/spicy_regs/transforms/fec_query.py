@@ -13,8 +13,9 @@ import re
 
 import pyarrow as pa
 
+from spicy_regs.fec_versions import INDIVIDUAL_RECEIPT_MAPPING_VERSION as RECEIPT_MAPPING_VERSION
+
 IDENTITY_VERSION = "fec-typed-observation/1"
-RECEIPT_MAPPING_VERSION = "fec-bulk-individual-receipt/2"
 VALUE_MAPPING_VERSION = "fec-exact-financial-values/2"
 AMOUNT_TYPE = pa.decimal128(38, 9)
 RECEIPT_SCHEMA = pa.schema(

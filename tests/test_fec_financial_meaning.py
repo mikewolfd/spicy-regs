@@ -13,7 +13,9 @@ import pytest
 from spicy_regs.fec_financial_rules import _SUMMARY_MAPPINGS
 from spicy_regs.relationship_views.fec_financial_meaning import financial_rule_sql
 from spicy_regs.transforms import fec_financial_policy as policy
+from spicy_regs.transforms.fec_query import RECEIPT_SCHEMA, bulk_receipt
 from tests.test_fec_financial_policy import amount, bulk, row, summary
+from tests.test_fec_query import selection, source_row
 
 
 def evaluate(observations, query, **kwargs):
@@ -141,6 +143,20 @@ def test_individual_missing_native_amount_column_refuses():
     assert actual["reason"] == "amount_or_currency_unqualified"
     assert actual["value"] is None
     assert_parity(observation, "bulk_source_analysis")
+
+
+@pytest.mark.parametrize("raw,value", [("125.25", Decimal("125.25")), (None, None), ("1e2", None)])
+def test_current_receipt_producer_schema_and_financial_rules_agree(raw, value):
+    source = source_row()
+    native = json.loads(source["metadata_json"])
+    native["TRANSACTION_AMT"] = raw
+    source["metadata_json"] = json.dumps(native)
+    mapped, _ = bulk_receipt(source, selection("snapshot"))
+    stored = pa.Table.from_pylist([mapped], schema=RECEIPT_SCHEMA).to_pylist()[0]
+    actual = evaluate([stored], "bulk_source_analysis")[0]
+    assert actual["status"] == ("eligible" if value is not None else "refused")
+    assert actual["value"] == value
+    assert_parity(stored, "bulk_source_analysis")
 
 
 @pytest.mark.parametrize("count", ["3", "0001", "0", "", None, "１２", "1e2", "-1"])
