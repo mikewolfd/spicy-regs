@@ -107,6 +107,28 @@ def test_bulk_unsupported_values_never_become_eligible(change):
     assert policy.bulk_observation_eligibility(bulk(**change)).status == "refused"
 
 
+@pytest.mark.parametrize("raw", [None, "", "99.99", "1e2", " 100", "100.0000000001"])
+def test_individual_receipt_requires_exact_native_amount_agreement(raw):
+    result = policy.bulk_observation_eligibility(bulk(amount_raw=raw))
+    assert result.status == "refused"
+    assert result.reason == "amount_or_currency_unqualified"
+    assert result.value is None
+    assert not result.current_financial_total_qualified
+
+
+def test_individual_receipt_missing_native_amount_refuses():
+    observation = bulk()
+    del observation["amount_raw"]
+    assert policy.bulk_observation_eligibility(observation).reason == "amount_or_currency_unqualified"
+
+
+@pytest.mark.parametrize("version,status", [("fec-bulk-individual-receipt/1", "refused"), ("fec-bulk-individual-receipt/2", "eligible")])
+def test_individual_receipt_requires_current_raw_field_mapper(version, status):
+    result = policy.bulk_observation_eligibility(bulk(mapping_version=version))
+    assert result.status == status
+    assert result.value == (Decimal("100") if status == "eligible" else None)
+
+
 def test_missing_memo_field_is_not_a_blank_source_flag():
     observation = bulk()
     del observation["memo_indicator"]
@@ -425,9 +447,9 @@ def test_quality_notice_requires_its_mapper_and_a_supported_record_before_associ
         assert result["association"] == "no_qualified_record_association"
 
 
-def test_union_null_column_does_not_invent_a_native_individual_amount_field():
+def test_missing_native_amount_does_not_qualify_individual_or_spending_money():
     observation = bulk(amount_raw=None)
-    assert policy.bulk_observation_eligibility(observation).value == Decimal("100")
+    assert policy.bulk_observation_eligibility(observation).reason == "amount_or_currency_unqualified"
     spending = spend()
     del spending["amount_raw"]
     assert policy.spending_observation_sum([spending]).status == "refused"

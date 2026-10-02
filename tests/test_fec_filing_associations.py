@@ -8,7 +8,10 @@ import duckdb
 import pyarrow as pa
 import pytest
 
-from spicy_regs.relationship_views.fec_filing_associations import financial_header_association_sql
+from spicy_regs.relationship_views.fec_filing_associations import (
+    financial_header_association_sql,
+    financial_number_association_sql,
+)
 from spicy_regs.transforms.fec_filing_associations import (
     ASSOCIATION_SCHEMA,
     associate_filing_headers,
@@ -51,7 +54,7 @@ def financial(**changes):
         source_authority="official-fec",
         selection_evidence_sha256=EVIDENCE,
         source_namespace=NAMESPACE,
-        mapping_version="fec-bulk-individual-receipt/1",
+        mapping_version="fec-bulk-individual-receipt/2",
         report_number="123",
         reporting_committee_id="C00000001",
         source_locator_json=json.dumps(dict(collection_id="c", source_record_id="native-row", member=None)),
@@ -103,6 +106,27 @@ def test_native_number_keeps_all_metadata_witnesses_without_multiplying_money():
     assert rows[0]["filing_observation_count"] == 2
     assert rows[0]["current_record_status"] == "unqualified"
     assert typed_batch(rows, ASSOCIATION_SCHEMA).to_pylist() == rows
+
+
+@pytest.mark.parametrize(
+    "version,status",
+    [
+        ("fec-bulk-individual-receipt/1", "unresolved_native_namespace"),
+        ("fec-bulk-individual-receipt/2", "resolved_native_filing_key"),
+    ],
+)
+def test_individual_number_association_requires_current_mapper_in_python_and_sql(version, status):
+    row = financial(mapping_version=version)
+    expected = numbers([row])[0]
+    assert expected["association_status"] == status
+    with duckdb.connect(config={"threads": 1, "memory_limit": "64MB"}) as con:
+        con.register("fec_receipts", pa.Table.from_pylist([row]))
+        con.register("fec_filings", pa.Table.from_pylist([filing()]))
+        result = con.sql(financial_number_association_sql(
+            "fec_receipts", GEN, {NAMESPACE: EVIDENCE}, columns=tuple(row),
+        )).to_arrow_table().to_pylist()[0]
+    assert result["association_status"] == status
+    assert result["filing_key"] == (filing_key("123") if status == "resolved_native_filing_key" else None)
 
 
 @pytest.mark.parametrize(

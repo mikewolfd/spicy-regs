@@ -1,4 +1,4 @@
-"""Finite source definitions and supported identities for financial policy /2.
+"""Finite source definitions and supported identities for financial policy /3.
 
 This module is shared by bounded Python evaluation and lightweight SQL views.
 It contains no source readers, Arrow types, filesystem reads or runtime pins.
@@ -6,10 +6,12 @@ It contains no source readers, Arrow types, filesystem reads or runtime pins.
 
 from dataclasses import dataclass
 
+from spicy_regs.fec_versions import INDIVIDUAL_RECEIPT_MAPPING_VERSION
+
 IDENTITY_VERSION = "fec-typed-observation/1"
 VALUE_MAPPING_VERSION = "fec-exact-financial-values/2"
 
-POLICY_VERSION = "fec-financial-meaning/2"
+POLICY_VERSION = "fec-financial-meaning/3"
 SOURCE_GENERATION = "sha256:9c289dfec822ff7e54f9d5719276579452a7b35cad573e701a51e0a15c2a06c0"
 
 
@@ -86,7 +88,7 @@ _ALLOCATION_LAYOUT = "sha256:9b2ac5e292955198ff2a796bb58101e28e09c3e5ecba8dde7f1
 
 
 _BULK_MAPPINGS = {
-    "fec-bulk-individual-contributions": "fec-bulk-individual-receipt/1",
+    "fec-bulk-individual-contributions": INDIVIDUAL_RECEIPT_MAPPING_VERSION,
     **{
         "fec-bulk-" + family: "fec-bulk-" + family + "/1"
         for family in (

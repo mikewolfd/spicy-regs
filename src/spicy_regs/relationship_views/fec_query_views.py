@@ -437,7 +437,7 @@ def fec_query_views(
             table + "_" + suffix,
             {table: columns},
             sql,
-            "Per-observation financial policy /2 decision, with explicit refusal, exact source-defined amount, definitions and warnings. Eligibility is limited to the named purpose; current financial totals and group additivity are never qualified.",
+            f"Per-observation {FINANCIAL_POLICY} decision, with explicit refusal, exact source-defined amount, definitions and warnings. Eligibility is limited to the named purpose; current financial totals and group additivity are never qualified. Key-only reads and observation counts grant no financial meaning; selected financial decisions require a valid observation identity.",
             ("source_table", "target_record_id"),
             FINANCIAL_POLICY,
             "relationship_views/fec_financial_meaning.py",

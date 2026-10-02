@@ -8,13 +8,15 @@ No Arrow or source-reader dependency is needed to construct this SQL.
 
 import re
 
+from spicy_regs.fec_versions import INDIVIDUAL_RECEIPT_MAPPING_VERSION
+
 from .core import literal, quoted
 
 POLICY_VERSION = "fec-retained-filing-association/1"
 TARGET_IDENTITY_VERSION = "fec-typed-observation/1"
 TARGET_MAPPING_VERSION = "fec-identity-observations/1"
 FILE_NUMBER_MAPPINGS = {
-    "fec-bulk-individual-contributions": "fec-bulk-individual-receipt/1",
+    "fec-bulk-individual-contributions": INDIVIDUAL_RECEIPT_MAPPING_VERSION,
     **{
         "fec-bulk-" + name: "fec-bulk-" + name + "/1"
         for name in (
