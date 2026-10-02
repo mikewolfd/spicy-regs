@@ -7,6 +7,7 @@ from typing import Any
 import duckdb
 import pyarrow as pa
 import pyarrow.parquet as pq
+import pytest
 
 from spicy_regs.relationship_views.fcc_native import FCC_NATIVE_VIEWS
 from spicy_regs.relationship_views.sql_views import install_sql_views
@@ -42,6 +43,44 @@ def test_native_replay_preserves_roles_proceeding_ids_and_artifact_alternatives(
     assert con.execute("SELECT field_state FROM fcc_native_field_states "
                        "WHERE id_submission='104290235804100' AND source_field='documents'").fetchone()[0]=='empty_array'
     assert all(r['native_fields_sha256']=='sha256:'+hashlib.sha256(r['native_fields_json'].encode()).hexdigest() for r in rows)
+
+
+@pytest.mark.parametrize(
+    "targets,expected_count,expected_status",
+    [
+        pytest.param([("17-108", "301759"), ("87-432", "301759")], 1, "found", id="reused-numeric-id"),
+        pytest.param([("87-432", "301759")], 0, "missing", id="wrong-name"),
+        pytest.param([("17-108", "999999")], 0, "missing", id="wrong-id-synthetic-control"),
+        pytest.param(
+            [("17-108", "301759"), ("87-432", "301759"), ("17-108", "301759")],
+            2, "ambiguous", id="duplicate-complete-key",
+        ),
+        pytest.param([], 0, "missing", id="no-held-target"),
+    ],
+)
+def test_native_proceeding_membership_requires_both_name_and_id(targets, expected_count, expected_status):
+    """Keep a literal retained filing membership separate from target-ID reuse.
+
+    positive.json names 17-108 / 301759. Independent published-data evidence in
+    mcp-chaos-2026-10-02/audit-dev/q01-proceeding-identities.json also has 87-432 /
+    301759. Neither key alone establishes membership. The wrong-ID and duplicate
+    target populations are synthetic controls, not additional publisher claims.
+    """
+    source = retained('positive')
+    native = json.dumps({"proceedings": source['proceedings']}, sort_keys=True, separators=(",", ":"))
+    with duckdb.connect() as con:
+        con.execute("CREATE TABLE fcc_filings (id_submission VARCHAR, native_fields_json VARCHAR, "
+                    "native_fields_sha256 VARCHAR)")
+        con.execute("INSERT INTO fcc_filings VALUES (?, ?, ?)",
+                    [source['id_submission'], native, 'sha256:' + hashlib.sha256(native.encode()).hexdigest()])
+        con.execute("CREATE TABLE fcc_proceedings (name VARCHAR, id_proceeding VARCHAR)")
+        if targets:
+            con.executemany("INSERT INTO fcc_proceedings VALUES (?, ?)", targets)
+        install_sql_views(con, ['fcc_filings', 'fcc_proceedings'], FCC_NATIVE_VIEWS)
+        assert con.execute(
+            "SELECT id_submission, source_ordinal, observed_name, native_proceeding_id, target_count, target_status "
+            "FROM fcc_native_proceeding_links"
+        ).fetchall() == [('04272972619149', 0, '17-108', '301759', expected_count, expected_status)]
 
 
 def test_native_states_keep_missing_null_unsupported_and_repeated_elements():

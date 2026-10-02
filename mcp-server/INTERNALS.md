@@ -2,19 +2,20 @@
 
 > Engineering notes for contributors. Not user-facing — for how to *use* the
 > server see <https://docs.spicy-regs.dev>; for deploying it see
-> [`../deploy/cloudrun/`](../deploy/cloudrun/).
+> [`../deploy/cloudflare/`](../deploy/cloudflare/).
 
-This is the rationale behind the MCP server implementation
-(`src/spicy_regs/mcp_server.py`). The source is comment-free by project policy
-(documentation lives in markdown), so this document explains what the code does
-and why.
+This document explains the canonical MCP server implementation
+(`src/spicy_regs/mcp_server.py`) and its operating boundaries. The active public
+endpoint is <https://mcp.spicygov.ai/mcp>: a Cloudflare Worker forwards requests
+to the Python server in Cloudflare Containers.
 
 > **History:** there used to be a second, hand-mirrored copy at
 > `mcp-server/api/index.py` — a dependency-light parallel of the canonical server
 > for a Vercel deployment, kept in sync by `test_vercel_copy_in_sync`. The server
-> now runs on Cloud Run (see `deploy/cloudrun/`) from the **canonical** module
-> directly (importing it pulls only duckdb + mcp, no ETL deps), so the copy and
-> its sync test were removed. Everything below is the single canonical server.
+> now runs from the **canonical** module directly; the copy and its sync test
+> were removed. Cloud Run was an earlier deployment. The active Cloudflare
+> Dockerfile installs the runtime dependencies without the ETL dependency set;
+> see `deploy/cloudflare/Dockerfile` and `deploy/cloudflare/worker/index.ts`.
 
 ## What must never be deleted
 
@@ -126,9 +127,10 @@ own connection against the public bucket.
 
 `query_sql` hands arbitrary SQL to `cursor.execute()`, so without a gate the
 public endpoint accepts writes. `COPY ... TO`, `ATTACH`, and `EXPORT DATABASE`
-all reach the container filesystem, and on Cloud Run that filesystem is
-in-memory — a large enough `COPY` evicts the instance. The service is
-`--allow-unauthenticated`, so that is an anonymous availability lever.
+all reach the container filesystem. Cloudflare gives this deployment disk-backed
+spill space, but arbitrary writes could still exhaust it or corrupt local state.
+The endpoint is public and unauthenticated, so that is an anonymous availability
+lever, not a reason to relax the read-only guard.
 
 Native file permissions constrain reads to selected data files. They do not
 replace `_first_write_statement`, which classifies with DuckDB's own parser and
@@ -170,15 +172,27 @@ runtime crash once, and `tests/test_mcp_server.py` guards the regression. The ca
 is a watchdog (`_statement_timeout`) that calls `cursor.interrupt()` and converts
 DuckDB's `InterruptException` into a `TimeoutError` so the cause is unambiguous.
 
-`SPICY_REGS_STATEMENT_TIMEOUT` defaults to `790s` in code; the Cloud Run
-deployment sets it to `600s` via env (matching the service `--timeout`), so a
-runaway query returns a clean `TimeoutError` rather than a platform-killed 5xx.
-Keep the app timeout at or below the platform request timeout. In practice the
-binding limit is usually the *MCP client*, which typically gives up at 60–120s.
-The stdio entrypoint has no platform limit at all.
+`SPICY_REGS_STATEMENT_TIMEOUT` defaults to `790s` in code. The active Cloudflare
+Worker passes `600s` to the container (see `deploy/cloudflare/worker/index.ts`).
+This is the application's cursor watchdog, not a measured platform or client
+request deadline. A client or outer runner can stop waiting earlier. The timer
+starts around the statement, after `query_sql` obtains its connection; it does
+not measure client startup, transport initialization, limiter wait or a cold
+connection build. The stdio entrypoint has no HTTP platform deadline.
 
 Each tool call runs on its own worker thread and cursor, so the timer interrupts
 that cursor only, never a sibling call on the same connection.
+
+For serialized local audits, bound lock acquisition separately from the client
+invocation and record attempt start, lock acquisition and terminal outcome in
+the existing call log. The outer caller's timeout must cover both budgets plus
+startup and log-delivery overhead: a `20000ms` Bash timeout cannot accommodate a
+`120s` client deadline, even before lock waiting. Use the audit harness's
+`600000ms` outer Bash budget, not a new production timeout setting. An outer
+termination without a completed wire response establishes neither server query
+duration nor whether server work continued or was cancelled. Test those caller
+boundaries with a local held lock and fake transport, not a repeated heavy
+public query.
 
 ## Iceberg and the comments mirror
 
@@ -301,14 +315,26 @@ file its reader cannot page, so two of five personas never read a row.
   and itself only when recursive), names compare case-insensitively, and other
   schemas hold no published tables. Before this, a CTE named like a view pinned
   the view, and `FCC_FILINGS` pinned nothing.
-- **Pins in replies state live facts** instead of prose counts that decay:
-  `rows` from the pinned index or snapshot manifest, a snapshot table's `run_id`
-  and `asserted_at`, and `coverage`, the dictionary's kind, which is the only
-  caveat a `query_sql` caller receives. `_reply_pins` adds them to
-  `describe_table` and `query_sql` only. Derived views embed
-  `_publication_status` pins in `source_publication_json`, and
-  `identity_candidates` hashes them into `candidate_id`, so those pins must not
-  change.
+- **Ordinary query provenance is compact, not weaker.** Preserve exact selected
+  table/generation and release receipt pins, source population/as-of scope,
+  named analytic purpose and essential interpretation warnings. Coverage kind
+  alone does not explain financial eligibility: source-analysis eligibility,
+  serving compatibility and a ledger audit are different checks. Keep the
+  owner-defined limits; do not infer current/net money or group additivity in
+  the server. Full dependency descriptors, consumer identity and acceptance
+  evidence belong in the existing `describe_table` response, not every query.
+  This is reply projection only: internal release admission, refusals and
+  retained evidence are unchanged. No new evidence table or duplicate storage
+  is needed.
+- **Pins describe the selected connection**, not universal freshness. Managed
+  `rows` come from the pinned index or snapshot manifest; snapshot `run_id` and
+  `asserted_at` and dictionary coverage retain their own meanings. A later
+  `describe_table` may run after a refresh: compare its exact generation and
+  receipt pins with the query's before treating its detailed evidence as support
+  for that earlier result. A mismatch is a different selection, not historical
+  verification. Derived views embed `_publication_status` pins in
+  `source_publication_json`, and `identity_candidates` hashes them into
+  `candidate_id`; compact reply shaping must not change those internal pins.
 - **`describe_table`** returns one column list. `declared_columns` repeated the
   column names and descriptions that `columns` already carried, which was about
   45% of the reply. DESCRIBE's null, key and default fields meant nothing for a
@@ -322,10 +348,11 @@ file its reader cannot page, so two of five personas never read a row.
 
 ## DNS rebinding protection is off in `build_app`
 
-Deliberate. The deployment is reached via `mcp.spicy-regs.dev` and per-deploy Cloud Run
-`*.run.app` hosts; the SDK's default localhost-only allowlist would reject all
-of them with **421**. `build_app` passes the setting to `streamable_http_app`. The server is public, stateless, and read-only, so
-rebinding protection buys nothing.
+Deliberate. The active deployment is reached via `mcp.spicygov.ai` and its
+configured `workers.dev` address; the SDK's default localhost-only allowlist
+would reject those hosts with **421**. `build_app` passes the setting to
+`streamable_http_app`. This is a public, stateless, read-only endpoint, not a
+privileged localhost service. The SQL and selected-file guards remain required.
 
 ## Other invariants
 
