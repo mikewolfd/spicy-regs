@@ -2,9 +2,8 @@
 
 A join names a child table and columns and the parent table and columns they
 reference. It resolves when a distinct non-null child key occurs in the parent.
-Each carries the rate measured on the live fork tables on 2026-09-26, the
-rulemaking dataset's on 2026-09-27 (``BASELINE_RECEIPTS``, and the date in each
-reason); its floor is that rate truncated to four decimals, and
+Each carries a measured rate (``BASELINE_RECEIPTS``, with later dates in each
+reason or measurement); its floor is that rate truncated to four decimals, and
 ``scripts/check_table_joins.py`` fails a join that falls below it. Joins that
 are low by design, or by a table's current selection, are declared with that
 rate and the reason, so the check still covers them. ``spicy-regs-dict
@@ -280,6 +279,12 @@ JOINS: tuple[Join, ...] = (
           "2000-2020 (15 in 2014), that the API does not serve (C00428599 and C00317453 answer an empty result). "
           "Every registry committee appears in the history. Receipt join-map-2026-09-26/fec-committee-history-first-run.json."),
     _join("fec_source_records", "collection_id", "fec_collections", "collection_id", 647, 0),
+    _join("fec_legal_parties", "matter_record_id", "fec_legal_matters", "record_id", 184, 0,
+          expected_cardinality="one"),
+    _join("fec_legal_events", "matter_record_id", "fec_legal_matters", "record_id", 184, 0,
+          expected_cardinality="one"),
+    _join("fec_legal_documents", "matter_record_id", "fec_legal_matters", "record_id", 184, 0,
+          expected_cardinality="one"),
     # GAO.
     _join("gao_recommendations", "report_id", "gao_reports", "report_id", 1_811, 0,
           reason="First public generation 14761739, measured 2026-09-30: every distinct report key resolves "
@@ -319,13 +324,14 @@ JOINS: tuple[Join, ...] = (
 # New full-key/attribute baselines include raw-row cardinality and immutable input
 # URLs. Keep historical declarations above as lineage; replace their measured
 # values only from the replayable complete-input receipt.
-_MEASUREMENTS = json.loads(Path(__file__).with_name("join_measurements.json").read_text())["results"]
-_MEASURED_BY_NAME = {item["join"]: item for item in _MEASUREMENTS}
+_MEASUREMENTS = json.loads(Path(__file__).with_name("join_measurements.json").read_text())
+_MEASURED_BY_NAME = {item["join"]: item for item in _MEASUREMENTS["results"]}
 JOINS = tuple(
     replace(join, baseline_keys=measurement["keys"], baseline_missing=measurement["missing"],
             kind="complete", expected_cardinality="one", measurement=measurement,
-            reason="Full selected-input measurement on 2026-09-27; immutable URLs, SQL and cardinality in "
-                   "join_measurements.json. Full-key hardening does not assert prior production amplification.")
+            reason=f"Full selected-input measurement on {measurement.get('measured_on', _MEASUREMENTS['measured_on'])}; "
+                   "immutable URLs, SQL and cardinality in join_measurements.json. "
+                   + measurement.get("reason", "Full-key hardening does not assert prior production amplification."))
     if (measurement := _MEASURED_BY_NAME.get(join.name)) is not None else join
     for join in JOINS
 )

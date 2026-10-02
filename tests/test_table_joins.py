@@ -18,6 +18,27 @@ def test_every_join_names_declared_tables_and_columns():
     assert table_joins.declaration_errors(dd.expected_schemas()) == []
 
 
+@pytest.mark.parametrize("child", ["fec_legal_parties", "fec_legal_events", "fec_legal_documents"])
+def test_legal_child_joins_name_exact_observations_and_zero_orphan_baselines(child):
+    """The independent retained-publication measurement admits no orphan or repeated parent key."""
+    outgoing = table_joins.joins_for(child)["outgoing"]
+    assert len(outgoing) == 1
+    join = outgoing[0]
+    assert (join["child_columns"], join["parent"], join["parent_columns"]) == (
+        ["matter_record_id"], "fec_legal_matters", ["record_id"],
+    )
+    assert (join["kind"], join["expected_cardinality"]) == ("complete", "one")
+    measurement = join["measurement"]
+    assert measurement["measured_on"] == "2026-10-02"
+    assert measurement["source_generation"] == (
+        "sha256:d76de786fccdd502efc8f20b65cc38863cce0084defad63770fb1f2b997a3153"
+    )
+    assert (measurement["keys"], measurement["missing"], measurement["parent_duplicate_keys"]) == (184, 0, 0)
+    assert measurement["child_nonnull_rows"] == measurement["child_input_rows"] == measurement["inner_join_rows"]
+    assert "2026-10-02" in join["reason"] and "2026-09-27" not in join["reason"]
+    assert join in table_joins.joins_for("fec_legal_matters")["incoming"]
+
+
 def test_a_join_naming_an_unknown_column_or_missing_its_reason_is_refused(monkeypatch):
     bad = (
         table_joins._join("documents", "no_such_column", "dockets", "docket_id", 1, 0),
@@ -150,3 +171,77 @@ def test_the_live_check_reads_rulemaking_tables_through_the_snapshot_pointer(mon
     assert url_of("nominations") == [f"{BASE}/{INDEX['families']['nominations']['prefix']}/nominations.parquet"]
     assert url_of("dockets") == [f"{BASE}/dockets.parquet"]
     assert url_of("_proceedings_state") == [f"{BASE}/_proceedings_state.parquet"]  # internal: never a snapshot URL
+
+
+@pytest.mark.parametrize("child", ["fec_legal_parties", "fec_legal_events", "fec_legal_documents"])
+def test_legal_capture_keys_preserve_rows_when_logical_matter_ids_repeat(tmp_path, child):
+    join = next(join for join in table_joins.JOINS if join.child == child)
+    parent = tmp_path / "matters.parquet"
+    children = tmp_path / "children.parquet"
+    pq.write_table(pa.table({"record_id": ["capture-1", "capture-2"], "matter_id": ["MUR-8195"] * 2}), parent)
+    pq.write_table(pa.table({
+        "matter_record_id": ["capture-1", "capture-1", "capture-2"], "matter_id": ["MUR-8195"] * 3,
+    }), children)
+    paths = {child: [str(children)], "fec_legal_matters": [str(parent)]}
+    with duckdb.connect() as con:
+        result = live.measure(con, join, paths.__getitem__)
+        assert (result["missing"], result["parent_duplicate_keys"]) == (0, 0)
+        assert result["child_nonnull_rows"] == result["child_input_rows"] == result["inner_join_rows"] == 3
+        unsafe = dataclasses.replace(join, child_columns=("matter_id",), parent_columns=("matter_id",))
+        multiplied = live.measure(con, unsafe, paths.__getitem__)
+        assert (multiplied["status"], multiplied["inner_join_rows"]) == ("MULTIPLICITY", 6)
+
+
+@pytest.mark.parametrize(("children", "parents", "status", "missing", "nonnull"), [
+    (["a", "orphan"], ["a"], "LAG", 1, 2),
+    (["a", None], ["a"], "OK", 0, 1),
+    (["a"], ["a", "a"], "MULTIPLICITY", 0, 1),
+    ([], ["a"], "EMPTIED", 0, 0),
+])
+def test_legal_join_measurements_expose_incomplete_or_nonunique_selections(
+    tmp_path, children, parents, status, missing, nonnull,
+):
+    join = next(join for join in table_joins.JOINS if join.child == "fec_legal_parties")
+    paths = _tables(tmp_path, children, parents)
+    selected = dataclasses.replace(join, child="child", child_columns=("key_id",),
+                                   parent="parent", parent_columns=("key_id",))
+    with duckdb.connect() as con:
+        result = live.measure(con, selected, paths.__getitem__)
+    assert (result["status"], result["missing"], result["child_nonnull_rows"]) == (status, missing, nonnull)
+    # LAG remains operational tolerance; it does not satisfy the retained zero-orphan acceptance above.
+    if status == "LAG":
+        assert result["missing"] > 0 and status not in live.FAILING
+
+
+def test_combining_legal_children_requires_separate_aggregation():
+    with duckdb.connect() as con:
+        con.execute("CREATE TABLE matters(record_id VARCHAR); INSERT INTO matters VALUES ('capture-1')")
+        for table, count in (("parties", 2), ("events", 3), ("documents", 2)):
+            con.execute(f"CREATE TABLE {table} AS SELECT 'capture-1' AS matter_record_id FROM range({count})")
+        assert con.execute("""
+            SELECT count(*) FROM matters m
+            JOIN parties p ON p.matter_record_id = m.record_id
+            JOIN events e ON e.matter_record_id = m.record_id
+            JOIN documents d ON d.matter_record_id = m.record_id
+        """).fetchone() == (12,)
+        assert con.execute("""
+            SELECT p.n, e.n, d.n FROM matters m
+            JOIN (SELECT matter_record_id, count(*) n FROM parties GROUP BY ALL) p ON p.matter_record_id = m.record_id
+            JOIN (SELECT matter_record_id, count(*) n FROM events GROUP BY ALL) e ON e.matter_record_id = m.record_id
+            JOIN (SELECT matter_record_id, count(*) n FROM documents GROUP BY ALL) d ON d.matter_record_id = m.record_id
+        """).fetchone() == (2, 3, 2)
+
+
+def test_mcp_legal_join_discovery_uses_the_generated_registry(monkeypatch):
+    from spicy_regs import mcp_server
+
+    monkeypatch.setattr(mcp_server, "_joins", table_joins.joins_record)
+    server = _serve(monkeypatch, _index(), bundled=True)
+    parent = _tool_data(server, "describe_table", {"table": "fec_legal_matters"})["joins"]
+    expected = {"fec_legal_parties", "fec_legal_events", "fec_legal_documents"}
+    assert {join["child"] for join in parent["incoming"]} == expected
+    for child in expected:
+        result = _tool_data(server, "describe_table", {"table": child})
+        assert result["available"] is False
+        assert result["qualification"]["status"] != "recorded"
+        assert result["joins"]["outgoing"] == table_joins.joins_for(child)["outgoing"]
