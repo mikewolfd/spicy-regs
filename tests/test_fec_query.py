@@ -104,6 +104,50 @@ def selection(role="deletion"):
     return ReceiptSelection("deletions", PIN, "sha256:" + "b" * 64, "official-fec", 2026, role, "sha256:" + "c" * 64)
 
 
+@pytest.mark.parametrize(
+    ("transaction_id", "raw_amount"),
+    [("9141314", "50"), ("9144996", "250"), ("9149847", "500")],
+)
+def test_audited_receipt_values_keep_literal_raw_fields(transaction_id, raw_amount):
+    """Independent publisher witnesses retained by the 2026-10-01 Nina audit."""
+    row = source_row()
+    native = json.loads(row["metadata_json"])
+    native.update(TRAN_ID=transaction_id, TRANSACTION_AMT=raw_amount, TRANSACTION_DT="10222025")
+    row["metadata_json"] = json.dumps(native)
+    before = dict(row)
+    typed, evidence = bulk_receipt(row, selection())
+    stored = pa.Table.from_pylist([typed], schema=RECEIPT_SCHEMA).to_pylist()[0]
+    assert stored["amount_raw"] == raw_amount
+    assert stored["transaction_date_raw"] == "10222025"
+    assert stored["transaction_date_status"] == stored["amount_status"] == "exact"
+    assert stored["amount"] == Decimal(raw_amount)
+    assert stored["transaction_date"] == date(2025, 10, 22)
+    assert stored["mapping_version"] == "fec-bulk-individual-receipt/2"
+    assert row == before and stored["record_id"] == observation_id("fec_receipts", row, "official-fec")
+    assert len(evidence) == 1 and stored["correction_operation"] == "deletion"
+
+
+@pytest.mark.parametrize(
+    ("raw_amount", "raw_date", "amount_status", "date_status"),
+    [(None, None, "source_null", "source_null"), ("", "", "source_empty", "source_empty"),
+     ("-.0100", "02292024", "exact", "exact"),
+     ("0.0000000001", "02292025", "excess_precision", "invalid_date")],
+)
+def test_receipt_raw_values_survive_missing_empty_and_refused_conversion(
+    raw_amount, raw_date, amount_status, date_status,
+):
+    row = source_row()
+    native = json.loads(row["metadata_json"])
+    native.update(TRANSACTION_AMT=raw_amount, TRANSACTION_DT=raw_date)
+    row["metadata_json"] = json.dumps(native)
+    typed, _ = bulk_receipt(row, selection())
+    assert typed["amount_raw"] == raw_amount and typed["transaction_date_raw"] == raw_date
+    assert typed["amount_status"] == amount_status and typed["transaction_date_status"] == date_status
+    assert typed["memo_indicator"] == "" and typed["amendment_indicator"] == "A"
+    if amount_status != "exact":
+        assert typed["amount"] is None and typed["transaction_date"] is None
+
+
 def test_positive_deletion_stays_a_deletion_and_ids_keep_native_spelling():
     row = source_row()
     typed, evidence = bulk_receipt(row, selection())
