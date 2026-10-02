@@ -103,14 +103,44 @@ def test_union_null_and_missing_memo():
     assert_parity(observation, "bulk_source_analysis")
 
 
+@pytest.mark.parametrize("raw", [None, "", "99.99", "1e2", " 100", "100.0000000001"])
+def test_individual_native_amount_is_required_for_financial_meaning(raw):
+    observation = bulk(amount_raw=raw)
+    actual = evaluate([observation], "bulk_source_analysis")[0]
+    assert actual["status"] == "refused"
+    assert actual["reason"] == "amount_or_currency_unqualified"
+    assert actual["value"] is None
+    assert not actual["current_financial_total_qualified"]
+    assert_parity(observation, "bulk_source_analysis")
+
+
+@pytest.mark.parametrize("version,status", [("fec-bulk-individual-receipt/1", "refused"), ("fec-bulk-individual-receipt/2", "eligible")])
+def test_individual_mapper_version_has_no_legacy_financial_fallback(version, status):
+    observation = bulk(mapping_version=version)
+    actual = evaluate([observation], "bulk_source_analysis")[0]
+    assert actual["status"] == status
+    assert actual["value"] == (Decimal("100") if status == "eligible" else None)
+    assert_parity(observation, "bulk_source_analysis")
+
+
 @pytest.mark.parametrize(
     "raw", ["12.0000000000", "+12.0", "12.0000000001", "12.00000000001", "12e0", " 12", "12.", "12", "-12", None]
 )
-def test_exact_native_amount_without_rounding(raw):
+@pytest.mark.parametrize("namespace", ["fec-bulk-individual-contributions", "fec-bulk-other-committee-transactions"])
+def test_exact_native_amount_without_rounding(raw, namespace):
     assert_parity(
-        bulk(source_namespace="fec-bulk-other-committee-transactions", amount=Decimal("12"), amount_raw=raw),
+        bulk(source_namespace=namespace, amount=Decimal("12"), amount_raw=raw),
         "bulk_source_analysis",
     )
+
+
+def test_individual_missing_native_amount_column_refuses():
+    observation = bulk()
+    del observation["amount_raw"]
+    actual = evaluate([observation], "bulk_source_analysis")[0]
+    assert actual["reason"] == "amount_or_currency_unqualified"
+    assert actual["value"] is None
+    assert_parity(observation, "bulk_source_analysis")
 
 
 @pytest.mark.parametrize("count", ["3", "0001", "0", "", None, "１２", "1e2", "-1"])

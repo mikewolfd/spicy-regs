@@ -1,4 +1,4 @@
-"""Per-observation financial policy /2 decisions without stored row copies.
+"""Per-observation financial policy /3 decisions without stored row copies.
 
 Serving admission binds the source tables and retained definition witnesses.
 These SQL rules preserve refusals and never qualify a current financial total.
@@ -41,17 +41,16 @@ def _definitions(values):
     return literal(json.dumps([asdict(value) for value in values], sort_keys=True, separators=(",", ":")))
 
 
-def _exact(value, status, raw=None):
+def _exact(value, status, raw):
     # TRY_CAST alone would round fractional digits. Require the Python spelling
     # and reject every nonzero digit past scale nine before interpreting bytes.
     typed = f"TRY_CAST({value} AS DECIMAL(38,9))"
     valid = (
         f"{status} = 'exact' AND regexp_full_match(typeof({value}), 'DECIMAL\\([0-9]+,[0-9]+\\)') AND {typed} = {value}"
     )
-    if raw is not None:
-        valid += f""" AND regexp_full_match({raw}, '[+-]?([0-9]+(\\.[0-9]+)?|\\.[0-9]+)')
-            AND NOT regexp_matches({raw}, '\\.[0-9]{{9}}[0-9]*[1-9]')
-            AND TRY_CAST({raw} AS DECIMAL(38,9)) = {typed}"""
+    valid += f""" AND regexp_full_match({raw}, '[+-]?([0-9]+(\\.[0-9]+)?|\\.[0-9]+)')
+        AND NOT regexp_matches({raw}, '\\.[0-9]{{9}}[0-9]*[1-9]')
+        AND TRY_CAST({raw} AS DECIMAL(38,9)) = {typed}"""
     return f"CASE WHEN {valid} THEN {typed} END"
 
 
@@ -103,13 +102,10 @@ def financial_rule_sql(table, query, *, columns, field=None, fields=("total_amou
     def refuse(condition, reason, **kwargs):
         branches.append((condition, decision("refused", reason, **kwargs)))
 
-    def amount(name, *, individual=False):
+    def amount(name):
         index = len(projections)
         val = col(name, _NULL)
-        if individual:
-            expression = f"CASE WHEN {col('source_namespace')} = 'fec-bulk-individual-contributions' THEN {_exact(val, col(name + '_status'))} ELSE {_exact(val, col(name + '_status'), col(name + '_raw'))} END"
-        else:
-            expression = _exact(val, col(name + "_status"), col(name + "_raw"))
+        expression = _exact(val, col(name + "_status"), col(name + "_raw"))
         alias = f"_fm_amount_{index}"
         projections.append(f"{expression} AS {alias}")
         return alias
@@ -157,7 +153,7 @@ def financial_rule_sql(table, query, *, columns, field=None, fields=("total_amou
                 "refused", "refund_return_attribution_and_direction_rules_unqualified", definitions=definition
             )
         else:
-            value = amount("amount", individual=True)
+            value = amount("amount")
             refuse(
                 f"{value} IS NULL OR {col('currency')} IS DISTINCT FROM 'USD'",
                 "amount_or_currency_unqualified",
@@ -360,13 +356,10 @@ def financial_rule_sql(table, query, *, columns, field=None, fields=("total_amou
         "CASE " + " ".join(f"WHEN {condition} THEN {result}" for condition, result in branches) + f" ELSE {final} END"
     )
     requested = tuple(fields) if query == "allocated_payment_measure" else ((field,) if field is not None else ())
-    # Malformed observation IDs are invalid evidence in the Python owner too.
-    # Refuse the query rather than return an apparently qualified anonymous row.
-    checked_id = "CASE WHEN regexp_full_match(record_id, 'sha256:[0-9a-f]{64}') THEN record_id ELSE error('FEC evidence requires a SHA-256 pin') END"
-    # Guard the decision itself: DuckDB can prune the target-ID projection
-    # when callers select only status/value or aggregate a financial field.
-    # count(*) alone interprets no money and may legitimately prune both guards.
+    # Literal keys let exact predicates reach the source scan. Reading a key or
+    # counting observations grants no financial meaning. Every decision field
+    # checks its selected identity, even when callers omit the key projection.
     checked_decision = f"CASE WHEN regexp_full_match(record_id, 'sha256:[0-9a-f]{{64}}') THEN {expression} ELSE error('FEC evidence requires a SHA-256 pin') END"
     return f"""WITH facts AS (SELECT {", ".join(quoted(name) for name in sorted(names))}, {", ".join(projections)} FROM {quoted(table)}),
-        decisions AS (SELECT {checked_id} AS target_record_id, {checked_decision} AS decision FROM facts)
+        decisions AS (SELECT record_id AS target_record_id, {checked_decision} AS decision FROM facts)
         SELECT {literal(table)} AS source_table, {_list(requested)} AS requested_fields, target_record_id, decision.* FROM decisions"""

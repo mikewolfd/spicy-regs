@@ -93,17 +93,16 @@ def _decision(query, rows, status, reason, **kwargs):
     return FinancialDecision(query, status, reason, ids, **kwargs)
 
 
-def _amount(row, field, *, has_native_amount=True):
+def _amount(row, field):
     value = row.get(field)
     if row.get(field + "_status") != "exact" or not isinstance(value, Decimal) or not value.is_finite():
         return None
     exact, status = exact_amount(format(value, "f"))
     if status != "exact":
         return None
-    if has_native_amount:
-        native, native_status = exact_amount(row.get(field + "_raw"))
-        if native_status != "exact" or native != exact:
-            return None
+    native, native_status = exact_amount(row.get(field + "_raw"))
+    if native_status != "exact" or native != exact:
+        return None
     return exact
 
 
@@ -177,9 +176,7 @@ def bulk_observation_eligibility(row, *, purpose="source_analysis"):
             "refund_return_attribution_and_direction_rules_unqualified",
             definitions=(definition,),
         )
-    # Individual-receipt rows keep their native amount in source evidence;
-    # their schema has no amount_raw column. A union's NULL column adds no fact.
-    value = _amount(row, "amount", has_native_amount=row["source_namespace"] != "fec-bulk-individual-contributions")
+    value = _amount(row, "amount")
     if value is None or row.get("currency") != "USD":
         return _decision(query, [row], "refused", "amount_or_currency_unqualified", definitions=(definition,))
     if "memo_indicator" not in row:
