@@ -14,7 +14,7 @@ import re
 import pyarrow as pa
 
 IDENTITY_VERSION = "fec-typed-observation/1"
-RECEIPT_MAPPING_VERSION = "fec-bulk-individual-receipt/1"
+RECEIPT_MAPPING_VERSION = "fec-bulk-individual-receipt/2"
 VALUE_MAPPING_VERSION = "fec-exact-financial-values/2"
 AMOUNT_TYPE = pa.decimal128(38, 9)
 RECEIPT_SCHEMA = pa.schema(
@@ -26,6 +26,7 @@ RECEIPT_SCHEMA = pa.schema(
             "source_authority selection_evidence_sha256 source_representation_role correction_operation "
             "correction_applicability_status current_record_status reporting_committee_id contributor_name contributor_type "
             "contributor_city contributor_state contributor_zip employer occupation date_status amount_status currency "
+            "amount_raw transaction_date_raw transaction_date_status "
             "amount_kind transaction_type transaction_id source_record_identifier source_namespace report_number report_type "
             "image_number amendment_indicator memo_indicator memo_text other_native_id transaction_election filing_key "
             "filing_link_status"
@@ -294,8 +295,11 @@ def bulk_receipt(row, selection: CollectionSelection):
         occupation=native["OCCUPATION"],
         transaction_date=date,
         date_status=date_status,
+        transaction_date_raw=native["TRANSACTION_DT"],
+        transaction_date_status=date_status,
         amount=amount,
         amount_status=amount_status,
+        amount_raw=native["TRANSACTION_AMT"],
         currency="USD",
         amount_kind="reported_receipt",
         transaction_type=native["TRANSACTION_TP"],

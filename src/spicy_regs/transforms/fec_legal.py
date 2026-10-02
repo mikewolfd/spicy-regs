@@ -24,7 +24,7 @@ from .fec_query import (
     record_evidence,
 )
 
-MAPPING_VERSION = "fec-retained-legal/1"
+MAPPING_VERSION = "fec-retained-legal/2"
 MATTERS = "fec_legal_matters"
 PARTIES = "fec_legal_parties"
 EVENTS = "fec_legal_events"
@@ -164,6 +164,41 @@ def _url(obj, key):
     return url, "source_absolute" if urlsplit(raw).scheme else "resolved_relative_to_fec"
 
 
+def _matter_url(obj, native_type, native_id):
+    """Resolve reviewed legacy matter routes without changing document URLs."""
+    raw = obj.get("url")
+    status = _state(obj, "url")
+    if status != "reported":
+        return raw, status
+    if not isinstance(raw, str):
+        raise ValueError("Legal matter URL must remain source text")
+    if any(ord(char) <= 32 for char in raw):
+        return None, "unsupported_url"
+    try:
+        parsed = urlsplit(raw)
+        url, status = _url(obj, "url")
+    except ValueError:
+        return None, "unsupported_url"
+    if url is None or parsed.scheme or parsed.netloc:
+        return (raw if url is not None and parsed.scheme else url), status
+    routes = {
+        "matter-under-review": "murs",
+        "administrative-fine": "admin_fines",
+        "alternative-dispute-resolution": "adrs",
+    }
+    parts = parsed.path.split("/")
+    if len(parts) >= 3 and parts[:2] == ["", "legal"] and parts[2] in routes:
+        if (
+            len(parts) != 5 or parts[4] != "" or routes[parts[2]] != native_type
+            or parts[3] != native_id or not parts[3]
+            or any(not (char.isascii() and (char.isalnum() or char in "_-")) for char in parts[3])
+        ):
+            return None, "unsupported_matter_route"
+        path = parsed._replace(path="/data" + parsed.path).geturl()
+        return urljoin("https://www.fec.gov", path), "resolved_legacy_matter_route"
+    return url, status
+
+
 def _list(obj, key):
     value = obj.get(key)
     if value is None:
@@ -283,6 +318,7 @@ def map_legal(row, selection: CollectionSelection):
                 "unsupported_spelling",
                 "invalid_date",
                 "unsupported_url",
+                "unsupported_matter_route",
                 "excess_precision",
                 "overflow",
                 "invalid_decimal",
@@ -297,7 +333,7 @@ def map_legal(row, selection: CollectionSelection):
     title_key = _first_key(native, ("title", "name", "mur_name", "committee_name"))
     description_key = _first_key(native, ("summary", "description"))
     status_key = _first_key(native, ("status", "case_status"))
-    matter_url, url_status = _url(native, "url")
+    matter_url, url_status = _matter_url(native, native_type, native_id)
     amounts = {}
     for field in (
         "final_determination_amount",

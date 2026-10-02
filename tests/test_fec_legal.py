@@ -2,6 +2,7 @@
 
 from datetime import date
 from decimal import Decimal
+from html.parser import HTMLParser
 import json
 
 import pyarrow as pa
@@ -25,6 +26,98 @@ def source(native, route="/v1/legal/search/", wrapped=True, record="result/0"):
         source_locator_json=json.dumps(dict(collection_id="legal", source_record_id=record, pointer="/murs/0")),
         metadata_json=json.dumps(dict(kind="api-record-observation", metadata=native) if wrapped else native),
     )
+
+
+class CanonicalURL(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.url = None
+
+    def handle_starttag(self, tag, attrs):
+        values = dict(attrs)
+        if tag == "link" and values.get("rel") == "canonical":
+            self.url = values["href"]
+
+
+@pytest.mark.parametrize(
+    ("matter_id", "canonical_html"),
+    [("8195", '<link rel="canonical" href="https://www.fec.gov/data/legal/matter-under-review/8195/">'),
+     ("4322", '<link rel="canonical" href="https://www.fec.gov/data/legal/matter-under-review/4322/">'),
+     ("4650", '<link rel="canonical" href="https://www.fec.gov/data/legal/matter-under-review/4650/">')],
+)
+def test_audited_mur_routes_match_publisher_canonical_html(matter_id, canonical_html):
+    """Exact canonical tags from retained official HTML, 2026-10-02, line 23."""
+    row = source(dict(type="murs", no=matter_id, url=f"/legal/matter-under-review/{matter_id}/"))
+    original = dict(row)
+    baseline, baseline_evidence = legal.map_legal(source(dict(type="murs", no=matter_id)), SELECTED)
+    tables, evidence = legal.map_legal(row, SELECTED)
+    parser = CanonicalURL()
+    parser.feed(canonical_html)
+    matter = tables[legal.MATTERS][0]
+    assert parser.url is not None and matter["source_url"] == parser.url
+    assert matter["source_url_status"] == "resolved_legacy_matter_route"
+    assert matter["mapping_version"] == "fec-retained-legal/2"
+    assert matter["record_id"] == baseline[legal.MATTERS][0]["record_id"]
+    assert evidence == baseline_evidence and row == original
+
+
+@pytest.mark.parametrize(
+    ("native_type", "raw", "expected", "status"),
+    [
+        ("admin_fines", "/legal/administrative-fine/42/", "/data/legal/administrative-fine/42/",
+         "resolved_legacy_matter_route"),
+        ("adrs", "/legal/alternative-dispute-resolution/42/", "/data/legal/alternative-dispute-resolution/42/",
+         "resolved_legacy_matter_route"),
+        ("murs", "/legal/matter-under-review/42/?mur_type=archived#documents",
+         "/data/legal/matter-under-review/42/?mur_type=archived#documents", "resolved_legacy_matter_route"),
+        ("advisory_opinions", "/legal/advisory-opinions/42/", "/legal/advisory-opinions/42/",
+         "resolved_relative_to_fec"),
+        ("murs", "/data/legal/matter-under-review/42/?a=1#x", "/data/legal/matter-under-review/42/?a=1#x",
+         "resolved_relative_to_fec"),
+        ("murs", "/legal/matters-under-review/42/", "/legal/matters-under-review/42/", "resolved_relative_to_fec"),
+        ("murs", "/legal/search/enforcement/", "/legal/search/enforcement/", "resolved_relative_to_fec"),
+        ("murs", "/files/42.pdf", "/files/42.pdf", "resolved_relative_to_fec"),
+        ("murs", "https://www.fec.gov/legal/matter-under-review/42/?q=1#x",
+         "https://www.fec.gov/legal/matter-under-review/42/?q=1#x", "source_absolute"),
+        ("murs", "https://example.org/42/", "https://example.org/42/", "source_absolute"),
+        ("murs", "/legal/administrative-fine/42/", None, "unsupported_matter_route"),
+        ("admin_fines", "/legal/matter-under-review/42/", None, "unsupported_matter_route"),
+        ("murs", "/legal/matter-under-review/43/", None, "unsupported_matter_route"),
+        ("murs", "/legal/matter-under-review/42/extra", None, "unsupported_matter_route"),
+        ("murs", "/legal/matter-under-review/42", None, "unsupported_matter_route"),
+        ("murs", "/legal/matter-under-review/%34%32/", None, "unsupported_matter_route"),
+        ("murs", "https://[invalid/", None, "unsupported_url"),
+        ("murs", "javascript:alert(1)", None, "unsupported_url"),
+        ("murs", "https://user:pass@www.fec.gov/legal/42/", None, "unsupported_url"),
+        ("murs", " /legal/matter-under-review/42/", None, "unsupported_url"),
+    ],
+)
+def test_matter_route_selection_is_exact_and_preserves_other_links(native_type, raw, expected, status):
+    native = dict(type=native_type, no="42", url=raw, documents=[dict(url="/files/42.pdf")])
+    row = source(native)
+    original = dict(row)
+    tables, _ = legal.map_legal(row, SELECTED)
+    matter = tables[legal.MATTERS][0]
+    if expected is not None and expected.startswith("/"):
+        expected = "https://www.fec.gov" + expected
+    assert matter["source_url"] == expected and matter["source_url_status"] == status
+    if status.startswith("unsupported"):
+        assert matter["mapping_status"] == "partial"
+        assert json.loads(matter["mapping_reason_json"])["source_url_status"] == status
+    assert row == original
+    document = tables[legal.DOCUMENTS][0]
+    assert document["url"] == "https://www.fec.gov/files/42.pdf"
+    assert document["body_status"] == "deferred_pdf" and document["content_sha256"] is None
+
+
+@pytest.mark.parametrize(("fields", "raw", "status"), [
+    ({}, None, "source_missing"), ({"url": None}, None, "source_null"), ({"url": ""}, "", "source_empty"),
+])
+def test_matter_urls_preserve_absence_without_manufacturing_links(fields, raw, status):
+    tables, _ = legal.map_legal(source(dict(type="murs", no="42", **fields)), SELECTED)
+    matter = tables[legal.MATTERS][0]
+    assert matter["source_url"] == raw and matter["source_url_status"] == status
+    assert matter["mapping_status"] == "mapped"
 
 
 def test_controls_do_not_duplicate_results_and_unrecognized_records_refuse():
