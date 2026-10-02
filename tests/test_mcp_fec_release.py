@@ -55,9 +55,11 @@ def test_compatible_mcp_responses_include_exact_receipt_dependency_and_consumer_
         attestation = result["publication"][name]["release_compatibility"]
         assert result["rows"] == [{"id": 1}]
         assert attestation["receipt_sha256"] == discovery["fec_release"]["receipt_sha256"]
-        assert attestation["consumer"] == consumer
-        assert attestation["dependencies"]["members"] == release.captured_table(index, "members")
-        assert attestation["sql_sha256"] and attestation["interpretation"]["policies"]
+        full = described["publication"]["release_compatibility"]
+        assert full["consumer"] == consumer
+        assert full["dependencies"]["members"] == release.captured_table(index, "members")
+        assert attestation["sql_sha256"] == full["sql_sha256"] and full["interpretation"]["policies"]
+        assert "consumer" not in attestation and "dependencies" not in attestation
         raw = _tool_data(mcp, "query_sql", {"sql": "SELECT * FROM fec_receipts"})
         assert "release_compatibility" not in raw["publication"]["fec_receipts"]
 
@@ -119,7 +121,7 @@ def test_parent_advancement_refuses_affected_query_but_keeps_old_connection_and_
         monkeypatch.setattr(server, "_get_connection", lambda: old)
         prior = _tool_data(mcp, "query_sql", {"sql": f"SELECT * FROM {name}"})
         assert prior["rows"] == [{"id": 1}]
-        assert prior["publication"][name]["release_compatibility"]["dependencies"]["members"]["generation"] == index["families"]["members"]["artifactDigest"]
+        assert prior["publication"][name]["input_publications"]["members"]["artifact_digest"] == index["families"]["members"]["artifactDigest"]
     old.close()
 
 

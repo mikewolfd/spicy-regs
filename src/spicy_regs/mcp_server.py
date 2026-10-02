@@ -19,6 +19,7 @@ import threading
 from collections import Counter
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from copy import deepcopy
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from functools import lru_cache
@@ -793,6 +794,30 @@ def _reply_pins(cursor: duckdb.DuckDBPyConnection, publication: dict[str, dict],
     return pins
 
 
+def _query_reply_pins(pins: dict[str, dict], relationships: dict) -> dict[str, dict]:
+    """Project selected query evidence, never the pins used for admission or row identities.
+
+    Full descriptors remain in describe_table. A view's interpretation limits
+    come from its registered meaning, even when SQL projects only a value.
+    """
+    result = {}
+    for name, pin in pins.items():
+        if "release_compatibility" not in pin:
+            result[name] = pin
+            continue
+        release = pin["release_compatibility"]
+        result[name] = deepcopy({
+            **{key: pin[key] for key in ("status", "rule_version", "dependencies", "input_publications", "coverage")},
+            "release_compatibility": {key: release[key] for key in (
+                "status", "receipt_sha256", "sql_sha256", "evidence_generations", "population", "as_of",
+            )},
+            "meaning": relationships[name]["metadata"]["summary"],
+            "details": "Call describe_table for full release evidence. Compare receipt, SQL, input and evidence pins "
+                       "after refresh; a later description may name a different release.",
+        })
+    return result
+
+
 # One connection serves every tool call. Building it reads each published
 # table's Parquet footer over HTTPS (464 requests and 43 s against r2.dev on
 # 2026-09-28); a query on it takes milliseconds to seconds. Each call runs on its
@@ -1139,6 +1164,11 @@ def _register_tools(mcp: MCPServer) -> None:
         measured baseline.
         For a FEC view, full release_compatibility evidence appears once:
         in publication when available, or relationship when unavailable.
+        compatible means the captured data, interpretation and consumer match
+        the selected release; it does not certify current/net money or completeness.
+        not_in_ledger means this table is absent from the bundled output ledger,
+        not that no other evidence exists. A financial row's eligible status is
+        only for its named purpose, separate from both checks.
         """
         cursor = _get_connection().cursor()
         with _statement_timeout(cursor):
@@ -1157,7 +1187,8 @@ def _register_tools(mcp: MCPServer) -> None:
             from spicy_regs.relationship_views import view_columns
 
             # A derived view declares its bound schema; it is described here, not at connection build.
-            entry = {"table": table, **relationships[table]["metadata"], "columns": view_columns(rows)}
+            metadata = relationships[table]["metadata"]
+            entry = {"table": table, **metadata, "columns": view_columns(rows, metadata.get("column_descriptions"))}
         else:
             entry = _table_metadata().get(table, {"table": table, "columns": []})
         declared = {column["column_name"]: column for column in entry["columns"]}
@@ -1190,7 +1221,7 @@ def _register_tools(mcp: MCPServer) -> None:
             ),
             "qualification": scope if qualified is None else {**scope, **qualified[table]},
             "joins": _table_joins(table),
-            "metadata": {key: value for key, value in entry.items() if key not in {"table", "columns"}},
+            "metadata": {key: value for key, value in entry.items() if key not in {"table", "columns", "column_descriptions"}},
             "metadata_basis": "Dictionary declarations and dated coverage notes; not live population measurements.",
             "schema_matches_declared": not any(differences.values()) if differences is not None else None,
             "schema_differences": differences,
@@ -1220,7 +1251,12 @@ def _register_tools(mcp: MCPServer) -> None:
         sql echoes the statement this reply answers.
         publication gives each table the query names: its live data version,
         pinned row count and coverage kind (a window or sample is not the
-        source's full history).
+        source's full history). Qualified-view pins keep the registered meaning
+        and purpose limits even for SELECT value only. Release compatible is not
+        financial eligibility or current/net-money qualification.
+        Call describe_table for full release evidence. Compare receipt, SQL,
+        input and evidence pins after refresh; a later description may name a
+        different release. Query replies do not repeat storage/consumer inventories.
         """
         cursor = _get_connection().cursor()
         write_statement = _first_write_statement(cursor, sql)
@@ -1251,7 +1287,7 @@ def _register_tools(mcp: MCPServer) -> None:
             "max_rows": max_rows,
             "truncated": len(rows) > max_rows,
             "rows": result_rows,
-            "publication": pins,
+            "publication": _query_reply_pins(pins, relationships),
         }
 
     @tool
