@@ -65,6 +65,23 @@ def citation_connection():
     return con
 
 
+@pytest.mark.parametrize("name", ["fcc_native_observations", "fcc_native_proceeding_links"])
+def test_fcc_description_explains_complete_publisher_key(monkeypatch, name):
+    with duckdb.connect() as con:
+        con.execute("CREATE TABLE fcc_filings (id_submission VARCHAR, native_fields_json VARCHAR, "
+                    "native_fields_sha256 VARCHAR)")
+        con.execute("CREATE TABLE fcc_proceedings (name VARCHAR, id_proceeding VARCHAR)")
+        mcp_server._install_relationship_views(con)
+        monkeypatch.setattr(mcp_server, "_get_connection", lambda: con)
+        described = _tool_data(mcp_server.build_server(), "describe_table", {"table": name})
+        meaning = next(c["description"] for c in described["columns"]
+                       if c["column_name"] == "native_proceeding_id")
+        assert described["available"]
+        assert all(term in meaning for term in ("reused", "observed_name", "native_proceeding_id",
+                                                "fcc_proceedings.name", "id_proceeding", "alone"))
+        assert "column_descriptions" not in described["metadata"]
+
+
 def test_citation_tool_is_bounded_and_keeps_extraction_separate(monkeypatch):
     with citation_connection() as con:
         monkeypatch.setattr(mcp_server, "_get_connection", lambda: con)
