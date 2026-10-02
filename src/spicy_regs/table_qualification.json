@@ -311,8 +311,15 @@
       "tables": [
         "fec_candidate_history"
       ],
-      "audits": [],
-      "statement": "Generation `dc9634bae8e1e0d881e34487c4d7115915ba281972dfff98a41426b657ec9ec0` passed independent comparison of all 130,562 selected 1980–2026 bulk candidate-master rows (2026-09-30), followed by publication, full public byte verification, schema/count/sample checks and a managed CLI download (2026-10-01). Inputs mix retained September 12 header/2024/2026 bytes and September 30 historical-cycle bytes. See [local qualification](fec-publish-qualification-2026-09-30.md) and the query-table publication checkpoint in `fec-retained-delivery-execution-2026-09-30.md`; receipt: `retained-delivery-20260930/query-publication-20261001/completion.json`. Older PostgreSQL-dump cycles are outside this source selection."
+      "audits": [
+        {
+          "disposition": "qualified",
+          "pin": "dc9634ba",
+          "pin_kind": "artifact",
+          "date": "2026-09-30"
+        }
+      ],
+      "statement": "qualified at `dc9634ba…` (2026-09-30): Generation `dc9634bae8e1e0d881e34487c4d7115915ba281972dfff98a41426b657ec9ec0` passed independent comparison of all 130,562 selected 1980–2026 bulk candidate-master rows (2026-09-30), followed by publication, full public byte verification, schema/count/sample checks and a managed CLI download (2026-10-01). Inputs mix retained September 12 header/2024/2026 bytes and September 30 historical-cycle bytes. See [local qualification](fec-publish-qualification-2026-09-30.md) and the query-table publication checkpoint in `fec-retained-delivery-execution-2026-09-30.md`; receipt: `retained-delivery-20260930/query-publication-20261001/completion.json`. Older PostgreSQL-dump cycles are outside this source selection."
     },
     {
       "task": "T04",

@@ -4,7 +4,7 @@
 
 **Retained legal matter observations**
 
-One source observation of a namespaced legal matter. Use matter_id for authority/type/native-case identity and record_id for each observation. Native amounts describe legal states or payments, not a summed case-wide liability. Child collection states and query completeness remain explicit. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates.
+One source observation of a namespaced legal matter. Use matter_id for authority/type/native-case identity and record_id for each observation. The same matter_id can occur in several captures; join each child table's matter_record_id to this table's record_id for the exact observation. Joining several child tables multiplies their rows; aggregate each child separately before combining summaries. Native amounts describe legal states or payments, not a summed case-wide liability. Child collection states and query completeness remain explicit. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates.
 
 **Coverage.** Sampled. Supported observations from retained advisory opinion, enforcement, administrative fine, dispute-resolution, rulemaking and audit metadata. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
 
@@ -40,8 +40,8 @@ One source observation of a namespaced legal matter. Use matter_id for authority
 | `description_status` | `VARCHAR` | Presence/interpretation state of the source description. |
 | `status` | `VARCHAR` | Legal status stated by the source at this observation, without selecting a current state across captures. |
 | `status_status` | `VARCHAR` | Source-presence state of the legal status field. |
-| `source_url` | `VARCHAR` | Captured source URL for this observation; it does not assert current availability or body retrieval. |
-| `source_url_status` | `VARCHAR` | Source-presence state of the matter's URL. |
+| `source_url` | `VARCHAR` | Source-provided absolute URL, or navigation URL resolved from a source-provided relative FEC path. Supported legacy matter routes are rewritten only after exact matter-type and identifier checks. Absolute URLs remain unchanged; a missing URL is not invented. It does not assert current availability or body retrieval. The original URL remains in source evidence. |
+| `source_url_status` | `VARCHAR` | Source-presence or route-resolution state. Under fec-retained-legal/2, resolved_legacy_matter_route identifies derived navigation for a reviewed legacy relative route. unsupported_matter_route leaves source_url NULL and mapping_status partial, with the original retained in source evidence. Neither status establishes live availability. |
 | `committee_id` | `VARCHAR` | Literal FEC committee identifier as reported in this observation. Use cycle and source scope for historical joins. |
 | `candidate_id` | `VARCHAR` | Literal FEC candidate identifier when the source reports one. Syntax checks do not prove identity resolution or a target match. |
 | `audit_id` | `VARCHAR` | Literal source audit identifier; it does not replace the namespaced matter identity. |
