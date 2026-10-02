@@ -285,6 +285,12 @@ file its reader cannot page, so two of five personas never read a row.
 - **`list_sources`** lists each table's name, label and coverage kind, and
   lists each relationship family's views once, under their shared summary. Pins,
   audits and view dependencies live in `describe_table`.
+  FEC release discovery reports the selected receipt, consumer identity and
+  counts of the captured compatibility states. It retains the warning that raw
+  financial qualification is not inferred. Available and unavailable view names
+  remain discoverable; `describe_table` supplies a selected view's full release
+  evidence and mismatch reasons. The summary is derived from the existing
+  checks, not a separately maintained qualification model.
 - **`query_sql`** echoes `sql` as its first key, so a reply read out of
   context, such as a client's spill file, names the statement it answers. It
   returns the pins of the tables the statement names. `_tables_named` walks
@@ -307,6 +313,12 @@ file its reader cannot page, so two of five personas never read a row.
   column names and descriptions that `columns` already carried, which was about
   45% of the reply. DESCRIBE's null, key and default fields meant nothing for a
   Parquet view.
+  Relationship metadata appears only in `metadata`. Full FEC release evidence
+  appears once: under `publication.release_compatibility` for an available view,
+  or `relationship.release_compatibility` for an unavailable view. Response
+  shaping creates new dictionaries and leaves the stored relationship records,
+  checks and publication provenance unchanged. No content is truncated; wide
+  schemas and complete selected evidence can still produce large descriptions.
 
 ## DNS rebinding protection is off in `build_app`
 

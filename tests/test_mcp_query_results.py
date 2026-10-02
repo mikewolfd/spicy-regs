@@ -108,6 +108,8 @@ def test_discovery_lists_tables_without_per_table_pins_or_audits(client):
     assert {entry["table"] for entry in data["tables"]} == {"fcc_filings", "fcc_proceedings"}
     assert set(data["tables"][0]) == {"table", "label", "coverage"}
     assert not {"publication", "qualification", "datasets", "declared_tables"} & set(data)
+    assert "views" not in data["fec_release"]
+    assert data["fec_release"]["raw_query_financial_qualification"] == "not_inferred"
 
 
 def test_an_unparseable_statement_is_refused_with_the_parsers_message(client):
