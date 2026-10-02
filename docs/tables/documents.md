@@ -8,7 +8,56 @@ One row per document posted to a docket — proposed rules, final rules, notices
 
 **Coverage.** Sampled repair with retained prior rows. On 2026-09-21 the fork merged every selected retained document release into the prior table, resolving each document to its most recent source record and keeping newer and unrelated rows; the daily regulations ETL adds to it. It is not a fresh regulations.gov census. The repair covered metadata and references; body-text, extraction-status and PDF-extraction-evidence values remain NULL. It does not include a full comments corpus. Receipts: fork-execution-2026-09-21/publication-documents.json and fork-base-repair-2026-09-21/repair-audit.json. *(measured 2026-09-28)*
 
-**Data quality.** The 2026-09-21 fork date check across all 2,001,531 rows found 52,699 posted_date values before 1990, including eight in year 0000; one value was in the future, 2,020 were missing and no other values were uncastable. Source date values remain literal in this base table; downstream calendar filters are separate. Receipt: fork-execution-2026-09-21/document-derivatives/audit.json. In the 2026-09-21 fork consumer audit, 1,854,836 documents resolve to published dockets; 466 preserve unmatched literal links across 137 docket IDs, and 146,229 have NULL links. The 348 selected-source unmatched links and 145,907 selected-source NULL links agree with native inputs; the remaining 118 unmatched and 322 NULL rows are outside that replay. Missing joins are not fabricated or treated as failed repairs. Receipt: fork-execution-2026-09-21/documents-mcp-audit/.
+**Data quality.** The 2026-09-21 fork date check across all 2,001,531 rows found 52,699 posted_date
+values before 1990, including eight in year 0000; one value was in the future,
+2,020 were missing and no other values were uncastable. Source date values remain
+literal in this base table; downstream calendar filters are separate. Receipt:
+fork-execution-2026-09-21/document-derivatives/audit.json. In the 2026-09-21 fork
+consumer audit, 1,854,836 documents resolve to published dockets; 466 preserve unmatched
+literal links across 137 docket IDs, and 146,229 have NULL links. The 348
+selected-source unmatched links and 145,907 selected-source NULL links agree with native
+inputs; the remaining 118 unmatched and 322 NULL rows are outside that replay. Missing
+joins are not fabricated or treated as failed repairs. Receipt:
+fork-execution-2026-09-21/documents-mcp-audit/.
+
+Calendar searches must distinguish source dates from instants. Under the
+Regulations.gov convention in SpicyDocs' `regulations_gov_day`, date-only
+values and bare `T00:00:00Z` retain their printed day; other offset-bearing
+timestamps use `America/New_York`, not their UTC date. For example,
+`2026-10-05T03:59:59Z` is October 4 at 23:59:59 EDT, while
+`2026-11-24T04:59:59Z` is November 23 at 23:59:59 EST. This bare-midnight
+exception is source-specific, not a rule for arbitrary timestamps.
+
+This guarded DuckDB example selects October 2–16 inclusive in Eastern
+calendar days (not a 14-day instant interval). It handles the shown ISO
+forms, preserving the source's date-only convention; year zero, malformed
+values and offset-free timestamps yield NULL. Inspect those unknowns
+separately rather than treating exclusion from the filter as no deadline.
+Do not compare UTC timestamp strings with a date-only upper bound.
+
+```sql
+WITH calendar AS (
+  SELECT document_id,
+    CASE
+      WHEN left(v, 4) = '0000' THEN NULL
+      WHEN regexp_full_match(v, '[0-9]{4}-[0-9]{2}-[0-9]{2}(T00:00:00Z)?')
+        THEN TRY_CAST(left(v, 10) AS DATE)
+      WHEN regexp_full_match(v, '[0-9]{4}-[0-9]{2}-[0-9]{2}T.+(Z|[+-][0-9]{2}:[0-9]{2})')
+        THEN CAST(TRY_CAST(v AS TIMESTAMPTZ) AT TIME ZONE 'America/New_York' AS DATE)
+    END AS end_day
+  FROM (SELECT document_id, trim(comment_end_date) AS v FROM documents)
+)
+SELECT document_id, end_day FROM calendar
+WHERE end_day >= DATE '2026-10-02' AND end_day < DATE '2026-10-17';
+```
+
+A date field alone does not establish submission purpose or the legally
+controlling/current deadline. For example, FR 2026-15634's DATES text
+specifies October 2, 2026 objections/hearing requests under 40 CFR part 178,
+not ordinary comments. NULL does not establish that no deadline exists.
+Read the notice's filing instructions and later notices before acting.
+`fr_docket_links` offers source docket navigation; `comment_periods` offers
+derived date-window candidates, not a complete legal extension history.
 
 - **Parquet file:** `documents.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -25,8 +74,8 @@ One row per document posted to a docket — proposed rules, final rules, notices
 | `document_type` | `VARCHAR` | Document category (e.g. `Rule`, `Proposed Rule`, `Notice`, `Supporting & Related Material`). |
 | `posted_date` | `VARCHAR` | Date the document was posted publicly (ISO 8601 string). |
 | `modify_date` | `VARCHAR` | Timestamp the document was last modified (ISO 8601 string). |
-| `comment_start_date` | `VARCHAR` | Start of the public comment period this document opens, if any. Often null. |
-| `comment_end_date` | `VARCHAR` | End (deadline) of the public comment period, if any. Often null. |
+| `comment_start_date` | `VARCHAR` | Literal Regulations.gov commentStartDate. See data_quality for the source-specific calendar conversion; this field does not establish submission purpose. NULL means no value was retained. |
+| `comment_end_date` | `VARCHAR` | Literal Regulations.gov commentEndDate. Convert offset-bearing instants to America/New_York for calendar searches; date-only values and the source's bare T00:00:00Z convention keep their printed day (see data_quality). Neither purpose nor the controlling/current deadline follows from this field; inspect filing instructions and later notices. NULL does not mean no deadline. |
 | `file_url` | `VARCHAR` | URL of the document's primary downloadable rendition. Retained for backward compatibility; see `attachments_json` for the full list. Often null. |
 | `attachments_json` | `VARCHAR` | JSON array of the main document's fileFormats renditions: `[{url, format, size}]`. This compatibility field does not contain separately listed attachment resources. Null when no main renditions were retained. |
 | `attachment_records_json` | `VARCHAR` | Literal records from an explicitly read document attachment relationship, preserving attachment IDs, restrictions and alternative file formats. Null means the relationship was not read; an empty array means a validated complete read returned no attachments. A main document response alone cannot establish attachment absence. |
