@@ -17,6 +17,33 @@ export class McpContainer extends Container<Env> {
   // Idle timeout before the instance is reclaimed (scale-to-zero economics).
   sleepAfter = "20m";
 
+  override async fetch(request: Request): Promise<Response> {
+    const response = await super.fetch(request);
+    const container = this.ctx.container;
+    if (response.status === 500 && container?.running) {
+      // After a rollout the native connection can claim to be running while
+      // its port refuses traffic. Confirm that contradiction independently of
+      // the application's response body; a normal application 500 passes through.
+      try {
+        const probe = await container.getTcpPort(this.defaultPort).fetch(
+          "http://containerhealthcheck/",
+          { method: "HEAD", signal: AbortSignal.timeout(2000) },
+        );
+        await probe.body?.cancel();
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message === "The container is not running, consider calling start()"
+        ) {
+          // The SDK uses the same reset for a stale native connection during
+          // startup. Abort reconnects on the next request; never replay this one.
+          this.ctx.abort("Resetting stale MCP container connection after port refusal");
+        }
+      }
+    }
+    return response;
+  }
+
   // DuckDB tuning + R2 read config. Memory is capped under
   // standard-4's 12 GiB so a heavy query spills to the real 20 GB disk (/tmp)
   // rather than being OOM-killed.

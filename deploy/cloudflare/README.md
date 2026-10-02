@@ -45,6 +45,7 @@ authentication in unrelated projects stays separate.
 ```bash
 cd deploy/cloudflare
 npm ci
+npm test              # bounded native-connection recovery checks
 npm run check          # Worker dry run and typecheck
 npx wrangler whoami    # verify the active named login and selected account
 npm run deploy         # deploys the configured image and Worker pins
@@ -79,6 +80,14 @@ before updating all three configuration values: `containers[].image`,
 `SPICY_REGS_CONSUMER_IMAGE_DIGEST` and `SPICY_REGS_FEC_RELEASE_SHA256`.
 Deploying the existing configuration reuses its image even when local Python
 source has changed. Retain the prior image and Worker configuration for recovery.
+
+If a rollout leaves the native connection claiming to run while its port reports
+that the container is stopped, the Worker confirms that contradiction with a
+short HEAD probe and resets the Durable Object. The next request reconnects;
+the failed request is never replayed. Ordinary application errors pass through.
+The reset can interrupt concurrent requests, so it applies only to this exact
+native error. `npm test` exercises the SDK boundary with mocks; public checks
+must still establish actual Cloudflare recovery.
 
 ### Catalog and public reads
 
