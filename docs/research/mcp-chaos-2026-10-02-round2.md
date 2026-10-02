@@ -92,3 +92,34 @@ Five separate auditors wrote fresh SQL over the same pinned public Parquet and c
 Federal Register, CFR and FR docket-link publication pointers advanced during the round. Audits used the exact generations observed by their personas; the unchanged Worker does not imply a common frozen data snapshot. No data, ETL schedule or deployed service was changed by this round.
 
 Evidence is retained locally under `/Users/mikewolfd/Work/corpora/mcp-chaos-2026-10-02/round2/`: persona reports and wires, five audits, baseline and final replays, target snapshots, `phase1-findings.md`, `scout-provenance.md`, `phase2-analysis.md`, `phase3-review.md` and `repair-handoff.md`. Local verification of this write-up is recorded in `documentation-gate/`. Original reports remain unchanged; findings and handoff incorporate audit corrections and reviewer constraints.
+
+
+## Released correction
+
+The subsequent release completes the local follow-up above. SpicyDocs fork main
+contains source merge `27294ada84b23af4b89265bd2e440ff3116e3e5a`; SpicyRegs fork
+main contains consumer merge `7753219d525cd2cdf3c027b9c96d09be75eeee9d` and
+deployment configuration `8f333c25dd98568e20391ededa83354b08f4ad9b`. The wheel's
+source bytes still match the reviewed source commit.
+
+The corrected public bill-family pin is `sha256:7d9013667128936debe71419542efbb566b63739c1299d9714b6f585956483e2`. It retains
+all law-listing facts, replaces the measured affected metadata, and removes only
+the proven contaminated sections and incident comparisons. Valid enrolled text
+and every unaffected row or file passed preservation checks. Unsupported law
+bodies remain unacquired; this release adds no law-body parser.
+
+The complete generation passed stock admission and remote byte readback before
+its conditional publication. The built container passed the original failing
+queries before publication. Local and deployed MCP replays then passed the
+retained controls and printing cases against the public generation, preserving
+compatibility for all qualified FEC views. The authenticated deployment check
+verified Worker `47fecf58-7b77-414c-9c32-b7e31323c826`, running container application
+version `30`, image
+`sha256:b8e201693dafc6179e44dd9e886b2f48a41e4a38271babfaa45c7d7c4d7cd7d8`, and matching release receipt
+`sha256:63f6f5c3ba3403dc4dfa1511f50e6be0374dafa1ae17b923818684c3018c5ea9`.
+
+The independent review, exact member scopes, preservation checks, local and live
+replays, deployment verification and release report are retained under
+`mcp-chaos-2026-10-02/round2/release-deploy/`. Original publisher spot-checks
+remain in `audit-iris/`; they establish the printing mismatch rather than a
+statutory-content error. Earlier paragraphs describe the prior checkpoints.
