@@ -43,8 +43,12 @@ def test_missing_release_disables_actual_registry_but_keeps_raw_and_unrelated_vi
         release = discovery["fec_release"]
         assert release["receipt_sha256"] is None
         assert release["consumer"]["image_digest"] is None
-        assert len(release["views"]) == 72
-        for state in release["views"].values():
+        assert release["status_counts"] == {"disabled": len(mcp_server.FEC_QUALIFIED_VIEWS)}
+        assert "views" not in release
+        for spec in mcp_server.FEC_QUALIFIED_VIEWS:
+            assert spec.view.name in discovery["unavailable_tables"]
+            selected = _tool_data(server, "describe_table", {"table": spec.view.name})
+            state = selected["relationship"]["release_compatibility"]
             assert state["status"] == "disabled"
             assert any(reason["reason"] == "deployment_receipt_digest_missing" for reason in state["reasons"])
         name = "fec_receipts_source_analysis_decision"

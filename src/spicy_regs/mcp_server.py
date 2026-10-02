@@ -666,27 +666,17 @@ def _fec_release_configuration(con, publication):
 
 
 def _fec_release_reply(cursor):
-    """Discovery summary; describe_table and query replies retain full evidence.
-
-    Repeating every dependency descriptor here can exceed an MCP client's SSE
-    event limit before it can discover which table to describe.
-    """
+    """Summarize captured release states; selected descriptions retain full evidence."""
     selected = _pinned_record(cursor, "_spicy_fec_release")
-    views = {}
-    for name, info in _connection_relationships(cursor).items():
-        release = info.get("release_compatibility")
-        if release is not None:
-            views[name] = {
-                key: release[key]
-                for key in ("status", "sql_sha256", "evidence_generations", "required_evidence_generations")
-            }
-            views[name]["reasons"] = [{"path": reason["path"], "reason": reason["reason"]}
-                                     for reason in release["reasons"]]
     return {
         "receipt_sha256": selected.get("receipt_sha256") if selected else None,
         "consumer": selected.get("consumer") if selected else None,
-        "views": views,
+        "status_counts": dict(Counter(
+            info["release_compatibility"]["status"]
+            for info in _connection_relationships(cursor).values() if "release_compatibility" in info
+        )),
         "raw_query_financial_qualification": "not_inferred",
+        "details": "Call describe_table for a selected view's release compatibility evidence and reasons.",
     }
 
 
@@ -1105,6 +1095,10 @@ def _register_tools(mcp: MCPServer) -> None:
         freshness audit. Call describe_table before querying a table: it gives
         columns, coverage caveats, joins, the live data version and the output
         ledger's audit.
+        fec_release.status_counts summarizes compatible and disabled views;
+        it does not qualify raw financial totals. Available and unavailable
+        names remain listed. Call describe_table for a selected view's full
+        release evidence and reasons, including an unavailable view.
         """
         cursor = _get_connection().cursor()
         with _statement_timeout(cursor):
@@ -1143,6 +1137,8 @@ def _register_tools(mcp: MCPServer) -> None:
         reported only for the ledger's publisher. joins lists the declared joins
         this table makes (outgoing) and receives (incoming), each with its
         measured baseline.
+        For a FEC view, full release_compatibility evidence appears once:
+        in publication when available, or relationship when unavailable.
         """
         cursor = _get_connection().cursor()
         with _statement_timeout(cursor):
@@ -1184,7 +1180,10 @@ def _register_tools(mcp: MCPServer) -> None:
             "table": table,
             **_source_details(cursor),
             "available": available,
-            **({"relationship": relationships[table]} if table in relationships else {}),
+            **({"relationship": {
+                key: value for key, value in relationships[table].items()
+                if key != "metadata" and (key != "release_compatibility" or not available)
+            }} if table in relationships else {}),
             "publication": (
                 _reply_pins(cursor, status["publication"], [table])[table]
                 if table in status["publication"] else {"status": "unavailable"}

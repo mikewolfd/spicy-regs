@@ -48,7 +48,7 @@ def test_compatible_mcp_responses_include_exact_receipt_dependency_and_consumer_
         mcp = server.build_server()
         discovery = _tool_data(mcp, "list_sources", {})
         name = specs[0].view.name
-        assert discovery["fec_release"]["views"][name]["status"] == "compatible"
+        assert discovery["fec_release"]["status_counts"] == {"compatible": len(specs)}
         described = _tool_data(mcp, "describe_table", {"table": name})
         assert described["available"]
         result = _tool_data(mcp, "query_sql", {"sql": f"SELECT * FROM {name}"})
@@ -89,9 +89,13 @@ def test_discovery_fits_sse_limit_with_many_views_and_partitioned_dependencies(t
             listed = call(client, "list_sources", {})
             # MCP sends both text and structured content in the same SSE event.
             assert len(json.dumps(listed).encode()) < 1024 * 1024
-            summary = listed["structuredContent"]["fec_release"]["views"]
-            assert set(summary) == {s.view.name for s in specs}
-            assert all(v["status"] == "compatible" for v in summary.values()), summary[specs[0].view.name]
+            summary = listed["structuredContent"]["fec_release"]
+            assert summary["status_counts"] == {"compatible": len(specs)}
+            assert "views" not in summary
+            # Release discovery is bounded independently of view/partition detail.
+            assert len(json.dumps(summary).encode()) < 2048
+            names = {name for group in listed["structuredContent"]["relationship_views"] for name in group["views"]}
+            assert names.issuperset(s.view.name for s in specs)
             described = call(client, "describe_table", {"table": specs[0].view.name})["structuredContent"]
             assert described["publication"]["release_compatibility"]["dependencies"] == view_receipt["dependencies"]
 
@@ -134,7 +138,12 @@ def test_receipt_or_deployment_failure_leaves_raw_tables_queryable(tmp_path, mon
         monkeypatch.setattr(server, "_get_connection", lambda: con)
         mcp = server.build_server()
         listed = _tool_data(mcp, "list_sources", {})
-        assert all(listed["fec_release"]["views"][spec.view.name]["status"] == "disabled" for spec in specs)
+        assert listed["fec_release"]["status_counts"] == {"disabled": len(specs)}
+        for spec in specs:
+            assert spec.view.name in listed["unavailable_tables"]
+            described = _tool_data(mcp, "describe_table", {"table": spec.view.name})
+            assert described["relationship"]["release_compatibility"]["status"] == "disabled"
+            assert described["relationship"]["release_compatibility"]["reasons"]
         assert _tool_data(mcp, "query_sql", {"sql": "SELECT * FROM fec_receipts"})["rows"] == [{"id": 1}]
 
 
