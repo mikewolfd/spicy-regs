@@ -104,6 +104,23 @@ def test_the_bundled_record_is_a_fresh_build_of_the_ledger():
     assert dd.qualification_errors() == []
 
 
+@pytest.mark.parametrize(("live_pin", "generation"), [
+    ("dc9634ba", "current generation audited"),
+    ("01234567", "newer generation, not yet audited"),
+])
+def test_candidate_retained_audit_is_recorded_only_for_its_generation(live_pin, generation):
+    """The retained whole-table comparison qualifies its selected generation, not subsequent refreshes."""
+    record = output_ledger.qualification_record(output_ledger.LEDGER.read_text(encoding="utf-8"))
+    rows = [row for row in record["rows"] if "fec_candidate_history" in row["tables"]]
+    result = mcp_server._table_qualification(rows, {"artifact": live_pin}, statements=True)
+    assert result["status"] == "recorded"
+    assert result["generation"] == generation
+    assert (result["ledger_pin"], result["ledger_date"], result["ledger_disposition"]) == (
+        "dc9634ba", "2026-09-30", "qualified",
+    )
+    assert result["ledger_statements"] == [row["statement"] for row in rows]
+
+
 def test_a_stale_record_fails_the_dictionary_check(tmp_path, monkeypatch, capsys):
     ledger, record = tmp_path / "ledger.md", tmp_path / "table_qualification.json"
     ledger.write_text(LEDGER, encoding="utf-8")
