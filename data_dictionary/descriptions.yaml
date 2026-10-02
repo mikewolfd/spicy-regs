@@ -2091,6 +2091,14 @@ tables:
       mix both documents) and 118-hr-7643's second House report. A rebuild of
       the bill retires the row and publishes each printing under its own code
       (receipt `repeated-printings-2026-09-26/`).
+      Public/private laws are distinct publisher listings, not enrolled BILLS
+      printings. Unsupported law bodies remain unacquired: their offered URLs,
+      labels and dates are retained, with no acquired body or section claims.
+      Generation `82c8088d…` contains public-law rows incorrectly associated
+      with enrolled BILLS resources. The corrected builder replaces these in
+      the requested Congress/bill-type scope and removes only their dependent
+      rows; adopting code alone does not correct an already-published generation
+      (receipt `mcp-chaos-2026-10-02/round2/repair/`).
     columns_from: spicy_docs
 
   bill_sections:

@@ -1809,15 +1809,11 @@ def test_a_printing_with_no_govinfo_suffix_is_a_row_not_a_dead_run():
     with pytest.raises(VersionCodeError):
         govinfo_suffix("private-law")
 
-    class _Printing:
-        type = "Private Law"
-        date = None
-        formats = ()
-        package_id = None
+    from spicy_docs.sources.congress.bill_status import BillTextVersion
 
     class _Status:
         identity = IDENTITY
-        text_versions = (_Printing(),)
+        text_versions = (BillTextVersion(type="Private Law", date=None, formats=(), package_id=None),)
 
     captures = _listed_captures(_Status())
 

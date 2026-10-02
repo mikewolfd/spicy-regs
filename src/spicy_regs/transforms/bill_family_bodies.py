@@ -66,10 +66,14 @@ from spicy_docs.interpretation.bill_family import (
     build_bill_printings,
 )
 from spicy_docs.sources.congress.bill_acquisition import BillSourceUnavailableError
-from spicy_docs.sources.congress.bill_status import BillIdentity, BillSourceError, BillTextFormat, BillTextVersion
+from spicy_docs.sources.congress.bill_status import (
+    BillIdentity, BillSourceError, BillTextFormat, BillTextVersion, bill_package_id_from_url,
+)
 from spicy_docs.sources.congress.bill_tree import engine_available, parse_bill_tree
 from spicy_docs.sources.congress.bill_versions import (
     DEFAULT_FORMAT_PREFERENCE,
+    VersionCodeError,
+    bill_text_package_id,
     choose_format,
     consecutive_pairs,
     format_name,
@@ -247,6 +251,7 @@ class Document:
     cleanup: Any = None
     chosen: BillTextFormat | None = None
     link: str | None = None
+    package_id: str | None = None
 
 
 @dataclass(slots=True)
@@ -284,7 +289,7 @@ def listed_digest(printing: Printing) -> str:
     return "sha256:" + hashlib.sha256(json.dumps(facts, separators=(",", ":")).encode()).hexdigest()
 
 
-def _version(row: Mapping[str, Any]) -> BillTextVersion:
+def version_from_row(row: Mapping[str, Any]) -> BillTextVersion:
     """The publisher's facts a ``bill_versions`` row states, as the version record they were shaped from."""
     formats = json.loads(row["offered_formats_json"]) if row.get("offered_formats_json") else []
     return BillTextVersion(
@@ -293,6 +298,15 @@ def _version(row: Mapping[str, Any]) -> BillTextVersion:
         formats=tuple(BillTextFormat(item["url"], item.get("type"), item.get("package_id")) for item in formats),
         package_id=row["package_id"],
     )
+
+
+def supported_package(identity: BillIdentity, version: BillTextVersion) -> str | None:
+    """A refused target leaves this printing listed without scheduling acquisition."""
+    try:
+        return bill_text_package_id(identity, version)
+    except VersionCodeError as error:
+        logger.warning("Bill family: {} {} target refused: {}", identity, version.type, scrub_credential(str(error), ""))
+        return None
 
 
 def plan_work(
@@ -335,8 +349,8 @@ def plan_work(
         listed = [
             Printing(
                 code=code,
-                version=_version(row),
-                package_id=row["package_id"],
+                version=version_from_row(row),
+                package_id=supported_package(bill_identity(bill), version_from_row(row)),
                 held=code in held_codes,
                 xml=code in xml_codes,
                 sha256=digests.get((bill, code)),
@@ -449,6 +463,16 @@ class BodyPass:
         self._read_zips: dict[str, tuple[Any, set[str]]] = {}
 
     # -- bulk ---------------------------------------------------------------
+    @staticmethod
+    def _matches_target(bill: BillWork, code: str, package_id: str | None) -> bool:
+        """A captured member belongs to the printing's supported, selected resource."""
+        printing = bill.by_code[code]
+        selected = supported_package(bill.identity, printing.version)
+        matches = selected is not None and selected == printing.package_id == package_id
+        if not matches:
+            logger.warning("Bill family: {} {} refuses mismatched package {}", bill.bill_id, code, package_id)
+        return matches
+
     def _listings(self, source: BulkBillsSource, congress: int, bill_type: str) -> tuple[list[Any], bool]:
         """Both sessions' listings, and whether each was answered: a 404 is a folder not yet published.
 
@@ -520,6 +544,8 @@ class BodyPass:
                 if member.body is None and member.package_id in wanted:
                     logger.warning("Bill family: BILLS member {} refused: {}", member.name, member.refusal)
                 for bill, code in wanted.get(member.package_id or "", ()):
+                    if not self._matches_target(bill, code, member.package_id):
+                        continue
                     if member.body is None:
                         if code in bill.pending:
                             refused.add(member.package_id)
@@ -528,7 +554,9 @@ class BodyPass:
                     chosen = next(
                         (item for item in bill.by_code[code].version.formats if format_name(item) == "xml"), None
                     )
-                    documents[(bill.bill_id, code)] = Document(member.body, chosen=chosen, link=listing.zip_entry.link)
+                    documents[(bill.bill_id, code)] = Document(
+                        member.body, chosen=chosen, link=listing.zip_entry.link, package_id=member.package_id
+                    )
             self._read_zips[listing.zip_entry.link] = (listing.zip_entry, refused)
 
     # -- per package -----------------------------------------------------------
@@ -579,6 +607,7 @@ class BodyPass:
             or not printing.package_id
             or self.remaining[0] <= 0
             or self._refused_package(printing)
+            or not self._matches_target(bill, code, printing.package_id)
         ):
             return
         self.remaining[0] -= 1
@@ -595,6 +624,16 @@ class BodyPass:
                 self._refuse(bill, printing, refusal="unavailable", status=error.capture.status_code)
             return
         body = package.body_capture
+        try:
+            matches = all(
+                bill_package_id_from_url(bill.identity, url) == printing.package_id
+                for url in (body.requested_url, body.resolved_url)
+            )
+        except BillSourceError:
+            matches = False
+        if not matches:
+            logger.warning("Bill family: {} {} refuses a body from another resource", bill.bill_id, code)
+            return
         # Labelled by the rendition read, never the listing's preferred link: a public law whose package has
         # no XML is read as HTML, and an ``xml`` label on it would be judged an XML body with no tree.
         fetched = BillTextFormat(body.requested_url, None, printing.package_id)
@@ -622,7 +661,7 @@ class BodyPass:
             self._refuse(bill, printing, refusal="tree", sha256=body.sha256)
             return
         self.outcome.package_refusals.pop(printing.package_id, None)
-        documents[(bill.bill_id, code)] = Document(body, document, cleanup, chosen)
+        documents[(bill.bill_id, code)] = Document(body, document, cleanup, chosen, package_id=printing.package_id)
 
     # -- build ---------------------------------------------------------------
     def _parsed(self, bill: BillWork, code: str, read: Document | None) -> Document | None:
@@ -660,7 +699,10 @@ class BodyPass:
         versions: list[BillVersionCapture] = []
         context: set[tuple[str, str]] = set()
         for printing in bill.printings:
-            read = self._parsed(bill, printing.code, documents.get((bill.bill_id, printing.code)))
+            read = documents.get((bill.bill_id, printing.code))
+            if read is not None and not self._matches_target(bill, printing.code, read.package_id):
+                read = None
+            read = self._parsed(bill, printing.code, read)
             # A held printing read again for a comparison is context only while
             # its bytes are the ones published; bytes the source has since
             # changed are captured anew, so its rows and the comparison agree.
@@ -680,7 +722,6 @@ class BodyPass:
                         version_code=printing.code,
                         source=LISTED_SOURCE,
                         package_id=printing.package_id,
-                        chosen_format=printing.chosen,
                     )
                 )
                 context.add((printing.code, LISTED_SOURCE))

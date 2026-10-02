@@ -30,6 +30,7 @@ from spicy_docs.interpretation.bill_family import (
     FamilyRefusal,
     SectionClassifier,
     installed_engine_stamp,
+    build_bill_printings,
 )
 from spicy_docs.interpretation.bill_family import build_bill_family as build_family
 from spicy_docs.interpretation.bill_stage import infer_stage
@@ -56,13 +57,10 @@ from spicy_docs.sources.congress.bill_status import (
     BillSponsor,
     BillStatus,
     BillTextVersion,
-    bill_package_id_from_url,
 )
 from spicy_docs.sources.congress.bill_versions import (
-    DEFAULT_FORMAT_PREFERENCE,
     VersionCodeError,
-    bill_version_package_id,
-    choose_format,
+    bill_text_package_id,
     consecutive_pairs,
     printing_order,
     printing_version_code,
@@ -102,9 +100,12 @@ from spicy_regs.transforms.bill_family_bodies import (
     BulkBillsSource,
     PackageBodySource,
     body_kind,
+    bill_identity,
     plan_work,
     refusal_metadata,
     refusal_state,
+    version_from_row,
+    supported_package,
 )
 from spicy_regs.transforms.congress_scope import (
     BULK_STATUS_FLOOR,
@@ -491,37 +492,13 @@ def _listed_captures(status: Any, held: Collection[str] = ()) -> list[BillVersio
         version_code = printing_version_code(version)
         if version_code in held:
             continue
-        chosen = choose_format(version.formats, prefer=DEFAULT_FORMAT_PREFERENCE)
-        package_id = version.package_id
-        if package_id is None and chosen is not None:
-            package_id = bill_package_id_from_url(status.identity, chosen.url)
-        if package_id is None:
-            try:
-                package_id = bill_version_package_id(status.identity, version_code)
-            except VersionCodeError as error:
-                # A printing whose slug the sealed vocabulary knows but whose
-                # GovInfo suffix it does not: `Private Law` is the measured case
-                # (`private-law` resolves as a slug, and `govinfo_suffix` refuses
-                # it, because GovInfo publishes private laws as PLAW `pvtl` and
-                # not as a BILLS printing). Outside this guard the refusal once
-                # aborted a whole run -- seventeen tables lost to one printing of
-                # one bill, on a cold-start walk of the 119th (receipt
-                # `d1-measured-run-2026-09-19/`, first attempt). The row still
-                # carries the publisher's facts; the columns that need an
-                # address are NULL, and the body pass never asks for it.
-                logger.warning(
-                    "Bill family: {} {} names no GovInfo package: {}",
-                    bill_key(status.identity),
-                    version_code,
-                    scrub_credential(str(error), ""),
-                )
+        package_id = supported_package(status.identity, version)
         captures.append(
             BillVersionCapture(
                 version=version,
                 version_code=version_code,
                 source=LISTED_SOURCE,
                 package_id=package_id,
-                chosen_format=chosen,
             )
         )
     return captures
@@ -595,6 +572,8 @@ class PriorIndex:
     shadowed: Collection[tuple[str, str]] = field(default_factory=frozenset)
     #: The reader that last read each bill's status (``STATUS_READERS_KEY``).
     status_readers: Mapping[str, str] = field(default_factory=dict)
+    #: Scoped rows whose stored BILLS target contradicts the publisher's law listing.
+    invalid_targets: Mapping[tuple[str, str, str], BillVersionCapture] = field(default_factory=dict)
 
     def held_codes(self, bill_id: str) -> set[str]:
         """The version codes this bill has a published processed body for."""
@@ -635,7 +614,7 @@ def _prior_index(
     """Read the skip lookups out of the prior tables without materialising them.
 
     ``sections`` are the prior ``bill_sections`` files: its members, or the one file it was before it was split.
-    ``in_scope`` names the bills this run's status pass reaches, for the log alone.
+    ``in_scope`` bounds target repairs and names the bills this run's status pass reaches.
     """
     import duckdb
 
@@ -718,20 +697,39 @@ def _prior_index(
         "package_id",
     )
     miskeyed: dict[str, set[tuple[str, str, str]]] = {}
+    invalid_targets: dict[tuple[str, str, str], BillVersionCapture] = {}
     versions_qualified = versions_path is not None and _has_columns(versions_path, needed)
     if versions_qualified:
-        for row in (
-            duckdb.sql(f"SELECT {', '.join(needed)} FROM read_parquet('{versions_path}')").to_arrow_table().to_pylist()
-        ):
+        offered = "offered_formats_json" if _has_columns(versions_path, ("offered_formats_json",)) else "NULL"
+        for row in duckdb.sql(
+            f"SELECT {', '.join(needed)}, {offered} AS offered_formats_json FROM read_parquet('{versions_path}')"
+        ).to_arrow_table().to_pylist():
+            invalid = (
+                row["version_code"] in {"public-law", "private-law"}
+                and row["label"] in {"Public Law", "Private Law"}
+                and (row["package_id"] or "").startswith("BILLS-")
+                and row["source"] in {LISTED_SOURCE, ACQUIRED_SOURCE}
+                and in_scope(row["bill_id"])
+            )
+            if invalid:
+                version = version_from_row(row)
+                # Consult the same source policy as new acquisition. Keep the offered
+                # law facts; regenerate every body-derived field through its shaper.
+                if bill_text_package_id(bill_identity(row["bill_id"]), version) is not None:
+                    raise ValueError("law listing unexpectedly selects a BILLS acquisition target")
+                invalid_targets[(row["bill_id"], row["version_code"], row["source"])] = BillVersionCapture(
+                    version=version, version_code=row["version_code"], source=LISTED_SOURCE,
+                    package_id=None,
+                )
             if row["source"] in {LISTED_SOURCE, ACQUIRED_SOURCE}:
                 listed.setdefault(row["bill_id"], set()).add(row["version_code"])
                 sources.setdefault((row["bill_id"], row["version_code"]), set()).add(row["source"])
                 dates[(row["bill_id"], row["version_code"])] = row["version_date"] or ""
-                if row["package_id"]:
+                if row["package_id"] and not invalid:
                     addressable.setdefault(row["bill_id"], set()).add(row["version_code"])
                 if row["label"] and row["package_id"] and (code := _row_printing_code(row)) != row["version_code"]:
                     miskeyed.setdefault(row["bill_id"], set()).add((row["version_code"], row["source"], code))
-            if row["source"] != ACQUIRED_SOURCE or not row["sha256"] or not row["byte_size"]:
+            if invalid or row["source"] != ACQUIRED_SOURCE or not row["sha256"] or not row["byte_size"]:
                 continue
             bill, code = row["bill_id"], row["version_code"]
             kind = body_kind(row["content_type"], row["format_name"])
@@ -826,8 +824,41 @@ def _prior_index(
             )
         pending_bills.update(unqualified_urls)
     return PriorIndex(
-        text_dates, printings, xml_printings, pairs, pending_bills, published, miskeyed, body_bills, shadowed, readers
+        text_dates, printings, xml_printings, pairs, pending_bills, published, miskeyed, body_bills, shadowed, readers,
+        invalid_targets,
     )
+
+
+def _target_repair_rows(index: PriorIndex, fresh: Sequence[Mapping[str, Any]], engine: EngineStamp) -> BillFamilyTables:
+    """Re-shape only invalid held listings not already refreshed from BILLSTATUS."""
+    refreshed = {(row["bill_id"], row["version_code"]) for row in fresh}
+    captures: dict[tuple[str, str], BillVersionCapture] = {}
+    for (bill, code, source), capture in index.invalid_targets.items():
+        if (bill, code) not in refreshed and ((bill, code) not in captures or source == LISTED_SOURCE):
+            captures[(bill, code)] = capture
+    return BillFamilyTables.concat([
+        build_bill_printings(bill_identity(bill), (capture,), engine=engine, diff=False)
+        for (bill, _code), capture in captures.items()
+    ])
+
+
+def _incident_pairs(paths: Mapping[str, Path | None], parents: Collection[tuple[str, str, str]]) -> set[tuple[str, ...]]:
+    """Only comparisons that name a withdrawn printing, including orphaned derived rows."""
+    import duckdb
+
+    if not parents:
+        return set()
+    retired = set(parents)
+    identity = TABLE_CONTRACTS["section_diffs"].identity
+    pairs: set[tuple[str, ...]] = set()
+    for name in ("section_diffs", "section_diff_items", "financial_changes", "diff_summaries"):
+        path = paths.get(name)
+        if path is None or not _has_columns(path, identity):
+            continue
+        for key in duckdb.sql(f"SELECT DISTINCT {', '.join(identity)} FROM read_parquet('{path}')").fetchall():
+            if (key[0], key[1], key[2]) in retired or (key[0], key[3], key[4]) in retired:
+                pairs.add(key)
+    return pairs
 
 
 def _held_readers(path: Path | None) -> dict[str, str]:
@@ -1846,8 +1877,12 @@ def build_bill_family(
     _require_spelled_digests(prior_paths)
     split_priors = {name: published_members(output_dir, name, download_members) for name in PARTITIONED}
     index = _prior_index(
-        prior_paths, split_priors["bill_sections"], in_scope=lambda bill: _in_scope(bill, bulk_congresses, bill_types)
+        prior_paths, split_priors["bill_sections"], in_scope=lambda bill: _in_scope(bill, congresses, bill_types)
     )
+    if index.invalid_targets:
+        for name in ("financial_changes", "diff_summaries"):
+            prior_paths[name] = published_table(output_dir, name, download_prior)
+    invalid_pairs = _incident_pairs(prior_paths, index.invalid_targets)
     # The published ``laws`` table names each public law's bill, best-effort, for the CBO titles led by a law.
     law_bills = law_bills_from(published_table(output_dir, "laws", download_prior))
     # Every bill's reader, carried forward, and this run's code for each status it shapes.
@@ -1905,7 +1940,7 @@ def build_bill_family(
     families: list[BillFamilyTables] = []
     touched: set[str] = set()
     # Published printings keyed under another printing's code.
-    retired_versions: set[tuple[str, ...]] = set()
+    retired_versions: set[tuple[str, ...]] = set(index.invalid_targets)
     archive_rows: list[dict] = []
     vote_rows: list[dict] = []
     # Each parsed bill's own report citations, which its CBO feed rows carry.
@@ -2008,6 +2043,9 @@ def build_bill_family(
     # 2b. Bodies, sections and comparisons, by each printing's own state:
     # the printings this run listed and every earlier run's still pending.
     fresh_versions = [row for tables in families for row in tables.bill_versions]
+    repairs = _target_repair_rows(index, fresh_versions, stamp)
+    families.append(repairs)
+    fresh_versions.extend(repairs.bill_versions)
     body = _run_body_pass(
         prior_paths,
         index,
@@ -2167,7 +2205,7 @@ def build_bill_family(
     item_scopes = _complete_child_scopes("section_diffs", folded.section_diffs, folded.section_diff_items, "item_count")
 
     pair_identity = TABLE_CONTRACTS["section_diffs"].identity
-    retired_pairs = body.retired_pairs
+    retired_pairs = body.retired_pairs | invalid_pairs
     if retired_pairs:
         logger.warning("Bill family: retiring {:,} published comparisons of non-neighbours", len(retired_pairs))
     if retired_versions:
@@ -2212,6 +2250,8 @@ def build_bill_family(
         "cbo_cost_estimates": estimate_scope,
         "bill_versions": (version_identity, retired_versions | superseded | body.unread),
         "bill_sections": (version_identity, section_scopes | retired_versions | body.unread),
+        "bill_summaries": (version_identity, set(index.invalid_targets)),
+        "section_classifications": (version_identity, set(index.invalid_targets)),
         "section_diffs": (pair_identity, retired_pairs),
         "section_diff_items": (pair_identity, item_scopes | retired_pairs),
         "financial_changes": (pair_identity, retired_pairs),

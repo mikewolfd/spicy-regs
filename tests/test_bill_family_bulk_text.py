@@ -236,8 +236,8 @@ def test_the_bulk_pass_is_bounded_by_whole_folders(tmp_path, scoped, monkeypatch
     assert {row["source"] for row in rows(paths, "bill_versions")} == {"congress"}, "left pending for the next run"
 
 
-def test_an_enrolled_bill_and_its_public_law_are_both_read_from_their_one_member(tmp_path, scoped):
-    """119 HR 983's enrolled printing and the law it became are one package, ``BILLS-119hr983enr``."""
+def test_a_public_law_listing_never_borrows_its_enrolled_bill_member(tmp_path, scoped):
+    """Native BILLSTATUS offers PLAW-119publ55 separately from BILLS-119hr983enr."""
     from tests.test_bill_family_order import BODIES, HR983, NativeBulk
 
     folder = {package: (FIXTURES / name).read_bytes() for package, name in BODIES.items() if "983" in package}
@@ -255,8 +255,15 @@ def test_an_enrolled_bill_and_its_public_law_are_both_read_from_their_one_member
         )
     }
     acquired = {row["version_code"]: row for row in rows(paths, "bill_versions") if row["source"] == "govinfo"}
-    assert acquired["enrolled-bill"]["sha256"] == acquired["public-law"]["sha256"]
-    assert ("enrolled-bill", "public-law") in {
+    assert "public-law" not in acquired
+    assert acquired["enrolled-bill"]["sha256"] == (
+        "sha256:b95447fdcbe46553d563f2a656e32f4b3a9861b92e4d75e57ba0812c5eb3a12a"
+    )
+    law = next(row for row in rows(paths, "bill_versions") if row["version_code"] == "public-law")
+    assert law["source"] == "congress" and law["package_id"] is None and law["sha256"] is None
+    assert "PLAW-119publ55" in law["offered_formats_json"]
+    assert not any(row["version_code"] == "public-law" for row in rows(paths, "bill_sections"))
+    assert ("enrolled-bill", "public-law") not in {
         (row["from_version_code"], row["to_version_code"]) for row in rows(paths, "section_diffs")
     }
     assert bills.downloads == [(119, 1, "hr")]

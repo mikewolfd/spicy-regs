@@ -309,9 +309,9 @@ def test_a_refused_read_withdraws_only_the_tree_less_row_its_own_bytes_published
 # --------------------------------------------------------------------------- #
 # The per-package route on one printing at a time: ``BodyPass`` over planned work.
 # --------------------------------------------------------------------------- #
-PUBLIC_LAW = ("113-hr-1067", "public-law", "BILLS-113hr1067enr")
-PLAW_URL = "https://www.govinfo.gov/content/pkg/PLAW-113publ237/uslm/PLAW-113publ237.xml"
-PLAW_LINK = {"url": PLAW_URL, "type": None, "package_id": None}
+USLM_PRINTING = ("113-hr-1067", "enrolled-bill", "BILLS-113hr1067enr")
+USLM_URL = "https://www.govinfo.gov/content/pkg/BILLS-113hr1067enr/uslm/BILLS-113hr1067enr.xml"
+USLM_LINK = {"url": USLM_URL, "type": None, "package_id": None}
 USLM = b'<?xml version="1.0"?><pLaw xmlns="http://schemas.gpo.gov/xml/uslm"><main>Public Law 113-237</main></pLaw>'
 USLM_DIGEST = "sha256:" + sha256(USLM).hexdigest()
 
@@ -332,7 +332,7 @@ def _row(key, formats, *, source="congress", digest=None, section_count=None, da
 
 
 class Rendition(StubBodyAcquirer):
-    """Serves the packages in ``uslm`` their USLM rendition, as the public law's MODS offers it; others the fixture XML."""
+    """Serves the packages in ``uslm`` their USLM rendition, as a BILLS MODS record may offer it; others the fixture XML."""
 
     def __init__(self, uslm=()):
         super().__init__()
@@ -374,22 +374,22 @@ def _pass(rows, source, *, held=None, package_refusals=None):
 @pytest.mark.parametrize(
     ("rows", "withdrawn"),
     [
-        ([_row(PUBLIC_LAW, [PLAW_LINK]), _row(PUBLIC_LAW, [PLAW_LINK], source="govinfo", digest=USLM_DIGEST)], True),
+        ([_row(USLM_PRINTING, [USLM_LINK]), _row(USLM_PRINTING, [USLM_LINK], source="govinfo", digest=USLM_DIGEST)], True),
         # No listing beside the body row: withdrawing it would leave the printing no row at all.
-        ([_row(PUBLIC_LAW, [PLAW_LINK], source="govinfo", digest=USLM_DIGEST)], False),
+        ([_row(USLM_PRINTING, [USLM_LINK], source="govinfo", digest=USLM_DIGEST)], False),
         # A body of other bytes is another read; this refusal says nothing about it.
         (
             [
-                _row(PUBLIC_LAW, [PLAW_LINK]),
-                _row(PUBLIC_LAW, [PLAW_LINK], source="govinfo", digest="sha256:" + "0" * 64),
+                _row(USLM_PRINTING, [USLM_LINK]),
+                _row(USLM_PRINTING, [USLM_LINK], source="govinfo", digest="sha256:" + "0" * 64),
             ],
             False,
         ),
         # A body row stating a tree is a processed read, whatever a refusal of the same bytes says now.
         (
             [
-                _row(PUBLIC_LAW, [PLAW_LINK]),
-                _row(PUBLIC_LAW, [PLAW_LINK], source="govinfo", digest=USLM_DIGEST, section_count="4"),
+                _row(USLM_PRINTING, [USLM_LINK]),
+                _row(USLM_PRINTING, [USLM_LINK], source="govinfo", digest=USLM_DIGEST, section_count="4"),
             ],
             False,
         ),
@@ -397,14 +397,14 @@ def _pass(rows, source, *, held=None, package_refusals=None):
     ids=["listed-same-bytes", "no-listing", "other-bytes", "with-a-tree"],
 )
 def test_a_uslm_body_is_a_refused_tree_that_withdraws_only_its_own_tree_less_row(rows, withdrawn):
-    """The live shape of 113-hr-1067's public law: its package offers USLM, which the bill-tree reader does not read."""
-    source = Rendition(uslm={PUBLIC_LAW[2]})
+    """A synthetic BILLS USLM rendition exercises parser refusal independently of law target selection."""
+    source = Rendition(uslm={USLM_PRINTING[2]})
     outcome = _pass(rows, source)
-    assert source.requested == [PUBLIC_LAW[2]]
+    assert source.requested == [USLM_PRINTING[2]]
     assert outcome.families == [], "a refused tree is not a read: no body row is written"
-    entry = outcome.package_refusals[PUBLIC_LAW[2]]
+    entry = outcome.package_refusals[USLM_PRINTING[2]]
     assert (entry["refusal"], entry["sha256"]) == ("tree", USLM_DIGEST)
-    assert outcome.unread == ({(PUBLIC_LAW[0], PUBLIC_LAW[1], "govinfo")} if withdrawn else set())
+    assert outcome.unread == ({(USLM_PRINTING[0], USLM_PRINTING[1], "govinfo")} if withdrawn else set())
 
 
 def test_a_held_neighbour_read_for_a_comparison_is_never_remembered_or_withdrawn():
@@ -439,34 +439,34 @@ def test_a_404_withdraws_nothing_even_beside_a_tree_less_row():
             self.requested.append(package_id)
             raise _unavailable(404)
 
-    rows = [_row(PUBLIC_LAW, [PLAW_LINK]), _row(PUBLIC_LAW, [PLAW_LINK], source="govinfo", digest=USLM_DIGEST)]
+    rows = [_row(USLM_PRINTING, [USLM_LINK]), _row(USLM_PRINTING, [USLM_LINK], source="govinfo", digest=USLM_DIGEST)]
     outcome = _pass(rows, Gone())
-    assert outcome.package_refusals[PUBLIC_LAW[2]]["refusal"] == "unavailable"
+    assert outcome.package_refusals[USLM_PRINTING[2]]["refusal"] == "unavailable"
     assert outcome.unread == set()
 
 
 def test_a_refusal_is_asked_again_once_its_listing_or_its_engine_moves():
-    rows = [_row(PUBLIC_LAW, [PLAW_LINK])]
+    rows = [_row(USLM_PRINTING, [USLM_LINK])]
     work, _, _ = bodies.plan_work(rows, held=lambda _: (), xml=lambda _: (), complete_pairs=set(), published_pairs={})
-    listed = bodies.listed_digest(work[0].by_code[PUBLIC_LAW[1]])
+    listed = bodies.listed_digest(work[0].by_code[USLM_PRINTING[1]])
     engine = reader(build.engine_stamp())
 
     def asked(rows, **entry) -> list[str]:
-        source = Rendition(uslm={PUBLIC_LAW[2]})
+        source = Rendition(uslm={USLM_PRINTING[2]})
         refusal = {"listed": listed, "refusal": "tree", "sha256": USLM_DIGEST, "engine": engine, "status": None}
-        _pass(rows, source, package_refusals={PUBLIC_LAW[2]: refusal | entry})
+        _pass(rows, source, package_refusals={USLM_PRINTING[2]: refusal | entry})
         return source.requested
 
     assert asked(rows) == [], "unchanged listing and reader"
-    assert asked(rows, engine=engine.replace("spicy-docs ", "spicy-docs 0.0.")) == [PUBLIC_LAW[2]], (
+    assert asked(rows, engine=engine.replace("spicy-docs ", "spicy-docs 0.0.")) == [USLM_PRINTING[2]], (
         "a spicy-docs release reads the tree again"
     )
-    assert asked(rows, engine="deltatrack 0.0.9 older") == [PUBLIC_LAW[2]], "another engine reads the tree again"
+    assert asked(rows, engine="deltatrack 0.0.9 older") == [USLM_PRINTING[2]], "another engine reads the tree again"
     assert asked(rows, refusal="unavailable", engine="another", status=404) == [], "an absence names no reader"
-    assert asked(rows, refusal="unavailable", engine=None, status=451) == [PUBLIC_LAW[2]], "not an absence"
-    assert asked(rows, refusal="later-kind", engine=None) == [PUBLIC_LAW[2]], "an unknown refusal is asked again"
-    pdf = {**PLAW_LINK, "url": PLAW_URL.replace("/uslm/", "/pdf/").replace(".xml", ".pdf")}
-    assert asked([_row(PUBLIC_LAW, [PLAW_LINK, pdf])]) == [PUBLIC_LAW[2]], "a listing offering another format moved"
+    assert asked(rows, refusal="unavailable", engine=None, status=451) == [USLM_PRINTING[2]], "not an absence"
+    assert asked(rows, refusal="later-kind", engine=None) == [USLM_PRINTING[2]], "an unknown refusal is asked again"
+    pdf = {**USLM_LINK, "url": USLM_URL.replace("/uslm/", "/pdf/").replace(".xml", ".pdf")}
+    assert asked([_row(USLM_PRINTING, [USLM_LINK, pdf])]) == [USLM_PRINTING[2]], "a listing offering another format moved"
 
 
 class HtmlOnly(StubBodyAcquirer):
@@ -680,7 +680,11 @@ def test_missing_middle_body_does_not_create_a_nonconsecutive_diff(scoped):
     """A held middle printing that cannot be read again stays in the order, so its neighbours are not paired."""
     status = parse_bill_status((FIXTURES / "status-119hr6028.xml").read_bytes(), identity=IDENTITY)
     introduced, engrossed = build._ordered_printings(status)
-    enrolled = replace(engrossed, type="Enrolled Bill", date="2026-09-20", package_id="BILLS-119hr6028enr")
+    enrolled = replace(
+        engrossed, type="Enrolled Bill", date="2026-09-20", package_id="BILLS-119hr6028enr",
+        formats=tuple(replace(item, url=item.url.replace("6028eh", "6028enr"), package_id="BILLS-119hr6028enr")
+                      for item in engrossed.formats),
+    )
 
     def row(version, code, source):
         return {
@@ -691,7 +695,7 @@ def test_missing_middle_body_does_not_create_a_nonconsecutive_diff(scoped):
             "version_date": version.date,
             "package_id": version.package_id,
             "offered_formats_json": json.dumps(
-                [{"url": item.url, "type": item.type, "package_id": item.package_id} for item in engrossed.formats]
+                [{"url": item.url, "type": item.type, "package_id": item.package_id} for item in version.formats]
             ),
             "sha256": "sha256:held" if source == "govinfo" else None,
         }
@@ -701,7 +705,15 @@ def test_missing_middle_body_does_not_create_a_nonconsecutive_diff(scoped):
             if package_id.endswith("eh"):
                 self.requested.append(package_id)
                 raise ValueError("the held middle cannot be read again")
-            return super().acquire(package_id.replace("enr", "eh"), **kwargs)
+            result = super().acquire(package_id.replace("enr", "eh"), **kwargs)
+            capture = result.body_capture
+            result.body_capture = replace(
+                capture, requested_url=capture.requested_url.replace("6028eh", "6028enr")
+                if package_id.endswith("enr") else capture.requested_url,
+                resolved_url=capture.resolved_url.replace("6028eh", "6028enr")
+                if package_id.endswith("enr") else capture.resolved_url,
+            )
+            return result
 
     rows = [
         row(introduced, "introduced-in-house", "congress"),

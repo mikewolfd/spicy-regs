@@ -172,7 +172,7 @@ def test_the_host_orders_a_dateless_enrolled_printing_as_the_provider_does():
 
 def test_the_enrolled_comparison_is_made_from_the_last_printing(tmp_path, scoped):
     paths = _run(tmp_path / "run", NativeBulk(HR983), NativeBodies(*BODIES))
-    assert _pairs(paths) == build._code_pairs(build._printings(_status(HR983)))
+    assert _pairs(paths) == build._code_pairs(build._printings(_status(HR983))) - {("enrolled-bill", "public-law")}
     assert ("rfs", "enrolled-bill") in _pairs(paths)
     assert _unresolved_items(paths) == []
 
@@ -189,16 +189,15 @@ def test_the_next_run_retires_published_backward_pairs_and_makes_the_missing_one
 
     bodies = NativeBodies(*BODIES)
     repaired = _run(tmp_path / "repaired", NativeBulk(HR983), bodies, prior=tmp_path / "audited")
-    assert _pairs(repaired) == build._code_pairs(build._printings(_status(HR983)))
+    assert _pairs(repaired) == build._code_pairs(build._printings(_status(HR983))) - {("enrolled-bill", "public-law")}
     assert not [
         row
         for row in _rows(repaired, "section_diff_items")
         if (row["from_version_code"], row["to_version_code"]) == ("enrolled-bill", "introduced-in-house")
     ]
     assert _unresolved_items(repaired) == []
-    # The re-read scope: the printings the two new neighbour pairs need -- the
-    # enrolled body once for itself and once for the law it became.
-    assert sorted(bodies.requested) == ["BILLS-119hr983enr", "BILLS-119hr983enr", "BILLS-119hr983rfs"]
+    # Only the real BILLS neighbours are read; the separate law remains a listing.
+    assert sorted(bodies.requested) == ["BILLS-119hr983enr", "BILLS-119hr983rfs"]
 
     steady = NativeBodies(*BODIES)
     again = _run(tmp_path / "steady", NativeBulk(HR983), steady, prior=tmp_path / "repaired")
