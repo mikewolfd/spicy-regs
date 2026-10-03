@@ -176,3 +176,52 @@ def test_a_cfr_generation_without_part_granule_reads_every_keyed_row():
     with cfr_sections(part_granule=False) as con:
         part = resolve(con, [occurrence("cfr_section", "2-200")], CFR_PINS)["occurrences"][0]
         assert part["target_status"] == "ambiguous" and part["match_count"] == 4 and part["reason"] is None
+
+
+# M8 (round 6): a Statutes pinpoint inside a law's page range. Ranges are the 119th's PLAW files' own page markers
+# (GovInfo PLAW-119-public.zip pinned 2026-09-14, read by spicy-docs' shape_law; impl-W/m8/ranges.out).
+
+def statutes(rows):
+    con = duckdb.connect()
+    con.execute("CREATE TABLE laws(congress VARCHAR, law_type VARCHAR, number VARCHAR, statutes_at_large_volume VARCHAR,"
+                " statutes_at_large_page VARCHAR, statutes_at_large_last_page VARCHAR)")
+    con.executemany("INSERT INTO laws VALUES (?, ?, ?, ?, ?, ?)", rows)
+    return con
+
+
+PLAW_119 = [("119", "public", "21", "139", "72", "401"), ("119", "public", "74", "140", "5", "172"),
+            ("119", "public", "75", "140", "173", "739"), ("119", "public", "1", "139", "3", None)]
+
+
+def _pinpoints(con, *keys):
+    rows = resolve(con, [occurrence("statutes_at_large", key, span_start=str(i)) for i, key in enumerate(keys)])
+    return [(r["target_status"], [c["number"] for c in r["candidate_keys"]], r.get("match_basis"))
+            for r in rows["occurrences"]]
+
+
+def test_a_page_inside_a_held_laws_range_resolves_to_that_law_by_range():
+    """140 Stat. 74 is inside Pub. L. 119-74 (140 Stat. 5-172): found, and the reply says the match is by range."""
+    with statutes(PLAW_119) as con:
+        assert _pinpoints(con, "140-74", "140-5", "139-401", "140-740") == [
+            ("found", ["74"], "page_range"), ("found", ["74"], "first_page"), ("found", ["21"], "page_range"),
+            ("missing", [], None)]
+
+
+def test_a_law_not_yet_read_for_its_last_page_matches_its_first_page_only():
+    with statutes(PLAW_119) as con:
+        assert _pinpoints(con, "139-3", "139-4") == [("found", ["1"], "first_page"), ("missing", [], None)]
+
+
+def test_a_page_two_laws_share_names_both_and_picks_neither():
+    """One law ending and the next starting on one page (none of the 119th's do; the shape is the publisher's)."""
+    shared = [("119", "public", "74", "140", "5", "172"), ("119", "public", "75", "140", "172", "739")]
+    with statutes(shared) as con:
+        assert _pinpoints(con, "140-172") == [("ambiguous", ["74", "75"], "first_page_and_page_range")]
+
+
+def test_a_laws_generation_before_the_last_page_column_matches_first_pages_as_before():
+    with duckdb.connect() as con:
+        con.execute("CREATE TABLE laws AS SELECT * EXCLUDE (statutes_at_large_last_page) FROM (VALUES "
+                    "('119', 'public', '74', '140', '5', '172')) t(congress, law_type, number, statutes_at_large_volume,"
+                    " statutes_at_large_page, statutes_at_large_last_page)")
+        assert _pinpoints(con, "140-5", "140-74") == [("found", ["74"], "first_page"), ("missing", [], None)]

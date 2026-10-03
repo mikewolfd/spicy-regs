@@ -3165,8 +3165,14 @@ tables:
       added. `statutes_at_large_volume` follows the session that cleared the
       bill, not the year the law was approved: 119-69 and 119-71 to 119-73,
       approved in January 2026 on bills cleared in December 2025, are in volume
-      139, and 119-70 and 119-74 on are in volume 140. All columns are stored
-      as VARCHAR.
+      139, and 119-70 and 119-74 on are in volume 140.
+      `statutes_at_large_last_page` comes with reader `laws-uslm-v3`
+      (2026-10-03), so a row read under an earlier reader holds NULL there,
+      which means not read, until the next laws run reads its PLAW again.
+      `resolve_document_citations` resolves a Statutes citation to a page
+      inside a law's range to that law and says the match is by range
+      (`match_basis`); a law with no last page is matched by its first page
+      only. All columns are stored as VARCHAR.
     summary: >-
       One row per enacted law the Congress.gov law list route states, with the
       Statutes at Large citation from the law's own PLAW USLM file where
