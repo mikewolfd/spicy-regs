@@ -100,7 +100,6 @@ from spicy_regs.transforms.bill_family_bodies import (
     BulkBillsSource,
     PackageBodySource,
     body_kind,
-    bill_identity,
     plan_work,
     refusal_metadata,
     refusal_state,
@@ -109,6 +108,7 @@ from spicy_regs.transforms.bill_family_bodies import (
 )
 from spicy_regs.transforms.congress_scope import (
     BULK_STATUS_FLOOR,
+    bill_identity,
     bill_types_from_env,
     bulk_status_budget,
     congresses_from_env,
@@ -2459,8 +2459,8 @@ def _require_spelled_digests(paths: Mapping[str, Path | None]) -> None:
 
 
 def _in_scope(bill_id: str, congresses: Collection[int], bill_types: Collection[str]) -> bool:
-    congress, bill_type, _number = bill_id.split("-")
-    return int(congress) in congresses and bill_type in bill_types
+    identity = bill_identity(bill_id)
+    return identity.congress in congresses and identity.bill_type in bill_types
 
 
 def _run_body_pass(

@@ -44,6 +44,8 @@ from spicy_docs.sources.cbo import CboAcquirer, CboBudget, CboSourceError
 from spicy_docs.sources.congress.bill_status import BillIdentity
 from spicy_docs.transport.credentials import scrub_credential
 
+from spicy_regs.transforms.congress_scope import bill_identity
+
 if TYPE_CHECKING:
     from spicy_regs.source_evidence import CaptureEvidence
 
@@ -73,12 +75,6 @@ def law_bills_from(path: Path | None) -> dict[str, str] | None:
         logger.warning("Bill family: laws unreadable, so no CBO title reads through a law: {}", error)
         return None
     return dict(rows)
-
-
-def bill_identity(bill: str) -> BillIdentity:
-    """A ``bill_id`` (``119-hr-1``) as the identity spicy-docs keys it by."""
-    congress, bill_type, number = bill.split("-")
-    return BillIdentity(int(congress), bill_type, int(number))
 
 
 def prior_citations(path: Path | None, congresses: Collection[int]) -> dict[BillIdentity, tuple[str, ...]]:
@@ -198,7 +194,6 @@ __all__ = [
     "CBO_FEED_BUDGET",
     "CBO_FEED_FLOOR",
     "FeedRead",
-    "bill_identity",
     "cost_estimate_publication",
     "law_bills_from",
     "prior_citations",

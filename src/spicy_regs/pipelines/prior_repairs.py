@@ -327,19 +327,11 @@ def add_missing_bills(prior: Path, out: Path, bill_ids: Sequence[str], source: A
     action histories and other sub-routes remain NULL through the ordinary backfill adjustment.
     """
     from spicy_docs.schemas import TABLE_CONTRACTS
-    from spicy_docs.sources.congress.bill_status import BillIdentity
 
     from spicy_regs.transforms import build_bill_family as family
+    from spicy_regs.transforms.congress_scope import bill_identity
 
-    identities = []
-    for key in dict.fromkeys(bill_ids):
-        parts = key.split("-")
-        if len(parts) != 3:
-            raise ValueError(f"Invalid bill ID: {key}")
-        identity = BillIdentity(int(parts[0]), parts[1], int(parts[2]))
-        if family.bill_key(identity) != key:
-            raise ValueError(f"Noncanonical bill ID: {key}")
-        identities.append(identity)
+    identities = [bill_identity(key) for key in dict.fromkeys(bill_ids)]
     if not identities:
         raise ValueError("Name at least one bill to repair")
     columns = TABLE_CONTRACTS["congress_bills"].columns

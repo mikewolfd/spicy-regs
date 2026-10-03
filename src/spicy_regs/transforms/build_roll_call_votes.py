@@ -86,7 +86,7 @@ from spicy_docs.interpretation.vote_matching import (
     read_vote_file_statement,
 )
 from spicy_docs.schemas.congress_activity_tables import shape_member_vote, shape_roll_call_vote
-from spicy_docs.sources.congress.bill_status import BillIdentity, BillSourceError
+from spicy_docs.sources.congress.bill_status import BillSourceError
 from spicy_docs.sources.congress.votes import (
     VoteAcquirer,
     VoteBudget,
@@ -101,6 +101,7 @@ from spicy_regs.sources import r2
 from spicy_regs.transforms.build_bill_family import VOTE_REFERENCES_TABLE
 from spicy_regs.transforms.congress_scope import (
     FIRST_CONGRESS_YEAR,
+    bill_identity,
     congresses_from_env,
     default_congresses,
     sessions_of,
@@ -223,21 +224,6 @@ def house_sessions(congress: int) -> tuple[int, ...]:
     return tuple(session for session in sessions_of(congress) if first_year + session - 1 >= CLERK_FIRST_YEAR)
 
 
-def _bill_identity(bill_id: str) -> BillIdentity:
-    """``119-hr-6028`` back to the identity the reference named, refusing anything else.
-
-    The key is written by ``schemas.tables.bill_id`` and read back here, which
-    is the one place this repository parses it. A key that does not split into
-    three parts is a row this rollup cannot use, and saying so beats matching a
-    vote to a bill that was never named.
-    """
-    parts = bill_id.split("-")
-    if len(parts) != 3:
-        raise BillSourceError(f"bill_id {bill_id!r} is not congress-type-number")
-    congress, bill_type, number = parts
-    return BillIdentity(congress=int(congress), bill_type=bill_type, number=int(number))
-
-
 def _recorded_vote_references(
     output_dir: Path, congresses: Sequence[int], download_prior: Callable[[str, Path], bool],
     *, evidence: CaptureEvidence | None = None,
@@ -304,7 +290,7 @@ def _recorded_vote_references(
                     vote=VoteKey(
                         congress=int(congress), chamber=str(chamber), session=int(session), roll_number=int(roll_number)
                     ),
-                    bill=_bill_identity(str(bill_id)),
+                    bill=bill_identity(str(bill_id)),
                     rule=RECORDED_RULE,
                     url=None if url is None else str(url),
                     date=None if date is None else str(date),

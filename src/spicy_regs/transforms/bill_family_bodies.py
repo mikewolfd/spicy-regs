@@ -85,6 +85,7 @@ from spicy_docs.sources.govinfo.body_acquisition import GovInfoBodyBudget, GovIn
 from spicy_docs.transport.credentials import CredentialRefusedError, scrub_credential
 
 from spicy_regs.source_evidence import SourceEvidenceError
+from spicy_regs.transforms.congress_scope import bill_identity
 
 #: Three requests per printing (summary, MODS, body), paced at ~3/s.
 BODY_BUDGET = GovInfoBodyBudget(
@@ -272,12 +273,6 @@ class BodyOutcome:
     bulk_read: int = 0
     fetched: int = 0
     captured: int = 0
-
-
-def bill_identity(bill_id: str) -> BillIdentity:
-    """``119-hr-983`` back to its identity; the provider's own ``bill_id`` spelling."""
-    congress, bill_type, number = bill_id.split("-")
-    return BillIdentity(int(congress), bill_type, int(number))
 
 
 def listed_digest(printing: Printing) -> str:
@@ -859,7 +854,6 @@ __all__ = [
     "BulkBillsSource",
     "PackageBodySource",
     "Printing",
-    "bill_identity",
     "body_kind",
     "listed_digest",
     "plan_work",
