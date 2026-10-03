@@ -1,6 +1,7 @@
 """The comment-field fill: a resumable read that holds no lock, and a catalog write that fills only what is unread."""
 
 import json
+from glob import glob
 from pathlib import Path
 
 import duckdb
@@ -60,7 +61,7 @@ def test_a_new_record_shape_reads_every_key_again_beside_an_earlier_shapes_parts
     cf.plan(tmp_path, _manifest(tmp_path, store), chunk_keys=10)
     assert cf.read(tmp_path, workers=2, resource=_FakeS3Resource(store))["keys"] == len(store)
     assert len(list(tmp_path.glob("parts/*/*.parquet"))) == 4  # two chunks per shape
-    assert len(list(tmp_path.glob(str(cf.shape_parts(tmp_path).relative_to(tmp_path))))) == 2
+    assert len(glob(str(cf.shape_parts(tmp_path)))) == 2
 
 
 def test_planning_or_reading_the_shape_needs_an_extract_that_keeps_withheld_attachments(tmp_path, monkeypatch):

@@ -32,6 +32,7 @@ import sys
 import time
 import zlib
 from collections.abc import Iterator
+from glob import glob
 from pathlib import Path
 
 import duckdb
@@ -270,7 +271,6 @@ def status(workdir: Path) -> dict:
             "read_chunks": len(done), "read_keys": read_keys}
 
 
-
 #: Words no staged column's name may carry. A part also keeps each copy's other stated attributes (``attributes_json``:
 #: email, phone, fax, address), its ETag and size and its body's digest; a staged read sits in the data bucket and
 #: holds only the object key and columns ``comments`` publishes (:func:`read_columns`).
@@ -320,10 +320,12 @@ def stage(workdir: Path, out: Path, *, profile: str = "all") -> dict:
     column's non-null count and hash sum) and by Arrow (rows, footer rows, each column's non-null count and byte
     total). A failed check removes the file. :func:`upload_staged` puts it where a runner fetches it.
     """
+    import pyarrow.parquet as pq
+
     from spicy_regs.sources.publication import file_identity
 
     columns = list(read_columns(profile))
-    parts = sorted(str(path) for path in workdir.glob(str(shape_parts(workdir).relative_to(workdir))))
+    parts = sorted(glob(str(shape_parts(workdir))))
     if not parts:
         raise RuntimeError(f"no {RECORD_SHAPE} parts under {workdir / 'parts'}")
     target = out / "reads.parquet"
@@ -340,8 +342,6 @@ def stage(workdir: Path, out: Path, *, profile: str = "all") -> dict:
         from_parts, from_file = (_column_totals(con, rel, columns) for rel in (source, f"read_parquet({_sql(target)})"))
     shutil.rmtree(out / "spill", ignore_errors=True)
     arrow_parts, arrow_file = _arrow_totals(parts, columns), _arrow_totals([str(target)], columns)
-    import pyarrow.parquet as pq
-
     names = pq.read_schema(target).names
     checks = {
         "the file holds exactly the profile's read columns, in order": names == columns,
