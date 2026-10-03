@@ -343,8 +343,69 @@ file its reader cannot page, so two of five personas never read a row.
   appears once: under `publication.release_compatibility` for an available view,
   or `relationship.release_compatibility` for an unavailable view. Response
   shaping creates new dictionaries and leaves the stored relationship records,
-  checks and publication provenance unchanged. No content is truncated; wide
-  schemas and complete selected evidence can still produce large descriptions.
+  checks and publication provenance unchanged.
+- **`describe_table(detail=false)` is the default since round 3 (2026-10-03).**
+  The 2026-10-02 round-3 personas (`docs/research/mcp-chaos-2026-10-02.md`,
+  round 3) found `bill_versions`' description at 24,600 bytes, 12,048 of them
+  the joins' `measurement` records and 3,365 the bill family's ledger statements
+  repeated on every table of the family. The default reply now omits exactly
+  `joins[].measurement` and `qualification.ledger_statements` and names them in
+  `detail.omitted`; every join still states its kind, reason, baseline counts
+  and floor, and the qualification keeps its status, generation, pins,
+  disposition and task ids. **A client that read `joins[].measurement` now
+  needs `detail=true`**, which returns the whole record as before plus `detail`.
+  Nothing else is truncated: a wide schema is still described whole.
+- **`query_sql(max_cell_chars=N)`** cuts every text, list or struct cell longer
+  than N characters to its first N (a list or struct as its compact JSON text)
+  and lists each cut cell in `truncated_cells` as `{row, column, chars}` with the
+  cell's full length, the same honesty rule as `truncated` for rows: a shortened
+  value is never mistaken for the whole. Unset, nothing is cut and
+  `truncated_cells` is empty. There is no server-side `offset`: the docstring
+  points at `ORDER BY … LIMIT n OFFSET m`, which DuckDB already does without the
+  server re-executing a statement to skip rows. Round 3 measured a 25-row
+  `SELECT *` on `committee_meetings` at 204,218 bytes, 99.6% of it rows, and a
+  43-row GAO result at 81,801 bytes that the client spilled to a file it could
+  not page.
+- **`list_sources` states each table's pinned `rows`** (the index descriptor's or
+  the snapshot manifest's count; null for a legacy table no pointer pins) so a
+  declared table whose generation publishes no rows is visible at discovery
+  without a describe call. It is the pinned generation's count, not a freshness
+  claim: a later data run lands after the pin.
+
+## Relationship-view column meanings (`view_columns`, `relationship_views.lineage`)
+
+A derived view's column has one of three meanings in `describe_table`, in this
+order: the spec's `column_descriptions` entry (an `SQLView` field; an
+`ArrayRelationship.details` triple), the shared registry in `sql_views`
+(`source_ordinal`, `target_key`, `source_table`, …), or the dictionary meaning
+of the dependency column it projects unchanged. A column none of them covers has
+`description: null`. The round-3 personas found 822 of 1,381 columns on the
+non-FEC views carrying a sentence manufactured from the column name ("Term
+match; its meaning and source grain are described by this view"); that fallback
+is gone, and `tests/test_chaos_r3_server.py` describes every view over
+dictionary-typed empty tables and refuses an undescribed column.
+
+**Inheritance is by lineage, never by name.** `lineage.column_lineage` walks
+DuckDB's own parse tree (`json_serialize_sql`) when a view is bound and records,
+in the pinned relationship record's `column_lineage`, which output columns are a
+bare projection (aliased or not, or a star expansion) of a dependency column,
+through CTEs, subqueries, lateral joins and views over views. A UNION keeps a
+position's origin only when every branch agrees; an aggregate, CASE, cast,
+constant or struct field has none, so `fec_relationship_evidence.collection_id`
+(computed from a locator) does not inherit `fec_source_records.collection_id`,
+and `min(purpose)` does not inherit `purpose`. The serving connection runs no
+EXPLAIN for this; the walk is a parse. A table function or VALUES list without
+column aliases has unknown columns, and an unqualified name beside one resolves
+to nothing rather than to a guess. The review of 2026-10-03 (`phase3-review.md`)
+replaced an earlier name-based design with this one.
+
+**Debt: the view meanings are not in `table_metadata.json`.** Generating the
+relationship-view entries at `spicy-regs-dict generate` time would give one
+dictionary file and let its decay lint cover view prose, but it needs the
+generator (`data_dictionary.py`, another lane's file) to bind every view over
+dictionary-typed tables, a placeholder FEC source pin for the 72 qualified
+views, and a rule for text that lives in two places. Until then the specs hold
+the view meanings and the server describes a view on request.
 
 ## DNS rebinding protection is off in `build_app`
 

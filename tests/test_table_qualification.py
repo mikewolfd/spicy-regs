@@ -137,7 +137,7 @@ def test_a_stale_record_fails_the_dictionary_check(tmp_path, monkeypatch, capsys
 
 def _audit(server, table: str) -> dict:
     """describe_table's audit for ``table``, without the ledger scope and statements every table shares."""
-    report = _tool_data(server, "describe_table", {"table": table})["qualification"]
+    report = _tool_data(server, "describe_table", {"table": table, "detail": True})["qualification"]
     shared = {"ledger", "ledger_destination", "basis", "ledger_tasks", "ledger_statements"}
     return {key: value for key, value in report.items() if key not in shared}
 
@@ -186,7 +186,7 @@ def test_a_drifted_table_reports_the_ledgers_latest_audit_not_its_last_phrase(mo
 )
 def test_a_failed_disposition_is_reported_verbatim_with_its_statement(monkeypatch, live, generation):
     server = _serve(monkeypatch, _index(committee_reports=live))
-    described = _tool_data(server, "describe_table", {"table": "committee_reports"})["qualification"]
+    described = _tool_data(server, "describe_table", {"table": "committee_reports", "detail": True})["qualification"]
     assert described["generation"] == generation
     assert (described["live_pin"], described["ledger_pin"]) == (live, "5e1e73ad")
     assert described["ledger_disposition"] == "FAILED"

@@ -102,11 +102,12 @@ def test_a_misspelled_table_is_answered_with_close_names(client):
 
 def test_discovery_lists_tables_without_per_table_pins_or_audits(client):
     # Pins and ledger audits for every table made list_sources 164K characters; describe_table carries them.
+    # The pinned row count is the one number that stays: it is how an empty generation shows at discovery.
     result = call(client, "list_sources", {})
     assert result["isError"] is False
     data = result["structuredContent"]
     assert {entry["table"] for entry in data["tables"]} == {"fcc_filings", "fcc_proceedings"}
-    assert set(data["tables"][0]) == {"table", "label", "coverage"}
+    assert set(data["tables"][0]) == {"table", "label", "coverage", "rows"}
     assert not {"publication", "qualification", "datasets", "declared_tables"} & set(data)
     assert "views" not in data["fec_release"]
     assert data["fec_release"]["raw_query_financial_qualification"] == "not_inferred"

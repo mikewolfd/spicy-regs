@@ -17,7 +17,7 @@ import os
 import tempfile
 import threading
 from collections import Counter
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from copy import deepcopy
 from datetime import date, datetime, time, timedelta
@@ -766,6 +766,17 @@ def _publication_status(cursor: duckdb.DuckDBPyConnection) -> dict:
     }
 
 
+def _pinned_rows(index: dict, rulemaking: dict, name: str) -> int | None:
+    """The row count the pinned index or snapshot manifest states for ``name``; None for a table neither pins."""
+    from spicy_regs.sources.publication import table_descriptor
+
+    descriptor = table_descriptor(index, f"{name}.parquet")
+    if descriptor is not None:
+        return descriptor["rows"]
+    pinned = rulemaking["tables"].get(f"{name}.parquet")
+    return pinned["rows"] if pinned is not None else None
+
+
 def _reply_pins(cursor: duckdb.DuckDBPyConnection, publication: dict[str, dict], names: list[str]) -> dict[str, dict]:
     """Each named table's pin with the facts a reply states instead of prose that decays.
 
@@ -775,17 +786,14 @@ def _reply_pins(cursor: duckdb.DuckDBPyConnection, publication: dict[str, dict],
     embed :func:`_publication_status` pins in provenance columns and candidate
     identities, which these facts must not move.
     """
-    from spicy_regs.sources.publication import table_descriptor
-
     index, rulemaking, relationships = (
         _connection_index(cursor), _connection_rulemaking(cursor), _connection_relationships(cursor)
     )
     pins = {}
     for name in names:
         pin = dict(publication[name])
-        managed = pin["status"] in ("managed_generation", "managed_download")
-        if managed and (descriptor := table_descriptor(index, f"{name}.parquet")) is not None:
-            pin["rows"] = descriptor["rows"]
+        if pin["status"] in ("managed_generation", "managed_download"):
+            pin["rows"] = _pinned_rows(index, rulemaking, name)
         elif pin["status"] == "rulemaking_snapshot":
             manifest = rulemaking["manifest"]
             pin |= {"rows": rulemaking["tables"][f"{name}.parquet"]["rows"],
@@ -934,6 +942,47 @@ def _table_metadata() -> dict[str, dict[str, Any]]:
     return json.loads(files("spicy_regs").joinpath("table_metadata.json").read_text(encoding="utf-8"))
 
 
+def _lineage_meanings(lineage: Mapping[str, Sequence[str]]) -> dict[str, str]:
+    """Dictionary meanings for the view columns that project a dependency table's column unchanged.
+
+    ``lineage`` is the view's ``column_lineage`` (``relationship_views.lineage``),
+    read from its parse tree when it was bound: a computed column has no entry and
+    so inherits nothing, whatever its name.
+    """
+    dictionary = _table_metadata()
+    meanings: dict[str, str] = {}
+    for column, (table, source) in lineage.items():
+        declared = {c["column_name"]: c.get("description") for c in dictionary.get(table, {}).get("columns", [])}
+        if declared.get(source):
+            meanings[column] = declared[source]
+    return meanings
+
+
+#: What ``describe_table`` leaves out unless asked with ``detail=true``: the measured records that
+#: made bill_versions' reply 24,600 bytes, repeated for every table of a ledger family (round 3, S3).
+DESCRIBE_DETAIL = ("joins[].measurement", "qualification.ledger_statements")
+
+
+def _bounded_cells(rows: list[dict[str, Any]], max_chars: int | None) -> list[dict[str, Any]]:
+    """Cut each text, list or struct cell longer than ``max_chars`` to its first ``max_chars`` characters, in place.
+
+    A list or struct cell is measured and cut as its compact JSON text. Returns
+    one record per cut cell with the cell's full length, so a shortened value is
+    never mistaken for the whole; ``None`` cuts nothing.
+    """
+    cut: list[dict[str, Any]] = []
+    if max_chars is None:
+        return cut
+    for index, row in enumerate(rows):
+        for column, value in row.items():
+            if isinstance(value, (str, list, dict)):
+                text = value if isinstance(value, str) else json.dumps(value, separators=(",", ":"), ensure_ascii=False)
+                if len(text) > max_chars:
+                    row[column] = text[:max_chars]
+                    cut.append({"row": index, "column": column, "chars": len(text)})
+    return cut
+
+
 QUALIFICATION_BASIS = (
     "The output ledger's audits, bundled when the dictionary was generated. ledger_disposition is the "
     "ledger's word for ledger_pin only; generation compares that pin with this connection's live pin. "
@@ -974,14 +1023,23 @@ def _joins() -> dict:
     return json.loads(files("spicy_regs").joinpath("table_joins.json").read_text("utf-8"))
 
 
-def _table_joins(table: str) -> dict:
-    """The declared joins where ``table`` is the child or the parent, with their baseline."""
+def _table_joins(table: str, *, measurements: bool) -> dict:
+    """The declared joins where ``table`` is the child or the parent, with their baseline.
+
+    ``measurements`` keeps each join's measurement record (immutable input URLs,
+    SQL and cardinality); without it the join still states its kind, reason,
+    baseline counts and floor.
+    """
     record = _joins()
+
+    def shaped(join: dict) -> dict:
+        return join if measurements else {key: value for key, value in join.items() if key != "measurement"}
+
     return {
         "basis": JOINS_BASIS,
         "baseline": record["baseline"],
-        "outgoing": [join for join in record["joins"] if join["child"] == table],
-        "incoming": [join for join in record["joins"] if join["parent"] == table],
+        "outgoing": [shaped(join) for join in record["joins"] if join["child"] == table],
+        "incoming": [shaped(join) for join in record["joins"] if join["parent"] == table],
     }
 
 
@@ -1042,8 +1100,9 @@ def _table_qualification(rows: list[dict], live: dict[str, str], statements: boo
             "ledger_date": audit["date"],
             "ledger_disposition": audit["disposition"],
         }
-    if statements and rows:
+    if rows:
         result["ledger_tasks"] = list(dict.fromkeys(row["task"] for row in rows))
+    if statements and rows:
         result["ledger_statements"] = [row["statement"] for row in rows]
     return result
 
@@ -1112,11 +1171,14 @@ def _register_tools(mcp: MCPServer) -> None:
 
     @tool
     def list_sources() -> dict[str, Any]:
-        """List the queryable tables: each one's label and coverage kind, with derived views grouped.
+        """List the queryable tables: each one's label, coverage kind and pinned row count, with derived views grouped.
 
         coverage is the dictionary's kind: true_range, window, sampled,
         not_a_range or derived; a window or a sample does not hold the
-        source's full history.
+        source's full history. rows is the pinned generation's row count for a
+        managed or snapshot table (describe_table gives the pin): 0 means this
+        generation publishes no rows; null means no pointer pins the table. A
+        later data run lands after the pin, so rows is not a freshness claim.
         A listed table loaded in this connection; that is not a data or
         freshness audit. Call describe_table before querying a table: it gives
         columns, coverage caveats, joins, the live data version and the output
@@ -1131,6 +1193,7 @@ def _register_tools(mcp: MCPServer) -> None:
             available = _available_tables(cursor)
         metadata = _table_metadata()
         relationships = _connection_relationships(cursor)
+        index, rulemaking = _connection_index(cursor), _connection_rulemaking(cursor)
         # A relationship family's occurrence, pair and field-state views share one summary; list it once.
         views: dict[str, list[str]] = {}
         for name, entry in relationships.items():
@@ -1139,7 +1202,8 @@ def _register_tools(mcp: MCPServer) -> None:
         return {
             **_source_details(cursor),
             "tables": [
-                {"table": name, "label": metadata.get(name, {}).get("label"), "coverage": metadata.get(name, {}).get("kind")}
+                {"table": name, "label": metadata.get(name, {}).get("label"), "coverage": metadata.get(name, {}).get("kind"),
+                 "rows": _pinned_rows(index, rulemaking, name)}
                 for name in available if name not in relationships
             ],
             "relationship_views": [{"views": names, "summary": summary} for summary, names in views.items()],
@@ -1148,7 +1212,7 @@ def _register_tools(mcp: MCPServer) -> None:
         }
 
     @tool
-    def describe_table(table: str) -> dict[str, Any]:
+    def describe_table(table: str, detail: bool = False) -> dict[str, Any]:
         """Return a table's columns with their meanings, row identity, coverage caveats and joins.
 
         Coverage metadata describes supported output; it does not certify this
@@ -1163,6 +1227,12 @@ def _register_tools(mcp: MCPServer) -> None:
         reported only for the ledger's publisher. joins lists the declared joins
         this table makes (outgoing) and receives (incoming), each with its
         measured baseline.
+        detail=false (the default) omits each join's measurement record and
+        the ledger's own statements, and names them in detail.omitted;
+        detail=true returns them. A derived view's column that projects a
+        source table's column unchanged carries that column's dictionary
+        meaning; a computed column carries its declared meaning, or null when
+        it has none.
         For a FEC view, full release_compatibility evidence appears once:
         in publication when available, or relationship when unavailable.
         compatible means the captured data, interpretation and consumer match
@@ -1189,12 +1259,14 @@ def _register_tools(mcp: MCPServer) -> None:
 
             # A derived view declares its bound schema; it is described here, not at connection build.
             metadata = relationships[table]["metadata"]
-            entry = {"table": table, **metadata, "columns": view_columns(rows, metadata.get("column_descriptions"))}
+            inherited = _lineage_meanings(metadata.get("column_lineage", {}))
+            entry = {"table": table, **metadata,
+                     "columns": view_columns(rows, metadata.get("column_descriptions"), inherited)}
         else:
             entry = _table_metadata().get(table, {"table": table, "columns": []})
         declared = {column["column_name"]: column for column in entry["columns"]}
         actual = {row[0]: row[1] for row in rows}
-        scope, qualified = _qualification(cursor, [table], statements=True)
+        scope, qualified = _qualification(cursor, [table], statements=detail)
         differences = (
             {
                 "missing_columns": [name for name in declared if name not in actual],
@@ -1212,6 +1284,7 @@ def _register_tools(mcp: MCPServer) -> None:
             "table": table,
             **_source_details(cursor),
             "available": available,
+            "detail": {"full": detail, "omitted": [] if detail else list(DESCRIBE_DETAIL)},
             **({"relationship": {
                 key: value for key, value in relationships[table].items()
                 if key != "metadata" and (key != "release_compatibility" or not available)
@@ -1221,8 +1294,9 @@ def _register_tools(mcp: MCPServer) -> None:
                 if table in status["publication"] else {"status": "unavailable"}
             ),
             "qualification": scope if qualified is None else {**scope, **qualified[table]},
-            "joins": _table_joins(table),
-            "metadata": {key: value for key, value in entry.items() if key not in {"table", "columns", "column_descriptions"}},
+            "joins": _table_joins(table, measurements=detail),
+            "metadata": {key: value for key, value in entry.items()
+                         if key not in {"table", "columns", "column_descriptions", "column_lineage"}},
             "metadata_basis": "Dictionary declarations and dated coverage notes; not live population measurements.",
             "schema_matches_declared": not any(differences.values()) if differences is not None else None,
             "schema_differences": differences,
@@ -1233,7 +1307,11 @@ def _register_tools(mcp: MCPServer) -> None:
         }
 
     @tool
-    def query_sql(sql: str, max_rows: Annotated[int, Field(ge=1, le=500)] = 25) -> dict[str, Any]:
+    def query_sql(
+        sql: str,
+        max_rows: Annotated[int, Field(ge=1, le=500)] = 25,
+        max_cell_chars: Annotated[int | None, Field(ge=1)] = None,
+    ) -> dict[str, Any]:
         """Run read-only SQL against configured Spicy Regs tables, returning up to max_rows rows.
 
         Only SELECT runs; DESCRIBE, SHOW, SUMMARIZE, VALUES and the
@@ -1246,7 +1324,12 @@ def _register_tools(mcp: MCPServer) -> None:
         queries. truncated reports whether rows beyond max_rows were omitted
         from what the statement returned; rows your own LIMIT excluded are not
         counted, so to learn whether more exist, set LIMIT above max_rows or
-        run a COUNT. SQL is DuckDB's dialect: `~` matches the whole string
+        run a COUNT. max_cell_chars, when set, cuts every text, list or struct
+        cell longer than that many characters to its first max_cell_chars
+        characters (a list or struct as compact JSON text) and lists each cut
+        cell in truncated_cells with its full length; nothing is cut when
+        unset. To page a long result, ORDER BY a key and use LIMIT n OFFSET m
+        in the SQL. SQL is DuckDB's dialect: `~` matches the whole string
         (use regexp_matches for a substring match, lower() for case).
         Selected columns must have unique names; alias shared names in joins.
         sql echoes the statement this reply answers.
@@ -1280,6 +1363,7 @@ def _register_tools(mcp: MCPServer) -> None:
             named = _tables_named(cursor, sql)
             pins = _reply_pins(cursor, publication, [name for name in publication if name in named])
         result_rows = [{col: _jsonify(val) for col, val in zip(columns, row)} for row in rows[:max_rows]]
+        truncated_cells = _bounded_cells(result_rows, max_cell_chars)
         return {
             "sql": sql,
             **_source_details(cursor),
@@ -1287,6 +1371,8 @@ def _register_tools(mcp: MCPServer) -> None:
             "row_count_shown": len(result_rows),
             "max_rows": max_rows,
             "truncated": len(rows) > max_rows,
+            "max_cell_chars": max_cell_chars,
+            "truncated_cells": truncated_cells,
             "rows": result_rows,
             "publication": _query_reply_pins(pins, relationships),
         }
