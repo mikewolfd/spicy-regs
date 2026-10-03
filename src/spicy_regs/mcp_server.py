@@ -1174,7 +1174,7 @@ def _register_tools(mcp: MCPServer) -> None:
         """List the queryable tables: each one's label, coverage kind and pinned row count, with derived views grouped.
 
         coverage is the dictionary's kind: true_range, window, sampled,
-        not_a_range or derived; a window or a sample does not hold the
+        derived, not_a_range or empty; a window or a sample does not hold the
         source's full history. rows is the pinned generation's row count for a
         managed or snapshot table (describe_table gives the pin): 0 means this
         generation publishes no rows; null means no pointer pins the table. A
