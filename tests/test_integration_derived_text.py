@@ -16,6 +16,7 @@ via ``pytest -m integration``. Needs outbound access to the anonymous S3 bucket.
 """
 
 import json
+import re
 
 import boto3
 import pytest
@@ -59,7 +60,8 @@ def test_real_comment_text_filled_from_derived_data() -> None:
     assert len(record["text_content"]) > 200
     provenance = json.loads(record["pdf_extraction_results_json"])
     assert provenance["comment_id"] == EXPECTED_COMMENT_ID
-    assert all(len(attachment["sha256"]) == 64 for attachment in provenance["attachments"])
+    # Every digest is spelled with its algorithm since spicy-docs 0.52.0.
+    assert all(re.fullmatch(r"sha256:[0-9a-f]{64}", attachment["sha256"]) for attachment in provenance["attachments"])
     logger.success(
         "Filled text_content from derived-data for {} ({} chars)",
         record["comment_id"],

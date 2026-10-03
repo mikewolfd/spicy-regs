@@ -44,15 +44,17 @@ def _column(table: str, column: str) -> str:
 
 
 def test_w3_the_enactment_date_is_approved_date_or_signed_date_and_the_latest_action_never_precedes_it(urls, con):
-    """`laws.data_quality` points enactment questions at `approved_date`, else `congress_bills.signed_date`.
+    """`laws.latest_action_date` points enactment questions at `approved_date`, else `congress_bills.signed_date`.
 
     Two publisher records are compared: `approved_date` is the PLAW USLM file's (GovInfo), `signed_date` the
     coded became-law action of the bill's BILLSTATUS document. `latest_action_date`, the law list route's latest
     action, may follow enactment (119-public-68) but never precede it. Cannot see: a law whose PLAW is uncaptured
     and whose bill has no coded became-law action, where neither date exists.
     """
-    note = " ".join(dd.load_descriptions()["laws"]["data_quality"].split())
-    assert "For the enactment date use `approved_date`, else `congress_bills.signed_date` through `bill_id`" in note
+    # The sentence is the contract's own text for the column since the 0.54.0 build (the interim note that carried
+    # it in data_quality left with that build).
+    assert ("enactment date read approved_date where the PLAW was captured, else congress_bills.signed_date through "
+            "bill_id") in _column("laws", "latest_action_date")
     disagree, undated_public, earlier = con.execute(f"""
         SELECT count(*) FILTER (WHERE l.approved_date IS NOT NULL AND b.signed_date IS NOT NULL
                                 AND l.approved_date <> b.signed_date),
