@@ -213,9 +213,11 @@ def _citation_tool():
     return tool
 
 
-def test_the_schema_names_the_table_each_kind_reads():
-    meaning = _citation_tool().input_schema["properties"]["document_kind"]["description"]
-    assert all(f"{kind}: {table}" in meaning for kind, table in SOURCE_TABLES.items())
+def test_the_schema_names_each_supported_kind_with_its_table_once():
+    """The field description lists the kinds the round-4 enum listed, each with its table, and nothing repeats them."""
+    document_kind = _citation_tool().input_schema["properties"]["document_kind"]
+    assert all(f"{kind}: {table}" in document_kind["description"] for kind, table in SOURCE_TABLES.items())
+    assert "enum" not in document_kind
 
 
 def test_the_description_defines_partial_the_key_rule_and_the_read_statuses():

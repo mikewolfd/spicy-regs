@@ -26,8 +26,12 @@ signature with `functools.wraps` and registers the docstring through
 `inspect.cleandoc` as the description. MCPServer sends `__doc__` as written, and
 Claude Code cuts a description at 2,048 characters (`CLAUDE_CODE_MAX_MCP_DESCRIPTION_LENGTH`)
 with "… [truncated]": round 4 found `query_sql`'s 2,132 characters, 225 of them
-indentation, cut mid-word for three personas. `tests/test_chaos_r4_server.py`
-holds every registered description to 2,000 characters with no indented line. `describe_table`'s docstring is how a client learns
+indentation, cut mid-word for three personas. The cap counts the compact input
+schema too: round 5 saw `query_sql`'s 1,728 + 322 = 2,050 cut at character 1,711
+for three personas while `describe_table`'s 1,832 + 190 = 2,022 was not
+(`round5/audit-oyelaran.md`). `tests/test_chaos_r4_server.py` holds every
+registered description plus its compact input schema to 2,048 characters, with
+no indented line; a long field description or enum spends the same budget. `describe_table`'s docstring is how a client learns
 which tables are valid; `query_sql`'s is how it learns the available views.
 Strip them and the server still runs, but every client goes blind. Verify with
 `asyncio.run(build_server().list_tools())`.
@@ -288,18 +292,20 @@ either text is a `spicy-regs-dict generate`, and `check` refuses a stale copy.
 The tool accepts exactly the keys of `citation_resolution.SOURCE_TABLES`: the
 kinds a writer puts in `document_citations.document_kind` (the print-citations
 rollup's `govinfo_package` and `budget_volume`, and every held-field kind in
-`citation_sources.TEXT_SOURCES`). The schema enumerates them, the server
-compares case-insensitively, and any other kind is a tool error naming the
-supported kinds and the closest one. Before round 4 an unknown kind ran its
-SELECT and answered `complete_held_selection` with no findings, which read as
-"this document cites nothing"; three aliases (`house_activity_report(s)`,
-`budget_volumes`) that no writer emits did the same with `source_read: read`.
-The enum is a schema hint, not pydantic validation, so a differently cased
-kind still reaches the server's own refusal. Raw SQL over `document_citations`
-is not checked. The `document_kind` field description is built from
-`SOURCE_TABLES` (`kind: table`), so a new kind names its table without a
+`citation_sources.TEXT_SOURCES`). The server compares case-insensitively, and
+any other kind is a tool error naming the supported kinds and the closest one.
+Before round 4 an unknown kind ran its SELECT and answered
+`complete_held_selection` with no findings, which read as "this document cites
+nothing"; three aliases (`house_activity_report(s)`, `budget_volumes`) that no
+writer emits did the same with `source_read: read`. Raw SQL over
+`document_citations` is not checked. The `document_kind` field description,
+built from `SOURCE_TABLES` (`kind: table`), lists each kind once with the table
+whose key `document_key` takes, so a new kind names its table without a
 docstring edit; `govinfo_package` covers only the reports
-`house_activity_reports` holds (no CHRG package has citation rows).
+`house_activity_reports` holds (no CHRG package has citation rows). Round 5
+dropped the round-4 enum: it listed the kinds a second time against the client
+budget above, and as a schema hint it never validated (the server's own refusal
+does).
 
 **Order and paging (round 5).** Rows come in `cite_kind` order, then
 `CAST(span_start AS BIGINT)`, `target_key`, `rule_version` and `text_sha256`.

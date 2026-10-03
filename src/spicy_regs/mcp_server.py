@@ -227,7 +227,7 @@ TABLES = (
     "court_opinion_pdf_extractions",
 )
 STATEMENT_TIMEOUT = os.environ.get("SPICY_REGS_STATEMENT_TIMEOUT", "790s")
-#: The kinds resolve_document_citations accepts and its schema enumerates: the kinds a writer emits.
+#: The kinds resolve_document_citations accepts, and its schema lists with their tables: the kinds a writer emits.
 DOCUMENT_KINDS = tuple(sorted(SOURCE_TABLES))
 #: resolve_document_citations' page size: offset and cite_kind page a long document (round 5 measured a 500-row
 #: hrpt964 reply at 283,615 characters, 64% of it fields that cannot vary within the document or the kind).
@@ -235,7 +235,7 @@ DEFAULT_OCCURRENCES, MAX_OCCURRENCES = 25, 100
 #: An occurrence field that restates another field of the same occurrence; a reply drops it where they are equal.
 OCCURRENCE_SAME_AS = {"target_kind": "cite_kind", "normalized_key": "target_key"}
 #: document_kind's schema description, derived from SOURCE_TABLES so a new kind cannot drift from its table.
-DOCUMENT_KIND_TABLES = "The table holding each kind's documents, whose key document_key takes: " + "; ".join(
+DOCUMENT_KIND_TABLES = "Each kind's table: " + "; ".join(
     f"{kind}: {table}" for kind, table in sorted(SOURCE_TABLES.items())
 )
 
@@ -1511,33 +1511,30 @@ def _register_tools(mcp: MCPServer) -> None:
         """Return a table's columns with their meanings, row identity, coverage caveats and joins.
 
         Coverage metadata describes supported output; it does not certify this
-        connection's data population or freshness. columns are the loaded
-        view's, each with its dictionary meaning; an unavailable declared table
-        returns its declared columns. schema_differences names any column or
-        type the view does not share with the dictionary. publication is the
-        live data version with its pinned row count, published_at (when the
-        publisher moved the pointer to this generation, not when its data was
-        read) and coverage kind; prefer its rows to a count stated in prose.
-        publication.inputs names each parent generation a derived table was
-        built from beside the live one (current compares the parent's bytes);
-        inputs_current is false when any lags. qualification gives the live pin and the output ledger's
+        connection's population or freshness. columns are the loaded view's,
+        each with its dictionary meaning (an unavailable declared table returns
+        its declared columns); schema_differences names any column or type the
+        view does not share with the dictionary. publication is the live data
+        version with its pinned row count, published_at (when the publisher
+        moved the pointer to this generation, not when its data was read) and
+        coverage kind; prefer its rows to a count in prose. publication.inputs
+        names each parent generation a derived table was built from beside the
+        live one (current compares the parent's bytes); inputs_current is false
+        when any lags. qualification gives the live pin and the output ledger's
         audited pin, date and disposition as separate fields, only for the
-        ledger's publisher. joins lists the declared joins this table makes
-        (outgoing) and receives (incoming), each with its measured baseline.
-        detail=false (the default) omits each join's measurement record and
-        the ledger's own statements, and names them in detail.omitted;
-        detail=true returns them. A derived view's column carries its source
-        column's meaning when it projects it unchanged, else its declared
-        meaning or null.
-        For a FEC view, release_compatibility appears once: in publication
-        when available, or relationship when unavailable. detail=false keeps
-        its pins and reasons, gives each dependency's family and generation
-        without its storage descriptor, and counts the acceptance receipts.
-        compatible means the captured data, interpretation and consumer match
-        the selected release; it does not certify current/net money or completeness.
-        not_in_ledger means this table is absent from the bundled output ledger,
-        not that no other evidence exists. A financial row's eligible status is
-        only for its named purpose, separate from both checks.
+        ledger's publisher; not_in_ledger means the table is absent from the
+        bundled output ledger, not that no other evidence exists. joins lists
+        the declared joins the table makes (outgoing) and receives (incoming).
+        detail=false (the default) omits each join's measurement record and the
+        ledger's own statements, naming them in detail.omitted; detail=true
+        returns them. A derived view's column carries its source column's
+        meaning when it projects it unchanged, else its declared meaning or null.
+        For a FEC view, release_compatibility appears once: in publication when
+        available, or relationship when unavailable; detail=false keeps its pins
+        and reasons, each dependency's family and generation, and the receipts'
+        count. compatible means the captured data, interpretation and consumer
+        match the selected release, not current/net money or completeness. A
+        financial row's eligible status is only for its named purpose.
         """
         cursor = _get_connection().cursor()
         with _statement_timeout(cursor):
@@ -1622,29 +1619,26 @@ def _register_tools(mcp: MCPServer) -> None:
         """Run read-only SQL against configured Spicy Regs tables, returning up to max_rows rows.
 
         Only SELECT runs; DESCRIBE, SHOW, SUMMARIZE, VALUES and the FROM-first
-        shorthand are accepted as SELECT. Statements that write (COPY TO, ATTACH,
-        CREATE, INSERT, DROP, EXPORT, SET, ...) are refused. EXPLAIN is refused
-        because its ANALYZE form can execute writes. One view exists per table
-        listed by list_sources. Always include a LIMIT in exploratory queries.
-        truncated reports whether rows beyond max_rows were omitted from what the
-        statement returned; rows your own LIMIT excluded are not counted, so to
-        learn whether more exist, set LIMIT above max_rows or run a COUNT.
-        max_cell_chars, when set, cuts every text, list or struct cell longer than
-        that many characters to its first max_cell_chars characters (a list or
-        struct as compact JSON text) and lists each cut cell in truncated_cells
-        with its full length; nothing is cut when unset. To page a long result,
-        ORDER BY a key and use LIMIT n OFFSET m in the SQL. SQL is DuckDB's
-        dialect: `~` matches the whole string (use regexp_matches for a substring
-        match, lower() for case). Selected columns must have unique names; alias
+        shorthand count as SELECT. Writes (COPY TO, ATTACH, CREATE, INSERT, DROP,
+        EXPORT, SET, ...) and EXPLAIN (its ANALYZE form can write) are refused.
+        One view exists per table list_sources lists. Always LIMIT exploratory
+        queries. truncated says whether rows beyond max_rows were omitted from
+        what the statement returned, not rows your own LIMIT excluded: to learn
+        whether more exist, LIMIT above max_rows or COUNT. max_cell_chars, when
+        set, cuts each text, list or struct cell (a list or struct as compact
+        JSON) to that many characters and lists each cut cell in truncated_cells
+        with its full length. To page, ORDER BY a key with LIMIT n OFFSET m. SQL
+        is DuckDB's dialect: `~` matches the whole string (regexp_matches for a
+        substring, lower() for case). Selected columns need unique names; alias
         shared names in joins. sql echoes the statement this reply answers.
-        publication gives each table the query names: its live data version,
-        pinned row count, published_at, coverage kind (a window or sample is
-        not the source's full history) and, for a table built from others,
-        inputs. Qualified-view pins keep the registered meaning and purpose
-        limits even for SELECT value only. Release compatible is not financial
-        eligibility or current/net-money qualification. Call describe_table for
-        full release evidence. Compare receipt, SQL, input and evidence pins
-        after refresh; a later description may name a different release.
+        publication gives each named table its live data version, pinned row
+        count, published_at, coverage kind (a window or sample is not the full
+        history) and, for a table built from others, inputs. Qualified-view
+        pins keep the registered meaning and purpose limits even for SELECT
+        value only; release compatible is not financial eligibility or
+        current/net-money qualification. Call describe_table for full release
+        evidence. Compare receipt, SQL, input and evidence pins after refresh; a
+        later description may name a different release.
         """
         cursor = _get_connection().cursor()
         write_statement = _first_write_statement(cursor, sql)
@@ -1683,9 +1677,9 @@ def _register_tools(mcp: MCPServer) -> None:
 
     @tool
     def resolve_document_citations(
-        document_kind: Annotated[
-            str, Field(description=DOCUMENT_KIND_TABLES, json_schema_extra={"enum": list(DOCUMENT_KINDS)})
-        ],
+        # The description lists each kind with its table; an enum would list the kinds a second time, and a client
+        # cuts a tool's description where it and the input schema together pass 2,048 characters.
+        document_kind: Annotated[str, Field(description=DOCUMENT_KIND_TABLES)],
         document_key: str,
         # The maximum is a schema hint, as document_kind's enum is: a larger page is refused below with how to page.
         max_occurrences: Annotated[int, Field(ge=1, json_schema_extra={"maximum": MAX_OCCURRENCES})] = DEFAULT_OCCURRENCES,
@@ -1694,33 +1688,21 @@ def _register_tools(mcp: MCPServer) -> None:
     ) -> dict[str, Any]:
         """Resolve a bounded document's held citations against this connection's selected targets.
 
-        Findings retain their spelling, text digest and extraction rule. Target
-        lookup does not validate extraction precision or legal applicability.
-        Missing, ambiguous, unsupported, unread and stale results stay explicit.
-        acquisition_queue plans qualified missing targets for retained-evidence
-        inspection. It performs no acquisition or publication.
-        document_kind is one of the enumerated kinds, compared case-insensitively;
-        any other kind is refused. Its schema names each kind's table:
-        govinfo_package covers only the committee activity reports
-        house_activity_reports holds, budget_volume the budget_volumes volumes;
-        both take the GovInfo packageId. A held-field kind takes its table's key:
-        the literal value for one key column (comment_inline: comment_id), else a
-        compact JSON list in the key order. These scopes cover only the selected
-        field. document_key is exact and case-sensitive; a key neither the table
-        nor any citation row holds is refused.
-        source_read.status read_none_found: the table records a read that found
-        nothing; not_read: no read record (held-field tables record none);
-        not_held: rows whose document the table no longer holds.
-        Rows come in cite_kind order, then by position in the text.
-        coverage.cite_kind_counts gives the document's rows per kind; cite_kind
-        selects one kind and offset skips that many rows, so a long document is
-        read a page at a time (max_occurrences at most 100). A capped page sets
-        truncated. A field equal across the page's occurrences, or within a
-        kind, is stated once: occurrence_fields and acquisition_queue.shared_fields
-        say how to merge it back. coverage.partial is
-        true when rows were left out of this page (capped or offset), some
-        occurrence was not looked up (coverage.reason_counts says why) or the
-        document was not read; neither establishes whole-document coverage.
+        Findings keep spelling, text digest and rule; lookup checks neither
+        extraction precision nor legal effect. acquisition_queue plans missing
+        targets; nothing is acquired. document_kind compares case-insensitively;
+        its schema names each kind's table, whose key document_key takes
+        (govinfo_package covers only house_activity_reports). document_key is
+        exact and case-sensitive; a composite key is a compact JSON list in key
+        order. A key neither the table nor any citation row holds is refused.
+        source_read.status read_none_found: read, none found; not_read: no read
+        record (held-field tables keep none); not_held: no longer held.
+        Rows run in cite_kind order, then text position; cite_kind selects a
+        kind, offset pages, and coverage.cite_kind_counts counts every kind.
+        Fields equal across a page or kind are stated once (occurrence_fields,
+        acquisition_queue.shared_fields). coverage.partial: rows left out of
+        this page, an occurrence not looked up (reason_counts) or an unread
+        document; never whole-document coverage.
         """
         from spicy_regs.acquisition_queue import build_missing_target_queue
         from spicy_regs.citation_resolution import CITE_KINDS, resolve_citations
