@@ -952,11 +952,11 @@
   "congress_bills": {
     "table": "congress_bills",
     "label": "Congressional bills",
-    "summary": "One row per bill or resolution. `bill-family` writes this table, filling the full contract for the Congresses it is scoped to (the current Congress on its daily schedule) — from a BILLSTATUS document for the 108th onward, and from the API bill detail route for the 82nd through the 107th, where no BILLSTATUS bulk exists. A consumer tells the two family routes apart by Congress and by the NULLs: a row for a Congress below the 108th is the detail route's, its `schema_version` is NULL because the detail record states no BILLSTATUS schema, and its `action_count`, `committee_count`, `version_count`, `subject_count`, `subjects_json`, `related_bill_count` and `related_bills_json` are NULL because the detail record states those only as sub-route counts the backfill does not walk — a zero would contradict the count the publisher declared. `cosponsor_count` is the one count the record does state, as its `cosponsors` sub-route's count, and is published from there (NULL when the record states no such sub-route, as the 92nd's do not). `stage` and `signed_date_rule` are NULL on these rows too: the record carries no actions, so no stage rule ran and no became-law action was looked for, and the shaper's default rung (\"introduced\") or the rule name \"public law without a became-law action\" would each be a statement about the bill that nothing examined. The first ten columns keep the exact order and spelling they have always had, because other repositories pin that prefix by digest; every new column is appended after them. Until plan A1 retired it (decision 31), a second rollup, `congress-bills`, walked the Congress.gov list route for that prefix across the whole archive, and a row of a Congress the family has not been scoped to keeps the prefix that walk last stated. Because rows from the two routes state different columns, this is the one table merged column-wise: a family row's NULL cannot erase a list-era value. All columns are stored as VARCHAR.",
+    "summary": "One row per bill or resolution. `bill-family` writes this table, filling the full contract for the Congresses it is scoped to (the current Congress on its daily schedule) — from a BILLSTATUS document for the 108th onward, and from the API bill detail route for the 82nd through the 107th, where no BILLSTATUS bulk exists. A consumer tells the two family routes apart by Congress and by the NULLs: a row for a Congress below the 108th is the detail route's, its `schema_version` is NULL because the detail record states no BILLSTATUS schema, and its `action_count`, `committee_count`, `version_count`, `subject_count`, `subjects_json`, `related_bill_count` and `related_bills_json` are NULL because the detail record states those only as sub-route counts the backfill does not walk — a zero would contradict the count the publisher declared. `cosponsor_count` is the one count the record does state, as its `cosponsors` sub-route's count, and is published from there (NULL when the record states no such sub-route, as the 92nd's do not). `stage` and `signed_date_rule` are NULL on these rows too: the record carries no actions, so no rule read any. The first ten columns keep the exact order and spelling they have always had, because other repositories pin that prefix by digest; every new column is appended after them. Until plan A1 retired it (decision 31), a second rollup, `congress-bills`, walked the Congress.gov list route for that prefix across the whole archive, and a row of a Congress the family has not been scoped to keeps the prefix that walk last stated. Because rows from the two routes state different columns, this is the one table merged column-wise: a family row's NULL cannot erase a list-era value. All columns are stored as VARCHAR.",
     "coverage": "True range on the archive index, mixed on enrichment. The archive index lists bills back to the earliest Congresses (latest actions from 1799-12-16); the bill family fills every column from GovInfo BILLSTATUS for the Congresses it has read, which begin at the 108th. On 2026-09-26 the 108th-117th rows, then written by a retired list walk, lacked bills against the BILLSTATUS listings (receipt `join-gaps-2026-09-26/d/`); bill-family runs scoped to those Congresses fill them. An absent CBO element does not mean CBO never scored a bill. The bill family re-reads its own prior once where the CBO outcome is missing, or where a reader other than the running one read it, even when the publisher stamp is unchanged; a bill of the 82nd-107th filled from the detail route is re-read the same way, within the run's fetch cap. A bill the running reader found refused in, or dropped from, its folder's unchanged zip is not read again until the zip moves or another reader runs.",
     "kind": "true_range",
     "measured_on": "2026-09-29",
-    "data_quality": "**Historical cosponsor-count defect:** the 2026-09-21 native-XML audit found 13,154 wrong zero counts in the then-retained 118th Congress HR/S output using SpicyDocs 0.24.2. The current reader counts the publisher's separate cosponsors list, including withdrawn entries, as the column description states. Corrected code does not establish that every historical row has been re-read; consult the selected generation's audit before claiming population-wide repair. Historical receipt: `legislative-release-candidate-2026-09-21/`. `statutes_at_large_cite` is filled at this table's merge by joining the published `laws` table on `bill_id`, as its column sentence says: `bill-family` reads `laws` best-effort after its merge and takes the law's citation where one is published, keeping a citation already here where `laws` has none for the bill; with no `laws` table published the column stays as it was, NULL on a cold start. It is never guessed: `laws` publishes a citation only from a captured PLAW USLM file, and reads a NULL through its own `uslm_outcome`. `public_law_number` and `law_type` are not that case: they come from the bill's own publisher record — its `laws` entry, when the publisher states one — and are filled wherever the bill family has reached. `url_source` `congress_api_list` marks a row the retired list writer last wrote. Its run of 2026-09-23 replaced 3,044 BILLSTATUS `update_date` instants with the list route's same-day dates and 3,095 congress.gov page URLs with API resource URLs (receipt `drift-audit-2026-09-23/`). The bill family re-reads every such bill in its scope instead of skipping it as unchanged, so the current Congress's rows heal on its next run; the 47 rows it relabelled in the 114th–118th (five of the replaced URLs among them) are re-read only by a run scoped to their Congress. `update_date` merges by the larger value, so a re-read never moves it backwards; the 46 rows of the 119th (and 42 older) whose list date is later than BILLSTATUS's therefore keep that date-only value after the re-read, and until BILLSTATUS catches up they read `url_source` `billstatus` beside an `update_date` no BILLSTATUS document stated. `stage` reads a bill's actions in the publisher's order under spicy-docs 0.51.0, which moved 154,374 of the 172,991 stages with actions in its replay of the live generation (reproduced on 2026-09-29); a row keeps the earlier rule's stage until its Congress is re-read. The 26 BILLSTATUS bills of the 108th-111th and 117th that stayed in doubt after every read on 2026-09-29 list a printing twice or without a type, so their `version_count` exceeds their `bill_versions` rows.",
+    "data_quality": "**Historical cosponsor-count defect:** the 2026-09-21 native-XML audit found 13,154 wrong zero counts in the then-retained 118th Congress HR/S output using SpicyDocs 0.24.2. The current reader counts the publisher's separate cosponsors list, including withdrawn entries, as the column description states. Corrected code does not establish that every historical row has been re-read; consult the selected generation's audit before claiming population-wide repair. Historical receipt: `legislative-release-candidate-2026-09-21/`. `statutes_at_large_cite` is filled at this table's merge by joining the published `laws` table on `bill_id`, as its column sentence says: `bill-family` reads `laws` best-effort after its merge and takes the law's citation where one is published, keeping a citation already here where `laws` has none for the bill; with no `laws` table published the column stays as it was, NULL on a cold start. It is never guessed: `laws` publishes a citation only from a captured PLAW USLM file, and reads a NULL through its own `uslm_outcome`. `public_law_number` and `law_type` are not that case: they come from the bill's own publisher record — its `laws` entry, when the publisher states one — and are filled wherever the bill family has reached. `url_source` `congress_api_list` marks a row the retired list writer last wrote. Its run of 2026-09-23 replaced 3,044 BILLSTATUS `update_date` instants with the list route's same-day dates and 3,095 congress.gov page URLs with API resource URLs (receipt `drift-audit-2026-09-23/`). The bill family re-reads every such bill in its scope instead of skipping it as unchanged, so the current Congress's rows heal on its next run; the 47 rows it relabelled in the 114th–118th (five of the replaced URLs among them) are re-read only by a run scoped to their Congress. `update_date` merges by the larger value, so a re-read never moves it backwards; the 46 rows of the 119th (and 42 older) whose list date is later than BILLSTATUS's therefore keep that date-only value after the re-read, and until BILLSTATUS catches up they read `url_source` `billstatus` beside an `update_date` no BILLSTATUS document stated. A row keeps the stage the rule of its last read gave until its Congress is read again. The 26 BILLSTATUS bills of the 108th-111th and 117th that stayed in doubt after every read on 2026-09-29 list a printing twice or without a type, so their `version_count` exceeds their `bill_versions` rows.",
     "columns": [
       {
         "column_name": "bill_id",
@@ -1091,7 +1091,7 @@
       {
         "column_name": "public_law_number",
         "column_type": "VARCHAR",
-        "description": "Public law number from the publisher's laws entry, when the measure was enacted."
+        "description": "Public law number from the publisher's laws entry, when the measure became a public law; NULL on a private law (law_type says which; its number is laws.law_number)."
       },
       {
         "column_name": "law_type",
@@ -1106,12 +1106,12 @@
       {
         "column_name": "stage",
         "column_type": "VARCHAR",
-        "description": "The whole bill's interpreted legislative stage, read from its actions under the current rule: `introduced`, `committee`, `calendared`, `passed_chamber`, `other_chamber`, `passed_both`, `conference`, `presented` or `law` (the terminal rung; the literal is `law`, never `enacted`), or an outcome, `failed` or `vetoed`, which has no rung. `introduced` is also the default when no rule fires (see stage_rule). NULL where the bill's actions were not examined, which is not a statement about enactment. A calendar placement, the desk, a motion to proceed or cloture reads `other_chamber` only where the chamber that took it (as the text names it, else the system that entered it) is not the one the bill's type originates in. In its own chamber a placement on the Union, House or Senate Legislative Calendar reads `calendared` (a reported bill awaiting the floor, or one placed there unreported under Senate Rule XIV or a discharge), and the desk, a motion to proceed or cloture moves nothing. `passed_both` is the bill's state once both chambers have passed it (the Library of Congress's 8000 and 17000 where the actions carry codes, else the text), read from the passage that completed it; a later conference, presentation or law outranks it. The stage never moves back once a chamber has passed the bill: the other chamber's referral or report, a star print or an introduction phrase does not lower it, and only a passage the Senate states it vitiated is undone. Where the bill's actions carry publisher codes, the Library of Congress's passage code (8000 House, 17000 Senate) is what holds it. A motion's or a point of order's result (\"motion to proceed ... agreed to in Senate\") is not the measure's passage, and \"disagreed to in Senate\" reads `failed`."
+        "description": "The whole bill's interpreted legislative stage: the latest step its actions show under the current rule, not a final outcome. On the ladder: `introduced`, `committee`, `calendared`, `passed_chamber`, `other_chamber`, `passed_both`, `conference`, `cleared`, `presented` or `law` (the terminal rung; the literal is `law`, never `enacted`); or an outcome with no rung, `failed` or `vetoed`. `introduced` is also the default when no rule fires (see stage_rule); NULL where the bill's actions were not examined, which is not a statement about enactment. A number the House reserves for its leadership (title \"Reserved for the Speaker.\") has no actions: it reads `introduced` with stage_rule NULL, or NULL where GovInfo holds no document. A mention is not an event: taking over the sponsorship of a bill \"originally introduced by\" another, a floor action citing the text \"as introduced\" or \"as reported\", a special rule's report or description, and a star print classify nothing, and where the publisher's action code names a step, the code is read before the text. `calendared` is a placement on the Union, House or Senate Legislative Calendar in the bill's own chamber (a reported bill awaiting the floor, or one placed there unreported under Senate Rule XIV or a discharge); a later report, order to report, subcommittee referral or floor step leaves it `calendared`, and only a referral of the bill to a committee lowers it. `passed_chamber` and `other_chamber` both mean the bill's own chamber has passed it; `other_chamber` adds that the other chamber has received it or taken a calendar, desk or floor step on it. A calendar placement, the desk, a motion to proceed or cloture reads `other_chamber` only where the chamber that took it (as the text names it, else the system that entered it) is not the one the bill's type originates in; in its own chamber the desk, a motion to proceed or cloture moves nothing. `passed_both` means both chambers have passed it (the Library of Congress's 8000 and 17000 where the actions carry codes, else the text) but not, as far as the wording shows, in one text: the second passage carried an amendment the other chamber has not agreed to, or names none either way (the House's \"On passage Passed\"). It is read from the passage that completed it. `conference` is a conference requested, held or reported; the Library of Congress's \"Resolving differences\" exchange of amendments is not one. `cleared` means both chambers have agreed to one text: the second chamber passed it as it arrived (the Senate \"without amendment\", or the House on a motion to suspend the rules that names no amendment), a chamber agreed to the other's amendment with no amendment of its own, or both agreed to a conference report; the Library of Congress's \"Cleared for White House.\" (109th-111th Congresses) reads it too. A bill or joint resolution is then ready for the President; a concurrent resolution is complete. `failed` is the latest vote on passage failing in either chamber, a failed two-thirds vote to suspend the rules included: the measure can still pass, and it reads over an earlier passage by the other chamber until a later step. `vetoed` stands until a recorded enactment; a failed override keeps it. The stage never moves back once a chamber has passed the bill: the other chamber's referral or report, a star print or an introduction phrase does not lower it, and only a passage the Senate states it vitiated is undone; where the actions carry publisher codes, the Library of Congress's passage code (8000 House, 17000 Senate) is what holds it. Once `cleared`, no lower rung moves it back. A motion's or a point of order's result (\"motion to proceed ... agreed to in Senate\") is not the measure's passage, and \"disagreed to in Senate\" reads `failed`."
       },
       {
         "column_name": "stage_rule",
         "column_type": "VARCHAR",
-        "description": "Which stage rule fired, or NULL when no rule fired and the default stood."
+        "description": "Which rule fired: a stage's own name where that rule read the action's text (`introduced`, `committee`, `calendared`, `passed_chamber`, `other_chamber`, `conference`, `cleared`, `presented`, `law`), `cleared` also for both chambers' agreement to a conference report, read from the second; `vetoed` for the President's veto; `failed_passage` for a failed vote on passage, a failed veto override included (which leaves the stage `vetoed`); `action_code` where the Library of Congress's passage or presentation code decided it; `became_law_code` for the publisher's became-law code; `passed_both` for the passage that left both chambers' passages standing. NULL when no rule fired and the default stood."
       },
       {
         "column_name": "stage_matcher",
@@ -1121,7 +1121,7 @@
       {
         "column_name": "stage_action_index",
         "column_type": "VARCHAR",
-        "description": "Position in the publisher's action list of the action the stage was read from."
+        "description": "Position in the publisher's action list of the action the stage was read from; the list runs newest first, so 0 is the bill's latest action."
       },
       {
         "column_name": "stage_action_date",
@@ -1136,12 +1136,12 @@
       {
         "column_name": "signed_date",
         "column_type": "VARCHAR",
-        "description": "Interpreted signing date, from the coded became-law action."
+        "description": "The date of the publisher's coded became-law action (36000, E40000 or the BecameLaw type) for a public or a private law; NULL where the bill states no law, or states one with no coded action."
       },
       {
         "column_name": "signed_date_rule",
         "column_type": "VARCHAR",
-        "description": "Which of the three signed-date rules produced that answer."
+        "description": "Which signed-date rule produced that answer: `public_law_and_became_law_action`, `private_law_and_became_law_action`, `public_law_without_became_law_action` (a public law with no coded action, so no date) or `no_public_law` (no law entry, or a private law with no coded action)."
       },
       {
         "column_name": "signed_date_action_index",
@@ -17697,7 +17697,7 @@
       {
         "column_name": "action_index",
         "column_type": "VARCHAR",
-        "description": "Zero-based position in the publisher's own action list; part of the identity."
+        "description": "Zero-based position in the publisher's own action list, which runs newest first: 0 is the bill's latest action. Part of the identity."
       },
       {
         "column_name": "action_date",
@@ -17747,12 +17747,12 @@
       {
         "column_name": "stage",
         "column_type": "VARCHAR",
-        "description": "The stage this one action's qualified code and text classify as, in the same vocabulary as congress_bills.stage (`introduced`, `committee`, `calendared`, `passed_chamber`, `other_chamber`, `conference`, `presented`, `law`, or the outcomes `failed` and `vetoed`; never `passed_both`, which is a bill's state, not one action's); `introduced` with stage_rule NULL when no rule classifies the action, as for the desk or a floor step in the bill's own chamber. One action's classification, not the bill's state."
+        "description": "The stage this one action's qualified code and text classify as, in the same vocabulary as congress_bills.stage (`introduced`, `committee`, `calendared`, `passed_chamber`, `other_chamber`, `conference`, `cleared`, `presented`, `law`, or the outcomes `failed` and `vetoed`; never `passed_both`, which is a bill's state, not one action's); `introduced` with stage_rule NULL when no rule classifies the action, as for the desk or a floor step in the bill's own chamber. An action reads `cleared` where its own words complete agreement on one text; a chamber's agreement to a conference report reads `conference` here, and the bill reads `cleared` from the second. One action's classification, not the bill's state."
       },
       {
         "column_name": "stage_rule",
         "column_type": "VARCHAR",
-        "description": "Which stage rule fired on this action, or NULL when none did."
+        "description": "Which stage rule fired on this action (the names congress_bills.stage_rule lists, but never passed_both), or NULL when none did."
       },
       {
         "column_name": "stage_matcher",
@@ -17861,7 +17861,7 @@
       {
         "column_name": "activity_date",
         "column_type": "VARCHAR",
-        "description": "The publisher's timestamp for it, as written (2026-05-11T20:30:49Z); empty where the item states none, as every Bills of Interest - Exchange of Letters item does."
+        "description": "The publisher's timestamp for it, as written (2026-05-11T20:30:49Z), in UTC: an evening step can fall on the next day here while bill_actions.action_date keeps the day the publisher states for the action (119-hr-1703's discharge: 2026-10-01T03:17:50Z here, 2026-09-30 there). Empty where the item states none, as every Bills of Interest - Exchange of Letters item does."
       },
       {
         "column_name": "occurrence",
@@ -20295,6 +20295,11 @@
         "column_name": "mods_event_id",
         "column_type": "VARCHAR",
         "description": "The committee-meeting event id the package's GovInfo MODS states in `<eventId>` (the first, where it states several), which committee_meetings.event_id joins on with congress and chamber.  A second publisher's statement beside event_id, never overriding it: a consumer may fall back to it where event_id is NULL.  43 of 185 published transcripts state one, 22 where Congress.gov names none, 21 of them Senate; where both state one they agree 21 of 21 (2026-10-03), including a misassignment both make (CHRG-118hhrg63377 names 116369, another subcommittee's hearing that day), so agreement is not independent confirmation."
+      },
+      {
+        "column_name": "committee_system_codes_json",
+        "column_type": "VARCHAR",
+        "description": "The committees the package's GovInfo MODS names as holding the hearing: each `congCommittee` `authorityId`, the system code committees.system_code and committee_meetings.committee_system_code key on (`hswm00`), lower-cased the way they key it, once each in the order the MODS first states it, as a JSON array. Read from the record and then each of its granules, because a hearing published as several states its committee only there (15 of 185 published transcripts, 2026-10-03); a joint hearing names two (3 of 185). `[]` where the MODS names none (1 of 185); NULL on a row not read since the column was added."
       }
     ],
     "subject": "congress",
@@ -20571,12 +20576,12 @@
       {
         "column_name": "b_numbers_json",
         "column_type": "VARCHAR",
-        "description": "JSON array of the B-numbers in `decision_number`, split on commas and semicolons; a fragment GAO cut mid-number is left out. `[]` for a docket- or P-numbered decision."
+        "description": "JSON array of the decision's B-numbers: the ones its page's File line states where the page was read, else the ones in `decision_number`, split on commas and semicolons. GAO's listing cuts a few long lists, ending them `et al` or where its number field is full, and a fragment it cut mid-number is left out; b_numbers_truncated says where the list here is still the cut one. `[]` for a docket- or P-numbered decision."
       },
       {
         "column_name": "decision_type",
         "column_type": "VARCHAR",
-        "description": "GAO's label for the decision: `Bid Protest Decision`, `Appropriations Decision`, `Legal Other Decision` and the like."
+        "description": "GAO's label for the page as its listing states it: `Bid Protest Decision`, `Appropriations Decision`, `Legal Other Decision` and the like. A label, not a check: GAO also labels a few reports and letters `Bid Protest Decision` (B-423717, B-401197)."
       },
       {
         "column_name": "title",
@@ -20612,6 +20617,16 @@
         "column_name": "decision_status",
         "column_type": "VARCHAR",
         "description": "GAO's outcome sentence for the decision as its listing states it, word for word with HTML whitespace collapsed (`We deny the protest.`); NULL where the listing states none."
+      },
+      {
+        "column_name": "b_numbers_truncated",
+        "column_type": "VARCHAR",
+        "description": "`true` where GAO's listing cut the decision's numbers -- the list ends `et al` or in a separator, or fills the listing's number field (64 characters for decisions released 2009-2011, 252 from 2012) -- and no decision page has completed it, so b_numbers_json holds only what the listing names; `false` otherwise."
+      },
+      {
+        "column_name": "decided_date",
+        "column_type": "VARCHAR",
+        "description": "The day GAO decided the decision, from the Date line of its page's caption, as an ISO date; NULL where no page was read or the page prints no caption (a letter, a report, a decision GAO posts only as a PDF). GAO releases a decision after deciding it, often days later (B-424477: decided 2026-08-07, released 2026-08-28), so a count by decided_date and one by released_date differ."
       },
       {
         "column_name": "outcome",
@@ -20708,7 +20723,7 @@
       {
         "column_name": "latest_action_date",
         "column_type": "VARCHAR",
-        "description": "Date of the publisher's latestAction entry. Usually the became-law action, but the publisher lists a later action when there is one (119-public-68: a committee report filed after signing), so for the enactment date read approved_date where the PLAW was captured, else congress_bills.signed_date through bill_id (NULL on a private law, rule no_public_law)."
+        "description": "Date of the publisher's latestAction entry. Usually the became-law action, but the publisher lists a later action when there is one (119-public-68: a committee report filed after signing), so for the enactment date read approved_date where the PLAW was captured, else congress_bills.signed_date through bill_id (a private law's too)."
       },
       {
         "column_name": "latest_action_text",
@@ -20824,6 +20839,11 @@
         "column_name": "law_text_url",
         "column_type": "VARCHAR",
         "description": "Actual resolved XML acquisition URL for an attempted law-text read, distinct from the bill API url. Supplied from capture evidence, never inferred; NULL when unattempted or the caller retained no URL. A refused read does not validate the target's law identity."
+      },
+      {
+        "column_name": "statutes_at_large_last_page",
+        "column_type": "VARCHAR",
+        "description": "The last Statutes at Large page the law is printed on: the last page marker the PLAW USLM states in the cited volume (`<page identifier=\"/us/stat/140/746\">`), so a page from statutes_at_large_page to this one, in statutes_at_large_volume, is inside the law. On the 102 public laws of the 119th's PLAW file (2026-09-14) the first marker is the cited page on every law and the next law starts on the following page on 97 of 98 consecutive pairs (one page between on the other). NULL where no USLM was captured, it states no citation or no marker in its volume, and on a row read under uslm_reader_version laws-uslm-v2 or earlier."
       }
     ],
     "subject": "congress",
@@ -20988,7 +21008,7 @@
       {
         "column_name": "action",
         "column_type": "VARCHAR",
-        "description": "Column 3 verbatim; NULL where the page left it blank. The page's own legend (Explanation of Table, column 3, as the retained tbl119pl_2nd.htm prints it): `nt` means note; `nt [tbl]` means note [table]; `prec` means preceding; `fr` means a transfer from another section; `to` means a transfer to another section; `new` means a new section or new note; `gen amd` means the section or note is generally amended; `omitted` means the section is omitted; `repealed` means the section or note is repealed; `nt ed chg` and `ed chg` refer to the Editorial Classification Change Table; no entry or `nt` by itself means the section or note is amended. Tokens combine (`nt new`: a new note)."
+        "description": "Column 3 verbatim; NULL where the page left it blank. The page's own legend (Explanation of Table, column 3, as the retained tbl119pl_2nd.htm prints it): `nt` means note; `nt [tbl]` means note [table]; `prec` means preceding; `fr` means a transfer from another section; `to` means a transfer to another section; `new` means a new section or new note; `gen amd` means the section or note is generally amended; `omitted` means the section is omitted; `repealed` means the section or note is repealed; `nt ed chg` and `ed chg` refer to the Editorial Classification Change Table; no entry or `nt` by itself means the section or note is amended. Tokens combine (`nt new`: a new note). A transfer prints as `tr fr <title>/<section>` (from that section) or `tr to <title>/<section>` (to it), the legend's `fr` and `to`. The leading `nt` or `prec` is the row's place, which usc_place states."
       },
       {
         "column_name": "act_section",
@@ -21038,7 +21058,12 @@
       {
         "column_name": "usc_section_key",
         "column_type": "VARCHAR",
-        "description": "usc_section as a join key: lower-cased, with every dash spelling an ASCII hyphen, as RefSpec's section oracle keys it. Fold the other side the same way (schemas.tables.usc_section_key): document_citations' usc_section rule 001 keeps the printed case and dashes. NULL where usc_section is, and on rows published before the column existed."
+        "description": "The one U.S. Code section the row names, as a join key: the section number without Table III's printed note words (`nt`, `nts`, `prec.`; usc_place states them), lower-cased, with every dash spelling an ASCII hyphen, as RefSpec's section oracle keys it. Both OLRC tables key it the same way, so they meet on usc_title, usc_section_key and usc_place; without usc_place a note line meets the section's own line. Fold another source the same way (schemas.tables.usc_section_key): document_citations' usc_section rule 001 keeps the printed case and dashes. NULL where usc_section is NULL or names no single section (a list, a range or a chapter, which Table III prints for some older acts), and on rows published before the column existed."
+      },
+      {
+        "column_name": "usc_place",
+        "column_type": "VARCHAR",
+        "description": "Where on that section the row lands: `section` (the section itself), `note` (a note under it; OLRC's `nt` or `nts`), `preceding` (the place just before it, such as a chapter or subchapter heading a law adds there; `prec`) or `note_preceding` (a note at that place). Read from the section as Table III prints it (`1101 nt`, `prec. 1071`, `nt. prec. 791`) and from the head of law_code_sections.action (`nt new`, `prec`, `nt prec new`), by schemas.law_tables.usc_section_place. NULL where usc_section_key is NULL, and on rows published before the column existed."
       }
     ],
     "subject": "congress",
@@ -21116,12 +21141,12 @@
       {
         "column_name": "usc_section",
         "column_type": "VARCHAR",
-        "description": "The Code section the section went to; NULL where it went nowhere."
+        "description": "The Code section the section went to, as Table III prints it: a note or preceding place is part of the value (`1101 nt`, `prec. 1071`, `nt. prec. 791`), where law_code_sections prints the bare section and puts `nt` or `prec` in action; usc_section_key and usc_place split it. NULL where it went nowhere."
       },
       {
         "column_name": "status",
         "column_type": "VARCHAR",
-        "description": "Table III's status for the record (repealed, omitted, and the like)."
+        "description": "Table III's status for the record, as printed and not expanded: `Rep.` (repealed) or `Elim.` (eliminated) on the 119th Congress's records; older acts also print `Rev. T.` (revised title) or a Revised Statutes or Internal Revenue Code reference (`R.S. Sec 572`). NULL where it prints none. The per-Congress tables spell a repeal `repealed` in law_code_sections.action."
       },
       {
         "column_name": "observed_at",
@@ -21131,7 +21156,12 @@
       {
         "column_name": "usc_section_key",
         "column_type": "VARCHAR",
-        "description": "usc_section as a join key: lower-cased, with every dash spelling an ASCII hyphen, as RefSpec's section oracle keys it. Fold the other side the same way (schemas.tables.usc_section_key): document_citations' usc_section rule 001 keeps the printed case and dashes. NULL where usc_section is, and on rows published before the column existed."
+        "description": "The one U.S. Code section the row names, as a join key: the section number without Table III's printed note words (`nt`, `nts`, `prec.`; usc_place states them), lower-cased, with every dash spelling an ASCII hyphen, as RefSpec's section oracle keys it. Both OLRC tables key it the same way, so they meet on usc_title, usc_section_key and usc_place; without usc_place a note line meets the section's own line. Fold another source the same way (schemas.tables.usc_section_key): document_citations' usc_section rule 001 keeps the printed case and dashes. NULL where usc_section is NULL or names no single section (a list, a range or a chapter, which Table III prints for some older acts), and on rows published before the column existed."
+      },
+      {
+        "column_name": "usc_place",
+        "column_type": "VARCHAR",
+        "description": "Where on that section the row lands: `section` (the section itself), `note` (a note under it; OLRC's `nt` or `nts`), `preceding` (the place just before it, such as a chapter or subchapter heading a law adds there; `prec`) or `note_preceding` (a note at that place). Read from the section as Table III prints it (`1101 nt`, `prec. 1071`, `nt. prec. 791`) and from the head of law_code_sections.action (`nt new`, `prec`, `nt prec new`), by schemas.law_tables.usc_section_place. NULL where usc_section_key is NULL, and on rows published before the column existed."
       }
     ],
     "subject": "congress",
@@ -21407,7 +21437,7 @@
       {
         "column_name": "document_type",
         "column_type": "VARCHAR",
-        "description": "The Register's category as the API states it: `Rule`, `Proposed Rule`, `Notice`, `Presidential Document`, and on older records `Uncategorized Document`, `Correction` (none after 2008-08-08) and `Sunshine Act Document`; NULL on a few records. Since 2008 a correction, an effective-date delay or a confirmation of a rule is itself typed `Rule` and shares the rule's RIN, docket and title; subtype is NULL on recent records, so tell them apart by title, abstract and publication_date."
+        "description": "The Register's category as the API states it: `Rule`, `Proposed Rule`, `Notice`, `Presidential Document`, and on older records `Uncategorized Document`, `Correction` (none after 2008-08-08) and `Sunshine Act Document`; NULL on a few records. Since 2008 a correction, an effective-date delay or a confirmation of a rule is itself typed `Rule` and shares the rule's RIN, docket and title; subtype is NULL on recent records, so tell them apart by `action`."
       },
       {
         "column_name": "publication_date",
@@ -21417,7 +21447,7 @@
       {
         "column_name": "effective_on",
         "column_type": "VARCHAR",
-        "description": "The date the action takes effect, when stated; often NULL."
+        "description": "The `effective_on` date the Federal Register API states for the document. On a rule it is usually the effective date; the API also states one on some proposed rules and notices (a comment-period extension can carry the original proposal's date), so a date here does not by itself show that anything took effect. NULL where the API states none, as on most notices."
       },
       {
         "column_name": "comments_close_on",
@@ -21492,7 +21522,7 @@
       {
         "column_name": "subtype",
         "column_type": "VARCHAR",
-        "description": "The Register's subtype when the API sets it; NULL on recent records, so it does not separate a correction from its rule."
+        "description": "The Register's subtype when the API sets it; NULL on recent records, so it does not separate a correction from its rule (`action` does)."
       },
       {
         "column_name": "executive_order_number",
@@ -21503,6 +21533,51 @@
         "column_name": "modify_date",
         "column_type": "VARCHAR",
         "description": "Always NULL: the Register's API states no update instant."
+      },
+      {
+        "column_name": "regulations_dot_gov_info_json",
+        "column_type": "VARCHAR",
+        "description": "The Register's own statement of the regulations.gov docket and document it matched this document to (the API's `regulations_dot_gov_info`), a JSON object exactly as stated: `{}` where the Register states nothing, the time of its check alone where it checked and found nothing, otherwise any of the docket, the document, the comment count, the supporting documents and their titles. NULL on a row not read since the field was first requested (2026-10-03)."
+      },
+      {
+        "column_name": "regulations_dot_gov_docket_id",
+        "column_type": "VARCHAR",
+        "description": "The regulations.gov docket the Register states for this document; NULL where it states none, even where it states a document: a docket is never read off the front of a document id."
+      },
+      {
+        "column_name": "regulations_dot_gov_document_id",
+        "column_type": "VARCHAR",
+        "description": "The regulations.gov document the Register states for this document; NULL where it states none."
+      },
+      {
+        "column_name": "regulations_dot_gov_comments_count",
+        "column_type": "VARCHAR",
+        "description": "Regulations.gov's comment count for that document as the Register relayed it at regulations_dot_gov_checked_at. The Register stops checking soon after the comment period closes, so the count is as of that check. It can be far higher than the comments regulations.gov posts (IRS-2024-0010-0001: 384,423 against 12 posted, 2026-10-03): a different fact from the posted comment rows this service holds. NULL where the Register states no count."
+      },
+      {
+        "column_name": "regulations_dot_gov_checked_at",
+        "column_type": "VARCHAR",
+        "description": "When the Register last checked regulations.gov for this document, as it states it (UTC); NULL where it has not checked."
+      },
+      {
+        "column_name": "action",
+        "column_type": "VARCHAR",
+        "description": "The document's action line as the API states it (`Final rule.`, `Final rule; correction.`, `Proposed rule; extension of comment period.`); NULL where it states none, as on many older records. It tells a rule from its later correction, delay or confirmation, which share the rule's type, RIN, docket and title."
+      },
+      {
+        "column_name": "correction_of",
+        "column_type": "VARCHAR",
+        "description": "For one of the Register's own editorial corrections (numbered like `C1-2012-1234`), the API address of the document it corrects; NULL otherwise. An agency's correction published as a rule carries no such link; its `action` names it a correction."
+      },
+      {
+        "column_name": "corrections_json",
+        "column_type": "VARCHAR",
+        "description": "The API addresses of the corrections the Register links to this document (its own editorial corrections), a JSON array; `[]` where it links none. NULL on a row not read since the field was first requested (2026-10-03)."
+      },
+      {
+        "column_name": "significant",
+        "column_type": "VARCHAR",
+        "description": "Whether the document was deemed significant under Executive Order 12866, as the API states it: `true` or `false`; NULL where the API states neither, which is common, so NULL does not mean `false`."
       },
       {
         "column_name": "rin",
@@ -21599,7 +21674,7 @@
       {
         "column_name": "connected_organization_name",
         "column_type": "VARCHAR",
-        "description": "The connected organization's name (`CONNECTED_ORG_NM`); NULL when blank."
+        "description": "The connected organization's name (`CONNECTED_ORG_NM`) as the committee filed it; NULL when blank. Committees often file a placeholder instead (`NONE`, `N/A`, `-`, and until 2016 `BLANK`), kept verbatim as FEC's own committee master carries it: read one as no connected organization (schemas.fec_committee_history.is_placeholder_name says which values are)."
       },
       {
         "column_name": "candidate_id",
@@ -23356,7 +23431,7 @@
       {
         "column_name": "sealed_stage",
         "column_type": "VARCHAR",
-        "description": "The rung of `interpretation.bill_stage`'s sealed seven-rung ladder this phrase resolves to, or NULL.  Derived by running the matched phrase through `infer_stage_from_text`, never asserted beside it.  NULL on 1,670 of 4,456 rows and that is a finding, not a gap: the print's register is not BILLSTATUS's.  `passed the House` is the sharpest case -- the sealed matcher is `passed house`, one word away -- and it is recorded NULL rather than closed by widening the sealed matcher list."
+        "description": "The rung of `interpretation.bill_stage`'s ladder this phrase resolves to, or NULL.  Derived by running the matched phrase through `infer_stage_from_text`, never asserted beside it.  NULL on 1,670 of 4,456 rows and that is a finding, not a gap: the print's register is not BILLSTATUS's.  `passed the House` is the sharpest case -- the sealed matcher is `passed house`, one word away -- and it is recorded NULL rather than closed by widening the sealed matcher list."
       },
       {
         "column_name": "sealed_stage_matcher",

@@ -224,6 +224,8 @@ def test_decisions_publish_under_the_spicy_docs_contract_with_the_outcome_their_
         "title": "Acme Corp.", "released_date": "2026-08-18", "topics_json": '["Bid Protest Decision"]',
         "url": "https://www.gao.gov/products/b-424129.2", "listing_page": LISTING_PAGE, "source": "gao_listing",
         "decision_status": "We deny the protest.", "outcome": "denied", "outcome_rule": GAO_OUTCOME_RULE,
+        # The listing's own values: its list is whole, and only a decision page states the decided day.
+        "b_numbers_truncated": "false", "decided_date": None,
     }
     assert (by_number["2020-02"]["b_numbers_json"], by_number["2020-02"]["outcome"]) == ("[]", None)
 

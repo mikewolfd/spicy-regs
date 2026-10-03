@@ -20,9 +20,9 @@ One row per dated Federal Register record, keyed by (`document_number`, `publica
 | `document_number` | `VARCHAR` | The Register's document number, spelled as it serves it (`2017-07442`, unpadded before 2013). |
 | `title` | `VARCHAR` | The document's title. |
 | `abstract` | `VARCHAR` | The agency's abstract of the document; often NULL. |
-| `document_type` | `VARCHAR` | The Register's category as the API states it: `Rule`, `Proposed Rule`, `Notice`, `Presidential Document`, and on older records `Uncategorized Document`, `Correction` (none after 2008-08-08) and `Sunshine Act Document`; NULL on a few records. Since 2008 a correction, an effective-date delay or a confirmation of a rule is itself typed `Rule` and shares the rule's RIN, docket and title; subtype is NULL on recent records, so tell them apart by title, abstract and publication_date. |
+| `document_type` | `VARCHAR` | The Register's category as the API states it: `Rule`, `Proposed Rule`, `Notice`, `Presidential Document`, and on older records `Uncategorized Document`, `Correction` (none after 2008-08-08) and `Sunshine Act Document`; NULL on a few records. Since 2008 a correction, an effective-date delay or a confirmation of a rule is itself typed `Rule` and shares the rule's RIN, docket and title; subtype is NULL on recent records, so tell them apart by `action`. |
 | `publication_date` | `VARCHAR` | The date the document was published, canonical YYYY-MM-DD. |
-| `effective_on` | `VARCHAR` | The date the action takes effect, when stated; often NULL. |
+| `effective_on` | `VARCHAR` | The `effective_on` date the Federal Register API states for the document. On a rule it is usually the effective date; the API also states one on some proposed rules and notices (a comment-period extension can carry the original proposal's date), so a date here does not by itself show that anything took effect. NULL where the API states none, as on most notices. |
 | `comments_close_on` | `VARCHAR` | The public comment deadline, for a document that opens a comment period; often NULL. |
 | `signing_date` | `VARCHAR` | The date a presidential document was signed; NULL for other documents. |
 | `agencies_json` | `VARCHAR` | The issuing agencies as the Register's agency objects, a JSON array. |
@@ -37,7 +37,16 @@ One row per dated Federal Register record, keyed by (`document_number`, `publica
 | `volume` | `VARCHAR` | The Federal Register volume. |
 | `start_page` | `VARCHAR` | The document's first page. |
 | `end_page` | `VARCHAR` | The document's last page. |
-| `subtype` | `VARCHAR` | The Register's subtype when the API sets it; NULL on recent records, so it does not separate a correction from its rule. |
+| `subtype` | `VARCHAR` | The Register's subtype when the API sets it; NULL on recent records, so it does not separate a correction from its rule (`action` does). |
 | `executive_order_number` | `VARCHAR` | The executive order number, for a presidential executive order; NULL otherwise. |
 | `modify_date` | `VARCHAR` | Always NULL: the Register's API states no update instant. |
+| `regulations_dot_gov_info_json` | `VARCHAR` | The Register's own statement of the regulations.gov docket and document it matched this document to (the API's `regulations_dot_gov_info`), a JSON object exactly as stated: `{}` where the Register states nothing, the time of its check alone where it checked and found nothing, otherwise any of the docket, the document, the comment count, the supporting documents and their titles. NULL on a row not read since the field was first requested (2026-10-03). |
+| `regulations_dot_gov_docket_id` | `VARCHAR` | The regulations.gov docket the Register states for this document; NULL where it states none, even where it states a document: a docket is never read off the front of a document id. |
+| `regulations_dot_gov_document_id` | `VARCHAR` | The regulations.gov document the Register states for this document; NULL where it states none. |
+| `regulations_dot_gov_comments_count` | `VARCHAR` | Regulations.gov's comment count for that document as the Register relayed it at regulations_dot_gov_checked_at. The Register stops checking soon after the comment period closes, so the count is as of that check. It can be far higher than the comments regulations.gov posts (IRS-2024-0010-0001: 384,423 against 12 posted, 2026-10-03): a different fact from the posted comment rows this service holds. NULL where the Register states no count. |
+| `regulations_dot_gov_checked_at` | `VARCHAR` | When the Register last checked regulations.gov for this document, as it states it (UTC); NULL where it has not checked. |
+| `action` | `VARCHAR` | The document's action line as the API states it (`Final rule.`, `Final rule; correction.`, `Proposed rule; extension of comment period.`); NULL where it states none, as on many older records. It tells a rule from its later correction, delay or confirmation, which share the rule's type, RIN, docket and title. |
+| `correction_of` | `VARCHAR` | For one of the Register's own editorial corrections (numbered like `C1-2012-1234`), the API address of the document it corrects; NULL otherwise. An agency's correction published as a rule carries no such link; its `action` names it a correction. |
+| `corrections_json` | `VARCHAR` | The API addresses of the corrections the Register links to this document (its own editorial corrections), a JSON array; `[]` where it links none. NULL on a row not read since the field was first requested (2026-10-03). |
+| `significant` | `VARCHAR` | Whether the document was deemed significant under Executive Order 12866, as the API states it: `true` or `false`; NULL where the API states neither, which is common, so NULL does not mean `false`. |
 | `rin` | `VARCHAR` | The host's derived first RIN of `regulation_id_numbers_json`; NULL when it states none. |

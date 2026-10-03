@@ -502,10 +502,7 @@ tables:
       is the one count the record does state, as its `cosponsors` sub-route's
       count, and is published from there (NULL when the record states no such
       sub-route, as the 92nd's do not). `stage` and `signed_date_rule` are NULL on
-      these rows too: the record carries no actions, so no stage rule ran and no
-      became-law action was looked for, and the shaper's default rung
-      ("introduced") or the rule name "public law without a became-law action"
-      would each be a statement about the bill that nothing examined. The first
+      these rows too: the record carries no actions, so no rule read any. The first
       ten columns keep the
       exact order and spelling they have always had, because other repositories
       pin that prefix by digest; every new column is appended after them. Until
@@ -547,10 +544,8 @@ tables:
       later than BILLSTATUS's therefore keep that date-only value after the
       re-read, and until BILLSTATUS catches up they read `url_source`
       `billstatus` beside an `update_date` no BILLSTATUS document stated.
-      `stage` reads a bill's actions in the publisher's order under spicy-docs
-      0.51.0, which moved 154,374 of the 172,991 stages with actions in its
-      replay of the live generation (reproduced on 2026-09-29); a row keeps the
-      earlier rule's stage until its Congress is re-read. The 26 BILLSTATUS
+      A row keeps the stage the rule of its last read gave until its Congress
+      is read again. The 26 BILLSTATUS
       bills of the 108th-111th and 117th that stayed in doubt after every read
       on 2026-09-29 list a printing twice or without a type, so their
       `version_count` exceeds their `bill_versions` rows.

@@ -29,5 +29,5 @@ One row per FEC committee per two-year cycle, as that cycle's bulk committee mas
 | `party` | `VARCHAR` | The party affiliation code (`CMTE_PTY_AFFILIATION`); NULL when blank. |
 | `filing_frequency` | `VARCHAR` | The filing frequency code (`CMTE_FILING_FREQ`), literal; NULL when blank. |
 | `organization_type` | `VARCHAR` | The interest-group category code (`ORG_TP`); NULL when blank. |
-| `connected_organization_name` | `VARCHAR` | The connected organization's name (`CONNECTED_ORG_NM`); NULL when blank. |
+| `connected_organization_name` | `VARCHAR` | The connected organization's name (`CONNECTED_ORG_NM`) as the committee filed it; NULL when blank. Committees often file a placeholder instead (`NONE`, `N/A`, `-`, and until 2016 `BLANK`), kept verbatim as FEC's own committee master carries it: read one as no connected organization (schemas.fec_committee_history.is_placeholder_name says which values are). |
 | `candidate_id` | `VARCHAR` | The candidate the committee is linked to that cycle (`CAND_ID`); NULL when none. |
