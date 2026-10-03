@@ -133,6 +133,25 @@ def test_rows_move_files_are_checked_before_commit_and_keep_every_other_column(t
     assert [line["state"] for line in journal(tmp_path)] == ["pending", "verified"] * 3
 
 
+def test_a_replacement_commits_as_one_rewritten_row_and_is_verified(tmp_path, lake):
+    """An attachments list the re-read only adds to is replaced like a fill: one record and one position delete."""
+    from tests.test_comment_fields_write import HELD, LISTED
+
+    with lake() as con:
+        con.execute(f"UPDATE {iceberg._qualified(COMMENT)} SET attachments_json = ? WHERE comment_id = 'C-0-0'", [HELD])
+    part = tmp_path / "parts" / "agency=EPA" / "p.parquet"
+    pl.read_parquet(part).with_columns(
+        pl.when(pl.col("comment_id") == "C-0-0").then(pl.lit(LISTED)).otherwise(pl.col("attachments_json"))
+        .alias("attachments_json")).write_parquet(part)
+    prepared = cfw.prepare(tmp_path, profile="attachments")
+    assert (prepared["rows_to_fill"], prepared["replaced_by_column"]) == (1, {"attachments_json": 1})
+    with lake() as con:
+        assert cfw.write(tmp_path, con=con)["rows_changed"] == 1
+    after = rows(lake)
+    assert after["C-0-0"]["attachments_json"] == LISTED and after["C-0-0"]["subtype"] is None  # the profile's column only
+    assert [line["state"] for line in journal(tmp_path)] == ["pending", "verified"]
+
+
 def test_a_merge_that_blanks_a_column_is_rolled_back_and_nothing_is_committed(tmp_path, lake):
     cfw.prepare(tmp_path)
     with lake() as con:

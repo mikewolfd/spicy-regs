@@ -81,22 +81,29 @@ def read_columns(profile: str) -> tuple[str, ...]:
 READ_COLUMNS = read_columns("all")
 
 
-def downloadable_attachments(value: str | None) -> str | None:
-    """``attachments_json`` less every entry and rendition that offers no file, spelled as the extract spells it.
+#: The keys b19b092 adds to an attachment's entry, and only when the record states them.
+_RESTRICTIONS = ("restrictReasonType", "restrictReason")
 
-    That is what the rule before SpicyDocs b19b092 (2026-03-15 to 0.53.0) wrote for the same record: it kept only
-    renditions with a ``fileUrl``, dropped an entry left with none (a withheld attachment, which states no
-    ``fileFormats``) and wrote NULL for no entry. So a held value equal to this is one the read only adds to. None for
-    a value of any other shape, which then equals no held value.
+
+def downloadable_attachments(value: str | None) -> str | None:
+    """``attachments_json`` less what offers no file: every rendition with no ``url``, every entry left with none (a
+    withheld attachment states no ``fileFormats``) and each entry's restriction.
+
+    That is what the rule before SpicyDocs b19b092 (2026-03-15 to 0.53.0) wrote for the same record, NULL for no entry,
+    so a held value equal to this is one the read only adds to. Only removals: the value must be in the extract's own
+    spelling (``json.dumps``), and what is kept keeps its keys and order. None for a value of any other spelling or
+    shape, which then equals no held value.
     """
     try:
+        listed = json.loads(value or "null")
+        if json.dumps(listed) != value:
+            return None
         kept = []
-        for entry in json.loads(value or "null"):
-            formats = [{"url": f["url"], "format": f["format"], "size": f["size"]} for f in entry["formats"] or []
-                       if f["url"]]
+        for entry in listed:
+            formats = [rendition for rendition in entry["formats"] or [] if rendition["url"]]
             if formats:
-                kept.append({"title": entry["title"], "formats": formats})
-    except (ValueError, TypeError, KeyError):
+                kept.append({**{k: v for k, v in entry.items() if k not in _RESTRICTIONS}, "formats": formats})
+    except (ValueError, TypeError, KeyError, AttributeError):
         return None
     return json.dumps(kept) if kept else None
 

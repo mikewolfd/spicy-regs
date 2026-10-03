@@ -197,6 +197,109 @@ def test_a_read_that_only_adds_withheld_attachments_replaces_the_held_list(tmp_p
     assert prepared["refused_not_additive_by_column"] == {"attachments_json": 0}
 
 
+def test_the_downloadable_part_of_a_listed_value_is_the_earlier_rules_value():
+    """Both shapes: b19b092's value less what offers no file is the earlier rule's, and the earlier rule's is its own."""
+    assert cfw.downloadable_attachments(LISTED) == HELD
+    assert cfw.downloadable_attachments(HELD) == HELD
+    only_withheld = json.dumps([{"title": "Study", "formats": None, "restrictReasonType": "Copyrighted"}])
+    assert cfw.downloadable_attachments(only_withheld) is None  # the earlier rule wrote NULL for it
+    for other in ("{}", "[1]", '[{"title": "x"}]', "not json", None):
+        assert cfw.downloadable_attachments(other) is None
+
+
+def test_the_installed_extract_projects_to_the_earlier_rules_value():
+    """Whichever SpicyDocs is installed, before or after b19b092, its value for a record listing a withheld attachment
+    and a rendition with no file projects to the earlier rule's value."""
+    record = {"data": {"id": "EPA-X-0001-0002", "attributes": {"modifyDate": T0}}, "included": [
+        {"type": "attachments", "attributes": {"title": "Letter", "fileFormats": [
+            {"fileUrl": _PDF["url"], "format": "pdf", "size": 1000}, {"fileUrl": None, "format": "docx", "size": 900}]}},
+        {"type": "attachments", "attributes": {"title": "Study", "fileFormats": None,
+                                               "restrictReasonType": "Copyrighted",
+                                               "restrictReason": "Copyrighted material"}},
+    ]}
+    assert cfw.downloadable_attachments(COMMENT.extract(record)["attachments_json"]) == HELD
+
+
+@pytest.mark.parametrize("read", [
+    json.dumps([{"title": "Letter", "formats": [{**_PDF, "url": _PDF["url"] + "?v=2"}]}]),  # a changed file
+    json.dumps([{"title": "Study", "formats": None, "restrictReasonType": "Copyrighted"}]),  # the held entry gone
+    json.dumps([{"title": "Letter", "formats": [_PDF]}], separators=(",", ":")),  # another spelling of the same list
+    json.dumps([{"formats": [_PDF], "title": "Letter"}]),  # the same entry, its keys reordered
+    json.dumps([{"title": "Letter", "formats": [{**_PDF, "checksum": "x"}]}]),  # a rendition with more than a file
+])
+def test_a_read_that_does_more_than_add_is_refused_and_counted(tmp_path, catalog, read):
+    seed(catalog, [row("A", attachments_json=HELD)])
+    reads(tmp_path, [{"key": "a", "comment_id": "A", "attachments_json": read}])
+    prepared, written = fill(tmp_path, catalog)
+    assert table(catalog)["A"]["attachments_json"] == HELD
+    assert (prepared["rows_to_fill"], written["rows_changed"]) == (0, 0)
+    assert prepared["refused_not_additive_by_column"] == {"attachments_json": 1}
+    assert pl.read_parquet(tmp_path / "fill" / "refusals.parquet").to_dicts() == [
+        {"comment_id": "A", "modify_date": T0, "column": "attachments_json"}]
+
+
+def test_a_read_of_another_version_replaces_nothing(tmp_path, catalog):
+    seed(catalog, [row("A", attachments_json=HELD)])
+    reads(tmp_path, [{"key": "a", "comment_id": "A", "modify_date": "2021-06-01T00:00:00Z", "attachments_json": LISTED}])
+    prepared, written = fill(tmp_path, catalog)
+    assert table(catalog)["A"]["attachments_json"] == HELD
+    assert (prepared["other_version_only"], prepared["replaced_by_column"], written["rows_changed"]) == (
+        1, {"attachments_json": 0}, 0)
+
+
+def test_copies_that_disagree_replace_nothing(tmp_path, catalog):
+    longer = json.dumps([*json.loads(LISTED), {"title": "Annex", "formats": None, "restrictReasonType": "Other"}])
+    seed(catalog, [row("A", attachments_json=HELD)])
+    reads(tmp_path, [{"key": "a", "comment_id": "A", "attachments_json": LISTED},
+                     {"key": "a(1)", "comment_id": "A", "attachments_json": longer}])
+    prepared, written = fill(tmp_path, catalog)
+    assert table(catalog)["A"]["attachments_json"] == HELD
+    assert prepared["conflicted_versions_by_column"]["attachments_json"] == 1
+    assert (prepared["replaced_by_column"], prepared["refused_not_additive_by_column"]) == (
+        {"attachments_json": 0}, {"attachments_json": 0})
+
+
+def test_a_null_held_list_still_fills_and_an_equal_one_is_left_alone(tmp_path, catalog):
+    seed(catalog, [row("A"), row("B", attachments_json=LISTED)])
+    reads(tmp_path, [{"key": "a", "comment_id": "A", "attachments_json": LISTED},
+                     {"key": "b", "comment_id": "B", "attachments_json": LISTED}])
+    prepared, written = fill(tmp_path, catalog)
+    assert (table(catalog)["A"]["attachments_json"], table(catalog)["B"]["attachments_json"]) == (LISTED, LISTED)
+    assert (prepared["cells_by_column"]["attachments_json"], prepared["replaced_by_column"]) == (
+        1, {"attachments_json": 0})
+    assert written["rows_changed"] == 1
+
+
+def test_a_replacement_is_written_only_over_the_value_it_replaces(tmp_path, catalog):
+    """A stale fill row expecting another held value matches no MERGE update, so the cell keeps what it holds."""
+    seed(catalog, [row("A", attachments_json=HELD), row("B", attachments_json="[]")])
+    reads(tmp_path, [{"key": "a", "comment_id": "A", "attachments_json": LISTED}])
+    cfw.prepare(tmp_path)
+    fill_file = tmp_path / "fill" / "fill.parquet"
+    rows = pl.read_parquet(fill_file)
+    pl.concat([rows, rows.with_columns(pl.lit("B").alias("comment_id"))]).write_parquet(fill_file)  # B holds "[]"
+    _restamp(tmp_path)
+    with catalog() as con:
+        assert cfw.write(tmp_path, con=con)["rows_changed"] == 1
+    assert (table(catalog)["A"]["attachments_json"], table(catalog)["B"]["attachments_json"]) == (LISTED, "[]")
+
+
+def test_a_merge_that_replaces_without_the_held_guard_is_rolled_back(tmp_path, catalog):
+    seed(catalog, [row("A", attachments_json=HELD), row("B", attachments_json="[]")])
+    reads(tmp_path, [{"key": "a", "comment_id": "A", "attachments_json": LISTED}])
+    cfw.prepare(tmp_path)
+    fill_file = tmp_path / "fill" / "fill.parquet"
+    rows = pl.read_parquet(fill_file)
+    pl.concat([rows, rows.with_columns(pl.lit("B").alias("comment_id"))]).write_parquet(fill_file)
+    _restamp(tmp_path)
+    unguarded = lambda sql: re.sub(  # noqa: E731
+        r'WHEN t\."attachments_json" = s\."_held_attachments_json" THEN', "WHEN TRUE THEN",
+        re.sub(r"WHEN MATCHED AND \(.*\) THEN UPDATE", "WHEN MATCHED THEN UPDATE", sql, flags=re.S)) if _merge(sql) else sql
+    with catalog() as con, pytest.raises(cfw.FillVerificationError):
+        cfw.write(tmp_path, con=Proxy(con, rewrite=unguarded))
+    assert (table(catalog)["A"]["attachments_json"], table(catalog)["B"]["attachments_json"]) == (HELD, "[]")
+
+
 def test_a_stated_null_disagreeing_with_a_value_is_a_conflict(tmp_path, catalog):
     seed(catalog, [row("A")])
     reads(tmp_path, [{"key": "a", "comment_id": "A", "subtype": None}, {"key": "a(1)", "comment_id": "A", "subtype": "S"}])
