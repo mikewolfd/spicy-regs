@@ -3,8 +3,9 @@
 The laws rollup now publishes native law sections from the same GovInfo XML
 capture it uses for law identity and citations. Researchers can search the
 enacted text, follow a section to its exact source, and distinguish unavailable
-text from an empty result. This qualification is local; it does not establish
-public publication or deployment.
+text from an empty result. The integration is merged into both fork main
+branches, the law tables are published to R2, and the deployed MCP passed the
+release checks described below.
 
 ## Data and relationships
 
@@ -106,11 +107,47 @@ review checked both researchers' query results against the canonical data
 already compared to source XML. The unavailable citation-resolution dependency
 was reported as unavailable; it did not manufacture a citation result.
 
-The local query candidate covers the retained published law family, not all
-historical law archives validated by the source audit. PDF processing remains
+The published query tables cover the retained 119th-Congress law family, not
+all historical law archives validated by the source audit. PDF processing remains
 deferred. Table formatting is flattened, and current legal effect, national
-completeness, source freshness beyond the capture dates, and public activation
-are outside this qualification. The replay held the published Code relationships
-without reacquiring them. Release work must retain the listing and inherited
-input lineage, publish the release generation, and verify the deployed consumer
-against its resulting publication pin.
+completeness, and source freshness beyond the capture dates are outside this
+qualification. The release retains the listing capture, the law XML captures
+and unavailable responses, and inherited input lineage. The existing Code
+relationship files retain their exact prior bytes.
+
+## Published release
+
+The source merge is `db313482663ae7f6eee04bbed9150766a70e2ce8`; the consumer
+merge is `b582b900df3924a6fb6f2f8e1c06ae66f1ba480e`. Both are on the fork's
+`main` branch. Deployment configuration commit
+`8e459dca5374fcaa2a71a51d979e194fece0a0e4` pins the verified image and its
+matching FEC compatibility receipt.
+
+- Laws generation:
+  `sha256:3a35c4db22311d39aa4f5e57203064410ee723a7c051f0d5215f79a09c7cda17`.
+- Consumer image:
+  `sha256:e6be24417f9925d8ad92aab8bf4d29ef9ad52012766e0b4edd1fd0f7b751334f`.
+- FEC compatibility receipt:
+  `sha256:fd1162dcd1207ac376d5e233e80671fb04b20eff12250eacbc7cb5c6ad066e1a`.
+- Worker version: `0911484f-6284-4e36-aaba-80e18c5cce6b`.
+
+The public publication index selects the new laws generation. All published
+law-family files were downloaded and matched the validated bytes. The FEC
+data generations remain unchanged; the new compatibility receipt binds their
+existing views to the new consumer image.
+
+The built image and [production MCP](https://mcp.spicygov.ai/mcp) each passed
+31 sequential smoke calls. Those calls cover enacted and private law text,
+section identity and counts, source URLs, FEC interpretation warnings, prior
+bill-printing fixes, and SQL safeguards. The live server reports all 72 FEC
+views compatible. These measured results are retained in
+`release/local/summary.json` and `release/live/summary.json` beneath the
+integration evidence directory above.
+
+Authenticated Cloudflare inspection independently confirmed the Worker
+settings, container image, and running application version; the receipt's
+own image assertion was not the only check. The initial live replay was
+interrupted during container replacement. Its partial results are retained
+in `release/live-during-rollout/`; the accepted replay ran after the expected
+image was confirmed active. See `release/deployment-verification.json` and
+`release/release-acceptance.json` for the release verification.
