@@ -2,9 +2,10 @@
 #
 # This file is the human layer of the data dictionary. Column *names and types*
 # are the source of truth in code (RECORD_TYPES in
-# src/spicy_regs/schemas/regulations.py for the core tables, and DERIVED_SCHEMAS
-# in src/spicy_regs/data_dictionary.py for the rollups). This file supplies the
-# prose. The two are reconciled by `spicy-regs-dict check`, which fails if a
+# src/spicy_regs/schemas/regulations.py for the core tables, the spicy-docs
+# contracts for the hosted tables, each transform's own column declaration, and
+# DERIVED_SCHEMAS in src/spicy_regs/data_dictionary.py for the SQL-only rollups;
+# see expected_schemas()). This file supplies the prose. The two are reconciled by `spicy-regs-dict check`, which fails if a
 # column has no description here or a description references a column that no
 # longer exists — so a schema change forces a docs update in the same PR.
 #

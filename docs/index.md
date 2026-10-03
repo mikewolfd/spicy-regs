@@ -203,7 +203,9 @@ of `dockets`; they join to the corpus (and to each other) on a few shared keys:
 
 !!! note "Keeping this current"
     Column names and types are the source of truth in code
-    (`RECORD_TYPES` for the core tables, `DERIVED_SCHEMAS` for the rollups). The
+    (`RECORD_TYPES` for the core tables, the spicy-docs contracts for the hosted
+    tables, each transform's own declaration for the rest, read by
+    `expected_schemas()` in `data_dictionary.py`). The
     prose lives in `data_dictionary/descriptions.yaml`. Run
     `uv run spicy-regs-dict generate` to rebuild the table pages, and
     `uv run spicy-regs-dict check` to verify the two are in sync — the same

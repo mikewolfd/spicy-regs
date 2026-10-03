@@ -216,17 +216,20 @@ def test_the_bill_family_declares_all_fourteen_plus_its_own_four():
 
 @pytest.mark.parametrize("table", sorted(OWN_TABLES), ids=str)
 def test_a_non_contract_output_is_declared_once_in_each_place_that_needs_it(table):
-    """Their columns are this repository's, so three lists state them and none may drift.
+    """Their columns are this repository's: the transform owns the tuple it writes and the dictionary reads it.
 
-    The transform owns the tuple it writes; ``DERIVED_SCHEMAS`` is what the
-    dictionary reconciles descriptions against; the MCP server lists it
-    literally because it must stay installable without the source-readers
-    group. Same shape as ``test_mcp_server_tables_match_dictionary``.
+    ``expected_schemas()`` imports the tuple, so ``DERIVED_SCHEMAS`` must not
+    restate it; this checks the wiring (the right tuple on the right table).
+    The MCP server lists the table literally because it must stay installable
+    without the source-readers group. Same shape as
+    ``test_mcp_server_tables_match_dictionary``.
     """
     from spicy_regs import mcp_server
 
-    assert [column for column, _ in dd.DERIVED_SCHEMAS[table]] == list(OWN_TABLES[table])
-    assert all(kind == "VARCHAR" for _, kind in dd.DERIVED_SCHEMAS[table])
+    declared = dd.expected_schemas()[table]
+    assert [column for column, _ in declared] == list(OWN_TABLES[table])
+    assert all(kind == "VARCHAR" for _, kind in declared)
+    assert table not in dd.DERIVED_SCHEMAS, "a transform's own declaration is read, never restated"
     assert table in dd.TABLES
     assert table in mcp_server.TABLES
     assert table not in dd.CONTRACT_TABLES, "it is this repository's own table, not a hosted contract"

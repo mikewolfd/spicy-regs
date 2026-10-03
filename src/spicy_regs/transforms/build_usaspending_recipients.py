@@ -49,8 +49,8 @@ DEFAULT_MAX_PAGES = 100
 FUNDED_WALK_PAGE_BOUND = 5_000
 _MAX_REQUESTS_PER_PAGE = 5
 
-# The published schema, all VARCHAR, in a fixed order (``data_dictionary`` declares
-# the same list). ``recipient_id`` is the primary / dedup key.
+# The published schema, all VARCHAR, in a fixed order (``data_dictionary`` reads
+# this list). ``recipient_id`` is the primary / dedup key.
 COLUMNS = (
     "recipient_id",
     "uei",
