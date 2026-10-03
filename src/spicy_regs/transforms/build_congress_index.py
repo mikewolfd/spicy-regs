@@ -54,7 +54,7 @@ from spicy_regs.sources import r2
 from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key, listing_reader
 from spicy_regs.transforms.congress_scope import congresses_from_env, current_congress, record_volumes
 from spicy_regs.transforms.congress_walk import ListingSource, PooledListingSource
-from spicy_regs.transforms.table_merge import merge_contract_table, published_table
+from spicy_regs.transforms.table_merge import merge_contract_table, published_table, set_column, write_in_place
 
 if TYPE_CHECKING:
     from spicy_regs.source_evidence import CaptureEvidence
@@ -159,14 +159,6 @@ def _shape_record_communication(entry: Any, *, congress: int, record_date: str) 
 RIN_COLUMNS = ("rin", "rin_occurrences_json", "rin_rule", "rin_matched_text")
 
 
-def _set_column(table: Any, name: str, values: Sequence[str | None]) -> Any:
-    """``table`` with ``name`` holding ``values`` as VARCHAR, in its place, or appended where the table lacks it."""
-    import pyarrow as pa
-
-    column, index = pa.array(values, type=pa.string()), table.schema.get_field_index(name)
-    return table.set_column(index, name, column) if index >= 0 else table.append_column(name, column)
-
-
 def _repair_rin(table: Any, read: Sequence[bool]) -> Any:
     """Re-derive every read row's RIN columns from its retained ``report_nature``, without origin reads.
 
@@ -186,7 +178,7 @@ def _repair_rin(table: Any, read: Sequence[bool]) -> Any:
         for name, value in zip(RIN_COLUMNS, derived, strict=True):
             columns[name][position] = value
     for name, values in columns.items():
-        table = _set_column(table, name, values)
+        table = set_column(table, name, values)
     return table
 
 
@@ -196,7 +188,7 @@ def _rederive_communications(table: Any, read: Sequence[bool]) -> Any:
 
     table = _repair_rin(table, read)
     routes = table["source_route"].to_pylist()
-    return _set_column(table, "source_route", [COMMUNICATION_SOURCE_ROUTES[0] if r is None else r for r in routes])
+    return set_column(table, "source_route", [COMMUNICATION_SOURCE_ROUTES[0] if r is None else r for r in routes])
 
 
 def _rederive_civilian(table: Any, _read: Sequence[bool]) -> Any:
@@ -207,7 +199,7 @@ def _rederive_civilian(table: Any, _read: Sequence[bool]) -> Any:
     reads is stored whole, so its rule reaches every held row each run, as ``gao_decisions``' outcome does. O(rows).
     """
     kinds = table["nomination_type_json"].to_pylist()
-    return _set_column(table, "is_civilian", [
+    return set_column(table, "is_civilian", [
         shape_nomination({"nominationType": None if kind is None else json.loads(kind)})["is_civilian"] for kind in kinds
     ])
 
@@ -402,12 +394,10 @@ def _rederive_held(output: Path, spec: IndexSpec) -> None:
     read = [False] * table.num_rows
     if spec.detail_marker is not None:
         read = _read_flags(table, spec.detail_marker)
-        table = _set_column(table, DETAIL_READ, [flag(was_read) for was_read in read])
+        table = set_column(table, DETAIL_READ, [flag(was_read) for was_read in read])
     if spec.rederive is not None:
         table = spec.rederive(table, read)
-    temporary = output.with_suffix(".tmp.parquet")
-    pq.write_table(table, temporary, compression="zstd")
-    temporary.replace(output)
+    write_in_place(table, output)
 
 
 def _windows(
