@@ -6001,6 +6001,23 @@
         "rule_version",
         "observed_at"
       ]
+    },
+    {
+      "table": "document_citation_reads",
+      "label": "Held-field citation reads",
+      "summary": "One row per complete held-field read, rebuilt each run from the checkpoints `document_citations` itself carries, so the two always agree. Join `document_citations` on `document_kind`, `document_key` and `text_sha256`: a row here with `citation_rows` 0 is a field read that found no citation, which is a different answer from a field never read. All columns are stored as VARCHAR.",
+      "coverage": "Not a range. One row per held field (a report section, a comment, a lobbying activity, a communication, a court PDF extraction) whose text an operator selected for a citation read and that read completely: the field, the text it read and how many citation rows it wrote, zero included. A field never selected, or whose read was refused or capped, has no row. A GovInfo package's or budget volume's read is stated on its own row in `house_activity_reports` or `budget_volumes` instead.",
+      "kind": "not_a_range",
+      "measured_on": "2026-10-03",
+      "data_quality": null,
+      "columns": [
+        "document_kind",
+        "document_key",
+        "text_sha256",
+        "rule_set_version",
+        "read_at",
+        "citation_rows"
+      ]
     }
   ]
 }

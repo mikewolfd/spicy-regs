@@ -223,6 +223,7 @@ TABLES = (
     "bill_family_backfills",
     "bill_family_backfill_walks",
     "committee_report_reads",
+    "document_citation_reads",
     "native_legal_references",
     "native_legal_reference_reads",
     "court_opinion_pdf_extractions",

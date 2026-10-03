@@ -186,3 +186,54 @@ def test_run_byte_budget_applies_in_selection_order(monkeypatch):
     assert [status for _, status, _ in reads] == [
         "complete_field", "field_byte_cap", "complete_field", "complete_field", "run_byte_cap",
     ]
+
+
+def test_a_held_read_that_finds_nothing_is_a_document_citation_reads_row(tmp_path):
+    """document_citation_reads states each held-field read, so a field read with no citation is told from an unread one.
+
+    Until now a zero-result read was only a checkpoint in document_citations' Parquet metadata, which the server
+    does not read: every held field with no rows answered "not read" (round 5 S5-2, the server's open question 1).
+    """
+    from spicy_docs.interpretation.citations import CITATION_RULE_SET_VERSION
+
+    with connection() as con:
+        con.execute("INSERT INTO comments VALUES ('a', '5 U.S.C. 552'), ('empty', 'No references here.')")
+        citations = run(con, tmp_path, ["a", "empty", "missing"])
+        reads = held.write_citation_reads(tmp_path, citations)
+        rows = {row["document_key"]: row for row in pq.read_table(reads).to_pylist()}
+    assert pq.read_schema(reads).names == list(held.READS_COLUMNS)
+    assert set(rows) == {"a", "empty"}, "a selection that read no field is no read"
+    assert (rows["empty"]["citation_rows"], rows["a"]["citation_rows"]) == ("0", "1")
+    assert {row["rule_set_version"] for row in rows.values()} == {CITATION_RULE_SET_VERSION}
+    assert all(row["read_at"] and row["text_sha256"].startswith("sha256:") for row in rows.values())
+    assert {row["document_kind"] for row in rows.values()} == {"comment_inline"}
+
+
+def test_a_read_from_before_the_reads_table_states_no_time_or_rule_set(tmp_path):
+    """A checkpoint written before read_at and rule_set_version existed is still a read, with those two NULL."""
+    with connection() as con:
+        con.execute("INSERT INTO comments VALUES ('empty', 'No references here.')")
+        citations = run(con, tmp_path, ["empty"])
+    from spicy_regs.transforms.read_checkpoints import checkpoint_metadata
+
+    states = [{k: v for k, v in state.items() if k not in ("read_at", "rule_set_version")}
+              for state in read_checkpoints(citations, held.NAMESPACE)]
+    table = pq.read_table(citations)
+    pq.write_table(table.replace_schema_metadata(checkpoint_metadata(citations, held.NAMESPACE, states)), citations)
+    [row] = pq.read_table(held.write_citation_reads(tmp_path, citations)).to_pylist()
+    assert (row["document_key"], row["citation_rows"], row["read_at"], row["rule_set_version"]) == (
+        "empty", "0", None, None)
+
+
+def test_the_print_citations_family_rebuilds_the_reads_from_its_merged_citation_table(tmp_path, monkeypatch):
+    """Both writers of the family publish the table, so a print-citations run never drops a held read."""
+    from spicy_regs.pipelines.rollups import print_citations as rollup
+
+    with connection() as con:
+        con.execute("INSERT INTO comments VALUES ('empty', 'No references here.')")
+        citations = run(con, tmp_path, ["empty"])
+    monkeypatch.setattr(rollup, "build_print_citations", lambda output_dir, **_: (citations,) * 4)
+    *_, reads = rollup.PrintCitationsRollup(output_dir=tmp_path).build(tmp_path)
+    assert [row["document_key"] for row in pq.read_table(reads).to_pylist()] == ["empty"]
+    assert rollup.PrintCitationsRollup.outputs[-1] == "document_citation_reads.parquet"
+    assert rollup.PrintCitationsRollup.added_tables == ("document_citation_reads.parquet",)

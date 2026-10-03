@@ -465,6 +465,7 @@ TABLES: tuple[str, ...] = (
     "bill_family_backfills",
     "bill_family_backfill_walks",
     "committee_report_reads",
+    "document_citation_reads",
 )
 
 # Tables the MCP server (list_sources / describe_table / query_sql) exposes.
@@ -517,6 +518,7 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "bill_family_backfills",
         "bill_family_backfill_walks",
         "committee_report_reads",
+        "document_citation_reads",
         "member_vote_terms",
         *RULEMAKING_TABLES,
         *CONTRACT_TABLES,
@@ -707,6 +709,7 @@ def expected_schemas() -> dict[str, list[tuple[str, str]]]:
         VOTE_REFERENCE_COLUMNS,
     )
     from spicy_regs.transforms.committee_report_reads import READ_COLUMNS as COMMITTEE_REPORT_READ_COLUMNS
+    from spicy_regs.transforms.held_citations import READS_COLUMNS as CITATION_READ_COLUMNS
     from spicy_regs.transforms.build_org_committee_links import COLUMNS as ORG_COMMITTEE_LINK_COLUMNS
 
     builder_columns = {
@@ -744,6 +747,7 @@ def expected_schemas() -> dict[str, list[tuple[str, str]]]:
         "bill_family_backfills": BACKFILL_COLUMNS,
         "bill_family_backfill_walks": BACKFILL_WALK_COLUMNS,
         "committee_report_reads": COMMITTEE_REPORT_READ_COLUMNS,
+        "document_citation_reads": CITATION_READ_COLUMNS,
     }
     # Writers that type their columns natively (DATE, INTEGER, BOOLEAN), spelled as DuckDB describes the file.
     builder_schemas = {

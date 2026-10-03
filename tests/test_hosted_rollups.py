@@ -72,9 +72,10 @@ OWN_TABLES = BILL_OWN_TABLES | {READS_TABLE: READ_COLUMNS}
 #: refresh's base families like ``documents`` itself, not by a standalone rollup (decisions 65-67).
 ETL_TABLES = {"document_attributes", "docket_attributes", "comment_attributes"}
 
-#: Tables of this repository's own that a hosted rollup publishes beside its contract: gao-reports' typed product
-#: table, whose schema is the transform's Arrow schema (``build_gao_reports._SCHEMA``).
-HOSTED_OWN_TABLES = {"gao_reports"}
+#: Tables of this repository's own that a hosted rollup publishes beside its contracts: gao-reports' typed product
+#: table, whose schema is the transform's Arrow schema (``build_gao_reports._SCHEMA``), and print-citations' held-field
+#: reads, rebuilt from its citation table's checkpoints (``held_citations.READS_COLUMNS``).
+HOSTED_OWN_TABLES = {"gao_reports", "document_citation_reads"}
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]

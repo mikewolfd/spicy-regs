@@ -1087,7 +1087,7 @@
       {
         "column_name": "money_bill_kind",
         "column_type": "VARCHAR",
-        "description": "Interpreted money-bill kind, or NULL when no rule claimed the measure. A title heuristic with unmeasured recall: an appropriations act whose title lacks the pattern, or an appropriations division inside another bill, is NULL (money_bill_rule names the rule that fired). A House special rule (an H. Res. \"Providing for consideration of\" or \"Waiving points of order against\" another measure) is never a money bill, though it names one, and `omnibus` is an appropriations omnibus only, not a statute named \"Omnibus\" (the Omnibus Crime Control and Safe Streets Act)."
+        "description": "Interpreted money-bill kind, or NULL when no rule claimed the measure. A title heuristic with unmeasured recall: an appropriations act whose title lacks the pattern, or an appropriations division inside another bill, is NULL (money_bill_rule names the rule that fired). A simple or concurrent resolution (H. Res., S. Res., H. Con. Res., S. Con. Res.) is never a money bill, though a House special rule names the one it brings up, and `omnibus` is an appropriations omnibus only, not a statute named \"Omnibus\" (the Omnibus Crime Control and Safe Streets Act)."
       },
       {
         "column_name": "money_bill_rule",
@@ -24092,6 +24092,53 @@
     "grain": null,
     "identity_columns": [
       "package_id"
+    ]
+  },
+  "document_citation_reads": {
+    "table": "document_citation_reads",
+    "label": "Held-field citation reads",
+    "summary": "One row per complete held-field read, rebuilt each run from the checkpoints `document_citations` itself carries, so the two always agree. Join `document_citations` on `document_kind`, `document_key` and `text_sha256`: a row here with `citation_rows` 0 is a field read that found no citation, which is a different answer from a field never read. All columns are stored as VARCHAR.",
+    "coverage": "Not a range. One row per held field (a report section, a comment, a lobbying activity, a communication, a court PDF extraction) whose text an operator selected for a citation read and that read completely: the field, the text it read and how many citation rows it wrote, zero included. A field never selected, or whose read was refused or capped, has no row. A GovInfo package's or budget volume's read is stated on its own row in `house_activity_reports` or `budget_volumes` instead.",
+    "kind": "not_a_range",
+    "measured_on": "2026-10-03",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "document_kind",
+        "column_type": "VARCHAR",
+        "description": "The held field's kind, as `document_citations.document_kind` spells it (`report_section`, `comment_inline`, ...)."
+      },
+      {
+        "column_name": "document_key",
+        "column_type": "VARCHAR",
+        "description": "The field's own key in its kind's spelling, as `document_citations.document_key` spells it."
+      },
+      {
+        "column_name": "text_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the field text this read read, as `document_citations.text_sha256` spells it."
+      },
+      {
+        "column_name": "rule_set_version",
+        "column_type": "VARCHAR",
+        "description": "The citation rule set the read ran under (`CITATION_RULE_SET_VERSION`); NULL on a read recorded before this table existed."
+      },
+      {
+        "column_name": "read_at",
+        "column_type": "VARCHAR",
+        "description": "UTC time the read ran; NULL on a read recorded before this table existed."
+      },
+      {
+        "column_name": "citation_rows",
+        "column_type": "VARCHAR",
+        "description": "How many citation rows the read wrote, as a decimal string; `0` for a read that found none."
+      }
+    ],
+    "grain": null,
+    "identity_columns": [
+      "document_kind",
+      "document_key",
+      "text_sha256"
     ]
   }
 }
