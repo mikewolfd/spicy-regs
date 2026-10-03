@@ -55,10 +55,13 @@ before a chunk when the disk has less than `--min-free-gb`.
 
 **The staged read.** A runner cannot see the parts, so one fill-only Parquet
 file carries what `prepare` reads of them (`READ_COLUMNS`): each copy's object
-key, `comment_id`, `modify_date` and the seven fill columns. It holds no
-attribute JSON and none of the submitter's contact fields; every column it
-holds goes public in `comments` anyway, which is why it may sit in the data
-bucket. `fetch` refuses any bytes but the named sha256. Delete the staging
+key, `comment_id`, `modify_date` and the fill columns, which since 2026-10-03
+are every column of the table a part holds (`FILL_COLUMNS`: the submitter's
+name, organization and category among them). It holds no attribute JSON and
+no body; every column it holds goes public in `comments` anyway, which is why
+it may sit in the data bucket. A staged read built for the earlier seven-column
+fill lacks the new columns, and `prepare --reads` refuses it on the first
+missing one: stage the parts again before the next fill. `fetch` refuses any bytes but the named sha256. Delete the staging
 prefix (the file, its `.sha256` and `journals/`, after copying the journals
 into the receipts) once the fill is done.
 

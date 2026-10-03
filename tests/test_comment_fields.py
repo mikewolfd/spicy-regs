@@ -148,13 +148,14 @@ def test_the_read_stops_cleanly_past_its_memory_cap_and_resumes(tmp_path):
     assert cf.read(tmp_path, workers=2, resource=_FakeS3Resource(store))["chunks"] == 1
 
 
-def test_the_part_holds_every_fill_column_typed_as_the_table():
-    from spicy_regs.pipelines.comment_fields_write import FILL_COLUMNS
+def test_every_table_column_a_part_holds_is_a_fill_column_typed_as_the_table():
+    """Parity both ways: a table column the parts hold that the fill skips would stay NULL on rows the extract
+    predated (the submitter fields did until 2026-10-03), and a fill column the parts lack cannot be read."""
+    from spicy_regs.pipelines.comment_fields_write import FILL_COLUMNS, KEY_COLUMNS
 
-    assert set(FILL_COLUMNS) <= set(cf.PART_SCHEMA)
-    assert FILL_COLUMNS[-3:] == ("subtype", "duplicate_comments", "attachments_json")
+    assert set(FILL_COLUMNS) == (set(COMMENT.schema) & set(cf.PART_SCHEMA)) - set(KEY_COLUMNS)
+    assert {"first_name", "last_name", "organization", "category", "subtype", "attachments_json"} <= set(FILL_COLUMNS)
     assert cf.PART_SCHEMA["duplicate_comments"] == COMMENT.schema["duplicate_comments"] == pl.Int32
-
 
 def test_shards_split_chunks_so_every_chunk_is_read_exactly_once(tmp_path):
     store = _store()
