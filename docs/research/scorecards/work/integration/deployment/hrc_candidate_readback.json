@@ -1,0 +1,51 @@
+{
+  "status": "superseded_not_published",
+  "generation": {
+    "artifactDigest": "sha256:249ac2c44ef975361ddcc5037eb3f73f610ac585c6fdd3b228a330845af8bf4b",
+    "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:4811ee11891330d5f324c8b5f15835ce5d70e178388ff180b02cbff96f8efd3f"
+  },
+  "candidate_receipt_sha256": "d278adb97551d1c4917bb48a7dfb0d07d386ed945ec040a76be8b8667ee11c2c",
+  "hrc_counts": {
+    "scorecard_metric_components": 0,
+    "scorecard_member_ratings": 1620,
+    "scorecard_metric_items": 0,
+    "scorecard_metrics": 6,
+    "scorecard_member_item_results": 19540,
+    "scorecard_methodologies": 10,
+    "scorecard_members": 540,
+    "scorecard_items": 56,
+    "scorecard_snapshots": 1,
+    "scorecard_publishers": 1,
+    "scorecards": 1
+  },
+  "literal_rating_and_result_comparisons": 21160,
+  "na_ratings": 279,
+  "result_tokens": {
+    "○": 9340,
+    "⊗": 471,
+    "●": 9306,
+    "N/A": 422,
+    "P": 1
+  },
+  "vacancy_in_member_table": false,
+  "remote_writes": 0,
+  "prior_generation": {
+    "artifactDigest": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb",
+    "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:553e225cf831e5087ebf8ba3fa1a6962a3c90d203c574ce09f8ce2c79837d61e"
+  },
+  "independent_exact_preserved_row_counts": {
+    "scorecard_metric_components": 0,
+    "scorecard_member_ratings": 5134,
+    "scorecard_metric_items": 227,
+    "scorecard_metrics": 10,
+    "scorecard_member_item_results": 24008,
+    "scorecard_methodologies": 5,
+    "scorecard_members": 1562,
+    "scorecard_items": 169,
+    "scorecard_snapshots": 3,
+    "scorecard_publishers": 3,
+    "scorecards": 3
+  },
+  "all_prior_source_values_and_observation_identifiers_preserved": true,
+  "superseded_reason": "User requested exact standalone NA to N/A in native rating columns; parser/1 candidate retained privately and must not be published."
+}

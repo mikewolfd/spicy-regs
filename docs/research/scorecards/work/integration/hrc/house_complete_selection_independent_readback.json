@@ -1,0 +1,277 @@
+{
+  "reviewed_at": "2026-10-03T21:49:57.034739+00:00",
+  "source_sha256": "sha256:804c1157e71da53a00821fdcaf15a1790448c682eb49d44613a577cfce9cb855",
+  "status": "selected_record_source_and_evidence_replay_passed",
+  "public_evidence_policy": "metadata_only_review_receipt",
+  "source_evidence_policy": "hash_only",
+  "production_reader_qualified": false,
+  "full_edition": false,
+  "candidate_declared_status": "incomplete_refused_candidate",
+  "candidate_page_validation_failures": [
+    {
+      "physical_page": 20,
+      "reason": "HRC published rating is missing or has an unqualified presentation"
+    }
+  ],
+  "counts": {
+    "members": 440,
+    "ratings": 1320,
+    "classified_cells": 17631,
+    "manual_image_cells": 409,
+    "vacancies": 1,
+    "vacancy_ratings": 3,
+    "vacancy_blank_cells": 41,
+    "unique_retained_observations": 94
+  },
+  "checks": [
+    {
+      "physical_page": 10,
+      "named_members": 26,
+      "vacancies": 0,
+      "status": "all_selected_fields_and_coverage_match_original_source",
+      "counts": {
+        "members": 26,
+        "ratings": 78,
+        "classified_cells": 1021,
+        "manual_image_cells": 45
+      }
+    },
+    {
+      "physical_page": 11,
+      "named_members": 31,
+      "vacancies": 0,
+      "status": "all_selected_fields_and_coverage_match_original_source",
+      "counts": {
+        "members": 31,
+        "ratings": 93,
+        "classified_cells": 1248,
+        "manual_image_cells": 23
+      }
+    },
+    {
+      "physical_page": 12,
+      "named_members": 29,
+      "vacancies": 0,
+      "status": "all_selected_fields_and_coverage_match_original_source",
+      "counts": {
+        "members": 29,
+        "ratings": 87,
+        "classified_cells": 1175,
+        "manual_image_cells": 14
+      }
+    },
+    {
+      "physical_page": 13,
+      "named_members": 29,
+      "vacancies": 0,
+      "status": "all_selected_fields_and_coverage_match_original_source",
+      "counts": {
+        "members": 29,
+        "ratings": 87,
+        "classified_cells": 1162,
+        "manual_image_cells": 27
+      }
+    },
+    {
+      "physical_page": 14,
+      "named_members": 27,
+      "vacancies": 0,
+      "status": "all_selected_fields_and_coverage_match_original_source",
+      "counts": {
+        "members": 27,
+        "ratings": 81,
+        "classified_cells": 1095,
+        "manual_image_cells": 12
+      }
+    },
+    {
+      "physical_page": 15,
+      "named_members": 27,
+      "vacancies": 0,
+      "status": "all_selected_fields_and_coverage_match_original_source",
+      "counts": {
+        "members": 27,
+        "ratings": 81,
+        "classified_cells": 1088,
+        "manual_image_cells": 19
+      }
+    },
+    {
+      "physical_page": 16,
+      "named_members": 27,
+      "vacancies": 0,
+      "status": "all_selected_fields_and_coverage_match_original_source",
+      "counts": {
+        "members": 27,
+        "ratings": 81,
+        "classified_cells": 1090,
+        "manual_image_cells": 17
+      }
+    },
+    {
+      "physical_page": 17,
+      "named_members": 27,
+      "vacancies": 0,
+      "status": "all_selected_fields_and_coverage_match_original_source",
+      "counts": {
+        "members": 27,
+        "ratings": 81,
+        "classified_cells": 1084,
+        "manual_image_cells": 23
+      }
+    },
+    {
+      "physical_page": 18,
+      "named_members": 25,
+      "vacancies": 0,
+      "status": "all_selected_fields_and_coverage_match_original_source",
+      "counts": {
+        "members": 25,
+        "ratings": 75,
+        "classified_cells": 993,
+        "manual_image_cells": 32
+      }
+    },
+    {
+      "physical_page": 19,
+      "named_members": 28,
+      "vacancies": 1,
+      "status": "all_selected_fields_and_coverage_match_original_source",
+      "counts": {
+        "members": 28,
+        "ratings": 84,
+        "classified_cells": 1118,
+        "manual_image_cells": 30
+      }
+    },
+    {
+      "physical_page": 20,
+      "named_members": 28,
+      "vacancies": 0,
+      "status": "all_selected_fields_and_coverage_match_original_source",
+      "counts": {
+        "members": 28,
+        "ratings": 84,
+        "classified_cells": 1109,
+        "manual_image_cells": 39
+      }
+    },
+    {
+      "physical_page": 21,
+      "named_members": 28,
+      "vacancies": 0,
+      "status": "all_selected_fields_and_coverage_match_original_source",
+      "counts": {
+        "members": 28,
+        "ratings": 84,
+        "classified_cells": 1122,
+        "manual_image_cells": 26
+      }
+    },
+    {
+      "physical_page": 22,
+      "named_members": 27,
+      "vacancies": 0,
+      "status": "all_selected_fields_and_coverage_match_original_source",
+      "counts": {
+        "members": 27,
+        "ratings": 81,
+        "classified_cells": 1090,
+        "manual_image_cells": 17
+      }
+    },
+    {
+      "physical_page": 23,
+      "named_members": 30,
+      "vacancies": 0,
+      "status": "all_selected_fields_and_coverage_match_original_source",
+      "counts": {
+        "members": 30,
+        "ratings": 90,
+        "classified_cells": 1201,
+        "manual_image_cells": 29
+      }
+    },
+    {
+      "physical_page": 24,
+      "named_members": 27,
+      "vacancies": 0,
+      "status": "all_selected_fields_and_coverage_match_original_source",
+      "counts": {
+        "members": 27,
+        "ratings": 81,
+        "classified_cells": 1083,
+        "manual_image_cells": 24
+      }
+    },
+    {
+      "physical_page": 25,
+      "named_members": 18,
+      "vacancies": 0,
+      "status": "all_selected_fields_and_coverage_match_original_source",
+      "counts": {
+        "members": 18,
+        "ratings": 54,
+        "classified_cells": 725,
+        "manual_image_cells": 13
+      }
+    },
+    {
+      "physical_page": 26,
+      "named_members": 6,
+      "vacancies": 0,
+      "status": "all_selected_fields_and_coverage_match_original_source",
+      "counts": {
+        "members": 6,
+        "ratings": 18,
+        "classified_cells": 227,
+        "manual_image_cells": 19
+      }
+    }
+  ],
+  "artifacts": [
+    {
+      "private_relative_path": "house-selected-candidate-before-na-rule.json",
+      "sha256": "sha256:ead318234836ee0a64e37ea599146c7bbffc818251b9717329595ae54821a552"
+    },
+    {
+      "private_relative_path": "original-house-cell-readback-300dpi/manual-original-cell-reference.json",
+      "sha256": "sha256:9f2e6d170e1c28dd403eb6f993d2d9f4737b9fef0febde12fc81f46a9884b8fd"
+    },
+    {
+      "private_relative_path": "independent-source-inventory/verify_house_selection.py",
+      "sha256": "sha256:906827ef9f1d805941dfcbff043355a2921ae6329829a334569796758b854a99"
+    }
+  ],
+  "reviewed_helpers": [
+    {
+      "repository_relative_path": "docs/research/scorecards/work/integration/hrc/house_source_validation.py",
+      "sha256": "sha256:7da2f706705739439af6635c021cc89d4c0c14fbb7bb7cc909427ff00612816a"
+    },
+    {
+      "repository_relative_path": "docs/research/scorecards/work/integration/hrc/assemble_house_candidate.py",
+      "sha256": "sha256:d1a5f526e2bcd990dea4676a76cc8a84c151342cf8cf4158fa6826281e3eff72"
+    },
+    {
+      "repository_relative_path": "docs/research/scorecards/work/integration/hrc/independent_source_inventory.json",
+      "sha256": "sha256:dcc7d96c57745b3b5273e6ed9070644a866ffc85fb8ba0c8f65bdd941e1245a2"
+    },
+    {
+      "repository_relative_path": "docs/research/scorecards/work/integration/hrc/house_glyph_reference_independent_readback.json",
+      "sha256": "sha256:601eed2aa0d578a3d30004ed9b667cf8c998667f355644e702302ef81515429b"
+    }
+  ],
+  "method": [
+    "Replayed every selected JSON pointer against exact retained outcome bytes and shared-backend observation; asserted unchanged complete member record.",
+    "Checked source, outcome, observation, settings and reviewed image-reference hashes.",
+    "Checked unique source row, member occurrence, all41 item keys and all3 rating periods, source scope and per-page roster counts against independent original source inventory.",
+    "Compared every emitted identity, party, district, state, footnote marker, score and action against original PDF native spans plus independently reviewed source-only glyph contact sheets.",
+    "Verified NJ9 vacancy has no invented member,3 literal N/A ratings and41 blank/null result cells."
+  ],
+  "all_model_outputs_unchanged": true,
+  "limits": [
+    "Source-comparison pass is independent of the candidate schema gate; any recorded page validation failures remain refusal reasons.",
+    "This is complete House member/vacancy research candidate verification, not full-edition or production-reader admission.",
+    "Items, notes, legends and methodology have separate evidence and admission."
+  ]
+}

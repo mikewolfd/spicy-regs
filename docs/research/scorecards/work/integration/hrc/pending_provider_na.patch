@@ -1,0 +1,36 @@
+--- a/src/spicy_docs/sources/scorecards/hrc_outcomes.py
++++ b/src/spicy_docs/sources/scorecards/hrc_outcomes.py
+@@ -141,7 +141,7 @@
+             raise ValueError("HRC item result is missing, uncertain or has an unqualified glyph")
+         if any(
+             not isinstance(rating["value_text"], str)
+-            or re.fullmatch(r"(?:\d{1,3}|N/A)\^?", rating["value_text"]) is None
++            or re.fullmatch(r"(?:\d{1,3}|N/A|NA)\^?", rating["value_text"]) is None
+             for rating in member["ratings"]
+         ):
+             raise ValueError("HRC published rating is missing or has an unqualified presentation")
+--- a/tests/test_scorecards_hrc_outcomes.py
++++ b/tests/test_scorecards_hrc_outcomes.py
+@@ -195,3 +195,22 @@
+     result["vacant_seats"][0]["bioguide_id"] = "invented"
+     with pytest.raises(ValidationError):
+         validate_outcome(19, result)
++
++
++def test_printed_na_rating_is_preserved_without_adding_a_slash():
++    # HRC physical page20 prints NA for Foushee's116th score, alongside N/A.
++    result = _house_with_vacancy()
++    result["vacant_seats"] = []
++    result["members"][0]["ratings"][2]["value_text"] = "NA"
++    original = deepcopy(result)
++    validate_outcome(20, result)
++    assert result == original
++
++
++@pytest.mark.parametrize("value", ["N / A", "NA?", "N/A?"])
++def test_unqualified_rating_text_still_refuses(value):
++    result = _house_with_vacancy()
++    result["vacant_seats"] = []
++    result["members"][0]["ratings"][2]["value_text"] = value
++    with pytest.raises(ValueError, match="published rating"):
++        validate_outcome(20, result)

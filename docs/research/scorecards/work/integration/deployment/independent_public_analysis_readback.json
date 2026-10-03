@@ -1,0 +1,33 @@
+{
+  "status": "independent_public_readback_passed",
+  "analysis_generation": "sha256:f3fffcf37e4ffc7a6015c54cbd5757379bc93701416c0281e1ef76d0f5ef7fe2",
+  "tables": {
+    "scorecard_item_links.parquet": {
+      "rows": 279,
+      "resolution_status": {
+        "resolved": 145,
+        "unresolved": 134
+      },
+      "resolution_rules": {
+        "exact_bill": 79,
+        "no_exact_item_match_incomplete": 5,
+        "no_exact_item_match": 110,
+        "exact_bill_incomplete": 19,
+        "exact_roll_call": 66
+      }
+    },
+    "scorecard_member_links.parquet": {
+      "rows": 1562,
+      "resolution_status": {
+        "resolved": 1324,
+        "unresolved": 238
+      },
+      "resolution_rules": {
+        "exact_historical_name_context": 917,
+        "no_exact_member_match": 238,
+        "unique_normalized_name_historical_term": 407
+      }
+    }
+  },
+  "public_urls_and_parquet_hashes_verified": true
+}

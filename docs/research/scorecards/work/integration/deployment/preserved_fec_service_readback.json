@@ -1,0 +1,32 @@
+{
+  "status": "passed-exact-release-mcp-smoke",
+  "url": "https://mcp.spicygov.ai/mcp",
+  "receipt_sha256": "sha256:36b1e24c0dc2d5b62397cb2f3eb63b132090560e451792e50897c3ee86c9cc72",
+  "consumer": {
+    "code_sha256": "sha256:80b9e2f761f16592e4e537a718c010d707cd4db6ff3ab1e6c2ec1c2355e4043f",
+    "image_digest": "sha256:c998280b7607009acbaa40a01dbe9169c20ab2258e0bf20f38d35ce3cb501279",
+    "package_versions": {
+      "duckdb": "1.5.5",
+      "mcp": "2.2.0",
+      "spicy-regs": "0.1.6"
+    }
+  },
+  "compatible_views": 72,
+  "sampled_relations": [
+    "fec_filings",
+    "fec_receipts",
+    "fec_receipts_evidence",
+    "fec_debts_closing_balance_decision",
+    "fec_communication_costs_native_filing_associations",
+    "fec_account_transfers_filing_associations",
+    "fec_reported_financial_summary_metrics",
+    "fec_reported_financial_summaries_ttl_receipts_decision",
+    "fec_independent_expenditures_targets",
+    "fec_agency_reports",
+    "fec_filing_text_observations"
+  ],
+  "seconds": 21.126,
+  "scope": "All registered views execute LIMIT 0; representative data rows and metadata read through MCP. Not a full corpus restore or financial-total qualification.",
+  "complete_private_receipt_sha256": "3a33958284ec7fd3ac503dee36283c8ae24d688c2c11833bcec567cd32b4697d",
+  "remote_mutations": []
+}

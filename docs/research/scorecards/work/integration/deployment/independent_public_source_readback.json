@@ -1,0 +1,24 @@
+{
+  "status": "independent_public_readback_passed",
+  "index_sha256": "6bb0767c2850938675b5734ade719e90ee4e9bd63a0fa20a96064c898f5990e0",
+  "source_generation": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb",
+  "table_counts": {
+    "scorecard_items.parquet": 169,
+    "scorecard_member_item_results.parquet": 24008,
+    "scorecard_member_ratings.parquet": 5134,
+    "scorecard_members.parquet": 1562,
+    "scorecard_methodologies.parquet": 5,
+    "scorecard_metric_components.parquet": 0,
+    "scorecard_metric_items.parquet": 227,
+    "scorecard_metrics.parquet": 10,
+    "scorecard_publishers.parquet": 3,
+    "scorecard_snapshots.parquet": 3,
+    "scorecards.parquet": 3
+  },
+  "ratings_by_scorecard": {
+    "afp:3933": 2120,
+    "ijm:3995": 1912,
+    "lcv:2025": 1102
+  },
+  "public_urls_and_parquet_hashes_verified": true
+}

@@ -1,0 +1,309 @@
+{
+  "audited_at": "2026-10-03T23:05:06.238935+00:00",
+  "scope": "Read-only diagnosis of the pinned HRC analysis; context-comparable roster rows are not accepted matches or override proposals.",
+  "rule_version": "scorecard-resolution-v1.4",
+  "analysis_generation": "sha256:4a99801a8a935e1dbe617ddaf219e959b32d46061fa196a36b693806121a8b46",
+  "member_counts": {
+    "total": 540,
+    "resolved": 458,
+    "unresolved": 82
+  },
+  "unresolved_by_chamber": {
+    "House": 66,
+    "Senate": 16
+  },
+  "reason_categories": {
+    "additional_source_given_name_words": 11,
+    "diacritic_difference": 2,
+    "different_given_name_spelling": 48,
+    "nickname_annotation_in_either_name": 9,
+    "roster_given_name_is_initial": 6,
+    "suffix_on_source_surname": 6
+  },
+  "all_unresolved_have_zero_exact_name_candidates": true,
+  "all_unresolved_have_recognized_source_context_and_context_compatible_roster_rows": true,
+  "all_comparison_roster_rows_have_null_other_names_json": true,
+  "absent_name_columns": [
+    "name_middle",
+    "name_nickname",
+    "name_official_full",
+    "name_suffix"
+  ],
+  "amendment_gap": {
+    "published_congresses": [
+      "119"
+    ],
+    "missing_hrc_amendment_ids": [
+      "118-hamdt-203",
+      "118-hamdt-223",
+      "118-hamdt-224",
+      "118-hamdt-236",
+      "118-hamdt-237",
+      "118-hamdt-341",
+      "118-hamdt-362",
+      "118-hamdt-382",
+      "118-hamdt-625",
+      "118-hamdt-647",
+      "118-hamdt-746",
+      "118-hamdt-770",
+      "118-hamdt-980",
+      "118-hamdt-983",
+      "118-hamdt-986",
+      "118-hamdt-987",
+      "118-samdt-1781",
+      "118-samdt-874",
+      "118-samdt-935"
+    ],
+    "unresolved_reference_occurrences": 36,
+    "independently_resolved_rolls_retained": 17
+  },
+  "input_pins": {
+    "scorecards": {
+      "sha256": "sha256:4296e1b033870e597673d09efc19fa5b4577db70a1d0f6082a05d8c795899412",
+      "byteSize": 5378,
+      "family": "scorecards",
+      "artifactDigest": "sha256:8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109"
+    },
+    "scorecard_members": {
+      "sha256": "sha256:3938caac54c06e2ce8ea93e0fa92340f67321a6afec7637f16653691d98aa291",
+      "byteSize": 56680,
+      "family": "scorecards",
+      "artifactDigest": "sha256:8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109"
+    },
+    "members": {
+      "sha256": "sha256:96c11c55ce3254491aa1fec9534398bf21f3c450d885cd93b700bf32a48045bb",
+      "byteSize": 283698,
+      "family": "members",
+      "artifactDigest": "sha256:5d6bd2a29a3b0fa9b587ed4e787a9cf26e3534a74c96c0daebc56a8149115b0b"
+    },
+    "member_terms": {
+      "sha256": "sha256:8810be48c3ed1a5508ee15243602c02d7ff46eee023ad7eb596206f24f2262f8",
+      "byteSize": 183149,
+      "family": "members",
+      "artifactDigest": "sha256:5d6bd2a29a3b0fa9b587ed4e787a9cf26e3534a74c96c0daebc56a8149115b0b"
+    },
+    "amendments": {
+      "sha256": "sha256:8d2b23ebc9bf033ed984bed993de5656303032aadc75d5c149de5be7c5adda39",
+      "byteSize": 135859,
+      "family": "amendments",
+      "artifactDigest": "sha256:a1f7489c31fd5894d4b0a44d7fc6fac3063f70e210699f0b8570d9bcc1a7f622"
+    }
+  },
+  "member_links_sha256": "sha256:9518b0013bf8a23021d0a73aae045a032b6d9f4c0b77f45ccf2f7966e8d93e8f",
+  "item_links_sha256": "sha256:6a061c114dd83e07a7fb45691508753240a2fff0f7521bea5dfbb100c7e71051",
+  "script_sha256": "sha256:b5ece5d121e808714e5b9ff33f0af9f1ba98cdcad782feebfa830eb91abf3d0d",
+  "source_network_requests": 0,
+  "new_links_or_overrides": 0,
+  "classification_note": "Categories describe visible spelling differences only, using historical term/seat context for inspection. Priority is suffix, annotation, diacritic, additional words, initial, other spelling; some names exhibit more than one difference. These are not accepted links or overrides.",
+  "unresolved_names_by_category": {
+    "additional_source_given_name_words": [
+      "Radewagen, Aumua Amata Coleman",
+      "Barragán, Nanette Diaz",
+      "Norton, Eleanor Holmes",
+      "Luna, Anna Paulina",
+      "Franklin, C. Scott",
+      "Salazar, Maria Elvira",
+      "Greene, Marjorie Taylor",
+      "Kuster, Ann McLane",
+      "Scanlon, Mary Gay",
+      "Luján, Ben Ray",
+      "Capito, Shelley Moore"
+    ],
+    "diacritic_difference": [
+      "Leger Fernández, Teresa",
+      "De La Cruz, Monica"
+    ],
+    "different_given_name_spelling": [
+      "Crawford, Rick",
+      "Himes, Jim",
+      "Cammack, Kat",
+      "Carter, Buddy",
+      "Simpson, Mike",
+      "Schneider, Brad",
+      "Schakowsky, Jan",
+      "Baird, Jim",
+      "LaTurner, Jake",
+      "Barr, Andy",
+      "Keating, Bill",
+      "Kildee, Dan",
+      "Van Drew, Jeff",
+      "Smith, Chris",
+      "Goldman, Daniel",
+      "Lawler, Mike",
+      "Ryan, Pat",
+      "Molinaro, Marc",
+      "LaLota, Nick",
+      "Langworthy, Nick",
+      "Jackson, Jeff",
+      "Davis, Don",
+      "Murphy, Greg",
+      "Hoyle, Val",
+      "Meuser, Dan",
+      "Fleischmann, Chuck",
+      "Ogles, Andy",
+      "Gonzales, Tony",
+      "Casar, Greg",
+      "Fallon, Pat",
+      "Owens, Burgess",
+      "Kiggans, Jen",
+      "Good, Bob",
+      "Beyer, Don",
+      "Mooney, Alex",
+      "Tiffany, Tom",
+      "Padilla, Alex",
+      "Coons, Chris",
+      "Crapo, Mike",
+      "Grassley, Chuck",
+      "Markey, Ed",
+      "Hawley, Josh",
+      "Daines, Steven",
+      "Hassan, Maggie",
+      "Vance, JD",
+      "Reed, Jack",
+      "Kaine, Tim",
+      "Manchin, Joseph"
+    ],
+    "nickname_annotation_in_either_name": [
+      "Moylan, James",
+      "Budzinski, Nikki",
+      "García, Jesús \"Chuy\"",
+      "Nunn, Zach",
+      "Vasquez, Gabe",
+      "Edwards, Chuck",
+      "Connolly, Gerald “Gerry”",
+      "Scott, Robert “Bobby”",
+      "Cassidy, William \"Bill\""
+    ],
+    "roster_given_name_is_initial": [
+      "Hill, French",
+      "Correa, Lou",
+      "Steube, Greg",
+      "Ferguson, Drew",
+      "Ruppersberger, Dutch",
+      "Griffith, Morgan"
+    ],
+    "suffix_on_source_surname": [
+      "Bishop Jr., Sanford",
+      "Johnson Jr., Henry “Hank”",
+      "Pallone Jr., Frank",
+      "Kean Jr., Tom",
+      "Menendez Jr., Rob",
+      "Casey Jr., Robert"
+    ]
+  },
+  "representative_comparisons": [
+    {
+      "source_member_name": "Himes, Jim",
+      "source_chamber": "House",
+      "source_state": "CONNECTICUT",
+      "source_district": "4",
+      "reason_category": "different_given_name_spelling",
+      "contextual_roster_name": "James Himes",
+      "accepted_link": false
+    },
+    {
+      "source_member_name": "Goldman, Daniel",
+      "source_chamber": "House",
+      "source_state": "NEW YORK",
+      "source_district": "10",
+      "reason_category": "different_given_name_spelling",
+      "contextual_roster_name": "Dan Goldman",
+      "accepted_link": false
+    },
+    {
+      "source_member_name": "Norton, Eleanor Holmes",
+      "source_chamber": "House",
+      "source_state": "DISTRICT OF COLUMBIA",
+      "source_district": "AL",
+      "reason_category": "additional_source_given_name_words",
+      "contextual_roster_name": "Eleanor Norton",
+      "accepted_link": false
+    },
+    {
+      "source_member_name": "Luján, Ben Ray",
+      "source_chamber": "Senate",
+      "source_state": "NEW MEXICO",
+      "source_district": null,
+      "reason_category": "additional_source_given_name_words",
+      "contextual_roster_name": "Ben Luján",
+      "accepted_link": false
+    },
+    {
+      "source_member_name": "Budzinski, Nikki",
+      "source_chamber": "House",
+      "source_state": "ILLINOIS",
+      "source_district": "13",
+      "reason_category": "nickname_annotation_in_either_name",
+      "contextual_roster_name": "Nicole (Nikki) Budzinski",
+      "accepted_link": false
+    },
+    {
+      "source_member_name": "Connolly, Gerald “Gerry”",
+      "source_chamber": "House",
+      "source_state": "VIRGINIA",
+      "source_district": "11",
+      "reason_category": "nickname_annotation_in_either_name",
+      "contextual_roster_name": "Gerald Connolly",
+      "accepted_link": false
+    },
+    {
+      "source_member_name": "Hill, French",
+      "source_chamber": "House",
+      "source_state": "ARKANSAS",
+      "source_district": "2",
+      "reason_category": "roster_given_name_is_initial",
+      "contextual_roster_name": "J. Hill",
+      "accepted_link": false
+    },
+    {
+      "source_member_name": "Griffith, Morgan",
+      "source_chamber": "House",
+      "source_state": "VIRGINIA",
+      "source_district": "9",
+      "reason_category": "roster_given_name_is_initial",
+      "contextual_roster_name": "H. Griffith",
+      "accepted_link": false
+    },
+    {
+      "source_member_name": "Pallone Jr., Frank",
+      "source_chamber": "House",
+      "source_state": "NEW JERSEY",
+      "source_district": "6",
+      "reason_category": "suffix_on_source_surname",
+      "contextual_roster_name": "Frank Pallone",
+      "accepted_link": false
+    },
+    {
+      "source_member_name": "Casey Jr., Robert",
+      "source_chamber": "Senate",
+      "source_state": "PENNSYLVANIA",
+      "source_district": null,
+      "reason_category": "suffix_on_source_surname",
+      "contextual_roster_name": "Robert Casey",
+      "accepted_link": false
+    },
+    {
+      "source_member_name": "Leger Fernández, Teresa",
+      "source_chamber": "House",
+      "source_state": "NEW MEXICO",
+      "source_district": "3",
+      "reason_category": "diacritic_difference",
+      "contextual_roster_name": "Teresa Leger Fernandez",
+      "accepted_link": false
+    },
+    {
+      "source_member_name": "De La Cruz, Monica",
+      "source_chamber": "House",
+      "source_state": "TEXAS",
+      "source_district": "15",
+      "reason_category": "diacritic_difference",
+      "contextual_roster_name": "Mónica De La Cruz",
+      "accepted_link": false
+    }
+  ],
+  "private_full_audit": {
+    "private_relative_path": "hrc-unresolved-member-audit.json",
+    "sha256": "sha256:8db6708c23aa12e07e91764ac3b9f905be23c7ae4a602317467577b2570ebaf9"
+  },
+  "verification_command": "cd spicy-regs && uv run --frozen --no-sync python <private HRC deployment corpus>/audit_unresolved_hrc_members.py"
+}

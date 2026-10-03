@@ -138,7 +138,8 @@ An exact bill or amendment citation identifies the measure alone. The resolver
 accepts the existing natural identifiers and anchored common citation spellings;
 unsupported prose remains unresolved. A reference occurrence with a typed
 `kind` can use its literal `citation_text`. There is no inference from title
-similarity, a bill's available votes, or an edition Congress. In particular, an
+similarity or a bill's available votes. The narrowly qualified edition-Congress
+rule below applies only to measures with no stated Congress. In particular, an
 older NIAC action without its own Congress does not inherit the edition's.
 
 The explicitly typed bill citation also accepts `hr4274-115`-style identifiers,
@@ -169,6 +170,24 @@ dates cannot qualify a link. An edition year never substitutes for an item's
 year, and this rule does not select floor rolls for committee, sponsorship,
 cosponsorship or bill-only items.
 
+Rule version `scorecard-resolution-v1.4` lets an exact bill or amendment citation
+use one explicitly stated edition Congress when both the reference and item omit
+Congress. It records `explicit_edition_congress_for_measure`, adds
+`_edition_congress` to the successful resolution rule, and retains the unchanged
+edition beside the original item and reference in `source_context_json`. This
+qualifies HRC's final 118th Congress cosponsorship citations without modifying
+their source fields.
+
+The fallback refuses malformed Congress or chamber assertions, a source roll or
+session context, a separate roll reference, conflicting or unparseable measure
+identifiers, and relative, historical, mixed or unrecognized periods. An asserted
+item date must fit entirely within the explicit edition Congress; exact English
+month/day/year spellings, ISO dates/intervals, years and numbered Congresses can
+constrain this check. Dates never supply a Congress or ordinal session. Embedded
+or explicit citation Congresses retain their own existing exact-match path. The
+fallback selects only a measure already present in the pinned official table;
+it never creates a roll call or treats a measure link as an official member action.
+
 Heritage's shorter `h168-2025` spelling remains unsupported because it omits
 Congress. Opaque publisher item IDs are never automatically parsed as roll
 references. Four-digit values placed directly in `session_text` remain source
@@ -178,8 +197,9 @@ the ordinal `session` column.
 Each repeated source reference is retained independently. Direct item fields
 use `reference_id=item:direct`; a source occurrence uses
 `reference:<occurrence_id>` and keeps its unmodified `source_reference_id`.
-Occurrence context does not silently inherit item-level or edition-level
-identifiers. Multiple actions on one bill keep separate item keys.
+Occurrence context does not silently inherit item-level identifiers. The explicit
+edition rule above is the only edition-context fallback and records its evidence
+and reason. Multiple actions on one bill keep separate item keys.
 
 Cosponsorship, sponsorship and bill items select measures only, leaving vote,
 session and roll fields null. Committee actions are not mapped to floor rolls.

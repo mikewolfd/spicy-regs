@@ -1,0 +1,25 @@
+{
+  "status": "independent_public_rating_readback_passed",
+  "source_generation": "sha256:8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109",
+  "rating_table_sha256": "sha256:9d0490bb012a9cac9f4a7af5cafd843626a4bfeff4ad08c2a9663cde370a144f",
+  "hrc_ratings": 1620,
+  "NA": 0,
+  "N/A": 280,
+  "foushee": [
+    {
+      "metric_id": "House:116th%20SCORE",
+      "value_text": "N/A",
+      "value_number": null
+    },
+    {
+      "metric_id": "House:117th%20SCORE",
+      "value_text": "N/A",
+      "value_number": null
+    },
+    {
+      "metric_id": "House:118th%20SCORE",
+      "value_text": "100",
+      "value_number": "100"
+    }
+  ]
+}

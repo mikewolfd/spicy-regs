@@ -1,0 +1,11 @@
+{
+  "status": "proposed_not_applied",
+  "provider_files_modified": false,
+  "source_value": "NA",
+  "source_context": "physical page 20, Foushee, Valerie, 116th SCORE",
+  "independent_source_review": "house_na_literal_independent_readback.json",
+  "patch_sha256": "sha256:84f4e4883683afd4a01fdb0c5d6eac26534744deb6d3a20a5ff1297f12ffc92f",
+  "source_file_sha256_before_patch": "sha256:da021e8435d067d186f1cfce42a791e8758eb3037f78277a737386fa316cf3c2",
+  "validation": "Executed proposed module in an isolated Python namespace. All 17 complete House page candidates passed without mutation; malformed N / A, NA?, N/A? still refused. Installed provider still rejects the confirmed literal NA. No dependency, environment, provider source or publication changed.",
+  "candidate_sha256": "sha256:ead318234836ee0a64e37ea599146c7bbffc818251b9717329595ae54821a552"
+}

@@ -40,14 +40,16 @@
       "N",
       "O"
     ],
-    "status": "bounded_source_fact_readback_passed",
+    "status": "refused_source_identifier",
     "checks": [
       "All item titles and source dates read against original render.",
       "Ten roll/session identifiers match original item descriptions.",
       "Five cosponsorship items preserve requested source action without inventing roll/session.",
       "Amendment-to-amendment citation preserved."
     ],
-    "full_prose_character_level_verification": false
+    "full_prose_character_level_verification": false,
+    "prior_status": "bounded_source_fact_readback_passed",
+    "correction": "Full original-source audit found item J title and bill_citations misreported H.R.8070; original source states H.R.5009. Earlier bounded title/identifier spot-check was insufficient. Raw output retained unchanged, never admitted."
   },
   "earlier_semantic_attempt": {
     "scope": "Page6 crop",

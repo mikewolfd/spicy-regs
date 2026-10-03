@@ -1,0 +1,118 @@
+{
+  "status": "bounded_original_source_readback_passed",
+  "basis": "Manually transcribed original image identity, score and item marks, then recursively compared with retained model JSON. No model JSON changes.",
+  "source_sha256": "sha256:804c1157e71da53a00821fdcaf15a1790448c682eb49d44613a577cfce9cb855",
+  "review_script_sha256": "sha256:d7e161ec014b00a65e01083fae8fac3908027c5ed7fa74dbbb5485e4c1e326d7",
+  "private_expected_rows_sha256": "sha256:ad93c72782479cc50c015fc9a993ee7e837ec16004bd0c49d2d604e8bde688d7",
+  "checks": [
+    {
+      "panel": "4-left",
+      "status": "pass",
+      "named_members_checked": 20,
+      "ratings_checked": 60,
+      "item_results_checked": 300,
+      "source_image_sha256": "sha256:017d0342948ee31a23a5b58d624717bcd05abcb58f25d0bcd637a1ba98e1d024",
+      "response_json_sha256": "sha256:716ca8dd4400ee3858f179d88916ca262874b23df09d80463fce06351531721b",
+      "request_response_pickle_sha256": "sha256:bfa21b5191c6afab1551865d677c482574ad77affb80827fa08e54cd61a74aaf",
+      "model_receipt_sha256": "sha256:b1eb66cb892b715f8a5cb2655989f9ad5130a805ac59efa714ca6a02a6639037",
+      "differences": [],
+      "nonmember_arrays": "uncertainties, notes, scoring_notes, result_definitions were empty; out-of-crop prose and legends are not claimed"
+    },
+    {
+      "panel": "4-right",
+      "status": "pass",
+      "named_members_checked": 20,
+      "ratings_checked": 60,
+      "item_results_checked": 300,
+      "source_image_sha256": "sha256:0549994220504f510ae906f073e0bf21da7b81dcb0c97807eec613571d10d87b",
+      "response_json_sha256": "sha256:a581943fb817d7af45c0de79abc5979e0abc76567e6f780e56390b6c85dc1da1",
+      "request_response_pickle_sha256": "sha256:8c9091a2266af7508947c4c4dc9e503712548680add5f8e27c0062e55a242a0d",
+      "model_receipt_sha256": "sha256:b1eb66cb892b715f8a5cb2655989f9ad5130a805ac59efa714ca6a02a6639037",
+      "differences": [],
+      "nonmember_arrays": "uncertainties, notes, scoring_notes, result_definitions were empty; out-of-crop prose and legends are not claimed"
+    },
+    {
+      "panel": "5-left",
+      "status": "pass",
+      "named_members_checked": 20,
+      "ratings_checked": 60,
+      "item_results_checked": 300,
+      "source_image_sha256": "sha256:ce3950dd6193ecd16a78131ef7971408bdc4efca0fce66ae96042e11cf7567de",
+      "response_json_sha256": "sha256:e043d012e9f817c0ae8ee97a0145783dd04a2643c28eb0bceaccd139df458907",
+      "request_response_pickle_sha256": "sha256:9cc0dc1daa103bbcde374e2ecfb4250fa22832b2bf1f75f7d4c0ce2636fcb49a",
+      "model_receipt_sha256": "sha256:0b2614a2a2f752cde4e03950a9b21b16dd562158f6de3cdc9df3dbf952a639ce",
+      "differences": [],
+      "nonmember_arrays": "uncertainties, notes, scoring_notes, result_definitions were empty; out-of-crop prose and legends are not claimed"
+    },
+    {
+      "panel": "5-right",
+      "status": "pass",
+      "named_members_checked": 20,
+      "ratings_checked": 60,
+      "item_results_checked": 300,
+      "source_image_sha256": "sha256:e861a4bd42ea7ce0337cd5e802278b156a56e78875935ff4c610fe6eb7e115b2",
+      "response_json_sha256": "sha256:e99a9a8af1c0ef67df063b3e21bac618295af884c0c7c2cc10fe092418737cf2",
+      "request_response_pickle_sha256": "sha256:eea2bb751bce812c2426eccf3158898b00370429d6b3b4438b91bcc91e5eaa19",
+      "model_receipt_sha256": "sha256:0b2614a2a2f752cde4e03950a9b21b16dd562158f6de3cdc9df3dbf952a639ce",
+      "differences": [],
+      "nonmember_arrays": "uncertainties, notes, scoring_notes, result_definitions were empty; out-of-crop prose and legends are not claimed"
+    }
+  ],
+  "reviewed_at": "2026-10-03T21:25:52.731745+00:00",
+  "schema_version": "hrc-118-source-facts/2",
+  "production_reader_qualified": false,
+  "full_edition": false,
+  "all_model_json_unchanged": true,
+  "compared_scope": {
+    "physical_pages": [
+      4,
+      5
+    ],
+    "crop_panels": [
+      "4-left",
+      "4-right",
+      "5-left",
+      "5-right"
+    ],
+    "members": 80,
+    "ratings": 240,
+    "item_results": 1200,
+    "member_fields": [
+      "member_name_text",
+      "party_text",
+      "state_text",
+      "district_text",
+      "footnote_markers"
+    ],
+    "rating_fields": [
+      "period_text",
+      "value_text"
+    ],
+    "item_fields": [
+      "item_key",
+      "result_text"
+    ]
+  },
+  "not_qualified": [
+    "Complete edition",
+    "House grids",
+    "Item-description prose",
+    "Scoring/endnote prose outside the reviewed crops",
+    "Historical editions"
+  ],
+  "review_trail": [
+    {
+      "kind": "manual_reference_correction",
+      "source": "physical4,left,Georgia,Warnock,M",
+      "first_read_expected": "●",
+      "enlarged_original_source": "○",
+      "unchanged_model_value": "○",
+      "disposition": "manual reference corrected after direct original-image enlargement; no model discrepancy or output correction",
+      "source_crop_sha256": "sha256:23d856cf5e7898f0001ff99d0678cdcfd82c8ee93111a67c7bcf0f5e6bb5e533",
+      "first_comparison_sha256": "sha256:38c1193e6aadd9952c3711c810552122e052410004cc40455a6d4e5d8136dd38"
+    }
+  ],
+  "private_verification_command": "uv run --frozen --no-sync python <private-corpus>/independent-source-inventory/verify_senate_source.py",
+  "private_full_reference_retained": true,
+  "public_evidence_policy": "hash_only"
+}

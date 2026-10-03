@@ -310,7 +310,7 @@ def generate(directory: Path) -> dict[str, str]:
         "coverage_summary.json": json.dumps(summary, indent=2, ensure_ascii=False) + "\n",
         "catalog_report.md": "".join(report),
         "shape_matrix.md": "".join(matrix),
-        "schema_fit.md": "".join(fit),
+        "schema_fit.md": "".join(fit).rstrip() + "\n",
     }
 
 

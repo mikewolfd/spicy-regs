@@ -1,0 +1,175 @@
+{
+  "reviewed_at": "2026-10-03T21:37:12.819760+00:00",
+  "status": "bounded_original_source_readback_passed",
+  "source_sha256": "sha256:804c1157e71da53a00821fdcaf15a1790448c682eb49d44613a577cfce9cb855",
+  "schema_version": "hrc-118-source-facts/3",
+  "checks": [
+    {
+      "scope": "gemini-v3-house-bands-page10/page-10-rows-8-14",
+      "status": "pass",
+      "members": 7,
+      "ratings": 21,
+      "item_results": 287,
+      "differences": [],
+      "artifacts": [
+        {
+          "private_relative_path": "gemini-v3-house-bands-page10/page-10-rows-8-14/input-1.png",
+          "sha256": "sha256:1102f14522830385a90077605fa6a8d4526d554313c0362ae6167b6cab8cbdf3"
+        },
+        {
+          "private_relative_path": "gemini-v3-house-bands-page10/page-10-rows-8-14/input-2.png",
+          "sha256": "sha256:ee1d03dfa7400bb01b85b91130b19a6cc32d9835cf9ed75da17b4618f8fac213"
+        },
+        {
+          "private_relative_path": "gemini-v3-house-bands-page10/page-10-rows-8-14/input-3.png",
+          "sha256": "sha256:f99e821b12550f2159e61e588390132f13d3a77136215b4f1c2b575d502d8941"
+        },
+        {
+          "private_relative_path": "gemini-v3-house-bands-page10/page-10-rows-8-14/input-4.png",
+          "sha256": "sha256:a40549eb8815c438f8816eae79a165c14d75381200d5c6da304714e706f96b5c"
+        },
+        {
+          "private_relative_path": "gemini-v3-house-bands-page10/page-10-rows-8-14/input-5.png",
+          "sha256": "sha256:066d52fd9a3843f9c936e1057e8f0d3445671fe3ca49b209bedb062a1e03c30e"
+        },
+        {
+          "private_relative_path": "gemini-v3-house-bands-page10/page-10-rows-8-14/outcome.json",
+          "sha256": "sha256:82d7f5e9530772a483bf4506163836f968b0d0b384cda14cab3ed9e78a43206d"
+        },
+        {
+          "private_relative_path": "gemini-v3-house-bands-page10/page-10-rows-8-14/observation.pickle",
+          "sha256": "sha256:336303c7db3e68447c3ae19fcbbe2b0be4f76eba67cd2372ba2f8c467f591b1c"
+        },
+        {
+          "private_relative_path": "gemini-v3-house-bands-page10/page-10-rows-8-14/receipt.json",
+          "sha256": "sha256:fd16e555835d4236f4e35524f0643ccdea57a9283c5d13f2d25f539127c3a916"
+        }
+      ]
+    },
+    {
+      "scope": "gemini-v3-house-bands-page10/page-10-rows-15-21",
+      "status": "pass",
+      "members": 7,
+      "ratings": 21,
+      "item_results": 287,
+      "differences": [],
+      "artifacts": [
+        {
+          "private_relative_path": "gemini-v3-house-bands-page10/page-10-rows-15-21/input-1.png",
+          "sha256": "sha256:edfa85804553ff800ae576cfdabf141bbda34a7a9668465291d803aa24aeb908"
+        },
+        {
+          "private_relative_path": "gemini-v3-house-bands-page10/page-10-rows-15-21/input-2.png",
+          "sha256": "sha256:3111239b84099e7fbc242d2a52c70ce57874ea28a22891b3cb03df8ff3135fda"
+        },
+        {
+          "private_relative_path": "gemini-v3-house-bands-page10/page-10-rows-15-21/input-3.png",
+          "sha256": "sha256:f99e821b12550f2159e61e588390132f13d3a77136215b4f1c2b575d502d8941"
+        },
+        {
+          "private_relative_path": "gemini-v3-house-bands-page10/page-10-rows-15-21/input-4.png",
+          "sha256": "sha256:a40549eb8815c438f8816eae79a165c14d75381200d5c6da304714e706f96b5c"
+        },
+        {
+          "private_relative_path": "gemini-v3-house-bands-page10/page-10-rows-15-21/input-5.png",
+          "sha256": "sha256:27a8f42b5c8ff9ae5b57613cfa43d1e65002108c9814bc3317e468c96145134e"
+        },
+        {
+          "private_relative_path": "gemini-v3-house-bands-page10/page-10-rows-15-21/outcome.json",
+          "sha256": "sha256:c42fff9392f06389d957ce7bbfe2b77d70bcf6bb7b7f4a7aa6ecc336f2a0c734"
+        },
+        {
+          "private_relative_path": "gemini-v3-house-bands-page10/page-10-rows-15-21/observation.pickle",
+          "sha256": "sha256:17d74d1b84dee154a914f7483e5b7db02f205fbc2602e1c93b09a2fe6f5bd68a"
+        },
+        {
+          "private_relative_path": "gemini-v3-house-bands-page10/page-10-rows-15-21/receipt.json",
+          "sha256": "sha256:7bffc39428a40e43f1cfde812fadfd9252767060ee61849df33f023428393df2"
+        }
+      ]
+    },
+    {
+      "scope": "gemini-v3-house-bands-page10/page-10-rows-22-26",
+      "status": "pass",
+      "members": 5,
+      "ratings": 15,
+      "item_results": 205,
+      "differences": [],
+      "artifacts": [
+        {
+          "private_relative_path": "gemini-v3-house-bands-page10/page-10-rows-22-26/input-1.png",
+          "sha256": "sha256:de2e003a15e34b48b35469ba8e7087d5aaab7f9d6d0121a8c75ed7ffd035ea6c"
+        },
+        {
+          "private_relative_path": "gemini-v3-house-bands-page10/page-10-rows-22-26/input-2.png",
+          "sha256": "sha256:b232a6c913cfc236e6f8bac281405956c5ad77251deb25b5a715e6a71701b6b6"
+        },
+        {
+          "private_relative_path": "gemini-v3-house-bands-page10/page-10-rows-22-26/input-3.png",
+          "sha256": "sha256:f99e821b12550f2159e61e588390132f13d3a77136215b4f1c2b575d502d8941"
+        },
+        {
+          "private_relative_path": "gemini-v3-house-bands-page10/page-10-rows-22-26/input-4.png",
+          "sha256": "sha256:a40549eb8815c438f8816eae79a165c14d75381200d5c6da304714e706f96b5c"
+        },
+        {
+          "private_relative_path": "gemini-v3-house-bands-page10/page-10-rows-22-26/input-5.png",
+          "sha256": "sha256:3a7665d645dd5dba295422d190e7d1996ad9581f6994edaa59f400971a9eddd1"
+        },
+        {
+          "private_relative_path": "gemini-v3-house-bands-page10/page-10-rows-22-26/outcome.json",
+          "sha256": "sha256:2bac47003473ac558552d0e7ef0c6e587eafb240a4101cd0796579b767653314"
+        },
+        {
+          "private_relative_path": "gemini-v3-house-bands-page10/page-10-rows-22-26/observation.pickle",
+          "sha256": "sha256:4aeb72f3457bd075dccb18fd320142081599bb3bee82bce64e8e3e8148db460f"
+        },
+        {
+          "private_relative_path": "gemini-v3-house-bands-page10/page-10-rows-22-26/receipt.json",
+          "sha256": "sha256:056ce3cb991df053b304ca98f09c9b0b72391d46a6f2717d557590076451fcd9"
+        }
+      ]
+    }
+  ],
+  "private_verifier_sha256": "sha256:2a828ad0f7c62a187a3b6441a99b0b665bc38954a70cfd1a62e58ea2bb0d23a3",
+  "private_reference_sha256": "sha256:44906a4a99a9f5d504e07423a954b5bde7953a3cb9e52f74b4aeb0bf0cee08c8",
+  "public_evidence_policy": "metadata_only_review_receipt",
+  "source_evidence_policy": "hash_only",
+  "full_edition": false,
+  "production_reader_qualified": false,
+  "all_model_outputs_unchanged": true,
+  "method": "Manually read every identity, period/value and action mark in the original paired source images. Used retained original headers and full-page state context. Compared independent manual rows against unmodified model JSON; enlarged questioned cells before resolving differences.",
+  "counts": {
+    "members": 19,
+    "ratings": 57,
+    "item_results": 779
+  },
+  "related_scope": "Alabama rows1–7 separately passed in alabama_paired_v3_independent_readback.json; together these cover all26 named source rows of physical10.",
+  "manual_reference_review_trail": {
+    "source_model_agreement_after_enlargement": [
+      "Stanton LL filled circle",
+      "Thompson LL filled circle",
+      "Gosar U open circle"
+    ],
+    "first_manual_comparison_sha256": "sha256:7ae42700538e73f085a7624a0649ca0b5022646cf20fea3a228e870bcf872821",
+    "source_zoom_hashes": [
+      {
+        "private_relative_path": "independent-source-inventory/band8-14-last-columns.png",
+        "sha256": "sha256:b8cef4339f11615d9bf01bd7555eef8d9494e8f3d97d7eec97c7c04018cf0062"
+      },
+      {
+        "private_relative_path": "independent-source-inventory/band22-26-last-columns.png",
+        "sha256": "sha256:790fb6611125fc0f91c713ea56b8ef46de4d540efcc112f8178d31aaca3bd678"
+      },
+      {
+        "private_relative_path": "independent-source-inventory/gosar-first-columns.png",
+        "sha256": "sha256:1420c08ae5557e5d18bbfb7101f187d63b55f9b7e58fdf4e0609cd8a7f9edbce"
+      }
+    ],
+    "model_outputs_patched": false
+  },
+  "remaining_limits": [
+    "Physical10 only; no fullHouse or completeedition claim.",
+    "Item descriptions and member-specific rules use separate qualification receipts."
+  ]
+}

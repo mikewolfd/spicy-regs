@@ -1,0 +1,128 @@
+{
+  "reviewed_at": "2026-10-03T21:38:38.487746+00:00",
+  "status": "bounded_original_source_readback_passed",
+  "source_sha256": "sha256:804c1157e71da53a00821fdcaf15a1790448c682eb49d44613a577cfce9cb855",
+  "schema_version": "hrc-118-source-facts/3",
+  "checks": [
+    {
+      "scope": "gemini-v3-house-bands-page19-pilot/page-19-rows-1-7",
+      "status": "pass",
+      "members": 6,
+      "ratings": 18,
+      "item_results": 246,
+      "differences": [],
+      "artifacts": [
+        {
+          "private_relative_path": "gemini-v3-house-bands-page19-pilot/page-19-rows-1-7/input-1.png",
+          "sha256": "sha256:61044234099c852362347b75fcdda5891980ef0ea3f352fc359e9810df7285fe"
+        },
+        {
+          "private_relative_path": "gemini-v3-house-bands-page19-pilot/page-19-rows-1-7/input-2.png",
+          "sha256": "sha256:d1412a7e1528844ce8808348a6aeb45d44fb366112192335155eb77873e88af4"
+        },
+        {
+          "private_relative_path": "gemini-v3-house-bands-page19-pilot/page-19-rows-1-7/input-3.png",
+          "sha256": "sha256:f99e821b12550f2159e61e588390132f13d3a77136215b4f1c2b575d502d8941"
+        },
+        {
+          "private_relative_path": "gemini-v3-house-bands-page19-pilot/page-19-rows-1-7/input-4.png",
+          "sha256": "sha256:a40549eb8815c438f8816eae79a165c14d75381200d5c6da304714e706f96b5c"
+        },
+        {
+          "private_relative_path": "gemini-v3-house-bands-page19-pilot/page-19-rows-1-7/input-5.png",
+          "sha256": "sha256:4f4be6b52a0258a3075b6a955ab2d638c341454cd9a082796f07589ae0b0ba0f"
+        },
+        {
+          "private_relative_path": "gemini-v3-house-bands-page19-pilot/page-19-rows-1-7/outcome.json",
+          "sha256": "sha256:bc005f3020b98ccec7e10c2ebdb49bf7ab4a10cddc6c9c1e57c5a958f831d50a"
+        },
+        {
+          "private_relative_path": "gemini-v3-house-bands-page19-pilot/page-19-rows-1-7/observation.pickle",
+          "sha256": "sha256:c292c79beeb6fefc7ad52711043bee7760e4e48f1cddf3f461b238d77228af63"
+        },
+        {
+          "private_relative_path": "gemini-v3-house-bands-page19-pilot/page-19-rows-1-7/receipt.json",
+          "sha256": "sha256:72f0dce1aff76934a31d012a8e269a3f952334e27c0b02c4b95bc8a9798146ce"
+        }
+      ]
+    },
+    {
+      "scope": "gemini-v3-house-bands-page26-pilot/page-26-rows-1-6",
+      "status": "pass",
+      "members": 6,
+      "ratings": 18,
+      "item_results": 246,
+      "differences": [],
+      "artifacts": [
+        {
+          "private_relative_path": "gemini-v3-house-bands-page26-pilot/page-26-rows-1-6/input-1.png",
+          "sha256": "sha256:c94551a91f9f06f3e1721a49e102b64db2ebc7450218b4a77fcf839024ef316b"
+        },
+        {
+          "private_relative_path": "gemini-v3-house-bands-page26-pilot/page-26-rows-1-6/input-2.png",
+          "sha256": "sha256:7023c8513d524d21e3c3ab9d09d0efa0546bf82b77a56c68c0b6e1a67b02483a"
+        },
+        {
+          "private_relative_path": "gemini-v3-house-bands-page26-pilot/page-26-rows-1-6/input-3.png",
+          "sha256": "sha256:f99e821b12550f2159e61e588390132f13d3a77136215b4f1c2b575d502d8941"
+        },
+        {
+          "private_relative_path": "gemini-v3-house-bands-page26-pilot/page-26-rows-1-6/input-4.png",
+          "sha256": "sha256:a40549eb8815c438f8816eae79a165c14d75381200d5c6da304714e706f96b5c"
+        },
+        {
+          "private_relative_path": "gemini-v3-house-bands-page26-pilot/page-26-rows-1-6/input-5.png",
+          "sha256": "sha256:56d29c0b4c20f6c42f50a6c7f600519bf1ee245af1bf2746c8496998c66c85cb"
+        },
+        {
+          "private_relative_path": "gemini-v3-house-bands-page26-pilot/page-26-rows-1-6/outcome.json",
+          "sha256": "sha256:a1f0c012a98311efd7a2a717945848a9ed92a839db7ccf820fa8b58de6a64a06"
+        },
+        {
+          "private_relative_path": "gemini-v3-house-bands-page26-pilot/page-26-rows-1-6/observation.pickle",
+          "sha256": "sha256:d40340f5e56a1f9cdc31e2c0a9aa547f87a6b83689993844b9f0d15787c1e81b"
+        },
+        {
+          "private_relative_path": "gemini-v3-house-bands-page26-pilot/page-26-rows-1-6/receipt.json",
+          "sha256": "sha256:8f43fcb2a069488902a5e59f6a9b4a91dd15bf24195517d6b9b8e6b705564e48"
+        }
+      ]
+    }
+  ],
+  "private_verifier_sha256": "sha256:1a0d3d52b2e2b299886835a6aa04b39357671b356999c26dc8fb2732dcdad071",
+  "private_reference_sha256": "sha256:243093b09b3f3d38ea0a0b7932a4aa2ee89deda28df48f8fa4c978183e103727",
+  "vacancy_check": {
+    "status": "pass",
+    "vacancy_rows": 1,
+    "ratings": 3,
+    "blank_item_cells": 41,
+    "named_member_not_invented": true
+  },
+  "private_shared_verifier_sha256": "sha256:2a828ad0f7c62a187a3b6441a99b0b665bc38954a70cfd1a62e58ea2bb0d23a3",
+  "public_evidence_policy": "metadata_only_review_receipt",
+  "source_evidence_policy": "hash_only",
+  "full_edition": false,
+  "production_reader_qualified": false,
+  "all_model_outputs_unchanged": true,
+  "method": "Every identity, period/value and action mark read directly from original paired source images; manual reference compared with unchanged model JSON. Explicit vacancy separately checked against all41 blank source cells.",
+  "counts": {
+    "named_members": 12,
+    "named_member_ratings": 36,
+    "named_member_item_results": 492,
+    "vacancy_rows": 1,
+    "vacancy_ratings": 3,
+    "vacancy_blank_item_cells": 41
+  },
+  "private_reference_relative_path": "independent-source-inventory/special-house-original-image-expectations.json",
+  "special_cases_verified": [
+    "NJ9 vacancy remains a separate vacant-seat observation, not a fabricated member.",
+    "Both-side row alignment preserves vacancy between Menendez and McIver.",
+    "McIver has N/A scores but published action and cosponsorship marks.",
+    "Radewagen wrapped source name is one member with endnote24.",
+    "Delegate N/A item cells remain distinct from open circles, crossed circles and blank vacancy cells."
+  ],
+  "remaining_limits": [
+    "Bounded physical19 rows1–7 and physical26 rows1–6 only.",
+    "No fullHouse, completeedition or production-publication claim."
+  ]
+}

@@ -19496,7 +19496,7 @@
       {
         "column_name": "value_text",
         "column_type": "VARCHAR",
-        "description": "The publisher-reported rating exactly as displayed, including units, suffixes and exclusions."
+        "description": "The publisher-reported rating, including units, suffixes and exclusions; reader-documented text normalization retains the original in source evidence."
       },
       {
         "column_name": "value_number",

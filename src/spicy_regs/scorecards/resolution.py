@@ -16,7 +16,7 @@ import unicodedata
 
 from spicy_docs.sources.congress.votes import vote_day
 
-RULE_VERSION = "scorecard-resolution-v1.3"
+RULE_VERSION = "scorecard-resolution-v1.4"
 SOURCE_TABLES = ("scorecards", "scorecard_members", "scorecard_items")
 OFFICIAL_TABLES = ("members", "member_terms", "congress_bills", "amendments", "roll_call_votes")
 INPUT_TABLES = SOURCE_TABLES + OFFICIAL_TABLES
@@ -582,6 +582,95 @@ def _citation(text: str | None, amendment: bool = False) -> tuple[str | None, st
     return (str(int(congress)) if congress else None, kind, str(int(number))) if kind in kinds else None
 
 
+def _measure_window(text: str) -> tuple[date, date] | None:
+    """Read an explicit source period only to constrain edition-context use."""
+    try:
+        window = _window(text)
+        if window:
+            return window
+        match = re.fullmatch(r"([A-Za-z]+) (\d{1,2}), (\d{4})", _text(text))
+        months = (
+            "january",
+            "february",
+            "march",
+            "april",
+            "may",
+            "june",
+            "july",
+            "august",
+            "september",
+            "october",
+            "november",
+            "december",
+        )
+        if match and match[1].casefold() in months:
+            start = date(int(match[3]), months.index(match[1].casefold()) + 1, int(match[2]))
+            return start, start + timedelta(days=1)
+    except ValueError:
+        pass
+    return None
+
+
+def _edition_measure_congress(reference: Row, item: Row, edition: Row) -> tuple[str | None, str | None]:
+    """Qualify an otherwise unnumbered measure; never supply a floor-vote context."""
+    congress = _congress(edition.get("congress_text"))
+    window = _window(congress + " Congress") if congress else None
+    if not window:
+        return None, None
+    if reference.get("kind") in {"roll_call", "roll_call_vote"}:
+        return None, "edition_congress_not_used_for_vote_context"
+    for source in (reference, item):
+        # Even malformed asserted context must not fall through to the edition.
+        if _text(source.get("congress_text")):
+            return None, None
+        if source.get("roll_number_text") or source.get("session_text"):
+            return None, "edition_congress_not_used_for_vote_context"
+        if source.get("chamber_text") and not _chamber(source["chamber_text"]):
+            return None, "edition_congress_not_used_with_unqualified_chamber"
+        for field, amendment in (("bill_citation_text", False), ("amendment_citation_text", True)):
+            literal = source.get(field)
+            parsed = _citation(literal, amendment) if literal else None
+            if literal and (not parsed or parsed[0] is not None):
+                return None, "edition_congress_not_used_with_stated_identifier_context"
+    for occurrence in _array(item.get("references_json"), "references_json"):
+        if occurrence.get("congress_text") and _congress(occurrence["congress_text"]) != congress:
+            return None, "edition_congress_not_used_with_conflicting_reference_context"
+        kind = occurrence.get("kind")
+        if kind in {"roll_call", "roll_call_vote"}:
+            return None, "edition_congress_not_used_with_sibling_vote_context"
+        if kind in {"bill", "bill_citation", "amendment", "amendment_citation"}:
+            field = "amendment_citation_text" if kind.startswith("amendment") else "bill_citation_text"
+            literal = occurrence.get(field) or occurrence.get("citation_text")
+            parsed = _citation(literal, kind.startswith("amendment")) if literal else None
+            if not parsed or parsed[0] not in {None, congress}:
+                return None, "edition_congress_not_used_with_conflicting_reference_context"
+    periods = [
+        value
+        for source, fields in (
+            (reference, ("item_date_text", "period_text", "year_text")),
+            (item, ("item_date_text", "period_text", "year_text")),
+            (edition, ("timespan_text", "year_text")),
+        )
+        for field in fields
+        if (value := source.get(field))
+    ]
+    for period in _array(edition.get("periods_json"), "periods_json"):
+        if not isinstance(period, dict) or period.get("kind") != "explicit":
+            return None, "edition_congress_not_used_with_relative_or_unknown_period"
+        if period.get("congress_text") and _congress(period["congress_text"]) != congress:
+            return None, "edition_congress_not_used_with_conflicting_period"
+        if not period.get("period_text"):
+            return None, "edition_congress_not_used_with_relative_or_unknown_period"
+        periods.append(period["period_text"])
+        if period.get("year_text"):
+            periods.append(period["year_text"])
+    for text in periods:
+        period_window = _measure_window(text)
+        if not period_window or not (window[0] <= period_window[0] < period_window[1] <= window[1]):
+            return None, "edition_congress_not_used_with_historical_or_unqualified_period"
+    return congress, "explicit_edition_congress_for_measure"
+
+
 class _Items:
     def __init__(self, official: Rows):
         self.bills = {
@@ -608,7 +697,7 @@ class _Items:
                 self.vote_years[congress, chamber, roll, day[:4]].append((vote, session, day))
                 self.vote_calendar[day[:4], chamber, roll].append((vote, congress, session, day))
 
-    def resolve(self, reference: Row, item: Row) -> dict:
+    def resolve(self, reference: Row, item: Row, edition: Row) -> dict:
         reference = dict(reference)
         reference_kind = reference.get("kind")
         if reference_kind in {"bill", "bill_citation", "amendment", "amendment_citation"}:
@@ -620,6 +709,7 @@ class _Items:
         session = _number(reference.get("session_text"), r"(?:session)?")
         roll = _number(reference.get("roll_number_text"))
         reasons, conflicts, unknown = [], [], []
+        edition_measure_congress = None
         targets, candidates, ambiguous = {}, [], False
         if reference_kind in {"roll_call", "roll_call_vote"}:
             natural = re.fullmatch(r"(\d+)-(house|senate)-(\d+)-(\d+)", reference.get("citation_text") or "")
@@ -716,6 +806,12 @@ class _Items:
                 conflicts.append("contradictory_congress_identifiers")
             resolved_congress = cited_congress or congress
             if not resolved_congress:
+                fallback, reason = _edition_measure_congress(reference, item, edition)
+                if reason and reason not in reasons:
+                    reasons.append(reason)
+                if fallback:
+                    resolved_congress = edition_measure_congress = fallback
+            if not resolved_congress:
                 unknown.append(f"missing_source_congress_for_{field}")
                 continue
             key = f"{resolved_congress}-{kind}-{number}"
@@ -772,6 +868,8 @@ class _Items:
             if targets.get("bill_id")
             else "no_exact_item_match"
         )
+        if edition_measure_congress and not conflicts and (targets.get("bill_id") or targets.get("amendment_id")):
+            rule += "_edition_congress"
         if unknown:
             rule += "_incomplete"
         if not has_roll:
@@ -780,7 +878,7 @@ class _Items:
             targets = {}
             congress = chamber = session = roll = None
         output = {
-            "congress": congress,
+            "congress": None if conflicts else congress or edition_measure_congress,
             "chamber": chamber,
             "session": session if not bill_only and not committee else None,
             "roll_number": roll if not bill_only and not committee else None,
@@ -883,14 +981,14 @@ def resolve_scorecard_links(
             seen.add(identity)
             occurrences.append(("reference:" + identity, identity, reference))
         for identity, raw_identity, reference in occurrences:
-            row, _ = base(source, "scorecard_item_links")
+            row, edition = base(source, "scorecard_item_links")
             row.update(
                 item_id=source["item_id"],
                 reference_id=identity,
                 source_reference_id=raw_identity,
-                **items.resolve(reference, source),
+                **items.resolve(reference, source, edition),
             )
-            row["source_context_json"] = _json({"item": source, "reference": reference})
+            row["source_context_json"] = _json({"item": source, "reference": reference, "edition": edition})
             if raw_identity and reference.get("source_path"):
                 row["source_path"] = reference["source_path"]
             output["scorecard_item_links"].append(row)

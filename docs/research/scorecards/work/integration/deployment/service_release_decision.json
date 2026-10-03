@@ -1,0 +1,20 @@
+{
+  "status": "existing_hosted_release_preserved",
+  "reason": "Live service is a newer divergent commit; it dynamically exposes managed publication tables. Do not deploy the older-baseline scorecard image over it. Hosted data-query verification is separate.",
+  "candidate_commit": "ed6d84c2f3a7d9db97d88b85709f9ba4715a2153",
+  "candidate_git_archive_sha256": "d712621158d8846e5634f4a3320c47eec93084cdc30c244bf76f62423fff13f0",
+  "candidate_image_pushed": "registry.cloudflare.com/174055408ff1560e60601c4d12c561c4/spicy-regs-scorecards@sha256:01cc4611b1c0e4ff5d26497895ea0dd88b469d716bd0fa9e4e84fc6c746d82fc",
+  "candidate_image_deployed": false,
+  "remote_worker_version": "fcbdcbe7-2e63-4a3c-95f5-079dbaf9f29e",
+  "remote_commit": "3ff136feed89c9377d7cdb09ffb7f4711b7e009c",
+  "retained_image_digest": "sha256:c998280b7607009acbaa40a01dbe9169c20ab2258e0bf20f38d35ce3cb501279",
+  "retained_fec_release_sha256": "sha256:36b1e24c0dc2d5b62397cb2f3eb63b132090560e451792e50897c3ee86c9cc72",
+  "remote_configuration_mutated": false,
+  "verification_files": {
+    "archive.json": "bc0877d89d808d0bb96474bc8e96ba962a8759c6648a7eef2a4b1d7e51ed9965",
+    "build.log": "f1128838b18c3e06292b260b845058b31f3b0e3911febd9f41f3091e1b6a27b5",
+    "push.log": "868ee9ebc6ab13c19ccb59addc2995be5aafe94cda5bf0d5a9268154d25c2ebb",
+    "deployments-before.json": "d7f66c0b644c620073cb743a1dd5632e9db5c26b4541277c6ee5cfe99d099b2e",
+    "version-before.json": "6a6c49bc85e41cf2045cb877ca4e02c262f29ef6d85d156ff780cdc9d1f820c9"
+  }
+}

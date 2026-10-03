@@ -1,0 +1,130 @@
+{
+  "status": "qualified_for_publication",
+  "rule_version": "scorecard-resolution-v1.4",
+  "source_attribution_checked": true,
+  "all_retained_target_ids_exist_in_pinned_official_inputs": true,
+  "source_network_requests": 0,
+  "tables": {
+    "scorecard_member_links": {
+      "hrc_rows": 540,
+      "statuses": {
+        "resolved": 458,
+        "unresolved": 82
+      },
+      "rules": {
+        "exact_historical_name_context": 458,
+        "no_exact_member_match": 82
+      },
+      "reasons": {
+        "exact_historical_name_context": 458,
+        "no_exact_member_match": 82
+      },
+      "prior_rows_preserved_except_version_pins_context": 1562,
+      "prior_changed_metadata_fields": {
+        "rule_version": 1562,
+        "input_pins_json": 1562
+      }
+    },
+    "scorecard_item_links": {
+      "hrc_rows": 127,
+      "statuses": {
+        "resolved": 91,
+        "unresolved": 36
+      },
+      "rules": {
+        "exact_roll_call": 29,
+        "exact_bill": 42,
+        "exact_roll_call_incomplete": 17,
+        "no_exact_item_match_incomplete": 19,
+        "exact_bill_edition_congress": 20
+      },
+      "reasons": {
+        "exact_roll_call": 29,
+        "no_roll_selected_from_bill_or_amendment_alone": 42,
+        "unknown_exact_amendment_id:118-hamdt-237": 1,
+        "unknown_exact_amendment_id:118-hamdt-237;no_roll_selected_from_bill_or_amendment_alone": 1,
+        "unknown_exact_amendment_id:118-hamdt-980": 1,
+        "unknown_exact_amendment_id:118-hamdt-980;no_roll_selected_from_bill_or_amendment_alone": 1,
+        "unknown_exact_amendment_id:118-hamdt-341": 1,
+        "unknown_exact_amendment_id:118-hamdt-341;no_roll_selected_from_bill_or_amendment_alone": 1,
+        "unknown_exact_amendment_id:118-hamdt-647": 1,
+        "unknown_exact_amendment_id:118-hamdt-647;no_roll_selected_from_bill_or_amendment_alone": 1,
+        "unknown_exact_amendment_id:118-hamdt-203": 1,
+        "unknown_exact_amendment_id:118-hamdt-203;no_roll_selected_from_bill_or_amendment_alone": 1,
+        "unknown_exact_amendment_id:118-hamdt-223": 1,
+        "unknown_exact_amendment_id:118-hamdt-223;no_roll_selected_from_bill_or_amendment_alone": 1,
+        "unknown_exact_amendment_id:118-hamdt-986": 1,
+        "unknown_exact_amendment_id:118-hamdt-986;no_roll_selected_from_bill_or_amendment_alone": 1,
+        "unknown_exact_amendment_id:118-hamdt-224": 1,
+        "unknown_exact_amendment_id:118-hamdt-224;no_roll_selected_from_bill_or_amendment_alone": 1,
+        "explicit_edition_congress_for_measure;no_roll_selected_from_bill_or_amendment_alone": 20,
+        "unknown_exact_amendment_id:118-hamdt-987": 1,
+        "unknown_exact_amendment_id:118-hamdt-987;no_roll_selected_from_bill_or_amendment_alone": 1,
+        "unknown_exact_amendment_id:118-hamdt-625": 1,
+        "unknown_exact_amendment_id:118-hamdt-625;no_roll_selected_from_bill_or_amendment_alone": 1,
+        "unknown_exact_amendment_id:118-hamdt-746": 1,
+        "unknown_exact_amendment_id:118-hamdt-746;no_roll_selected_from_bill_or_amendment_alone": 1,
+        "unknown_exact_amendment_id:118-hamdt-236": 1,
+        "unknown_exact_amendment_id:118-hamdt-236;no_roll_selected_from_bill_or_amendment_alone": 1,
+        "unknown_exact_amendment_id:118-hamdt-983": 1,
+        "unknown_exact_amendment_id:118-hamdt-983;no_roll_selected_from_bill_or_amendment_alone": 1,
+        "unknown_exact_amendment_id:118-hamdt-382": 1,
+        "unknown_exact_amendment_id:118-hamdt-382;no_roll_selected_from_bill_or_amendment_alone": 1,
+        "unknown_exact_amendment_id:118-hamdt-362": 1,
+        "unknown_exact_amendment_id:118-hamdt-362;no_roll_selected_from_bill_or_amendment_alone": 1,
+        "unknown_exact_amendment_id:118-hamdt-770": 1,
+        "unknown_exact_amendment_id:118-hamdt-770;no_roll_selected_from_bill_or_amendment_alone": 1,
+        "unknown_exact_amendment_id:118-samdt-1781": 1,
+        "unknown_exact_amendment_id:118-samdt-1781;no_roll_selected_from_bill_or_amendment_alone": 1,
+        "unknown_exact_amendment_id:118-samdt-874;no_roll_selected_from_bill_or_amendment_alone": 1,
+        "unknown_exact_amendment_id:118-samdt-935;no_roll_selected_from_bill_or_amendment_alone": 1
+      },
+      "prior_rows_preserved_except_version_pins_context": 279,
+      "prior_changed_metadata_fields": {
+        "rule_version": 279,
+        "source_context_json": 279,
+        "input_pins_json": 279
+      }
+    }
+  },
+  "edition_congress_fallback_items": [
+    "House:KK",
+    "House:LL",
+    "House:MM",
+    "House:NN",
+    "House:OO",
+    "Senate:K",
+    "Senate:L",
+    "Senate:M",
+    "Senate:N",
+    "Senate:O"
+  ],
+  "missing_amendment_ids": [
+    "118-hamdt-203",
+    "118-hamdt-223",
+    "118-hamdt-224",
+    "118-hamdt-236",
+    "118-hamdt-237",
+    "118-hamdt-341",
+    "118-hamdt-362",
+    "118-hamdt-382",
+    "118-hamdt-625",
+    "118-hamdt-647",
+    "118-hamdt-746",
+    "118-hamdt-770",
+    "118-hamdt-980",
+    "118-hamdt-983",
+    "118-hamdt-986",
+    "118-hamdt-987",
+    "118-samdt-1781",
+    "118-samdt-874",
+    "118-samdt-935"
+  ],
+  "official_amendment_congresses": [
+    "119"
+  ],
+  "generation": {
+    "artifactDigest": "sha256:4a99801a8a935e1dbe617ddaf219e959b32d46061fa196a36b693806121a8b46",
+    "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:68e02756c3c18b9cd76d39aafc9aeac35cac4dac2b1942e6bb4d2d40363f2ce8"
+  }
+}

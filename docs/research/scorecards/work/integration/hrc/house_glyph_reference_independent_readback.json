@@ -1,0 +1,359 @@
+{
+  "reviewed_at": "2026-10-03T21:43:12.478306+00:00",
+  "source_sha256": "sha256:804c1157e71da53a00821fdcaf15a1790448c682eb49d44613a577cfce9cb855",
+  "status": "bounded_original_source_readback_passed",
+  "public_evidence_policy": "metadata_only_review_receipt",
+  "source_evidence_policy": "hash_only",
+  "production_reader_qualified": false,
+  "full_edition": false,
+  "all_model_outputs_unchanged": true,
+  "scope": "Original-only House cell contact sheets, physical pages10–26; no model values present",
+  "counts": {
+    "circled_cross_cells": 409,
+    "filled_controls": 34,
+    "open_controls": 34,
+    "total_cells": 477
+  },
+  "checks": [
+    {
+      "physical_page": 10,
+      "circled_cross_cells_checked": 45,
+      "filled_controls_checked": 2,
+      "open_controls_checked": 2,
+      "status": "passed",
+      "artifacts": [
+        {
+          "private_relative_path": "original-house-cell-readback-300dpi/page-10-source-cells.json",
+          "sha256": "sha256:d84b1ddd3c6027bcad22b8548583066b90f4f2ad6e08f677a6b3bc42c40c4a97",
+          "byte_size": 18805
+        },
+        {
+          "private_relative_path": "original-house-cell-readback-300dpi/page-10-source-cells.png",
+          "sha256": "sha256:f2f8bb130cdf02b1d268737f6d33b2e224bf17dbb82b4f8a93e068d4f06c9666",
+          "byte_size": 134222
+        }
+      ]
+    },
+    {
+      "physical_page": 11,
+      "circled_cross_cells_checked": 23,
+      "filled_controls_checked": 2,
+      "open_controls_checked": 2,
+      "status": "passed",
+      "artifacts": [
+        {
+          "private_relative_path": "original-house-cell-readback-300dpi/page-11-source-cells.json",
+          "sha256": "sha256:dafffcfb4e39b6866909a88cbc84f53afcc9a3bf11f8daf527fd408e5ff76388",
+          "byte_size": 10465
+        },
+        {
+          "private_relative_path": "original-house-cell-readback-300dpi/page-11-source-cells.png",
+          "sha256": "sha256:0d47e5bf51b043be8d563a0ef2ad475a4c7d497c756505b6a7e1af511532bc2d",
+          "byte_size": 76489
+        }
+      ]
+    },
+    {
+      "physical_page": 12,
+      "circled_cross_cells_checked": 14,
+      "filled_controls_checked": 2,
+      "open_controls_checked": 2,
+      "status": "passed",
+      "artifacts": [
+        {
+          "private_relative_path": "original-house-cell-readback-300dpi/page-12-source-cells.json",
+          "sha256": "sha256:c8149288409970b3f8771a8587f1f29b4f2448ff47cdb5dc03e1b1ee7c18ad5f",
+          "byte_size": 7083
+        },
+        {
+          "private_relative_path": "original-house-cell-readback-300dpi/page-12-source-cells.png",
+          "sha256": "sha256:d85dcfba8f2aa2dea0b2d4e711ef5a133028362ad6dfcf9faed9ae2588915e2b",
+          "byte_size": 52673
+        }
+      ]
+    },
+    {
+      "physical_page": 13,
+      "circled_cross_cells_checked": 27,
+      "filled_controls_checked": 2,
+      "open_controls_checked": 2,
+      "status": "passed",
+      "artifacts": [
+        {
+          "private_relative_path": "original-house-cell-readback-300dpi/page-13-source-cells.json",
+          "sha256": "sha256:300016e7f26ce18eeec52ddd617642839a1dc901ec060aec191a5e0fda48949e",
+          "byte_size": 11997
+        },
+        {
+          "private_relative_path": "original-house-cell-readback-300dpi/page-13-source-cells.png",
+          "sha256": "sha256:6d6b493eb57eb06b302eb095b5c2429c37dfd79c4fb6c77701ab0563b717285a",
+          "byte_size": 91405
+        }
+      ]
+    },
+    {
+      "physical_page": 14,
+      "circled_cross_cells_checked": 12,
+      "filled_controls_checked": 2,
+      "open_controls_checked": 2,
+      "status": "passed",
+      "artifacts": [
+        {
+          "private_relative_path": "original-house-cell-readback-300dpi/page-14-source-cells.json",
+          "sha256": "sha256:9d67995912382e599aac3f3d3ed8547feb5352e77db49882f9a7165d2510e8a1",
+          "byte_size": 6336
+        },
+        {
+          "private_relative_path": "original-house-cell-readback-300dpi/page-14-source-cells.png",
+          "sha256": "sha256:408ae0b4a78d84c48da3133a4b2127258c45d09213b1e68044cc17d208b2944a",
+          "byte_size": 51137
+        }
+      ]
+    },
+    {
+      "physical_page": 15,
+      "circled_cross_cells_checked": 19,
+      "filled_controls_checked": 2,
+      "open_controls_checked": 2,
+      "status": "passed",
+      "artifacts": [
+        {
+          "private_relative_path": "original-house-cell-readback-300dpi/page-15-source-cells.json",
+          "sha256": "sha256:ee083ded0d9a6403024565cbe4e104a604dcdb216d2f3aee59b3478349727b54",
+          "byte_size": 8979
+        },
+        {
+          "private_relative_path": "original-house-cell-readback-300dpi/page-15-source-cells.png",
+          "sha256": "sha256:8d3e8efd9267b6d789595a875b15121accf8995cfe0b0e3914127b4436ea0a9b",
+          "byte_size": 64221
+        }
+      ]
+    },
+    {
+      "physical_page": 16,
+      "circled_cross_cells_checked": 17,
+      "filled_controls_checked": 2,
+      "open_controls_checked": 2,
+      "status": "passed",
+      "artifacts": [
+        {
+          "private_relative_path": "original-house-cell-readback-300dpi/page-16-source-cells.json",
+          "sha256": "sha256:d021ee4db26ec89706b80421b0c5090ab53935af8ecb8ccc5c5a2899b8f2f957",
+          "byte_size": 8213
+        },
+        {
+          "private_relative_path": "original-house-cell-readback-300dpi/page-16-source-cells.png",
+          "sha256": "sha256:e9fcb65855517aa0b1610ee848c3fcfe08f8b7630c8056460955d00e5408457f",
+          "byte_size": 62797
+        }
+      ]
+    },
+    {
+      "physical_page": 17,
+      "circled_cross_cells_checked": 23,
+      "filled_controls_checked": 2,
+      "open_controls_checked": 2,
+      "status": "passed",
+      "artifacts": [
+        {
+          "private_relative_path": "original-house-cell-readback-300dpi/page-17-source-cells.json",
+          "sha256": "sha256:c5700249778a11e815b7ab6157c6060127eaa41f2dd84d1035c340c606f8447d",
+          "byte_size": 10460
+        },
+        {
+          "private_relative_path": "original-house-cell-readback-300dpi/page-17-source-cells.png",
+          "sha256": "sha256:3de9adddb47ac1b4f0c71b71164d31ebb416a6bd4615691da53c61f6a2af38a0",
+          "byte_size": 73052
+        }
+      ]
+    },
+    {
+      "physical_page": 18,
+      "circled_cross_cells_checked": 32,
+      "filled_controls_checked": 2,
+      "open_controls_checked": 2,
+      "status": "passed",
+      "artifacts": [
+        {
+          "private_relative_path": "original-house-cell-readback-300dpi/page-18-source-cells.json",
+          "sha256": "sha256:1b36ec0d5bbc7794af6983616fd7b0d1ad10e13527fbe384f77155a9cd7050bd",
+          "byte_size": 13861
+        },
+        {
+          "private_relative_path": "original-house-cell-readback-300dpi/page-18-source-cells.png",
+          "sha256": "sha256:4646f91e0cec42cb2880ea674b725ea7543b0e203a13b3be6a08af7a2d0cc2c2",
+          "byte_size": 98753
+        }
+      ]
+    },
+    {
+      "physical_page": 19,
+      "circled_cross_cells_checked": 30,
+      "filled_controls_checked": 2,
+      "open_controls_checked": 2,
+      "status": "passed",
+      "artifacts": [
+        {
+          "private_relative_path": "original-house-cell-readback-300dpi/page-19-source-cells.json",
+          "sha256": "sha256:1dbdb4ac99a2d061c5b762c181ae3f36428d2dfe958cb53401b648adbaa5a816",
+          "byte_size": 13288
+        },
+        {
+          "private_relative_path": "original-house-cell-readback-300dpi/page-19-source-cells.png",
+          "sha256": "sha256:c48c5cc004eabea762a340ddca8a5ba03d0696bad35c2b41a836ad07d3be6f4f",
+          "byte_size": 92211
+        }
+      ]
+    },
+    {
+      "physical_page": 20,
+      "circled_cross_cells_checked": 39,
+      "filled_controls_checked": 2,
+      "open_controls_checked": 2,
+      "status": "passed",
+      "artifacts": [
+        {
+          "private_relative_path": "original-house-cell-readback-300dpi/page-20-source-cells.json",
+          "sha256": "sha256:75c3fa37995281a6c8a0dc6d92e0a2bbe466256a2a058617e74381078940c79c",
+          "byte_size": 16527
+        },
+        {
+          "private_relative_path": "original-house-cell-readback-300dpi/page-20-source-cells.png",
+          "sha256": "sha256:8b77a6a61b072e524a7929d2e983e45f9b2202dac0bf939c0d51b965ed4a7c4c",
+          "byte_size": 120500
+        }
+      ]
+    },
+    {
+      "physical_page": 21,
+      "circled_cross_cells_checked": 26,
+      "filled_controls_checked": 2,
+      "open_controls_checked": 2,
+      "status": "passed",
+      "artifacts": [
+        {
+          "private_relative_path": "original-house-cell-readback-300dpi/page-21-source-cells.json",
+          "sha256": "sha256:7c1b31323166fdca5dbc792e4d08a369925073062b24b7b2c9ef0f9b3013c8cc",
+          "byte_size": 11598
+        },
+        {
+          "private_relative_path": "original-house-cell-readback-300dpi/page-21-source-cells.png",
+          "sha256": "sha256:3ebe3fb1b39b40d8a3b28a0c7a77d5502410e43628fbf476a8bcc4e70ff7dbe2",
+          "byte_size": 80780
+        }
+      ]
+    },
+    {
+      "physical_page": 22,
+      "circled_cross_cells_checked": 17,
+      "filled_controls_checked": 2,
+      "open_controls_checked": 2,
+      "status": "passed",
+      "artifacts": [
+        {
+          "private_relative_path": "original-house-cell-readback-300dpi/page-22-source-cells.json",
+          "sha256": "sha256:595b6348955328fef8ca575b67359ed778a2a6c7693b0e0550e1f36018d6f03b",
+          "byte_size": 8149
+        },
+        {
+          "private_relative_path": "original-house-cell-readback-300dpi/page-22-source-cells.png",
+          "sha256": "sha256:feb7345ca418c7f4880bded17f88bb419cbae227af8b8228ed03316921601829",
+          "byte_size": 57871
+        }
+      ]
+    },
+    {
+      "physical_page": 23,
+      "circled_cross_cells_checked": 29,
+      "filled_controls_checked": 2,
+      "open_controls_checked": 2,
+      "status": "passed",
+      "artifacts": [
+        {
+          "private_relative_path": "original-house-cell-readback-300dpi/page-23-source-cells.json",
+          "sha256": "sha256:9af60b5d32c94d020d6776c0597fa4b6a4c19184c4a0ed1cb8880e89e507d6ee",
+          "byte_size": 12718
+        },
+        {
+          "private_relative_path": "original-house-cell-readback-300dpi/page-23-source-cells.png",
+          "sha256": "sha256:dfa1c700b68a4fc29f3103254231fb56864177372ed4964e24944f1988201a20",
+          "byte_size": 94423
+        }
+      ]
+    },
+    {
+      "physical_page": 24,
+      "circled_cross_cells_checked": 24,
+      "filled_controls_checked": 2,
+      "open_controls_checked": 2,
+      "status": "passed",
+      "artifacts": [
+        {
+          "private_relative_path": "original-house-cell-readback-300dpi/page-24-source-cells.json",
+          "sha256": "sha256:26217ddd21a80dbbc6c5bcb62586d0283c92f52329035d1bfc7626151fa81f6c",
+          "byte_size": 10856
+        },
+        {
+          "private_relative_path": "original-house-cell-readback-300dpi/page-24-source-cells.png",
+          "sha256": "sha256:dd2cc8eb9ffb09b39235dd962a606939e34674dffb5453fc897d8a4397341f24",
+          "byte_size": 77144
+        }
+      ]
+    },
+    {
+      "physical_page": 25,
+      "circled_cross_cells_checked": 13,
+      "filled_controls_checked": 2,
+      "open_controls_checked": 2,
+      "status": "passed",
+      "artifacts": [
+        {
+          "private_relative_path": "original-house-cell-readback-300dpi/page-25-source-cells.json",
+          "sha256": "sha256:3d018066e1315e380d0c2b6b68cd62108948f61e2c1ed0455bffca00660263f4",
+          "byte_size": 6706
+        },
+        {
+          "private_relative_path": "original-house-cell-readback-300dpi/page-25-source-cells.png",
+          "sha256": "sha256:c7fa70ca43865dfddb0b086da781a75db11390fd5b2689b57abc08d83dc4604b",
+          "byte_size": 49715
+        }
+      ]
+    },
+    {
+      "physical_page": 26,
+      "circled_cross_cells_checked": 19,
+      "filled_controls_checked": 2,
+      "open_controls_checked": 2,
+      "status": "passed",
+      "artifacts": [
+        {
+          "private_relative_path": "original-house-cell-readback-300dpi/page-26-source-cells.json",
+          "sha256": "sha256:0bb01024b12807023532c8a8a776d18d31cf9857b183a39016204b060877ec1f",
+          "byte_size": 9263
+        },
+        {
+          "private_relative_path": "original-house-cell-readback-300dpi/page-26-source-cells.png",
+          "sha256": "sha256:d20ceb2e43d29105967cbe76d189540ae6ca25679e368bd05e27df49ec98219f",
+          "byte_size": 68515
+        }
+      ]
+    }
+  ],
+  "method": [
+    "Independently viewed every cell in all17 original-source image sheets, before consulting the census manual reference.",
+    "All409 native-unclassified marks visibly show a circled cross. Every page includes two filled-circle and two open-circle original controls; all68 match their display shapes.",
+    "Bound each image and coordinate manifest to the exact retained PDF digest.",
+    "Full paired-row readbacks on physical10 and special vacancy/delegate scopes corroborate column association separately."
+  ],
+  "limits": [
+    "These are source references, not validation of any particular model output.",
+    "The source-native comparison helper iterates emitted rows. Complete candidate admission additionally requires explicit unique member, rating-period and action-key coverage checks; missing or duplicated rows must refuse.",
+    "No model output was used as gold, edited, or repaired."
+  ],
+  "diagnostic_observation": "One thin original circled cross on physical14 remains visibly crossed; no unsupported glyph normalization was required.",
+  "corroborating_reference": {
+    "private_relative_path": "original-house-cell-readback-300dpi/manual-original-cell-reference.json",
+    "sha256": "sha256:9f2e6d170e1c28dd403eb6f993d2d9f4737b9fef0febde12fc81f46a9884b8fd",
+    "byte_size": 153213
+  }
+}
