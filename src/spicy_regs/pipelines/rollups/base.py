@@ -22,7 +22,13 @@ merge-time join whose absence must not fail the run is declared in
 the linkage columns NULL so the rollup still publishes everything its own
 source establishes — it exists so the read is *stated* rather than buried in a
 transform, and so ``tests/test_hosted_rollups.py`` can hold each entry to being
-an ingest rollup's output whose cron runs before this one's. Multi-output
+an ingest rollup's output whose cron runs before this one's. A read that does
+fetch the table is recorded like any other: every table of another family the
+build fetches through :func:`spicy_regs.sources.r2.download_from_r2`, soft or
+undeclared, is a parent of the generation at the bytes fetched; a read that
+found nothing records nothing, and a read that bypasses the helper is not
+recorded. The family's own prior is never a parent: the generation's
+prior-generation input names it. Multi-output
 rollups declare ``outputs`` instead of ``output`` and return a tuple of paths
 from ``build()``; every declared output must be present, including successful
 empty tables, and each goes through the same per-file shrink guard on upload.
@@ -61,7 +67,8 @@ class RollupPipeline(Pipeline):
     #: Published tables this rollup reads **best-effort** at merge time, to
     #: fill columns its own source does not carry (R2 remote keys). Not
     #: primed and never fatal: absence leaves those columns NULL and the
-    #: rollup still publishes everything its own source establishes. Each
+    #: rollup still publishes everything its own source establishes; a read
+    #: that fetches one is recorded as a parent (see the module note). Each
     #: entry must name an *ingest* rollup's output whose cron runs before
     #: this one's — ``tests/test_hosted_rollups.py`` holds both.
     soft_inputs: ClassVar[tuple[str, ...]] = ()
@@ -164,13 +171,16 @@ class RollupPipeline(Pipeline):
             if public_url:
                 build_dir = output_dir / ".builds" / uuid4().hex
                 build_dir.mkdir(parents=True)
-            parents = self._prime(build_dir, prior_index)
-            remote = self._observe_remote_inputs(build_dir, public_url)
-            logger.info("Building rollup {}...", self.output)
-            built = self.build(build_dir)
+            with r2.recorded_reads() as reads:
+                parents = self._prime(build_dir, prior_index)
+                remote = self._observe_remote_inputs(build_dir, public_url)
+                logger.info("Building rollup {}...", self.output)
+                built = self.build(build_dir)
             if self._observe_remote_inputs(build_dir, public_url) != remote:
                 raise publication.PublicationError("A remote input changed while the rollup built; rebuild")
-            parents |= remote
+            # Every other family's table the build fetched is a parent, read soft or undeclared included.
+            parents |= remote | {key: read for key, read in reads.items()
+                                 if key not in parents and not self._own(key, read.get("family"))}
             out_paths = built if isinstance(built, tuple) else (built,)
             family = self.name
             expected_keys = self.outputs or (self.output,)
@@ -246,8 +256,12 @@ class RollupPipeline(Pipeline):
             purge_urls([f"{public_url.rstrip('/')}/{key}" for key in (publication.INDEX_V2_KEY, publication.INDEX_KEY)])
         logger.info("Done!")
 
+    def _own(self, key: str, family: str | None) -> bool:
+        """Whether ``key`` is this rollup's own table: its prior is a prior-generation input, never a parent."""
+        return family == (self.publication_family or self.name) or key in (self.outputs or (self.output,))
+
     def _prime(self, output_dir: Path, snapshot: Mapping | None = None) -> dict[str, dict]:
-        """Download each required base table from R2 unless already local; return what was read.
+        """Download each required base table from R2 unless already local; return the parents read.
 
         A missing base table is fatal: a rollup built from absent inputs would
         publish a truncated artifact that the upload shrink-guard would then
@@ -255,6 +269,7 @@ class RollupPipeline(Pipeline):
         Each parent records the digest and size of the bytes read, plus its
         family and generation when a managed family published it. A verified
         managed download reuses its descriptor; any other file is hashed once.
+        The rollup's own table is primed but is no parent (:meth:`_own`).
         """
         from spicy_regs.sources import publication
 
@@ -272,6 +287,8 @@ class RollupPipeline(Pipeline):
             else:
                 downloaded = True
             owner = publication.table_owner(snapshot or publication.empty_index(), remote_key)
+            if self._own(remote_key, owner[0] if owner else None):
+                continue
             descriptor = owner[1]["tables"][remote_key] if owner else None
             if downloaded and descriptor:
                 parent = {"sha256": descriptor["sha256"], "byteSize": descriptor["byteSize"]}

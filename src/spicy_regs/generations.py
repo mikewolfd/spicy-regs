@@ -208,9 +208,12 @@ def build_generation(
 ):
     """Snapshot exactly one declared family into a new immutable artifact.
 
-    ``parents`` records each input table the build read: the digest and size of
-    its bytes, or the storage version of an input read in place, plus the
-    family and generation when a managed family published it.
+    ``parents`` records each table of another family the build read: the digest
+    and size of its bytes, or the storage version of an input read in place,
+    plus the family and generation when a managed family published it. The
+    family's own prior is its prior-generation input, never a parent; a parent
+    of the generation's own family is refused here, while the verifier still
+    admits the roots published that way before this rule.
 
     ``partitioned`` maps a table stored as several files to its partition
     columns. Its entry in ``files`` is a directory named for the table holding
@@ -226,6 +229,8 @@ def build_generation(
         describe_member,
     )
 
+    if any(parent.get("family") == family for parent in (parents or {}).values()):
+        raise ValueError("A generation's own prior is its prior-generation input, not a parent")
     expected, partitioned = set(expected_keys), dict(partitioned or {})
     names = output_keys(files, partitioned)
     if not expected or len(expected) != len(expected_keys) or len(set(names)) != len(names) or set(names) != expected:

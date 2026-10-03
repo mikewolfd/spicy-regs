@@ -11,7 +11,10 @@ download error produced an empty local file, and the upload overwrote the
 historical 3.3 GB ``comments.parquet``.
 """
 
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import contextmanager
+from contextvars import ContextVar
 import hashlib
 import json
 from os import getenv
@@ -27,6 +30,38 @@ from spicy_regs.sources.publication import _get_bounded, _head
 
 
 # --- download (public URL) -------------------------------------------------
+
+#: The tables fetched through :func:`download_from_r2` while :func:`recorded_reads` is active, by key.
+_reads: ContextVar[dict[str, dict] | None] = ContextVar("r2_reads", default=None)
+
+
+@contextmanager
+def recorded_reads() -> Iterator[dict[str, dict]]:
+    """Note every table :func:`download_from_r2` fetches while active, at the bytes fetched.
+
+    A managed table is noted by its pin: digest, size, family and generation. Any other object is noted by the digest
+    and size of the file written. A read that found nothing is not noted. What a caller then does with the bytes,
+    including failing to use them, does not change the note: the build read them.
+    """
+    reads: dict[str, dict] = {}
+    token = _reads.set(reads)
+    try:
+        yield reads
+    finally:
+        _reads.reset(token)
+
+
+def _note_read(remote_key: str, member, owner, local_path: Path) -> None:
+    reads = _reads.get()
+    if reads is None:
+        return
+    if member.sha256 is not None and owner is not None:
+        reads[remote_key] = {"sha256": member.sha256, "byteSize": member.byte_size,
+                             "family": owner[0], "artifactDigest": owner[1]["artifactDigest"]}
+    else:
+        with local_path.open("rb") as stream:
+            reads[remote_key] = {"sha256": "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest(),
+                                 "byteSize": local_path.stat().st_size}
 
 
 def download_from_r2(remote_key: str, local_path: Path, *, bare: bool = False) -> bool:
@@ -53,10 +88,14 @@ def download_from_r2(remote_key: str, local_path: Path, *, bare: bool = False) -
         logger.warning("R2_PUBLIC_URL not set; cannot download {}", remote_key)
         return False
 
-    from spicy_regs.sources.publication import Member, current_index, fetch_member, single_member
+    from spicy_regs.sources.publication import Member, current_index, fetch_member, single_member, table_owner
 
-    member = Member(remote_key, None, None, None) if bare else single_member(current_index(public_url), remote_key)
-    return fetch_member(public_url, member, local_path, remote_key)
+    index = None if bare else current_index(public_url)
+    member = Member(remote_key, None, None, None) if index is None else single_member(index, remote_key)
+    if not fetch_member(public_url, member, local_path, remote_key):
+        return False
+    _note_read(remote_key, member, None if index is None else table_owner(index, remote_key), local_path)
+    return True
 
 
 def download_members(remote_key: str, directory: Path) -> list[Path]:

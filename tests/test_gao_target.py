@@ -89,7 +89,10 @@ def test_complete_generation_candidate_uses_prior_pin_without_publication(tmp_pa
         prior_index=snapshot,public_url='https://test.invalid',retained_index=retained())
     artifact=verify_generation(tmp_path/'target/generation')
     assert report['status']=='verified_candidate_not_published'
-    assert artifact.root['spec']['parents']['gao_reports.parquet']['artifactDigest']==snapshot['families']['gao-reports']['artifactDigest']
+    # The family's own prior is its prior-generation input, never a parent.
+    prior_digest=snapshot['families']['gao-reports']['artifactDigest']
+    assert 'parents' not in artifact.root['spec']
+    assert [i['artifactDigest'] for i in artifact.root['inputs'] if i['role']=='prior-generation']==[prior_digest]
     assert report['candidate_rows']==2
 
 

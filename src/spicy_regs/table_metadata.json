@@ -24147,6 +24147,26 @@
         "column_name": "citation_rows",
         "column_type": "VARCHAR",
         "description": "How many citation rows the read wrote, as a decimal string; `0` for a read that found none."
+      },
+      {
+        "column_name": "source_table",
+        "column_type": "VARCHAR",
+        "description": "The published table the read took the field from (`comments`, `report_sections`, ...)."
+      },
+      {
+        "column_name": "input_family",
+        "column_type": "VARCHAR",
+        "description": "The publication family of `source_table` the read was pinned to; NULL when its pin named none (a table no family publishes)."
+      },
+      {
+        "column_name": "input_generation",
+        "column_type": "VARCHAR",
+        "description": "The `source_table` generation the read was pinned to (`sha256:` artifact digest); NULL when its pin named none. A later generation of that table need not change the field: `text_sha256` is what was read."
+      },
+      {
+        "column_name": "input_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the `source_table` file the read was pinned to; NULL when its pin named none."
       }
     ],
     "grain": null,

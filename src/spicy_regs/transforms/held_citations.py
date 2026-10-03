@@ -39,7 +39,8 @@ NAMESPACE = "held-citations-explicit-context"
 #: One row per held-field read the citation table's checkpoints record: the field, the text read, the citation rule
 #: set the read ran under, when, and how many citation rows it wrote (0 for a read that found none).
 READS_TABLE = "document_citation_reads"
-READS_COLUMNS = ("document_kind", "document_key", "text_sha256", "rule_set_version", "read_at", "citation_rows")
+READS_COLUMNS = ("document_kind", "document_key", "text_sha256", "rule_set_version", "read_at", "citation_rows",
+                 "source_table", "input_family", "input_generation", "input_sha256")
 ADAPTER_VERSION = "held-fields/1"
 MAX_SELECTIONS = 100
 MAX_FIELD_BYTES = 4 * 1024 * 1024
@@ -251,16 +252,23 @@ def write_citation_reads(output_dir: Path, citations: Path) -> Path:
 
     Derived whole from the citation table's own checkpoints, so the two never disagree; a read checkpointed before
     ``read_at`` and ``rule_set_version`` were kept states both NULL. A refused or capped read writes no checkpoint and
-    so no row: absence here is "not read". ``citation_rows`` counts the rows that read wrote. O(reads).
+    so no row: absence here is "not read". ``citation_rows`` counts the rows that read wrote, and the ``input_*``
+    columns the source table's generation the read was pinned to (NULL where the pin names no such part). O(reads).
     """
     def text(value: Any) -> str | None:
         return None if value is None else str(value)
 
+    def row(state: Mapping[str, Any]) -> dict[str, str | None]:
+        pin = state.get("input_pin") or {}
+        return {"document_kind": text(state.get("document_kind")), "document_key": text(state.get("document_key")),
+                "text_sha256": text(state.get("text_sha256")), "rule_set_version": text(state.get("rule_set_version")),
+                "read_at": text(state.get("read_at")), "citation_rows": text(state.get("findings")),
+                "source_table": text(state.get("source_table")), "input_family": text(pin.get("family")),
+                "input_generation": text(pin.get("artifactDigest")), "input_sha256": text(pin.get("sha256"))}
+
     states = read_checkpoints(citations, NAMESPACE)
     rows = sorted(
-        ({"document_kind": text(state.get("document_kind")), "document_key": text(state.get("document_key")),
-          "text_sha256": text(state.get("text_sha256")), "rule_set_version": text(state.get("rule_set_version")),
-          "read_at": text(state.get("read_at")), "citation_rows": text(state.get("findings"))} for state in states),
+        (row(state) for state in states),
         key=lambda row: (row["document_kind"] or "", row["document_key"] or "", row["text_sha256"] or ""),
     )
     schema = pa.schema([(column, pa.string()) for column in READS_COLUMNS])
