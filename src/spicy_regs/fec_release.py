@@ -8,13 +8,14 @@ does not publish data, select historical parents, or import source processors.
 
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass, replace
 import hashlib
 from importlib import metadata
 import json
 from pathlib import Path
 import re
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 FORMAT = "spicy-regs-fec-release"
 VERSION = 1
@@ -328,6 +329,34 @@ def check_view(spec: QualifiedView, configuration: dict, index: Mapping, availab
         image_identity_basis="deployment_assertion_requires_FR13_external_running_image_verification",
         acceptance_receipts=expected.get("acceptance_receipts") if isinstance(expected, dict) else None,
     )
+
+
+#: What a query reply states of each qualified view it read: the pins to compare after a refresh.
+QUERY_RELEASE_FIELDS = ("status", "receipt_sha256", "sql_sha256", "evidence_generations", "population", "as_of")
+#: What a release summary leaves out of a ``check_view`` record; ``describe_table(detail=true)`` returns them.
+RELEASE_INVENTORIES = ("dependencies[].descriptor", "acceptance_receipts")
+
+
+def release_summary(record: Mapping, fields: Sequence[str] | None = None) -> dict:
+    """A ``check_view`` record without its inventories, as a new dict; the record itself is not changed.
+
+    Each dependency keeps its family and generation but not its storage
+    descriptor (every column and member file), and the acceptance receipts
+    become their count. Every other field stays whole, failure reasons
+    included. ``fields`` narrows the summary to those keys.
+    """
+    summary = {key: value for key, value in record.items() if key not in ("dependencies", "acceptance_receipts")}
+    if "dependencies" in record:
+        summary["dependencies"] = {
+            table: None if pin is None else {"family": pin["family"], "generation": pin["generation"]}
+            for table, pin in (record["dependencies"] or {}).items()
+        }
+    if "acceptance_receipts" in record:
+        receipts = record["acceptance_receipts"]
+        summary["acceptance_receipt_count"] = None if receipts is None else len(receipts)
+    if fields is not None:
+        summary = {key: summary[key] for key in fields}
+    return deepcopy(summary)
 
 
 def install_views(connection, specs, configuration, index, available_tables, publication, *, read_tables):

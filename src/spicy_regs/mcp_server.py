@@ -45,6 +45,7 @@ from starlette.responses import Response
 from spicy_regs._icon import ICON_DATA_URI
 from spicy_regs.citation_resolution import SOURCE_TABLES
 from spicy_regs.duckdb_settings import INTERACTIVE_HTTP_RETRIES, load_public_http, memory_limit
+from spicy_regs.fec_release import QUERY_RELEASE_FIELDS, RELEASE_INVENTORIES, release_summary
 from spicy_regs.public_url import resolve_r2_base_url
 from spicy_regs.relationship_views.fec_query_views import fec_query_views
 
@@ -819,12 +820,9 @@ def _query_reply_pins(pins: dict[str, dict], relationships: dict) -> dict[str, d
         if "release_compatibility" not in pin:
             result[name] = pin
             continue
-        release = pin["release_compatibility"]
         result[name] = deepcopy({
             **{key: pin[key] for key in ("status", "rule_version", "dependencies", "input_publications", "coverage")},
-            "release_compatibility": {key: release[key] for key in (
-                "status", "receipt_sha256", "sql_sha256", "evidence_generations", "population", "as_of",
-            )},
+            "release_compatibility": release_summary(pin["release_compatibility"], QUERY_RELEASE_FIELDS),
             "meaning": relationships[name]["metadata"]["summary"],
             "details": "Call describe_table for full release evidence. Compare receipt, SQL, input and evidence pins "
                        "after refresh; a later description may name a different release.",
@@ -965,6 +963,9 @@ def _lineage_meanings(lineage: Mapping[str, Sequence[str]]) -> dict[str, str]:
 
 #: What ``describe_table`` leaves out unless asked with ``detail=true``: the measured records that
 #: made bill_versions' reply 24,600 bytes, repeated for every table of a ledger family (round 3, S3).
+#: A qualified FEC view also leaves out its release record's inventories (``RELEASE_INVENTORIES``): its
+#: dependency's whole storage descriptor and the acceptance receipts were 13,146 of 21,054 characters
+#: in fec_receipts_net_receipts_decision's reply (round 4, S4).
 DESCRIBE_DETAIL = ("joins[].measurement", "qualification.ledger_statements")
 
 
@@ -1268,8 +1269,10 @@ def _register_tools(mcp: MCPServer) -> None:
         source table's column unchanged carries that column's dictionary
         meaning; a computed column carries its declared meaning, or null when
         it has none.
-        For a FEC view, full release_compatibility evidence appears once:
-        in publication when available, or relationship when unavailable.
+        For a FEC view, release_compatibility appears once: in publication
+        when available, or relationship when unavailable. detail=false keeps
+        its pins and reasons, gives each dependency's family and generation
+        without its storage descriptor, and counts the acceptance receipts.
         compatible means the captured data, interpretation and consumer match
         the selected release; it does not certify current/net money or completeness.
         not_in_ledger means this table is absent from the bundled output ledger,
@@ -1315,19 +1318,28 @@ def _register_tools(mcp: MCPServer) -> None:
             if available and declared
             else None
         )
+        relationship: dict[str, Any] = {
+            key: value for key, value in relationships.get(table, {}).items()
+            if key != "metadata" and (key != "release_compatibility" or not available)
+        }
+        publication: dict[str, Any] = (
+            _reply_pins(cursor, status["publication"], [table])[table]
+            if table in status["publication"] else {"status": "unavailable"}
+        )
+        omitted = [] if detail else list(DESCRIBE_DETAIL)
+        # Full release evidence sits once: in publication for an available view, else in relationship.
+        held = publication if "release_compatibility" in publication else relationship
+        if not detail and "release_compatibility" in held:
+            held["release_compatibility"] = release_summary(held["release_compatibility"])
+            where = "publication" if held is publication else "relationship"
+            omitted += [f"{where}.release_compatibility.{item}" for item in RELEASE_INVENTORIES]
         return {
             "table": table,
             **_source_details(cursor),
             "available": available,
-            "detail": {"full": detail, "omitted": [] if detail else list(DESCRIBE_DETAIL)},
-            **({"relationship": {
-                key: value for key, value in relationships[table].items()
-                if key != "metadata" and (key != "release_compatibility" or not available)
-            }} if table in relationships else {}),
-            "publication": (
-                _reply_pins(cursor, status["publication"], [table])[table]
-                if table in status["publication"] else {"status": "unavailable"}
-            ),
+            "detail": {"full": detail, "omitted": omitted},
+            **({"relationship": relationship} if table in relationships else {}),
+            "publication": publication,
             "qualification": scope if qualified is None else {**scope, **qualified[table]},
             "joins": _table_joins(table, measurements=detail),
             "metadata": {key: value for key, value in entry.items()

@@ -8,15 +8,17 @@ from __future__ import annotations
 import asyncio
 import inspect
 import json
+from copy import deepcopy
 
 import duckdb
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 from starlette.testclient import TestClient
 
-from spicy_regs import mcp_server as server
+from spicy_regs import fec_release as release, mcp_server as server
 from spicy_regs.citation_resolution import SOURCE_TABLES
 from spicy_regs.citation_sources import TEXT_SOURCES
+from tests.test_mcp_fec_release import configure, connection
 from tests.test_mcp_query_results import call
 from tests.test_mcp_relationships import citation_connection
 from tests.test_mcp_server import _tool_data
@@ -95,3 +97,62 @@ def test_kinds_compare_case_insensitively(monkeypatch):
 def test_the_schema_enumerates_the_supported_kinds():
     [tool] = [t for t in asyncio.run(server.build_server().list_tools()) if t.name == "resolve_document_citations"]
     assert tool.input_schema["properties"]["document_kind"]["enum"] == sorted(SOURCE_TABLES)
+
+
+# S4: describe_table names the release inventories it leaves out.
+
+def test_describe_default_summarizes_release_evidence_and_names_what_it_omits(tmp_path, monkeypatch):
+    specs, index, _, _, _ = configure(tmp_path, monkeypatch)
+    with connection(index) as con:
+        monkeypatch.setattr(server, "_get_connection", lambda: con)
+        mcp = server.build_server()
+        name = specs[0].view.name
+        stored = server._connection_relationships(con)[name]["release_compatibility"]
+        compact = _tool_data(mcp, "describe_table", {"table": name})
+        summary = compact["publication"]["release_compatibility"]
+        assert "acceptance_receipts" not in summary
+        assert summary["acceptance_receipt_count"] == len(stored["acceptance_receipts"]) == 1
+        assert summary["dependencies"] == {table: {"family": pin["family"], "generation": pin["generation"]}
+                                           for table, pin in stored["dependencies"].items()}
+        for key in ("status", "reasons", "receipt_sha256", "sql_sha256", "interpretation", "consumer",
+                    "evidence_generations", "required_evidence_generations", "population", "as_of",
+                    "image_identity_basis"):
+            assert summary[key] == stored[key]
+        assert compact["detail"]["omitted"] == [
+            "joins[].measurement", "qualification.ledger_statements",
+            "publication.release_compatibility.dependencies[].descriptor",
+            "publication.release_compatibility.acceptance_receipts",
+        ]
+        full = _tool_data(mcp, "describe_table", {"table": name, "detail": True})
+        assert full["publication"]["release_compatibility"] == stored and full["detail"]["omitted"] == []
+        assert server._connection_relationships(con)[name]["release_compatibility"] == stored
+
+
+def test_an_unavailable_views_description_summarizes_its_relationship_record(tmp_path, monkeypatch):
+    specs, index, _, _, _ = configure(tmp_path, monkeypatch)
+    monkeypatch.setenv("SPICY_REGS_FEC_RELEASE_SHA256", "sha256:" + "0" * 64)
+    with connection(index) as con:
+        monkeypatch.setattr(server, "_get_connection", lambda: con)
+        compact = _tool_data(server.build_server(), "describe_table", {"table": specs[0].view.name})
+    assert not compact["available"]
+    record = compact["relationship"]["release_compatibility"]
+    assert record["status"] == "disabled" and record["reasons"] and "acceptance_receipts" not in record
+    assert "relationship.release_compatibility.acceptance_receipts" in compact["detail"]["omitted"]
+
+
+def test_query_replies_keep_their_release_pins(tmp_path, monkeypatch):
+    specs, index, _, _, _ = configure(tmp_path, monkeypatch)
+    with connection(index) as con:
+        monkeypatch.setattr(server, "_get_connection", lambda: con)
+        name = specs[0].view.name
+        pins = _tool_data(server.build_server(), "query_sql", {"sql": f"SELECT * FROM {name}"})["publication"][name]
+    assert set(pins["release_compatibility"]) == set(release.QUERY_RELEASE_FIELDS)
+
+
+def test_release_summary_does_not_mutate_the_record():
+    record = {"status": "compatible", "acceptance_receipts": ["sha256:" + "a" * 64],
+              "dependencies": {"t": {"family": "f", "generation": "g", "descriptor": {"members": [1]}}, "u": None}}
+    saved = deepcopy(record)
+    summary = release.release_summary(record)
+    assert summary["dependencies"] == {"t": {"family": "f", "generation": "g"}, "u": None}
+    assert summary["acceptance_receipt_count"] == 1 and record == saved

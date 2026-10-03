@@ -378,6 +378,19 @@ file its reader cannot page, so two of five personas never read a row.
   disposition and task ids. **A client that read `joins[].measurement` now
   needs `detail=true`**, which returns the whole record as before plus `detail`.
   Nothing else is truncated: a wide schema is still described whole.
+- **A qualified FEC view's default description summarizes its release record
+  (round 4, 2026-10-03).** The round-4 personas found
+  `fec_receipts_net_receipts_decision` at 21,054 characters, 11,443 of them its
+  dependency's whole storage descriptor (123 columns, 26 member files) and 1,703
+  its 23 acceptance receipts. `fec_release.release_summary` keeps every pin and
+  reason, each dependency's family and generation, and the receipts' count, and
+  `detail.omitted` names `release_compatibility.dependencies[].descriptor` and
+  `.acceptance_receipts` under `publication` or `relationship`. `detail=true`
+  returns the stored record. Query replies use the same function narrowed to
+  `QUERY_RELEASE_FIELDS`. This revises the 2026-10-02 "full release verification
+  belongs in an explicit table description": the explicit description is now
+  `detail=true`. Measured on the live 72 views: a median of 15,471 to 8,301
+  characters (maximum 25,187 to 11,235; all 72, 1,130,695 to 609,034).
 - **`query_sql(max_cell_chars=N)`** cuts every text, list or struct cell longer
   than N characters to its first N (a list or struct as its compact JSON text)
   and lists each cut cell in `truncated_cells` as `{row, column, chars}` with the
