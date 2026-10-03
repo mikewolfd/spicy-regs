@@ -2754,10 +2754,16 @@ tables:
       published as `unavailable`. `not_requested` means only that no request
       was made, which the per-run cap decides.
 
-      A validated row (`captured` or `captured_partial`) is not re-read unless
-      its list row's `update_date` moves or `uslm_reader_version` changes, and
-      a failed later attempt never replaces it. All columns are stored as
-      VARCHAR.
+      A validated row with parsed text is read again when its listing or
+      metadata/text reader changes, or its matching section output is missing.
+      A failed later attempt preserves its prior metadata and parsed sections.
+      `law_text_outcome` distinguishes unread, parsed and refused text; an
+      unavailable XML file does not mean the law has no provisions. Join
+      `law_sections` on `law_id` for native sections. `law_body_remainder`
+      retains main-body text outside those sections, including appropriation
+      blocks; it is NULL unless parsed and may be an empty string on success.
+      The section rows and remainder are printed law text, not consolidated
+      current law. All columns are stored as VARCHAR.
     summary: >-
       One row per enacted law the Congress.gov law list route states, with the
       Statutes at Large citation from the law's own PLAW USLM file where
@@ -2765,6 +2771,30 @@ tables:
       `bill_id` is the foreign key to `congress_bills`, whose
       `statutes_at_large_cite` the host fills from this table at that table's
       merge. All columns are stored as VARCHAR.
+    columns_from: spicy_docs
+
+  law_sections:
+    label: "Published law sections"
+    coverage: >-
+      Derived: source-native sections from identity-validated GovInfo public and private
+      law XML acquired by the laws rollup. Join law_id to laws.law_id, then
+      laws.bill_id to congress_bills.bill_id. A missing section row does not
+      establish that the law has no text: check laws.law_text_outcome and
+      law_section_count. Coverage follows successfully read XML, not all enacted
+      laws. PDF-only sources are outside this reader.
+    measured_on: "2026-10-02"
+    summary: >-
+      One row per native section occurrence in a published law's main body.
+      These are the law's own words, including amendment instructions, not a
+      consolidated statement of current law. Section numbers and publisher IDs
+      can repeat or be absent; (law_id, seq) identifies each occurrence and
+      native_path locates it in the source XML. is_quoted marks sections inside
+      quotedContent; parent_seq alone does not imply a quotation. Body excludes
+      its own number and heading, print furniture, and nested sections' text;
+      query the child rows as well. laws.law_body_remainder retains text outside
+      all numbered sections, including appropriation blocks. Hierarchy and
+      issues_json retain context and source irregularities. All columns are
+      VARCHAR, including boolean and numeric observations.
     columns_from: spicy_docs
 
   law_code_sections:

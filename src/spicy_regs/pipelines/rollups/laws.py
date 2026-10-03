@@ -1,6 +1,6 @@
-"""Rollup pipeline: laws, law_code_sections and table3_records.
+"""Rollup pipeline: law metadata, law text and relationships to the U.S. Code.
 
-Three outputs from one pass: the enumeration on the Congress.gov law route is
+The outputs share one pass: the enumeration on the Congress.gov law route is
 what addresses both the PLAW USLM file (the citation) and the two OLRC views
 of what each law did to the Code, and the act keys are only in hand while
 the list is. Its cron fires before the bill family's, which fills
@@ -20,7 +20,7 @@ class LawsRollup(RollupPipeline):
     name: ClassVar[str] = "laws"
     retain_source_evidence: ClassVar[bool] = True
     inputs: ClassVar[tuple[str, ...]] = ()
-    outputs: ClassVar[tuple[str, ...]] = ("laws.parquet", "law_code_sections.parquet", "table3_records.parquet")
+    outputs: ClassVar[tuple[str, ...]] = ("laws.parquet", "law_code_sections.parquet", "table3_records.parquet", "law_sections.parquet")
 
     def build(self, output_dir: Path) -> tuple[Path, ...]:
         return build_laws(output_dir, evidence=self.source_evidence)

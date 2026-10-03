@@ -163,6 +163,7 @@ CONTRACT_TABLES: tuple[str, ...] = (
     "cbo_cost_estimates",
     # A8/A9 (laws and rosters): the laws and committee-rosters rollups.
     "laws",
+    "law_sections",
     "law_code_sections",
     "table3_records",
     "committees",

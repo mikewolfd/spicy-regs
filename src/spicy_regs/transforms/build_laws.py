@@ -1,7 +1,7 @@
-"""Transform: build ``laws``, ``law_code_sections`` and ``table3_records``.
+"""Build law metadata, native law sections and relationships to the U.S. Code.
 
-Three tables from three publishers in one pass, because the second and third
-are addressed by what the first enumerates. **``laws``**: the Congress.gov
+Four tables from three publishers in one pass; law text and classifications
+are addressed by what the law list enumerates. **``laws``**: the Congress.gov
 ``law/{congress}`` list route walked whole per scoped Congress (it lists
 private laws too when ``law_type`` is omitted), one row per
 ``laws[]`` entry, each joined to the GovInfo PLAW USLM file whose ``<meta>``
@@ -10,6 +10,11 @@ per-run cap). ``shape_law`` refuses a meta that states another law, so a
 citation never lands on the wrong row; a validated file that states no
 ``NNN Stat. NNN`` (the private laws) is ``captured_partial``, its literal
 ``citableAs`` kept and its Statutes fields NULL.
+**``law_sections``**: native sections from the same validated PLAW bytes,
+with source paths and hashes. A successful reread replaces that law's whole
+section set; an unsuccessful reread preserves its prior metadata and sections.
+These are sections as printed in the enacted law, including amendment
+instructions and explicitly marked quoted sections, not a consolidated Code.
 **``law_code_sections``**: the OLRC per-Congress classification table, read in
 the publisher's public-law order alone (the index links the current Congress's
 session tables only) — the two orders hold the same rows, but the contract
@@ -33,8 +38,8 @@ lists is retired only past a release-point advance and within
 
 **Incremental.** The list is re-walked whole every run; the PLAW is what is
 not re-read. A law already published ``captured`` or ``captured_partial`` under
-the current :data:`~spicy_docs.schemas.law_tables.USLM_READER_VERSION` with the
-same ``update_date`` is left standing; any other is asked for again, newest
+the current metadata and text readers with the same ``update_date`` and
+retained section table is left standing; any other is asked for again, newest
 first, under :data:`MAX_USLM_PER_RUN`. Every attempt publishes a truthful
 outcome (``unavailable`` only for a ``404``/``410`` from the exact locator),
 except that a failed attempt never replaces a validated prior row; a law the
@@ -67,10 +72,17 @@ from typing import TYPE_CHECKING, Any, NamedTuple, Protocol
 import httpx
 from loguru import logger
 from spicy_docs.reading.paged_json import PagedJsonBudget
-from spicy_docs.schemas.law_tables import USLM_READER_VERSION, shape_law, shape_law_code_section, shape_table3_record
+from spicy_docs.schemas.law_tables import (
+    USLM_READER_VERSION,
+    shape_law,
+    shape_law_code_section,
+    shape_law_section,
+    shape_table3_record,
+)
 from spicy_docs.schemas.tables import TableContractError, digest, json_column
 from spicy_docs.sources.congress.listing import LIST_ROUTES, MAX_LIMIT, CongressListingReader, list_route_url
 from spicy_docs.sources.govinfo.uslm import PublicLawSelection, UslmIdentityError, UslmSourceError
+from spicy_docs.sources.govinfo.law_text import LAW_TEXT_READER_VERSION, read_law_sections
 from spicy_docs.sources.govinfo.uslm_acquisition import (
     UslmAcquirer,
     UslmAcquisitionBudget,
@@ -150,6 +162,7 @@ MAX_USLM_PER_RUN = 300
 NAME = "laws"
 CODE_SECTIONS = "law_code_sections"
 TABLE3 = "table3_records"
+TEXT_SECTIONS = "law_sections"
 CAPTURED = "captured"
 #: The outcomes whose USLM identity was validated; a failed later attempt never replaces one.
 VALIDATED = ("captured", "captured_partial")
@@ -163,6 +176,8 @@ class HeldLaw(NamedTuple):
     update_date: str | None
     uslm_outcome: str | None
     reader_version: str | None = None
+    text_outcome: str | None = None
+    text_reader_version: str | None = None
 
 
 #: At most this many held acts may leave Table III in one release, and only when
@@ -200,19 +215,36 @@ def _transport_error(error: BaseException) -> str:
     return scrub_credential(str(error), "")
 
 
-def _held_laws(prior_file: Path | None, congresses: tuple[int, ...]) -> dict[str, HeldLaw]:
+def _held_laws(prior_file: Path | None, congresses: tuple[int, ...], sections_file: Path | None = None) -> dict[str, HeldLaw]:
     """``law_id`` -> what is published for it, for the scoped Congresses."""
     if prior_file is None:
         return {}
     import duckdb
 
     columns = {row[0] for row in duckdb.sql(f"DESCRIBE SELECT * FROM read_parquet('{prior_file}')").fetchall()}
-    version = "uslm_reader_version" if "uslm_reader_version" in columns else "NULL"
+    selected = [name if name in columns else "NULL" for name in
+                ("uslm_reader_version", "law_text_outcome", "law_text_reader_version")]
+    if sections_file is None:
+        selected[1:] = ["NULL", "NULL"]
     rows = duckdb.sql(
-        f"SELECT law_id, update_date, uslm_outcome, {version} FROM read_parquet('{prior_file}') WHERE congress IN (SELECT UNNEST(?))",
+        f"SELECT law_id, update_date, uslm_outcome, {', '.join(selected)} FROM read_parquet('{prior_file}') WHERE congress IN (SELECT UNNEST(?))",
         params=[[str(c) for c in congresses]],
     ).fetchall()
-    return {str(law_id): HeldLaw(update_date, outcome, version) for law_id, update_date, outcome, version in rows}
+    held = {str(row[0]): HeldLaw(*row[1:]) for row in rows}
+    if sections_file is not None and {"law_section_count", "uslm_sha256"} <= columns:
+        # A parent status alone cannot establish that its matching children survived.
+        invalid = duckdb.sql(
+            f"SELECT p.law_id FROM read_parquet('{prior_file}') p LEFT JOIN "
+            f"(SELECT law_id, count(*) AS n, min(source_sha256) AS lo, max(source_sha256) AS hi "
+            f"FROM read_parquet('{sections_file}') GROUP BY law_id) s USING (law_id) "
+            "WHERE p.law_text_outcome = 'parsed' AND "
+            "(TRY_CAST(p.law_section_count AS BIGINT) IS DISTINCT FROM coalesce(s.n, 0) "
+            "OR s.lo IS DISTINCT FROM p.uslm_sha256 OR s.hi IS DISTINCT FROM p.uslm_sha256)"
+        ).fetchall()
+        for (law_id,) in invalid:
+            if law_id in held:
+                held[law_id] = held[law_id]._replace(text_reader_version=None)
+    return held
 
 
 def _held_congresses(prior_file: Path | None) -> set[int]:
@@ -278,6 +310,7 @@ def _list_laws(
 def _uslm_row(
     uslm: LawTextSource, record: Mapping[str, Any], law: Mapping[str, Any], plain: dict,
     evidence: CaptureEvidence | None = None,
+    text_sections: list[dict] | None = None,
 ) -> dict:
     """The law's row with its PLAW leg: every attempted read states a truthful outcome.
 
@@ -312,7 +345,7 @@ def _uslm_row(
     if evidence:
         evidence.capture(acquired.capture, stage=stage)
     try:
-        return shape_law(
+        row = shape_law(
             record, law, uslm=acquired.metadata, uslm_sha256=acquired.capture.sha256,
             uslm_observed_at=acquired.capture.observed_at, uslm_outcome=CAPTURED,
         )
@@ -324,6 +357,29 @@ def _uslm_row(
             uslm_observed_at=acquired.capture.observed_at,
             uslm_outcome="captured_refused", uslm_reason="contract_refused",
         )
+    try:
+        document = read_law_sections(acquired.capture.body, selection=selection,
+                                     final_url=acquired.capture.resolved_url)
+        children = [shape_law_section(section, document=document, observed_at=acquired.capture.observed_at)
+                    for section in document.sections]
+    except (UslmSourceError, TableContractError) as error:
+        reason = scrub_credential(str(error), "")[:1000]
+        row = shape_law(record, law, uslm=acquired.metadata, uslm_sha256=acquired.capture.sha256,
+                        uslm_observed_at=acquired.capture.observed_at, uslm_outcome=CAPTURED,
+                        law_text_outcome="refused", law_text_reader_version=LAW_TEXT_READER_VERSION,
+                        law_text_reason="section_structure_refused", law_text_url=acquired.capture.resolved_url)
+        if evidence:
+            evidence.event("law-text-refused", stage=stage, law_id=plain["law_id"], reason=reason,
+                           source_sha256=acquired.capture.sha256, reader_version=LAW_TEXT_READER_VERSION)
+        return row
+    row = shape_law(record, law, uslm=acquired.metadata, uslm_sha256=acquired.capture.sha256,
+                    uslm_observed_at=acquired.capture.observed_at, uslm_outcome=CAPTURED,
+                    law_text_outcome="parsed", law_text_reader_version=LAW_TEXT_READER_VERSION,
+                    law_section_count=len(children), law_body_remainder=document.unsectioned_body,
+                    law_text_issues=document.issues, law_text_url=acquired.capture.resolved_url)
+    if text_sections is not None:
+        text_sections.extend(children)
+    return row
 
 
 def _law_rows(
@@ -332,6 +388,8 @@ def _law_rows(
     uslm: LawTextSource,
     cap: PerRunCap,
     evidence: CaptureEvidence | None = None,
+    text_sections: list[dict] | None = None,
+    text_evaluated: set[str] | None = None,
 ) -> list[dict]:
     rows: list[dict] = []
     outcomes: Counter[str] = Counter()
@@ -341,15 +399,18 @@ def _law_rows(
         # A validated read under the current rule stands until the list row moves; ``captured_partial`` is
         # the whole truth about a law whose USLM states no Statutes citation, not a read to retry every run.
         if (prior is not None and prior.uslm_outcome in VALIDATED
-                and prior.reader_version == USLM_READER_VERSION and prior.update_date == plain["update_date"]):
+                and prior.reader_version == USLM_READER_VERSION and prior.update_date == plain["update_date"]
+                and prior.text_outcome == "parsed" and prior.text_reader_version == LAW_TEXT_READER_VERSION):
             unchanged += 1
             continue
-        row = _uslm_row(uslm, record, law, plain, evidence) if cap.take() else None
+        children: list[dict] = []
+        row = _uslm_row(uslm, record, law, plain, evidence, children) if cap.take() else None
         if row is not None and evidence:
             evidence.event("law-read", law_id=plain["law_id"], outcome=row["uslm_outcome"],
                            reason=row["uslm_reason"], reader_version=USLM_READER_VERSION)
         if (row is not None and prior is not None and prior.uslm_outcome in VALIDATED
-                and row["uslm_outcome"] not in VALIDATED):
+                and (row["uslm_outcome"] not in VALIDATED
+                     or (prior.text_outcome == "parsed" and row["law_text_outcome"] != "parsed"))):
             # A failed new attempt must not erase an earlier validated body.
             deferred += 1
             continue
@@ -359,6 +420,11 @@ def _law_rows(
                 deferred += 1
                 continue
             row = plain
+        if row["law_text_outcome"] == "parsed":
+            if text_sections is not None:
+                text_sections.extend(children)
+            if text_evaluated is not None:
+                text_evaluated.add(str(row["law_id"]))
         outcomes[row["uslm_outcome"]] += 1
         rows.append(row)
     logger.info(
@@ -628,8 +694,8 @@ def build_laws(
     max_uslm: int = MAX_USLM_PER_RUN,
     download_prior: Callable[[str, Path], bool] = r2.download,
     evidence: CaptureEvidence | None = None,
-) -> tuple[Path, Path, Path]:
-    """Build ``laws.parquet``, ``law_code_sections.parquet`` and ``table3_records.parquet``."""
+) -> tuple[Path, Path, Path, Path]:
+    """Build law metadata, Code relationships and sections from the law's own XML."""
     if reader is None:
         api_key = _resolve_api_key()
         if not api_key:
@@ -643,7 +709,7 @@ def build_laws(
     olrc = olrc or olrc_acquirer()
 
     congresses = congresses_from_env()
-    priors = {name: published_table(output_dir, name, download_prior) for name in (NAME, CODE_SECTIONS, TABLE3)}
+    priors = {name: published_table(output_dir, name, download_prior) for name in (NAME, CODE_SECTIONS, TABLE3, TEXT_SECTIONS)}
 
     # 1. The enumeration, whole, then the PLAW leg under its cap.
     if evidence:
@@ -652,7 +718,10 @@ def build_laws(
     listed = _list_laws(reader, congresses)
     if evidence:
         evidence.event("law-list-complete", law_ids=[plain["law_id"] for _, _, plain in listed])
-    law_rows = _law_rows(listed, _held_laws(priors[NAME], congresses), uslm, PerRunCap(max_uslm, "Laws: PLAW files"), evidence)
+    text_sections: list[dict] = []
+    text_evaluated: set[str] = set()
+    law_rows = _law_rows(listed, _held_laws(priors[NAME], congresses, priors[TEXT_SECTIONS]), uslm,
+                         PerRunCap(max_uslm, "Laws: PLAW files"), evidence, text_sections, text_evaluated)
 
     # 2. The per-Congress classification tables the index links.
     sessions: set[tuple[str, str]] = set()
@@ -674,4 +743,6 @@ def build_laws(
         merge_contract_table(output_dir, TABLE3, table3.rows, prior_present=priors[TABLE3] is not None,
                              replace_parents=("act_key", evaluated),
                              parquet_metadata=checkpoint_metadata(priors[TABLE3], "laws-table3", checkpoints.values())),
+        merge_contract_table(output_dir, TEXT_SECTIONS, text_sections, prior_present=priors[TEXT_SECTIONS] is not None,
+                             replace_parents=("law_id", text_evaluated)),
     )
