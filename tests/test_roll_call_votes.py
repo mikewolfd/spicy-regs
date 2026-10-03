@@ -639,6 +639,10 @@ def test_held_links_refresh_independently_of_native_fetch_and_preserve_members(
     assert acquirer.requested == ([("senate", 212)] if refresh_native else [])
 
 
+#: What a captured Senate file with none of these stated publishes: the columns a held Senate row carries.
+_SENATE_FILE_COLUMNS = dict.fromkeys(("vote_question_text", "vote_title", "majority_requirement", "modify_date"), "")
+
+
 def _held_row(roll: int, *, congress: int = 119) -> dict:
     """A held House roll call as a prior run published it, with a recorded-vote link at action 21."""
     from spicy_docs.schemas.congress_activity_tables import shape_roll_call_vote
@@ -795,7 +799,7 @@ def test_candidate_capture_merges_legacy_rows_and_is_held_on_resume(tmp_path, sc
         for c in TABLE_CONTRACTS["roll_call_votes"].columns
         if c not in {"tally_kind", "documents_json", "amendments_json"}
     ]
-    # A Senate row: it predates tally_kind and needs no legis_num to be held.
+    # A Senate row: it predates tally_kind and is held on the columns its own file states, with no legis_num.
     legacy = {
         "vote_id": "119-senate-1-1",
         "congress": "119",
@@ -804,6 +808,7 @@ def test_candidate_capture_merges_legacy_rows_and_is_held_on_resume(tmp_path, sc
         "roll_number": "1",
         "yea": "1",
         "vote_date": "January 3, 2025,  12:00 PM",
+        **_SENATE_FILE_COLUMNS,
     }
 
     def legacy_prior(remote, local):
@@ -1095,7 +1100,7 @@ def test_held_rows_relink_from_their_own_columns_without_a_fetch(tmp_path, scope
     """No file is fetched: the House row's legis_num and the Senate row's documents link them; a recorded link stays."""
     stated_house = _held_row(7) | {"legis_num": "H R 7", **dict.fromkeys(("bill_id", "match_action_index", "match_url"))}
     stated_house |= {"match_rule": "unmatched", "conflict_count": "0"}
-    senate = {**_held_row(9), "vote_id": "119-senate-1-9", "chamber": "senate", "legis_num": None,
+    senate = {**_held_row(9), **_SENATE_FILE_COLUMNS, "vote_id": "119-senate-1-9", "chamber": "senate", "legis_num": None,
               "documents_json": json.dumps([{"congress": 119, "type": "S.Res.", "number": "30"}]),
               "amendments_json": "[]", "bill_id": None, "match_rule": "unmatched", "match_action_index": None,
               "match_url": None, "conflict_count": "0"}
@@ -1326,6 +1331,36 @@ def test_a_house_row_published_before_party_totals_is_read_once_more_then_held(t
     second.mkdir()
     resumed = RealBodyAcquirer(house_rolls=(240,))
     assert _real_run(second, _carried(first), acquirer=resumed, overlap=0) == rows
+    assert resumed.requested == []
+
+
+def test_a_senate_row_published_before_its_file_columns_is_read_once_more_then_held(tmp_path, scoped):
+    """A captured Senate file always states its question, title, majority and modify date ("" at the least).
+
+    So a held Senate row with NULL there was captured before those columns, and before the tie-breaker columns
+    that arrived after them: its file is read once more, the only way a tied vote's tie-breaker reaches such a
+    row (119-senate-1-15 read 50-50 with no tie-breaker on roll-call-votes 7e68208e). The re-read row is held
+    from then on, tied or not.
+    """
+    from spicy_regs.transforms.build_roll_call_votes import _READ_COLUMNS
+
+    first = tmp_path / "first"
+    first.mkdir()
+    fresh = _real_run(first, _no_prior, acquirer=RealBodyAcquirer(senate_rolls=(1,)), overlap=0)["119-senate-1-1"]
+    assert all(fresh[column] is not None for column in _READ_COLUMNS["senate"])
+    legacy = {**fresh, **dict.fromkeys(_READ_COLUMNS["senate"]), "tie_breaker_by_whom": None, "tie_breaker_vote": None}
+
+    second = tmp_path / "second"
+    second.mkdir()
+    acquirer = RealBodyAcquirer(senate_rolls=(1,))
+    rows = _real_run(second, _published({"roll_call_votes": [legacy], "member_votes": []}), acquirer=acquirer, overlap=0)
+    assert acquirer.requested == [("senate", 1)]
+    assert rows["119-senate-1-1"] == fresh
+
+    third = tmp_path / "third"
+    third.mkdir()
+    resumed = RealBodyAcquirer(senate_rolls=(1,))
+    assert _real_run(third, _carried(second), acquirer=resumed, overlap=0) == rows
     assert resumed.requested == []
 
 

@@ -23,10 +23,12 @@ before the Clerk's roll files catch up; Senate references alone never establish 
 Senate selection.
 
 A held row is relinked from its own columns, never refetched: ``legis_num`` for
-the House, ``documents_json``/``amendments_json`` for the Senate. A House row
-published before ``legis_num`` or ``clerk_body_element`` existed is not held
-until it carries both, so each is read again once and gains the file's voting
-body element and ``vote_desc`` with them.
+the House, ``documents_json``/``amendments_json`` for the Senate. A row
+published before a column every captured file of its chamber states
+(``_READ_COLUMNS``) is not held until it carries them all, so each is read
+again once: a House row gains the file's voting body element, ``vote_desc``
+and party totals, a Senate row its question, title, majority requirement and
+any tie-breaker.
 
 House files before 2003 (the 101st-107th Congresses) name no legislator by
 bioguide id; spicy-docs reads them with ``name:`` member keys and NULL
@@ -190,8 +192,12 @@ REFERENCE_COLUMNS = ("bill_id", "chamber", "congress", "session", "roll_number",
 LINK_RULE_VERSION = "recorded-vote-then-vote-file-v4"
 LINK_COLUMNS = ("bill_id", "match_rule", "match_action_index", "match_url", "conflict_count")
 IDENTITY_COLUMNS = ("congress", "chamber", "session", "roll_number")
-#: Columns every captured Clerk file fills, so a held House row lacking any of them predates it and is read again.
-_HOUSE_READ_COLUMNS = ("legis_num", "clerk_body_element", "party_totals_json")
+#: Columns every captured file of the chamber fills ("" or [] at the least), so a held row lacking any of them
+#: predates the column and is read again.
+_READ_COLUMNS = {
+    "house": ("legis_num", "clerk_body_element", "party_totals_json"),
+    "senate": ("vote_question_text", "vote_title", "majority_requirement", "modify_date"),
+}
 #: The row's own statement of its measure, read by spicy-docs ``read_vote_file_statement``.
 STATEMENT_COLUMNS = ("source_url", "legis_num", "documents_json", "amendments_json")
 #: The bill family's reference: the bill's own action names the roll call.
@@ -320,9 +326,11 @@ def _held_votes(prior_file: Path) -> set[tuple[str, ...]]:
     element, ``vote_desc`` and totals by party fill. Every captured Clerk file
     states one body element (spicy-docs refuses a file naming neither) and its
     party totals (``[]`` where it states none), so a re-read row is held from
-    then on. A Senate row has no such rule: a NULL tie-breaker also means the
-    vote was not tied, so a row captured before those columns keeps NULL, as
-    the contract says, until it is read again.
+    then on. A Senate row has the same rule on the four columns every captured
+    Senate file states ("" at the least): a NULL tie-breaker alone cannot mark a
+    row for a re-read, since it also means the vote was not tied, but a row
+    lacking those four was captured before them and so before the tie-breaker
+    columns that followed. O(held rows) per chamber.
     """
     if not prior_file.exists():
         return set()
@@ -371,10 +379,11 @@ def _held_votes(prior_file: Path) -> set[tuple[str, ...]]:
             and sum(tallies.values()) == member_count
         ):
             held.add(tuple(str(part) for part in parts))
-    missing = [f"{column} IS NULL" for column in _HOUSE_READ_COLUMNS if column in columns]
-    stated = len(missing) == len(_HOUSE_READ_COLUMNS)  # a prior predating any of them holds no House row
-    unstated = relation.filter("chamber = 'house'" + (f" AND ({' OR '.join(missing)})" if stated else ""))
-    held -= {tuple(str(part) for part in row) for row in unstated.project(", ".join(IDENTITY_COLUMNS)).fetchall()}
+    for chamber, read_columns in _READ_COLUMNS.items():
+        missing = [f"{column} IS NULL" for column in read_columns if column in columns]
+        stated = len(missing) == len(read_columns)  # a prior predating any of them holds no row of the chamber
+        unstated = relation.filter(f"chamber = '{chamber}'" + (f" AND ({' OR '.join(missing)})" if stated else ""))
+        held -= {tuple(str(part) for part in row) for row in unstated.project(", ".join(IDENTITY_COLUMNS)).fetchall()}
     return held
 
 
