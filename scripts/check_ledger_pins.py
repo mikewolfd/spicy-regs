@@ -15,6 +15,14 @@ compared with a HEAD of the public object. Read-only.
 not a semantic quality gate: ``scripts/audit_generation.py`` writes the
 machine-readable audit of what a pin actually holds.
 
+A second, non-failing pass lists each dictionary sentence that names a pin no
+longer live (``PROSE-NOT-LIVE``): a sentence that says what generation
+``42d9c8a5…`` held, or what a later run would do, went false within hours on
+2026-10-03 and nothing listed it. Whoever releases re-measures or deletes each
+listed sentence. It compares pins only, so it cannot see a sentence with no pin
+that went stale, a pinned count that is still the live pin's but was miscounted,
+or a pin written in a form other than ``snapshot_<hex>`` or ``<hex>…``.
+
 The publisher checked is the one the ledger names in its ``Public data
 destination`` line, not whatever the environment happens to point at: a clean
 run against another bucket would prove nothing about this ledger. An explicit
@@ -30,6 +38,8 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 import httpx
+import yaml
+from spicy_regs.data_dictionary import DEFAULT_DESCRIPTIONS, pinned_sentences
 from spicy_regs.output_ledger import LEDGER, audits, ledger_destination, ledger_rows
 from spicy_regs.sources import publication
 
@@ -115,24 +125,43 @@ def object_pins(base_url: str, keys: Sequence[str]) -> dict[str, tuple[str, int]
     return pins
 
 
-def fetch_live(base_url: str, ledger: str) -> tuple[dict, dict, dict]:
-    """Read the publication index and the rulemaking pointer once each, and HEAD the ledger's base objects."""
+def fetch_live(base_url: str, ledger: str) -> tuple[dict, dict, dict, str | None]:
+    """Read the index, the rulemaking pointer and the comments export receipt once each; HEAD the base objects.
+
+    The last item is the comments receipt's short pin, or None while no receipt is published.
+    """
     rollups = rollup_pins(publication.load_index(base_url))
     objects = object_pins(base_url, base_object_keys(ledger))
-    return rollups, snapshot_pins(publication.load_rulemaking_snapshot(base_url)), objects
+    comments = publication.load_comments_publication(base_url)
+    receipt = comments["receipt_sha256"].removeprefix("sha256:")[:8] if comments else None
+    return rollups, snapshot_pins(publication.load_rulemaking_snapshot(base_url)), objects, receipt
+
+
+def live_prose_pins(rollups: Live, snapshots: Live, receipt: str | None) -> set[str]:
+    """Every pin a dictionary sentence may name and still describe live data."""
+    return {pin for pin, _ in (*rollups.values(), *snapshots.values())} | ({receipt} if receipt else set())
+
+
+def prose_not_live(tables: Mapping, live: set[str]) -> list[tuple[str, str, str, str]]:
+    """``(table, field, pin, sentence)`` for each pinned dictionary sentence whose pin is not live."""
+    return [found for found in pinned_sentences(dict(tables)) if found[2] not in live]
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ledger", type=Path, default=LEDGER)
     parser.add_argument("--index-url", help="Public base URL holding publication.json (default: the ledger's destination)")
+    parser.add_argument("--descriptions", type=Path, default=DEFAULT_DESCRIPTIONS,
+                        help="The dictionary whose pinned sentences the prose pass reads")
     args = parser.parse_args(argv)
     try:
         ledger = args.ledger.read_text(encoding="utf-8")
         stated = ledger_destination(ledger) if args.index_url is None else None
         base_url = (args.index_url or stated or "").rstrip("/")
-        results = check(ledger, *fetch_live(base_url, ledger))
-    except (OSError, ValueError, KeyError, RuntimeError, httpx.HTTPError) as exc:
+        rollups, snapshots, objects, receipt = fetch_live(base_url, ledger)
+        results = check(ledger, rollups, snapshots, objects)
+        tables = (yaml.safe_load(args.descriptions.read_text(encoding="utf-8")) or {}).get("tables", {})
+    except (OSError, ValueError, KeyError, RuntimeError, httpx.HTTPError, yaml.YAMLError) as exc:
         print(f"Ledger pins could not be checked: {exc}", file=sys.stderr)
         return 1
     source = "the ledger's stated destination" if stated else "an explicit --index-url, not the ledger's destination"
@@ -142,6 +171,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     counts = Counter(status for status, _ in results)
     print("\n" + " ".join(f"{status}={counts[status]}" for status in ("OK", "NO-PIN", *FAILING)))
     print("OK compares pins only; audit what a pin holds with scripts/audit_generation.py.")
+    stale = prose_not_live(tables, live_prose_pins(rollups, snapshots, receipt))
+    print(f"\nDictionary sentences pinned to data that is no longer live ({args.descriptions.name}):")
+    for table, field, pin, sentence in stale:
+        print(f"PROSE-NOT-LIVE {table}.{field} {pin}  {sentence[:200]}")
+    print(f"PROSE-NOT-LIVE={len(stale)} (a report: re-measure or delete each sentence; it never fails this check)")
     return 1 if any(counts[status] for status in FAILING) else 0
 
 

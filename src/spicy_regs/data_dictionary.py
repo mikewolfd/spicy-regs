@@ -211,6 +211,29 @@ def data_quality_prose_errors(table: str, data_quality: str) -> list[str]:
     return errors
 
 
+def pinned_sentences(tables: dict) -> list[tuple[str, str, str, str]]:
+    """``(table, field, pin, sentence)`` for each sentence of the dictionary prose that names a pin.
+
+    A pin is what COVERAGE_PROSE_REFUSALS calls a snapshot id or a digest or generation pin, cut to the
+    form the live index states (``snapshot_`` and 8 hex digits, or 8 hex digits), so the release-time
+    prose pass (``scripts/check_ledger_pins.py``) can say which no longer name the live data. ``field`` is
+    ``summary``, ``coverage``, ``data_quality`` or ``columns.<name>``; pass the file's own entries, not
+    ``load_descriptions``', so a contract sentence this repository cannot edit is not listed.
+    """
+    found = []
+    for table, entry in tables.items():
+        fields = {name: (entry or {}).get(name) for name in ("summary", "coverage", "data_quality")}
+        fields |= {f"columns.{name}": text for name, text in ((entry or {}).get("columns") or {}).items()}
+        for field, text in fields.items():
+            for sentence in re.split(r"(?<=\.)\s+", " ".join(str(text or "").split())):
+                for what in ("a snapshot id", "a digest or generation pin"):
+                    for match in _DATA_QUALITY_RULES[what].finditer(sentence):
+                        pin = match.group(0).rstrip("…")
+                        pin = pin[: len("snapshot_") + 8] if pin.startswith("snapshot_") else pin[:8]
+                        found.append((table, field, pin, sentence))
+    return found
+
+
 #: A data-quality note that stands in for a fix in the vendored spicy-docs wheel ends "(interim until
 #: spicy-docs > <version>)". spicy-regs cannot override one contract column's sentence, so such a note
 #: corrects it from the table level, and without an expiry it outlives the release that fixes the sentence

@@ -153,7 +153,9 @@ def test_fetch_live_follows_the_pointer_to_its_manifest(monkeypatch):
     _serve(monkeypatch)
     heads = {f"{BASE}/dockets.parquet": ('"0a1b2c3d9e8f7a6b5c4d3e2f1a0b9c8d-303"', "1000")}
     monkeypatch.setattr(pins.httpx, "head", lambda url, **_: _Head(*heads[url]) if url in heads else _Head())
-    rollups, snapshots, objects = pins.fetch_live(BASE, LEDGER)
+    monkeypatch.setattr(publication, "load_comments_publication", lambda url: {"receipt_sha256": "sha256:" + "7" * 64})
+    rollups, snapshots, objects, receipt = pins.fetch_live(BASE, LEDGER)
+    assert receipt == "77777777"
     assert rollups["court_citation_map.parquet"] == ("f1e2e523", 20)
     assert snapshots["proceedings.parquet"] == ("snapshot_0e799850", 515121)
     assert objects == {"dockets.parquet": ("0a1b2c3d", 1000)}  # documents answers 404; comments records no ETag
@@ -170,7 +172,7 @@ class _Head:
 
 def test_exit_code_fails_only_on_drift_not_live_or_malformed(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(
-        pins, "fetch_live", lambda url, text: (pins.rollup_pins(INDEX), pins.snapshot_pins(_snapshot()), OBJECTS)
+        pins, "fetch_live", lambda url, text: (pins.rollup_pins(INDEX), pins.snapshot_pins(_snapshot()), OBJECTS, None)
     )
     ledger = tmp_path / "ledger.md"
     ledger.write_text(LEDGER, encoding="utf-8")
@@ -185,7 +187,7 @@ def test_the_default_publisher_is_the_one_the_ledger_states_not_the_environment(
     """An unset or foreign R2_PUBLIC_URL must not decide which bucket a ledger is checked against."""
     monkeypatch.setenv("R2_PUBLIC_URL", "https://another-bucket.example")
     seen = []
-    monkeypatch.setattr(pins, "fetch_live", lambda url, text: seen.append(url) or ({}, {}, {}))
+    monkeypatch.setattr(pins, "fetch_live", lambda url, text: seen.append(url) or ({}, {}, {}, None))
     ledger = tmp_path / "ledger.md"
     ledger.write_text("Public data destination: `https://pub-fork.example/`. Local candidates are not publications.\n")
     assert pins.main(["--ledger", str(ledger)]) == 0
@@ -196,10 +198,57 @@ def test_the_default_publisher_is_the_one_the_ledger_states_not_the_environment(
 @pytest.mark.parametrize("text", ["no destination here\n",
                                   "Public data destination: `https://a.example`\nPublic data destination: `https://b.example`\n"])
 def test_a_ledger_without_exactly_one_destination_refuses_unless_one_is_given(monkeypatch, tmp_path, capsys, text):
-    monkeypatch.setattr(pins, "fetch_live", lambda url, text: ({}, {}, {}))
+    monkeypatch.setattr(pins, "fetch_live", lambda url, text: ({}, {}, {}, None))
     ledger = tmp_path / "ledger.md"
     ledger.write_text(text)
     assert pins.main(["--ledger", str(ledger)]) == 1
     assert "pass --index-url" in capsys.readouterr().err
     assert pins.main(["--ledger", str(ledger), "--index-url", "https://explicit.example"]) == 0
     assert "an explicit --index-url" in capsys.readouterr().out
+
+
+# --------------------------------------------------------------------------- #
+# The prose pass: dictionary sentences pinned to a generation that is no longer live (round 6, L1).
+# --------------------------------------------------------------------------- #
+PROSE = {
+    "amendments": {
+        "data_quality": "Read again later. On generation c943cb37… (2026-09-23) every row held one. "
+                        "On generation 4a40b55e… (2026-09-22) 12 rows were wrong.",
+        "columns": {"amendment_id": "Keyed on it; on receipt sha256:77a08369… (2026-10-03) all rows state it."},
+    },
+    "rule_targets": {"data_quality": "Measured on snapshot_0e799850 and on snapshot_62318069 (digits only)."},
+    "nominations": {"summary": "No pin here: a UUID such as 7866327b-c892-4430 is not one."},
+}
+
+
+def _live_prose(receipt: str | None = "77a08369") -> set[str]:
+    return pins.live_prose_pins(pins.rollup_pins(INDEX), pins.snapshot_pins(_snapshot()), receipt)
+
+
+def test_the_prose_pass_lists_each_sentence_whose_pin_is_not_the_live_one():
+    """The GAO sentence of 2026-10-03 named generation 42d9c8a5 and was false on the next one; nothing listed it."""
+    listed = pins.prose_not_live(PROSE, _live_prose())
+    assert [(table, field, pin) for table, field, pin, _ in listed] == [
+        ("amendments", "data_quality", "4a40b55e"),
+        ("rule_targets", "data_quality", "snapshot_62318069"),
+    ]
+    assert listed[0][3] == "On generation 4a40b55e… (2026-09-22) 12 rows were wrong."
+
+
+def test_a_receipt_pin_is_live_only_while_the_export_receipt_is_the_named_one():
+    listed = pins.prose_not_live(PROSE, _live_prose(receipt=None))
+    assert ("amendments", "columns.amendment_id", "77a08369") in [entry[:3] for entry in listed]
+
+
+def test_the_prose_pass_is_a_report_and_never_fails_the_check(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(pins, "fetch_live", lambda url, text: (
+        pins.rollup_pins(INDEX), pins.snapshot_pins(_snapshot()), OBJECTS, "77a08369"))
+    ledger = tmp_path / "ledger.md"
+    ledger.write_text("\n".join(line for line in LEDGER.splitlines() if "amendments" in line), encoding="utf-8")
+    descriptions = tmp_path / "descriptions.yaml"
+    descriptions.write_text("tables:\n  amendments:\n    data_quality: On generation 4a40b55e… (2026-09-22) it held 12.\n",
+                            encoding="utf-8")
+    argv = ["--ledger", str(ledger), "--index-url", "https://data.example", "--descriptions", str(descriptions)]
+    assert pins.main(argv) == 0
+    out = capsys.readouterr().out
+    assert "PROSE-NOT-LIVE amendments.data_quality 4a40b55e" in out and "PROSE-NOT-LIVE=1" in out
