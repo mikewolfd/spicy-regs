@@ -23,6 +23,7 @@ from spicy_regs import fec_release as release, mcp_server as server
 from spicy_regs.citation_resolution import SOURCE_TABLES
 from spicy_regs.citation_sources import TEXT_SOURCES
 from spicy_regs.sources import publication as pub
+from tests.test_chaos_r3_server import _fec_specs
 from tests.test_generation_mcp import connection_fixture, serve_documents
 from tests.test_mcp_fec_release import configure, connection
 from tests.test_mcp_query_results import call
@@ -248,3 +249,26 @@ def test_a_moved_receipt_rebuilds_the_connection(tmp_path, monkeypatch):
     moved["source"]["snapshot_id"] += 1
     serve_documents(monkeypatch, {f"{server.R2_BASE_URL}/comments-publication.json": moved})
     assert server._refreshed(first) is not first
+
+
+# S10 class A: the summary and detailed-summary decision columns name what the rule does not do.
+
+def test_summary_measure_reasons_name_the_layouts_that_never_state_the_field():
+    from spicy_regs.fec_financial_rules import _SUMMARY_MAPPINGS
+
+    specs = {spec.view.name: spec.view for spec in _fec_specs()}
+    for field in ("NET_CONTB", "TTL_RECEIPTS", "TTL_DISB"):
+        reason = specs[f"fec_reported_financial_summaries_{field.lower()}_decision"].column_descriptions["reason"]
+        missing = [layout for layout, rule in _SUMMARY_MAPPINGS.items() if field not in rule.money_fields]
+        assert "summary_measure_missing_ambiguous_or_inexact" in reason and all(layout in reason for layout in missing)
+        assert "Total_Receipt" in reason
+    present = [layout for layout, rule in _SUMMARY_MAPPINGS.items() if "TTL_RECEIPTS" in rule.money_fields]
+    reason = specs["fec_reported_financial_summaries_ttl_receipts_decision"].column_descriptions["reason"]
+    assert not any(layout in reason for layout in present)
+
+
+def test_detailed_summary_values_say_outflows_keep_a_positive_sign():
+    specs = {spec.view.name: spec.view for spec in _fec_specs()}
+    for table in ("fec_receipts", "fec_intercommittee_transactions"):
+        value = specs[f"{table}_detailed_summary_component_decision"].column_descriptions["value"]
+        assert "22Y" in value and "positive" in value and "negative_sign_preserved_refund_not_inferred" in value

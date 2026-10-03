@@ -13,7 +13,7 @@ from pathlib import Path
 import re
 from typing import Mapping
 
-from spicy_regs.fec_financial_rules import IDENTITY_VERSION, POLICY_VERSION as FINANCIAL_POLICY
+from spicy_regs.fec_financial_rules import IDENTITY_VERSION, POLICY_VERSION as FINANCIAL_POLICY, _SUMMARY_MAPPINGS
 from spicy_regs.fec_release import QualifiedView
 from spicy_regs.fec_versions import INDIVIDUAL_SNAPSHOT_POLICY
 
@@ -172,6 +172,31 @@ def _selected_scope(source_generation_pin, population, as_of, namespace_evidence
     ):
         raise ValueError("FEC filing namespace witnesses require explicit SHA-256 pins")
     return proofs
+
+
+def _rule_caveats(query: str, field: str | None) -> dict[str, str]:
+    """Column meanings a rule's own decisions do not state: what one refusal reason also covers, what a sign omits.
+
+    Wording only (round 4, S10); the SQL and its reasons stay policy /3's. A
+    layout-specific refusal reason needs a policy version, and an outflow-direction
+    rule also a retained FEC transaction-type definition (owner items, FEC /4).
+    """
+    if query == "reported_summary_measure":
+        missing = [layout for layout, rule in _SUMMARY_MAPPINGS.items() if field not in rule.money_fields]
+        return {"reason": (
+            f"{_FINANCIAL_COLUMN_DESCRIPTIONS['reason']} summary_measure_missing_ambiguous_or_inexact also refuses "
+            f"every row of a layout that never states {field}: {', '.join(missing)}. Those layouts name their own "
+            f"measures differently (candidate-summary-csv/1 states Total_Receipt, Total_Disbursement and "
+            f"Net_Contribution, defined per candidate); no rule equates one with {field}."
+        )}
+    if query == "bulk_detailed_summary_component":
+        return {"value": (
+            f"{_FINANCIAL_COLUMN_DESCRIPTIONS['value']} The reported sign is kept: refund and other outflow transaction "
+            "types (such as 22Y, a refund to an individual) are reported as positive amounts, and "
+            "negative_sign_preserved_refund_not_inferred marks only negative ones, so a sum of eligible values is not "
+            "net receipts. No rule infers direction from transaction_type."
+        )}
+    return {}
 
 
 def fec_query_views(
@@ -481,6 +506,7 @@ def fec_query_views(
                 **_FINANCIAL_COLUMN_DESCRIPTIONS,
                 "query": f"Named analytic purpose {query}; eligibility applies only to this purpose and requested_fields, "
                          "not to current totals, ledger audit coverage or release compatibility.",
+                **_rule_caveats(query, field),
             },
         )
 
