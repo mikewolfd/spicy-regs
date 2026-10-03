@@ -44,6 +44,7 @@
         "description": "Regulation Identifier Number tying the docket to the Unified Agenda. Often null."
       }
     ],
+    "subject": "rulemaking",
     "grain": null,
     "identity_columns": [
       "docket_id"
@@ -199,6 +200,7 @@
         "description": "When the reconcile step first found the document removed, as a UTC ISO 8601 instant; NULL unless `publisher_status` is `removed`."
       }
     ],
+    "subject": "rulemaking",
     "grain": null,
     "identity_columns": [
       "document_id"
@@ -383,6 +385,7 @@
         "description": "`comment` read as plain text, derived from it each time the mirror is exported and never stored in the catalog. The publisher serves `comment` as an HTML fragment (`I&#39;m`, `<br/>`); this column decodes each character reference once, makes `<br>` and the end of a block element a newline and a no-break space a space, drops every other tag and trims the ends. Search and quote this column; `comment` keeps the publisher's bytes. The projection loses link targets, list bullets and table layout. One decode only: a body the publisher escaped twice keeps one level (`&amp;#39;` reads `&#39;`), and markup a commenter typed as text (`&lt;br&gt;`) reads as that text. NULL exactly where `comment` is NULL."
       }
     ],
+    "subject": "rulemaking",
     "grain": null,
     "identity_columns": [
       "comment_id"
@@ -461,6 +464,7 @@
         "description": "Number of posted comment records in the group. These are posted comment records, not comments received: an agency posts one record for a mass-mail campaign that can stand for thousands of submissions (EPA-HQ-OW-2022-0114 has 1,629 posted records for about 122,200 comments EPA received). To estimate submissions received, sum `comments.duplicate_comments` as its description says; this table does not carry it."
       }
     ],
+    "subject": "rulemaking",
     "grain": null,
     "identity_columns": [
       "agency_code",
@@ -562,6 +566,7 @@
         "description": "Earliest document `posted_date` on the docket, less postings Regulations.gov removed, used as a creation date. Null when unknown."
       }
     ],
+    "subject": "rulemaking",
     "grain": null,
     "identity_columns": [
       "docket_id"
@@ -621,6 +626,7 @@
         "description": "Posted comments on the agency's dockets, summed from `comments_index`, less those on a posting Regulations.gov removed. These are posted comment records, not comments received: an agency posts one record for a mass-mail campaign that can stand for thousands of submissions (EPA-HQ-OW-2022-0114 has 1,629 posted records for about 122,200 comments EPA received). To estimate submissions received, sum `comments.duplicate_comments` as its description says; this table does not carry it."
       }
     ],
+    "subject": "rulemaking",
     "grain": null,
     "identity_columns": [
       "agency_code"
@@ -696,6 +702,7 @@
         "description": "Number of documents the agency posted of that type in that month."
       }
     ],
+    "subject": "rulemaking",
     "grain": null,
     "identity_columns": [
       "agency_code",
@@ -825,6 +832,7 @@
         "description": "Executive order number, for presidential documents."
       }
     ],
+    "subject": "rulemaking",
     "grain": "One source docket-array occurrence per dated Federal Register record; docket_source_ordinal retains the original zero-based array position in rebuilt outputs. Older publications lack that column.",
     "identity_columns": []
   },
@@ -858,6 +866,7 @@
         "description": "`recent_30d` divided by `baseline` — the spike multiple."
       }
     ],
+    "subject": "rulemaking",
     "grain": null,
     "identity_columns": [
       "agency_code"
@@ -933,6 +942,7 @@
         "description": "`'true'` on the granule that is a part itself (an id ending `-part200`, or `-part60-id334` in Title 41), `'false'` on every other row. A part's subparts, subject groups, appendices and table of contents share its `cfr_ref` and read `'false'`, so `part_granule = 'true'` picks the part out of them; a part citation's lookup does exactly that. Read from the granule id alone by SpicyDocs' grammar, never from the heading. A part held in two annual editions has one such row per edition, and a part printed across volumes one per volume (40 CFR part 60 spans volumes 7 to 9 of the 2025 edition)."
       }
     ],
+    "subject": "reference",
     "grain": null,
     "identity_columns": [
       "package_id",
@@ -1204,6 +1214,7 @@
         "description": "Source list state: absent, empty or populated; NULL means not read."
       }
     ],
+    "subject": "congress",
     "grain": "One row per bill or resolution, as one BILLSTATUS document states it.",
     "identity_columns": [
       "bill_id"
@@ -1249,6 +1260,7 @@
         "description": "UTC timestamp when this retained answer was shaped, not the publisher's modification date."
       }
     ],
+    "subject": "congress",
     "grain": "One observed subject assignment per bill_id, with the latest retained answer replacing its predecessor.",
     "identity_columns": [
       "bill_id"
@@ -1349,6 +1361,7 @@
         "description": "URL of the entry's detail page on reginfo.gov."
       }
     ],
+    "subject": "rulemaking",
     "grain": null,
     "identity_columns": [
       "rin",
@@ -1445,6 +1458,7 @@
         "description": "JSON array of the literal Federal Register number references behind the edge, each with the `status` saying how it resolved (`dated`, `single_candidate_in_input`, `ambiguous`, `missing`, or a folded or unpadded match)."
       }
     ],
+    "subject": "rulemaking",
     "grain": "One observed docket, CFR and RIN edge per evidence source class.",
     "identity_columns": [
       "docket_id",
@@ -1563,6 +1577,7 @@
         "description": "JSON array of every RIN it holds, from its dockets, documents and Register documents."
       }
     ],
+    "subject": "rulemaking",
     "grain": "One rulemaking proceeding: the dockets and Register documents that are one action.",
     "identity_columns": [
       "proceeding_id"
@@ -1653,6 +1668,7 @@
         "description": "JSON array of unresolved Register number references from the Register documents that state this RIN."
       }
     ],
+    "subject": "rulemaking",
     "grain": "One durable Regulatory Agenda item per RIN.",
     "identity_columns": [
       "agenda_item_id"
@@ -1738,6 +1754,7 @@
         "description": "Id of a prior row this one continues; always NULL here."
       }
     ],
+    "subject": "rulemaking",
     "grain": "One evidence record linking one agenda item (RIN) to one proceeding.",
     "identity_columns": [
       "relationship_id"
@@ -1843,6 +1860,7 @@
         "description": "Latest comment end (Eastern day) of its Regulations.gov documents, `YYYY-MM-DD`; NULL when none states one."
       }
     ],
+    "subject": "rulemaking",
     "grain": "One rule-derived group of source-reported date windows for a notice and its candidate extensions; not a legally adjudicated comment period.",
     "identity_columns": [
       "comment_period_id"
@@ -1998,6 +2016,7 @@
         "description": "Id of a prior row this one continues; always NULL here: lifecycles are recomputed each snapshot and continue no prior row. `proceedings.supersedes_id` differs: there a continuing proceeding names its own id."
       }
     ],
+    "subject": "rulemaking",
     "grain": "One lifecycle per docketed proceeding.",
     "identity_columns": [
       "proceeding_id"
@@ -2103,6 +2122,7 @@
         "description": "Id of a prior row this one continues; always NULL here: events are recomputed each snapshot and continue no prior row. `proceedings.supersedes_id` differs: there a continuing proceeding names its own id."
       }
     ],
+    "subject": "rulemaking",
     "grain": "One stage event per document of one docketed proceeding.",
     "identity_columns": [
       "proceeding_id",
@@ -2229,6 +2249,7 @@
         "description": "Id of a prior row this one continues; always NULL here."
       }
     ],
+    "subject": "rulemaking",
     "grain": "One agency (or all agencies) and one stratum of rules.",
     "identity_columns": [
       "agency_code",
@@ -2253,7 +2274,7 @@
   "sam_entities": {
     "table": "sam_entities",
     "label": "Federal entity registry",
-    "summary": "One row per active SAM.gov registration, ingested from the Entity Management API v4 bulk extract (`/entities?format=json`) by `build_sam_entities`. The authoritative federal entity registry, the directory of organizations registered to do business with or receive assistance from the U.S. government, and the anchor for organization/entity resolution across the corpus: the same UEI ties a commenting organization to its registered identity. Filtered to public active registrations (`registrationStatus=A`); list-level fields only. All columns are stored as VARCHAR.",
+    "summary": "One row per active SAM.gov registration, ingested from the Entity Management API v4 bulk extract (`/entities?format=json`) by `build_sam_entities`. The authoritative federal entity registry, the directory of organizations registered to do business with or receive assistance from the U.S. government. Its UEI is the identity `usaspending_recipients.uei` joins on. Comments carry no UEI, so a commenting organization reaches this table only by a name match on `legal_business_name` or `dba_name`, which is not an identity. Filtered to public active registrations (`registrationStatus=A`); list-level fields only. All columns are stored as VARCHAR.",
     "coverage": "Window, complete for the years read. Every public active registration SAM.gov dated 1996 through 2026 and the two older ones (1949, 1968), one bulk extract per registrationDate year; each year matched its active count when read, less its credited renewals (see data_quality), and the output ledger records the counts. Scheduled runs re-read the current year every other day and cycle through the older years between, and each year read replaces that year's rows.",
     "kind": "window",
     "measured_on": "2026-09-26",
@@ -2355,6 +2376,7 @@
         "description": "Entity's self-reported website URL (`coreData.entityInformation.entityURL`). Often null."
       }
     ],
+    "subject": "spending",
     "grain": null,
     "identity_columns": [
       "uei",
@@ -2441,6 +2463,7 @@
         "description": "URL of the filing's printable document page on lda.gov (`filing_document_url`; lda.senate.gov redirects there)."
       }
     ],
+    "subject": "lobbying",
     "grain": null,
     "identity_columns": [
       "filing_uuid"
@@ -2491,6 +2514,7 @@
         "description": "JSON array of the government entities contacted for this activity, `{id, name}` objects (e.g. `SENATE`)."
       }
     ],
+    "subject": "lobbying",
     "grain": null,
     "identity_columns": [
       "filing_uuid",
@@ -2500,7 +2524,7 @@
   "lobbying_activity_lobbyists": {
     "table": "lobbying_activity_lobbyists",
     "label": "Lobbyists named on lobbying activities",
-    "summary": "One row per lobbyist an LDA filing names on one of its activities, with the lobbyist's LDA id and name parts, any covered official position they held, and whether the filing lists them as new. Keyed `(filing_uuid, activity_index, lobbyist_index)`, positions in the filing's own lists. Joins to `lobbying_activities` on `(filing_uuid, activity_index)`. All columns are stored as VARCHAR.",
+    "summary": "One row per lobbyist an LDA filing names on one of its activities, with the lobbyist's LDA id and name parts, any covered official position they held, and whether the filing lists them as new. Keyed `(filing_uuid, activity_index, lobbyist_index)`, positions in the filing's own lists. Joins to `lobbying_activities` on `(filing_uuid, activity_index)` and to `lobbying_filings` on `filing_uuid`. All columns are stored as VARCHAR.",
     "coverage": "True range, the same filings as `lobbying_filings`: one row per lobbyist named on each activity. An activity that names no lobbyist has no rows here.",
     "kind": "true_range",
     "measured_on": "2026-09-28",
@@ -2524,7 +2548,7 @@
       {
         "column_name": "lobbyist_id",
         "column_type": "VARCHAR",
-        "description": "LDA lobbyist id: the stable identity of the person across filings."
+        "description": "LDA's lobbyist record id: one registrant's record of a lobbyist, stable across that registrant's filings, not an identity for the person. LDA's own record for an id (`lda.gov/api/v1/lobbyists/<id>/`) names exactly one registrant, so a lobbyist who moves to another firm is filed under a new id: Stephen Holland is 146616 under registrant 11377 and 151303 under registrant 7257. A count of distinct ids counts registrant-lobbyist records, not people; matching a person across firms is a name match. A few ids also appear on another registrant's filing, all on filings of 2020-2022 (measured 2026-10-03)."
       },
       {
         "column_name": "prefix",
@@ -2559,7 +2583,7 @@
       {
         "column_name": "covered_position",
         "column_type": "VARCHAR",
-        "description": "The covered executive- or legislative-branch position the lobbyist held, as filed; null when none."
+        "description": "The covered executive- or legislative-branch position the lobbyist held, as the registrant typed it for this activity: free text, not parsed, with no link to `committees` or any agency table. It is stated per activity, so one lobbyist's rows can carry it on some activities and not others; NULL means this entry states none, not that the lobbyist held none. Many values are placeholders rather than positions (`N/A`, `None`, `Not applicable`) or point elsewhere (`See prior filing`), and LDA's own filings sometimes put a colleague's text against the wrong name."
       },
       {
         "column_name": "new",
@@ -2567,6 +2591,7 @@
         "description": "`True` when the filing lists the lobbyist as new for this activity, `False` otherwise."
       }
     ],
+    "subject": "lobbying",
     "grain": null,
     "identity_columns": [
       "filing_uuid",
@@ -2664,6 +2689,7 @@
         "description": "JSON array of OpenFEC candidate IDs associated with the committee (e.g. `[\"P00008052\"]`). Often `[]`."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One row per observed FEC committee identifier.",
     "identity_columns": [
       "committee_id"
@@ -2734,6 +2760,7 @@
         "description": "Explicit scope limitation: catalogue entries describe routes and do not certify underlying data acquisition or publication."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One row per official source family in the SpicyDocs FEC registry.",
     "identity_columns": [
       "source_family"
@@ -2809,6 +2836,7 @@
         "description": "Digest of the verified provider source-release artifact; null for direct retained-query input that has no release artifact."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One row per selected input collection or explicitly declared caller coverage disposition.",
     "identity_columns": [
       "collection_id"
@@ -2909,6 +2937,7 @@
         "description": "Complete provider source-record serialization, preserving identity, native metadata, assets, bodies and evidence."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One row per provider source record within a selected collection.",
     "identity_columns": [
       "collection_id",
@@ -3010,6 +3039,7 @@
         "description": "JSON object preserving the exact source fields used for this relationship observation."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One reported relationship or explicit absence state at one source location.",
     "identity_columns": [
       "source_sha256",
@@ -3114,7 +3144,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Status of the relationship to a submitted filing version; unresolved references preserve the financial observation."
+        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
       },
       {
         "column_name": "currency",
@@ -3457,6 +3487,7 @@
         "description": "Exact decimal for reported generic campaign activity. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One source-reported account-transfer or allocated-activity record version.",
     "identity_columns": [
       "record_id"
@@ -3502,6 +3533,7 @@
         "description": "JSON array of typed observation keys emitted from this native source record; empty output is explained by the disposition."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One explicit mapping disposition for one native agency source record.",
     "identity_columns": [
       "collection_id",
@@ -3608,6 +3640,7 @@
         "description": "Native XML, HTML or Word coordinates for the emitted text or link, retaining row, cell or element addresses."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One source link occurrence attached to one agency report observation.",
     "identity_columns": [
       "record_id"
@@ -3703,6 +3736,7 @@
         "description": "Native XML, HTML or Word coordinates for the emitted text or link, retaining row, cell or element addresses."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One supported text observation at a native agency-report location.",
     "identity_columns": [
       "record_id"
@@ -3863,6 +3897,7 @@
         "description": "Date parsed from the source publication date of the agency report. NULL requires the source value and conversion status; capture time is not substituted."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One retained agency report edition observation with its source context.",
     "identity_columns": [
       "record_id"
@@ -3965,7 +4000,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Status of the relationship to a submitted filing version; unresolved references preserve the financial observation."
+        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
       },
       {
         "column_name": "currency",
@@ -4463,6 +4498,7 @@
         "description": "Source identifier for the reported account/event used by this schedule."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One payment/allocation record version from its source schedule or API.",
     "identity_columns": [
       "record_id"
@@ -4565,7 +4601,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Status of the relationship to a submitted filing version; unresolved references preserve the financial observation."
+        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
       },
       {
         "column_name": "currency",
@@ -4993,6 +5029,7 @@
         "description": "Native allocation-ratio code, resolved only under the pinned layout definitions."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One source-reported allocation method, ratio or supporting-basis record version.",
     "identity_columns": [
       "record_id"
@@ -5095,7 +5132,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Status of the relationship to a submitted filing version; unresolved references preserve the financial observation."
+        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
       },
       {
         "column_name": "currency",
@@ -5173,6 +5210,7 @@
         "description": "Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One native top-level API response field or result-container observation.",
     "identity_columns": [
       "record_id"
@@ -5328,6 +5366,7 @@
         "description": "Exact decimal for the source-reported amount for this record and its amount_kind. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One native audit finding occurrence associated with a retained matter observation.",
     "identity_columns": [
       "record_id"
@@ -5430,7 +5469,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Status of the relationship to a submitted filing version; unresolved references preserve the financial observation."
+        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
       },
       {
         "column_name": "currency",
@@ -5743,6 +5782,7 @@
         "description": "Explicit statement of whether submission conformance was established; successful field mapping alone does not establish it."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One identified bundler/recipient amount for a source period and filing version.",
     "identity_columns": [
       "record_id"
@@ -5845,7 +5885,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Status of the relationship to a submitted filing version; unresolved references preserve the financial observation."
+        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
       },
       {
         "column_name": "currency",
@@ -5978,6 +6018,7 @@
         "description": "Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One candidate result occurrence in a retained API response.",
     "identity_columns": [
       "record_id"
@@ -6068,6 +6109,7 @@
         "description": "Exact count of native observations covered by this collection selection decision; not a monetary total."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One source collection/member decision under a named snapshot-selection policy.",
     "identity_columns": [
       "record_id"
@@ -6170,7 +6212,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Status of the relationship to a submitted filing version; unresolved references preserve the financial observation."
+        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
       },
       {
         "column_name": "currency",
@@ -6293,6 +6335,7 @@
         "description": "Named struct of every literal committee-master field in its verified header order. Original values remain text beside the source-owned committee-history mapping."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One physical committee-master row within its retained cycle/file capture.",
     "identity_columns": [
       "record_id"
@@ -6395,7 +6438,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Status of the relationship to a submitted filing version; unresolved references preserve the financial observation."
+        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
       },
       {
         "column_name": "currency",
@@ -6538,6 +6581,7 @@
         "description": "Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One committee result occurrence in a retained API response.",
     "identity_columns": [
       "record_id"
@@ -6640,7 +6684,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Status of the relationship to a submitted filing version; unresolved references preserve the financial observation."
+        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
       },
       {
         "column_name": "currency",
@@ -6808,6 +6852,7 @@
         "description": "Date parsed from the transaction date reported by the source. NULL requires the source value and conversion status; capture time is not substituted."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One source-reported communication-cost record observation.",
     "identity_columns": [
       "record_id"
@@ -6910,7 +6955,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Status of the relationship to a submitted filing version; unresolved references preserve the financial observation."
+        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
       },
       {
         "column_name": "aggregate_type",
@@ -6930,7 +6975,7 @@
       {
         "column_name": "entity_reference_status",
         "column_type": "VARCHAR",
-        "description": "Resolution status of the literal entity reference. ID-shaped aggregate codes do not establish a candidate or committee."
+        "description": "`source_identifier_unresolved` on every row that states an id: set when the row is mapped, before any candidate or committee is looked up, so it does not say whether an id names one. The ids are kept as the file states them, an empty string or a committee id in a candidate column included. The declared joins resolve them, each with its measured rate: `committee_native_id` to `fec_committees.committee_id` and `candidate_native_id` to `fec_candidate_history.candidate_id`. FEC's aggregate codes `P00000001` (all candidates), `P00000002` (Democrats) and `P00000003` (Republicans) name a group, not a candidate."
       },
       {
         "column_name": "currency",
@@ -7018,6 +7063,7 @@
         "description": "Whether the source contributor reference resolves; name text alone is not a donor identity."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One group in a source-defined contribution population and period.",
     "identity_columns": [
       "record_id"
@@ -7120,7 +7166,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Status of the relationship to a submitted filing version; unresolved references preserve the financial observation."
+        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
       },
       {
         "column_name": "currency",
@@ -7573,6 +7619,7 @@
         "description": "Literal transaction code from the selected filing layout; its meaning is distinct from unrelated families' codes."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One Schedule F expenditure record version.",
     "identity_columns": [
       "record_id"
@@ -7675,7 +7722,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Status of the relationship to a submitted filing version; unresolved references preserve the financial observation."
+        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
       },
       {
         "column_name": "currency",
@@ -8043,6 +8090,7 @@
         "description": "Literal native superseded-transaction reference; a proven replacement scope is still required from the retained filing layout."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One obligation state as reported in a filing and period.",
     "identity_columns": [
       "record_id"
@@ -8145,7 +8193,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Status of the relationship to a submitted filing version; unresolved references preserve the financial observation."
+        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
       },
       {
         "column_name": "currency",
@@ -8598,6 +8646,7 @@
         "description": "Declared limitation on adding this observation to other records; requires the relevant named financial policy before totals."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One source-reported payment or disbursement record version.",
     "identity_columns": [
       "record_id"
@@ -8700,7 +8749,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Status of the relationship to a submitted filing version; unresolved references preserve the financial observation."
+        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
       },
       {
         "column_name": "currency",
@@ -8883,6 +8932,7 @@
         "description": "The public disbursement date the source states. A two-digit year (FEC's electioneering file writes `21-FEB-24`) is read as the one year ending in those digits between 1975, when FEC began, and the year the file was captured (`10` is 2010; the range is `date_year_bounds` in `mapping_reason_json`). A typo that stays in the range (`26` for `24`) is typed as written and cannot be detected; `public_disbursement_date_raw` keeps the date as filed. NULL has its reason in `public_disbursement_date_status`; capture time is never substituted."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One source candidate-associated disbursement observation.",
     "identity_columns": [
       "record_id"
@@ -8963,6 +9013,7 @@
         "description": "Native source coordinates of the witness, including worksheet cells, source row address or definition location."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One exact association from a normalized filing definition to a source context witness.",
     "identity_columns": [
       "target_table",
@@ -9020,6 +9071,7 @@
         "description": "Ordered source field definitions with exact worksheet/cell addresses and available rules. This defines source layout, not a consumer policy or submission-conformance result."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One distinct pinned source layout with its literal family, version and form.",
     "identity_columns": [
       "record_id"
@@ -9165,6 +9217,7 @@
         "description": "List of all candidate fec_filings.record_id values retained by the association, including unresolved/conflicting candidates; expanding it changes row cardinality."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One evidenced association decision for one retained original-file header observation.",
     "identity_columns": [
       "record_id"
@@ -9252,7 +9305,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Status of the relationship to a submitted filing version; unresolved references preserve the financial observation."
+        "description": "The stating filing's own `filing_link_status`, copied from `fec_filings` onto each link it states: `native_file_number` where that filing states its FEC file number, `unresolved_no_file_number` where it does not. It says nothing about the referenced filing; see `target_resolution_status`."
       },
       {
         "column_name": "native_field_states_json",
@@ -9287,7 +9340,7 @@
       {
         "column_name": "target_resolution_status",
         "column_type": "VARCHAR",
-        "description": "Whether the referenced target resolves in the retained filing population; unresolved targets do not disappear."
+        "description": "Not a resolution result: set when the link is mapped, before any filing is looked up, as `native_reference_unresolved` on every link that states a file number and `unresolved_no_file_number` on the rest. Whether the referenced filing is held is in the view `fec_filing_reference_resolution` (same `record_id`), whose `target_resolution_status` is `resolved_native_filing_key` or the reason it is not."
       },
       {
         "column_name": "replacement_mode",
@@ -9310,6 +9363,7 @@
         "description": "Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One directed native filing reference from a retained filing observation.",
     "identity_columns": [
       "record_id"
@@ -9412,7 +9466,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Status of the relationship to a submitted filing version; unresolved references preserve the financial observation."
+        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
       },
       {
         "column_name": "currency",
@@ -9640,6 +9694,7 @@
         "description": "Ordered measure structs: native_position, native_label, definition_cell, raw_value, exact decimal value, value_status, quantity_kind, measure_role and period_basis. Parent totals/subtotals are not added to itemized children."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One source filing report/statement/cover record version.",
     "identity_columns": [
       "record_id"
@@ -9742,7 +9797,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Status of the relationship to a submitted filing version; unresolved references preserve the financial observation."
+        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
       },
       {
         "column_name": "currency",
@@ -9835,6 +9890,7 @@
         "description": "Ordered fragment structs: field_position, source_column, source_pointer, text, text_status and body_reference_json. Retains exact native addresses and missing/null states; no inferred money or PDF extraction."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One source narrative or text record version at its native file position.",
     "identity_columns": [
       "record_id"
@@ -9922,7 +9978,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Status of the relationship to a submitted filing version; unresolved references preserve the financial observation."
+        "description": "Set when the row is mapped: `native_file_number` where the filing states its own FEC file number (then `filing_key` is set), `unresolved_no_file_number` where it does not. It does not look up any other filing."
       },
       {
         "column_name": "native_field_states_json",
@@ -10250,6 +10306,7 @@
         "description": "Date parsed from the date component of the source load timestamp; the full native timestamp remains in load_timestamp_raw. NULL requires the source value and conversion status; capture time is not substituted."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One retained metadata observation of a submitted report or statement version.",
     "identity_columns": [
       "record_id"
@@ -10445,6 +10502,7 @@
         "description": "Date parsed from the end of the source-defined reporting period. NULL requires the source value and conversion status; capture time is not substituted."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One native statistical worksheet row with its stated row grain.",
     "identity_columns": [
       "record_id"
@@ -10547,7 +10605,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Status of the relationship to a submitted filing version; unresolved references preserve the financial observation."
+        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
       },
       {
         "column_name": "currency",
@@ -10745,6 +10803,7 @@
         "description": "Literal FEC image reference; it is not a transaction ID or filing number."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One itemized Form 13 donation or refund record version.",
     "identity_columns": [
       "record_id"
@@ -10753,11 +10812,11 @@
   "fec_independent_expenditures": {
     "table": "fec_independent_expenditures",
     "label": "Reported independent-expenditure observations",
-    "summary": "One source-reported independent-expenditure record version. Separates spender, payee, candidate target, expenditure date, dissemination date and report metadata. Generic spender_name, payee_name, candidate_name and expenditure_date apply only to layouts that supply those fields. Original-filing Schedule E rows instead retain payee organization/person-name fields, candidate name components, and separate dissemination_date, disbursement_date and signed_date. Use the filing/header associations to locate supporting cover metadata; these native fields and associations are valid without synthesizing generic names or choosing one date. Target expansion must not multiply the record's full amount; current/net totals need a qualified selection and financial rule. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. For original-filing rows, definition_set_id joins fec_filing_definitions.record_id and its fec_filing_definition_evidence context witnesses; filing_header_record_id and filing_header_locator_json identify the separate actual header witness. Other source layouts retain their own dictionary evidence.",
-    "coverage": "Sampled. Supported observations from retained bulk and original-filing independent-expenditure layouts. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
+    "summary": "One source-reported independent-expenditure record version. Separates spender, payee, candidate target, expenditure date, dissemination date and report metadata. Generic spender_name, payee_name, candidate_name and expenditure_date apply only to layouts that supply those fields. Original-filing Schedule E rows instead retain payee organization/person-name fields, candidate name components, and separate dissemination_date, disbursement_date and signed_date. For an original-filing row, the filing's cover is the fec_filing_report_observations row with the same collection_id and `report_record_role` `reported-form`; its form_type ends N for a new filing and A for an amendment (`F24N`, `F24A`), with source_amendment_date. The header association view (fec_independent_expenditures_filing_associations) finds no filing for any row, original-filing or bulk. These native fields are valid without synthesizing generic names or choosing one date. Target expansion must not multiply the record's full amount; current/net totals need a qualified selection and financial rule. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. For original-filing rows, definition_set_id joins fec_filing_definitions.record_id and its fec_filing_definition_evidence context witnesses; filing_header_record_id and filing_header_locator_json identify the separate actual header witness. Other source layouts retain their own dictionary evidence.",
+    "coverage": "Sampled. The bulk rows are FEC's 2024-cycle independent-expenditure file (`source_cycle` 2024). The original-filing rows are the Schedule E and Form 5 lines of the filings in the daily electronic-filing archives this service retained, not a cycle: `source_cycle` is NULL on them, and `fec_collections` names each archive (join on `collection_id`). This declaration does not establish complete FEC history or current publication.",
     "kind": "sampled",
-    "measured_on": "2026-10-01",
-    "data_quality": "Exact decimals preserve signs. Memo, subtotal and attribution flags require source-specific interpretation; successful mapping does not qualify current, gross or net totals. Keep reported balances, allocation totals/components, overlapping summaries and two-sided transfers at their declared grains. Quality notices do not automatically exclude records.",
+    "measured_on": "2026-10-03",
+    "data_quality": "Exact decimals preserve signs. Memo, subtotal and attribution flags require source-specific interpretation; successful mapping does not qualify current, gross or net totals. Keep reported balances, allocation totals/components, overlapping summaries and two-sided transfers at their declared grains. Quality notices do not automatically exclude records.\nThe bulk file is FEC's as filed, including a few single lines of billions of dollars that no committee plausibly spent: THE COMMITTEE OF 300 (C00874586) reports $9,778,412,568 in one line of its 24-hour report 1766664, exactly as its raw filing on docquery.fec.gov states it (checked 2026-10-03), not a sum of amended or memo lines. Review the largest rows before summing. On 2026-10-03 the original-filing rows came from the archives of 2026-06-08, 2026-06-09 and 2026-07-02.",
     "columns": [
       {
         "column_name": "record_id",
@@ -10847,7 +10906,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Status of the relationship to a submitted filing version; unresolved references preserve the financial observation."
+        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
       },
       {
         "column_name": "currency",
@@ -11265,6 +11324,7 @@
         "description": "Declared limitation on adding this observation to other records; requires the relevant named financial policy before totals."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One source-reported independent-expenditure record version.",
     "identity_columns": [
       "record_id"
@@ -11367,7 +11427,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Status of the relationship to a submitted filing version; unresolved references preserve the financial observation."
+        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
       },
       {
         "column_name": "currency",
@@ -11530,6 +11590,7 @@
         "description": "Literal FEC candidate identifier when the source reports one. Syntax checks do not prove identity resolution or a target match."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One reported intercommittee transaction record version.",
     "identity_columns": [
       "record_id"
@@ -11725,6 +11786,7 @@
         "description": "Date parsed from the date supplied for the legal document. NULL requires the source value and conversion status; capture time is not substituted."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One source legal-document occurrence or rendition associated with a matter observation.",
     "identity_columns": [
       "record_id"
@@ -11895,6 +11957,7 @@
         "description": "Exact decimal for this event's source-reported amount and amount_kind; signs are preserved. Respondent dispositions can repeat a shared penalty (MUR 8074 reports 19000 for each of two respondents). Neither SUM(amount) nor SUM(DISTINCT amount) establishes liability, allocation or payment: equal amounts can also belong to separate obligations. Read amount_status and the source's disposition/agreement context; NULL is unknown, not zero."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One dated or undated native event occurrence within a matter observation.",
     "identity_columns": [
       "record_id"
@@ -12155,6 +12218,7 @@
         "description": "Exact decimal for the amount stated for referral to Treasury. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One source observation of a namespaced legal matter.",
     "identity_columns": [
       "record_id"
@@ -12295,6 +12359,7 @@
         "description": "Exact typed legal-document observation cited by this party or other source assertion."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One party-role occurrence within a retained matter observation.",
     "identity_columns": [
       "record_id"
@@ -12397,7 +12462,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Status of the relationship to a submitted filing version; unresolved references preserve the financial observation."
+        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
       },
       {
         "column_name": "currency",
@@ -12512,7 +12577,7 @@
       {
         "column_name": "loan_link_status",
         "column_type": "VARCHAR",
-        "description": "Whether the guarantor record resolves to its reported loan state using source references; unresolved links remain rows."
+        "description": "Always `unresolved` in this table: set when the row is mapped, before any loan is looked up. The guarantor's loan is the `fec_loans` row with the same `collection_id` whose `transaction_id` is this row's `back_reference_transaction_id` (a declared join)."
       },
       {
         "column_name": "guaranteed_amount_raw",
@@ -12560,6 +12625,7 @@
         "description": "Explicit statement of whether submission conformance was established; successful field mapping alone does not establish it."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One source guarantor record associated with a reported loan state.",
     "identity_columns": [
       "record_id"
@@ -12662,7 +12728,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Status of the relationship to a submitted filing version; unresolved references preserve the financial observation."
+        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
       },
       {
         "column_name": "currency",
@@ -13070,6 +13136,7 @@
         "description": "Explicit statement of whether submission conformance was established; successful field mapping alone does not establish it."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One source loan-terms or credit-line record version.",
     "identity_columns": [
       "record_id"
@@ -13172,7 +13239,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Status of the relationship to a submitted filing version; unresolved references preserve the financial observation."
+        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
       },
       {
         "column_name": "currency",
@@ -13550,6 +13617,7 @@
         "description": "Literal native superseded-transaction reference; a proven replacement scope is still required from the retained filing layout."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One loan state as reported in a filing and period.",
     "identity_columns": [
       "record_id"
@@ -13637,7 +13705,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Status of the relationship to a submitted filing version; unresolved references preserve the financial observation."
+        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
       },
       {
         "column_name": "native_field_states_json",
@@ -13710,6 +13778,7 @@
         "description": "Boolean mapped only from a supported source lobbyist flag; NULL retains the adjacent status."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One native committee registration/lobbyist observation.",
     "identity_columns": [
       "record_id"
@@ -13865,6 +13934,7 @@
         "description": "Exact decimal for the funds-for-better-use amount stated by the oversight recommendation. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One source recommendation or recommendation-status observation.",
     "identity_columns": [
       "record_id"
@@ -13967,7 +14037,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Status of the relationship to a submitted filing version; unresolved references preserve the financial observation."
+        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
       },
       {
         "column_name": "currency",
@@ -14030,6 +14100,7 @@
         "description": "Named source fields retained as a struct. PostgreSQL NULL, array text, date text and boolean text remain literal; no current-profile inference."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One native COPY row from a selected retained history derivation.",
     "identity_columns": [
       "record_id"
@@ -14117,7 +14188,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Status of the relationship to a submitted filing version; unresolved references preserve the financial observation."
+        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
       },
       {
         "column_name": "native_field_states_json",
@@ -14190,6 +14261,7 @@
         "description": "The first receipt date the quality notice states. A two-digit year (FEC's false and fictitious filings list writes `31-DEC-76`) is read as the one year ending in those digits between 1975, when FEC began, and the year the file was captured (`76` is 1976, not 2076; the capture instant is in `fec_collections`, by `collection_id`). A typo that stays in the range (`26` for `24`) is typed as written and cannot be detected; `first_receipt_date_raw` keeps the date as filed. NULL has its reason in `first_receipt_date_status`; capture time is never substituted."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One source notice observation about an explicitly stated filing/committee scope.",
     "identity_columns": [
       "record_id"
@@ -14412,7 +14484,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Status of the relationship to a submitted filing version; unresolved references preserve the financial observation."
+        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
       },
       {
         "column_name": "source_cycle",
@@ -14820,6 +14892,7 @@
         "description": "Source-stated form associated with the reported account; not an inferred account identity."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One reported receipt record version or physical source observation.",
     "identity_columns": [
       "record_id"
@@ -14900,6 +14973,7 @@
         "description": "Native source coordinates of the witness, including worksheet cells, source row address or definition location."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One explicit target-to-witness association with exact endpoint coordinates.",
     "identity_columns": [
       "target_table",
@@ -14999,7 +15073,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Status of the relationship to a submitted filing version; unresolved references preserve the financial observation."
+        "description": "Always `unresolved_no_report_number` in this table, with `filing_key` NULL beside it: a registration statement states no report number, so the row is mapped without a filing link."
       },
       {
         "column_name": "native_field_states_json",
@@ -15202,6 +15276,7 @@
         "description": "The day FEC received the statement, as the source states it. On a Form 2 (candidate) row the year must be the row's own `report_year`; on a Form 1 (committee) row, a two-digit year (FEC's file writes `31-DEC-24`) is read as the one year ending in those digits between 1975, when FEC began, and the year the file was captured (`24` is 2024; the capture instant is in `fec_collections`, by `collection_id`). A typo that stays in the range (`26` for `24`) is typed as written and cannot be detected; `receipt_date_raw` keeps the date as filed. NULL has its reason in `receipt_date_status`; capture time is never substituted."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One source Form 1 or Form 2 registration observation.",
     "identity_columns": [
       "record_id"
@@ -15367,6 +15442,7 @@
         "description": "Date parsed from the end of the source-defined reporting period. NULL requires the source value and conversion status; capture time is not substituted."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One defined measure occurrence within an agency report edition.",
     "identity_columns": [
       "record_id"
@@ -15469,7 +15545,7 @@
       {
         "column_name": "filing_link_status",
         "column_type": "VARCHAR",
-        "description": "Status of the relationship to a submitted filing version; unresolved references preserve the financial observation."
+        "description": "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
       },
       {
         "column_name": "summary_type",
@@ -15489,7 +15565,7 @@
       {
         "column_name": "entity_reference_status",
         "column_type": "VARCHAR",
-        "description": "Resolution status of the literal entity reference. ID-shaped aggregate codes do not establish a candidate or committee."
+        "description": "`source_identifier_unresolved` on every row that states an id: set when the row is mapped, before any candidate or committee is looked up, so it does not say whether an id names one. The ids are kept as the file states them, an empty string or a committee id in a candidate column included. The declared joins resolve them, each with its measured rate: `committee_native_id` to `fec_committees.committee_id` and `candidate_native_id` to `fec_candidate_history.candidate_id`. FEC's aggregate codes `P00000001` (all candidates), `P00000002` (Democrats) and `P00000003` (Republicans) name a group, not a candidate."
       },
       {
         "column_name": "candidate_native_id",
@@ -15562,6 +15638,7 @@
         "description": "Source-specific monetary measures as a list of structs: native_field, raw_value, exact DECIMAL value, value_status and unit. Unnest with record_id; never add parent summaries to their itemized details."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One source entity/period/summary-layout/version observation.",
     "identity_columns": [
       "record_id"
@@ -15612,6 +15689,7 @@
         "description": "JSON object recording emitted table counts for this context; an empty output has an explicit mapping reason."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One explicit mapping disposition for a retained collection context.",
     "identity_columns": [
       "collection_id"
@@ -15727,6 +15805,7 @@
         "description": "Complete native metadata object retained for this observation, including fields outside the typed mapping."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One source document/case-reference metadata occurrence in retained context.",
     "identity_columns": [
       "record_id"
@@ -15827,6 +15906,7 @@
         "description": "Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One RSS item occurrence in a captured source feed.",
     "identity_columns": [
       "record_id"
@@ -15932,6 +16012,7 @@
         "description": "Native row address in the retained HTML table; use native_cells_json for exact cell evidence."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One native HTML table row describing a meeting listing.",
     "identity_columns": [
       "record_id"
@@ -16022,6 +16103,7 @@
         "description": "Count of result entries actually visible in the retained payload, distinct from a claimed complete query population."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One retained response/context outcome observation.",
     "identity_columns": [
       "record_id"
@@ -16117,6 +16199,7 @@
         "description": "Ordered source headings with their native context, preserving document structure."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One supported source-documentation page observation from retained context.",
     "identity_columns": [
       "record_id"
@@ -16262,6 +16345,7 @@
         "description": "Native row ordinal supplied by the retained CSV context."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One physical CSV row exposed by retained collection context.",
     "identity_columns": [
       "record_id"
@@ -16382,6 +16466,7 @@
         "description": "Whether `connected_organization_name` names the commenting organization: `agrees` when it reduces to `organization_core` under the same normalization (read also with PAC words such as `POLITICAL ACTION COMMITTEE` removed, spaces ignored); `differs` otherwise, most often the same organization spelled another way (`ASSN`, inverted words, a typo), a former name or a parent company, sometimes a different sponsor; `not_stated` when FEC names no sponsor. A name comparison, not an identity."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One row per commenter organization name and FEC committee name match.",
     "identity_columns": [
       "organization",
@@ -16488,6 +16573,7 @@
         "description": "JSON array of GAO's subject index terms for the product, as the R package states them (e.g. `Cost control`, `Financial management`), finer than `topics_json`. NULL where it states none, and on reports issued after its copy."
       }
     ],
+    "subject": "oversight",
     "grain": null,
     "identity_columns": [
       "report_id"
@@ -16543,6 +16629,7 @@
         "description": "Congress.gov API URL for the report's detail resource."
       }
     ],
+    "subject": "oversight",
     "grain": null,
     "identity_columns": [
       "report_id"
@@ -16673,6 +16760,7 @@
         "description": "Case-type code parsed from a district-court `docket_number` (`1:26-cv-02460` is `cv`, civil; also `cr` criminal, `mj` magistrate, `po` petty offense, `mc` miscellaneous). NULL when the number carries none, as appellate numbers do. The publisher codes non-civil dockets 899 too; they are kept, so filter on this for civil litigation."
       }
     ],
+    "subject": "courts",
     "grain": null,
     "identity_columns": [
       "cl_docket_id"
@@ -16723,6 +16811,7 @@
         "description": "What showed the rows are one case: `same_caption` (every member's caption reads the same, ignoring case and punctuation, with U.S. and Dept. spelled out) or `same_date_contained_caption` (filed the same day, with one member's caption contained in another's)."
       }
     ],
+    "subject": "courts",
     "grain": "One row per grouped court_dockets row; absent rows have no group.",
     "identity_columns": [
       "cl_docket_id"
@@ -16933,6 +17022,7 @@
         "description": "Route for the retained row: bulk or search. The table does not itself pin the original capture bytes."
       }
     ],
+    "subject": "courts",
     "grain": "One CourtListener decision cluster per cluster_id; multiple opinion bodies can belong to it.",
     "identity_columns": [
       "cluster_id"
@@ -16993,6 +17083,7 @@
         "description": "The CourtListener bulk export the row was copied from (ISO date)."
       }
     ],
+    "subject": "courts",
     "grain": "One reporter citation of one CourtListener decision (cluster); a decision can have several.",
     "identity_columns": [
       "citation_id"
@@ -17028,6 +17119,7 @@
         "description": "The CourtListener bulk export the row was copied from (ISO date)."
       }
     ],
+    "subject": "courts",
     "grain": "One citing opinion's citation of one cited opinion, with how many times it cites it.",
     "identity_columns": [
       "citing_opinion_id",
@@ -17079,6 +17171,7 @@
         "description": "The CourtListener bulk export the row was copied from (ISO date)."
       }
     ],
+    "subject": "courts",
     "grain": "One parenthetical summary one opinion wrote about another.",
     "identity_columns": [
       "parenthetical_id"
@@ -17169,6 +17262,7 @@
         "description": "The CourtListener bulk export the row was copied from (ISO date)."
       }
     ],
+    "subject": "courts",
     "grain": "One CourtListener opinion (a majority, concurrence or dissent) of one decision.",
     "identity_columns": [
       "opinion_id"
@@ -17254,6 +17348,7 @@
         "description": "Exact selected opinion family and its member metadata."
       }
     ],
+    "subject": "courts",
     "grain": "One retained PDF extraction per opinion and exact observed body.",
     "identity_columns": [
       "opinion_id",
@@ -17315,6 +17410,7 @@
         "description": "The matched term's end date; NULL unless matched."
       }
     ],
+    "subject": "congress",
     "grain": null,
     "identity_columns": [
       "vote_id",
@@ -17371,6 +17467,7 @@
         "description": "SHA-256 of the retained ranking response page this row was read from, so its values trace to one captured response. NULL exactly when `observed_at` is NULL."
       }
     ],
+    "subject": "spending",
     "grain": null,
     "identity_columns": [
       "recipient_id"
@@ -17456,6 +17553,7 @@
         "description": "ECFS account that created the proceeding. An internal FCC username; occasionally useful for spotting bureau conventions."
       }
     ],
+    "subject": "rulemaking",
     "grain": null,
     "identity_columns": [
       "name"
@@ -17576,6 +17674,7 @@
         "description": "Outcomes for selected offered attachment URLs, retaining source SHA-256, page count and extraction status. Null when no attempt is retained. These selected attempts do not establish complete filing text coverage."
       }
     ],
+    "subject": "rulemaking",
     "grain": null,
     "identity_columns": [
       "id_submission"
@@ -17661,6 +17760,7 @@
         "description": "The matched text pattern, publisher code or vote-result reading used by the named rule."
       }
     ],
+    "subject": "congress",
     "grain": "One row per entry of the bill's own action list (actions in its BILLSTATUS document), in publisher order; actions recorded under the bill's amendments (amendments/amendment/actions) are not rows, so a roll call on an amendment can have no action here.",
     "identity_columns": [
       "bill_id",
@@ -17727,6 +17827,7 @@
         "description": "The rule applied to produce referral_signal; a system-code lookup, never a name match."
       }
     ],
+    "subject": "congress",
     "grain": "One row per committee or subcommittee a bill reached, as its BILLSTATUS document names it.",
     "identity_columns": [
       "bill_id",
@@ -17778,6 +17879,7 @@
         "description": "The parent document's updateDate, so a committee's activities are versioned with its bill."
       }
     ],
+    "subject": "congress",
     "grain": "One row per activity a BILLSTATUS document lists under one of the bill's committees or subcommittees: what the committee did and when. A clean key for a committee's work but not a complete one: 119-s-545's lists Markup By and no Reported By while its actions record the report, so a report can appear in bill_actions only.",
     "identity_columns": [
       "bill_id",
@@ -17872,6 +17974,7 @@
         "description": "The cosponsor item's markup exactly as the publisher wrote it, from <item> through </item>, cut from the input bytes input_sha256 pins; it keeps every field, including those no column reads."
       }
     ],
+    "subject": "congress",
     "grain": "One cosponsor occurrence in one retained BILLSTATUS observation.",
     "identity_columns": [
       "bill_id",
@@ -17924,6 +18027,7 @@
         "description": "Character length of summary_html, so a truncation upstream is visible without reading it."
       }
     ],
+    "subject": "congress",
     "grain": "One row per CRS summary the publisher states on a bill, at the version and action it describes.",
     "identity_columns": [
       "bill_id",
@@ -17938,7 +18042,7 @@
     "coverage": "Sampled: bills the bill family has read from GovInfo BILLSTATUS, Congress by Congress from the 108th on; group by the Congress in bill_id to see which Congresses are filled. source is govinfo for a printing whose body was acquired; other rows are printings the publisher lists without an acquired body.",
     "kind": "sampled",
     "measured_on": "2026-09-28",
-    "data_quality": "A numbered reprint is its own printing since spicy-docs 0.37.0: the publisher types it exactly like the printing it follows, so its `version_code` is its own package suffix (`eas2`, `rfs2`) rather than the stage's slug. Generation `d380cdc0…` still keys two such printings under the stage's slug: 119-hr-6644's second Senate engrossed amendment (a congress row with `BILLS-119hr6644eas2`, beside a printing whose sections mix both documents) and 118-hr-7643's second House report. A rebuild of the bill retires the row and publishes each printing under its own code (receipt `repeated-printings-2026-09-26/`). Public/private laws are distinct publisher listings, not enrolled BILLS printings. Unsupported law bodies remain unacquired: their offered URLs, labels and dates are retained, with no acquired body or section claims. Generation `82c8088d…` contains public-law rows incorrectly associated with enrolled BILLS resources. The corrected builder replaces these in the requested Congress/bill-type scope and removes only their dependent rows; adopting code alone does not correct an already-published generation (receipt `mcp-chaos-2026-10-02/round2/repair/`).",
+    "data_quality": "A numbered reprint is its own printing since spicy-docs 0.37.0: the publisher types it exactly like the printing it follows, so its `version_code` is its own package suffix (`eas2`, `rfs2`) rather than the stage's slug. Public/private laws are distinct publisher listings, not enrolled BILLS printings. Unsupported law bodies remain unacquired: their offered URLs, labels and dates are retained, with no acquired body or section claims.",
     "columns": [
       {
         "column_name": "bill_id",
@@ -18116,6 +18220,7 @@
         "description": "The body byte length the kind heuristic was given, recorded for the same reason."
       }
     ],
+    "subject": "congress",
     "grain": "One row per printing of a bill, per source that supplied it.",
     "identity_columns": [
       "bill_id",
@@ -18130,7 +18235,7 @@
     "coverage": "Sampled: the sections parsed from printings whose bodies the bill family acquired (source govinfo in bill_versions).",
     "kind": "sampled",
     "measured_on": "2026-09-28",
-    "data_quality": "A printing with no parsed section tree is a counted refusal, never a row with invented values. On the measured cold-start run of the 119th (receipt `d1-measured-run-2026-09-19/`) the family reported **21,466** such refusals against 6,301 published rows — one per printing whose body the 600-per-run fetch cap did not reach, plus those offered only as PDF. The refusal count is therefore a measure of how far the cap is from the corpus, not of anything wrong with the printings; it falls as successive runs spend the cap on ground earlier ones did not reach. A section is keyed on its `seq` within the printing since spicy-docs 0.35.0: the old key (`match_path`, `body_index`) repeats inside a printing, and the merge had kept one row per repeat, so generation `55671b43…` holds 83 of 119-hr-5334 enrolled's 84 sections, 150 of 119-hr-9022 reported's 151 and 4 of 119-hr-4060 introduced's 5. Each such printing's `section_count` exceeds its rows, so the next run re-reads it and republishes it whole (receipt `bill-family-repair-scope-2026-09-26/`). All columns are stored as VARCHAR.",
+    "data_quality": "A printing with no parsed section tree is a counted refusal, never a row with invented values. On the measured cold-start run of the 119th (receipt `d1-measured-run-2026-09-19/`) the family reported **21,466** such refusals against 6,301 published rows — one per printing whose body the 600-per-run fetch cap did not reach, plus those offered only as PDF. The refusal count is therefore a measure of how far the cap is from the corpus, not of anything wrong with the printings; it falls as successive runs spend the cap on ground earlier ones did not reach. A section is keyed on its `seq` within the printing since spicy-docs 0.35.0; the older key (`match_path`, `body_index`) repeats inside a printing. All columns are stored as VARCHAR.",
     "columns": [
       {
         "column_name": "bill_id",
@@ -18228,6 +18333,7 @@
         "description": "The Congress of the bill, the prefix of bill_id (119 for 119-hr-1), so a host can store the table one file per Congress."
       }
     ],
+    "subject": "congress",
     "grain": "One row per content-bearing node of one bill version, in document order.",
     "identity_columns": [
       "bill_id",
@@ -18243,7 +18349,7 @@
     "coverage": "Sampled: consecutive printings of a bill are compared only when both bodies were acquired and parsed, from the Congresses the bill family has read.",
     "kind": "sampled",
     "measured_on": "2026-09-28",
-    "data_quality": "A consecutive pair that cannot be diffed — because one or both sides has no parsed tree — is a counted refusal named by table, never a row. Measured on the cold-start run of the 119th (receipt `d1-measured-run-2026-09-19/`): **3,185** refusals against 128 published comparisons, which is what a 600-printing cap over 22,064 printings implies, since a pair needs both of its sides fetched in the same run. A pair runs from a printing to its neighbour in spicy-docs' `printing_order`: publisher date, then a dateless enrolled printing by its stage (`pair_rule` `consecutive_by_date_then_stage`). Before spicy-docs 0.35.0 the empty enrolled date sorted first, and generation `55671b43…` holds 18 enrolled-to-introduced comparisons and 14 that skip the enrolled printing to reach the law. The next run over each such bill retires them with their items and makes the neighbour pairs (receipt `bill-family-repair-scope-2026-09-26/`). A pair's neighbour can be a procedural printing (a four-section Senate engrossed amendment between the calendar printing and the enrolled bill), which the summary route refuses but this table compares, so the pair reads as nearly everything removed and then everything added. In `section_diff_items`, `financial_amounts_changed` is true on every added or removed row that carries a figure, by construction; only a modified row says a figure changed in place. Floor-amendment annotations (`(increased by $X)`) are left out of `financial_*_amounts_json` though they change the text; `financial_has_amendment_annotations` marks them. Enrolled printings carry new element ids at the publisher, so `element_id` does not join into `enr`. All columns are stored as VARCHAR.",
+    "data_quality": "A consecutive pair that cannot be diffed — because one or both sides has no parsed tree — is a counted refusal named by table, never a row. Measured on the cold-start run of the 119th (receipt `d1-measured-run-2026-09-19/`): **3,185** refusals against 128 published comparisons, which is what a 600-printing cap over 22,064 printings implies, since a pair needs both of its sides fetched in the same run. A pair runs from a printing to its neighbour in spicy-docs' `printing_order`: publisher date, then a dateless enrolled printing by its stage (`pair_rule` `consecutive_by_date_then_stage`). A pair's neighbour can be a procedural printing (a four-section Senate engrossed amendment between the calendar printing and the enrolled bill), which the summary route refuses but this table compares, so the pair reads as nearly everything removed and then everything added. In `section_diff_items`, `financial_amounts_changed` is true on every added or removed row that carries a figure, by construction; only a modified row says a figure changed in place. Floor-amendment annotations (`(increased by $X)`) are left out of `financial_*_amounts_json` though they change the text; `financial_has_amendment_annotations` marks them. Enrolled printings carry new element ids at the publisher, so `element_id` does not join into `enr`. All columns are stored as VARCHAR.",
     "columns": [
       {
         "column_name": "bill_id",
@@ -18341,6 +18447,7 @@
         "description": "When the comparison ran, from the caller's injected clock."
       }
     ],
+    "subject": "congress",
     "grain": "One row per compared pair of consecutive printings of one bill.",
     "identity_columns": [
       "bill_id",
@@ -18505,6 +18612,7 @@
         "description": "True when the section carries amendment annotations around its figures."
       }
     ],
+    "subject": "congress",
     "grain": "One row per settled correspondence in one version-pair comparison.",
     "identity_columns": [
       "bill_id",
@@ -18585,6 +18693,7 @@
         "description": "What this row claims: that the two figures sit at the same place in a word-level alignment. It does not claim they are the same account."
       }
     ],
+    "subject": "congress",
     "grain": "One row per aligned pair of dollar figures in a section whose amounts changed.",
     "identity_columns": [
       "bill_id",
@@ -18681,6 +18790,7 @@
         "description": "Digest over the sealed label table, so a vocabulary change is visible in the data."
       }
     ],
+    "subject": "congress",
     "grain": "One row per label a model assigned to one section of one printing.",
     "identity_columns": [
       "bill_id",
@@ -18775,6 +18885,7 @@
         "description": "The sealed framing sentence the prompt carried; without it the summary is not reproducible."
       }
     ],
+    "subject": "congress",
     "grain": "One row per plain-language summary of one printing of a bill.",
     "identity_columns": [
       "bill_id",
@@ -18877,6 +18988,7 @@
         "description": "When the answer came back; the merge prefers the larger value."
       }
     ],
+    "subject": "congress",
     "grain": "One row per model-written summary of the change between two printings of a bill.",
     "identity_columns": [
       "bill_id",
@@ -18926,6 +19038,7 @@
         "description": "The few fields a reader needs to render the event without joining another table."
       }
     ],
+    "subject": "congress",
     "grain": "One row per change detected between two runs of the bill family.",
     "identity_columns": [
       "bill_id",
@@ -19034,6 +19147,7 @@
         "description": "The publisher's own URL for this amendment."
       }
     ],
+    "subject": "congress",
     "grain": "One row per amendment, as the Congress.gov amendment list route states it.",
     "identity_columns": [
       "congress",
@@ -19221,6 +19335,7 @@
         "description": "The exact text that matched, so a false positive is readable from the row."
       }
     ],
+    "subject": "congress",
     "grain": "One row per item in one appropriations committee press-release feed capture.",
     "identity_columns": [
       "release_id"
@@ -19406,6 +19521,7 @@
         "description": "The Clerk's totals by party, as a JSON array in the file's order: each object the party as the Clerk names it (Republican, Democratic, Independent; member_votes.party spells the same parties R, D and I) and its yea-total, nay-total, present-total and not-voting-total. [] when a captured Clerk file states none (a Speaker election). NULL on Senate rows, whose files state none; on linkage-only rows; and on House rows captured before this column until they are read again."
       }
     ],
+    "subject": "congress",
     "grain": "One row per roll call: the publisher's own tally, and the bill it refers to.",
     "identity_columns": [
       "congress",
@@ -19494,6 +19610,7 @@
         "description": "The chamber's literal date; sorts as text, not by time (see roll_call_votes `vote_day`)."
       }
     ],
+    "subject": "congress",
     "grain": "One row per member's position on one roll call.",
     "identity_columns": [
       "congress",
@@ -19603,6 +19720,7 @@
         "description": "When the file was captured; the merge prefers the larger value."
       }
     ],
+    "subject": "congress",
     "grain": "One row per legislator in one capture of the community crosswalk.",
     "identity_columns": [
       "bioguide_id"
@@ -19668,6 +19786,7 @@
         "description": "Nested list state: unread, absent, null, empty or populated."
       }
     ],
+    "subject": "congress",
     "grain": "One row per term a legislator served, in the crosswalk's own order.",
     "identity_columns": [
       "bioguide_id",
@@ -19749,6 +19868,7 @@
         "description": "Caller-supplied capture instant; not a source affiliation date."
       }
     ],
+    "subject": "congress",
     "grain": "One nested party affiliation in one retained community-crosswalk observation.",
     "identity_columns": [
       "bioguide_id",
@@ -19947,6 +20067,7 @@
         "description": "The derivation that produced the text text_sha256 digests (`markup-reader`, `text-rendition-cleanup` or `pdf-extraction-gpo-normalized`), from the body sha256 digests; NULL on a row not re-read since the column was added."
       }
     ],
+    "subject": "congress",
     "grain": "One row per published part of a captured GovInfo committee report package, with the CBO estimate it reprints or refuses.",
     "identity_columns": [
       "package_id",
@@ -20033,6 +20154,7 @@
         "description": "The report part this block was parsed from, spelled as `committee_reports.part_id`, so (package_id, part_id) is the parent row.  Appended last."
       }
     ],
+    "subject": "congress",
     "grain": "One row per heading block parsed out of one committee report part's text.",
     "identity_columns": [
       "package_id",
@@ -20047,7 +20169,7 @@
     "coverage": "Sampled. Selected hearing packages from GovInfo, each with its native event identifiers checked: package and body metadata, not speaker turns or complete hearing history.",
     "kind": "sampled",
     "measured_on": "2026-09-28",
-    "data_quality": "Cover bills come from the package's MODS and cost no extra requests. BODY mentions do not become hearing links. event_id is the meeting the Congress.gov hearing record names (its associatedMeeting), carried as the publisher pairs them. NULL means that record names no meeting, or was refused, and committee_report_reads says which: on committee-reports generation 9aa9d10d… (2026-10-03) all 164 NULL rows were completed reads naming none. It does not mean no meeting exists: a meeting can list the transcript's jacket in `committee_meetings.hearing_jackets_json` without the hearing record naming it. That jacket route is the publisher's many-to-many listing, not a declared join: on committee-meetings generation 31e62420… (2026-10-03) 1,021 meetings list two or more distinct jackets and 1,075 (congress, jacket) values sit on two or more meetings. The declared event_id join reads `complete` because every event_id names a meeting row; that does not check the pairing: CHRG-118hhrg63377 names meeting 116369, an Oversight and Investigations hearing the same day, while its MODS and docs.house.gov place it at 116330. body_completeness says what the read text states about itself: a publisher_placeholder body is the publisher's notice that the document is only in the PDF. When the package offers that PDF it is read instead (pdf_extracted, with text_derivation naming the extraction); when it offers none, the notice is published as it stands. NULL on rows not re-read since the column was added.",
+    "data_quality": "Cover bills come from the package's MODS and cost no extra requests. BODY mentions do not become hearing links. event_id is the meeting the Congress.gov hearing record names (its associatedMeeting), carried as the publisher pairs them. NULL means that record names no meeting, or was refused, and `committee_report_reads` says which (its `outcome`). It does not mean no meeting exists: a meeting can list the transcript's jacket in `committee_meetings.hearing_jackets_json` without the hearing record naming it. That jacket route is the publisher's many-to-many listing, not a declared join: on committee-meetings generation 31e62420… (2026-10-03) 1,021 meetings list two or more distinct jackets and 1,075 (congress, jacket) values sit on two or more meetings. The declared event_id join reads `complete` because every event_id names a meeting row; that does not check the pairing: CHRG-118hhrg63377 names meeting 116369, an Oversight and Investigations hearing the same day, while its MODS and docs.house.gov place it at 116330. body_completeness says what the read text states about itself: a publisher_placeholder body is the publisher's notice that the document is only in the PDF. When the package offers that PDF it is read instead (pdf_extracted, with text_derivation naming the extraction); when it offers none, the notice is published as it stands. NULL on rows not re-read since the column was added.",
     "columns": [
       {
         "column_name": "package_id",
@@ -20175,6 +20297,7 @@
         "description": "The committee-meeting event id the package's GovInfo MODS states in `<eventId>` (the first, where it states several), which committee_meetings.event_id joins on with congress and chamber.  A second publisher's statement beside event_id, never overriding it: a consumer may fall back to it where event_id is NULL.  43 of 185 published transcripts state one, 22 where Congress.gov names none, 21 of them Senate; where both state one they agree 21 of 21 (2026-10-03), including a misassignment both make (CHRG-118hhrg63377 names 116369, another subcommittee's hearing that day), so agreement is not independent confirmation."
       }
     ],
+    "subject": "congress",
     "grain": "One row per captured GovInfo hearing transcript package.",
     "identity_columns": [
       "package_id"
@@ -20255,6 +20378,7 @@
         "description": "Every nonempty `heldDate` the package MODS states, as a JSON list in document order with repetitions kept; `[]` where it states none.  A compiled volume states several, and which bill was heard on which day is not stated, so no bill is paired with a date.  NULL on a row not re-read since the column was added (`mods_cover` 002)."
       }
     ],
+    "subject": "congress",
     "grain": "One row per bill one source states a hearing was held on or noticed for: the pair, the source that stated it, and the committee-and-date key the statement was checked against.",
     "identity_columns": [
       "package_id",
@@ -20367,6 +20491,7 @@
         "description": "The rule that read title_bill_id, on every row, a NULL title_bill_id included (the rule ran and named no bill): `cbo_title_citation/1`, the bill or public law the estimate's title leads with, a law through the host's laws table.  The grammar is this package's and moves; the version says which one read the row."
       }
     ],
+    "subject": "congress",
     "grain": "One row per bill and CBO publication a source names as a cost estimate of it: the bill's own BILLSTATUS document or CBO's per-Congress feed, read for every Congress and merged, the bill's own record winning where both name one bill and publication.",
     "identity_columns": [
       "bill_id",
@@ -20423,6 +20548,7 @@
         "description": "The per-Congress feed the item was read from, the one keyless request a re-read repeats."
       }
     ],
+    "subject": "congress",
     "grain": "One row per item of CBO's keyless per-Congress cost-estimate feed, as CBO lists it, whether or not the item names a bill.",
     "identity_columns": [
       "publication_id"
@@ -20435,7 +20561,7 @@
     "coverage": "True range from 2009 on: every legal decision GAO's own Month in Review and Annual Index list for each year or month a finished walk of those pages read: the B-numbered decisions (bid protests, appropriations law, vacancies letters, other decisions) and the Contract Appeals Board decisions GAO numbers as dockets (`2020-02`) or `P` numbers. Federal Agency Major Rule Reports, B-numbered from April 2017, are in `gao_reports`, not here. Entries GAO gives no number are left out. A year or month the walk has not finished adds nothing, and a month with no listed decision adds nothing either; this table does not record which case a missing month is. A walk reads a year's listing (`month-in-review/2025?page=N`) or a month's (`month-in-review/2026/August`), as its scopes name, and the held rows came from year scopes for 2009-2025 and month scopes for 2026, so one listing page can span several months and `listing_page` names a scope, not a month. A month inside a year scope read, or before the newest month scope read, with no rows is a publisher zero (October 2025, when GAO was closed by the lapse in appropriations, is one); a month after the newest month scope is unread.",
     "kind": "true_range",
     "measured_on": "2026-10-03",
-    "data_quality": "`released_date` is when GAO released the decision, not when it decided it; the decision page and `gao.gov/docket/<B-number>.1` state the decision date. Apply `html.unescape` when matching a `title`. `decision_status` is captured from spicy-docs 0.54.0, so it, `outcome` and `outcome_rule` are NULL on every row until a walk is read again; on gao-reports generation 42d9c8a5… (2026-10-03) none of the 6,616 rows carries one. Read again from the retained walk under 0.54.0, 5,903 rows get an outcome and 713 do not: 681 state no sentence and 32 state one the table leaves unmapped (an advisory or appropriations opinion), which each run's journal counts.",
+    "data_quality": "`released_date` is when GAO released the decision, not when it decided it; the decision page and `gao.gov/docket/<B-number>.1` state the decision date. Apply `html.unescape` when matching a `title`. `outcome` is NULL where GAO's listing states no status sentence for a decision, and where it states one spicy-docs' table leaves unmapped (a cost recommendation, an advisory or appropriations opinion and the like); each run's journal counts both.\nGAO's own bid protest statistics, in its annual reports to Congress, are not a count of these rows: GAO counts docket numbers (B-numbers) as cases, not decision pages or procurements, per fiscal year, and takes its sustain rate over merit decisions (sustained plus denied). Here a row is one decision page, which can carry several B-numbers, dated by its release. The annual reports are rows of `gao_reports` (`GAO Bid Protest Annual Report to Congress for Fiscal Year …`) with title, date, link and at most a short abstract: their figures are not held. `decision_type` is GAO's label as its listing states it, not a check: GAO also labels a few reports `Bid Protest Decision` (B-423717, its response to section 885 of the FY2025 NDAA, and B-401197, a report to Congress on defense bid protests).",
     "columns": [
       {
         "column_name": "decision_number",
@@ -20498,6 +20624,7 @@
         "description": "The table that read outcome, `gao-decision-outcome/002`; NULL where outcome is NULL. A row read under an earlier table names that table."
       }
     ],
+    "subject": "oversight",
     "grain": "One row per legal decision page GAO's own Month in Review or Annual Index lists with a number: every B-numbered decision and every docket- or P-numbered other. Federal Agency Major Rule Reports, B-numbered from April 2017, are products, not rows here.",
     "identity_columns": [
       "decision_number",
@@ -20699,6 +20826,7 @@
         "description": "Actual resolved XML acquisition URL for an attempted law-text read, distinct from the bill API url. Supplied from capture evidence, never inferred; NULL when unattempted or the caller retained no URL. A refused read does not validate the target's law identity."
       }
     ],
+    "subject": "congress",
     "grain": "One row per enacted law the Congress.gov law list route states, with its PLAW USLM citation where captured.",
     "identity_columns": [
       "congress",
@@ -20796,6 +20924,7 @@
         "description": "When the caller captured the law XML, not when this section reader ran."
       }
     ],
+    "subject": "congress",
     "grain": "One native USLM section occurrence within a public or private law, including explicitly flagged quoted sections.",
     "identity_columns": [
       "law_id",
@@ -20912,6 +21041,7 @@
         "description": "usc_section as a join key: lower-cased, with every dash spelling an ASCII hyphen, as RefSpec's section oracle keys it. Fold the other side the same way (schemas.tables.usc_section_key): document_citations' usc_section rule 001 keeps the printed case and dashes. NULL where usc_section is, and on rows published before the column existed."
       }
     ],
+    "subject": "congress",
     "grain": "One row per line of one OLRC per-Congress classification table: a Code place one public law section touched.",
     "identity_columns": [
       "congress",
@@ -20926,7 +21056,7 @@
     "coverage": "Window, complete for the Congresses read: every public law Table III holds for each Congress the laws table holds, plus the scoped ones, derived from OLRC's Table III bulk file on each run, so a Congress keeps its rows current after it leaves the laws scope while Table III catches up. The file holds the whole table back to 1789; other Congresses, private laws and pre-1957 session-law chapters are not derived.",
     "kind": "window",
     "measured_on": "2026-09-26",
-    "data_quality": "Table III holds an act only once OLRC has classified it, and lags enactment: on 2026-09-26 it was current through 119-73, a law of 2026-01-23, while the law route reached 119-111. `release_point` says how current the file was.\nSince 2026-09-26 the rows come from the bulk file (`fulldump@<release point>.xml`) instead of one page per act. The file splits an act's records about ten to an `<act>` fragment. An act's rows are its fragments' records in the file's order, and `seq` is a record's position in its act, as on the page; the file's own `sequence` attribute repeats within 70 acts, so it is not used. Each fragment states its own Congress, date and Statutes volume, and a record carries its fragment's volume where it states a page. Replayed against the 2,981 rows the pages had published, every row keeps its position, act section, Statutes page and volume, Code title and section, status and release point. The file also holds 119-30 and 119-53, whose pages the page walk never reached. Four act-level columns now carry the file's spelling instead of the page's: `stated_key` `119-37` (page `119–37`), `congress` `119` (`119th Cong.`), `act_date` `2025-11-12` (`Nov. 12, 2025`) and `statutes_at_large_volume` `139` (`139 Stat.`).\nOLRC states no Last-Modified, ETag or Content-Length for the zip, so each run fetches it; it was byte-identical on 2026-09-14 and 2026-09-26 at the same release point. Each Congress keeps a checkpoint in the file's metadata: the derivation rule with a digest of SpicyDocs' code (not its release string, so a version-only release derives nothing), the member's digest and release point, and each act's shaped-row digest. While all match, nothing is derived. Otherwise every scoped act is derived again, and only an act whose rows changed is published, its whole row set replaced.\nTable III only grows: across the eight consecutive releases from 116-150 (2020-07) to 119-73, archived by the Wayback Machine, no act was ever dropped (receipt `table3-bulk-2026-09-26/wayback/`). So a held act the file no longer lists loses its rows only when the release point advances, at most one act a release, and the removal is journaled as `rows-retired` for qualification to reconcile. A file whose release point is older than the one published, that drops an act without advancing, or that drops more than one is refused, and so is a file the reader refuses outright: the member has been renamed twice since 2020. A refused read publishes nothing for this table and keeps every checkpoint, while `laws` and `law_code_sections` publish as usual. The build journals it as `table3-bulk-refused`, and the nightly `scripts/check_source_refusals.py` fails while the current laws generation holds one, so the table cannot stop updating in silence. A transport failure is only retried on the next run. `usc_section_key` is `usc_section` folded for joins (trimmed, lower-cased, every dash spelling an ASCII hyphen), because case carries no identity in the Code and Table III itself prints some sections both ways (decision 30, `docs/research/fork-delivery-decisions-2026-09-22.md`). All columns are stored as VARCHAR.",
+    "data_quality": "Table III holds an act only once OLRC has classified it, and lags enactment: on 2026-09-26 it was current through 119-73, a law of 2026-01-23, while the law route reached 119-111. `release_point` says how current the file was. Its file at release point 119-73 also has no record of 119-70, a second-session law `law_code_sections` classifies (OLRC's gap, not a reading error).\nSince 2026-09-26 the rows come from the bulk file (`fulldump@<release point>.xml`) instead of one page per act. The file splits an act's records about ten to an `<act>` fragment. An act's rows are its fragments' records in the file's order, and `seq` is a record's position in its act, as on the page; the file's own `sequence` attribute repeats within 70 acts, so it is not used. Each fragment states its own Congress, date and Statutes volume, and a record carries its fragment's volume where it states a page. Replayed against the 2,981 rows the pages had published, every row keeps its position, act section, Statutes page and volume, Code title and section, status and release point. The file also holds 119-30 and 119-53, whose pages the page walk never reached. Four act-level columns now carry the file's spelling instead of the page's: `stated_key` `119-37` (page `119–37`), `congress` `119` (`119th Cong.`), `act_date` `2025-11-12` (`Nov. 12, 2025`) and `statutes_at_large_volume` `139` (`139 Stat.`).\nOLRC states no Last-Modified, ETag or Content-Length for the zip, so each run fetches it; it was byte-identical on 2026-09-14 and 2026-09-26 at the same release point. Each Congress keeps a checkpoint in the file's metadata: the derivation rule with a digest of SpicyDocs' code (not its release string, so a version-only release derives nothing), the member's digest and release point, and each act's shaped-row digest. While all match, nothing is derived. Otherwise every scoped act is derived again, and only an act whose rows changed is published, its whole row set replaced.\nTable III only grows: across the eight consecutive releases from 116-150 (2020-07) to 119-73, archived by the Wayback Machine, no act was ever dropped (receipt `table3-bulk-2026-09-26/wayback/`). So a held act the file no longer lists loses its rows only when the release point advances, at most one act a release, and the removal is journaled as `rows-retired` for qualification to reconcile. A file whose release point is older than the one published, that drops an act without advancing, or that drops more than one is refused, and so is a file the reader refuses outright: the member has been renamed twice since 2020. A refused read publishes nothing for this table and keeps every checkpoint, while `laws` and `law_code_sections` publish as usual. The build journals it as `table3-bulk-refused`, and the nightly `scripts/check_source_refusals.py` fails while the current laws generation holds one, so the table cannot stop updating in silence. A transport failure is only retried on the next run. `usc_section_key` is `usc_section` folded for joins (trimmed, lower-cased, every dash spelling an ASCII hyphen), because case carries no identity in the Code and Table III itself prints some sections both ways (decision 30, `docs/research/fork-delivery-decisions-2026-09-22.md`). All columns are stored as VARCHAR.",
     "columns": [
       {
         "column_name": "act_key",
@@ -21004,6 +21134,7 @@
         "description": "usc_section as a join key: lower-cased, with every dash spelling an ASCII hyphen, as RefSpec's section oracle keys it. Fold the other side the same way (schemas.tables.usc_section_key): document_citations' usc_section rule 001 keeps the printed case and dashes. NULL where usc_section is, and on rows published before the column existed."
       }
     ],
+    "subject": "congress",
     "grain": "One row per classification record of one act in OLRC's Table III, read from its page or the bulk file.",
     "identity_columns": [
       "act_key",
@@ -21125,6 +21256,7 @@
         "description": "The detail record's own updateDate."
       }
     ],
+    "subject": "congress",
     "grain": "One row per committee or subcommittee the Congress.gov committee list route states, with its detail record where captured.",
     "identity_columns": [
       "system_code"
@@ -21240,6 +21372,7 @@
         "description": "When the file was captured; the merge prefers the larger value."
       }
     ],
+    "subject": "congress",
     "grain": "One row per member per committee or subcommittee seat a chamber roster file lists today.",
     "identity_columns": [
       "congress",
@@ -21377,6 +21510,7 @@
         "description": "The host's derived first RIN of `regulation_id_numbers_json`; NULL when it states none."
       }
     ],
+    "subject": "rulemaking",
     "grain": "One row per dated Federal Register document: a rule, proposed rule, notice or presidential document.",
     "identity_columns": [
       "document_number",
@@ -21473,6 +21607,7 @@
         "description": "The candidate the committee is linked to that cycle (`CAND_ID`); NULL when none."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One row per FEC committee per two-year cycle, as that cycle's bulk committee master states it.",
     "identity_columns": [
       "committee_id",
@@ -21569,6 +21704,7 @@
         "description": "The address ZIP code as filed (`CAND_ZIP`); NULL when blank."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One row per FEC candidate per two-year cycle, as that cycle's bulk candidate master states it.",
     "identity_columns": [
       "candidate_id",
@@ -21825,6 +21961,7 @@
         "description": "The submitter's postal code."
       }
     ],
+    "subject": "rulemaking",
     "grain": "One row per Regulations.gov document: the attributes the thin documents table does not carry.",
     "identity_columns": [
       "document_id"
@@ -21920,6 +22057,7 @@
         "description": "A second docket subtype level."
       }
     ],
+    "subject": "rulemaking",
     "grain": "One row per Regulations.gov docket: the attributes the thin dockets table does not carry.",
     "identity_columns": [
       "docket_id"
@@ -22065,6 +22203,7 @@
         "description": "The submitter's postal code."
       }
     ],
+    "subject": "rulemaking",
     "grain": "One row per Regulations.gov comment: the attributes the thin comments table does not carry.",
     "identity_columns": [
       "comment_id"
@@ -22250,6 +22389,7 @@
         "description": "`true` where the Congress.gov detail route was read for this row, `false` where the row holds the list route's record only (a detail not yet reached under a run's cap, or refused). The one test of whether a detail was read: a list column cannot say it, because a read detail omits a list it does not state and the column is then NULL as for an unread one. `false` on a `congressional-record-granule` row, which no detail route serves."
       }
     ],
+    "subject": "congress",
     "grain": "One row per House executive communication: the Congress.gov house-communication routes where the publisher decomposes it, the Congressional Record entry it printed where the publisher does not.",
     "identity_columns": [
       "congress",
@@ -22264,7 +22404,7 @@
     "coverage": "Sampled, and accumulating. Each run walks the current Congress's whole `committee-meeting` list, and the previous Congress's from the day before its newest held `updateDate` (or its oldest unread row), and reads the detail of every meeting the table does not yet hold, newest `updateDate` first, at most 1,000 a run; a meeting whose detail is unread or refused has its list fields only. The previous Congress stays in scope because its meetings change when GovInfo prints their transcripts, and hearing transcripts have named meetings the table lacked (receipt `join-gaps-2026-09-26/f/`).",
     "kind": "sampled",
     "measured_on": "2026-09-28",
-    "data_quality": "A row whose `detail_read` is `false` is list-only: its detail has not been read yet, and every detail-only column is NULL with it. A read detail's list is `[]` where the detail states an empty one and NULL where it states none. Rows read before spicy-docs 0.54.0 spelled both `[]`; each such row is read once more, after a run's own reads and under its cap of 1,000 (5,992 on 2026-10-03, about six runs). Event ids are keyed with their chamber because their uniqueness across chambers is unmeasured (spicy-docs' contract note); the 119th's House and Senate event ids come from different ranges, so an id alone does not say which chamber. The publisher's witness entries can repeat within one meeting, so count people by name, not entries, and a bill named only in meeting documents is not in `bill_ids_json`.\n**Senate and NoChamber meetings list no witnesses here.** Congress.gov's committee-meeting detail, the route this table reads, has no `witnesses` element for those chambers (retained detail `119/nochamber/338692`): on committee-meetings generation 31e62420… (2026-10-03) none of the 2,336 Senate and NoChamber rows lists a witness (each read `witnesses_json` `[]` and `witness_count` 0 then; read again under spicy-docs 0.54.0, both are NULL, no list stated), while 2,735 of the 3,761 House rows do. Such a row without witnesses means the route stated none, not that the meeting had none: GovInfo's MODS for a printed hearing (`hearing_transcripts.package_id`) can name them (CHRG-119shrg64653 names four), and this service does not read MODS for witnesses.\nThe publisher's `NoChamber` value is stored as `nochamber`, matching its detail address and preserving the existing row identity. It is neither NULL nor an inferred `joint` chamber. The source reader accepts that address, so previously list-only rows can fill at an unchanged timestamp. Retained meeting `119/nochamber/338692` names the Helsinki Commission; the September 24 committee-meetings audit retains its list row and served detail.",
+    "data_quality": "A row whose `detail_read` is `false` is list-only: its detail has not been read yet, and every detail-only column is NULL with it. A read detail's list is `[]` where the detail states an empty one and NULL where it states none. Rows read before spicy-docs 0.54.0 spelled both `[]`; each such row is read once more, after a run's own reads and under its cap of 1,000, and until then its `[]` can mean either. Event ids are keyed with their chamber because their uniqueness across chambers is unmeasured (spicy-docs' contract note); the 119th's House and Senate event ids come from different ranges, so an id alone does not say which chamber. The publisher's witness entries can repeat within one meeting, so count people by name, not entries.\n**Related bills.** Congress.gov often leaves the related bills off a markup's detail, so `bill_ids_json` names none; the meeting's documents usually still name them, in a `meeting_documents_json` entry whose `documentType` is `Bills and Resolutions`. A bill named only in a meeting document is not in `bill_ids_json`.\n**A meeting can carry no committee**: `committee_system_code` and `committees_json` are NULL where the detail names none (Senate Finance's nominations meeting of 2026-07-23, event 338678), so a filter on the committee misses it; search `title` as well. **`meeting_status` is Congress.gov's and can lag**: a hearing the committee rescheduled can stay `Scheduled` under its first date (Senate Finance's trade-agenda hearing, event 338326 on 2026-04-23, which the committee lists as rescheduled to July, event 338681).\n**Senate and NoChamber meetings list no witnesses here.** Congress.gov's committee-meeting detail, the route this table reads, has no `witnesses` element for those chambers (retained detail `119/nochamber/338692`), so their witness lists are `[]` or NULL: the route stated none, not that the meeting had none. For a printed hearing, `hearing_transcripts.witnesses_json` lists the witnesses GovInfo's MODS names (CHRG-119shrg64653 names four). A transcript reaches its meeting by `event_id`, or by `mods_event_id` where `event_id` is NULL, with `congress` and `chamber`; most Senate transcripts name no meeting either way, so most Senate meetings have no witness list from either source.\nThe publisher's `NoChamber` value is stored as `nochamber`, matching its detail address and preserving the existing row identity. It is neither NULL nor an inferred `joint` chamber. The source reader accepts that address, so previously list-only rows can fill at an unchanged timestamp. Retained meeting `119/nochamber/338692` names the Helsinki Commission; the September 24 committee-meetings audit retains its list row and served detail.",
     "columns": [
       {
         "column_name": "congress",
@@ -22407,6 +22547,7 @@
         "description": "`true` where the Congress.gov detail route was read for this row, `false` where the row holds the list route's record only (a detail not yet reached under a run's cap, or refused). The one test of whether a detail was read: a list column cannot say it, because a read detail omits a list it does not state and the column is then NULL as for an unread one."
       }
     ],
+    "subject": "congress",
     "grain": "One row per scheduled committee meeting, as the Congress.gov committee-meeting routes state it.",
     "identity_columns": [
       "congress",
@@ -22514,6 +22655,7 @@
         "description": "`true` where the Congress.gov detail route was read for this row, `false` where the row holds the list route's record only (a detail not yet reached under a run's cap, or refused). The one test of whether a detail was read: a list column cannot say it, because a read detail omits a list it does not state and the column is then NULL as for an unread one."
       }
     ],
+    "subject": "congress",
     "grain": "One row per daily Congressional Record issue, which is also one legislative day per chamber named.",
     "identity_columns": [
       "volume",
@@ -22655,6 +22797,7 @@
         "description": "`true` where the Congress.gov detail route was read for this row, `false` where the row holds the list route's record only (a detail not yet reached under a run's cap, or refused). The one test of whether a detail was read: a list column cannot say it, because a read detail omits a list it does not state and the column is then NULL as for an unread one."
       }
     ],
+    "subject": "congress",
     "grain": "One row per treaty document, as the Congress.gov treaty routes state it.",
     "identity_columns": [
       "congress_received",
@@ -22737,6 +22880,7 @@
         "description": "The publisher's own URL for this nomination."
       }
     ],
+    "subject": "congress",
     "grain": "One row per nomination or part, as the Congress.gov nomination list route states it.",
     "identity_columns": [
       "congress",
@@ -22943,6 +23087,7 @@
         "description": "Which of the report's own statements `covered_congress` was read from: `title`, `cover` or `front_matter`, strongest first, the first to state any Congress deciding.  Set beside a NULL `covered_congress` where that source states several; NULL where none states one."
       }
     ],
+    "subject": "congress",
     "grain": "One row per end-of-Congress committee activity report package, House or Senate, with what its print adds; the table's name predates its Senate rows.",
     "identity_columns": [
       "package_id"
@@ -23128,6 +23273,7 @@
         "description": "Digest over every citation rule's name, version, pattern and rejects, so these counts name the rules that produced them."
       }
     ],
+    "subject": "spending",
     "grain": "One row per published volume of the President's budget, with what its print adds to its own index.",
     "identity_columns": [
       "package_id"
@@ -23278,6 +23424,7 @@
         "description": "Digest of the normalized text every offset in this row indexes into, and part of the identity.  A span means nothing without it, and keying on it is what stops two extractions of one document from colliding on one identity and silently merging.  Append-only per digest, exactly as `document_citations` is."
       }
     ],
+    "subject": "congress",
     "grain": "One row per action phrase a committee print states about one bill it names in the same sentence: the print's own phrasing, what it maps to, and how reliable the pairing is.",
     "identity_columns": [
       "document_key",
@@ -23294,7 +23441,7 @@
     "coverage": "Derived, and selective: not a list of the texts the service holds. Every House activity report (`govinfo_package`) and budget volume (`budget_volume`) the print-citations family holds is read, and `house_activity_reports` and `budget_volumes` state each read (`pages_read`, `citation_rows`; `citation_rows` 0 is a read that found none). The held-field kinds (bill_section, report_section, lobbying_activity, comment_inline, communication_authority, communication_report_nature, communication_record_entry, court_opinion_derived_pdf) are read only for the fields an operator selects, at most 100 a run, so a held text of those kinds has rows here only once it has been selected. A document with no rows may be held and unread: look a committee report up in `committee_reports` and `report_sections`, a bill's text in `bill_sections`. Each row's document_kind is one the resolve_document_citations tool accepts; the tool refuses any other kind, and a kind with no held rows yet resolves to no occurrences. A budget root the reader refuses yields no citations. Every kind is written by the print-citations family.",
     "kind": "derived",
     "measured_on": "2026-10-03",
-    "data_quality": "**The span is in the identity because the span is the yield.** Keying on document, kind and target alone would collapse CRPT-118hrpt968's repeated mentions of one bill into one row; the aggregate is derivable from this table with `GROUP BY document_key, cite_kind, target_key` and the reverse is not. **Different text digests retain their histories.** A source revision producing a new `text_sha256` adds findings beside earlier text versions. A successful rule correction for the same document and text digest replaces that digest's findings, including an empty result; it can retire obsolete rows. A failed read preserves previous findings. Size grows with retained text revisions and their citations. Filter to the digest the document row states (`house_activity_reports.text_sha256` or `budget_volumes.text_sha256`) to read exactly one extraction. Prints are revised rarely, so this is a property to know before building on the table; pruning earlier text digests would require a separate retention decision. `stated_by_index` is three-valued and the third value matters: `true`/`false` where a keyed index record was read and could state a key of this shape, and **NULL where no comparison was possible** — either no index record was supplied or the MODS vocabulary has no element of that shape, which is the case for every bill citation of a budget volume. So the consumer predicate for \"what the print adds\" is `WHERE stated_by_index IS NOT TRUE`, never `= false`. `target_resolved` false means the cite was found and its key is unsettled, not that the cite is wrong. `target_rule` says **how** a key was reached and separates lookups from inferences: `exact` and `roster_prefix` are lookups against a supplied vocabulary, while `name_prefix` and `sibling_prefix` are inferences from the printed text that a consumer may decline. `evidence_page` is NULL where the rendition states no page boundary, and a match straddling a page break is attributed to the page it began on.\n**A document with no rows here is not shown to be unheld.** On print-citations generation 685f2e27… (2026-10-03) the report_section rows cover 1 of the 158 report packages `report_sections` holds, and each other held-field kind with rows covers two documents. GAO product ids join `gao_reports` on `report_number = target_key`, GAO's own spelling (`report_id` is the same id in lower case): 241 of the 248 distinct ids resolve; the other 7 are six `…SU` products and the misprint `GAO-21-105520` (GAO-23-105520 is held).",
+    "data_quality": "**The span is in the identity because the span is the yield.** Keying on document, kind and target alone would collapse CRPT-118hrpt968's repeated mentions of one bill into one row; the aggregate is derivable from this table with `GROUP BY document_key, cite_kind, target_key` and the reverse is not. **Different text digests retain their histories.** A source revision producing a new `text_sha256` adds findings beside earlier text versions. A successful rule correction for the same document and text digest replaces that digest's findings, including an empty result; it can retire obsolete rows. A failed read preserves previous findings. Size grows with retained text revisions and their citations. Filter to the digest the document row states (`house_activity_reports.text_sha256` or `budget_volumes.text_sha256`) to read exactly one extraction. Prints are revised rarely, so this is a property to know before building on the table; pruning earlier text digests would require a separate retention decision. `stated_by_index` is three-valued and the third value matters: `true`/`false` where a keyed index record was read and could state a key of this shape, and **NULL where no comparison was possible** — either no index record was supplied or the MODS vocabulary has no element of that shape, which is the case for every bill citation of a budget volume. So the consumer predicate for \"what the print adds\" is `WHERE stated_by_index IS NOT TRUE`, never `= false`. `target_resolved` false means the cite was found and its key is unsettled, not that the cite is wrong. `target_rule` says **how** a key was reached and separates lookups from inferences: `exact` and `roster_prefix` are lookups against a supplied vocabulary, while `name_prefix` and `sibling_prefix` are inferences from the printed text that a consumer may decline. `evidence_page` is NULL where the rendition states no page boundary, and a match straddling a page break is attributed to the page it began on.\n**A document with no rows here is not shown to be unheld.** Each held-field kind has rows only for the documents selected so far (on 2026-10-03 the report_section rows covered one of the report packages `report_sections` holds); count distinct `document_key` by `document_kind` for the live figure. GAO product ids join `gao_reports` on `report_number = target_key`, GAO's own spelling (`report_id` is the same id in lower case); the few that do not resolve are `…SU` products, which `gao_reports` does not hold, and misprints such as `GAO-21-105520` (GAO-23-105520 is held).",
     "columns": [
       {
         "column_name": "document_key",
@@ -23382,6 +23529,7 @@
         "description": "Digest of the normalized text the offsets index into, and part of the identity.  A span means nothing without it -- a re-extraction that moved one character moves every offset after it -- and keying on it is what stops two extractions of the same document from colliding on one identity and silently merging.  The table is append-only per digest: a superseded extraction's rows are not retired, and a consumer filters to the digest `house_activity_reports.text_sha256` states for that document."
       }
     ],
+    "subject": "congress",
     "grain": "One row per occurrence of one cited key in one document's text: the key, the exact text that named it, and the character span it was read at.",
     "identity_columns": [
       "document_kind",
@@ -23577,6 +23725,7 @@
         "description": "This module's rule version, so a re-extraction under a corrected rule is attributable; the merge prefers the larger value.  Zero-padded decimal, because the column is compared as a string."
       }
     ],
+    "subject": "spending",
     "grain": "One row per ruled row of one ruled table on one page of a Report of the Secretary of the Senate, with the cells exactly as the print states them and the roles its own header band names.",
     "identity_columns": [
       "package_id",
@@ -23697,6 +23846,7 @@
         "description": "`native-legal-reference/003` (`NATIVE_LEGAL_REFERENCE_RULE`): the scanners' selected shapes and the reading this row was produced under, comparable for equality only."
       }
     ],
+    "subject": "reference",
     "grain": "One scanner observation in one pinned U.S. Code or eCFR XML input: a native href or source credit, or an AUTH or SOURCE note, with every target read from it nested rather than multiplied.",
     "identity_columns": [
       "scope_id",
@@ -23779,6 +23929,7 @@
         "description": "`native-legal-reference/003` (`NATIVE_LEGAL_REFERENCE_RULE`): the rule this read ran under, the same as its observation rows'; comparable for equality only."
       }
     ],
+    "subject": "reference",
     "grain": "One row per input scope: its latest complete read of the selected shapes, including a read that found none.",
     "identity_columns": [
       "scope_id"
@@ -23884,6 +24035,7 @@
         "description": "The export's own status-as-of stamp, verbatim, from the latest export that listed it; GAO labels it EST year round, though it is Eastern local time. Text in GAO's spelling (`Sep 30, 2026 at 1:18 PM EST`), not sortable: last_seen carries the same stamp's date in ISO form, so order and filter by it."
       }
     ],
+    "subject": "oversight",
     "grain": "One row per recommendation per agency that GAO's open-recommendations export has listed, with its status as last listed.",
     "identity_columns": [
       "recommendation_id"
@@ -23939,6 +24091,7 @@
         "description": "When this run captured the listing the entry was read from."
       }
     ],
+    "subject": "congress",
     "grain": null,
     "identity_columns": [
       "congress",
@@ -24005,6 +24158,7 @@
         "description": "When the bill-family run that read this entry captured the BILLSTATUS document."
       }
     ],
+    "subject": "congress",
     "grain": null,
     "identity_columns": [
       "bill_id",
@@ -24055,6 +24209,7 @@
         "description": "When the detail request that filled the bill was captured, or when the refusal was recorded."
       }
     ],
+    "subject": "congress",
     "grain": null,
     "identity_columns": [
       "congress",
@@ -24122,6 +24277,7 @@
         "description": "When this walk's last captured list page was observed."
       }
     ],
+    "subject": "congress",
     "grain": null,
     "identity_columns": [
       "congress",
@@ -24163,6 +24319,7 @@
         "description": "UTC time this rollup recorded the checkpoint."
       }
     ],
+    "subject": "congress",
     "grain": null,
     "identity_columns": [
       "package_id"
@@ -24228,6 +24385,7 @@
         "description": "SHA-256 of the `source_table` file the read was pinned to; NULL when its pin named none."
       }
     ],
+    "subject": "congress",
     "grain": null,
     "identity_columns": [
       "document_kind",

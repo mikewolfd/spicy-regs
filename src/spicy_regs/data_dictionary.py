@@ -83,6 +83,17 @@ COVERAGE_KINDS: dict[str, str] = {
 }
 
 
+#: What each table is about, so a reader who does not know table names can find the rulemaking tables
+#: among the rest (owner decision 8, 2026-10-03: two personas could not, one of them a non-SQL user). One
+#: word per table, stated in descriptions.yaml and carried into table_metadata.json; a relationship view
+#: takes its base table's. GAO and CRS are oversight; SAM, USAspending, the President's budget and the
+#: Senate's expenditure reports are spending; reference holds the legal texts other subjects cite (the CFR,
+#: the U.S. Code and eCFR authority notes).
+SUBJECTS: tuple[str, ...] = (
+    "rulemaking", "congress", "campaign_finance", "lobbying", "courts", "oversight", "spending", "reference",
+)
+
+
 def coverage_kind(coverage: str) -> str | None:
     """Return the machine-readable kind for a coverage statement, or None.
 
@@ -198,6 +209,29 @@ def data_quality_prose_errors(table: str, data_quality: str) -> list[str]:
             for match in _DATA_QUALITY_RULES[what].finditer(text)
         )
     return errors
+
+
+def pinned_sentences(tables: dict) -> list[tuple[str, str, str, str]]:
+    """``(table, field, pin, sentence)`` for each sentence of the dictionary prose that names a pin.
+
+    A pin is what COVERAGE_PROSE_REFUSALS calls a snapshot id or a digest or generation pin, cut to the
+    form the live index states (``snapshot_`` and 8 hex digits, or 8 hex digits), so the release-time
+    prose pass (``scripts/check_ledger_pins.py``) can say which no longer name the live data. ``field`` is
+    ``summary``, ``coverage``, ``data_quality`` or ``columns.<name>``; pass the file's own entries, not
+    ``load_descriptions``', so a contract sentence this repository cannot edit is not listed.
+    """
+    found = []
+    for table, entry in tables.items():
+        fields = {name: (entry or {}).get(name) for name in ("summary", "coverage", "data_quality")}
+        fields |= {f"columns.{name}": text for name, text in ((entry or {}).get("columns") or {}).items()}
+        for field, text in fields.items():
+            for sentence in re.split(r"(?<=\.)\s+", " ".join(str(text or "").split())):
+                for what in ("a snapshot id", "a digest or generation pin"):
+                    for match in _DATA_QUALITY_RULES[what].finditer(sentence):
+                        pin = match.group(0).rstrip("…")
+                        pin = pin[: len("snapshot_") + 8] if pin.startswith("snapshot_") else pin[:8]
+                        found.append((table, field, pin, sentence))
+    return found
 
 
 #: A data-quality note that stands in for a fix in the vendored spicy-docs wheel ends "(interim until
@@ -927,6 +961,8 @@ def check_descriptions(
             errors.append(f"[{table}] missing a 'label' in descriptions.yaml")
         if not (entry.get("coverage") or "").strip():
             errors.append(f"[{table}] missing a 'coverage' statement in descriptions.yaml")
+        if entry.get("subject") not in SUBJECTS:
+            errors.append(f"[{table}] 'subject' must be one of {', '.join(SUBJECTS)}, not {entry.get('subject')!r}")
         measured_on = str(entry.get("measured_on") or "").strip()
         errors.extend(coverage_prose_errors(table, entry.get("coverage") or "", measured_on))
         errors.extend(data_quality_prose_errors(table, entry.get("data_quality") or ""))
@@ -1308,6 +1344,7 @@ def build_mcp_metadata(descriptions: dict, schemas: dict[str, list[tuple[str, st
         )
         result[table] = {
             **entry,
+            "subject": description["subject"],
             "grain": contract.grain if contract is not None else description.get("grain"),
             "identity_columns": identity,
             "columns": [

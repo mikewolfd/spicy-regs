@@ -325,6 +325,27 @@ non-null child key names a parent row; the qualification basis says a receipt
 it names is the maintainer's retained evidence, not a public file. Editing
 either text is a `spicy-regs-dict generate`, and `check` refuses a stale copy.
 
+## Map-time status columns (FEC typed tables)
+
+Some FEC typed columns are stamped when a row is mapped and never computed
+afterwards: `filing_link_status` (`unresolved` on every row of 27 tables on
+2026-10-03, with `filing_key` NULL), `entity_reference_status` on the two
+summary tables, `fec_loan_guarantors.loan_link_status` and
+`fec_filing_links.target_resolution_status`. The deciding happens elsewhere: in
+the `<table>_filing_associations` and `fec_filing_reference_resolution` views,
+or in a declared join. Since round 6 the dictionary says so from one template
+per column (a YAML anchor in `descriptions.yaml`), and
+`scripts/check_status_constants.py` lists, at release, every status column that
+holds one value while its text does not say so.
+
+**Debt: drop these stored constants when the FEC typed family is next
+regenerated wholesale.** They state nothing the mapper did not already know and
+read like outcomes. They stay for now because removing `filing_link_status`
+rewrites all 27 tables of the family, the two largest (`fec_receipts`,
+`fec_intercommittee_transactions`) among them, changes the SQL identity of the
+qualified views that read them and forces a full release receipt, for a cleanup
+that changes no result (`phase3-review.md`, round 6, 2026-10-03).
+
 ## Citation lookup kinds (`resolve_document_citations`)
 
 The tool accepts exactly the keys of `citation_resolution.SOURCE_TABLES`: the

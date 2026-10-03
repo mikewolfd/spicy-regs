@@ -1603,6 +1603,1052 @@
       "measurement": null
     },
     {
+      "child": "fec_account_transfers",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 20,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_agency_mapping_dispositions",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 124,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_agency_report_documents",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 98,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_agency_report_text",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 60,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_agency_reports",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 124,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_allocated_disbursements",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 32,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_allocation_bases",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 15,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_api_response_controls",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 280,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_audit_findings",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 2,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_bundled_contributions",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 9,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_candidate_api_observations",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 1,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_collection_selection",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 19,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_committee_master_observations",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 26,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_committee_observations",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 277,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_communication_costs",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 9,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_contribution_aggregates",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 3,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_coordinated_party_expenditures",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 4,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_debts",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 174,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_disbursements",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 657,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_electioneering_communications",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 9,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_filing_definition_evidence",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 14,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_filing_header_associations",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 1357,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_filing_links",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 23,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_filing_report_observations",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 1357,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_filing_text_observations",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 223,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_filings",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 26,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_historical_ie_statistics",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 4,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_inaugural_donations",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 23,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_independent_expenditures",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 54,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_intercommittee_transactions",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 2,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_legal_documents",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 25,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_legal_events",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 25,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_legal_matters",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 25,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_legal_parties",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 25,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_loan_guarantors",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 19,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_loan_terms",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 9,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_loans",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 127,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_lobbyist_registrations",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 1,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_oversight_recommendations",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 6,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_postgres_committee_history_observations",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 1,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_quality_notices",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 1,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_receipts",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 824,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_record_evidence",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 1181,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_registration_statements",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 4,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_report_metrics",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 107,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_reported_financial_summaries",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 14,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_research_context_dispositions",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 1517,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_research_document_observations",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 380,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_research_filing_feed_items",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 9,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_research_meeting_observations",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 1,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_research_response_outcomes",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 42,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_research_source_pages",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 30,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_retained_csv_observations",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_collections",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 3,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "fec_independent_expenditures",
+      "child_columns": [
+        "collection_id"
+      ],
+      "parent": "fec_filing_report_observations",
+      "parent_columns": [
+        "collection_id"
+      ],
+      "kind": "scope",
+      "reason": "An original-filing row's cover: each electronic collection holds one fec_filing_report_observations row, its report_record_role reported-form (F24N or F24A, F3XN or F3XA, F5N). The bulk file (bulk-independent-expenditure-2024) has no cover row. Measured 2026-10-03 through check_table_joins on fec-query 81453ac6…, fec-observations 9c289dfe…, fec-committees ce80d98e… and fec-candidate-history d9e9c233…; receipt mcp-chaos-2026-10-02/round6/impl-B/joins-measured-2026-10-03.json.",
+      "measured_via": null,
+      "baseline_keys": 54,
+      "baseline_missing": 1,
+      "floor_pct": 98.1481,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
+      "child": "fec_reported_financial_summaries",
+      "child_columns": [
+        "committee_native_id"
+      ],
+      "parent": "fec_committees",
+      "parent_columns": [
+        "committee_id"
+      ],
+      "kind": "scope",
+      "reason": "The ids are copied as each summary file states them and are never looked up when a row is mapped. Most of those OpenFEC's registry does not serve are filers of FEC's committee web summaries (2024 and 2026 cycles) that the bulk committee master does not list either; the rest are a few bundling, leadership and committee-summary filers and the empty string. Measured 2026-10-03 through check_table_joins on fec-query 81453ac6…, fec-observations 9c289dfe…, fec-committees ce80d98e… and fec-candidate-history d9e9c233…; receipt mcp-chaos-2026-10-02/round6/impl-B/joins-measured-2026-10-03.json.",
+      "measured_via": null,
+      "baseline_keys": 21633,
+      "baseline_missing": 331,
+      "floor_pct": 98.4699,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
+      "child": "fec_reported_financial_summaries",
+      "child_columns": [
+        "candidate_native_id"
+      ],
+      "parent": "fec_candidate_history",
+      "parent_columns": [
+        "candidate_id"
+      ],
+      "kind": "scope",
+      "reason": "The ids are copied as each summary file states them and are never looked up when a row is mapped. The 21 not in the bulk candidate master are FEC's aggregate codes P00000001-P00000003, committee ids the file puts in its candidate column, the empty string and ten candidate ids no cycle's master lists. A candidate has one row per cycle, so a key meets several. Measured 2026-10-03 through check_table_joins on fec-query 81453ac6…, fec-observations 9c289dfe…, fec-committees ce80d98e… and fec-candidate-history d9e9c233…; receipt mcp-chaos-2026-10-02/round6/impl-B/joins-measured-2026-10-03.json.",
+      "measured_via": null,
+      "baseline_keys": 10405,
+      "baseline_missing": 21,
+      "floor_pct": 99.7981,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
+      "child": "fec_contribution_aggregates",
+      "child_columns": [
+        "candidate_native_id"
+      ],
+      "parent": "fec_candidate_history",
+      "parent_columns": [
+        "candidate_id"
+      ],
+      "kind": "scope",
+      "reason": "The ids are copied as each summary file states them and are never looked up when a row is mapped. The 3 missing are FEC's aggregate codes P00000001 (all candidates), P00000002 (Democrats) and P00000003 (Republicans). Measured 2026-10-03 through check_table_joins on fec-query 81453ac6…, fec-observations 9c289dfe…, fec-committees ce80d98e… and fec-candidate-history d9e9c233…; receipt mcp-chaos-2026-10-02/round6/impl-B/joins-measured-2026-10-03.json.",
+      "measured_via": null,
+      "baseline_keys": 27,
+      "baseline_missing": 3,
+      "floor_pct": 88.8888,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
+      "child": "fec_loan_guarantors",
+      "child_columns": [
+        "collection_id",
+        "back_reference_transaction_id"
+      ],
+      "parent": "fec_loans",
+      "parent_columns": [
+        "collection_id",
+        "transaction_id"
+      ],
+      "kind": "complete",
+      "reason": "A Schedule C2 guarantor names its Schedule C loan by transaction id within one filing; each of the 22 met exactly one loan, though a few other loan keys repeat. Measured 2026-10-03 through check_table_joins on fec-query 81453ac6…, fec-observations 9c289dfe…, fec-committees ce80d98e… and fec-candidate-history d9e9c233…; receipt mcp-chaos-2026-10-02/round6/impl-B/joins-measured-2026-10-03.json.",
+      "measured_via": null,
+      "baseline_keys": 22,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
       "child": "fec_legal_parties",
       "child_columns": [
         "matter_record_id"
@@ -1957,6 +3003,56 @@
         "measured_on": "2026-10-03",
         "source_generation": "sha256:6ac8813aa36683c9fe742bc5afe930cd5192a4ea2324a88070f7d5f6339c4e5a",
         "reason": "Every lobbyist row names an activity of the same lobbying-filings generation. Until 2026-10-03 the declaration served 522 keys, the first-migration population (run 36264742453, 2026-09-26), as the baseline."
+      }
+    },
+    {
+      "child": "lobbying_activity_lobbyists",
+      "child_columns": [
+        "filing_uuid"
+      ],
+      "parent": "lobbying_filings",
+      "parent_columns": [
+        "filing_uuid"
+      ],
+      "kind": "complete",
+      "reason": "Full selected-input measurement on 2026-10-03; immutable URLs, SQL and cardinality in join_measurements.json. Every lobbyist row names a filing of the same lobbying-filings generation directly, as the activity route does; declared in round 6 (wanjiru audit) because the column text already promised it.",
+      "measured_via": null,
+      "baseline_keys": 1696361,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": {
+        "join": "lobbying_activity_lobbyists.filing_uuid -> lobbying_filings.filing_uuid",
+        "kind": "complete",
+        "status": "OK",
+        "keys": 1696361,
+        "missing": 0,
+        "resolved_pct": 100.0,
+        "floor_pct": 100.0,
+        "baseline_keys": 1696361,
+        "baseline_missing": 0,
+        "examples": [],
+        "child_input_rows": 10288894,
+        "child_nonnull_rows": 10288894,
+        "parent_input_rows": 1964854,
+        "parent_distinct_keys": 1964854,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 10288894,
+        "left_join_nonnull_rows": 10288894,
+        "scope": "full_selected_inputs",
+        "child_urls": [
+          "https://data.spicygov.ai/generations/lobbying-filings/6ac8813aa36683c9fe742bc5afe930cd5192a4ea2324a88070f7d5f6339c4e5a/lobbying_activity_lobbyists.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/lobbying-filings/6ac8813aa36683c9fe742bc5afe930cd5192a4ea2324a88070f7d5f6339c4e5a/lobbying_filings.parquet"
+        ],
+        "sql": "\n        WITH child_input AS (SELECT \"filing_uuid\" FROM read_parquet(['https://data.spicygov.ai/generations/lobbying-filings/6ac8813aa36683c9fe742bc5afe930cd5192a4ea2324a88070f7d5f6339c4e5a/lobbying_activity_lobbyists.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"filing_uuid\" FROM read_parquet(['https://data.spicygov.ai/generations/lobbying-filings/6ac8813aa36683c9fe742bc5afe930cd5192a4ea2324a88070f7d5f6339c4e5a/lobbying_filings.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"filing_uuid\" AS c0, count(*) AS child_rows\n                   FROM child_input WHERE \"filing_uuid\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"filing_uuid\" AS p0, count(*) AS parent_rows\n                   FROM parent_input WHERE \"filing_uuid\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0) ORDER BY c0) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+        "expected_cardinality": "one",
+        "measured_on": "2026-10-03",
+        "source_generation": "sha256:6ac8813aa36683c9fe742bc5afe930cd5192a4ea2324a88070f7d5f6339c4e5a",
+        "reason": "Every lobbyist row names a filing of the same lobbying-filings generation directly, as the activity route does; declared in round 6 (wanjiru audit) because the column text already promised it."
       }
     },
     {
@@ -2776,7 +3872,364 @@
         ]
       }
     ],
-    "fec_legal_parties": [
+    "fec_account_transfers": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_agency_mapping_dispositions": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_agency_report_documents": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_agency_report_text": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_agency_reports": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_allocated_disbursements": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_allocation_bases": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_api_response_controls": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_audit_findings": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_bundled_contributions": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_candidate_api_observations": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_collection_selection": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_committee_master_observations": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_committee_observations": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_communication_costs": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_contribution_aggregates": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      },
+      {
+        "child_columns": [
+          "candidate_native_id"
+        ],
+        "parent_table": "fec_candidate_history",
+        "parent_columns": [
+          "candidate_id"
+        ]
+      }
+    ],
+    "fec_coordinated_party_expenditures": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_debts": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_disbursements": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_electioneering_communications": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_filing_definition_evidence": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_filing_header_associations": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_filing_links": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_filing_report_observations": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_filing_text_observations": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_filings": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_historical_ie_statistics": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_inaugural_donations": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_independent_expenditures": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      },
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_filing_report_observations",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_intercommittee_transactions": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_legal_documents": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      },
       {
         "child_columns": [
           "matter_record_id"
@@ -2790,6 +4243,15 @@
     "fec_legal_events": [
       {
         "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      },
+      {
+        "child_columns": [
           "matter_record_id"
         ],
         "parent_table": "fec_legal_matters",
@@ -2798,7 +4260,27 @@
         ]
       }
     ],
-    "fec_legal_documents": [
+    "fec_legal_matters": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_legal_parties": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      },
       {
         "child_columns": [
           "matter_record_id"
@@ -2806,6 +4288,244 @@
         "parent_table": "fec_legal_matters",
         "parent_columns": [
           "record_id"
+        ]
+      }
+    ],
+    "fec_loan_guarantors": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      },
+      {
+        "child_columns": [
+          "collection_id",
+          "back_reference_transaction_id"
+        ],
+        "parent_table": "fec_loans",
+        "parent_columns": [
+          "collection_id",
+          "transaction_id"
+        ]
+      }
+    ],
+    "fec_loan_terms": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_loans": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_lobbyist_registrations": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_oversight_recommendations": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_postgres_committee_history_observations": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_quality_notices": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_receipts": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_record_evidence": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_registration_statements": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_report_metrics": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_reported_financial_summaries": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      },
+      {
+        "child_columns": [
+          "committee_native_id"
+        ],
+        "parent_table": "fec_committees",
+        "parent_columns": [
+          "committee_id"
+        ]
+      },
+      {
+        "child_columns": [
+          "candidate_native_id"
+        ],
+        "parent_table": "fec_candidate_history",
+        "parent_columns": [
+          "candidate_id"
+        ]
+      }
+    ],
+    "fec_research_context_dispositions": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_research_document_observations": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_research_filing_feed_items": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_research_meeting_observations": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_research_response_outcomes": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_research_source_pages": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
+        ]
+      }
+    ],
+    "fec_retained_csv_observations": [
+      {
+        "child_columns": [
+          "collection_id"
+        ],
+        "parent_table": "fec_collections",
+        "parent_columns": [
+          "collection_id"
         ]
       }
     ],
@@ -2885,6 +4605,15 @@
         "parent_columns": [
           "filing_uuid",
           "activity_index"
+        ]
+      },
+      {
+        "child_columns": [
+          "filing_uuid"
+        ],
+        "parent_table": "lobbying_filings",
+        "parent_columns": [
+          "filing_uuid"
         ]
       }
     ],
