@@ -138,6 +138,37 @@ _RULEMAKING = ("Measured 2026-09-27 on snapshot_f31a4045…; receipts rulemaking
                "and join-map-2026-09-26/rulemaking-exposure-independent.json, -2.json.")
 
 
+#: Where the round-6 FEC joins were measured: check_table_joins.measure over the full columns, 2026-10-03.
+_FEC_R6 = ("Measured 2026-10-03 through check_table_joins on fec-query 81453ac6…, fec-observations 9c289dfe…, "
+           "fec-committees ce80d98e… and fec-candidate-history d9e9c233…; receipt "
+           "mcp-chaos-2026-10-02/round6/impl-B/joins-measured-2026-10-03.json.")
+#: Distinct collection_id values per FEC typed table on that date (_FEC_R6), each naming exactly one fec_collections
+#: row; fec_filing_definitions is the one typed table without the column. The joins carry no reason: a complete join
+#: needs none, and fec_collections receives every one of them, so a reason each would repeat in its describe_table.
+_FEC_COLLECTION_KEYS = {
+    "fec_account_transfers": 20, "fec_agency_mapping_dispositions": 124, "fec_agency_report_documents": 98,
+    "fec_agency_report_text": 60, "fec_agency_reports": 124, "fec_allocated_disbursements": 32,
+    "fec_allocation_bases": 15, "fec_api_response_controls": 280, "fec_audit_findings": 2,
+    "fec_bundled_contributions": 9, "fec_candidate_api_observations": 1, "fec_collection_selection": 19,
+    "fec_committee_master_observations": 26, "fec_committee_observations": 277, "fec_communication_costs": 9,
+    "fec_contribution_aggregates": 3, "fec_coordinated_party_expenditures": 4, "fec_debts": 174,
+    "fec_disbursements": 657, "fec_electioneering_communications": 9, "fec_filing_definition_evidence": 14,
+    "fec_filing_header_associations": 1_357, "fec_filing_links": 23, "fec_filing_report_observations": 1_357,
+    "fec_filing_text_observations": 223, "fec_filings": 26, "fec_historical_ie_statistics": 4,
+    "fec_inaugural_donations": 23, "fec_independent_expenditures": 54, "fec_intercommittee_transactions": 2,
+    "fec_legal_documents": 25, "fec_legal_events": 25, "fec_legal_matters": 25, "fec_legal_parties": 25,
+    "fec_loan_guarantors": 19, "fec_loan_terms": 9, "fec_loans": 127, "fec_lobbyist_registrations": 1,
+    "fec_oversight_recommendations": 6, "fec_postgres_committee_history_observations": 1, "fec_quality_notices": 1,
+    "fec_receipts": 824, "fec_record_evidence": 1_181, "fec_registration_statements": 4, "fec_report_metrics": 107,
+    "fec_reported_financial_summaries": 14, "fec_research_context_dispositions": 1_517,
+    "fec_research_document_observations": 380, "fec_research_filing_feed_items": 9,
+    "fec_research_meeting_observations": 1, "fec_research_response_outcomes": 42, "fec_research_source_pages": 30,
+    "fec_retained_csv_observations": 3,
+}
+#: Why a summary's literal ids are a scope join: the file's ids are copied, never looked up (entity_reference_status).
+_LITERAL_IDS = "The ids are copied as each summary file states them and are never looked up when a row is mapped. "
+
+
 def _unlisted_rins(x_pattern: int, well_formed: int, placeholder: int, detail: str = "") -> str:
     """A RIN join's scope reason: the three kinds of RIN no Unified Agenda edition lists (receipt rin_orphans.json)."""
     return (f"unified_agenda holds every readable edition, Fall 1995 to the newest (202510). Of the RINs no edition "
@@ -328,6 +359,28 @@ JOINS: tuple[Join, ...] = (
           "2000-2020 (15 in 2014), that the API does not serve (C00428599 and C00317453 answer an empty result). "
           "Every registry committee appears in the history. Receipt join-map-2026-09-26/fec-committee-history-first-run.json."),
     _join("fec_source_records", "collection_id", "fec_collections", "collection_id", 647, 0),
+    *(_join(table, "collection_id", "fec_collections", "collection_id", keys, 0, expected_cardinality="one")
+      for table, keys in _FEC_COLLECTION_KEYS.items()),
+    _join("fec_independent_expenditures", "collection_id", "fec_filing_report_observations", "collection_id", 54, 1,
+          "scope", "An original-filing row's cover: each electronic collection holds one fec_filing_report_observations "
+          "row, its report_record_role reported-form (F24N or F24A, F3XN or F3XA, F5N). The bulk file "
+          "(bulk-independent-expenditure-2024) has no cover row. " + _FEC_R6),
+    _join("fec_reported_financial_summaries", "committee_native_id", "fec_committees", "committee_id", 21_633, 331,
+          "scope", _LITERAL_IDS + "Most of those OpenFEC's registry does not serve are filers of FEC's committee web "
+          "summaries (2024 and 2026 cycles) that the bulk committee master does not list either; the rest are a few "
+          "bundling, leadership and committee-summary filers and the empty string. " + _FEC_R6),
+    _join("fec_reported_financial_summaries", "candidate_native_id", "fec_candidate_history", "candidate_id",
+          10_405, 21, "scope", _LITERAL_IDS + "The 21 not in the bulk candidate master are FEC's aggregate codes "
+          "P00000001-P00000003, committee ids the file puts in its candidate column, the empty string and ten "
+          "candidate ids no cycle's master lists. A candidate has one row per cycle, so a key meets several. "
+          + _FEC_R6),
+    _join("fec_contribution_aggregates", "candidate_native_id", "fec_candidate_history", "candidate_id", 27, 3,
+          "scope", _LITERAL_IDS + "The 3 missing are FEC's aggregate codes P00000001 (all candidates), P00000002 "
+          "(Democrats) and P00000003 (Republicans). " + _FEC_R6),
+    _join("fec_loan_guarantors", ("collection_id", "back_reference_transaction_id"), "fec_loans",
+          ("collection_id", "transaction_id"), 22, 0,
+          reason="A Schedule C2 guarantor names its Schedule C loan by transaction id within one filing; each of the "
+                 "22 met exactly one loan, though a few other loan keys repeat. " + _FEC_R6),
     _join("fec_legal_parties", "matter_record_id", "fec_legal_matters", "record_id", 184, 0,
           expected_cardinality="one"),
     _join("fec_legal_events", "matter_record_id", "fec_legal_matters", "record_id", 184, 0,
@@ -370,6 +423,7 @@ JOINS: tuple[Join, ...] = (
     _join("lobbying_activities", "filing_uuid", "lobbying_filings", "filing_uuid", 247, 0),
     _join("lobbying_activity_lobbyists", ("filing_uuid", "activity_index"),
           "lobbying_activities", ("filing_uuid", "activity_index"), 522, 0),
+    _join("lobbying_activity_lobbyists", "filing_uuid", "lobbying_filings", "filing_uuid", 1_696_361, 0),
     # Native legal references: each observation names the complete read of its input (spicy-docs 0.52.0's
     # contract reference). Measured 2026-09-28 on native-legal-references 53755e3e…: both scopes resolve.
     _join("native_legal_references", "scope_id", "native_legal_reference_reads", "scope_id", 2, 0),

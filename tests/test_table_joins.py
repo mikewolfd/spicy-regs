@@ -21,7 +21,7 @@ def test_every_join_names_declared_tables_and_columns():
 @pytest.mark.parametrize("child", ["fec_legal_parties", "fec_legal_events", "fec_legal_documents"])
 def test_legal_child_joins_name_exact_observations_and_zero_orphan_baselines(child):
     """The independent retained-publication measurement admits no orphan or repeated parent key."""
-    outgoing = table_joins.joins_for(child)["outgoing"]
+    outgoing = [join for join in table_joins.joins_for(child)["outgoing"] if join["parent"] == "fec_legal_matters"]
     assert len(outgoing) == 1
     join = outgoing[0]
     assert (join["child_columns"], join["parent"], join["parent_columns"]) == (
@@ -175,7 +175,7 @@ def test_the_live_check_reads_rulemaking_tables_through_the_snapshot_pointer(mon
 
 @pytest.mark.parametrize("child", ["fec_legal_parties", "fec_legal_events", "fec_legal_documents"])
 def test_legal_capture_keys_preserve_rows_when_logical_matter_ids_repeat(tmp_path, child):
-    join = next(join for join in table_joins.JOINS if join.child == child)
+    join = next(join for join in table_joins.JOINS if join.child == child and join.parent == "fec_legal_matters")
     parent = tmp_path / "matters.parquet"
     children = tmp_path / "children.parquet"
     pq.write_table(pa.table({"record_id": ["capture-1", "capture-2"], "matter_id": ["MUR-8195"] * 2}), parent)
@@ -245,3 +245,48 @@ def test_mcp_legal_join_discovery_uses_the_generated_registry(monkeypatch):
         assert result["available"] is False
         assert result["qualification"]["status"] != "recorded"
         assert result["joins"]["outgoing"] == table_joins.joins_for(child)["outgoing"]
+
+
+# --------------------------------------------------------------------------- #
+# Round 6 (implementer B): the joins the column prose promised, each measured through check_table_joins.
+# --------------------------------------------------------------------------- #
+def _only_join(child: str, parent: str) -> table_joins.Join:
+    (join,) = [join for join in table_joins.JOINS if join.child == child and join.parent == parent]
+    return join
+
+
+def test_lobbyists_join_their_filing_directly_with_a_full_measurement():
+    join = _only_join("lobbying_activity_lobbyists", "lobbying_filings")
+    assert join.child_columns == ("filing_uuid",) and join.kind == "complete"
+    assert (join.baseline_keys, join.baseline_missing) == (1_696_361, 0) and join.measurement is not None
+
+
+def test_every_fec_typed_table_with_a_collection_names_a_held_collection():
+    schemas = dd.expected_schemas()
+    with_collection = {table for table in dd.FEC_TYPED_TABLES if "collection_id" in dict(schemas[table])}
+    declared = {join.child for join in table_joins.JOINS
+                if join.parent == "fec_collections" and join.child_columns == ("collection_id",)}
+    assert with_collection <= declared
+    assert all(_only_join(table, "fec_collections").kind == "complete" for table in with_collection)
+
+
+@pytest.mark.parametrize(("child", "column", "parent"), [
+    ("fec_independent_expenditures", "collection_id", "fec_filing_report_observations"),
+    ("fec_reported_financial_summaries", "committee_native_id", "fec_committees"),
+    ("fec_reported_financial_summaries", "candidate_native_id", "fec_candidate_history"),
+    ("fec_contribution_aggregates", "candidate_native_id", "fec_candidate_history"),
+])
+def test_the_partial_fec_routes_are_declared_as_scope_joins_with_their_reason(child, column, parent):
+    (join,) = [join for join in table_joins.JOINS
+               if join.child == child and join.parent == parent and join.child_columns == (column,)]
+    assert join.kind == "scope" and join.baseline_missing > 0 and join.reason
+
+
+def test_a_guarantor_reaches_its_loan_by_its_back_reference():
+    join = _only_join("fec_loan_guarantors", "fec_loans")
+    assert join.child_columns == ("collection_id", "back_reference_transaction_id")
+    assert join.parent_columns == ("collection_id", "transaction_id") and join.baseline_missing == 0
+
+
+def test_no_join_reason_names_a_path_on_a_maintainers_machine():
+    assert [join.name for join in table_joins.JOINS if table_joins.maintainer_path(join.reason)] == []

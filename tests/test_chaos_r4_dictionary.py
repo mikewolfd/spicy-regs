@@ -97,9 +97,10 @@ def test_rule_targets_reach_cfr_sections_on_the_structural_part():
     assert "chapter" in join.reason and "Title 41" in join.reason
 
 
-@pytest.mark.parametrize("child", ["lobbying_activities", "lobbying_activity_lobbyists"])
-def test_the_lobbying_joins_carry_a_full_measurement_not_the_migration_population(child):
+@pytest.mark.parametrize(("child", "parent"), [("lobbying_activities", "lobbying_filings"),
+                                               ("lobbying_activity_lobbyists", "lobbying_activities")])
+def test_the_lobbying_joins_carry_a_full_measurement_not_the_migration_population(child, parent):
     """247 and 522 were the activity tables' first-migration populations, served as baselines on 2026-10-03."""
-    (join,) = [join for join in table_joins.JOINS if join.child == child]
+    (join,) = [join for join in table_joins.JOINS if join.child == child and join.parent == parent]
     assert join.measurement is not None and join.baseline_keys > 100_000 and join.baseline_missing == 0
     assert join.measurement["parent_duplicate_keys"] == 0
