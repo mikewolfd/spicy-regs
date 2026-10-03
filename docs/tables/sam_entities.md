@@ -4,7 +4,7 @@
 
 **Federal entity registry**
 
-One row per active SAM.gov registration, ingested from the Entity Management API v4 bulk extract (`/entities?format=json`) by `build_sam_entities`. The authoritative federal entity registry, the directory of organizations registered to do business with or receive assistance from the U.S. government, and the anchor for organization/entity resolution across the corpus: the same UEI ties a commenting organization to its registered identity. Filtered to public active registrations (`registrationStatus=A`); list-level fields only. All columns are stored as VARCHAR.
+One row per active SAM.gov registration, ingested from the Entity Management API v4 bulk extract (`/entities?format=json`) by `build_sam_entities`. The authoritative federal entity registry, the directory of organizations registered to do business with or receive assistance from the U.S. government. Its UEI is the identity `usaspending_recipients.uei` joins on. Comments carry no UEI, so a commenting organization reaches this table only by a name match on `legal_business_name` or `dba_name`, which is not an identity. Filtered to public active registrations (`registrationStatus=A`); list-level fields only. All columns are stored as VARCHAR.
 
 **Coverage.** Window, complete for the years read. Every public active registration SAM.gov dated 1996 through 2026 and the two older ones (1949, 1968), one bulk extract per registrationDate year; each year matched its active count when read, less its credited renewals (see data_quality), and the output ledger records the counts. Scheduled runs re-read the current year every other day and cycle through the older years between, and each year read replaces that year's rows. *(measured 2026-09-26)*
 

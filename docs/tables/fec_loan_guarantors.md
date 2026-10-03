@@ -34,7 +34,7 @@ One source guarantor record associated with a reported loan state. Keeps each gu
 | `correction_applicability_status` | `VARCHAR` | Whether the captured correction can be applied to an evidenced base and target population; unresolved applicability prevents a qualified current total. |
 | `current_record_status` | `VARCHAR` | Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record. |
 | `filing_key` | `VARCHAR` | Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. |
-| `filing_link_status` | `VARCHAR` | Status of the relationship to a submitted filing version; unresolved references preserve the financial observation. |
+| `filing_link_status` | `VARCHAR` | Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist. |
 | `currency` | `VARCHAR` | Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately. |
 | `amount_kind` | `VARCHAR` | Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It is not an aggregation permission. |
 | `source_namespace` | `VARCHAR` | Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent. |
@@ -57,7 +57,7 @@ One source guarantor record associated with a reported loan state. Keeps each gu
 | `guarantor_zip` | `VARCHAR` | The loan guarantor's reported postal code, preserving leading zeroes. |
 | `employer` | `VARCHAR` | Employer name reported for the contributor or other named person; not an inferred organization identity. |
 | `occupation` | `VARCHAR` | Occupation reported by the source for the named person. |
-| `loan_link_status` | `VARCHAR` | Whether the guarantor record resolves to its reported loan state using source references; unresolved links remain rows. |
+| `loan_link_status` | `VARCHAR` | Always `unresolved` in this table: set when the row is mapped, before any loan is looked up. The guarantor's loan is the `fec_loans` row with the same `collection_id` whose `transaction_id` is this row's `back_reference_transaction_id` (a declared join). |
 | `guaranteed_amount_raw` | `VARCHAR` | Literal source value before conversion for guaranteed_amount. Preserves spelling, signs and empty values; the typed value and its status are separate. |
 | `guaranteed_amount_status` | `VARCHAR` | Source-presence or conversion state for guaranteed_amount, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
 | `source_cycle` | `INTEGER` | Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year. |

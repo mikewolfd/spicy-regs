@@ -29,7 +29,7 @@ One retained metadata observation of a submitted report or statement version. Us
 | `selection_evidence_sha256` | `VARCHAR` | Digest of the retained selection evidence used to authorize this mapper's source scope; not a financial inclusion decision. |
 | `source_namespace` | `VARCHAR` | Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent. |
 | `filing_key` | `VARCHAR` | Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. |
-| `filing_link_status` | `VARCHAR` | Status of the relationship to a submitted filing version; unresolved references preserve the financial observation. |
+| `filing_link_status` | `VARCHAR` | Set when the row is mapped: `native_file_number` where the filing states its own FEC file number (then `filing_key` is set), `unresolved_no_file_number` where it does not. It does not look up any other filing. |
 | `native_field_states_json` | `VARCHAR` | JSON map of field presence states such as source_missing, source_null, source_empty or reported. |
 | `current_record_status` | `VARCHAR` | Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record. |
 | `report_number` | `VARCHAR` | Literal source file/report number, retained separately from source row, image and transaction identifiers. A filing join requires a qualified number namespace. |

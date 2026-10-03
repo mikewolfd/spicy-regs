@@ -32,6 +32,14 @@
 # src/spicy_regs/data_dictionary.py). A dated measurement stays only where it
 # justifies a caveat, with its date.
 #
+# A pin anchors a past measurement: what that generation held. It never
+# carries a claim about now or about what a later run will do; a sentence about
+# now is a rule and must hold on every generation the code produces. A defect a
+# later generation fixed is deleted, not kept as history (version control and
+# the receipts keep it). `scripts/check_ledger_pins.py` lists each sentence
+# whose pin is no longer live, so whoever releases re-measures or deletes it. A
+# count that matters is a data control, not a sentence.
+#
 # `subject` says what a table is about, for a reader who does not know its
 # name: one of SUBJECTS in src/spicy_regs/data_dictionary.py, which
 # `spicy-regs-dict check` holds it to.
@@ -1069,11 +1077,12 @@ tables:
       Management API v4 bulk extract (`/entities?format=json`) by
       `build_sam_entities`. The authoritative federal entity registry, the
       directory of organizations registered to do business with or receive
-      assistance from the U.S. government, and the anchor for
-      organization/entity resolution across the corpus: the same UEI ties a
-      commenting organization to its registered identity. Filtered to public
-      active registrations (`registrationStatus=A`); list-level fields only.
-      All columns are stored as VARCHAR.
+      assistance from the U.S. government. Its UEI is the identity
+      `usaspending_recipients.uei` joins on. Comments carry no UEI, so a
+      commenting organization reaches this table only by a name match on
+      `legal_business_name` or `dba_name`, which is not an identity. Filtered
+      to public active registrations (`registrationStatus=A`); list-level
+      fields only. All columns are stored as VARCHAR.
     columns:
       uei: "Unique Entity ID (SAM `ueiSAM`, 12-char alphanumeric, e.g. `Q93HWX24PGA4`). With `entity_eft_indicator`, the registration key; alone, the entity-resolution join key."
       entity_eft_indicator: "SAM `entityEFTIndicator`: which of an entity's registrations this is, one per EFT (bank-account) indicator. NULL for an entity's sole registration."
@@ -1167,20 +1176,20 @@ tables:
       the lobbyist's LDA id and name parts, any covered official position they
       held, and whether the filing lists them as new. Keyed `(filing_uuid,
       activity_index, lobbyist_index)`, positions in the filing's own lists.
-      Joins to `lobbying_activities` on `(filing_uuid, activity_index)`. All
-      columns are stored as VARCHAR.
+      Joins to `lobbying_activities` on `(filing_uuid, activity_index)` and to
+      `lobbying_filings` on `filing_uuid`. All columns are stored as VARCHAR.
     columns:
       filing_uuid: "The filing; joins to `lobbying_filings.filing_uuid`."
       activity_index: "The activity's position in the filing; with `filing_uuid`, joins to `lobbying_activities`."
       lobbyist_index: "The lobbyist's position in the activity's list, from `0`. Completes the key."
-      lobbyist_id: "LDA lobbyist id: the stable identity of the person across filings."
+      lobbyist_id: "LDA's lobbyist record id: one registrant's record of a lobbyist, stable across that registrant's filings, not an identity for the person. LDA's own record for an id (`lda.gov/api/v1/lobbyists/<id>/`) names exactly one registrant, so a lobbyist who moves to another firm is filed under a new id: Stephen Holland is 146616 under registrant 11377 and 151303 under registrant 7257. A count of distinct ids counts registrant-lobbyist records, not people; matching a person across firms is a name match. A few ids also appear on another registrant's filing, all on filings of 2020-2022 (measured 2026-10-03)."
       prefix: "Name prefix as filed; often null."
       first_name: "First name as filed (LDA prints names upper-case)."
       nickname: "Nickname as filed; often null."
       middle_name: "Middle name as filed; often null."
       last_name: "Last name as filed."
       suffix: "Name suffix as filed; often null."
-      covered_position: "The covered executive- or legislative-branch position the lobbyist held, as filed; null when none."
+      covered_position: "The covered executive- or legislative-branch position the lobbyist held, as the registrant typed it for this activity: free text, not parsed, with no link to `committees` or any agency table. It is stated per activity, so one lobbyist's rows can carry it on some activities and not others; NULL means this entry states none, not that the lobbyist held none. Many values are placeholders rather than positions (`N/A`, `None`, `Not applicable`) or point elsewhere (`See prior filing`), and LDA's own filings sometimes put a colleague's text against the wrong name."
       new: "`True` when the filing lists the lobbyist as new for this activity, `False` otherwise."
   fec_committees:
     label: "Political committees"
@@ -1569,14 +1578,23 @@ tables:
     data_quality: >-
       `released_date` is when GAO released the decision, not when it decided
       it; the decision page and `gao.gov/docket/<B-number>.1` state the
-      decision date. Apply `html.unescape` when matching a `title`.
-      `decision_status` is captured from spicy-docs 0.54.0, so it, `outcome`
-      and `outcome_rule` are NULL on every row until a walk is read again; on
-      gao-reports generation 42d9c8a5… (2026-10-03) none of the 6,616 rows
-      carries one. Read again from the retained walk under 0.54.0, 5,903 rows
-      get an outcome and 713 do not: 681 state no sentence and 32 state one
-      the table leaves unmapped (an advisory or appropriations opinion), which
-      each run's journal counts.
+      decision date. Apply `html.unescape` when matching a `title`. `outcome`
+      is NULL where GAO's listing states no status sentence for a decision, and
+      where it states one spicy-docs' table leaves unmapped (a cost
+      recommendation, an advisory or appropriations opinion and the like); each
+      run's journal counts both.
+
+      GAO's own bid protest statistics, in its annual reports to Congress, are
+      not a count of these rows: GAO counts docket numbers (B-numbers) as
+      cases, not decision pages or procurements, per fiscal year, and takes its
+      sustain rate over merit decisions (sustained plus denied). Here a row is
+      one decision page, which can carry several B-numbers, dated by its
+      release. The annual reports are rows of `gao_reports` (`GAO Bid Protest
+      Annual Report to Congress for Fiscal Year …`) with title, date, link and
+      at most a short abstract: their figures are not held. `decision_type` is GAO's label as its
+      listing states it, not a check: GAO also labels a few reports `Bid
+      Protest Decision` (B-423717, its response to section 885 of the FY2025
+      NDAA, and B-401197, a report to Congress on defense bid protests).
     columns_from: spicy_docs
   crs_reports:
     identity_columns: [report_id]
@@ -2294,20 +2312,10 @@ tables:
       A numbered reprint is its own printing since spicy-docs 0.37.0: the
       publisher types it exactly like the printing it follows, so its
       `version_code` is its own package suffix (`eas2`, `rfs2`) rather than the
-      stage's slug. Generation `d380cdc0…` still keys two such printings under
-      the stage's slug: 119-hr-6644's second Senate engrossed amendment (a
-      congress row with `BILLS-119hr6644eas2`, beside a printing whose sections
-      mix both documents) and 118-hr-7643's second House report. A rebuild of
-      the bill retires the row and publishes each printing under its own code
-      (receipt `repeated-printings-2026-09-26/`).
-      Public/private laws are distinct publisher listings, not enrolled BILLS
-      printings. Unsupported law bodies remain unacquired: their offered URLs,
-      labels and dates are retained, with no acquired body or section claims.
-      Generation `82c8088d…` contains public-law rows incorrectly associated
-      with enrolled BILLS resources. The corrected builder replaces these in
-      the requested Congress/bill-type scope and removes only their dependent
-      rows; adopting code alone does not correct an already-published generation
-      (receipt `mcp-chaos-2026-10-02/round2/repair/`).
+      stage's slug. Public/private laws are distinct publisher listings, not
+      enrolled BILLS printings. Unsupported law bodies remain unacquired: their
+      offered URLs, labels and dates are retained, with no acquired body or
+      section claims.
     columns_from: spicy_docs
 
   bill_sections:
@@ -2322,14 +2330,9 @@ tables:
       The refusal count is therefore a measure of how far the cap is from the
       corpus, not of anything wrong with the printings; it falls as successive
       runs spend the cap on ground earlier ones did not reach. A section is
-      keyed on its `seq` within the printing since spicy-docs 0.35.0: the old
-      key (`match_path`, `body_index`) repeats inside a printing, and the merge
-      had kept one row per repeat, so generation `55671b43…` holds 83 of
-      119-hr-5334 enrolled's 84 sections, 150 of 119-hr-9022 reported's 151 and
-      4 of 119-hr-4060 introduced's 5. Each such printing's `section_count`
-      exceeds its rows, so the next run re-reads it and republishes it whole
-      (receipt `bill-family-repair-scope-2026-09-26/`). All columns are stored
-      as VARCHAR.
+      keyed on its `seq` within the printing since spicy-docs 0.35.0; the older
+      key (`match_path`, `body_index`) repeats inside a printing. All columns
+      are stored as VARCHAR.
     coverage: >-
       Sampled: the sections parsed from printings whose bodies the bill family
       acquired (source govinfo in bill_versions).
@@ -2353,12 +2356,7 @@ tables:
       implies, since a pair needs both of its sides fetched in the same run.
       A pair runs from a printing to its neighbour in spicy-docs'
       `printing_order`: publisher date, then a dateless enrolled printing by its
-      stage (`pair_rule` `consecutive_by_date_then_stage`). Before spicy-docs
-      0.35.0 the empty enrolled date sorted first, and generation `55671b43…`
-      holds 18 enrolled-to-introduced comparisons and 14 that skip the enrolled
-      printing to reach the law. The next run over each such bill retires them
-      with their items and makes the neighbour pairs (receipt
-      `bill-family-repair-scope-2026-09-26/`). A pair's neighbour can be a
+      stage (`pair_rule` `consecutive_by_date_then_stage`). A pair's neighbour can be a
       procedural printing (a four-section Senate engrossed amendment between
       the calendar printing and the enrolled bill), which the summary route
       refuses but this table compares, so the pair reads as nearly everything
@@ -2828,9 +2826,8 @@ tables:
       BODY mentions do not become hearing links. event_id is the meeting the
       Congress.gov hearing record names (its associatedMeeting), carried as the
       publisher pairs them. NULL means that record names no meeting, or was
-      refused, and committee_report_reads says which: on committee-reports
-      generation 9aa9d10d… (2026-10-03) all 164 NULL rows were completed reads
-      naming none. It does not mean no meeting exists: a meeting can list the
+      refused, and `committee_report_reads` says which (its `outcome`). It
+      does not mean no meeting exists: a meeting can list the
       transcript's jacket in `committee_meetings.hearing_jackets_json` without
       the hearing record naming it. That jacket route is the publisher's
       many-to-many listing, not a declared join: on committee-meetings
@@ -3155,7 +3152,9 @@ tables:
       Table III holds an act only once OLRC has classified it, and lags
       enactment: on 2026-09-26 it was current through 119-73, a law of
       2026-01-23, while the law route reached 119-111. `release_point` says
-      how current the file was.
+      how current the file was. Its file at release point 119-73 also has no
+      record of 119-70, a second-session law `law_code_sections` classifies
+      (OLRC's gap, not a reading error).
 
       Since 2026-09-26 the rows come from the bulk file
       (`fulldump@<release point>.xml`) instead of one page per act. The file
@@ -3360,26 +3359,38 @@ tables:
       detail's list is `[]` where the detail states an empty one and NULL where
       it states none. Rows read before spicy-docs 0.54.0 spelled both `[]`;
       each such row is read once more, after a run's own reads and under its
-      cap of 1,000 (5,992 on 2026-10-03, about six runs). Event ids are keyed with their
-      chamber because their uniqueness across chambers is unmeasured
-      (spicy-docs' contract note); the 119th's House and Senate event ids come
-      from different ranges, so an id alone does not say which chamber. The
-      publisher's witness entries can repeat within one meeting, so count
-      people by name, not entries, and a bill named only in meeting documents
-      is not in `bill_ids_json`.
+      cap of 1,000, and until then its `[]` can mean either. Event ids are
+      keyed with their chamber because their uniqueness across chambers is
+      unmeasured (spicy-docs' contract note); the 119th's House and Senate
+      event ids come from different ranges, so an id alone does not say which
+      chamber. The publisher's witness entries can repeat within one meeting,
+      so count people by name, not entries.
+
+      **Related bills.** Congress.gov often leaves the related bills off a
+      markup's detail, so `bill_ids_json` names none; the meeting's documents
+      usually still name them, in a `meeting_documents_json` entry whose
+      `documentType` is `Bills and Resolutions`. A bill named only in a meeting
+      document is not in `bill_ids_json`.
+
+      **A meeting can carry no committee**: `committee_system_code` and
+      `committees_json` are NULL where the detail names none (Senate Finance's
+      nominations meeting of 2026-07-23, event 338678), so a filter on the
+      committee misses it; search `title` as well. **`meeting_status` is
+      Congress.gov's and can lag**: a hearing the committee rescheduled can
+      stay `Scheduled` under its first date (Senate Finance's trade-agenda
+      hearing, event 338326 on 2026-04-23, which the committee lists as
+      rescheduled to July, event 338681).
 
       **Senate and NoChamber meetings list no witnesses here.** Congress.gov's
       committee-meeting detail, the route this table reads, has no
       `witnesses` element for those chambers (retained detail
-      `119/nochamber/338692`): on committee-meetings generation 31e62420…
-      (2026-10-03) none of the 2,336 Senate and NoChamber rows lists a
-      witness (each read `witnesses_json` `[]` and `witness_count` 0 then;
-      read again under spicy-docs 0.54.0, both are NULL, no list stated),
-      while 2,735 of the 3,761 House rows do. Such a row without witnesses means
-      the route stated none, not that the meeting had none: GovInfo's MODS
-      for a printed hearing (`hearing_transcripts.package_id`) can name them
-      (CHRG-119shrg64653 names four), and this service does not read MODS for
-      witnesses.
+      `119/nochamber/338692`), so their witness lists are `[]` or NULL: the
+      route stated none, not that the meeting had none. For a printed hearing,
+      `hearing_transcripts.witnesses_json` lists the witnesses GovInfo's MODS
+      names (CHRG-119shrg64653 names four). A transcript reaches its meeting
+      by `event_id`, or by `mods_event_id` where `event_id` is NULL, with
+      `congress` and `chamber`; most Senate transcripts name no meeting either
+      way, so most Senate meetings have no witness list from either source.
 
       The publisher's `NoChamber` value is stored as `nochamber`, matching
       its detail address and preserving the existing row identity. It is
@@ -3717,14 +3728,15 @@ tables:
       rendition states no page boundary, and a match straddling a page break
       is attributed to the page it began on.
 
-      **A document with no rows here is not shown to be unheld.** On
-      print-citations generation 685f2e27… (2026-10-03) the report_section
-      rows cover 1 of the 158 report packages `report_sections` holds, and
-      each other held-field kind with rows covers two documents. GAO product
-      ids join `gao_reports` on `report_number = target_key`, GAO's own spelling
-      (`report_id` is the same id in lower case): 241 of the 248 distinct
-      ids resolve; the other 7 are six `…SU` products and the misprint
-      `GAO-21-105520` (GAO-23-105520 is held).
+      **A document with no rows here is not shown to be unheld.** Each
+      held-field kind has rows only for the documents selected so far (on
+      2026-10-03 the report_section rows covered one of the report packages
+      `report_sections` holds); count distinct `document_key` by
+      `document_kind` for the live figure. GAO product ids join `gao_reports` on `report_number =
+      target_key`, GAO's own spelling (`report_id` is the same id in lower
+      case); the few that do not resolve are `…SU` products, which
+      `gao_reports` does not hold, and misprints such as `GAO-21-105520`
+      (GAO-23-105520 is held).
     columns_from: spicy_docs
 
   senate_expenditures:
@@ -4141,8 +4153,7 @@ tables:
         do not establish the current record.
       filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
         share it; group proven filing identity before joining.
-      filing_link_status: Status of the relationship to a submitted filing version; unresolved references preserve
-        the financial observation.
+      filing_link_status: &map_time_filing_link_status "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
         is not an aggregation permission.
@@ -4503,8 +4514,7 @@ tables:
         do not establish the current record.
       filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
         share it; group proven filing identity before joining.
-      filing_link_status: Status of the relationship to a submitted filing version; unresolved references preserve
-        the financial observation.
+      filing_link_status: *map_time_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
         is not an aggregation permission.
@@ -4718,8 +4728,7 @@ tables:
         do not establish the current record.
       filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
         share it; group proven filing identity before joining.
-      filing_link_status: Status of the relationship to a submitted filing version; unresolved references preserve
-        the financial observation.
+      filing_link_status: *map_time_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
         is not an aggregation permission.
@@ -4939,8 +4948,7 @@ tables:
         do not establish the current record.
       filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
         share it; group proven filing identity before joining.
-      filing_link_status: Status of the relationship to a submitted filing version; unresolved references preserve
-        the financial observation.
+      filing_link_status: *map_time_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
         is not an aggregation permission.
@@ -5077,8 +5085,7 @@ tables:
         do not establish the current record.
       filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
         share it; group proven filing identity before joining.
-      filing_link_status: Status of the relationship to a submitted filing version; unresolved references preserve
-        the financial observation.
+      filing_link_status: *map_time_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
         is not an aggregation permission.
@@ -5217,8 +5224,7 @@ tables:
         do not establish the current record.
       filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
         share it; group proven filing identity before joining.
-      filing_link_status: Status of the relationship to a submitted filing version; unresolved references preserve
-        the financial observation.
+      filing_link_status: *map_time_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
         is not an aggregation permission.
@@ -5344,8 +5350,7 @@ tables:
         do not establish the current record.
       filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
         share it; group proven filing identity before joining.
-      filing_link_status: Status of the relationship to a submitted filing version; unresolved references preserve
-        the financial observation.
+      filing_link_status: *map_time_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
         is not an aggregation permission.
@@ -5428,8 +5433,7 @@ tables:
         do not establish the current record.
       filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
         share it; group proven filing identity before joining.
-      filing_link_status: Status of the relationship to a submitted filing version; unresolved references preserve
-        the financial observation.
+      filing_link_status: *map_time_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
         is not an aggregation permission.
@@ -5519,8 +5523,7 @@ tables:
         do not establish the current record.
       filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
         share it; group proven filing identity before joining.
-      filing_link_status: Status of the relationship to a submitted filing version; unresolved references preserve
-        the financial observation.
+      filing_link_status: *map_time_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
         is not an aggregation permission.
@@ -5623,15 +5626,13 @@ tables:
         do not establish the current record.
       filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
         share it; group proven filing identity before joining.
-      filing_link_status: Status of the relationship to a submitted filing version; unresolved references preserve
-        the financial observation.
+      filing_link_status: *map_time_filing_link_status
       aggregate_type: Source-defined aggregation class, such as geographic bucket, contribution-size band or inaugural
         contributor group.
       candidate_native_id: Literal candidate-like reference as reported. Aggregate codes or unresolved references
         do not establish a person.
       candidate_name: The candidate's name as reported, without a name-based identity merge.
-      entity_reference_status: Resolution status of the literal entity reference. ID-shaped aggregate codes do not
-        establish a candidate or committee.
+      entity_reference_status: &map_time_entity_reference_status "`source_identifier_unresolved` on every row that states an id: set when the row is mapped, before any candidate or committee is looked up, so it does not say whether an id names one. The ids are kept as the file states them, an empty string or a committee id in a candidate column included. The declared joins resolve them, each with its measured rate: `committee_native_id` to `fec_committees.committee_id` and `candidate_native_id` to `fec_candidate_history.candidate_id`. FEC's aggregate codes `P00000001` (all candidates), `P00000002` (Democrats) and `P00000003` (Republicans) name a group, not a candidate."
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_raw: Literal source value before conversion for amount. Preserves spelling, signs and empty values; the
         typed value and its status are separate.
@@ -5711,8 +5712,7 @@ tables:
         do not establish the current record.
       filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
         share it; group proven filing identity before joining.
-      filing_link_status: Status of the relationship to a submitted filing version; unresolved references preserve
-        the financial observation.
+      filing_link_status: *map_time_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
         is not an aggregation permission.
@@ -5896,8 +5896,7 @@ tables:
         do not establish the current record.
       filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
         share it; group proven filing identity before joining.
-      filing_link_status: Status of the relationship to a submitted filing version; unresolved references preserve
-        the financial observation.
+      filing_link_status: *map_time_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
         is not an aggregation permission.
@@ -6071,8 +6070,7 @@ tables:
         do not establish the current record.
       filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
         share it; group proven filing identity before joining.
-      filing_link_status: Status of the relationship to a submitted filing version; unresolved references preserve
-        the financial observation.
+      filing_link_status: *map_time_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
         is not an aggregation permission.
@@ -6254,8 +6252,7 @@ tables:
         do not establish the current record.
       filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
         share it; group proven filing identity before joining.
-      filing_link_status: Status of the relationship to a submitted filing version; unresolved references preserve
-        the financial observation.
+      filing_link_status: *map_time_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
         is not an aggregation permission.
@@ -6498,8 +6495,7 @@ tables:
         across namespaces are not equivalent.
       filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
         share it; group proven filing identity before joining.
-      filing_link_status: Status of the relationship to a submitted filing version; unresolved references preserve
-        the financial observation.
+      filing_link_status: "The stating filing's own `filing_link_status`, copied from `fec_filings` onto each link it states: `native_file_number` where that filing states its FEC file number, `unresolved_no_file_number` where it does not. It says nothing about the referenced filing; see `target_resolution_status`."
       native_field_states_json: JSON map of field presence states such as source_missing, source_null, source_empty
         or reported.
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
@@ -6510,8 +6506,7 @@ tables:
         number.
       relation_type: Source-supported directed relationship type between the identified records; not inferred from
         matching names.
-      target_resolution_status: Whether the referenced target resolves in the retained filing population; unresolved
-        targets do not disappear.
+      target_resolution_status: "Not a resolution result: set when the link is mapped, before any filing is looked up, as `native_reference_unresolved` on every link that states a file number and `unresolved_no_file_number` on the rest. Whether the referenced filing is held is in the view `fec_filing_reference_resolution` (same `record_id`), whose `target_resolution_status` is `resolved_native_filing_key` or the reason it is not."
       replacement_mode: Evidenced amendment replacement mode, such as complete, partial or unknown. A filing link
         alone does not prove delete-by-omission behavior.
       membership_completeness: Whether all records in the amendment/replacement scope were established; unknown scope
@@ -6569,8 +6564,7 @@ tables:
         do not establish the current record.
       filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
         share it; group proven filing identity before joining.
-      filing_link_status: Status of the relationship to a submitted filing version; unresolved references preserve
-        the financial observation.
+      filing_link_status: *map_time_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
         is not an aggregation permission.
@@ -6703,8 +6697,7 @@ tables:
         do not establish the current record.
       filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
         share it; group proven filing identity before joining.
-      filing_link_status: Status of the relationship to a submitted filing version; unresolved references preserve
-        the financial observation.
+      filing_link_status: *map_time_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
         is not an aggregation permission.
@@ -6780,8 +6773,7 @@ tables:
         across namespaces are not equivalent.
       filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
         share it; group proven filing identity before joining.
-      filing_link_status: Status of the relationship to a submitted filing version; unresolved references preserve
-        the financial observation.
+      filing_link_status: "Set when the row is mapped: `native_file_number` where the filing states its own FEC file number (then `filing_key` is set), `unresolved_no_file_number` where it does not. It does not look up any other filing."
       native_field_states_json: JSON map of field presence states such as source_missing, source_null, source_empty
         or reported.
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
@@ -7006,8 +6998,7 @@ tables:
         do not establish the current record.
       filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
         share it; group proven filing identity before joining.
-      filing_link_status: Status of the relationship to a submitted filing version; unresolved references preserve
-        the financial observation.
+      filing_link_status: *map_time_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
         is not an aggregation permission.
@@ -7079,16 +7070,24 @@ tables:
     grain: One source-reported independent-expenditure record version.
     identity_columns:
     - record_id
-    coverage: Sampled. Supported observations from retained bulk and original-filing independent-expenditure layouts.
-      The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does
-      not establish complete FEC history or current publication.
-    measured_on: '2026-10-01'
+    coverage: >-
+      Sampled. The bulk rows are FEC's 2024-cycle independent-expenditure file
+      (`source_cycle` 2024). The original-filing rows are the Schedule E and
+      Form 5 lines of the filings in the daily electronic-filing archives this
+      service retained, not a cycle: `source_cycle` is NULL on them, and
+      `fec_collections` names each archive (join on `collection_id`). This
+      declaration does not establish complete FEC history or current
+      publication.
+    measured_on: '2026-10-03'
     summary: One source-reported independent-expenditure record version. Separates spender, payee, candidate target,
       expenditure date, dissemination date and report metadata. Generic spender_name, payee_name, candidate_name
       and expenditure_date apply only to layouts that supply those fields. Original-filing Schedule E rows instead
       retain payee organization/person-name fields, candidate name components, and separate dissemination_date,
-      disbursement_date and signed_date. Use the filing/header associations to locate supporting cover metadata;
-      these native fields and associations are valid without synthesizing generic names or choosing one date.
+      disbursement_date and signed_date. For an original-filing row, the filing's cover is the
+      fec_filing_report_observations row with the same collection_id and `report_record_role` `reported-form`; its
+      form_type ends N for a new filing and A for an amendment (`F24N`, `F24A`), with source_amendment_date. The
+      header association view (fec_independent_expenditures_filing_associations) finds no filing for any row,
+      original-filing or bulk. These native fields are valid without synthesizing generic names or choosing one date.
       Target expansion must not multiply the record's full amount; current/net totals need a qualified selection
       and financial rule. Resolve collection_id and source_record_id
       against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to
@@ -7128,8 +7127,7 @@ tables:
         do not establish the current record.
       filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
         share it; group proven filing identity before joining.
-      filing_link_status: Status of the relationship to a submitted filing version; unresolved references preserve
-        the financial observation.
+      filing_link_status: *map_time_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
         is not an aggregation permission.
@@ -7253,10 +7251,17 @@ tables:
         the source value and conversion status; capture time is not substituted.
       receipt_date: Date parsed from the filing receipt date stated by the source. NULL requires the source value
         and conversion status; capture time is not substituted.
-    data_quality: Exact decimals preserve signs. Memo, subtotal and attribution flags require source-specific interpretation;
+    data_quality: >-
+      Exact decimals preserve signs. Memo, subtotal and attribution flags require source-specific interpretation;
       successful mapping does not qualify current, gross or net totals. Keep reported balances, allocation totals/components,
       overlapping summaries and two-sided transfers at their declared grains. Quality notices do not automatically
       exclude records.
+
+      The bulk file is FEC's as filed, including a few single lines of billions of dollars that no committee
+      plausibly spent: THE COMMITTEE OF 300 (C00874586) reports $9,778,412,568 in one line of its 24-hour report
+      1766664, exactly as its raw filing on docquery.fec.gov states it (checked 2026-10-03), not a sum of amended or
+      memo lines. Review the largest rows before summing. On 2026-10-03 the original-filing rows came from the
+      archives of 2026-06-08, 2026-06-09 and 2026-07-02.
   fec_intercommittee_transactions:
     label: Reported committee-to-committee transaction observations
     subject: campaign_finance
@@ -7305,8 +7310,7 @@ tables:
         do not establish the current record.
       filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
         share it; group proven filing identity before joining.
-      filing_link_status: Status of the relationship to a submitted filing version; unresolved references preserve
-        the financial observation.
+      filing_link_status: *map_time_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
         is not an aggregation permission.
@@ -7720,8 +7724,7 @@ tables:
         do not establish the current record.
       filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
         share it; group proven filing identity before joining.
-      filing_link_status: Status of the relationship to a submitted filing version; unresolved references preserve
-        the financial observation.
+      filing_link_status: *map_time_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
         is not an aggregation permission.
@@ -7751,8 +7754,7 @@ tables:
       guarantor_zip: The loan guarantor's reported postal code, preserving leading zeroes.
       employer: Employer name reported for the contributor or other named person; not an inferred organization identity.
       occupation: Occupation reported by the source for the named person.
-      loan_link_status: Whether the guarantor record resolves to its reported loan state using source references;
-        unresolved links remain rows.
+      loan_link_status: "Always `unresolved` in this table: set when the row is mapped, before any loan is looked up. The guarantor's loan is the `fec_loans` row with the same `collection_id` whose `transaction_id` is this row's `back_reference_transaction_id` (a declared join)."
       guaranteed_amount_raw: Literal source value before conversion for guaranteed_amount. Preserves spelling, signs
         and empty values; the typed value and its status are separate.
       guaranteed_amount_status: Source-presence or conversion state for guaranteed_amount, distinguishing supported
@@ -7825,8 +7827,7 @@ tables:
         do not establish the current record.
       filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
         share it; group proven filing identity before joining.
-      filing_link_status: Status of the relationship to a submitted filing version; unresolved references preserve
-        the financial observation.
+      filing_link_status: *map_time_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
         is not an aggregation permission.
@@ -8018,8 +8019,7 @@ tables:
         do not establish the current record.
       filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
         share it; group proven filing identity before joining.
-      filing_link_status: Status of the relationship to a submitted filing version; unresolved references preserve
-        the financial observation.
+      filing_link_status: *map_time_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
         is not an aggregation permission.
@@ -8178,8 +8178,7 @@ tables:
         across namespaces are not equivalent.
       filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
         share it; group proven filing identity before joining.
-      filing_link_status: Status of the relationship to a submitted filing version; unresolved references preserve
-        the financial observation.
+      filing_link_status: *map_time_filing_link_status
       native_field_states_json: JSON map of field presence states such as source_missing, source_null, source_empty
         or reported.
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
@@ -8310,8 +8309,7 @@ tables:
         do not establish the current record.
       filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
         share it; group proven filing identity before joining.
-      filing_link_status: Status of the relationship to a submitted filing version; unresolved references preserve
-        the financial observation.
+      filing_link_status: *map_time_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
         is not an aggregation permission.
@@ -8374,8 +8372,7 @@ tables:
         across namespaces are not equivalent.
       filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
         share it; group proven filing identity before joining.
-      filing_link_status: Status of the relationship to a submitted filing version; unresolved references preserve
-        the financial observation.
+      filing_link_status: *map_time_filing_link_status
       native_field_states_json: JSON map of field presence states such as source_missing, source_null, source_empty
         or reported.
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
@@ -8454,8 +8451,7 @@ tables:
         do not establish the current record.
       filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
         share it; group proven filing identity before joining.
-      filing_link_status: Status of the relationship to a submitted filing version; unresolved references preserve
-        the financial observation.
+      filing_link_status: *map_time_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
         is not an aggregation permission.
@@ -8702,8 +8698,7 @@ tables:
         across namespaces are not equivalent.
       filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
         share it; group proven filing identity before joining.
-      filing_link_status: Status of the relationship to a submitted filing version; unresolved references preserve
-        the financial observation.
+      filing_link_status: "Always `unresolved_no_report_number` in this table, with `filing_key` NULL beside it: a registration statement states no report number, so the row is mapped without a filing link."
       native_field_states_json: JSON map of field presence states such as source_missing, source_null, source_empty
         or reported.
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
@@ -8875,15 +8870,13 @@ tables:
         do not establish the current record.
       filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
         share it; group proven filing identity before joining.
-      filing_link_status: Status of the relationship to a submitted filing version; unresolved references preserve
-        the financial observation.
+      filing_link_status: *map_time_filing_link_status
       summary_type: Namespaced source summary layout or report type; measures from different layouts and periods are
         not interchangeable.
       source_namespace: Namespace identifying the native layout or identifier system. Similar numbers or field names
         across namespaces are not equivalent.
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
-      entity_reference_status: Resolution status of the literal entity reference. ID-shaped aggregate codes do not
-        establish a candidate or committee.
+      entity_reference_status: *map_time_entity_reference_status
       candidate_native_id: Literal candidate-like reference as reported. Aggregate codes or unresolved references
         do not establish a person.
       candidate_name: The candidate's name as reported, without a name-based identity merge.

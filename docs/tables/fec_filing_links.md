@@ -29,14 +29,14 @@ One directed native filing reference from a retained filing observation. Follow 
 | `selection_evidence_sha256` | `VARCHAR` | Digest of the retained selection evidence used to authorize this mapper's source scope; not a financial inclusion decision. |
 | `source_namespace` | `VARCHAR` | Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent. |
 | `filing_key` | `VARCHAR` | Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. |
-| `filing_link_status` | `VARCHAR` | Status of the relationship to a submitted filing version; unresolved references preserve the financial observation. |
+| `filing_link_status` | `VARCHAR` | The stating filing's own `filing_link_status`, copied from `fec_filings` onto each link it states: `native_file_number` where that filing states its FEC file number, `unresolved_no_file_number` where it does not. It says nothing about the referenced filing; see `target_resolution_status`. |
 | `native_field_states_json` | `VARCHAR` | JSON map of field presence states such as source_missing, source_null, source_empty or reported. |
 | `current_record_status` | `VARCHAR` | Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record. |
 | `source_filing_record_id` | `VARCHAR` | Retained filing observation from which this directed filing reference was reported. |
 | `target_filing_key` | `VARCHAR` | Qualified target filing-version key when the native reference has a supported namespace. |
 | `native_target_file_number` | `VARCHAR` | Literal source file number referenced by the filing link; not an image or transaction number. |
 | `relation_type` | `VARCHAR` | Source-supported directed relationship type between the identified records; not inferred from matching names. |
-| `target_resolution_status` | `VARCHAR` | Whether the referenced target resolves in the retained filing population; unresolved targets do not disappear. |
+| `target_resolution_status` | `VARCHAR` | Not a resolution result: set when the link is mapped, before any filing is looked up, as `native_reference_unresolved` on every link that states a file number and `unresolved_no_file_number` on the rest. Whether the referenced filing is held is in the view `fec_filing_reference_resolution` (same `record_id`), whose `target_resolution_status` is `resolved_native_filing_key` or the reason it is not. |
 | `replacement_mode` | `VARCHAR` | Evidenced amendment replacement mode, such as complete, partial or unknown. A filing link alone does not prove delete-by-omission behavior. |
 | `membership_completeness` | `VARCHAR` | Whether all records in the amendment/replacement scope were established; unknown scope cannot justify removing omitted rows. |
 | `reference_status` | `VARCHAR` | Source-presence and interpretation state of the directed filing reference. |

@@ -1,6 +1,8 @@
 """Declared-metadata repairs from the 2026-10-03 persona test (round 6, implementer B).
 
-Hermetic: the subject field, against the committed ``descriptions.yaml`` and the in-code schema.
+Hermetic: the subject field and the rewritten sentences, against the committed ``descriptions.yaml`` and the
+in-code schema. The claims that need the published data are in ``test_chaos_r6_dictionary_live.py``; the joins are
+in ``test_table_joins.py``.
 """
 
 from __future__ import annotations
@@ -64,3 +66,113 @@ def test_every_relationship_view_has_a_base_table_with_a_subject():
     entries = dd.load_descriptions()
     bases = {spec.source_table for spec in RELATIONSHIP_VIEWS} | {next(iter(spec.required)) for spec in SQL_RELATIONSHIP_VIEWS}
     assert {base for base in bases if entries.get(base, {}).get("subject") not in dd.SUBJECTS} == set()
+
+
+# --------------------------------------------------------------------------- #
+# False or stale sentences out.
+# --------------------------------------------------------------------------- #
+def test_lobbyist_id_is_one_registrants_record_not_a_person():
+    """H3 (wanjiru): LDA's own record for an id names one registrant; Stephen Holland is 146616 and 151303."""
+    text = _column("lobbying_activity_lobbyists", "lobbyist_id")
+    assert "stable identity of the person" not in text
+    assert "one registrant's record of a lobbyist" in text and "146616" in text and "151303" in text
+
+
+def test_covered_position_is_free_text_per_activity_with_no_crosswalk():
+    text = _column("lobbying_activity_lobbyists", "covered_position")
+    assert "null when none" not in text
+    assert all(phrase in text for phrase in ("free text", "not parsed", "for this activity", "`committees`", "N/A"))
+
+
+def test_gao_decisions_says_how_gaos_statistics_count_and_no_longer_promises_a_walk():
+    """L1 and L3 (alasdair): the 42d9c8a5 sentence was false on the next generation; GAO counts B-numbers."""
+    text = _prose("gao_decisions")
+    assert "until a walk is read again" not in text and "42d9c8a5" not in text
+    assert "not when it decided it" in text
+    assert all(phrase in text for phrase in ("B-number", "merit decisions", "fiscal year", "B-423717"))
+    assert "their figures are not held" in text
+
+
+def test_sam_entities_no_longer_promises_a_uei_tie_to_commenters():
+    text = _prose("sam_entities", "summary")
+    assert "the same UEI ties" not in text and "name match" in text
+
+
+def test_independent_expenditures_name_the_cover_route_that_works():
+    """L5 (vikram): the header associations find no filing for any row; the cover by collection_id does."""
+    summary, coverage = _prose("fec_independent_expenditures", "summary"), _prose("fec_independent_expenditures", "coverage")
+    assert "Use the filing/header associations to locate supporting cover metadata" not in summary
+    assert "fec_filing_report_observations" in summary and "`reported-form`" in summary
+    assert "daily electronic-filing archives" in coverage and "not a cycle" in coverage
+    assert "docquery.fec.gov" in _prose("fec_independent_expenditures")
+
+
+def test_committee_meetings_points_at_the_mods_witnesses_and_the_meeting_documents():
+    """L13, L14 (caetano): MODS witnesses are read since round 5; markups often omit their bills."""
+    text = _prose("committee_meetings")
+    assert "does not read MODS for witnesses" not in text
+    assert "`hearing_transcripts.witnesses_json`" in text and "Senate and NoChamber meetings list no witnesses here" in text
+    assert "the route this table reads" in text
+    assert all(phrase in text for phrase in ("`meeting_documents_json`", "Bills and Resolutions", "no committee",
+                                             "`Scheduled`", "338326"))
+    assert "about six runs" not in text
+
+
+@pytest.mark.parametrize(("table", "pin"), [
+    ("bill_versions", "d380cdc0"), ("bill_versions", "82c8088d"), ("bill_sections", "55671b43"),
+    ("section_diffs", "55671b43"),
+])
+def test_repair_notes_about_defects_a_later_generation_fixed_are_gone(table, pin):
+    assert pin not in _prose(table)
+
+
+def test_drifted_counts_point_at_their_query_instead():
+    assert "1 of the 158" not in _prose("document_citations")
+    assert "count distinct `document_key` by `document_kind`" in _prose("document_citations")
+    assert "all 164 NULL rows" not in _prose("hearing_transcripts")
+    assert "`committee_report_reads` says which" in _prose("hearing_transcripts")
+
+
+def test_table3_names_the_law_the_publisher_left_out():
+    assert "119-70" in _prose("table3_records")
+
+
+def test_the_header_states_the_writing_rule_for_pinned_sentences():
+    header = dd.DEFAULT_DESCRIPTIONS.read_text(encoding="utf-8").split("\ntables:\n", 1)[0]
+    flat = " ".join(line.lstrip("# ") for line in header.splitlines())
+    assert "a pin anchors a past measurement" in flat.lower()
+    assert "deleted, not kept as history" in flat
+
+
+# --------------------------------------------------------------------------- #
+# Map-time status columns: one honest template, naming where the value is decided.
+# --------------------------------------------------------------------------- #
+#: The tables whose stored filing_link_status is `unresolved` on every row (footer sweep, 2026-10-03).
+MAP_TIME_FILING_LINK = (
+    "fec_account_transfers", "fec_allocated_disbursements", "fec_allocation_bases", "fec_api_response_controls",
+    "fec_bundled_contributions", "fec_candidate_api_observations", "fec_committee_master_observations",
+    "fec_committee_observations", "fec_communication_costs", "fec_contribution_aggregates",
+    "fec_coordinated_party_expenditures", "fec_debts", "fec_disbursements", "fec_electioneering_communications",
+    "fec_filing_report_observations", "fec_filing_text_observations", "fec_inaugural_donations",
+    "fec_independent_expenditures", "fec_intercommittee_transactions", "fec_loan_guarantors", "fec_loan_terms",
+    "fec_loans", "fec_lobbyist_registrations", "fec_postgres_committee_history_observations", "fec_quality_notices",
+    "fec_receipts", "fec_reported_financial_summaries",
+)
+
+
+def test_filing_link_status_reads_from_one_template_that_says_it_is_set_when_mapped():
+    texts = {_column(table, "filing_link_status") for table in MAP_TIME_FILING_LINK}
+    assert len(MAP_TIME_FILING_LINK) == 27 and len(texts) == 1, texts
+    (text,) = texts
+    assert text.startswith("Always `unresolved`") and "before any filing is looked up" in text
+    assert "_filing_associations" in text and "_native_filing_associations" in text
+
+
+def test_the_other_map_time_statuses_name_where_they_are_decided():
+    assert "`fec_filing_reference_resolution`" in _column("fec_filing_links", "target_resolution_status")
+    assert "resolves in the retained filing population" not in _column("fec_filing_links", "target_resolution_status")
+    entity = {_column(table, "entity_reference_status")
+              for table in ("fec_reported_financial_summaries", "fec_contribution_aggregates")}
+    assert len(entity) == 1 and all(name in next(iter(entity)) for name in ("`fec_committees", "`fec_candidate_history",
+                                                                            "P00000001"))
+    assert "`back_reference_transaction_id`" in _column("fec_loan_guarantors", "loan_link_status")
