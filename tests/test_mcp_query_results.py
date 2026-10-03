@@ -7,7 +7,7 @@ import pytest
 from starlette.testclient import TestClient
 
 from spicy_regs import mcp_server
-from tests.test_mcp_server import _records
+from tests.test_mcp_server import _listed, _records
 
 
 @pytest.fixture
@@ -107,8 +107,8 @@ def test_discovery_lists_tables_without_per_table_pins_or_audits(client):
     result = call(client, "list_sources", {})
     assert result["isError"] is False
     data = result["structuredContent"]
-    assert {entry["table"] for entry in data["tables"]} == {"fcc_filings", "fcc_proceedings"}
-    assert set(data["tables"][0]) == {"table", "label", "coverage", "rows"}
+    assert {entry["table"] for entry in _listed(data)} == {"fcc_filings", "fcc_proceedings"}
+    assert set(_listed(data)[0]) == {"table", "label", "coverage", "rows"}
     assert not {"publication", "qualification", "datasets", "declared_tables"} & set(data)
     assert "views" not in data["fec_release"]
     assert data["fec_release"]["raw_query_financial_qualification"] == "not_inferred"

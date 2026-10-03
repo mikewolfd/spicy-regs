@@ -14,7 +14,7 @@ from spicy_regs import mcp_server
 from spicy_regs.local_data import local_selection
 from spicy_regs.sources import publication
 from tests.test_cli_generations import _download, _remote
-from tests.test_mcp_server import _records, _tool_data
+from tests.test_mcp_server import _listed, _records, _tool_data
 
 
 def serve(monkeypatch, directory):
@@ -41,7 +41,7 @@ def test_local_batch_exposes_selected_members_and_verified_pins(tmp_path, monkey
     con, server = serve(monkeypatch, directory)
     try:
         sources = _tool_data(server, "list_sources", {})
-        assert [entry["table"] for entry in sources["tables"]] == ["a", "dockets"]
+        assert [entry["table"] for entry in _listed(sources)] == ["a", "dockets"]
         assert sources["selected_directory"] == str(batch)
         pin = _tool_data(server, "describe_table", {"table": "a"})["publication"]
         assert pin["status"] == "managed_download"

@@ -507,7 +507,13 @@ relationship-view metadata. Every `query_sql` returned about 54,000 characters,
 file its reader cannot page, so two of five personas never read a row.
 
 - **`list_sources`** lists each table's name, label and coverage kind, and
-  lists each relationship family's views once, under their shared summary. Pins,
+  lists each relationship family's views once, under their shared summary.
+  Since round 6 (owner decision 2026-10-03) the tables come in `subjects`
+  groups by the dictionary's `subject` (`table_metadata.json`, implementer
+  B's field), in the order subjects first appear in the display order, with
+  the tables the dictionary gives no subject yet in a last group whose
+  `subject` is null: two personas could not find the rulemaking tables among
+  158 in one list. A group costs about 40 characters. Pins,
   audits and view dependencies live in `describe_table`.
   FEC release discovery reports the selected receipt, consumer identity and
   counts of the captured compatibility states. It retains the warning that raw

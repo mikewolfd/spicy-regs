@@ -7,7 +7,7 @@ import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 
 from spicy_regs import mcp_server
-from tests.test_mcp_server import _records, _tool_data
+from tests.test_mcp_server import _listed, _records, _tool_data
 
 
 def test_discovery_exposes_derived_dependencies_and_unsupported_old_schema(monkeypatch):
@@ -29,7 +29,7 @@ def test_discovery_exposes_derived_dependencies_and_unsupported_old_schema(monke
         [group] = [group for group in discovered["relationship_views"] if name in group["views"]]
         assert set(group["views"]) == set(available)
         assert group["summary"] == registry[name]["metadata"]["summary"]
-        assert name not in [entry["table"] for entry in discovered["tables"]]
+        assert name not in [entry["table"] for entry in _listed(discovered)]
         described = _tool_data(server, "describe_table", {"table": name})
         assert described["relationship"]["dependencies"] == ["members"]
         assert described["publication"]["status"] == "derived_view"

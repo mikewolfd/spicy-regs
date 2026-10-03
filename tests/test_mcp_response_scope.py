@@ -12,7 +12,7 @@ from spicy_regs import mcp_server as server
 from spicy_regs.data_dictionary import COVERAGE_KINDS
 from tests.test_fec_release import digest
 from tests.test_mcp_fec_release import configure, connection
-from tests.test_mcp_server import _records, _tool_data
+from tests.test_mcp_server import _listed, _records, _tool_data
 
 
 def test_discovery_summarizes_mixed_release_states_and_names_each_view(tmp_path, monkeypatch):
@@ -32,7 +32,7 @@ def test_discovery_summarizes_mixed_release_states_and_names_each_view(tmp_path,
         assert specs[1].view.name in available
         assert specs[0].view.name not in available
         assert specs[0].view.name in discovery["unavailable_tables"]
-        assert "fec_receipts" in {entry["table"] for entry in discovery["tables"]}
+        assert "fec_receipts" in {entry["table"] for entry in _listed(discovery)}
         selected = _tool_data(mcp, "describe_table", {"table": specs[0].view.name})
         assert selected["relationship"]["release_compatibility"]["reasons"]
         assert selected["relationship"]["release_compatibility"]["receipt_sha256"] == summary["receipt_sha256"]

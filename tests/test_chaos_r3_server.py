@@ -18,7 +18,7 @@ from spicy_regs.relationship_views import comments as comment_views
 from spicy_regs.relationship_views.fec_query_views import fec_query_views
 from spicy_regs.relationship_views.lineage import Columns, column_lineage, table_columns
 from spicy_regs.relationship_views.sql_views import _COLUMN_DESCRIPTIONS, install_sql_views, view_columns
-from tests.test_mcp_server import _records, _tool_data
+from tests.test_mcp_server import _listed, _records, _tool_data
 
 FALLBACK = "described by this view"
 SOURCE = "sha256:9c289dfec822ff7e54f9d5719276579452a7b35cad573e701a51e0a15c2a06c0"
@@ -249,7 +249,7 @@ def pinned_server(monkeypatch):
 
 def test_list_sources_states_each_pinned_tables_rows_so_an_empty_generation_is_visible_at_discovery(pinned_server):
     mcp, _ = pinned_server
-    tables = {entry["table"]: entry for entry in _tool_data(mcp, "list_sources", {})["tables"]}
+    tables = {entry["table"]: entry for entry in _listed(_tool_data(mcp, "list_sources", {}))}
     assert tables["financial_changes"]["rows"] == 0
     assert tables["bill_versions"]["rows"] == 225_893
     assert tables["comments"]["rows"] is None  # a legacy table no pointer pins

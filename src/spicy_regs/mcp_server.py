@@ -1733,7 +1733,7 @@ def _tools() -> list[Tool]:
 
     @tool
     def list_sources() -> dict[str, Any]:
-        """List the queryable tables: each one's label, coverage kind and pinned row count, with derived views grouped.
+        """List the queryable tables by subject (null: not yet assigned): label, coverage kind and pinned rows; views grouped.
 
         coverage is the dictionary's kind: true_range, window, sampled,
         derived, not_a_range or empty; a window or a sample does not hold the
@@ -1773,13 +1773,20 @@ def _tools() -> list[Tool]:
                 return {"rows": _pinned_rows(index, rulemaking, name)}
             return {"rows": export["rows"], "rows_basis": export["rows_basis"]}
 
+        # Grouped by the dictionary's subject, in the order subjects first appear in the display order; a table the
+        # dictionary gives no subject yet is in the last group. Two personas could not find the rulemaking tables
+        # among 158 listed in one run (round 6, L10).
+        subjects: dict[str | None, list[dict[str, Any]]] = {}
+        for name in available:
+            if name not in relationships:
+                subjects.setdefault(metadata.get(name, {}).get("subject"), []).append(
+                    {"table": name, "label": metadata.get(name, {}).get("label"),
+                     "coverage": metadata.get(name, {}).get("kind"), **rows(name)})
+        if None in subjects:
+            subjects[None] = subjects.pop(None)
         return {
             **_source_details(cursor),
-            "tables": [
-                {"table": name, "label": metadata.get(name, {}).get("label"), "coverage": metadata.get(name, {}).get("kind"),
-                 **rows(name)}
-                for name in available if name not in relationships
-            ],
+            "subjects": [{"subject": subject, "tables": tables} for subject, tables in subjects.items()],
             "relationship_views": [{"views": names, "summary": summary} for summary, names in views.items()],
             "unavailable_tables": [name for name in (*TABLES, *relationships) if name not in available],
             "fec_release": _fec_release_reply(cursor),

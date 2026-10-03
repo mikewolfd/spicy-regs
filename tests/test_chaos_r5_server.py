@@ -18,7 +18,7 @@ from spicy_regs.citation_resolution import SOURCE_TABLES
 from spicy_regs.sources import publication as pub
 from spicy_regs.sources.publication import read_pinned_root  # bound before conftest keeps roots off the network
 from tests.test_mcp_relationships import citation_connection, merged_occurrences
-from tests.test_mcp_server import _tool_data
+from tests.test_mcp_server import _listed, _tool_data
 
 
 def _resolve(con, monkeypatch, **arguments):
@@ -405,7 +405,7 @@ def test_replies_state_when_the_publisher_moved_the_pointer(monkeypatch, publish
         queried = _tool_data(mcp, "query_sql", {"sql": "SELECT count(*) AS n FROM laws"})["publication"]["laws"]
         cited = _tool_data(mcp, "resolve_document_citations",
                            {"document_kind": "govinfo_package", "document_key": "CRPT-example"})
-        listed = {row["table"]: row for row in _tool_data(mcp, "list_sources", {})["tables"]}
+        listed = {row["table"]: row for row in _listed(_tool_data(mcp, "list_sources", {}))}
         status = server._publication_status(con)["publication"]["laws"]
     assert described["published_at"] == queried["published_at"] == published_at
     assert "published_at" in described and "published_at" in queried
@@ -537,7 +537,7 @@ def test_roots_are_read_lazily_once_per_generation_and_never_for_discovery(monke
         assert reads == []
         for _ in range(3):
             _tool_data(mcp, "describe_table", {"table": "discovery_signals"})
-        listed = {row["table"]: row for row in _tool_data(mcp, "list_sources", {})["tables"]}
+        listed = {row["table"]: row for row in _listed(_tool_data(mcp, "list_sources", {}))}
     assert reads == [SIGNALS] and "inputs" not in listed["discovery_signals"]
 
 

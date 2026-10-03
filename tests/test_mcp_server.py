@@ -72,6 +72,11 @@ def _tool_data(server, name, arguments):
     return asyncio.run(server.call_tool(name, arguments)).structured_content
 
 
+def _listed(reply):
+    """A list_sources reply's table entries, which it groups by subject, in the order it lists them."""
+    return [entry for group in reply["subjects"] for entry in group["tables"]]
+
+
 def _records(reply):
     """A query_sql reply's rows, which are arrays in the order of its columns, as one dict per row."""
     return [dict(zip(reply["columns"], row, strict=True)) for row in reply["rows"]]
@@ -93,7 +98,7 @@ def test_discovery_reports_actual_parquet_schema_and_dictionary_caveats(tmp_path
 
     sources = _tool_data(server, "list_sources", {})
     declared = mcp_server._table_metadata()["org_committee_links"]
-    assert sources["tables"] == [
+    assert _listed(sources) == [
         {"table": "org_committee_links", "label": declared["label"], "coverage": declared["kind"], "rows": None}
     ]
     assert "fec_committees" in sources["unavailable_tables"]
@@ -189,7 +194,7 @@ def test_local_directory_runs_actual_connection_without_remote_fallback(tmp_path
     assert sources["source"] == "local"
     assert sources["base_path"] == str(tmp_path)
     assert "base_url" not in sources
-    assert [entry["table"] for entry in sources["tables"]] == ["fec_committees"]
+    assert [entry["table"] for entry in _listed(sources)] == ["fec_committees"]
     assert loaded == []
     described = _tool_data(server, "describe_table", {"table": "fec_committees"})
     assert described["available"] is True

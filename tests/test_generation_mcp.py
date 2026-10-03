@@ -165,7 +165,7 @@ def test_a_remote_build_sets_the_interactive_retries_before_it_locks(tmp_path, m
 
 
 def test_admitted_table_without_dictionary_is_available_but_helpers_are_not(tmp_path, monkeypatch):
-    from tests.test_mcp_server import _tool_data
+    from tests.test_mcp_server import _listed, _tool_data
 
     directory, _ = build(tmp_path, keys=("extra.parquet",))
     index = publish(Store(), directory)
@@ -177,7 +177,7 @@ def test_admitted_table_without_dictionary_is_available_but_helpers_are_not(tmp_
     monkeypatch.setattr(mcp_server, "_get_connection", lambda: inner)
     server = mcp_server.build_server()
     result = _tool_data(server, "list_sources", {})
-    assert [entry["table"] for entry in result["tables"]] == ["extra"]
+    assert [entry["table"] for entry in _listed(result)] == ["extra"]
     described = _tool_data(server, "describe_table", {"table": "extra"})
     assert described["publication"]["status"] == "managed_generation"
     assert described["available"] is True

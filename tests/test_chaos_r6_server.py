@@ -440,3 +440,21 @@ def test_the_text_says_current_lineage_is_for_register_ids_and_points_at_the_rea
     assert "current_lineage is computed for federal_register_agency ids only" in text
     assert "reasoning" in text and "parent_labels" in text
     assert _lookup("regulations.gov:agency", "FNS")["registry_evidence"]["current_lineage"]["status"] == "not_applicable"
+
+
+# L10 (owner decision 2026-10-03): list_sources groups tables by the dictionary's subject (implementer B's field).
+
+def test_list_sources_groups_tables_by_subject_with_unassigned_tables_last(monkeypatch):
+    metadata = {name: dict(entry) for name, entry in server._table_metadata().items()}
+    for name, subject in (("dockets", "rulemaking"), ("documents", "rulemaking"), ("laws", "congress")):
+        metadata[name]["subject"] = subject
+    monkeypatch.setattr(server, "_table_metadata", lambda: metadata)
+    with duckdb.connect() as con:
+        for name in ("laws", "documents", "dockets", "comments"):
+            con.execute(f'CREATE TABLE "{name}" (id VARCHAR)')
+        monkeypatch.setattr(server, "_get_connection", lambda: con)
+        listed = _tool_data(server.build_server(), "list_sources", {})
+    assert "tables" not in listed
+    assert [(group["subject"], [row["table"] for row in group["tables"]]) for group in listed["subjects"]] == [
+        ("rulemaking", ["dockets", "documents"]), ("congress", ["laws"]), (None, ["comments"])]
+    assert set(listed["subjects"][0]["tables"][0]) == {"table", "label", "coverage", "rows"}
