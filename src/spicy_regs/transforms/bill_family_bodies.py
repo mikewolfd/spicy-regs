@@ -56,6 +56,7 @@ from typing import Any, Protocol
 
 from loguru import logger
 from spicy_docs.extraction.body_text import body_text
+from spicy_docs.reading.media_types import bare_media_type
 from spicy_docs.interpretation.bill_family import (
     BillFamilyTables,
     BillSummarizer,
@@ -159,7 +160,7 @@ class BulkBillsSource(Protocol):
 
 def body_kind(content_type: str | None, format_name: str | None) -> str | None:
     """Classify a fetched body as ``pdf``, ``xml``, or the source's own format name."""
-    media = (content_type or "").split(";", 1)[0].strip().lower()
+    media = bare_media_type(content_type)
     if media == "application/pdf":
         return "pdf"
     if media in {"application/xml", "text/xml"} or media.endswith("+xml"):
