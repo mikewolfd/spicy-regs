@@ -8,6 +8,8 @@ A small row-count index over `comments`. Each row counts the comments of one age
 
 **Coverage.** Derived. Counts over `comments` by agency, docket and posting month; it covers exactly what that table covers and adds no rows of its own. *(measured 2026-09-06)*
 
+**Data quality.** Its counts include the comments held on a posting Regulations.gov removed (see `comments`), which `agency_stats` and `feed_summary` subtract. To subtract them yourself, count those rows in `comments` by agency, docket and posting month.
+
 - **Parquet file:** `comments_index.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
 - **Publication status:** Not established by this schema page or its measurement date.

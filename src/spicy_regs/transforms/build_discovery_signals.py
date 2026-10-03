@@ -19,6 +19,8 @@ from pathlib import Path
 import pyarrow.parquet as pq
 from loguru import logger
 
+from spicy_regs.transforms.removed_postings import counted_documents
+
 
 def build_discovery_signals(output_dir: Path) -> Path:
     """Build ``discovery_signals.parquet`` (the per-agency spike signal)."""
@@ -54,7 +56,9 @@ def build_discovery_signals(output_dir: Path) -> Path:
         "spicy_regs.input.documents.rows": str(pq.read_metadata(documents_file).num_rows),
     }
 
-    query = """
+    # A posting Regulations.gov removed is no output of its agency's (removed_postings).
+    documents = counted_documents(documents_file)
+    query = f"""
     COPY (
         WITH per AS (
             SELECT agency_code,
@@ -65,7 +69,7 @@ def build_discovery_signals(output_dir: Path) -> Path:
                 WHERE TRY_CAST(posted_date AS TIMESTAMPTZ) >= $as_of::TIMESTAMPTZ - INTERVAL '13' MONTH
                   AND TRY_CAST(posted_date AS TIMESTAMPTZ) <  $as_of::TIMESTAMPTZ - INTERVAL '1' MONTH
               ) AS prior_yr
-            FROM read_parquet($documents)
+            FROM {documents}
             WHERE TRY_CAST(posted_date AS TIMESTAMPTZ) >= $as_of::TIMESTAMPTZ - INTERVAL '13' MONTH
               AND TRY_CAST(posted_date AS TIMESTAMPTZ) <= $as_of::TIMESTAMPTZ
               AND agency_code IS NOT NULL
@@ -82,7 +86,7 @@ def build_discovery_signals(output_dir: Path) -> Path:
     ) TO $output (FORMAT PARQUET, COMPRESSION ZSTD, KV_METADATA $metadata);
     """
     con.execute(
-        query, {"as_of": as_of, "documents": str(documents_file), "output": str(out_file), "metadata": metadata}
+        query, {"as_of": as_of, "output": str(out_file), "metadata": metadata}
     )
     con.close()
 

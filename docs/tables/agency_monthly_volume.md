@@ -6,7 +6,7 @@
 
 Per-agency monthly document volume, broken out by document type — one row per (agency, year, month, document_type). Feeds activity sparklines and profile activity panels. Built by `build_agency_monthly_volume` from document `posted_date`; missing, uncastable and year-zero dates are omitted.
 
-**Coverage.** Derived from `documents`: document counts by agency, month and document type. A document whose posted date is NULL or the publisher's year zero is left out, and the file records each omitted date; other literal dates stay as the publisher wrote them, including documents dated before 1990 or in the future. Source values are unchanged. Receipts: fork-execution-2026-09-21/document-derivatives/MANUAL-AUDIT.md and publication-agency-monthly-volume.json. *(measured 2026-09-21)*
+**Coverage.** Derived from `documents`: document counts by agency, month and document type. A document whose posted date is NULL or the publisher's year zero is left out, and so is a posting Regulations.gov removed (`documents.publisher_status`); the file records how many of each it left out. Other literal dates stay as the publisher wrote them, including documents dated before 1990 or in the future. Source values are unchanged. Receipts: fork-execution-2026-09-21/document-derivatives/MANUAL-AUDIT.md and publication-agency-monthly-volume.json. *(measured 2026-09-21)*
 
 - **Parquet file:** `agency_monthly_volume.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.

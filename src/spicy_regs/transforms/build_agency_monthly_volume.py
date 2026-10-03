@@ -5,8 +5,9 @@ materialized by its own decoupled rollup pipeline. Produces
 ``agency_monthly_volume.parquet`` — per-agency monthly document counts typed by
 ``document_type``, serving both the directory activity sparkline and the profile
 activity panel.
-Unusable dates, including year zero, are omitted from calendar buckets. The
-Parquet metadata retains omitted counts and the exact parent-file digest.
+Unusable dates, including year zero, are omitted from calendar buckets, and so
+is a posting Regulations.gov removed. The Parquet metadata retains both counts
+and the exact parent-file digest.
 """
 
 from hashlib import file_digest
@@ -15,6 +16,8 @@ from pathlib import Path
 import polars as pl
 import pyarrow.parquet as pq
 from loguru import logger
+
+from spicy_regs.transforms.removed_postings import counted_documents
 
 
 def build_agency_monthly_volume(output_dir: Path) -> Path:
@@ -45,8 +48,7 @@ def build_agency_monthly_volume(output_dir: Path) -> Path:
         # narrow temp table instead of re-scanning the payload columns.
         con.execute(
             "CREATE TEMP TABLE _vol_docs AS "
-            "SELECT agency_code, posted_date, document_type FROM read_parquet($documents)",
-            {"documents": str(documents_file)},
+            f"SELECT agency_code, posted_date, document_type FROM {counted_documents(documents_file)}"
         )
         counts = con.execute(
             """
@@ -58,15 +60,17 @@ def build_agency_monthly_volume(output_dir: Path) -> Path:
             """
         ).fetchone()
         assert counts is not None
-        input_rows, missing_dates, invalid_dates, year_zero_dates = counts
+        counted_rows, missing_dates, invalid_dates, year_zero_dates = counts
+        input_rows = pq.read_metadata(documents_file).num_rows
         omitted = missing_dates + invalid_dates + year_zero_dates
         with documents_file.open("rb") as source:
             parent_digest = file_digest(source, "sha256").hexdigest()
         metadata = {
             "spicy_regs.input.documents.sha256": f"sha256:{parent_digest}",
             "spicy_regs.input.documents.rows": str(input_rows),
-            "spicy_regs.agency_monthly_volume.included_rows": str(input_rows - omitted),
+            "spicy_regs.agency_monthly_volume.included_rows": str(counted_rows - omitted),
             "spicy_regs.agency_monthly_volume.omitted_rows": str(omitted),
+            "spicy_regs.agency_monthly_volume.removed_postings": str(input_rows - counted_rows),
             "spicy_regs.agency_monthly_volume.missing_dates": str(missing_dates),
             "spicy_regs.agency_monthly_volume.invalid_dates": str(invalid_dates),
             "spicy_regs.agency_monthly_volume.year_zero_dates": str(year_zero_dates),

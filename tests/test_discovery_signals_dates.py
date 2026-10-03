@@ -162,5 +162,6 @@ def test_monthly_excludes_year_zero_and_records_every_omitted_parent_row(tmp_pat
         "missing_dates": "1",
         "invalid_dates": "2",
         "year_zero_dates": "1",
+        "removed_postings": "0",
     }
     assert pq.read_table(source)["posted_date"].to_pylist() == dates

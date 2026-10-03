@@ -25,6 +25,19 @@ class Aggregate:
     population: str
 
 
+#: A derived count leaves out a posting Regulations.gov removed, and the comments held on it (removed_postings).
+_COUNTED = "publisher_status IS DISTINCT FROM 'removed'"
+
+
+_TRIMMED_DOCKET = """trim(docket_id,'"') docket_id"""
+
+
+def _removed_comments(key: str) -> str:
+    """``gone``: every held comment naming a removed posting, counted by ``key`` as the comments index spells it."""
+    return f"""gone AS (SELECT {key},count(*) n FROM comments WHERE comment_on_document_id IN
+        (SELECT document_id FROM documents WHERE publisher_status='removed') GROUP BY ALL)"""
+
+
 AGGREGATES = (
     Aggregate(
         "comments-index",
@@ -38,33 +51,50 @@ AGGREGATES = (
         "SELECT agency_code,docket_id,year,month,sum(row_count) AS value FROM comments_index GROUP BY ALL",
         "All held comment rows, including NULL cohort keys; strict timestamp conversion as index builder.",
     ),
-    *(
-        Aggregate(
-            "agency-" + metric,
-            "agency_stats",
-            (source,),
-            ("agency_code",),
-            f"SELECT agency_code,{expression} AS value FROM {source} WHERE agency_code IS NOT NULL GROUP BY ALL",
-            f"SELECT agency_code,sum({metric}_count) AS value FROM agency_stats GROUP BY ALL",
-            "All held rows with non-NULL agency; zero-valued agency cells may originate in another input.",
-        )
-        for metric, source, expression in [
-            ("docket", "dockets", "count(*)"),
-            ("document", "documents", "count(*)"),
-            ("comment", "comments_index", "sum(row_count)"),
-        ]
+    Aggregate(
+        "agency-docket",
+        "agency_stats",
+        ("dockets",),
+        ("agency_code",),
+        "SELECT agency_code,count(*) AS value FROM dockets WHERE agency_code IS NOT NULL GROUP BY ALL",
+        "SELECT agency_code,sum(docket_count) AS value FROM agency_stats GROUP BY ALL",
+        "All held rows with non-NULL agency; zero-valued agency cells may originate in another input.",
+    ),
+    Aggregate(
+        "agency-document",
+        "agency_stats",
+        ("documents",),
+        ("agency_code",),
+        f"SELECT agency_code,count(*) AS value FROM documents WHERE agency_code IS NOT NULL AND {_COUNTED} GROUP BY ALL",
+        "SELECT agency_code,sum(document_count) AS value FROM agency_stats GROUP BY ALL",
+        "Held rows with non-NULL agency, less postings Regulations.gov removed; zero-valued agency cells may "
+        "originate in another input.",
+    ),
+    Aggregate(
+        "agency-comment",
+        "agency_stats",
+        ("comments_index", "comments", "documents"),
+        ("agency_code",),
+        f"""WITH {_removed_comments("agency_code")},
+        held AS (SELECT agency_code,sum(row_count) n FROM comments_index GROUP BY ALL)
+        SELECT agency_code,held.n-coalesce(gone.n,0) AS value FROM held LEFT JOIN gone USING (agency_code)
+        WHERE agency_code IS NOT NULL""",
+        "SELECT agency_code,sum(comment_count) AS value FROM agency_stats GROUP BY ALL",
+        "Indexed comments with non-NULL agency, less those naming a posting Regulations.gov removed, matched over "
+        "every comment row; zero-valued agency cells may originate in another input.",
     ),
     Aggregate(
         "monthly-documents",
         "agency_monthly_volume",
         ("documents",),
         ("agency_code", "year", "month", "document_type"),
-        """SELECT agency_code,extract(year FROM try_cast(posted_date AS DATE)) AS year,
+        f"""SELECT agency_code,extract(year FROM try_cast(posted_date AS DATE)) AS year,
         extract(month FROM try_cast(posted_date AS DATE)) AS month,document_type,count(*) AS value
-        FROM documents WHERE try_cast(posted_date AS DATE) IS NOT NULL
+        FROM documents WHERE try_cast(posted_date AS DATE) IS NOT NULL AND {_COUNTED}
         AND extract(year FROM try_cast(posted_date AS DATE))<>0 GROUP BY ALL""",
         "SELECT agency_code,year,month,document_type,sum(document_count) AS value FROM agency_monthly_volume GROUP BY ALL",
-        "Usable posted dates only; NULL, unparseable and year-zero dates omitted; NULL agency/type retained.",
+        "Usable posted dates only; NULL, unparseable and year-zero dates and removed postings omitted; NULL "
+        "agency/type retained.",
     ),
     Aggregate(
         "feed-dockets",
@@ -78,14 +108,16 @@ AGGREGATES = (
     Aggregate(
         "feed-comments",
         "feed_summary",
-        ("dockets", "comments_index"),
+        ("dockets", "comments_index", "comments", "documents"),
         ("docket_id",),
-        """SELECT d.docket_id,sum(coalesce(c.n,0)) AS value FROM
-        (SELECT trim(docket_id,'"') docket_id FROM dockets) d LEFT JOIN
-        (SELECT docket_id,sum(row_count) n FROM comments_index GROUP BY ALL) c
-        ON d.docket_id=c.docket_id GROUP BY d.docket_id""",
+        f"""WITH {_removed_comments(_TRIMMED_DOCKET)},
+        held AS (SELECT docket_id,sum(row_count) n FROM comments_index GROUP BY ALL)
+        SELECT d.docket_id,sum(coalesce(c.n,0)-coalesce(gone.n,0)) AS value FROM
+        (SELECT trim(docket_id,'"') docket_id FROM dockets) d LEFT JOIN held c ON d.docket_id=c.docket_id
+        LEFT JOIN gone ON d.docket_id=gone.docket_id GROUP BY d.docket_id""",
         "SELECT docket_id,sum(comment_count) AS value FROM feed_summary GROUP BY ALL",
-        "Comments on held docket rows only; SQL NULL dockets do not match; repeated dockets multiply as builder does.",
+        "Comments on held docket rows only, less those naming a posting Regulations.gov removed; SQL NULL dockets "
+        "do not match; repeated dockets multiply as builder does.",
     ),
     Aggregate(
         "lifecycle-outcomes",

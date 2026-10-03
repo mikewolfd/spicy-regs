@@ -84,6 +84,48 @@ def test_a_row_group_over_the_admission_bound_is_not_published(tmp_path, monkeyp
     assert pub.INDEX_KEY not in remote.objects
 
 
+@pytest.mark.parametrize("reconciled", [True, False])
+def test_the_documents_family_carries_what_regulations_gov_last_said_of_each_document(
+    tmp_path, monkeypatch, remote, reconciled
+):
+    """The reconcile step's bare outcomes join the working copy; never reconciled, the two columns read NULL."""
+    from spicy_regs.pipelines.docket_reconcile import OUTCOME_SCHEMA, OUTCOMES
+    from spicy_regs.pipelines.rollups.regulatory_base import DocumentsFamily
+
+    documents = RECORD_TYPES["documents"]
+    ids = ["FNA-2026-0301-0004", "FNA-2026-0301-0005", "FNS-2025-0401-0001"]
+    working_copy = pl.DataFrame(
+        [{**dict.fromkeys(documents.schema), "document_id": i, "agency_code": i[:3]} for i in ids],
+        schema=documents.schema,
+    )
+    outcomes = pl.DataFrame(
+        [{"document_id": ids[0], "docket_id": "FNA-2026-0301", "publisher_status": "removed",
+          "observed_at": "2026-10-03T12:40:00+00:00", "removed_observed_at": "2026-10-03T12:40:00+00:00",
+          "http_status": 404, "body_sha256": None},
+         {"document_id": ids[1], "docket_id": "FNA-2026-0301", "publisher_status": "listed",
+          "observed_at": "2026-10-03T12:40:00+00:00", "removed_observed_at": None, "http_status": None,
+          "body_sha256": None}],
+        schema=OUTCOME_SCHEMA,
+    )
+
+    def working(remote_key, local_path):
+        frame = {"documents.parquet": working_copy, OUTCOMES: outcomes if reconciled else None}.get(remote_key)
+        if frame is None:
+            return False
+        frame.write_parquet(local_path)
+        return True
+
+    monkeypatch.setattr(r2, "download_working_copy", working)
+    monkeypatch.setattr(r2, "download", lambda key, path: pytest.fail(f"read a managed family: {key}"))
+    DocumentsFamily(output_dir=tmp_path, skip_upload=False).run()
+    location = pub.single_member(pub.parse_index(remote.objects[pub.INDEX_KEY]), "documents.parquet").path
+    published = pl.read_parquet(io.BytesIO(remote.objects[location]))
+    status = dict(published.select("document_id", "publisher_status").iter_rows())
+    assert status == ({ids[0]: "removed", ids[1]: "listed", ids[2]: None} if reconciled else dict.fromkeys(ids))
+    assert published.filter(pl.col("document_id") == ids[0])["removed_observed_at"].to_list() == [
+        "2026-10-03T12:40:00+00:00" if reconciled else None]
+
+
 def test_working_copy_download_ignores_a_family_that_owns_the_key(tmp_path, monkeypatch):
     """The ETL primes from the bare object even when ``dockets.parquet`` resolves to a generation."""
     monkeypatch.setenv("R2_PUBLIC_URL", "https://example.test")

@@ -5,6 +5,8 @@ from pathlib import Path
 import pyarrow.parquet as pq
 from loguru import logger
 
+from spicy_regs.transforms.removed_postings import counted_documents, removed_comments
+
 
 def build_feed_summary(output_dir: Path) -> Path:
     """Build ``feed_summary.parquet``: dockets joined to comment counts and document dates, sorted ``modify_date`` DESC.
@@ -12,8 +14,9 @@ def build_feed_summary(output_dir: Path) -> Path:
     Comment counts come from ``comments_index.parquet`` (per-partition row
     counts) when present, falling back to the monolithic ``comments.parquet``;
     ``comment_end_date`` and ``date_created`` come from ``documents.parquet``
-    when present, otherwise NULL. Raises ``FileNotFoundError`` when
-    ``dockets.parquet`` is missing.
+    when present, otherwise NULL. A posting Regulations.gov removed, and the
+    comments held on it, are left out (``removed_postings``). Raises
+    ``FileNotFoundError`` when ``dockets.parquet`` is missing.
     """
     import duckdb
 
@@ -39,26 +42,22 @@ def build_feed_summary(output_dir: Path) -> Path:
     con.execute(f"SET temp_directory='{spill_dir}'")
 
     # Build the query dynamically based on which files exist.
-    # Prefer the comments index (tiny) over the monolithic comments file.
+    # Prefer the comments index (tiny) over the monolithic comments file. Comments on a
+    # posting Regulations.gov removed are subtracted from the counts they are held in.
+    removed = removed_comments(con, documents_file, output_dir)
     comment_join = ""
     comment_col = "0 AS comment_count,"
+    held = None
     if comments_index_file.exists():
-        comment_join = f"""
-        LEFT JOIN (
-            SELECT docket_id, CAST(SUM(row_count) AS BIGINT) AS comment_count
-            FROM read_parquet('{comments_index_file}')
-            GROUP BY docket_id
-        ) cc ON cc.docket_id = d.docket_id
-        """
-        comment_col = "COALESCE(cc.comment_count, 0) AS comment_count,"
+        held = f"SELECT docket_id, row_count AS n FROM read_parquet('{comments_index_file}')"
     elif comments_file.exists():
+        held = f"""SELECT TRIM(docket_id, '"') AS docket_id, 1 AS n FROM read_parquet('{comments_file}')"""
+    if held:
         comment_join = f"""
         LEFT JOIN (
-            SELECT
-                TRIM(docket_id, '"') AS docket_id,
-                COUNT(*) AS comment_count
-            FROM read_parquet('{comments_file}')
-            GROUP BY TRIM(docket_id, '"')
+            SELECT docket_id, CAST(SUM(n) AS BIGINT) AS comment_count
+            FROM ({held} UNION ALL SELECT docket_id, -n FROM {removed})
+            GROUP BY docket_id
         ) cc ON cc.docket_id = d.docket_id
         """
         comment_col = "COALESCE(cc.comment_count, 0) AS comment_count,"
@@ -72,7 +71,7 @@ def build_feed_summary(output_dir: Path) -> Path:
                 TRIM(docket_id, '"') AS docket_id,
                 MAX(comment_end_date) AS comment_end_date,
                 MIN(posted_date) AS date_created
-            FROM read_parquet('{documents_file}')
+            FROM {counted_documents(documents_file)}
             GROUP BY TRIM(docket_id, '"')
         ) da ON da.docket_id = d.docket_id
         """

@@ -10,6 +10,8 @@ from pathlib import Path
 import pyarrow.parquet as pq
 from loguru import logger
 
+from spicy_regs.transforms.removed_postings import counted_documents, removed_comments
+
 
 def build_agency_stats(output_dir: Path) -> Path:
     """Build ``agency_stats.parquet`` — one row per agency with dockets /
@@ -17,9 +19,10 @@ def build_agency_stats(output_dir: Path) -> Path:
 
     Comment counts come from the tiny ``comments_index.parquet`` rather than
     scanning the 24.7M-row comments dataset, falling back to the monolithic
-    ``comments.parquet`` if the index doesn't exist yet. The CTEs are built
-    dynamically so the rollup works whether or not the documents / comments
-    artifacts are present yet.
+    ``comments.parquet`` if the index doesn't exist yet. A posting Regulations.gov
+    removed, and the comments held on it, are left out (``removed_postings``).
+    The CTEs are built dynamically so the rollup works whether or not the
+    documents / comments artifacts are present yet.
     """
     import duckdb
 
@@ -56,11 +59,12 @@ def build_agency_stats(output_dir: Path) -> Path:
     doc_count_col = "0 AS document_count"
     comment_count_col = "0 AS comment_count"
 
+    removed = removed_comments(con, documents_file, output_dir)
     if documents_file.exists():
         ctes.append(
             f"""doc AS (
             SELECT agency_code, COUNT(*) AS document_count
-            FROM read_parquet('{documents_file}')
+            FROM {counted_documents(documents_file)}
             GROUP BY agency_code
         )"""
         )
@@ -68,12 +72,14 @@ def build_agency_stats(output_dir: Path) -> Path:
         joins.append("LEFT JOIN doc ON doc.agency_code = a.agency_code")
         doc_count_col = "COALESCE(doc.document_count, 0) AS document_count"
 
+    # Comments on a removed posting are subtracted from the counts they are held in.
     if comments_index_file.exists():
         ctes.append(
             f"""cmt AS (
-            SELECT agency_code, CAST(SUM(row_count) AS BIGINT) AS comment_count
-            FROM read_parquet('{comments_index_file}')
-            GROUP BY agency_code
+            SELECT agency_code, CAST(SUM(n) AS BIGINT) AS comment_count FROM (
+                SELECT agency_code, row_count AS n FROM read_parquet('{comments_index_file}')
+                UNION ALL SELECT agency_code, -n FROM {removed}
+            ) GROUP BY agency_code
         )"""
         )
         union_parts.append("SELECT agency_code FROM cmt")
@@ -82,9 +88,10 @@ def build_agency_stats(output_dir: Path) -> Path:
     elif comments_file.exists():
         ctes.append(
             f"""cmt AS (
-            SELECT agency_code, COUNT(*) AS comment_count
-            FROM read_parquet('{comments_file}')
-            GROUP BY agency_code
+            SELECT agency_code, CAST(SUM(n) AS BIGINT) AS comment_count FROM (
+                SELECT agency_code, 1 AS n FROM read_parquet('{comments_file}')
+                UNION ALL SELECT agency_code, -n FROM {removed}
+            ) GROUP BY agency_code
         )"""
         )
         union_parts.append("SELECT agency_code FROM cmt")

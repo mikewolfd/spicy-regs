@@ -6,7 +6,8 @@ merges ``docket_attributes.parquet`` and ``document_attributes.parquet``
 (decisions 65-67). Once a sweep completes, these publish each as its own
 generation family, so index-aware readers and DocSpec's by-reference admission
 see one verified snapshot per sweep. Bare-URL readers keep reading the working
-copies.
+copies. The documents family alone adds two columns, from the reconcile step's
+bare outcomes, which the working copy never carries.
 """
 
 from pathlib import Path
@@ -47,11 +48,15 @@ class _BaseTableFamily(RollupPipeline):
         )
         if missing or distinct != rows:
             raise RuntimeError(f"{self.output}: {missing} rows lack {key} and {rows - missing - distinct} repeat one")
+        self.annotate(path)
         metadata = pq.ParquetFile(path).metadata
         largest = max((metadata.row_group(i).total_byte_size for i in range(metadata.num_row_groups)), default=0)
         if largest > MAX_ROW_GROUP_BYTES:
             raise RuntimeError(f"{self.output}: a {largest / 2**20:.1f} MiB row group exceeds the admission bound")
         return path
+
+    def annotate(self, path: Path) -> None:
+        """Add what the family publishes beyond the working copy; the base tables add nothing."""
 
 
 class DocketsFamily(_BaseTableFamily):
@@ -60,8 +65,16 @@ class DocketsFamily(_BaseTableFamily):
 
 
 class DocumentsFamily(_BaseTableFamily):
+    """The ETL's documents, each with what Regulations.gov last said of it (``pipelines.docket_reconcile``)."""
+
     name: ClassVar[str] = "documents"
     output: ClassVar[str] = "documents.parquet"
+
+    def annotate(self, path: Path) -> None:
+        from spicy_regs.pipelines.docket_reconcile import OUTCOMES, with_publisher_status
+
+        outcomes = path.with_name(OUTCOMES)
+        with_publisher_status(path, outcomes if r2.download_working_copy(OUTCOMES, outcomes) else None)
 
 
 class _AttributesFamily(_BaseTableFamily):

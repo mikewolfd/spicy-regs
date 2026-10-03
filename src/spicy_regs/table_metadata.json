@@ -77,7 +77,7 @@
         "grain": [
           "docket_id"
         ],
-        "population": "Comments on held docket rows only; SQL NULL dockets do not match; repeated dockets multiply as builder does.",
+        "population": "Comments on held docket rows only, less those naming a posting Regulations.gov removed; SQL NULL dockets do not match; repeated dockets multiply as builder does.",
         "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
         "command": "uv run --frozen python scripts/check_table_joins.py --aggregate feed-comments",
         "status": "available_check_not_a_live_measurement"
@@ -91,7 +91,7 @@
     "coverage": "Sampled repair with retained prior rows. On 2026-09-21 the fork merged every selected retained document release into the prior table, resolving each document to its most recent source record and keeping newer and unrelated rows; the daily regulations ETL adds to it. It is not a fresh regulations.gov census. The repair covered metadata and references; body-text, extraction-status and PDF-extraction-evidence values remain NULL. It does not include a full comments corpus. Receipts: fork-execution-2026-09-21/publication-documents.json and fork-base-repair-2026-09-21/repair-audit.json.",
     "kind": "sampled",
     "measured_on": "2026-09-28",
-    "data_quality": "The 2026-09-21 fork date check across all 2,001,531 rows found 52,699 posted_date\nvalues before 1990, including eight in year 0000; one value was in the future,\n2,020 were missing and no other values were uncastable. Source date values remain\nliteral in this base table; downstream calendar filters are separate. Receipt:\nfork-execution-2026-09-21/document-derivatives/audit.json. In the 2026-09-21 fork\nconsumer audit, 1,854,836 documents resolve to published dockets; 466 preserve unmatched\nliteral links across 137 docket IDs, and 146,229 have NULL links. The 348\nselected-source unmatched links and 145,907 selected-source NULL links agree with native\ninputs; the remaining 118 unmatched and 322 NULL rows are outside that replay. Missing\njoins are not fabricated or treated as failed repairs. Receipt:\nfork-execution-2026-09-21/documents-mcp-audit/.\n\nCalendar searches must distinguish source dates from instants. Under the\nRegulations.gov convention in SpicyDocs' `regulations_gov_day`, date-only\nvalues and bare `T00:00:00Z` retain their printed day; other offset-bearing\ntimestamps use `America/New_York`, not their UTC date. For example,\n`2026-10-05T03:59:59Z` is October 4 at 23:59:59 EDT, while\n`2026-11-24T04:59:59Z` is November 23 at 23:59:59 EST. This bare-midnight\nexception is source-specific, not a rule for arbitrary timestamps.\n\nThis guarded DuckDB example selects October 2–16 inclusive in Eastern\ncalendar days (not a 14-day instant interval). It handles the shown ISO\nforms, preserving the source's date-only convention; year zero, malformed\nvalues and offset-free timestamps yield NULL. Inspect those unknowns\nseparately rather than treating exclusion from the filter as no deadline.\nDo not compare UTC timestamp strings with a date-only upper bound.\n\n```sql\nWITH calendar AS (\n  SELECT document_id,\n    CASE\n      WHEN left(v, 4) = '0000' THEN NULL\n      WHEN regexp_full_match(v, '[0-9]{4}-[0-9]{2}-[0-9]{2}(T00:00:00Z)?')\n        THEN TRY_CAST(left(v, 10) AS DATE)\n      WHEN regexp_full_match(v, '[0-9]{4}-[0-9]{2}-[0-9]{2}T.+(Z|[+-][0-9]{2}:[0-9]{2})')\n        THEN CAST(TRY_CAST(v AS TIMESTAMPTZ) AT TIME ZONE 'America/New_York' AS DATE)\n    END AS end_day\n  FROM (SELECT document_id, trim(comment_end_date) AS v FROM documents)\n)\nSELECT document_id, end_day FROM calendar\nWHERE end_day >= DATE '2026-10-02' AND end_day < DATE '2026-10-17';\n```\n\nA date field alone does not establish submission purpose or the legally\ncontrolling/current deadline. For example, FR 2026-15634's DATES text\nspecifies October 2, 2026 objections/hearing requests under 40 CFR part 178,\nnot ordinary comments. NULL does not establish that no deadline exists.\nRead the notice's filing instructions and later notices before acting.\n`fr_docket_links` offers source docket navigation; `comment_periods` offers\nderived date-window candidates, not a complete legal extension history.",
+    "data_quality": "The 2026-09-21 fork date check across all 2,001,531 rows found 52,699 posted_date\nvalues before 1990, including eight in year 0000; one value was in the future,\n2,020 were missing and no other values were uncastable. Source date values remain\nliteral in this base table; downstream calendar filters are separate. Receipt:\nfork-execution-2026-09-21/document-derivatives/audit.json. In the 2026-09-21 fork\nconsumer audit, 1,854,836 documents resolve to published dockets; 466 preserve unmatched\nliteral links across 137 docket IDs, and 146,229 have NULL links. The 348\nselected-source unmatched links and 145,907 selected-source NULL links agree with native\ninputs; the remaining 118 unmatched and 322 NULL rows are outside that replay. Missing\njoins are not fabricated or treated as failed repairs. Receipt:\nfork-execution-2026-09-21/documents-mcp-audit/.\n\nCalendar searches must distinguish source dates from instants. Under the\nRegulations.gov convention in SpicyDocs' `regulations_gov_day`, date-only\nvalues and bare `T00:00:00Z` retain their printed day; other offset-bearing\ntimestamps use `America/New_York`, not their UTC date. For example,\n`2026-10-05T03:59:59Z` is October 4 at 23:59:59 EDT, while\n`2026-11-24T04:59:59Z` is November 23 at 23:59:59 EST. This bare-midnight\nexception is source-specific, not a rule for arbitrary timestamps.\n\nThis guarded DuckDB example selects October 2–16 inclusive in Eastern\ncalendar days (not a 14-day instant interval). It handles the shown ISO\nforms, preserving the source's date-only convention; year zero, malformed\nvalues and offset-free timestamps yield NULL. Inspect those unknowns\nseparately rather than treating exclusion from the filter as no deadline.\nDo not compare UTC timestamp strings with a date-only upper bound.\n\n```sql\nWITH calendar AS (\n  SELECT document_id,\n    CASE\n      WHEN left(v, 4) = '0000' THEN NULL\n      WHEN regexp_full_match(v, '[0-9]{4}-[0-9]{2}-[0-9]{2}(T00:00:00Z)?')\n        THEN TRY_CAST(left(v, 10) AS DATE)\n      WHEN regexp_full_match(v, '[0-9]{4}-[0-9]{2}-[0-9]{2}T.+(Z|[+-][0-9]{2}:[0-9]{2})')\n        THEN CAST(TRY_CAST(v AS TIMESTAMPTZ) AT TIME ZONE 'America/New_York' AS DATE)\n    END AS end_day\n  FROM (SELECT document_id, trim(comment_end_date) AS v FROM documents)\n)\nSELECT document_id, end_day FROM calendar\nWHERE end_day >= DATE '2026-10-02' AND end_day < DATE '2026-10-17';\n```\n\nA date field alone does not establish submission purpose or the legally\ncontrolling/current deadline. For example, FR 2026-15634's DATES text\nspecifies October 2, 2026 objections/hearing requests under 40 CFR part 178,\nnot ordinary comments. NULL does not establish that no deadline exists.\nRead the notice's filing instructions and later notices before acting.\n`fr_docket_links` offers source docket navigation; `comment_periods` offers\nderived date-window candidates, not a complete legal extension history.\n\nRows are additive. The Mirrulations mirror keeps every capture and never\nsees a deletion, so a posting Regulations.gov later removes, or moves to\nanother docket, stays here: on 2026-10-03 FNA-2026-0301-0004, the Utah\nnotice (FR 2026-18893) filed to the Idaho docket, answered 404 while this\ntable held it with `withdrawn = 'false'`; Regulations.gov had re-posted it\nas FNA-2026-0313-0006, and its four comments appear under both. A daily\nstep lists every docket with a document posted or modified in the past\nweek and reads by id each held document the listing omits:\n`publisher_status` is `removed` where Regulations.gov answers 404 or 410.\nOlder dockets are not checked, so NULL means never checked, not still\npublished. Removed rows stay here; `agency_stats`, `feed_summary`,\n`agency_monthly_volume` and `discovery_signals` leave them and their\ncomments out. Filter `publisher_status IS DISTINCT FROM 'removed'` to do\nthe same.",
     "columns": [
       {
         "column_name": "document_id",
@@ -187,6 +187,16 @@
         "column_name": "pdf_extraction_results_json",
         "column_type": "VARCHAR",
         "description": "Ordered JSON array from the latest PDF attempt: `{url, source_sha256, status, page_count, error}` per distinct selected URL. SHA-256 identifies observed bytes; no-bytes fetch failures have null digest/page count and a generic error. Null when no PDF attempt is recorded. Describes that attempt, not the provenance of older text retained after a failed overwrite."
+      },
+      {
+        "column_name": "publisher_status",
+        "column_type": "VARCHAR",
+        "description": "What Regulations.gov last said of the document when the daily reconcile step checked its docket: `listed` (the docket's document listing names it, or, where the listing does not, its own record still answers) or `removed` (the listing omits it and its own record answers 404 or 410). NULL where the step has never checked it: it checks only dockets with a document posted or modified in the past week, so NULL does not mean the publisher still serves it. A removed document stays in this table (see data_quality)."
+      },
+      {
+        "column_name": "removed_observed_at",
+        "column_type": "VARCHAR",
+        "description": "When the reconcile step first found the document removed, as a UTC ISO 8601 instant; NULL unless `publisher_status` is `removed`."
       }
     ],
     "grain": null,
@@ -200,9 +210,20 @@
         "grain": [
           "agency_code"
         ],
-        "population": "All held rows with non-NULL agency; zero-valued agency cells may originate in another input.",
+        "population": "Held rows with non-NULL agency, less postings Regulations.gov removed; zero-valued agency cells may originate in another input.",
         "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
         "command": "uv run --frozen python scripts/check_table_joins.py --aggregate agency-document",
+        "status": "available_check_not_a_live_measurement"
+      },
+      {
+        "name": "agency-comment",
+        "role": "input",
+        "grain": [
+          "agency_code"
+        ],
+        "population": "Indexed comments with non-NULL agency, less those naming a posting Regulations.gov removed, matched over every comment row; zero-valued agency cells may originate in another input.",
+        "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
+        "command": "uv run --frozen python scripts/check_table_joins.py --aggregate agency-comment",
         "status": "available_check_not_a_live_measurement"
       },
       {
@@ -214,9 +235,20 @@
           "month",
           "document_type"
         ],
-        "population": "Usable posted dates only; NULL, unparseable and year-zero dates omitted; NULL agency/type retained.",
+        "population": "Usable posted dates only; NULL, unparseable and year-zero dates and removed postings omitted; NULL agency/type retained.",
         "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
         "command": "uv run --frozen python scripts/check_table_joins.py --aggregate monthly-documents",
+        "status": "available_check_not_a_live_measurement"
+      },
+      {
+        "name": "feed-comments",
+        "role": "input",
+        "grain": [
+          "docket_id"
+        ],
+        "population": "Comments on held docket rows only, less those naming a posting Regulations.gov removed; SQL NULL dockets do not match; repeated dockets multiply as builder does.",
+        "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
+        "command": "uv run --frozen python scripts/check_table_joins.py --aggregate feed-comments",
         "status": "available_check_not_a_live_measurement"
       }
     ]
@@ -228,7 +260,7 @@
     "coverage": "True range, floored and open-ended. Posted dates are stated from 1990-01-01 rather than from the raw minimum of year 0000, on the same publisher defect as `documents`; the mirror is rebuilt from the catalog, so the latest posted date is a query (`SELECT max(posted_date)`), not a stated bound. See the data-quality note.",
     "kind": "true_range",
     "measured_on": "2026-10-03",
-    "data_quality": "Rows with a `posted_date` before 1990 carry the same publisher defect as `documents` (`WHERE posted_date < '1990'` counts them); filter on the date when recency matters.",
+    "data_quality": "Rows with a `posted_date` before 1990 carry the same publisher defect as `documents` (`WHERE posted_date < '1990'` counts them); filter on the date when recency matters. A comment on a posting Regulations.gov removed stays here, and where the publisher moved the posting it re-posted the comments under new ids, so one comment can appear twice: on 2026-10-03 FNA-2026-0301-0006 to -0009, on the removed FNA-2026-0301-0004, are FNA-2026-0313-0002 to -0005, body for body. `agency_stats` and `feed_summary` leave them out; to do the same, keep rows `WHERE comment_on_document_id IS NULL OR comment_on_document_id NOT IN (SELECT document_id FROM documents WHERE publisher_status = 'removed')`.",
     "columns": [
       {
         "column_name": "comment_id",
@@ -369,6 +401,28 @@
         "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
         "command": "uv run --frozen python scripts/check_table_joins.py --aggregate comments-index",
         "status": "available_check_not_a_live_measurement"
+      },
+      {
+        "name": "agency-comment",
+        "role": "input",
+        "grain": [
+          "agency_code"
+        ],
+        "population": "Indexed comments with non-NULL agency, less those naming a posting Regulations.gov removed, matched over every comment row; zero-valued agency cells may originate in another input.",
+        "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
+        "command": "uv run --frozen python scripts/check_table_joins.py --aggregate agency-comment",
+        "status": "available_check_not_a_live_measurement"
+      },
+      {
+        "name": "feed-comments",
+        "role": "input",
+        "grain": [
+          "docket_id"
+        ],
+        "population": "Comments on held docket rows only, less those naming a posting Regulations.gov removed; SQL NULL dockets do not match; repeated dockets multiply as builder does.",
+        "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
+        "command": "uv run --frozen python scripts/check_table_joins.py --aggregate feed-comments",
+        "status": "available_check_not_a_live_measurement"
       }
     ]
   },
@@ -379,7 +433,7 @@
     "coverage": "Derived. Counts over `comments` by agency, docket and posting month; it covers exactly what that table covers and adds no rows of its own.",
     "kind": "derived",
     "measured_on": "2026-09-06",
-    "data_quality": null,
+    "data_quality": "Its counts include the comments held on a posting Regulations.gov removed (see `comments`), which `agency_stats` and `feed_summary` subtract. To subtract them yourself, count those rows in `comments` by agency, docket and posting month.",
     "columns": [
       {
         "column_name": "agency_code",
@@ -435,7 +489,7 @@
         "grain": [
           "agency_code"
         ],
-        "population": "All held rows with non-NULL agency; zero-valued agency cells may originate in another input.",
+        "population": "Indexed comments with non-NULL agency, less those naming a posting Regulations.gov removed, matched over every comment row; zero-valued agency cells may originate in another input.",
         "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
         "command": "uv run --frozen python scripts/check_table_joins.py --aggregate agency-comment",
         "status": "available_check_not_a_live_measurement"
@@ -446,7 +500,7 @@
         "grain": [
           "docket_id"
         ],
-        "population": "Comments on held docket rows only; SQL NULL dockets do not match; repeated dockets multiply as builder does.",
+        "population": "Comments on held docket rows only, less those naming a posting Regulations.gov removed; SQL NULL dockets do not match; repeated dockets multiply as builder does.",
         "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
         "command": "uv run --frozen python scripts/check_table_joins.py --aggregate feed-comments",
         "status": "available_check_not_a_live_measurement"
@@ -495,17 +549,17 @@
       {
         "column_name": "comment_count",
         "column_type": "BIGINT",
-        "description": "Posted comments on the docket, summed from `comments_index`. 0 when none. These are posted comment records, not comments received: an agency posts one record for a mass-mail campaign that can stand for thousands of submissions (EPA-HQ-OW-2022-0114 has 1,629 posted records for about 122,200 comments EPA received). To estimate submissions received, sum `comments.duplicate_comments` as its description says; this table does not carry it."
+        "description": "Posted comments on the docket, summed from `comments_index`, less those on a posting Regulations.gov removed (`documents.publisher_status`). 0 when none. These are posted comment records, not comments received: an agency posts one record for a mass-mail campaign that can stand for thousands of submissions (EPA-HQ-OW-2022-0114 has 1,629 posted records for about 122,200 comments EPA received). To estimate submissions received, sum `comments.duplicate_comments` as its description says; this table does not carry it."
       },
       {
         "column_name": "comment_end_date",
         "column_type": "VARCHAR",
-        "description": "Latest comment-period end date across the docket's documents. Null when unknown."
+        "description": "Latest comment-period end date across the docket's documents, less postings Regulations.gov removed. Null when unknown."
       },
       {
         "column_name": "date_created",
         "column_type": "VARCHAR",
-        "description": "Earliest document `posted_date` on the docket, used as a creation date. Null when unknown."
+        "description": "Earliest document `posted_date` on the docket, less postings Regulations.gov removed, used as a creation date. Null when unknown."
       }
     ],
     "grain": null,
@@ -530,7 +584,7 @@
         "grain": [
           "docket_id"
         ],
-        "population": "Comments on held docket rows only; SQL NULL dockets do not match; repeated dockets multiply as builder does.",
+        "population": "Comments on held docket rows only, less those naming a posting Regulations.gov removed; SQL NULL dockets do not match; repeated dockets multiply as builder does.",
         "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
         "command": "uv run --frozen python scripts/check_table_joins.py --aggregate feed-comments",
         "status": "available_check_not_a_live_measurement"
@@ -559,12 +613,12 @@
       {
         "column_name": "document_count",
         "column_type": "BIGINT",
-        "description": "Number of documents posted by the agency."
+        "description": "Number of documents posted by the agency, less postings Regulations.gov removed (`documents.publisher_status`)."
       },
       {
         "column_name": "comment_count",
         "column_type": "BIGINT",
-        "description": "Posted comments on the agency's dockets, summed from `comments_index`. These are posted comment records, not comments received: an agency posts one record for a mass-mail campaign that can stand for thousands of submissions (EPA-HQ-OW-2022-0114 has 1,629 posted records for about 122,200 comments EPA received). To estimate submissions received, sum `comments.duplicate_comments` as its description says; this table does not carry it."
+        "description": "Posted comments on the agency's dockets, summed from `comments_index`, less those on a posting Regulations.gov removed. These are posted comment records, not comments received: an agency posts one record for a mass-mail campaign that can stand for thousands of submissions (EPA-HQ-OW-2022-0114 has 1,629 posted records for about 122,200 comments EPA received). To estimate submissions received, sum `comments.duplicate_comments` as its description says; this table does not carry it."
       }
     ],
     "grain": null,
@@ -589,7 +643,7 @@
         "grain": [
           "agency_code"
         ],
-        "population": "All held rows with non-NULL agency; zero-valued agency cells may originate in another input.",
+        "population": "Held rows with non-NULL agency, less postings Regulations.gov removed; zero-valued agency cells may originate in another input.",
         "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
         "command": "uv run --frozen python scripts/check_table_joins.py --aggregate agency-document",
         "status": "available_check_not_a_live_measurement"
@@ -600,7 +654,7 @@
         "grain": [
           "agency_code"
         ],
-        "population": "All held rows with non-NULL agency; zero-valued agency cells may originate in another input.",
+        "population": "Indexed comments with non-NULL agency, less those naming a posting Regulations.gov removed, matched over every comment row; zero-valued agency cells may originate in another input.",
         "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
         "command": "uv run --frozen python scripts/check_table_joins.py --aggregate agency-comment",
         "status": "available_check_not_a_live_measurement"
@@ -611,7 +665,7 @@
     "table": "agency_monthly_volume",
     "label": "Agency monthly volume",
     "summary": "Per-agency monthly document volume, broken out by document type — one row per (agency, year, month, document_type). Feeds activity sparklines and profile activity panels. Built by `build_agency_monthly_volume` from document `posted_date`; missing, uncastable and year-zero dates are omitted.",
-    "coverage": "Derived from `documents`: document counts by agency, month and document type. A document whose posted date is NULL or the publisher's year zero is left out, and the file records each omitted date; other literal dates stay as the publisher wrote them, including documents dated before 1990 or in the future. Source values are unchanged. Receipts: fork-execution-2026-09-21/document-derivatives/MANUAL-AUDIT.md and publication-agency-monthly-volume.json.",
+    "coverage": "Derived from `documents`: document counts by agency, month and document type. A document whose posted date is NULL or the publisher's year zero is left out, and so is a posting Regulations.gov removed (`documents.publisher_status`); the file records how many of each it left out. Other literal dates stay as the publisher wrote them, including documents dated before 1990 or in the future. Source values are unchanged. Receipts: fork-execution-2026-09-21/document-derivatives/MANUAL-AUDIT.md and publication-agency-monthly-volume.json.",
     "kind": "derived",
     "measured_on": "2026-09-21",
     "data_quality": null,
@@ -659,7 +713,7 @@
           "month",
           "document_type"
         ],
-        "population": "Usable posted dates only; NULL, unparseable and year-zero dates omitted; NULL agency/type retained.",
+        "population": "Usable posted dates only; NULL, unparseable and year-zero dates and removed postings omitted; NULL agency/type retained.",
         "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; fixed comment URLs require unchanged ETags around the read. Each check selects its own pins.",
         "command": "uv run --frozen python scripts/check_table_joins.py --aggregate monthly-documents",
         "status": "available_check_not_a_live_measurement"
@@ -777,7 +831,7 @@
   "discovery_signals": {
     "table": "discovery_signals",
     "label": "Agency activity spikes",
-    "summary": "Per-agency document-output spike signal that powers the feed's discovery panel — agencies whose document count in the trailing 30 days is at least 2× their prior-year monthly mean, requiring ≥24 documents in the prior year to suppress tiny-denominator noise. Recomputed relative to the run date, so rows turn over on every rebuild; it is a current-state signal, not a time series. Built by `build_discovery_signals` from `documents`.",
+    "summary": "Per-agency document-output spike signal that powers the feed's discovery panel — agencies whose document count in the trailing 30 days is at least 2× their prior-year monthly mean, requiring ≥24 documents in the prior year to suppress tiny-denominator noise. Recomputed relative to the run date, so rows turn over on every rebuild; it is a current-state signal, not a time series. Built by `build_discovery_signals` from `documents`, less postings Regulations.gov removed (`documents.publisher_status`).",
     "coverage": "Not a range. A dated snapshot recomputed from `documents` at each build. Its date is the calculation instant the file's metadata records (`spicy_regs.discovery_signals.as_of`, beside the date policy and the `documents` digest it read; `parquet_kv_metadata` on the generation's file returns them), not `measured_on`, which dates the audit of this note. Future dates are excluded from recent activity. This is not a historical series or a complete measure of agency activity. Receipt: fork-execution-2026-09-21/discovery-utc/MANUAL-AUDIT.md.",
     "kind": "not_a_range",
     "measured_on": "2026-09-21",
