@@ -74,8 +74,11 @@ against the running service before declaring delivery complete; see the
 For a new consumer release, build from the repository root with
 `docker build --platform linux/amd64 --provenance=false -f deploy/cloudflare/Dockerfile -t spicy-regs-fec:RELEASE_TAG .`,
 then push that tag using the project-local `wrangler containers push` from this
-directory. Measure `runtime_consumer` inside the pushed image and construct the
-release receipt with the registry manifest digest. Publish and verify the receipt
+directory. The build installs every runtime package at `uv.lock`'s version and
+fails if any differs; rerun that check inside the pushed image
+(`python /app/lock/lock_pins.py check /app/lock/uv.lock` exits 0 or names each
+package that differs) before you measure `runtime_consumer` there and construct
+the release receipt with the registry manifest digest. Publish and verify the receipt
 before updating all three configuration values: `containers[].image`,
 `SPICY_REGS_CONSUMER_IMAGE_DIGEST` and `SPICY_REGS_FEC_RELEASE_SHA256`.
 Deploying the existing configuration reuses its image even when local Python

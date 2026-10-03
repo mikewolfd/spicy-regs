@@ -17,23 +17,30 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# Runtime deps only. duckdb and mcp are pinned to uv.lock's versions: the
-# server's HTTP retry schedule was measured on duckdb 1.5.5, and mcp 2.x changes
-# how tool errors reach clients between minor releases. uvicorn serves the ASGI
-# app. loguru: the publication index reader the server imports to resolve fork
-# generations logs through it; without it every tool call failed (found by the
-# 2026-09-25 local smoke before the first fork deploy). httpx: that reader's
-# client, which mcp 2 (on httpx2) no longer brings.
-# pytz: DuckDB imports it to return a TIMESTAMPTZ value; without it query_sql
-# failed on any such column (found by the 2026-09-28 persona re-run).
-RUN pip install "mcp==2.2.0" "duckdb==1.5.5" "uvicorn[standard]>=0.31.1" "loguru>=0.7" "httpx>=0.28.1,<1" "pytz==2026.4"
+# Runtime deps only, each at uv.lock's version: pip resolves the roots below with
+# the lock as constraints, and lock_pins.py check fails the build if any installed
+# package differs from the lock or is not in it. Round 6 found the image running
+# 22 packages the tests never ran (pydantic 2.13, starlette 1.7 against the
+# lock's 2.12.5 and 0.52.1), because only mcp and duckdb were pinned; the server's
+# argument errors and its HTTP retry schedule come from these packages.
+# uvicorn serves the ASGI app; its [standard] extras (uvloop, httptools, websockets,
+# watchfiles) are not in the lock, so the image runs uvicorn's default asyncio
+# loop and h11, as the tests do. loguru: the publication index reader the server
+# imports to resolve fork generations logs through it (found by the 2026-09-25
+# local smoke). httpx: that reader's client, which mcp 2 (on httpx2) no longer
+# brings. pytz: DuckDB imports it to return a TIMESTAMPTZ value (found by the
+# 2026-09-28 persona re-run). The lock and the check stay in the image, so the
+# binding step can rerun the check inside the pushed image.
+COPY uv.lock deploy/cloudflare/lock_pins.py /app/lock/
+RUN python /app/lock/lock_pins.py constraints /app/lock/uv.lock > /app/lock/constraints.txt \
+    && pip install -c /app/lock/constraints.txt mcp duckdb uvicorn loguru httpx pytz && pip check
 
 # Install the package code without its declared (ETL) dependencies. mcp_server
 # imports only the local _icon module plus mcp/duckdb, so this is sufficient and
-# keeps boto3/polars/etc out of the image.
+# keeps boto3/polars/etc out of the image (so pip check runs before it).
 COPY pyproject.toml README.md ./
 COPY src ./src
-RUN pip install --no-deps .
+RUN pip install --no-deps . && python /app/lock/lock_pins.py check /app/lock/uv.lock
 # Fail the build, not the first request, when a module the server imports at
 # request time needs a package this image does not install.
 RUN python -c "import spicy_regs.mcp_server, spicy_regs.sources.publication, spicy_regs.local_data; import spicy_regs.relationship_views, spicy_regs.citation_resolution, spicy_regs.acquisition_queue; from spicy_regs.vocabulary_mapping import lookup_agency; assert lookup_agency('regulations.gov:agency', 'OPM')['status'] == 'reviewed_mapping'; import duckdb; duckdb.sql(\"SELECT TIMESTAMPTZ '2026-01-01 00:00:00+00'\").fetchall()"
