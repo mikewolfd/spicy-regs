@@ -22,7 +22,12 @@ to the Python server in Cloudflare Containers.
 **The tool docstrings are not documentation — do not delete them.**
 MCPServer reflects over `fn.__doc__` to build the tool descriptions sent to every
 client during `list_tools`; the `tool` wrapper in `_register_tools` copies each
-docstring and signature with `functools.wraps`. `describe_table`'s docstring is how a client learns
+signature with `functools.wraps` and registers the docstring through
+`inspect.cleandoc` as the description. MCPServer sends `__doc__` as written, and
+Claude Code cuts a description at 2,048 characters (`CLAUDE_CODE_MAX_MCP_DESCRIPTION_LENGTH`)
+with "… [truncated]": round 4 found `query_sql`'s 2,132 characters, 225 of them
+indentation, cut mid-word for three personas. `tests/test_chaos_r4_server.py`
+holds every registered description to 2,000 characters with no indented line. `describe_table`'s docstring is how a client learns
 which tables are valid; `query_sql`'s is how it learns the available views.
 Strip them and the server still runs, but every client goes blind. Verify with
 `asyncio.run(build_server().list_tools())`.
@@ -32,6 +37,9 @@ Strip them and the server still runs, but every client goes blind. Verify with
 
 ## Connection setup (`_build_connection`, `_get_connection`, `_apply_security_settings`)
 
+- A local directory (`SPICY_REGS_DATA_DIR`) replaces R2 for the whole
+  connection and never falls back to remote files; every reply's `source` names
+  which one it read.
 - `SET home_directory` **must precede** `INSTALL`/`LOAD`. DuckDB writes
   extensions under `<home_directory>/.duckdb`, and the default home is read-only
   or undefined on serverless hosts — hence `_resolve_home_directory` defaulting
@@ -81,7 +89,8 @@ into the next one.
 
 - **Polled, not rebuilt.** Past `SPICY_REGS_CONNECTION_TTL` (300 s), the first
   caller re-reads the publication index and the rulemaking pointer and manifest
-  (3 GETs, 0.45 s) and compares them with the pins the connection holds
+  (3 GETs, 0.45 s), plus the comments export receipt (one GET of about 45 KB),
+  and compares them with the pins the connection holds
   (`_pinned_publication`). The views name immutable URLs, so unchanged pointers
   keep the connection; an idle TTL went from 464 requests to 3.
 - **Moved pointers rebuild** through `_build_connection(publication)`, which
@@ -97,8 +106,11 @@ into the next one.
   signatures are re-read at build.
 - **Legacy comments files stay mutable.** Their views read the object current at
   each statement (the HEAD revalidates DuckDB's file cache), but the bound
-  schema lasts until the pointers move. Pinning a comments generation, or adding
-  `comments-publication.json` to the poll, would close that gap.
+  schema lasts until the pointers move. The build reads `comments-publication.json`
+  and HEADs the two files that back views (`COMMENTS_EXPORT_TABLES`), not the 182
+  the receipt lists; a moved receipt rebuilds the connection at the next poll.
+  An invalid receipt reads as none (logged): it only labels two files' rows, so
+  it does not refuse the connection. A failed read refuses it, as the index does.
 
 ## Concurrency: worker threads and a limiter
 
@@ -205,8 +217,9 @@ were removed rather than retaining an unreachable, unrestricted fallback.
 The 2026-09-27 comparison matched the catalog table UUID, snapshot and schema to
 the mirror receipt, then matched the public object ETags and sizes to that
 receipt. This supports current publication agreement, not a new source-content
-audit. Legacy comments files still have mutable URLs; the MCP does not yet
-expose their publication receipt or pin an immutable comments generation.
+audit. Legacy comments files still have mutable URLs and no immutable comments
+generation is pinned; replies state the export receipt's identity and rows
+beside the `legacy_unversioned` status (see Response size).
 
 A table in `TABLES` whose Parquet is not published yet is skipped with a warning.
 A missing managed generation member still refuses the connection.
@@ -258,6 +271,21 @@ bundles from `spicy_regs.table_joins` and `check` refuses when stale. Each join
 carries its kind (`complete`, `scope`, `design`, `empty`), the reason for a
 partial one, and its measured baseline. `scripts/check_table_joins.py` holds the
 live tables to each floor nightly in `check-rollup-freshness.yml`.
+
+## Citation lookup kinds (`resolve_document_citations`)
+
+The tool accepts exactly the keys of `citation_resolution.SOURCE_TABLES`: the
+kinds a writer puts in `document_citations.document_kind` (the print-citations
+rollup's `govinfo_package` and `budget_volume`, and every held-field kind in
+`citation_sources.TEXT_SOURCES`). The schema enumerates them, the server
+compares case-insensitively, and any other kind is a tool error naming the
+supported kinds and the closest one. Before round 4 an unknown kind ran its
+SELECT and answered `complete_held_selection` with no findings, which read as
+"this document cites nothing"; three aliases (`house_activity_report(s)`,
+`budget_volumes`) that no writer emits did the same with `source_read: read`.
+The enum is a schema hint, not pydantic validation, so a differently cased
+kind still reaches the server's own refusal. Raw SQL over `document_citations`
+is not checked.
 
 ## Ledger qualification (`_qualification`)
 
@@ -355,6 +383,19 @@ file its reader cannot page, so two of five personas never read a row.
   disposition and task ids. **A client that read `joins[].measurement` now
   needs `detail=true`**, which returns the whole record as before plus `detail`.
   Nothing else is truncated: a wide schema is still described whole.
+- **A qualified FEC view's default description summarizes its release record
+  (round 4, 2026-10-03).** The round-4 personas found
+  `fec_receipts_net_receipts_decision` at 21,054 characters, 11,443 of them its
+  dependency's whole storage descriptor (123 columns, 26 member files) and 1,703
+  its 23 acceptance receipts. `fec_release.release_summary` keeps every pin and
+  reason, each dependency's family and generation, and the receipts' count, and
+  `detail.omitted` names `release_compatibility.dependencies[].descriptor` and
+  `.acceptance_receipts` under `publication` or `relationship`. `detail=true`
+  returns the stored record. Query replies use the same function narrowed to
+  `QUERY_RELEASE_FIELDS`. This revises the 2026-10-02 "full release verification
+  belongs in an explicit table description": the explicit description is now
+  `detail=true`. Measured on the live 72 views: a median of 15,471 to 8,301
+  characters (maximum 25,187 to 11,235; all 72, 1,130,695 to 609,034).
 - **`query_sql(max_cell_chars=N)`** cuts every text, list or struct cell longer
   than N characters to its first N (a list or struct as its compact JSON text)
   and lists each cut cell in `truncated_cells` as `{row, column, chars}` with the
@@ -366,11 +407,33 @@ file its reader cannot page, so two of five personas never read a row.
   `SELECT *` on `committee_meetings` at 204,218 bytes, 99.6% of it rows, and a
   43-row GAO result at 81,801 bytes that the client spilled to a file it could
   not page.
+- **Each reply is sent once as data and once as its compact JSON text.** MCPServer's
+  default text block is the structured result indented (`indent=2`), so the wire
+  carried each reply twice, the second copy 1.1 to 1.7 times the first. Claude
+  Code reads `structuredContent` (its spill files are compact JSON), and the MCP
+  specification asks only for the serialized JSON in a text block, so `tool`
+  returns a `CallToolResult` whose text is the compact JSON: `list_sources` went
+  from 86,603 to 75,403 bytes and a FEC view's description from 59,148 to
+  17,168 with the release summary above.
 - **`list_sources` states each table's pinned `rows`** (the index descriptor's or
   the snapshot manifest's count; null for a legacy table no pointer pins) so a
   declared table whose generation publishes no rows is visible at discovery
   without a describe call. It is the pinned generation's count, not a freshness
   claim: a later data run lands after the pin.
+- **A comments export states its receipt's rows, labelled (round 4).** `comments`
+  and `comments_index` are served from fixed URLs no pointer pins, so their
+  `rows` were null while `comments-publication.json` stated them. A file whose
+  ETag and size matched the receipt at build carries the receipt's `rows` with
+  `rows_basis: comments_export_receipt`; a moved file carries `rows: null` with
+  `rows_basis: export_receipt_does_not_match_object`. `describe_table` and
+  `query_sql` pins add `export_receipt` (receipt digest, file digest, ETag,
+  bytes, catalog snapshot). The status stays `legacy_unversioned`: the facts
+  join the reply in `_reply_pins` only, never `_publication_status`, whose pins
+  the comment views embed in `source_publication_json`. A matching ETag proves
+  the object is the one the receipt names, not that the receipt's count is
+  right; that check belongs to the mirror export, before it writes the receipt.
+  The match is measured at build: until the next poll sees a new receipt, a
+  statement can read a newer file than the labelled count describes.
 
 ## Relationship-view column meanings (`view_columns`, `relationship_views.lineage`)
 

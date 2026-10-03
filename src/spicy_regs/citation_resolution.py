@@ -18,9 +18,11 @@ from spicy_regs.identifiers import normalize_rin
 from spicy_regs.citation_sources import TEXT_SOURCES
 
 RESOLUTION_RULE = "selected-target-lookup/1"
-SOURCE_TABLES = {"govinfo_package": "house_activity_reports", "house_activity_report": "house_activity_reports", "house_activity_reports": "house_activity_reports",
-                 "budget_volume": "budget_volumes", "budget_volumes": "budget_volumes"}
-SOURCE_TABLES.update({kind: source.table for kind, source in TEXT_SOURCES.items()})
+#: Each ``document_citations.document_kind`` a writer emits, to the table holding its documents: the print-citations
+#: rollup's two GovInfo families (spicy-docs ``GOVINFO_PACKAGE``, ``BUDGET_VOLUME``; literal here because the server
+#: does not require spicy-docs) and every held-field kind. Its keys are the kinds the citation tool accepts.
+SOURCE_TABLES = {"govinfo_package": "house_activity_reports", "budget_volume": "budget_volumes",
+                 **{kind: source.table for kind, source in TEXT_SOURCES.items()}}
 
 
 @dataclass(frozen=True)

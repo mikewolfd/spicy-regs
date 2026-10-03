@@ -138,7 +138,7 @@ def test_value_only_keeps_registry_limits_and_exact_release_scope(financial_serv
     assert "Compare" in pin["details"] and "pins" in pin["details"]
     assert set(release) == {"status", "receipt_sha256", "sql_sha256", "evidence_generations", "population", "as_of"}
     assert len(json.dumps(reply["publication"], separators=(",", ":")).encode()) < 4096
-    description = _tool_data(mcp, "describe_table", {"table": NAME})
+    description = _tool_data(mcp, "describe_table", {"table": NAME, "detail": True})
     assert description["publication"]["release_compatibility"] == relationships[NAME]["release_compatibility"]
     assert len(json.dumps(description["publication"]).encode()) > 4096
     # Response edits and a later description cannot mutate the admission/provenance pins.

@@ -51,7 +51,7 @@ def test_selected_description_carries_evidence_once_without_changing_pinned_stat
         publication = deepcopy(server._publication_status(con))
         captured_release = deepcopy(server._pinned_record(con, "_spicy_fec_release"))
         expected = relationships[name]
-        description = _tool_data(mcp, "describe_table", {"table": name})
+        description = _tool_data(mcp, "describe_table", {"table": name, "detail": True})
         assert description["available"] is available
         # Per-column meanings and lineage feed the column list, not the metadata block.
         assert description["metadata"] == {
@@ -149,7 +149,7 @@ def test_query_size_is_independent_of_inventory_and_does_not_mutate_pins(tmp_pat
         # Inject expanded captured audit detail, not new data/admission: only presentation is under test.
         after = _tool_data(mcp, "query_sql", {"sql": sql})
         assert after == before
-        full = _tool_data(mcp, "describe_table", {"table": name})
+        full = _tool_data(mcp, "describe_table", {"table": name, "detail": True})
         assert full["publication"]["release_compatibility"] == release
         pins = server._reply_pins(con, server._publication_status(con)["publication"], [name])
         saved = deepcopy(pins)

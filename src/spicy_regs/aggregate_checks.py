@@ -10,7 +10,6 @@ from threading import Timer
 from time import monotonic
 
 import duckdb
-import httpx
 
 from spicy_regs.sources import publication
 
@@ -261,15 +260,12 @@ def check_public(con, base: str, names: list[str], *, timeout_seconds: float = 9
         if table in {BY_NAME[name].output for name in names} and family not in roots:
             _, roots[family] = publication.load_family_root(base, entry)
     missing = tables - pins.keys()
-    if missing & {"comments", "comments_index"}:
+    exports = sorted(missing & set(publication.COMMENTS_EXPORT_TABLES))
+    if exports:
         comments = publication.load_comments_publication(base)
         if comments is not None:
             roots["comments-mirror"] = comments["receipt"]
-            for table in missing & {"comments", "comments_index"}:
-                record = comments["receipt"]["files"][table + ".parquet"]
-                pins[table] = {**record, "sha256": "sha256:" + record["sha256"], "kind": "comments-mirror",
-                               "family": "comments-mirror", "receipt_sha256": comments["receipt_sha256"],
-                               "source": comments["receipt"]["source"], "urls": [base.rstrip("/") + "/" + table + ".parquet"]}
+            pins.update(publication.comments_export_pins(base, comments, exports))
     missing = tables - pins.keys()
     if missing:
         snapshot = publication.load_rulemaking_snapshot(base)
@@ -286,11 +282,11 @@ def check_public(con, base: str, names: list[str], *, timeout_seconds: float = 9
         check = BY_NAME[name]
         selected = {table: pins.get(table) for table in (check.output, *check.inputs)}
         root = roots.get((pins.get(check.output) or {}).get("family"), {})
-        versions_match = _mutable_versions_match(selected)
+        versions_match = publication.mutable_versions_match(selected)
         result = measure(con, check, pins=selected, root=root, timeout_seconds=timeout_seconds,
                          read_status="full_selected_inputs" if versions_match else "moved_public_version",
                          bind_pinned_views=True)
-        if versions_match and not _mutable_versions_match(selected):
+        if versions_match and not publication.mutable_versions_match(selected):
             result.update(status="NOT_MEASURED", read_status="moved_public_version",
                           reason="A fixed public comment file changed during the measurement; rerun from its new receipt.")
             for key in ("expected_cells", "observed_cells", "expected_total", "observed_total", "mismatched_cells"):
@@ -306,16 +302,3 @@ def check_public(con, base: str, names: list[str], *, timeout_seconds: float = 9
         "requested_checks": names,
         "remaining_checks": names[len(results) :],
     }
-
-
-def _mutable_versions_match(pins: dict) -> bool:
-    """Fixed comment URLs are usable only while their published object versions match the receipt."""
-    for pin in pins.values():
-        if pin is None or pin.get("kind") != "comments-mirror":
-            continue
-        response = httpx.head(pin["urls"][0], follow_redirects=True, timeout=30,
-                              headers={"Cache-Control": "no-cache"})
-        response.raise_for_status()
-        if response.headers.get("etag") != pin["etag"] or int(response.headers.get("content-length", -1)) != pin["bytes"]:
-            return False
-    return True

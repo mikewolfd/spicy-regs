@@ -49,7 +49,7 @@ def test_compatible_mcp_responses_include_exact_receipt_dependency_and_consumer_
         discovery = _tool_data(mcp, "list_sources", {})
         name = specs[0].view.name
         assert discovery["fec_release"]["status_counts"] == {"compatible": len(specs)}
-        described = _tool_data(mcp, "describe_table", {"table": name})
+        described = _tool_data(mcp, "describe_table", {"table": name, "detail": True})
         assert described["available"]
         result = _tool_data(mcp, "query_sql", {"sql": f"SELECT * FROM {name}"})
         attestation = result["publication"][name]["release_compatibility"]
@@ -98,7 +98,7 @@ def test_discovery_fits_sse_limit_with_many_views_and_partitioned_dependencies(t
             assert len(json.dumps(summary).encode()) < 2048
             names = {name for group in listed["structuredContent"]["relationship_views"] for name in group["views"]}
             assert names.issuperset(s.view.name for s in specs)
-            described = call(client, "describe_table", {"table": specs[0].view.name})["structuredContent"]
+            described = call(client, "describe_table", {"table": specs[0].view.name, "detail": True})["structuredContent"]
             assert described["publication"]["release_compatibility"]["dependencies"] == view_receipt["dependencies"]
 
 

@@ -11,6 +11,7 @@ from __future__ import annotations
 import base64
 import difflib
 import functools
+import inspect
 import json
 import logging
 import os
@@ -32,16 +33,19 @@ from uuid import UUID
 import anyio
 import anyio.to_thread
 import duckdb
+import pydantic_core
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
-from mcp.types import Icon
+from mcp.types import CallToolResult, Icon, TextContent
 from pydantic import Field
 from starlette.requests import Request
 from starlette.responses import Response
 
 from spicy_regs._icon import ICON_DATA_URI
+from spicy_regs.citation_resolution import SOURCE_TABLES
 from spicy_regs.duckdb_settings import INTERACTIVE_HTTP_RETRIES, load_public_http, memory_limit
+from spicy_regs.fec_release import QUERY_RELEASE_FIELDS, RELEASE_INVENTORIES, release_summary
 from spicy_regs.public_url import resolve_r2_base_url
 from spicy_regs.relationship_views.fec_query_views import fec_query_views
 
@@ -222,6 +226,8 @@ TABLES = (
     "court_opinion_pdf_extractions",
 )
 STATEMENT_TIMEOUT = os.environ.get("SPICY_REGS_STATEMENT_TIMEOUT", "790s")
+#: The kinds resolve_document_citations accepts and its schema enumerates: the kinds a writer emits.
+DOCUMENT_KINDS = tuple(sorted(SOURCE_TABLES))
 
 logger = logging.getLogger(__name__)
 
@@ -491,23 +497,53 @@ def _apply_security_settings(con: duckdb.DuckDBPyConnection, allowed_paths: list
 
 
 class _Publication(NamedTuple):
-    """The published pointers a remote connection pins: the publication index and the rulemaking snapshot."""
+    """The published pointers a remote connection pins: the publication index, the rulemaking snapshot and the
+    comments export receipt, which states the rows of two fixed-URL files without making them immutable."""
 
     index: dict
     rulemaking: dict | None
+    comments: dict | None = None
 
 
 def _read_publication() -> _Publication:
-    """The live pointers, read once each; the rulemaking snapshot is ``None`` while none is published."""
-    from spicy_regs.sources.publication import load_index, load_rulemaking_snapshot
+    """The live pointers, read once each; the rulemaking snapshot and comments receipt are ``None`` while unpublished.
 
-    return _Publication(load_index(R2_BASE_URL), load_rulemaking_snapshot(R2_BASE_URL))
+    An invalid comments receipt reads as none: it only labels two legacy files' rows, and refusing the
+    connection over it would take every table down. A failed read propagates, as the other pointers' do.
+    """
+    from spicy_regs.sources.publication import (
+        PublicationError,
+        load_comments_publication,
+        load_index,
+        load_rulemaking_snapshot,
+    )
+
+    try:
+        comments = load_comments_publication(R2_BASE_URL)
+    except PublicationError:
+        logger.warning("comments export receipt is invalid; its tables state no rows", exc_info=True)
+        comments = None
+    return _Publication(load_index(R2_BASE_URL), load_rulemaking_snapshot(R2_BASE_URL), comments)
 
 
 def _pinned_publication(con: duckdb.DuckDBPyConnection) -> _Publication:
     """The pointers ``con`` pinned when it was built, as :func:`_read_publication` returned them."""
     cursor = con.cursor()
-    return _Publication(_connection_index(cursor), _pinned_record(cursor, "_spicy_rulemaking"))
+    export = _pinned_record(cursor, "_spicy_comments_export")
+    return _Publication(
+        _connection_index(cursor), _pinned_record(cursor, "_spicy_rulemaking"), export["receipt"] if export else None
+    )
+
+
+def _comments_exports(comments: dict, served: list[str]) -> dict[str, dict]:
+    """The receipt's pin for each served export table, with whether its object still matches the receipt.
+
+    One HEAD per served file (``COMMENTS_EXPORT_TABLES``), not per file the receipt lists: only these back views.
+    """
+    from spicy_regs.sources.publication import comments_export_pins, mutable_versions_match
+
+    pins = comments_export_pins(R2_BASE_URL, comments, served)
+    return {name: {**pin, "matches_object": mutable_versions_match({name: pin})} for name, pin in pins.items()}
 
 
 def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBPyConnection:
@@ -520,7 +556,7 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
     cannot be read, or a legacy table that fails other than as absent (HTTP
     404), raises RuntimeError.
     """
-    from spicy_regs.sources.publication import parquet_scan, table_descriptor, table_members
+    from spicy_regs.sources.publication import COMMENTS_EXPORT_TABLES, parquet_scan, table_descriptor, table_members
 
     if DATA_DIR is None and _resolve_catalog_config() is not None:
         raise RuntimeError(
@@ -529,6 +565,7 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
         )
     local = None
     signatures = {}
+    comments = None
     if DATA_DIR is not None:
         from spicy_regs.local_data import local_selection, verify_local_members
 
@@ -536,7 +573,7 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
         signatures = verify_local_members(local)
         publication_index, rulemaking = local.publication, None
     else:
-        publication_index, rulemaking = publication or _read_publication()
+        publication_index, rulemaking, comments = publication or _read_publication()
     con = duckdb.connect()
     con.execute("SET allow_persistent_secrets=false")
     con.execute(f"SET home_directory='{HOME_DIRECTORY.replace(chr(39), chr(39) * 2)}'")
@@ -570,6 +607,7 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
     ]
     snapshot_names = [key.removesuffix(".parquet") for key in (rulemaking or {"tables": {}})["tables"]]
     selected_names = list(local.files) if local is not None and local.is_download else []
+    exports: list[str] = []
     for name in dict.fromkeys((*TABLES, *managed_names, *snapshot_names, *selected_names)):
         published = table_descriptor(publication_index, f"{name}.parquet")
         paths = [member.path for member in table_members(publication_index, f"{name}.parquet")]
@@ -590,6 +628,8 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
                     con.close()
                     raise RuntimeError(f"Published schema differs from admitted generation: {name}")
             allowed_paths.extend(urls)
+            if local is None and published is None and pinned is None and name in COMMENTS_EXPORT_TABLES:
+                exports.append(name)
         except duckdb.Error as exc:
             required = published is not None or pinned is not None or (local is not None and local.is_download)
             # A remote legacy table is skipped only when it is absent; a throttled or failing read refuses the
@@ -600,6 +640,14 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
                 kind = "Published generation member" if required else "Legacy table"
                 raise RuntimeError(f"{kind} unavailable: {name}") from exc
             logger.warning("table %s not available at %s; skipping view: %s", name, urls, exc)
+    if comments is not None:
+        try:
+            matched = _comments_exports(comments, exports)
+        except Exception:
+            con.close()
+            raise
+        con.execute("CREATE TABLE _spicy_comments_export (snapshot VARCHAR)")
+        con.execute("INSERT INTO _spicy_comments_export VALUES (?)", [json.dumps({"receipt": comments, "tables": matched})])
     _install_relationship_views(con)
     _apply_security_settings(con, allowed_paths)
     return con
@@ -777,18 +825,41 @@ def _pinned_rows(index: dict, rulemaking: dict, name: str) -> int | None:
     return pinned["rows"] if pinned is not None else None
 
 
+def _export_rows(cursor: duckdb.DuckDBPyConnection) -> dict[str, dict]:
+    """``rows``, ``rows_basis`` and ``export_receipt`` for each fixed-URL comments export this connection matched.
+
+    The receipt's count stands only while the object matched it at build, and is labelled as the receipt's: the
+    URL is mutable, so a later statement can read a newer export. A moved object states no rows.
+    """
+    record = _pinned_record(cursor, "_spicy_comments_export")
+    exports = {}
+    for name, pin in (record["tables"] if record is not None else {}).items():
+        matches = pin["matches_object"]
+        exports[name] = {
+            "rows": pin["rows"] if matches else None,
+            "rows_basis": "comments_export_receipt" if matches else "export_receipt_does_not_match_object",
+            "export_receipt": {
+                "receipt_sha256": pin["receipt_sha256"], "sha256": pin["sha256"], "etag": pin["etag"],
+                "bytes": pin["bytes"], "catalog_snapshot_id": pin["source"]["snapshot_id"],
+            },
+        }
+    return exports
+
+
 def _reply_pins(cursor: duckdb.DuckDBPyConnection, publication: dict[str, dict], names: list[str]) -> dict[str, dict]:
     """Each named table's pin with the facts a reply states instead of prose that decays.
 
     ``rows`` is the pinned index's or snapshot manifest's count, a snapshot
-    table adds its manifest's ``run_id`` and ``asserted_at``, and ``coverage`` is
-    the dictionary's coverage kind. They join the pin only here: derived views
-    embed :func:`_publication_status` pins in provenance columns and candidate
-    identities, which these facts must not move.
+    table adds its manifest's ``run_id`` and ``asserted_at``, a comments export
+    adds its receipt's count with ``rows_basis`` (:func:`_export_rows`), and
+    ``coverage`` is the dictionary's coverage kind. They join the pin only here:
+    derived views embed :func:`_publication_status` pins in provenance columns
+    and candidate identities, which these facts must not move.
     """
     index, rulemaking, relationships = (
         _connection_index(cursor), _connection_rulemaking(cursor), _connection_relationships(cursor)
     )
+    exports = _export_rows(cursor)
     pins = {}
     for name in names:
         pin = dict(publication[name])
@@ -798,6 +869,8 @@ def _reply_pins(cursor: duckdb.DuckDBPyConnection, publication: dict[str, dict],
             manifest = rulemaking["manifest"]
             pin |= {"rows": rulemaking["tables"][f"{name}.parquet"]["rows"],
                     "run_id": manifest.get("run_id"), "asserted_at": manifest.get("asserted_at")}
+        elif name in exports:
+            pin |= exports[name]
         declared = _table_metadata().get(name) or relationships.get(name, {}).get("metadata", {})
         pins[name] = {**pin, "coverage": declared.get("kind")}
     return pins
@@ -814,12 +887,9 @@ def _query_reply_pins(pins: dict[str, dict], relationships: dict) -> dict[str, d
         if "release_compatibility" not in pin:
             result[name] = pin
             continue
-        release = pin["release_compatibility"]
         result[name] = deepcopy({
             **{key: pin[key] for key in ("status", "rule_version", "dependencies", "input_publications", "coverage")},
-            "release_compatibility": {key: release[key] for key in (
-                "status", "receipt_sha256", "sql_sha256", "evidence_generations", "population", "as_of",
-            )},
+            "release_compatibility": release_summary(pin["release_compatibility"], QUERY_RELEASE_FIELDS),
             "meaning": relationships[name]["metadata"]["summary"],
             "details": "Call describe_table for full release evidence. Compare receipt, SQL, input and evidence pins "
                        "after refresh; a later description may name a different release.",
@@ -960,6 +1030,9 @@ def _lineage_meanings(lineage: Mapping[str, Sequence[str]]) -> dict[str, str]:
 
 #: What ``describe_table`` leaves out unless asked with ``detail=true``: the measured records that
 #: made bill_versions' reply 24,600 bytes, repeated for every table of a ledger family (round 3, S3).
+#: A qualified FEC view also leaves out its release record's inventories (``RELEASE_INVENTORIES``): its
+#: dependency's whole storage descriptor and the acceptance receipts were 13,146 of 21,054 characters
+#: in fec_receipts_net_receipts_decision's reply (round 4, S4).
 DESCRIBE_DETAIL = ("joins[].measurement", "qualification.ledger_statements")
 
 
@@ -1128,6 +1201,28 @@ def _available_tables(cursor: duckdb.DuckDBPyConnection) -> list[str]:
     ]
 
 
+def _document_kind(requested: str) -> str:
+    """The supported kind ``requested`` names, compared case-insensitively; any other kind is refused.
+
+    The refusal names every supported kind and the closest one: the kinds whose
+    documents a named table holds (``house_activity_reports`` holds
+    ``govinfo_package``), else the nearest spelling.
+    """
+    kind = requested.lower()
+    if kind in SOURCE_TABLES:
+        return kind
+    closest = [name for name, table in SOURCE_TABLES.items() if table in (kind, kind + "s")]
+    closest = closest or difflib.get_close_matches(kind, DOCUMENT_KINDS, n=1)
+    hint = (
+        f" The closest supported kind is {closest[0]!r}." if len(closest) == 1
+        else f" The closest supported kinds are {', '.join(map(repr, closest))}." if closest else ""
+    )
+    raise ValueError(
+        f"Unsupported document_kind {requested!r}.{hint} Supported kinds: {', '.join(DOCUMENT_KINDS)}; "
+        "no other kind has held citation rows."
+    )
+
+
 def _register_tools(mcp: MCPServer) -> None:
     limiter = anyio.CapacityLimiter(TOOL_CONCURRENCY)
 
@@ -1137,16 +1232,24 @@ def _register_tools(mcp: MCPServer) -> None:
         A failure reaches the caller with its text. MCPServer shows only a
         ToolError's message, and DuckDB's errors and the read-only refusals are
         what a caller needs to correct a query.
+
+        The description is the docstring without its indentation: MCPServer sends
+        ``__doc__`` as written, and clients cap descriptions (Claude Code at 2,048
+        characters). The reply's text block is the compact JSON of its structured
+        content; the SDK's default text is the same object indented, sent twice.
         """
 
         @functools.wraps(fn)
-        async def call(**arguments: Any) -> dict[str, Any]:
+        async def call(**arguments: Any) -> CallToolResult:
             try:
-                return await anyio.to_thread.run_sync(functools.partial(fn, **arguments), limiter=limiter)
+                result = await anyio.to_thread.run_sync(functools.partial(fn, **arguments), limiter=limiter)
             except Exception as exc:
                 raise ToolError(str(exc)) from exc
+            structured = pydantic_core.to_jsonable_python(result, fallback=str)
+            text = pydantic_core.to_json(structured).decode()
+            return CallToolResult(content=[TextContent(type="text", text=text)], structured_content=structured)
 
-        return mcp.tool()(call)
+        return mcp.tool(description=inspect.cleandoc(fn.__doc__ or ""))(call)
 
     @tool
     def lookup_agency(
@@ -1179,6 +1282,11 @@ def _register_tools(mcp: MCPServer) -> None:
         managed or snapshot table (describe_table gives the pin): 0 means this
         generation publishes no rows; null means no pointer pins the table. A
         later data run lands after the pin, so rows is not a freshness claim.
+        A comments export at a fixed URL is not pinned: rows_basis
+        comments_export_receipt marks its export receipt's count, stated while
+        the file matched the receipt when this connection was built (a later
+        statement can read a newer export); export_receipt_does_not_match_object
+        means the file had moved, and rows is null.
         A listed table loaded in this connection; that is not a data or
         freshness audit. Call describe_table before querying a table: it gives
         columns, coverage caveats, joins, the live data version and the output
@@ -1193,17 +1301,24 @@ def _register_tools(mcp: MCPServer) -> None:
             available = _available_tables(cursor)
         metadata = _table_metadata()
         relationships = _connection_relationships(cursor)
-        index, rulemaking = _connection_index(cursor), _connection_rulemaking(cursor)
+        index, rulemaking, exports = _connection_index(cursor), _connection_rulemaking(cursor), _export_rows(cursor)
         # A relationship family's occurrence, pair and field-state views share one summary; list it once.
         views: dict[str, list[str]] = {}
         for name, entry in relationships.items():
             if name in available:
                 views.setdefault(entry["metadata"]["summary"], []).append(name)
+
+        def rows(name: str) -> dict[str, Any]:
+            export = exports.get(name)
+            if export is None:
+                return {"rows": _pinned_rows(index, rulemaking, name)}
+            return {"rows": export["rows"], "rows_basis": export["rows_basis"]}
+
         return {
             **_source_details(cursor),
             "tables": [
                 {"table": name, "label": metadata.get(name, {}).get("label"), "coverage": metadata.get(name, {}).get("kind"),
-                 "rows": _pinned_rows(index, rulemaking, name)}
+                 **rows(name)}
                 for name in available if name not in relationships
             ],
             "relationship_views": [{"views": names, "summary": summary} for summary, names in views.items()],
@@ -1233,8 +1348,10 @@ def _register_tools(mcp: MCPServer) -> None:
         source table's column unchanged carries that column's dictionary
         meaning; a computed column carries its declared meaning, or null when
         it has none.
-        For a FEC view, full release_compatibility evidence appears once:
-        in publication when available, or relationship when unavailable.
+        For a FEC view, release_compatibility appears once: in publication
+        when available, or relationship when unavailable. detail=false keeps
+        its pins and reasons, gives each dependency's family and generation
+        without its storage descriptor, and counts the acceptance receipts.
         compatible means the captured data, interpretation and consumer match
         the selected release; it does not certify current/net money or completeness.
         not_in_ledger means this table is absent from the bundled output ledger,
@@ -1280,19 +1397,28 @@ def _register_tools(mcp: MCPServer) -> None:
             if available and declared
             else None
         )
+        relationship: dict[str, Any] = {
+            key: value for key, value in relationships.get(table, {}).items()
+            if key != "metadata" and (key != "release_compatibility" or not available)
+        }
+        publication: dict[str, Any] = (
+            _reply_pins(cursor, status["publication"], [table])[table]
+            if table in status["publication"] else {"status": "unavailable"}
+        )
+        omitted = [] if detail else list(DESCRIBE_DETAIL)
+        # Full release evidence sits once: in publication for an available view, else in relationship.
+        held = publication if "release_compatibility" in publication else relationship
+        if not detail and "release_compatibility" in held:
+            held["release_compatibility"] = release_summary(held["release_compatibility"])
+            where = "publication" if held is publication else "relationship"
+            omitted += [f"{where}.release_compatibility.{item}" for item in RELEASE_INVENTORIES]
         return {
             "table": table,
             **_source_details(cursor),
             "available": available,
-            "detail": {"full": detail, "omitted": [] if detail else list(DESCRIBE_DETAIL)},
-            **({"relationship": {
-                key: value for key, value in relationships[table].items()
-                if key != "metadata" and (key != "release_compatibility" or not available)
-            }} if table in relationships else {}),
-            "publication": (
-                _reply_pins(cursor, status["publication"], [table])[table]
-                if table in status["publication"] else {"status": "unavailable"}
-            ),
+            "detail": {"full": detail, "omitted": omitted},
+            **({"relationship": relationship} if table in relationships else {}),
+            "publication": publication,
             "qualification": scope if qualified is None else {**scope, **qualified[table]},
             "joins": _table_joins(table, measurements=detail),
             "metadata": {key: value for key, value in entry.items()
@@ -1314,33 +1440,29 @@ def _register_tools(mcp: MCPServer) -> None:
     ) -> dict[str, Any]:
         """Run read-only SQL against configured Spicy Regs tables, returning up to max_rows rows.
 
-        Only SELECT runs; DESCRIBE, SHOW, SUMMARIZE, VALUES and the
-        FROM-first shorthand are accepted as SELECT. Statements that write
-        (COPY TO, ATTACH, CREATE, INSERT, DROP, EXPORT, SET, ...) are refused.
-        EXPLAIN is refused because its ANALYZE form can execute writes.
-        The connection reads either R2 or an explicitly configured local directory.
-        Local mode never falls back to remote files. One view exists per
-        table listed by list_sources. Always include a LIMIT in exploratory
-        queries. truncated reports whether rows beyond max_rows were omitted
-        from what the statement returned; rows your own LIMIT excluded are not
-        counted, so to learn whether more exist, set LIMIT above max_rows or
-        run a COUNT. max_cell_chars, when set, cuts every text, list or struct
-        cell longer than that many characters to its first max_cell_chars
-        characters (a list or struct as compact JSON text) and lists each cut
-        cell in truncated_cells with its full length; nothing is cut when
-        unset. To page a long result, ORDER BY a key and use LIMIT n OFFSET m
-        in the SQL. SQL is DuckDB's dialect: `~` matches the whole string
-        (use regexp_matches for a substring match, lower() for case).
-        Selected columns must have unique names; alias shared names in joins.
-        sql echoes the statement this reply answers.
+        Only SELECT runs; DESCRIBE, SHOW, SUMMARIZE, VALUES and the FROM-first
+        shorthand are accepted as SELECT. Statements that write (COPY TO, ATTACH,
+        CREATE, INSERT, DROP, EXPORT, SET, ...) are refused. EXPLAIN is refused
+        because its ANALYZE form can execute writes. One view exists per table
+        listed by list_sources. Always include a LIMIT in exploratory queries.
+        truncated reports whether rows beyond max_rows were omitted from what the
+        statement returned; rows your own LIMIT excluded are not counted, so to
+        learn whether more exist, set LIMIT above max_rows or run a COUNT.
+        max_cell_chars, when set, cuts every text, list or struct cell longer than
+        that many characters to its first max_cell_chars characters (a list or
+        struct as compact JSON text) and lists each cut cell in truncated_cells
+        with its full length; nothing is cut when unset. To page a long result,
+        ORDER BY a key and use LIMIT n OFFSET m in the SQL. SQL is DuckDB's
+        dialect: `~` matches the whole string (use regexp_matches for a substring
+        match, lower() for case). Selected columns must have unique names; alias
+        shared names in joins. sql echoes the statement this reply answers.
         publication gives each table the query names: its live data version,
-        pinned row count and coverage kind (a window or sample is not the
-        source's full history). Qualified-view pins keep the registered meaning
-        and purpose limits even for SELECT value only. Release compatible is not
-        financial eligibility or current/net-money qualification.
-        Call describe_table for full release evidence. Compare receipt, SQL,
-        input and evidence pins after refresh; a later description may name a
-        different release. Query replies do not repeat storage/consumer inventories.
+        pinned row count and coverage kind (a window or sample is not the source's
+        full history). Qualified-view pins keep the registered meaning and purpose
+        limits even for SELECT value only. Release compatible is not financial
+        eligibility or current/net-money qualification. Call describe_table for
+        full release evidence. Compare receipt, SQL, input and evidence pins
+        after refresh; a later description may name a different release.
         """
         cursor = _get_connection().cursor()
         write_statement = _first_write_statement(cursor, sql)
@@ -1379,7 +1501,7 @@ def _register_tools(mcp: MCPServer) -> None:
 
     @tool
     def resolve_document_citations(
-        document_kind: str,
+        document_kind: Annotated[str, Field(json_schema_extra={"enum": list(DOCUMENT_KINDS)})],
         document_key: str,
         max_occurrences: Annotated[int, Field(ge=1, le=500)] = 100,
     ) -> dict[str, Any]:
@@ -1391,14 +1513,18 @@ def _register_tools(mcp: MCPServer) -> None:
         A capped response sets truncated; it does not establish whole-document coverage.
         acquisition_queue plans qualified missing targets for retained-evidence
         inspection. It performs no acquisition or publication.
-        Held-field kinds bill_section, report_section and lobbying_activity use
-        compact JSON-list keys in their source table's full key order; comment_inline
-        uses the literal comment_id. These scopes cover only the selected field.
+        document_kind is one of the enumerated kinds, compared case-insensitively;
+        any other kind is refused with the supported list. govinfo_package and
+        budget_volume take the GovInfo packageId. A held-field kind takes its
+        source table's key: the literal value for one key column (comment_inline:
+        comment_id), else a compact JSON list in the table's key order. These
+        scopes cover only the selected field.
         """
         from spicy_regs.acquisition_queue import build_missing_target_queue
-        from spicy_regs.citation_resolution import SOURCE_TABLES, resolve_citations
+        from spicy_regs.citation_resolution import resolve_citations
         from spicy_regs.citation_sources import TEXT_SOURCES, source_digests as held_source_digests
 
+        document_kind = _document_kind(document_kind)
         cursor = _get_connection().cursor()
         with _statement_timeout(cursor):
             status = _publication_status(cursor)

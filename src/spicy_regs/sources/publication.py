@@ -19,7 +19,7 @@ import base64
 import hashlib
 import json
 import re
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
 from copy import deepcopy
@@ -296,6 +296,11 @@ def load_rulemaking_snapshot(base_url: str) -> dict | None:
             "manifest": manifest}
 
 
+#: The comment files the export receipt identifies at fixed public URLs, as table names; the receipt's agency
+#: partitions are downloads, not served tables.
+COMMENTS_EXPORT_TABLES = ("comments", "comments_index")
+
+
 def load_comments_publication(base_url: str) -> dict | None:
     """Read the catalog export receipt; fixed member URLs still require version checks.
 
@@ -314,8 +319,8 @@ def load_comments_publication(base_url: str) -> dict | None:
             raise ValueError("unknown receipt format or table identity")
         if any(type(source[key]) is not int or source[key] < 0 for key in ("snapshot_id", "schema_id")):
             raise ValueError("invalid catalog version")
-        for key in ("comments.parquet", "comments_index.parquet"):
-            record = receipt["files"][key]
+        for table in COMMENTS_EXPORT_TABLES:
+            record = receipt["files"][table + ".parquet"]
             if not re.fullmatch(r"[0-9a-f]{64}", record["sha256"]) or not record["etag"]:
                 raise ValueError("invalid public file identity")
             if any(type(record[name]) is not int or record[name] < 0 for name in ("rows", "bytes")):
@@ -323,6 +328,35 @@ def load_comments_publication(base_url: str) -> dict | None:
     except (ValueError, TypeError, KeyError, AttributeError) as exc:
         raise PublicationError("Invalid comments publication receipt") from exc
     return {"receipt_sha256": "sha256:" + hashlib.sha256(raw).hexdigest(), "receipt": receipt}
+
+
+def comments_export_pins(base_url: str, comments: Mapping, tables: Iterable[str]) -> dict[str, dict]:
+    """Each named export table's pin from a loaded receipt: its file record, fixed URL and the receipt's identity."""
+    base = base_url.rstrip("/")
+    receipt = comments["receipt"]
+    pins = {}
+    for table in tables:
+        record = receipt["files"][table + ".parquet"]
+        pins[table] = {**record, "sha256": "sha256:" + record["sha256"], "kind": "comments-mirror",
+                       "family": "comments-mirror", "receipt_sha256": comments["receipt_sha256"],
+                       "source": receipt["source"], "urls": [f"{base}/{table}.parquet"]}
+    return pins
+
+
+def mutable_versions_match(pins: Mapping[str, Mapping | None]) -> bool:
+    """Fixed comment URLs are usable only while their published object versions match the receipt.
+
+    One HEAD per comments-mirror pin; other pins are immutable and pass.
+    """
+    for pin in pins.values():
+        if pin is None or pin.get("kind") != "comments-mirror":
+            continue
+        response = httpx.head(pin["urls"][0], follow_redirects=True, timeout=30,
+                              headers={"Cache-Control": "no-cache"})
+        response.raise_for_status()
+        if response.headers.get("etag") != pin["etag"] or int(response.headers.get("content-length", -1)) != pin["bytes"]:
+            return False
+    return True
 
 
 def published_urls(base_url: str) -> dict[str, list[str]]:
