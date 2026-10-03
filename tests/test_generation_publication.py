@@ -2,6 +2,7 @@
 
 import json
 from contextlib import contextmanager
+from datetime import datetime, timezone
 
 import httpx
 import pyarrow as pa
@@ -633,7 +634,160 @@ def test_version_1_omits_split_tables_and_a_family_left_without_tables():
     split = {"byteSize": 1, "rows": 1, "columns": [["id", "VARCHAR"]], "partitionColumns": ["id"], "members": []}
     family = {"prefix": "p", "logicalId": "urn:x", "artifactDigest": "sha256:" + "d" * 64}
     index = {"format": "spicy-regs-publication", "version": 2, "families": {
-        "mixed": {**family, "tables": {"one.parquet": single, "many.parquet": split}},
+        "mixed": {**family, "publishedAt": "2026-10-01T03:12:26Z", "tables": {"one.parquet": single, "many.parquet": split}},
         "split": {**family, "tables": {"all.parquet": split}}}}
     assert pub.derive_v1(index) == {"format": "spicy-regs-publication", "version": 1, "families": {
         "mixed": {**family, "tables": {"one.parquet": single}}}}
+
+
+_INSTANT = "%Y-%m-%dT%H:%M:%SZ"
+
+
+def _stamp(index: dict, family: str = "test") -> datetime:
+    return datetime.strptime(index["families"][family]["publishedAt"], _INSTANT).replace(tzinfo=timezone.utc)
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def test_the_pointer_write_stamps_when_it_moved_the_pointer_and_version_1_omits_it(tmp_path):
+    old, _ = build(tmp_path)
+    new, _ = build(tmp_path, "two", value="two")
+    store = Store()
+    stamps = []
+    prior = None
+    for directory in (old, new):
+        before = _now().replace(microsecond=0)
+        prior = publish(store, directory, prior)
+        stored = pub.parse_index(store.objects[pub.INDEX_V2_KEY])
+        assert stored == prior
+        assert before <= _stamp(stored) <= _now()
+        assert "publishedAt" not in pub.parse_index(store.objects[pub.INDEX_KEY])["families"]["test"]
+        assert pub.parse_index(store.objects[pub.INDEX_KEY]) == pub.derive_v1(stored)
+        stamps.append(_stamp(stored))
+    assert stamps[0] <= stamps[1]
+
+
+def test_a_build_that_read_a_stamped_or_unstamped_index_still_publishes(tmp_path):
+    """``publishedAt`` says when the pointer moved, not what a build read, so it never makes a family look changed.
+
+    The build reads the index through ``parse_index`` (stamp kept), or before a backfill stamped it (stamp absent).
+    """
+    old, _ = build(tmp_path)
+    new, artifact = build(tmp_path, "two", value="two")
+    third, latest = build(tmp_path, "three", value="three")
+    store = Store()
+    publish(store, old)
+    read = pub.parse_index(store.objects[pub.INDEX_V2_KEY])
+    assert "publishedAt" in read["families"]["test"]
+    assert publish(store, new, read)["families"]["test"]["artifactDigest"] == artifact.pin.artifact_digest
+    unstamped = pub.parse_index(store.objects[pub.INDEX_V2_KEY])
+    del unstamped["families"]["test"]["publishedAt"]
+    assert publish(store, third, unstamped)["families"]["test"]["artifactDigest"] == latest.pin.artifact_digest
+    with pytest.raises(pub.PublicationError, match="changed since"):
+        publish(store, new, read)
+
+
+def test_replaying_the_current_generation_keeps_when_the_pointer_moved_to_it(tmp_path, monkeypatch):
+    directory, _ = build(tmp_path)
+    store = Store()
+    prior = publish(store, directory)
+    monkeypatch.setattr(pub, "_instant", lambda seconds=None: "2030-01-01T00:00:00Z")
+    assert publish(store, directory, prior) == prior
+    assert pub.parse_index(store.objects[pub.INDEX_V2_KEY]) == prior
+
+
+def _unstamped(store, *families: str) -> dict:
+    """Leave ``store``'s version 2 as written before the writer stamped ``families``; return that index."""
+    index = pub.parse_index(store.objects[pub.INDEX_V2_KEY])
+    for family in families:
+        del index["families"][family]["publishedAt"]
+    store.objects[pub.INDEX_V2_KEY] = canonical_json_bytes(index)
+    return index
+
+
+def test_backfill_stamps_only_entries_lacking_the_instant_from_their_generation_s_latest_write(tmp_path):
+    one, _ = build(tmp_path)
+    other, _ = build(tmp_path, "other", family="other", keys=("c.parquet",))
+    store = Store()
+    publish(store, one)
+    published = publish(store, other)
+    index = _unstamped(store, "other")
+    prefix = index["families"]["other"]["prefix"]
+    for key in store.objects:
+        if key.startswith(prefix + "/"):
+            store.modified[key] = datetime(2026, 9, 1, 12, 0, 0, tzinfo=timezone.utc)
+    # The root is written first; the pointer moves after the last member and its read-back.
+    store.modified[f"{prefix}/c.parquet"] = datetime(2026, 9, 1, 12, 15, 2, 750_000, tzinfo=timezone.utc)
+    v1, writes = store.objects[pub.INDEX_KEY], list(store.writes)
+
+    planned = pub.backfill_published_at(store, "test")
+    assert planned["stamps"] == {"other": "2026-09-01T12:15:02Z"} and not planned["applied"]
+    assert store.writes == writes
+
+    applied = pub.backfill_published_at(store, "test", apply=True)
+    assert applied["stamps"] == planned["stamps"] and applied["applied"]
+    stored = pub.parse_index(store.objects[pub.INDEX_V2_KEY])
+    assert stored["families"]["other"] == {**index["families"]["other"], "publishedAt": "2026-09-01T12:15:02Z"}
+    assert stored["families"]["test"] == published["families"]["test"]
+    assert store.objects[pub.INDEX_KEY] == v1
+
+    writes = list(store.writes)
+    again = pub.backfill_published_at(store, "test", apply=True)
+    assert again["stamps"] == {} and not again["applied"] and store.writes == writes
+
+
+def test_backfill_refuses_when_the_pointer_moved_since_it_read_it(tmp_path):
+    one, _ = build(tmp_path)
+    two, _ = build(tmp_path, "two", value="two")
+    store = Store()
+    _unstamped(store, *publish(store, one)["families"])
+    prior = pub.parse_index(store.objects[pub.INDEX_V2_KEY])
+
+    moved = []
+
+    def rival(key):
+        if key == pub.INDEX_V2_KEY:
+            store.before_put = None
+            moved.append(publish(store, two, prior))
+
+    store.before_put = rival
+    with pytest.raises(pub.PublicationError, match="moved since"):
+        pub.backfill_published_at(store, "test", apply=True)
+    assert pub.parse_index(store.objects[pub.INDEX_V2_KEY]) == moved[0]
+
+
+def test_backfill_refuses_a_generation_without_its_root_or_an_index_without_version_2(tmp_path):
+    directory, _ = build(tmp_path)
+    store = Store()
+    index = _unstamped(store, *publish(store, directory)["families"])
+    del store.objects[index["families"]["test"]["prefix"] + "/artifact.json"]
+    writes = list(store.writes)
+    with pytest.raises(pub.PublicationError, match="no root"):
+        pub.backfill_published_at(store, "test", apply=True)
+    _v1_only(store, index)
+    with pytest.raises(pub.PublicationError, match="absent"):
+        pub.backfill_published_at(store, "test", apply=True)
+    assert store.writes == writes
+
+
+def test_the_backfill_command_writes_only_with_apply(tmp_path, monkeypatch, capsys):
+    from scripts.backfill_published_at import main
+
+    directory, _ = build(tmp_path)
+    store = Store()
+    _unstamped(store, *publish(store, directory)["families"])
+    purged = []
+    monkeypatch.setattr(r2, "get_r2_client", lambda: store)
+    monkeypatch.setattr("scripts.backfill_published_at.purge_urls", purged.extend)
+    monkeypatch.setenv("R2_BUCKET_NAME", "test")
+    monkeypatch.setenv("R2_PUBLIC_URL", "https://test/")
+    writes = list(store.writes)
+    assert main([]) == 0
+    assert json.loads(capsys.readouterr().out)["applied"] is False and store.writes == writes and not purged
+    assert main(["--apply"]) == 0
+    assert json.loads(capsys.readouterr().out)["applied"] is True and store.writes == [*writes, pub.INDEX_V2_KEY]
+    assert "publishedAt" in pub.parse_index(store.objects[pub.INDEX_V2_KEY])["families"]["test"]
+    assert purged == [f"https://test/{pub.INDEX_V2_KEY}"]
+    assert main(["--apply"]) == 0 and json.loads(capsys.readouterr().out)["applied"] is False and len(purged) == 1
