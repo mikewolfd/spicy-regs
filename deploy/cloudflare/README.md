@@ -20,7 +20,7 @@ RAM-backed, so its spill isn't real headroom; Vercel caps memory outright.)
 ## Files
 
 - `Dockerfile` — the image (canonical server under uvicorn on `$PORT`). Generic.
-- `wrangler.jsonc` — exact container image, release pins, Durable Object binding
+- `wrangler.template.jsonc` — exact container image, release pins, Durable Object binding
   and `standard-4` instance. Build new images with the repository root as context.
 - `worker/index.ts` — forwards `/mcp` to the container; sets the DuckDB/R2 env.
 - `package.json` — `wrangler` + `@cloudflare/containers` + a `check` script.
@@ -37,13 +37,17 @@ there first.
 
 ## Deploy
 
-The fork pins `174055408ff1560e60601c4d12c561c4` in `wrangler.jsonc`. Complete
-[the fork setup](../fork-setup.md) and set `vars.SPICY_REGS_R2_URL` before deploying.
+The fork pins `174055408ff1560e60601c4d12c561c4` in `wrangler.template.jsonc`. Complete
+[the fork setup](../fork-setup.md) and export `SPICYREGS_DOMAIN=spicygov.ai` before deploying.
+The npm commands render the ignored `wrangler.jsonc` from the template. Its route,
+data URL and runtime domain use that setting; unset uses `spicy-regs.dev`.
+Existing explicit data URL overrides still take precedence. See [domain setup](../public-domain.md).
 The Worker returns 503 while that URL is empty. Use the named account login so
 authentication in unrelated projects stays separate.
 
 ```bash
 cd deploy/cloudflare
+export SPICYREGS_DOMAIN=spicygov.ai # Mike's fork; omit for upstream defaults
 npm ci
 npm test              # bounded native-connection recovery checks
 npm run check          # Worker dry run and typecheck

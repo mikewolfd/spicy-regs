@@ -113,7 +113,9 @@ def test_workflow_refuses_missing_public_url_before_any_reader(tmp_path, workflo
     root = Path(__file__).resolve().parents[1]
     config = yaml.safe_load((root / ".github" / "workflows" / workflow).read_text())
     step = next(step for job in config["jobs"].values() for step in job.get("steps", ()) if step.get("name") == step_name)
-    assert step["env"]["R2_PUBLIC_URL"] == "${{ secrets.R2_PUBLIC_URL }}"
+    assert step["env"]["R2_PUBLIC_URL"] == (
+        "${{ secrets.R2_PUBLIC_URL || format('https://data.{0}', vars.SPICYREGS_DOMAIN || 'spicy-regs.dev') }}"
+    )
     # Execute the actual guard and first read boundary; no GitHub expressions,
     # tools or network are evaluated. A missing URL must prevent reaching it.
     guard = step["run"].splitlines()[0]

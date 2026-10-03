@@ -22,6 +22,7 @@ import argparse
 import csv
 import io
 import json
+import os
 import re
 import sys
 from collections import defaultdict
@@ -32,7 +33,12 @@ from itertools import combinations
 from pathlib import Path
 from typing import Any
 
-R2_BASE_URL = "https://data.spicy-regs.dev"
+# Standalone uv scripts also work without the spicy-regs package installed.
+R2_BASE_URL = (
+    os.environ.get("SPICY_REGS_R2_URL")
+    or os.environ.get("R2_PUBLIC_URL")
+    or f"https://data.{os.environ.get('SPICYREGS_DOMAIN') or 'spicy-regs.dev'}"
+).rstrip("/")
 
 STOPWORDS = {
     "a",

@@ -42,6 +42,7 @@ from dotenv import load_dotenv
 
 from spicy_regs import output_ledger, table_joins
 from spicy_regs.duckdb_settings import load_public_http
+from spicy_regs.public_url import resolve_r2_base_url
 from spicy_regs.schemas.regulations import COMMENT_MIRROR_COLUMNS, RECORD_TYPES
 from spicy_regs.sources.publication import SNAPSHOT_POINTER, PublicationError, parquet_scan
 
@@ -252,8 +253,6 @@ def interim_note_errors(table: str, data_quality: str, installed: str) -> list[s
                           f"{version}; delete the note if the wheel fixed it, or restate its marker")
     return errors
 
-
-DEFAULT_R2_BASE_URL = "https://data.spicy-regs.dev"
 
 #: The tables hosted from spicy-docs' table contracts. Their columns and their
 #: per-column prose both come from ``spicy_docs.schemas.TABLE_CONTRACTS``, so a
@@ -809,7 +808,7 @@ def discover_schemas(source: str, base: str | None = None) -> dict[str, list[tup
     if source == "r2":
         from spicy_regs.sources.publication import published_urls
 
-        base_url = (base or DEFAULT_R2_BASE_URL).rstrip("/")
+        base_url = resolve_r2_base_url(base)
         urls = published_urls(base_url)
         names = tuple(dict.fromkeys(("dockets", "documents", "comments", "comments_index", *urls)))
 
@@ -1175,7 +1174,7 @@ def cmd_check(args: argparse.Namespace) -> int:
         if args.source == "r2":
             # The kind is derived from the pinned index where the index can be read; offline it is the prose prefix.
             try:
-                errors += kind_index_errors(descriptions, published_row_counts(args.base or DEFAULT_R2_BASE_URL))
+                errors += kind_index_errors(descriptions, published_row_counts(resolve_r2_base_url(args.base)))
             except (httpx.HTTPError, OSError, PublicationError) as exc:
                 print(f"! Could not read the published row counts: {exc}", file=sys.stderr)
                 unreadable = True

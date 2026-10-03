@@ -85,7 +85,7 @@ jobs:
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
           R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
-          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
+          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL || format('https://data.{0}', vars.SPICYREGS_DOMAIN || 'spicy-regs.dev') }}
           # Cloudflare edge-cache purge after publish (best-effort; no-op if unset).
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
@@ -124,7 +124,7 @@ jobs:
       - name: Verify freshness (index vs rows)
         if: ${{ inputs.full_load == true }}
         env:
-          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
+          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL || format('https://data.{0}', vars.SPICYREGS_DOMAIN || 'spicy-regs.dev') }}
           R2_CATALOG_URI: ${{ secrets.R2_CATALOG_URI }}
           R2_CATALOG_WAREHOUSE: ${{ secrets.R2_CATALOG_WAREHOUSE }}
           R2_CATALOG_TOKEN: ${{ secrets.R2_CATALOG_TOKEN }}

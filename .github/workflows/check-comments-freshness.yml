@@ -54,7 +54,7 @@ jobs:
 
       - name: Check comments freshness
         env:
-          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
+          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL || format('https://data.{0}', vars.SPICYREGS_DOMAIN || 'spicy-regs.dev') }}
           # Verify both the anonymous mirror and physical catalog rows.
           AGENCY: ${{ inputs.agency }}
           R2_CATALOG_URI: ${{ secrets.R2_CATALOG_URI }}

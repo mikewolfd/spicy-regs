@@ -34,6 +34,9 @@ MEM_LIMIT="${SPICY_REGS_MEMORY_LIMIT:-12GB}"   # under MEMORY so heavy queries s
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
+# Validate and resolve the same setting used by GitHub Actions and Python readers.
+SPICYREGS_DOMAIN="$(python3 "$ROOT/src/spicy_regs/public_url.py" domain)"
+PUBLIC_DATA_URL="$(python3 "$ROOT/src/spicy_regs/public_url.py" data)"
 IMAGE="${REGION}-docker.pkg.dev/${PROJECT}/${AR_REPO}/mcp:$(git -C "$ROOT" rev-parse --short HEAD)"
 
 echo "1/6 Enable APIs"
@@ -55,7 +58,7 @@ gcloud run deploy "$SERVICE" \
   --memory "$MEMORY" --cpu "$CPU" \
   --concurrency "$CONCURRENCY" --timeout "$TIMEOUT" \
   --min-instances "$MIN_INSTANCES" --max-instances "$MAX_INSTANCES" \
-  --update-env-vars "SPICY_REGS_MEMORY_LIMIT=${MEM_LIMIT},SPICY_REGS_TEMP_DIR=/tmp,SPICY_REGS_HOME_DIR=/tmp,SPICY_REGS_STATEMENT_TIMEOUT=${TIMEOUT}s,SPICY_REGS_R2_URL=https://data.spicy-regs.dev"
+  --update-env-vars "SPICY_REGS_MEMORY_LIMIT=${MEM_LIMIT},SPICY_REGS_TEMP_DIR=/tmp,SPICY_REGS_HOME_DIR=/tmp,SPICY_REGS_STATEMENT_TIMEOUT=${TIMEOUT}s,SPICYREGS_DOMAIN=${SPICYREGS_DOMAIN},SPICY_REGS_R2_URL=${PUBLIC_DATA_URL}"
 
 # --update-env-vars, NOT --set-env-vars: the latter "removes all existing
 # environment variables first", which would strip the R2_CATALOG_* config wired
@@ -73,7 +76,7 @@ URL="$(gcloud run services describe "$SERVICE" --project "$PROJECT" --region "$R
 echo "$URL"
 
 echo "6/6 Smoke check (against the public domain, so it covers DNS + cert + routing)"
-BASE="${SMOKE_BASE:-https://mcp.spicy-regs.dev}"
+BASE="${SMOKE_BASE:-https://mcp.${SPICYREGS_DOMAIN}}"
 fail=0
 
 code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 "$BASE/")"
