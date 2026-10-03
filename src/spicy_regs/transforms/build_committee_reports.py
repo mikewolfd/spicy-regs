@@ -48,7 +48,7 @@ from spicy_docs.sources.govinfo.body_acquisition import (
 from spicy_docs.reading.refusals import RefusedResponse
 from spicy_docs.reading.paged_json import PagedJsonSourceError
 from spicy_docs.schemas.tables import text
-from spicy_docs.sources.congress.listing import LIST_ROUTES, list_route_url
+from spicy_docs.sources.congress.listing import LIST_ROUTES, hearing_detail_event_id, list_route_url
 from spicy_docs.sources.govinfo.discovery import GovInfoDiscoveryReader, collection_url
 from spicy_docs.transport.credentials import CredentialRefusedError, scrub_credential
 
@@ -401,13 +401,8 @@ def _event_id(hearings: HearingDetailSource, package: Any,
         page = next(iter(hearings.records(route, url, max_pages=1)))
         if evidence:
             evidence.capture(page.capture, stage=identity.package_id + ":hearing-detail")
-        if len(page.records) != 1:
-            raise PagedJsonSourceError(f"hearing-detail answered {len(page.records)} records, not one")
-        record = page.records[0]
-        if str(record["jacketNumber"]) != str(int(identity.number)) or str(record["congress"]) != str(
-            identity.congress
-        ):
-            raise PagedJsonSourceError("hearing-detail identity differs from the requested jacket")
+        # spicy-docs reads the answer as the hearing asked for (one record, its jacket and Congress) (X5).
+        event_id = hearing_detail_event_id(page.records, congress=identity.congress, jacket=identity.number)
     except CredentialRefusedError:
         raise
     except _HEARING_REFUSALS as error:
@@ -416,8 +411,6 @@ def _event_id(hearings: HearingDetailSource, package: Any,
         logger.warning("CHRG: {} hearing detail refused: {}", identity.package_id,
                        scrub_credential(str(error), evidence.credential if evidence else ""))
         return None, "refused"
-    meeting = record.get("associatedMeeting")
-    event_id = text(meeting.get("eventId")) if isinstance(meeting, dict) else None
     return event_id, "meeting" if event_id is not None else "no_meeting"
 
 

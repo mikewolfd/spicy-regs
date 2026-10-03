@@ -205,6 +205,12 @@ JOINS: tuple[Join, ...] = (
           reason="Complete since committee_meetings keeps the previous Congress: the 7 orphans of the first "
                  "baseline were 118th-Congress meetings it had not listed (join-gaps-2026-09-26/f/). Receipt "
                  "join-map-2026-09-26/live-check-after-fixes.json."),
+    _join("hearing_transcripts", ("congress", "chamber", "mods_event_id"), "committee_meetings",
+          ("congress", "chamber", "event_id"), 43, 1,
+          reason="The meeting GovInfo's MODS names (spicy-docs 0.54.0), filled as each held hearing is read again. Baseline "
+          "from the reader over the 185 retained MODS (round 5, implementer E, 2026-10-03): 42 of 43 keys name a held "
+          "meeting; CHRG-119hhrg60746's 417109 names none. Where Congress.gov's event_id also names one they agree "
+          "21 of 21."),
     _join("report_sections", ("package_id", "part_id"), "committee_reports", ("package_id", "part_id"), 142, 0),
     _join("law_sections", "law_id", "laws", "law_id", 0, 0, "empty",
           "Sections from the law's own XML; public population not yet baselined."),
