@@ -7,11 +7,12 @@ preference, interpretation and row shapes; this host owns the issue-date
 window, caps, prior-output resume and publication.
 
 The whole published window is enumerated each run so unsuccessful packages
-remain eligible, and held packages are revisited when processing changes; an
-unchanged source with successful matching checkpoints across all its outputs
-costs no body requests. Collections share the package cap round-robin so
-neither starves on a cold start. Print families read the package's PDF-first
-order because their columns state pages; bodies are read whole and
+remain eligible, and held packages are revisited when a reading input changes
+(:func:`_processing_versions`); an unchanged source with successful matching
+checkpoints across all its outputs costs no body requests. Outstanding packages
+are read most-needed first (:func:`_queue`), and collections share the package
+cap round-robin so neither starves on a cold start. Print families read the
+package's PDF-first order because their columns state pages; bodies are read whole and
 ``read_depth`` reports the publisher's stated extent against pages actually
 extracted. The two keyless chamber rosters supply the committee vocabulary — a
 roster failure leaves its names unresolved, while access refusals abort.
@@ -25,13 +26,14 @@ import hashlib
 import json
 import os
 from collections import Counter
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from datetime import UTC, datetime
 from importlib.metadata import version
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, NamedTuple, Protocol
 
 import httpx
+import spicy_docs
 from loguru import logger
 from spicy_docs.extraction.body_text import BodyText, body_text
 from spicy_docs.interpretation.bill_actions import (
@@ -41,12 +43,14 @@ from spicy_docs.interpretation.bill_actions import (
 )
 from spicy_docs.interpretation.citations import (
     CITATION_RULE_SET_VERSION,
+    CITATION_RULES,
     CITATION_RULES_BY_NAME,
     COMMITTEE_CHAMBERS,
     committee_vocabulary,
     find_citations,
 )
 from spicy_docs.reading.paged_json import PagedJsonBudget, PagedJsonSourceError
+from spicy_docs.schemas import TABLE_CONTRACTS
 from spicy_docs.schemas.bill_action_tables import shape_bill_committee_action
 from spicy_docs.schemas.budget_volume_tables import (
     BUDGET_VOLUME,
@@ -82,7 +86,7 @@ from spicy_docs.sources.govinfo.body_acquisition import (
 from spicy_docs.sources.govinfo.discovery import GovInfoDiscoveryReader, published_url
 from spicy_docs.transport.credentials import CredentialRefusedError, scrub_credential
 
-from spicy_regs.generations import spicy_docs_code
+from spicy_regs.generations import source_digest
 from spicy_regs.sources import r2
 from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key
 from spicy_regs.transforms.congress_scope import current_congress
@@ -106,6 +110,14 @@ CHECKPOINT_NAMESPACE = "print-citations"
 #: spicy-docs 2026-09-19).
 CRPT = "CRPT"
 BUDGET = "BUDGET"
+
+#: The tables one package's read writes, its parent first. A parent checkpoint
+#: alone can overtake failed child publication, so every table a read affects
+#: carries the same successful-read checkpoint.
+_OUTPUTS: dict[str, tuple[str, ...]] = {
+    CRPT: (ACTIVITY_REPORTS, BILL_ACTIONS, CITATIONS),
+    BUDGET: (BUDGET_VOLUMES, CITATIONS),
+}
 
 #: The issue-date floor a cold run walks from. **This is a scope, not a
 #: coverage claim.** GovInfo's CRPT and CDOC collections reach 1817, and
@@ -230,37 +242,92 @@ def _today() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%d")
 
 
-def _held_packages(prior_file: Path | None) -> dict[str, tuple[str | None, str | None]]:
-    """Published source timestamp and text digest, including legacy rows to reread."""
+def _now() -> str:
+    """When a package was read or left unread, as its checkpoint records it; ISO 8601 UTC sorts as text."""
+    return datetime.now(UTC).isoformat(timespec="microseconds")
+
+
+class _Held(NamedTuple):
+    """One published parent row's read state: the source timestamp, text digest and citation rule set it was read under."""
+
+    last_modified: str | None
+    text_sha256: str | None
+    rule_set_version: str | None
+
+
+def _held_packages(prior_file: Path | None) -> dict[str, _Held]:
+    """Each published parent row's read state, including legacy rows to reread."""
     if prior_file is None:
         return {}
     import duckdb
 
     return {
-        package_id: (modified, text_sha256)
-        for package_id, modified, text_sha256 in duckdb.sql(
-            f"SELECT package_id, last_modified, text_sha256 FROM read_parquet('{prior_file}')"
+        package_id: _Held(modified, text_sha256, rule_set_version)
+        for package_id, modified, text_sha256, rule_set_version in duckdb.sql(
+            f"SELECT package_id, last_modified, text_sha256, rule_set_version FROM read_parquet('{prior_file}')"
         ).fetchall()
     }
 
 
-def _processing_versions(vocabularies: Mapping[str, Mapping[str, tuple[tuple[str, str], ...]]]) -> dict[str, str]:
-    """Identify citation, action and body-reading inputs even when no finding exists.
+#: The SpicyDocs packages a print's text is derived in: ``extraction``
+#: (``body_text``, the PDF reader, ``gpo_normalize``) and ``reading``, which
+#: ``body_text`` reads markup renditions through. Whole packages, so no module
+#: inside them is missed; their only imports from elsewhere in SpicyDocs are
+#: transport byte bounds and credential checks, which never change a text.
+_DERIVATION_PACKAGES = ("extraction", "reading")
 
-    The reader's code (:func:`spicy_docs_code`, not its release string, which would re-read
-    all 68 held parents on a version-only release) also covers body-text derivation and row shaping;
-    citation and action digests identify their rules independently. The parent
-    tables' public ``rule_set_version`` keeps its citation-only meaning.
+
+def _derivation_code() -> dict[str, str]:
+    """Digest of each package the body text is derived in (``.py``/``.json``/``.xsd``, as :func:`spicy_docs_code` reads)."""
+    root = Path(spicy_docs.__file__).parent
+    return {package: source_digest(root / package, (".py", ".json", ".xsd")) for package in _DERIVATION_PACKAGES}
+
+
+def _processing_versions(vocabularies: Mapping[str, Mapping[str, tuple[tuple[str, str], ...]]]) -> dict[str, str]:
+    """Identify every input that decides a print's published rows, even when no finding exists.
+
+    **Named inputs, not the installed SpicyDocs' whole-code digest.** Over the
+    eight builds vendored through round 5 (0.53.0, printing, four FEC, laws,
+    votes), all with one citation rule set, that digest took seven values and
+    this key three (``round5/impl-C/w52_key_across_wheels.out``). Each move of
+    the digest left every held print outstanding, and with a capped queue the
+    same first packages were re-read every day while 20 activity reports stayed
+    at bill rule 004 (round 5, W5-2). What the digest stood for is named
+    instead, so a build that moves none of it re-reads nothing:
+
+    * the citation rule set, and the table each rule names -- ``target_table``
+      is written into every citation row but is not in the rule-set digest,
+      so a relabel would otherwise never reach a held row;
+    * the body-text derivation: :func:`_derivation_code`, PyMuPDF's release
+      and the rendition order;
+    * each output's contract columns and types, so a column a contract adds is
+      filled on held prints;
+    * for reports, the covered-Congress and action rules, the chamber map and
+      the committee vocabulary the rosters gave this run.
+
+    What this cannot see: a SpicyDocs change to row shaping that keeps every
+    contract's columns and moves no rule version. Such a change reaches a held
+    print when its publisher modifies it or one of these inputs moves; one that
+    must reach every print moves a rule version. The release string is not an
+    input either (a version-only release, 0.39.2 against 0.39.1, re-reads
+    nothing). The parent tables' public ``rule_set_version`` keeps its
+    citation-only meaning, and :func:`_queue` reads it to order the re-reads.
     """
+    def contracts(collection: str) -> dict[str, Any]:
+        return {name: [list(TABLE_CONTRACTS[name].columns), dict(TABLE_CONTRACTS[name].types)]
+                for name in _OUTPUTS[collection]}
+
     common = {
-        "reader_code": spicy_docs_code(),
+        "derivation_code": _derivation_code(),
         "pdf_reader_release": version("PyMuPDF"),
         "citation_rules": CITATION_RULE_SET_VERSION,
+        "citation_rule_tables": sorted((rule.name, rule.target_table) for rule in CITATION_RULES),
         "body_preference": PRINT_BODY_PREFERENCE,
     }
     inputs = {
-        BUDGET: common,
+        BUDGET: common | {"contracts": contracts(BUDGET)},
         CRPT: common | {
+            "contracts": contracts(CRPT),
             "covered_congress_rules": COVERED_CONGRESS_RULE_VERSION,
             "action_rules": PRINT_ACTION_RULE_SET_VERSION,
             "action_vocabulary": PRINT_ACTION_VOCABULARY_VERSION,
@@ -392,6 +459,48 @@ _FAMILIES: tuple[tuple[str, str, str, Callable[[str, str], bool]], ...] = (
 )
 
 
+def _read_identity(state: Mapping[str, Any] | None) -> tuple[Any, Any, Any]:
+    """What a checkpoint says was read: source timestamp, text digest and processing version.
+
+    The read and refusal times beside them order the queue and never decide
+    whether a package is complete.
+    """
+    state = state or {}
+    return state.get("last_modified"), state.get("text_sha256"), state.get("processing_version")
+
+
+def _queue(pending: Iterable[str], held: Mapping[str, _Held], states: Mapping[str, Mapping[str, Any]]) -> list[str]:
+    """One collection's outstanding packages, the one most in need of a read first.
+
+    1. A package its last scheduled attempt left unread (a refusal, or a
+       volume whose root offers no preferred body) goes behind every other,
+       oldest attempt first: a print the publisher keeps refusing never holds
+       the head of a capped queue, and is still retried whenever the cap
+       leaves room.
+    2. Then a package whose published row was read under a citation rule set
+       other than the installed one, or that has no published row: its rows are
+       wrong or missing, not merely due. Round 5 (W5-2) found 20 activity
+       reports held under bill rule 004 behind 20 at the installed set, which a
+       cap of 20 re-read every day.
+    3. Then the least recently read; a checkpoint from before read times were
+       kept counts as never read.
+
+    Ties keep the enumeration order (held table, then listing). ``O(n log n)``
+    in one collection's outstanding packages (81 across both, 2026-10-03).
+    """
+
+    def need(package_id: str) -> tuple[str, bool, str]:
+        state = states.get(package_id) or {}
+        row = held.get(package_id)
+        return (
+            str(state.get("unread_at") or ""),
+            row is not None and row.rule_set_version == CITATION_RULE_SET_VERSION,
+            str(state.get("read_at") or ""),
+        )
+
+    return sorted(pending, key=need)
+
+
 def _schedule(outstanding: Mapping[str, Sequence[str]], cap: int) -> list[tuple[str, str]]:
     """Round-robin the collections' outstanding packages into one capped list.
 
@@ -402,8 +511,8 @@ def _schedule(outstanding: Mapping[str, Sequence[str]], cap: int) -> list[tuple[
     consumer cannot tell "this family published nothing" from "this family has
     nothing". Round-robin fetches the same total, makes progress on both
     families every run, and a family with more outstanding work keeps the
-    slack once the other is exhausted. ``O(cap)`` in time, and the order
-    within a collection is the publisher's own listing order, untouched.
+    slack once the other is exhausted. ``O(cap)`` in time; the order within a
+    collection is :func:`_queue`'s, untouched.
     """
     queues = {collection: list(packages) for collection, packages in outstanding.items() if packages}
     scheduled: list[tuple[str, str]] = []
@@ -481,26 +590,22 @@ def build_print_citations(
 
     vocabularies = _roster_vocabulary(rosters, current_congress())
     processing_versions = _processing_versions(vocabularies)
-    # A parent checkpoint alone can overtake failed child publication. Every
-    # table affected by a read must carry the same successful-read checkpoint.
-    outputs_for = {
-        CRPT: (ACTIVITY_REPORTS, BILL_ACTIONS, CITATIONS),
-        BUDGET: (BUDGET_VOLUMES, CITATIONS),
-    }
     evaluated: dict[str, set[tuple[str, str]]] = {CRPT: set(), BUDGET: set()}
 
     def complete(package_id: str, collection: str, last_modified: str | None) -> bool:
-        parent = outputs_for[collection][0]
-        published = held[parent].get(package_id)
-        expected = {"package_id": package_id, "last_modified": last_modified,
-                    "text_sha256": published[1] if published is not None else None,
-                    "processing_version": processing_versions[collection]}
-        return (
-            last_modified is not None
-            and published is not None
-            and published[0] == last_modified
-            and all(checkpoints[name].get(package_id) == expected for name in outputs_for[collection])
-        )
+        published = held[_OUTPUTS[collection][0]].get(package_id)
+        if last_modified is None or published is None or published.last_modified != last_modified:
+            return False
+        expected = (last_modified, published.text_sha256, processing_versions[collection])
+        return all(_read_identity(checkpoints[name].get(package_id)) == expected for name in _OUTPUTS[collection])
+
+    def left_unread(collection: str, package_id: str) -> None:
+        # Kept beside whatever the last successful read recorded, which this
+        # does not complete: the package stays outstanding, behind the others.
+        at = _now()
+        for name in _OUTPUTS[collection]:
+            checkpoints[name][package_id] = {**checkpoints[name].get(package_id, {"package_id": package_id}),
+                                             "unread_at": at}
 
     activity_rows: list[dict] = []
     budget_rows: list[dict] = []
@@ -520,8 +625,8 @@ def build_print_citations(
     for collection, table, _label, keep in _FAMILIES:
         # Legacy outputs have no checkpoint and need one reread. Stale held
         # packages remain eligible even when the discovery window omits them.
-        known = {package_id: modified for package_id, (modified, _digest) in held[table].items()}
-        for name in outputs_for[collection]:
+        known = {package_id: row.last_modified for package_id, row in held[table].items()}
+        for name in _OUTPUTS[collection]:
             for package_id, state in checkpoints[name].items():
                 if _collection(package_id) == collection:
                     known.setdefault(package_id, state.get("last_modified"))
@@ -530,7 +635,7 @@ def build_print_citations(
         listed = _listed(reader, collection, since, keep)
         pending.update({package_id: modified for package_id, modified in listed
                         if not complete(package_id, collection, modified)})
-        outstanding[collection] = list(pending)
+        outstanding[collection] = _queue(pending, held[table], checkpoints[table])
         unchanged += sum(package_id not in pending for package_id, _modified in listed)
 
     scheduled = _schedule(outstanding, max_packages)
@@ -542,6 +647,7 @@ def build_print_citations(
         if collection == CRPT and chamber is None:
             refusals["NoStatedChamber"] += 1
             logger.warning("CRPT: {} states no House or Senate chamber in its id; refused before any request", package_id)
+            left_unread(collection, package_id)
             continue
         try:
             package, derived = _read_body(acquirer, package_id)
@@ -553,6 +659,7 @@ def build_print_citations(
             root_not_offered += 1
             logger.info("BUDGET: {} publisher offers no preferred package-root body: {}; no granule attempted",
                         package_id, scrub_credential(str(error), ""))
+            left_unread(collection, package_id)
             continue
         except _PACKAGE_REFUSALS as error:
             # Counted by reason, not just counted: forty refusals sharing
@@ -561,6 +668,7 @@ def build_print_citations(
             reason = type(error).__name__
             refusals[reason] += 1
             logger.warning("{}: {} refused ({}): {}", collection, package_id, reason, scrub_credential(str(error), ""))
+            left_unread(collection, package_id)
             continue
         fetched += 1
 
@@ -631,8 +739,8 @@ def build_print_citations(
             evaluated[collection].add((package_id, provenance.text_sha256))
         state = {"package_id": package_id, "last_modified": package.summary.last_modified,
                  "text_sha256": provenance.text_sha256,
-                 "processing_version": processing_versions[collection]}
-        for name in outputs_for[collection]:
+                 "processing_version": processing_versions[collection], "read_at": _now()}
+        for name in _OUTPUTS[collection]:
             checkpoints[name][package_id] = state
 
         depth = len(derived.pages) if derived.pages is not None else 0
