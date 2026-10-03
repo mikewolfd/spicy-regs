@@ -136,7 +136,7 @@
       {
         "column_name": "comment_end_date",
         "column_type": "VARCHAR",
-        "description": "Literal Regulations.gov commentEndDate as Regulations.gov states it now, which can reflect a later extension rather than the notice's own date: when a later notice extends the period, Regulations.gov can rewrite the original notice's date too (FS-2025-0001-223869, FR 2026-16965, reads 2026-10-07T03:59:59Z, the extension FR 2026-18648 set, while the Register's comments_close_on for 2026-16965 is 2026-09-21). For the date a notice printed, read federal_register.comments_close_on by fr_doc_num. Convert offset-bearing instants to America/New_York for calendar searches; date-only values and the source's bare T00:00:00Z convention keep their printed day (see data_quality). Purpose does not follow from this field. NULL does not mean no deadline."
+        "description": "Literal Regulations.gov commentEndDate as Regulations.gov states it now, which can reflect a later extension rather than the notice's own date: when a later notice extends the period, Regulations.gov can rewrite the original notice's date too (FS-2025-0001-223869, FR 2026-16965, reads 2026-10-07T03:59:59Z, the extension FR 2026-18648 set, while the Register's comments_close_on for 2026-16965 is 2026-09-21). For the date a notice printed, read federal_register.comments_close_on by fr_doc_num. Convert offset-bearing instants to America/New_York for calendar searches; date-only values and the source's bare T00:00:00Z convention keep their printed day (see data_quality). Neither purpose nor the controlling/current deadline follows from this field; inspect filing instructions and later notices. NULL does not mean no deadline."
       },
       {
         "column_name": "file_url",
