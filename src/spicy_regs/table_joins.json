@@ -168,7 +168,7 @@
         "bill_id"
       ],
       "kind": "empty",
-      "reason": "Model output not yet computed (needs GEMINI_API_KEY); the table publishes no rows.",
+      "reason": "Kept empty by owner decision 34 (fork-delivery-decisions-2026-09-22): the model output that would fill it is not produced; publishes no rows",
       "measured_via": null,
       "baseline_keys": 0,
       "baseline_missing": 0,
@@ -258,7 +258,7 @@
         "bill_id"
       ],
       "kind": "empty",
-      "reason": "Model output not yet computed (needs GEMINI_API_KEY); the table publishes no rows.",
+      "reason": "Kept empty by owner decision 34 (fork-delivery-decisions-2026-09-22): the model output that would fill it is not produced; publishes no rows",
       "measured_via": null,
       "baseline_keys": 0,
       "baseline_missing": 0,
@@ -276,7 +276,7 @@
         "bill_id"
       ],
       "kind": "empty",
-      "reason": "Model output not yet computed (needs GEMINI_API_KEY); the table publishes no rows.",
+      "reason": "Disabled by design in spicy-docs (pair_amounts=False), owner decision 34; publishes no rows",
       "measured_via": null,
       "baseline_keys": 0,
       "baseline_missing": 0,
@@ -402,7 +402,7 @@
         "bill_id"
       ],
       "kind": "empty",
-      "reason": "Model output not yet computed (needs GEMINI_API_KEY); the table publishes no rows.",
+      "reason": "Kept empty by owner decision 34 (fork-delivery-decisions-2026-09-22): the model output that would fill it is not produced; publishes no rows",
       "measured_via": null,
       "baseline_keys": 0,
       "baseline_missing": 0,
@@ -926,14 +926,46 @@
       "parent_columns": [
         "law_id"
       ],
-      "kind": "empty",
-      "reason": "Sections from the law's own XML; public population not yet baselined.",
+      "kind": "complete",
+      "reason": "Full selected-input measurement on 2026-10-03; immutable URLs, SQL and cardinality in join_measurements.json. Both tables are written by one laws run, so every section names a law the same generation holds; a declared-empty join until this family first published sections (2026-10-02).",
       "measured_via": null,
-      "baseline_keys": 0,
+      "baseline_keys": 113,
       "baseline_missing": 0,
-      "floor_pct": null,
-      "expected_cardinality": "unspecified",
-      "measurement": null
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": {
+        "join": "law_sections.law_id -> laws.law_id",
+        "kind": "complete",
+        "status": "OK",
+        "keys": 113,
+        "missing": 0,
+        "resolved_pct": 100.0,
+        "floor_pct": 100.0,
+        "baseline_keys": 113,
+        "baseline_missing": 0,
+        "examples": [],
+        "child_input_rows": 3852,
+        "child_nonnull_rows": 3852,
+        "parent_input_rows": 119,
+        "parent_distinct_keys": 119,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 3852,
+        "left_join_nonnull_rows": 3852,
+        "scope": "full_selected_inputs",
+        "child_urls": [
+          "https://data.spicygov.ai/generations/laws/3a35c4db22311d39aa4f5e57203064410ee723a7c051f0d5215f79a09c7cda17/law_sections.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/laws/3a35c4db22311d39aa4f5e57203064410ee723a7c051f0d5215f79a09c7cda17/laws.parquet"
+        ],
+        "sql": "\n        WITH child_input AS (SELECT \"law_id\" FROM read_parquet(['https://data.spicygov.ai/generations/laws/3a35c4db22311d39aa4f5e57203064410ee723a7c051f0d5215f79a09c7cda17/law_sections.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"law_id\" FROM read_parquet(['https://data.spicygov.ai/generations/laws/3a35c4db22311d39aa4f5e57203064410ee723a7c051f0d5215f79a09c7cda17/laws.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"law_id\" AS c0, count(*) AS child_rows\n                   FROM child_input WHERE \"law_id\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"law_id\" AS p0, count(*) AS parent_rows\n                   FROM parent_input WHERE \"law_id\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0) ORDER BY c0) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+        "expected_cardinality": "one",
+        "measured_on": "2026-10-03",
+        "source_generation": "sha256:3a35c4db22311d39aa4f5e57203064410ee723a7c051f0d5215f79a09c7cda17",
+        "reason": "Both tables are written by one laws run, so every section names a law the same generation holds; a declared-empty join until this family first published sections (2026-10-02)."
+      }
     },
     {
       "child": "law_code_sections",
@@ -1736,7 +1768,7 @@
         "cl_docket_id"
       ],
       "kind": "design",
-      "reason": "court_dockets is a PACER docket selection; most PACER dockets have no published opinion.",
+      "reason": "court_dockets is a PACER (RECAP) docket selection: most PACER dockets have no published opinion, and for an appellate case the publisher often keeps two docket objects, the court-website scraper's, which the cluster names, and RECAP's, which this table holds, so a decision of a case this table holds may not join by id (30 of the 100 cadc cases present on 2026-10-02 did not). The docket number, in court_opinions.download_url or court_dockets.docket_number, is the fallback key.",
       "measured_via": null,
       "baseline_keys": 11475,
       "baseline_missing": 9214,

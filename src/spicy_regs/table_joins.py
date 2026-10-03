@@ -111,7 +111,11 @@ def _join(child: str, child_columns: str | tuple[str, ...], parent: str, parent_
                 measured_via, expected_cardinality, measurement)
 
 
-_MODEL_OUTPUT = "Model output not yet computed (needs GEMINI_API_KEY); the table publishes no rows."
+#: Why the model-written bill tables publish no rows: an owner decision, not a missing key. The financial pairing has
+#: its own reason below. Neither names a deployment setting: a join reason is public metadata.
+_MODEL_OUTPUT = ("Kept empty by owner decision 34 (fork-delivery-decisions-2026-09-22): the model output that would fill "
+                 "it is not produced; publishes no rows")
+_AMOUNT_PAIRING = "Disabled by design in spicy-docs (pair_amounts=False), owner decision 34; publishes no rows"
 _BILL = "congress_bills"
 #: Where the rulemaking dataset's joins were measured, twice independently (the pointer's snapshot, not a table pin).
 _RULEMAKING = ("Measured 2026-09-27 on snapshot_f31a4045…; receipts rulemaking-exposure-2026-09-27/proposed-joins.json "
@@ -148,7 +152,7 @@ JOINS: tuple[Join, ...] = (
     _join("cbo_cost_estimates", "bill_id", _BILL, "bill_id", 2_488, 0),
     _join("committee_reports", "bill_id", _BILL, "bill_id", 137, 0),
     _join("diff_summaries", "bill_id", _BILL, "bill_id", 0, 0, "empty", _MODEL_OUTPUT),
-    _join("financial_changes", "bill_id", _BILL, "bill_id", 0, 0, "empty", _MODEL_OUTPUT),
+    _join("financial_changes", "bill_id", _BILL, "bill_id", 0, 0, "empty", _AMOUNT_PAIRING),
     _join("hearing_bill_links", "bill_id", _BILL, "bill_id", 85, 0),
     _join("hearing_transcripts", "bill_id", _BILL, "bill_id", 0, 0, "design",
           "Always NULL: a hearing covers a list of bills, which hearing_bill_links hosts one row per bill."),
@@ -303,7 +307,11 @@ JOINS: tuple[Join, ...] = (
           "since or are not indexed. Re-record at 20 once that catch-up is published. Receipt "
           "join-gaps-2026-09-26/i/."),
     _join("court_dockets", "cl_docket_id", "court_opinion_clusters", "cl_docket_id", 11_475, 9_214, "design",
-          "court_dockets is a PACER docket selection; most PACER dockets have no published opinion."),
+          "court_dockets is a PACER (RECAP) docket selection: most PACER dockets have no published opinion, and for "
+          "an appellate case the publisher often keeps two docket objects, the court-website scraper's, which the "
+          "cluster names, and RECAP's, which this table holds, so a decision of a case this table holds may not join "
+          "by id (30 of the 100 cadc cases present on 2026-10-02 did not). The docket number, in "
+          "court_opinions.download_url or court_dockets.docket_number, is the fallback key."),
     # Federal spending and registration.
     _join("usaspending_recipients", "uei", "sam_entities", "uei", 140_849, 20_417, "scope",
           "sam_entities holds SAM's public active registrations, every registration year from 1996. The recipients "
