@@ -14,11 +14,11 @@ establish publication. See the [publication observation](publication-status.md).
 
 ```
 regulations.gov  →  Mirrulations S3 mirror  →  Spicy Regs ETL  →  Parquet on R2
-                                                                   (data.spicy-regs.dev)
+                                                                   (data.{{ SPICYREGS_DOMAIN }})
 ```
 
 The ETL flattens the raw regulations.gov JSON into a handful of flat tables and
-publishes them, plus small pre-computed rollups, to `https://data.spicy-regs.dev`.
+publishes them, plus small pre-computed rollups, to `{{ R2_PUBLIC_URL }}`.
 Alongside them it ingests a set of **complementary federal data sources** — the
 Federal Register, the Unified Agenda, Congress.gov, the CFR, SAM.gov, lobbying
 disclosures, the FEC, USASpending, federal-court litigation, and GAO/CRS reports
@@ -27,7 +27,7 @@ downstream context can all be queried from one place.
 
 ## The tables
 
-When published, a table is available as `https://data.spicy-regs.dev/<name>.parquet` and
+When published, a table is available as `{{ R2_PUBLIC_URL }}/<name>.parquet` and
 is queryable through the MCP server (`list_sources` / `describe_table` /
 `query_sql`).
 
@@ -160,7 +160,7 @@ of `dockets`; they join to the corpus (and to each other) on a few shared keys:
     with no available view. `describe_table` includes actual columns, field
     meanings, declared identifiers and coverage caveats; a listed definition
     does not establish that its data is published. Add
-    `https://mcp.spicy-regs.dev/mcp` as a connector, or run it locally:
+    `https://mcp.{{ SPICYREGS_DOMAIN }}/mcp` as a connector, or run it locally:
 
     ```bash
     claude mcp add spicy-regs -- uvx --from "spicy-regs @ git+https://github.com/civictechdc/spicy-regs" spicy-regs-mcp
@@ -178,7 +178,7 @@ of `dockets`; they join to the corpus (and to each other) on a few shared keys:
     ```sql
     INSTALL httpfs; LOAD httpfs;
     SELECT agency_code, COUNT(*) AS dockets
-    FROM read_parquet('https://data.spicy-regs.dev/dockets.parquet')
+    FROM read_parquet('{{ R2_PUBLIC_URL }}/dockets.parquet')
     GROUP BY agency_code
     ORDER BY dockets DESC
     LIMIT 20;
@@ -192,7 +192,7 @@ of `dockets`; they join to the corpus (and to each other) on a few shared keys:
     con.execute("INSTALL httpfs; LOAD httpfs")
     con.execute(
         "SELECT agency_code, docket_count "
-        "FROM read_parquet('https://data.spicy-regs.dev/agency_stats.parquet') "
+        "FROM read_parquet('{{ R2_PUBLIC_URL }}/agency_stats.parquet') "
         "ORDER BY docket_count DESC LIMIT 20"
     ).df()   # -> pandas DataFrame
     ```

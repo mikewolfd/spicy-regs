@@ -52,17 +52,15 @@ the MCP server's ``comments`` view so counts here agree with counts there.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pyarrow.parquet as pq
 from loguru import logger
 
 from spicy_regs.duckdb_settings import load_public_http
+from spicy_regs.public_url import resolve_r2_base_url
 
 OUTPUT = "org_committee_links.parquet"
-
-DEFAULT_R2_BASE_URL = "https://data.spicy-regs.dev"
 
 # The published schema, in a fixed order.
 COLUMNS: tuple[tuple[str, str], ...] = (
@@ -282,12 +280,7 @@ def _resolve_comments_source(output_dir: Path) -> str:
         logger.info("org_committee_links: using local {}", local)
         return str(local)
 
-    base_url = os.environ.get("R2_PUBLIC_URL") or DEFAULT_R2_BASE_URL
-    base_url = base_url.rstrip("/")
-    if not base_url.startswith("https://"):
-        raise RuntimeError(f"R2_PUBLIC_URL must be an https:// URL, got {base_url!r}")
-    if any(c in base_url for c in ("'", "\\", "\x00", "\n", "\r")):
-        raise RuntimeError(f"R2_PUBLIC_URL contains illegal characters: {base_url!r}")
+    base_url = resolve_r2_base_url()
     url = f"{base_url}/comments.parquet"
     logger.info("org_committee_links: reading comments remotely from {} (column projection)", url)
     return url

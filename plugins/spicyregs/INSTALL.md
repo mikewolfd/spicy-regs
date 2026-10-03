@@ -136,3 +136,10 @@ identifiers from the dataset:
 A correctly installed skill / connector returns docket IDs, titles, and
 modification dates from the R2 parquet — and says so explicitly if R2 was
 unavailable rather than substituting another source.
+
+## Fork domains
+
+The hosted URLs above are upstream defaults. For Mike's fork, use
+`https://mcp.spicygov.ai/mcp`. Standalone query scripts accept
+`SPICYREGS_DOMAIN=spicygov.ai`; an explicit `--r2-url`, `SPICY_REGS_R2_URL`,
+or `R2_PUBLIC_URL` takes precedence, in that order.

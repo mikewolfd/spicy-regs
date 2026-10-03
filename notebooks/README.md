@@ -4,7 +4,10 @@ Jupyter notebooks for exploring and analyzing federal regulations data from [reg
 
 ## Data Source
 
-All notebooks query Parquet files hosted on Cloudflare R2 at `https://data.spicy-regs.dev`:
+The notebooks default to the upstream corpus at `https://data.spicy-regs.dev`.
+Set `SPICYREGS_DOMAIN=spicygov.ai` before starting Jupyter to read the fork.
+`SPICY_REGS_R2_URL` and `R2_PUBLIC_URL` remain explicit data URL overrides
+(in that order). The public corpus includes:
 
 - **dockets.parquet** - 276K+ regulatory dockets
 - **documents.parquet** - 2M+ documents
@@ -58,7 +61,13 @@ These need credentials the public notebooks above don't (R2 / R2 Data Catalog AP
 ```python
 import duckdb
 
-R2_URL = "https://data.spicy-regs.dev"
+import os
+
+R2_URL = (
+    os.environ.get("SPICY_REGS_R2_URL")
+    or os.environ.get("R2_PUBLIC_URL")
+    or f"https://data.{os.environ.get('SPICYREGS_DOMAIN') or 'spicy-regs.dev'}"
+).rstrip("/")
 
 conn = duckdb.connect()
 conn.execute("INSTALL httpfs; LOAD httpfs;")

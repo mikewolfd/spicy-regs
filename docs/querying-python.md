@@ -1,7 +1,7 @@
 # Querying with Python
 
 Every table is published as public Apache Parquet at
-`https://data.spicy-regs.dev/<table>.parquet` — **no credentials, no download
+`{{ R2_PUBLIC_URL }}/<table>.parquet` — **no credentials, no download
 required**. The easiest way to query it from Python is [DuckDB](https://duckdb.org)
 with the `httpfs` extension, which reads the remote Parquet directly (and only
 fetches the byte ranges your query touches).
@@ -18,7 +18,7 @@ import duckdb
 con = duckdb.connect()
 con.execute("INSTALL httpfs; LOAD httpfs")
 
-BASE = "https://data.spicy-regs.dev"
+BASE = "{{ R2_PUBLIC_URL }}"
 
 def table(name: str) -> str:
     """Return a read_parquet(...) expression for a published table."""
@@ -188,5 +188,5 @@ con.execute(f"""
 ## Other ways in
 
 - **Bundled CLI (local files):** `uvx --from "spicy-regs @ git+https://github.com/civictechdc/spicy-regs" spicy-regs download` then `spicy-regs stats` / `sample` / `search`.
-- **AI assistants (MCP):** the hosted server at `https://mcp.spicy-regs.dev/mcp` exposes `list_sources` / `describe_table` / `query_sql`. See the [home page](index.md#how-to-query-it).
+- **AI assistants (MCP):** the hosted server at `https://mcp.{{ SPICYREGS_DOMAIN }}/mcp` exposes `list_sources` / `describe_table` / `query_sql`. See the [home page](index.md#how-to-query-it).
 - **Full schemas:** every column of every table is documented under [The tables](index.md#the-tables).
