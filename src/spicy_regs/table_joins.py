@@ -269,8 +269,10 @@ JOINS: tuple[Join, ...] = (
           reason="Asked of the Regulations.gov API by fill-docket-gaps like documents' orphans: 6 answer 404 and 22 "
                  "answer 400 Invalid ID (legacy -RULEMAKING/-NONRULEMAKING ids)."),
     _join("fr_docket_links", "docket_id", "dockets", "docket_id", 612_342, 592_102, "design",
-          "Raw publisher docket labels (many are agency docket numbers); the normalized bridge is "
-          "rule_targets.docket_id -> dockets."),
+          "Printed rows carry raw publisher docket labels (many are agency docket numbers); the normalized bridge is "
+          "rule_targets.docket_id -> dockets. A row whose link_source is regulations_dot_gov_info carries the "
+          "Register's own regulations.gov docket id (from 2026-10-03), which names a regulations.gov docket; the "
+          "baseline predates those rows."),
     _join("rule_targets", "docket_id", "dockets", "docket_id", 143_012, 83,
           reason="Normalized FR-to-Regulations.gov bridge from the materialized rulemaking snapshot. Each orphan "
                  "is one fill-docket-gaps asked for: 16 answer 404 and 67 answer 400 Invalid ID."),

@@ -4,9 +4,9 @@
 
 **Federal Register to docket links**
 
-The Federal Register ↔ docket bridge: each `federal_register` row's `docket_ids_json` array exploded to one row per (docket_id, document_number, publication_date), carrying the FR display columns. Use this instead of an `ILIKE` scan over `federal_register.docket_ids_json` — it is sorted by `docket_id`, so `WHERE docket_id = ?` prunes row groups. This is the practical join from regulations.gov to the Federal Register using the Federal Register's own stated docket links. Built by `build_fr_docket_links`.
+The Federal Register ↔ docket bridge, from the Register's two statements: each `federal_register` row's printed `docket_ids_json` array exploded to one row per occurrence, and the docket of its regulations.gov link (`regulations_dot_gov_docket_id`) as a row of its own where no printed label carries it; `link_source` says which statement carries the pair. Printed labels are often agency docket numbers: of 2,791 documents that state a regulations.gov docket in windows sampled from 1998 to 2026, 1,513 print no label that carries it, and these `WHERE docket_id = ?` reaches only through the link; 998 print it in another form (`Docket No. …`), kept verbatim, with the id in `normalized_docket_candidates_json` (receipt `round6/impl-W/m2/printed_vs_info.out`). Carries the FR display columns. Use this instead of an `ILIKE` scan over `federal_register.docket_ids_json`: it is sorted by `docket_id`, so `WHERE docket_id = ?` prunes row groups. The rulemaking tables read the printed statement only (`link_source` `printed` or `both`). Built by `build_fr_docket_links`.
 
-**Coverage.** Derived, and bounded by its inputs: one link per docket id that a dated Federal Register record names, over the `federal_register` table's own date range. *(measured 2026-09-23)*
+**Coverage.** Derived, and bounded by its inputs: one link per docket a dated Federal Register record names, in its printed labels or in its regulations.gov link, over the `federal_register` table's own date range. A Register row not read since the regulations.gov link was first requested contributes its printed labels only. *(measured 2026-10-03)*
 
 - **Parquet file:** `fr_docket_links.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -15,9 +15,9 @@ The Federal Register ↔ docket bridge: each `federal_register` row's `docket_id
 
 | Column | Type | Description |
 | --- | --- | --- |
-| `docket_id` | `VARCHAR` | One literal docket ID extracted from the FR document's `docket_ids_json` array. |
-| `docket_source_ordinal` | `BIGINT` | Zero-based position in the original docket array, before null/blank elements are filtered. Present only after rebuilding. Required with document_number and publication_date to identify an occurrence. |
-| `normalized_docket_candidates_json` | `VARCHAR` | Owner-normalizer candidate interpretations of the literal docket value; an empty array means no supported interpretation, not absence of a docket. |
+| `docket_id` | `VARCHAR` | The docket as the statement gives it: a printed label verbatim from `docket_ids_json` (`Docket No. FAA-2007-29334`, an agency docket number, a `FRL-` number), or the Register's regulations.gov docket id. |
+| `docket_source_ordinal` | `BIGINT` | Zero-based position of a printed label in the original docket array, before null/blank elements are filtered; NULL on a row the regulations.gov link alone carries. With document_number and publication_date it identifies a printed occurrence. |
+| `normalized_docket_candidates_json` | `VARCHAR` | Owner-normalizer candidate interpretations of the docket value; an empty array means no supported interpretation, not absence of a docket. |
 | `docket_normalization_rule` | `VARCHAR` | Digest-pinned owner identifier-normalization rule used to produce candidates. |
 | `document_number` | `VARCHAR` | Literal Federal Register document number. Join to `federal_register` on both this value and `publication_date`; a number can name distinct dated records. |
 | `title` | `VARCHAR` | FR document title. |
@@ -34,3 +34,4 @@ The Federal Register ↔ docket bridge: each `federal_register` row's `docket_id
 | `html_url` | `VARCHAR` | federalregister.gov HTML permalink. |
 | `pdf_url` | `VARCHAR` | Federal Register PDF URL. |
 | `executive_order_number` | `VARCHAR` | Executive order number, for presidential documents. |
+| `link_source` | `VARCHAR` | Which of the Register's statements carries the pair: `printed` (the document's printed docket labels), `regulations_dot_gov_info` (the Register's regulations.gov link, read from `regulations_dot_gov_docket_id` alone, never off a document id) or `both`, where a printed label is that docket id or SpicyDocs' normalizer reads it from the label. Every printed occurrence that carries the pair reads `both`, and the link then adds no row. Never NULL. |

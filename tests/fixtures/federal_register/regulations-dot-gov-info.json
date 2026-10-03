@@ -1,0 +1,435 @@
+[
+ {
+  "abstract": "HRSA administers this grant using funding made available by the Health and Human Services Assistant Secretary for Planning and Evaluation (ASPE) from the Patient Centered Outcomes Research Trust Fund (PCORTF) and awarded for this purpose to JHU. ASPE/PCORTF supports this multi-agency data linkage project to build further data capacity. Supplemental funding was previously awarded in fiscal year (FY) 2024 and FY25 to initiate the data linkage and user testing process. This award is a continuation of this work and the final year for this ASPE/ PCORTF award. If JHU does not receive this award, it will not have the funds needed to execute the final phase of the data linkage project.",
+  "action": "Notice of supplemental funding to Johns Hopkins University (JHU), a current HRSA awardee for the Autism Longitudinal Data Project.",
+  "agencies": [
+   {
+    "raw_name": "DEPARTMENT OF HEALTH AND HUMAN SERVICES",
+    "name": "Health and Human Services Department",
+    "id": 221,
+    "url": "https://www.federalregister.gov/agencies/health-and-human-services-department",
+    "json_url": "https://www.federalregister.gov/api/v1/agencies/221",
+    "parent_id": null,
+    "slug": "health-and-human-services-department"
+   },
+   {
+    "raw_name": "Health Resources and Services Administration",
+    "name": "Health Resources and Services Administration",
+    "id": 222,
+    "url": "https://www.federalregister.gov/agencies/health-resources-and-services-administration",
+    "json_url": "https://www.federalregister.gov/api/v1/agencies/222",
+    "parent_id": 221,
+    "slug": "health-resources-and-services-administration"
+   }
+  ],
+  "agency_names": [
+   "Health and Human Services Department",
+   "Health Resources and Services Administration"
+  ],
+  "body_html_url": "https://www.federalregister.gov/documents/full_text/html/2026/09/30/2026-19936.html",
+  "cfr_references": [],
+  "comments_close_on": null,
+  "correction_of": null,
+  "corrections": [],
+  "docket_ids": [],
+  "document_number": "2026-19936",
+  "effective_on": null,
+  "end_page": 61850,
+  "executive_order_number": null,
+  "full_text_xml_url": "https://www.federalregister.gov/documents/full_text/xml/2026/09/30/2026-19936.xml",
+  "html_url": "https://www.federalregister.gov/documents/2026/09/30/2026-19936/autism-longitudinal-data-project-and-linking-the-boston-birth-cohort-and-pregnancy-to-early-life",
+  "pdf_url": "https://www.govinfo.gov/content/pkg/FR-2026-09-30/pdf/2026-19936.pdf",
+  "publication_date": "2026-09-30",
+  "regulation_id_numbers": [],
+  "regulations_dot_gov_info": {},
+  "significant": null,
+  "signing_date": null,
+  "start_page": 61850,
+  "subtype": null,
+  "title": "Autism Longitudinal Data Project and Linking the Boston Birth Cohort and Pregnancy to Early Life Longitudinal Data System and Community-Level Health Databases: A Longitudinal Cohort of Mother-Child Dyads",
+  "topics": [],
+  "type": "Notice",
+  "volume": 91
+ },
+ {
+  "abstract": "In compliance with the requirements of the Paperwork Reduction Act of 1995 (PRA), the Federal Energy Regulatory Commission (Commission or FERC) is soliciting public comment on FERC-521: Payments for Benefits from Headwater Improvements (OMB Control No 1902-0087) which will be submitted to the Office of Management and Budget (OMB) for a review of the information collection requirements. There are no proposed changes to the reporting requirements. No comments were received in the 60-day comment period.",
+  "action": "Notice of information collection and request for comments.",
+  "agencies": [
+   {
+    "raw_name": "DEPARTMENT OF ENERGY",
+    "name": "Energy Department",
+    "id": 136,
+    "url": "https://www.federalregister.gov/agencies/energy-department",
+    "json_url": "https://www.federalregister.gov/api/v1/agencies/136",
+    "parent_id": null,
+    "slug": "energy-department"
+   },
+   {
+    "raw_name": "Federal Energy Regulatory Commission",
+    "name": "Federal Energy Regulatory Commission",
+    "id": 167,
+    "url": "https://www.federalregister.gov/agencies/federal-energy-regulatory-commission",
+    "json_url": "https://www.federalregister.gov/api/v1/agencies/167",
+    "parent_id": 136,
+    "slug": "federal-energy-regulatory-commission"
+   }
+  ],
+  "agency_names": [
+   "Energy Department",
+   "Federal Energy Regulatory Commission"
+  ],
+  "body_html_url": "https://www.federalregister.gov/documents/full_text/html/2026/09/18/2026-19200.html",
+  "cfr_references": [],
+  "comments_close_on": "2026-10-19",
+  "correction_of": null,
+  "corrections": [],
+  "docket_ids": [
+   "Docket No. IC26-36-000"
+  ],
+  "document_number": "2026-19200",
+  "effective_on": null,
+  "end_page": 59123,
+  "executive_order_number": null,
+  "full_text_xml_url": "https://www.federalregister.gov/documents/full_text/xml/2026/09/18/2026-19200.xml",
+  "html_url": "https://www.federalregister.gov/documents/2026/09/18/2026-19200/commission-information-collection-activities-ferc-521-comment-request-extension",
+  "pdf_url": "https://www.govinfo.gov/content/pkg/FR-2026-09-18/pdf/2026-19200.pdf",
+  "publication_date": "2026-09-18",
+  "regulation_id_numbers": [],
+  "regulations_dot_gov_info": {
+   "comments_count": 0,
+   "agency_id": "FERC",
+   "document_id": "FERC-2026-5579-0001",
+   "checked_regulationsdotgov_at": "2026-09-19T15:55:04Z"
+  },
+  "significant": null,
+  "signing_date": null,
+  "start_page": 59123,
+  "subtype": null,
+  "title": "Commission Information Collection Activities (Ferc-521); Comment Request; Extension",
+  "topics": [],
+  "type": "Notice",
+  "volume": 91
+ },
+ {
+  "abstract": "The Department of the Treasury will submit the following information collection requests to the Office of Management and Budget (OMB) for review and clearance in accordance with the Paperwork Reduction Act of 1995, on or after the date of publication of this notice. The public is invited to submit comments on these requests.",
+  "action": "Notice of Information Collection; request for comment.",
+  "agencies": [
+   {
+    "raw_name": "DEPARTMENT OF THE TREASURY",
+    "name": "Treasury Department",
+    "id": 497,
+    "url": "https://www.federalregister.gov/agencies/treasury-department",
+    "json_url": "https://www.federalregister.gov/api/v1/agencies/497",
+    "parent_id": null,
+    "slug": "treasury-department"
+   }
+  ],
+  "agency_names": [
+   "Treasury Department"
+  ],
+  "body_html_url": "https://www.federalregister.gov/documents/full_text/html/2026/09/01/2026-17779.html",
+  "cfr_references": [],
+  "comments_close_on": "2026-10-01",
+  "correction_of": null,
+  "corrections": [],
+  "docket_ids": [],
+  "document_number": "2026-17779",
+  "effective_on": null,
+  "end_page": 56288,
+  "executive_order_number": null,
+  "full_text_xml_url": "https://www.federalregister.gov/documents/full_text/xml/2026/09/01/2026-17779.xml",
+  "html_url": "https://www.federalregister.gov/documents/2026/09/01/2026-17779/agency-information-collection-activities-submission-for-omb-review-comment-request-regulation-agency",
+  "pdf_url": "https://www.govinfo.gov/content/pkg/FR-2026-09-01/pdf/2026-17779.pdf",
+  "publication_date": "2026-09-01",
+  "regulation_id_numbers": [],
+  "regulations_dot_gov_info": {
+   "checked_regulationsdotgov_at": "2026-09-01T07:43:54Z"
+  },
+  "significant": null,
+  "signing_date": null,
+  "start_page": 56287,
+  "subtype": null,
+  "title": "Agency Information Collection Activities; Submission for OMB Review; Comment Request; Regulation Agency Protests",
+  "topics": [],
+  "type": "Notice",
+  "volume": 91
+ },
+ {
+  "abstract": "In response to Section 10106 of Public Law 119-21, the One Big Beautiful Bill Act of 2025, this proposed rule would amend the Supplemental Nutrition Assistance Program (SNAP) regulations to codify the reduction of the amount of the Federal government's share of annual SNAP State administrative costs from 50 percent to 25 percent, effective beginning in fiscal year 2027.",
+  "action": "Proposed rule.",
+  "agencies": [
+   {
+    "raw_name": "DEPARTMENT OF AGRICULTURE",
+    "name": "Agriculture Department",
+    "id": 12,
+    "url": "https://www.federalregister.gov/agencies/agriculture-department",
+    "json_url": "https://www.federalregister.gov/api/v1/agencies/12",
+    "parent_id": null,
+    "slug": "agriculture-department"
+   },
+   {
+    "raw_name": "Food and Nutrition Administration",
+    "name": "Food and Nutrition Administration",
+    "id": 625,
+    "url": "https://www.federalregister.gov/agencies/food-and-nutrition-administration",
+    "json_url": "https://www.federalregister.gov/api/v1/agencies/625",
+    "parent_id": 12,
+    "slug": "food-and-nutrition-administration"
+   }
+  ],
+  "agency_names": [
+   "Agriculture Department",
+   "Food and Nutrition Administration"
+  ],
+  "body_html_url": "https://www.federalregister.gov/documents/full_text/html/2026/06/24/2026-12696.html",
+  "cfr_references": [
+   {
+    "chapter": null,
+    "citation_url": null,
+    "part": "272",
+    "title": 7
+   },
+   {
+    "chapter": null,
+    "citation_url": null,
+    "part": "274",
+    "title": 7
+   },
+   {
+    "chapter": null,
+    "citation_url": null,
+    "part": "277",
+    "title": 7
+   }
+  ],
+  "comments_close_on": "2026-08-24",
+  "correction_of": null,
+  "corrections": [],
+  "docket_ids": [
+   "FNS-2026-0595"
+  ],
+  "document_number": "2026-12696",
+  "effective_on": null,
+  "end_page": 37840,
+  "executive_order_number": null,
+  "full_text_xml_url": "https://www.federalregister.gov/documents/full_text/xml/2026/06/24/2026-12696.xml",
+  "html_url": "https://www.federalregister.gov/documents/2026/06/24/2026-12696/supplemental-nutrition-assistance-program-changes-in-federal-state-administrative-cost-sharing",
+  "pdf_url": "https://www.govinfo.gov/content/pkg/FR-2026-06-24/pdf/2026-12696.pdf",
+  "publication_date": "2026-06-24",
+  "regulation_id_numbers": [
+   "0584-AF22"
+  ],
+  "regulations_dot_gov_info": {
+   "supporting_documents": [
+    {
+     "title": "SNAP Admin Cost Sharing RIA",
+     "document_id": "FNA-2026-0034-0002"
+    }
+   ],
+   "comments_count": 41,
+   "agency_id": "FNA",
+   "comments_url": "https://www.regulations.gov/docketBrowser?rpp=50&so=DESC&sb=postedDate&po=0&dct=PS&D=FNA-2026-0034",
+   "supporting_documents_count": 1,
+   "docket_id": "FNA-2026-0034",
+   "document_id": "FNA-2026-0034-0001",
+   "regulation_id_number": "0584-AF22",
+   "title": "Supplemental Nutrition Assistance Program: Changes in Federal-State Administrative Cost Sharing",
+   "checked_regulationsdotgov_at": "2026-09-25T08:55:04Z"
+  },
+  "significant": null,
+  "signing_date": null,
+  "start_page": 37837,
+  "subtype": null,
+  "title": "Supplemental Nutrition Assistance Program: Changes in Federal-State Administrative Cost Sharing",
+  "topics": [
+   "Administrative practice and procedure",
+   "Grant programs-social programs",
+   "Investigations",
+   "Reporting and recordkeeping requirements",
+   "Supplemental Nutrition Assistance Program"
+  ],
+  "type": "Proposed Rule",
+  "volume": 91
+ },
+ {
+  "document_number": "E8-3813",
+  "publication_date": "2008-03-04",
+  "type": "Rule",
+  "docket_ids": [
+   "Docket No. FAA-2007-29334",
+   "Directorate Identifier 2006-NM-268-AD",
+   "Amendment 39-15398",
+   "AD 2008-05-04"
+  ],
+  "comments_close_on": null,
+  "regulations_dot_gov_info": {
+   "supporting_documents": [
+    {
+     "title": "U.S. DOT/FAA - Airworthiness Directive Grid",
+     "document_id": "FAA-2007-29334-0007"
+    },
+    {
+     "title": "U.S. DOT/FAA - Airworthiness Directive Grid",
+     "document_id": "FAA-2007-29334-0005"
+    }
+   ],
+   "regulatory_plan": {
+    "html_url": "https://www.federalregister.gov/regulations/2120-AA64/airworthiness-directives",
+    "title": "Airworthiness Directives"
+   },
+   "comments_url": "https://www.regulations.gov/docketBrowser?rpp=50&so=DESC&sb=postedDate&po=0&dct=PS&D=FAA-2007-29334",
+   "supporting_documents_count": 2,
+   "docket_id": "FAA-2007-29334",
+   "regulation_id_number": "2120-AA64",
+   "title": "Airbus Model A330 Airplanes and A340-200 and -300 Series Airplanes - 2006-NM-268-AD",
+   "checked_regulationsdotgov_at": "2011-11-13T21:34:12Z"
+  },
+  "dockets": [],
+  "agencies": [
+   {
+    "raw_name": "DEPARTMENT OF TRANSPORTATION",
+    "name": "Transportation Department",
+    "id": 492,
+    "url": "https://www.federalregister.gov/agencies/transportation-department",
+    "json_url": "https://www.federalregister.gov/api/v1/agencies/492",
+    "parent_id": null,
+    "slug": "transportation-department"
+   },
+   {
+    "raw_name": "Federal Aviation Administration",
+    "name": "Federal Aviation Administration",
+    "id": 159,
+    "url": "https://www.federalregister.gov/agencies/federal-aviation-administration",
+    "json_url": "https://www.federalregister.gov/api/v1/agencies/159",
+    "parent_id": 492,
+    "slug": "federal-aviation-administration"
+   }
+  ]
+ },
+ {
+  "document_number": "E8-4997",
+  "publication_date": "2008-03-12",
+  "type": "Notice",
+  "docket_ids": [
+   "EPA-HQ-OW-2004-0015",
+   "FRL-8541-7",
+   "Docket ID No. EPA-HQ-OW-2004-0015"
+  ],
+  "comments_close_on": "2008-05-12",
+  "regulations_dot_gov_info": {
+   "supporting_documents": [
+    {
+     "title": "ICR CWSRF Supporting Statement OMB NO.2040-0118 EPA ICR NO. 1391.12 7-31-20",
+     "document_id": "EPA-HQ-OW-2004-0015-0040"
+    },
+    {
+     "title": "SRF Public Awareness Policy",
+     "document_id": "EPA-HQ-OW-2004-0015-0038"
+    },
+    {
+     "title": "Sample IUP",
+     "document_id": "EPA-HQ-OW-2004-0015-0037"
+    },
+    {
+     "title": "ICR CWSRF Supporting Statement OMB NO. 2040-0118 EPA ICR NO. 1391.12 Final",
+     "document_id": "EPA-HQ-OW-2004-0015-0036"
+    },
+    {
+     "title": "CWNIMS Instructions",
+     "document_id": "EPA-HQ-OW-2004-0015-0035"
+    },
+    {
+     "title": "CWNIMS Data Definitions",
+     "document_id": "EPA-HQ-OW-2004-0015-0034"
+    },
+    {
+     "title": "CBR Definitions and Reporting Instructions",
+     "document_id": "EPA-HQ-OW-2004-0015-0032"
+    },
+    {
+     "title": "ICR Supporting Statement",
+     "document_id": "EPA-HQ-OW-2004-0015-0030"
+    },
+    {
+     "title": "Supporting Statement",
+     "document_id": "EPA-HQ-OW-2004-0015-0029"
+    },
+    {
+     "title": "Sample IUP Final",
+     "document_id": "EPA-HQ-OW-2004-0015-0028"
+    }
+   ],
+   "comments_url": "https://www.regulations.gov/docketBrowser?rpp=50&so=DESC&sb=postedDate&po=0&dct=PS&D=EPA-HQ-OW-2004-0015",
+   "supporting_documents_count": 30,
+   "docket_id": "EPA-HQ-OW-2004-0015",
+   "regulation_id_number": null,
+   "title": "Clean Water Act State Revolving Fund",
+   "checked_regulationsdotgov_at": "2011-11-13T23:42:42Z"
+  },
+  "dockets": [],
+  "agencies": [
+   {
+    "raw_name": "ENVIRONMENTAL PROTECTION AGENCY",
+    "name": "Environmental Protection Agency",
+    "id": 145,
+    "url": "https://www.federalregister.gov/agencies/environmental-protection-agency",
+    "json_url": "https://www.federalregister.gov/api/v1/agencies/145",
+    "parent_id": null,
+    "slug": "environmental-protection-agency"
+   }
+  ]
+ },
+ {
+  "document_number": "2016-04346",
+  "publication_date": "2016-03-01",
+  "type": "Notice",
+  "docket_ids": [
+   "NRC-2016-0040"
+  ],
+  "comments_close_on": "2016-03-31",
+  "regulations_dot_gov_info": {
+   "supporting_documents": [],
+   "comments_count": 0,
+   "agency_id": "NRC",
+   "comments_url": "https://www.regulations.gov/docketBrowser?rpp=50&so=DESC&sb=postedDate&po=0&dct=PS&D=NRC-2016-0040",
+   "supporting_documents_count": 0,
+   "docket_id": "NRC-2016-0040",
+   "document_id": "NRC-2016-0040-0001",
+   "regulation_id_number": null,
+   "title": "Applications and Amendments to Facility Operating Licenses and Combined Licenses Involving No Significant Hazards Considerations",
+   "checked_regulationsdotgov_at": "2023-02-28T21:23:46Z"
+  },
+  "dockets": [
+   {
+    "supporting_documents": [],
+    "agency_name": "NRC",
+    "documents": [
+     {
+      "comment_count": 0,
+      "comment_start_date": "2016-03-01",
+      "updated_at": "2023-02-28T16:23:47.430-05:00",
+      "comment_url": "https://www.regulations.gov/commenton/NRC-2016-0040-0001",
+      "allow_late_comments": null,
+      "id": "NRC-2016-0040-0001",
+      "comment_end_date": "2016-04-01",
+      "regulations_dot_gov_open_for_comment": false
+     }
+    ],
+    "supporting_documents_count": 0,
+    "id": "NRC-2016-0040",
+    "title": "Applications and Amendments to Facility Operating Licenses and Combined Licenses Involving No Significant Hazards Considerations"
+   }
+  ],
+  "agencies": [
+   {
+    "raw_name": "NUCLEAR REGULATORY COMMISSION",
+    "name": "Nuclear Regulatory Commission",
+    "id": 383,
+    "url": "https://www.federalregister.gov/agencies/nuclear-regulatory-commission",
+    "json_url": "https://www.federalregister.gov/api/v1/agencies/383",
+    "parent_id": null,
+    "slug": "nuclear-regulatory-commission"
+   }
+  ]
+ }
+]

@@ -1092,7 +1092,7 @@
         "docket_id"
       ],
       "kind": "design",
-      "reason": "Raw publisher docket labels (many are agency docket numbers); the normalized bridge is rule_targets.docket_id -> dockets.",
+      "reason": "Printed rows carry raw publisher docket labels (many are agency docket numbers); the normalized bridge is rule_targets.docket_id -> dockets. A row whose link_source is regulations_dot_gov_info carries the Register's own regulations.gov docket id (from 2026-10-03), which names a regulations.gov docket; the baseline predates those rows.",
       "measured_via": null,
       "baseline_keys": 612342,
       "baseline_missing": 592102,

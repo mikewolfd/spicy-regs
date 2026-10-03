@@ -421,7 +421,10 @@ class FederalRegisterIndex:
         number, date and status otherwise; a value naming none, or a row with no number,
         yields nothing. So a stage keys a link by its (FR document, docket) pair, as it did
         when a value named one docket. Every docket-shaped value comes back: which dockets a
-        stage trusts is its own join.
+        stage trusts is its own join. Only the labels the document prints are read: a row the
+        Register's regulations.gov link alone carries (``link_source``) is not a stage's
+        evidence, which keeps the rulemaking tables as they were (whether it should be is a
+        later decision).
 
         The table is read once per index and replayed to every stage that shares it, as the
         index itself is; the plural reader costs about twice the single one, which each stage
@@ -434,7 +437,10 @@ class FederalRegisterIndex:
         rows = self._docket_links.get(path)
         if rows is None:
             rows = self._docket_links[path] = []
-            for row in iter_parquet_rows(path, columns=("docket_id", "document_number", "publication_date")):
+            columns = ("docket_id", "document_number", "publication_date", "link_source")
+            for row in iter_parquet_rows(path, columns=columns):
+                if row.get("link_source") == "regulations_dot_gov_info":
+                    continue
                 if row.get("document_number") and (dockets := linked_docket_ids(row.get("docket_id"))):
                     reference = self.reference(str(row["document_number"]), row.get("publication_date"))
                     rows.append((dockets, {**reference, "candidate_ids": tuple(reference["candidate_ids"])}))

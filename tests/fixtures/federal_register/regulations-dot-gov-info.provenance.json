@@ -1,0 +1,44 @@
+{
+  "description": "Exact native result objects, reserialized as JSON; no values changed. The first four are every shape of regulations_dot_gov_info (stated empty, a check alone, a document with no docket, a docket the document does not print), fetched 2026-10-03 by round-6 implementer D2; the last three are the Register's docket printed literally (2016-04346), printed only as 'Docket No. ...' (E8-3813) and printed twice in two spellings (E8-4997), from round-6 scout C's windowed pages.",
+  "inputs": [
+    {
+      "path": "/Users/mikewolfd/Work/spicy-stack/corpora/mcp-chaos-2026-10-02/round6/impl-D2/fr/fr-shapes-2026-10-03.json",
+      "sha256": "e17334aad9563ba1feb826eeddc2a15dbb915b3484f8b61f5fee07faa509caba",
+      "url": "https://www.federalregister.gov/api/v1/documents/2026-19936,2026-17779,2026-19200,2026-12696.json (every requested field; receipt impl-D2/fr/receipts.jsonl)",
+      "selection": [
+        "2026-19936",
+        "2026-19200",
+        "2026-17779",
+        "2026-12696"
+      ],
+      "source_rows": 4
+    },
+    {
+      "path": "/Users/mikewolfd/Work/spicy-stack/corpora/mcp-chaos-2026-10-02/round6/scout-C/m2m4/fr_pages/2008-03-01_2008-03-15_p1.json",
+      "sha256": "d27c35ba69ef70c8016fb9bc415426a2e776d2bdefa6f8ce42fbe202d4e96b7e",
+      "url": "federalregister.gov /api/v1/documents.json, fields document_number, publication_date, type, docket_ids, comments_close_on, regulations_dot_gov_info, dockets, agencies (scout-C/m2m4/m2_fetch_sample.py)",
+      "selection": {
+        "document_number": "E8-3813"
+      },
+      "source_rows": 1000
+    },
+    {
+      "path": "/Users/mikewolfd/Work/spicy-stack/corpora/mcp-chaos-2026-10-02/round6/scout-C/m2m4/fr_pages/2008-03-01_2008-03-15_p2.json",
+      "sha256": "a41fe773f8c6f3d60d091a36789c8380385323ebd90eac9968c6ba5d4f8b3385",
+      "url": "federalregister.gov /api/v1/documents.json, fields document_number, publication_date, type, docket_ids, comments_close_on, regulations_dot_gov_info, dockets, agencies (scout-C/m2m4/m2_fetch_sample.py)",
+      "selection": {
+        "document_number": "E8-4997"
+      },
+      "source_rows": 307
+    },
+    {
+      "path": "/Users/mikewolfd/Work/spicy-stack/corpora/mcp-chaos-2026-10-02/round6/scout-C/m2m4/fr_pages/2016-03-01_2016-03-15_p1.json",
+      "sha256": "be157aaef3603eb91a26341fda81fa2e3c8f816eaf93b56c36b138cb4ea3d1c6",
+      "url": "federalregister.gov /api/v1/documents.json, fields document_number, publication_date, type, docket_ids, comments_close_on, regulations_dot_gov_info, dockets, agencies (scout-C/m2m4/m2_fetch_sample.py)",
+      "selection": {
+        "document_number": "2016-04346"
+      },
+      "source_rows": 1000
+    }
+  ]
+}

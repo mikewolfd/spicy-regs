@@ -157,10 +157,10 @@
     {
       "table": "fr_docket_links",
       "label": "Federal Register to docket links",
-      "summary": "The Federal Register ↔ docket bridge: each `federal_register` row's `docket_ids_json` array exploded to one row per (docket_id, document_number, publication_date), carrying the FR display columns. Use this instead of an `ILIKE` scan over `federal_register.docket_ids_json` — it is sorted by `docket_id`, so `WHERE docket_id = ?` prunes row groups. This is the practical join from regulations.gov to the Federal Register using the Federal Register's own stated docket links. Built by `build_fr_docket_links`.",
-      "coverage": "Derived, and bounded by its inputs: one link per docket id that a dated Federal Register record names, over the `federal_register` table's own date range.",
+      "summary": "The Federal Register ↔ docket bridge, from the Register's two statements: each `federal_register` row's printed `docket_ids_json` array exploded to one row per occurrence, and the docket of its regulations.gov link (`regulations_dot_gov_docket_id`) as a row of its own where no printed label carries it; `link_source` says which statement carries the pair. Printed labels are often agency docket numbers: of 2,791 documents that state a regulations.gov docket in windows sampled from 1998 to 2026, 1,513 print no label that carries it, and these `WHERE docket_id = ?` reaches only through the link; 998 print it in another form (`Docket No. …`), kept verbatim, with the id in `normalized_docket_candidates_json` (receipt `round6/impl-W/m2/printed_vs_info.out`). Carries the FR display columns. Use this instead of an `ILIKE` scan over `federal_register.docket_ids_json`: it is sorted by `docket_id`, so `WHERE docket_id = ?` prunes row groups. The rulemaking tables read the printed statement only (`link_source` `printed` or `both`). Built by `build_fr_docket_links`.",
+      "coverage": "Derived, and bounded by its inputs: one link per docket a dated Federal Register record names, in its printed labels or in its regulations.gov link, over the `federal_register` table's own date range. A Register row not read since the regulations.gov link was first requested contributes its printed labels only.",
       "kind": "derived",
-      "measured_on": "2026-09-23",
+      "measured_on": "2026-10-03",
       "data_quality": null,
       "columns": [
         "docket_id",
@@ -181,7 +181,8 @@
         "regulation_id_numbers_json",
         "html_url",
         "pdf_url",
-        "executive_order_number"
+        "executive_order_number",
+        "link_source"
       ]
     },
     {
@@ -5252,7 +5253,7 @@
       "coverage": "True range: dated records published from 1994-01-03 on, the whole span the API serves.",
       "kind": "true_range",
       "measured_on": "2026-09-23",
-      "data_quality": "Document numbers are not globally unique: `00-111` names different records on 2000-01-14 and 2000-01-18. Current merging preserves both dates and replaces only the same dated record on a later successful fetch. This code correction does not restore historical records already lost from published files; those require a pinned historical replay and publication. A number-only source reference remains ambiguous when its input generation supplies multiple dated candidates. One RIN, docket and title can cover a rule and its later corrections, effective-date delays and confirmations, all typed `Rule` since 2008 with `subtype` NULL, so a RIN or title match picks a document family, not a document; tell them apart by title, abstract and `publication_date`. The API lists no RIN on a large share of `Rule` documents every year, some of which state one in the printed text or inside `docket_ids_json`.",
+      "data_quality": "Document numbers are not globally unique: `00-111` names different records on 2000-01-14 and 2000-01-18. Current merging preserves both dates and replaces only the same dated record on a later successful fetch. This code correction does not restore historical records already lost from published files; those require a pinned historical replay and publication. A number-only source reference remains ambiguous when its input generation supplies multiple dated candidates. One RIN, docket and title can cover a rule and its later corrections, effective-date delays and confirmations, all typed `Rule` since 2008 with `subtype` NULL, so a RIN or title match picks a document family, not a document; `action` tells them apart (`Final rule; correction.`) where the Register states one. The API lists no RIN on a large share of `Rule` documents every year, some of which state one in the printed text or inside `docket_ids_json`. A row not read since the Register's regulations.gov link and `action` were first requested (2026-10-03) is NULL in all nine of those columns, which means not read: test `regulations_dot_gov_info_json`, which a row read since holds as `'{}'` at least. The scheduled run re-reads the last 120 days, so a relayed comment count follows the Register's own checks to about the comment period's close.",
       "columns": [
         "document_number",
         "title",
@@ -5469,7 +5470,7 @@
     {
       "table": "house_communications",
       "label": "House executive communications",
-      "summary": "One row per House executive communication, as the Congress.gov house-communication list and detail routes state it, keyed on the publisher's own address. The regulatory bridge: `is_rulemaking`, the cited `legal_authority`, the committee referral, the matching House requirement and the RIN read from `report_nature`. A Federal Register RIN join must unnest `regulation_id_numbers_json` (the scalar `federal_register.rin` is the first value only) and retain number plus publication date. The Register API lists no RIN on many `Rule` documents, including some whose printed text states one, and sometimes prints the RIN inside `docket_ids_json`, so a RIN join misses those and can land on a correction or effective-date notice that shares the rule's RIN, docket and title. All columns are stored as VARCHAR.",
+      "summary": "One row per House executive communication, as the Congress.gov house-communication list and detail routes state it, keyed on the publisher's own address. The regulatory bridge: `is_rulemaking`, the cited `legal_authority`, the committee referral, the matching House requirement and the RIN read from `report_nature`. A Federal Register RIN join must unnest `regulation_id_numbers_json` (the scalar `federal_register.rin` is the first value only) and retain number plus publication date. The Register API lists no RIN on many `Rule` documents, including some whose printed text states one, and sometimes prints the RIN inside `docket_ids_json`, so a RIN join misses those and can land on a correction or effective-date notice that shares the rule's RIN, docket and title; `federal_register.action` tells such a notice from its rule. All columns are stored as VARCHAR.",
       "coverage": "Window: the sitting Congress (the 119th), every communication the Congress.gov house-communication list declares for each type (`ec`, `ml`, `pm`, `pt`), the list walked whole each run and refused short of the publisher's declared total, with every detail read. A later run reads new details newest first under its per-run cap, so a row it has not reached is list-only (`detail_read` false), not absent. The output ledger records the declared counts beside what is held.",
       "kind": "window",
       "measured_on": "2026-10-03",
