@@ -371,10 +371,9 @@ def _unevidenced(held: Mapping[tuple, _Held], spec: IndexSpec, evidence: Capture
         return set()
     read = {key for key, state in held.items() if state.read}
     selection = evidence.inherited_event("congress-index-selection", table=spec.table)
-    stated = None if selection is None else selection.get("unevidenced")
-    if selection is None or stated is None:
+    if selection is None or selection.get("unevidenced") is None:
         return read
-    remainder = read & {tuple(key) for key in stated}
+    remainder = read & {tuple(key) for key in selection["unevidenced"]}
     if selection.get("shape_version") != spec.shape_version:
         remainder |= {key for key in read if held[key].stale}
     return remainder
