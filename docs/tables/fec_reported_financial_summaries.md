@@ -8,6 +8,8 @@ One source entity/period/summary-layout/version observation. Keeps monetary meas
 
 **Coverage.** Sampled. Supported observations from retained candidate, committee, presidential and bundling summary layouts. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
 
+**Data quality.** Two layouts repeat one figure. candidate-web-summary/1 holds a candidate's row from FEC's weball file and, for a current House or Senate campaign, an identical row from webl, a subset of weball; committee-summary-csv/1 repeats a committee's row once per linked candidate. Keep one row per layout, entity, cycle and period before summing (cycle 2026, measured 2026-10-03, with 2,949 identical candidate pairs and 70 committees repeated, every repeat identical).
+
 - **Parquet file:** `fec_reported_financial_summaries.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
 - **Publication status:** Not established by this schema page or its measurement date.

@@ -3358,7 +3358,7 @@
       "table": "fec_receipts",
       "label": "Reported receipt observations",
       "summary": "One reported receipt record version or physical source observation. Preserves contributor, amount, date, transaction type, memo, source role and evidence. Main/date partitions, amendments and correction streams remain distinct observations; select proved representation membership and a named financial rule before totals. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. For original-filing rows, definition_set_id joins fec_filing_definitions.record_id and its fec_filing_definition_evidence context witnesses; filing_header_record_id and filing_header_locator_json identify the separate actual header witness. Other source layouts retain their own dictionary evidence.",
-      "coverage": "Sampled. Supported observations from retained individual-contribution bulk representations, original-filing receipt schedules and supported receipt APIs. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
+      "coverage": "Sampled by collection, whole within one. Which FEC collections are retained is an explicit selection (fec_collections, fec_collection_selection) of individual-contribution bulk files, original-filing receipt schedules and supported receipt APIs. A retained individual-contribution bulk file is held whole, every record, so its rows here equal its fec_collections.record_count, while a retained original filing contributes only its receipt records. Cycles, filings and API scopes outside the selection are absent; this declaration does not establish complete FEC history or current publication.",
       "kind": "sampled",
       "measured_on": "2026-10-01",
       "data_quality": "Exact decimals preserve signs. Memo, subtotal and attribution flags require source-specific interpretation; successful mapping does not qualify current, gross or net totals. Keep reported balances, allocation totals/components, overlapping summaries and two-sided transfers at their declared grains. Quality notices do not automatically exclude records.",
@@ -3626,7 +3626,7 @@
       "coverage": "Sampled. Supported observations from retained candidate, committee, presidential and bundling summary layouts. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
       "kind": "sampled",
       "measured_on": "2026-10-01",
-      "data_quality": null,
+      "data_quality": "Two layouts repeat one figure. candidate-web-summary/1 holds a candidate's row from FEC's weball file and, for a current House or Senate campaign, an identical row from webl, a subset of weball; committee-summary-csv/1 repeats a committee's row once per linked candidate. Keep one row per layout, entity, cycle and period before summing (cycle 2026, measured 2026-10-03, with 2,949 identical candidate pairs and 70 committees repeated, every repeat identical).",
       "columns": [
         "record_id",
         "identity_version",
