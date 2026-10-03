@@ -1495,7 +1495,6 @@ tables:
       page_count: "The report's page count as the R package states it. BIGINT. NULL where it states none, and on reports issued after its copy."
       subject_terms_json: "JSON array of GAO's subject index terms for the product, as the R package states them (e.g. `Cost control`, `Financial management`), finer than `topics_json`. NULL where it states none, and on reports issued after its copy."
   gao_decisions:
-    identity_columns: [decision_number, url]
     label: "Government Accountability Office legal decisions"
     coverage: >-
       True range from 2009 on: every legal decision GAO's own Month in Review
@@ -1525,17 +1524,22 @@ tables:
       months apart (`b-331093` and `b-331093-0`). `listing_page` names the
       retained listing page that listed it, which the run keeps as evidence. A
       later walk refreshes the rows it lists; a run without one carries the
-      table forward. All columns are stored as VARCHAR.
-    columns:
-      decision_number: "The decision's number as GAO's listing spells it, suffixes and all (`B-424129.2`, `B-423916.2,B-423916.3`, `B-235577.2-O.M.`, a docket `2020-02`). With `url`, the key."
-      b_numbers_json: "JSON array of the B-numbers in `decision_number`, split on commas and semicolons; a fragment GAO cut mid-number is left out. `[]` for a docket- or P-numbered decision."
-      decision_type: "GAO's label for the decision (e.g. `Bid Protest Decision`, `Appropriations Decision`, `Legal Other Decision`)."
-      title: "The decision's heading as GAO's listing states it: the protester or the question decided. GAO double-escapes some headings, so a few keep `&mdash;`, `&#151;` or `&amp;` literally; apply `html.unescape` when matching."
-      released_date: "Not the date GAO decided the case, which this table does not hold: the date GAO publicly released the decision, from the listing's \"Publicly Released\" line (its \"Published\" date where it states none), as an ISO date string. A bid protest is released days or weeks after it is decided (B-424477: decided 2026-08-07, released 2026-08-28), so a count by fiscal year counts releases; the decision page and `gao.gov/docket/<B-number>.1` state the decision date. Sort key."
-      topics_json: "JSON array of GAO's headings the decision was listed under, in listed order."
-      url: "The decision's gao.gov page, as the listing links it (percent-encoded where GAO encodes it). With `decision_number`, the key."
-      listing_page: "The first retained Month in Review or Annual Index page that listed the decision, the evidence a reader can open."
-      source: "The route that supplied the row: `gao_listing` (GAO's own Month in Review and Annual Index)."
+      table forward. `outcome` is read again from `decision_status` on every
+      row each run, by spicy-docs' closed table of GAO's sentences, so a new
+      table version reaches held rows without a re-read of the walk. All
+      columns are stored as VARCHAR.
+    data_quality: >-
+      `released_date` is when GAO released the decision, not when it decided
+      it; the decision page and `gao.gov/docket/<B-number>.1` state the
+      decision date. Apply `html.unescape` when matching a `title`.
+      `decision_status` is captured from spicy-docs 0.54.0, so it, `outcome`
+      and `outcome_rule` are NULL on every row until a walk is read again; on
+      gao-reports generation 42d9c8a5… (2026-10-03) none of the 6,616 rows
+      carries one. Read again from the retained walk under 0.54.0, 5,903 rows
+      get an outcome and 713 do not: 681 state no sentence and 32 state one
+      the table leaves unmapped (an advisory or appropriations opinion), which
+      each run's journal counts.
+    columns_from: spicy_docs
   crs_reports:
     identity_columns: [report_id]
     label: "Congressional Research Service reports"

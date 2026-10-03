@@ -289,6 +289,8 @@ CONTRACT_TABLES: tuple[str, ...] = (
     "hearing_transcripts",
     "hearing_bill_links",
     "cbo_cost_estimates",
+    # GAO's legal decisions, a spicy-docs contract from 0.54.0 (DRY X1); the gao-reports rollup writes it.
+    "gao_decisions",
     # A8/A9 (laws and rosters): the laws and committee-rosters rollups.
     "laws",
     "law_sections",
@@ -436,7 +438,6 @@ TABLES: tuple[str, ...] = (
     *FEC_TYPED_TABLES,
     "org_committee_links",
     "gao_reports",
-    "gao_decisions",
     "crs_reports",
     "court_dockets",
     "court_docket_groups",
@@ -498,7 +499,6 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         *FEC_TYPED_TABLES,
         "org_committee_links",
         "gao_reports",
-        "gao_decisions",
         "crs_reports",
         "court_dockets",
         "court_docket_groups",
@@ -690,7 +690,6 @@ def expected_schemas() -> dict[str, list[tuple[str, str]]]:
     from spicy_regs.transforms.build_unified_agenda import COLUMNS as UNIFIED_AGENDA_COLUMNS
     from spicy_regs.transforms.build_fec_committees import COLUMNS as FEC_COMMITTEE_COLUMNS
     # gao_reports types its three counts; its Arrow schema is the one declaration that says so.
-    from spicy_regs.transforms.build_gao_reports import DECISION_COLUMNS as GAO_DECISION_COLUMNS
     from spicy_regs.transforms.build_gao_reports import _SCHEMA as GAO_REPORT_SCHEMA
     from spicy_regs.transforms.build_crs_reports import COLUMNS as CRS_REPORT_COLUMNS
     from spicy_regs.transforms.build_court_docket_groups import SCHEMA as COURT_DOCKET_GROUP_SCHEMA
@@ -734,7 +733,6 @@ def expected_schemas() -> dict[str, list[tuple[str, str]]]:
         "cfr_sections": CFR_SECTION_COLUMNS,
         "unified_agenda": UNIFIED_AGENDA_COLUMNS,
         "fec_committees": FEC_COMMITTEE_COLUMNS,
-        "gao_decisions": GAO_DECISION_COLUMNS,
         "crs_reports": CRS_REPORT_COLUMNS,
         "usaspending_recipients": USASPENDING_COLUMNS,
         "fcc_proceedings": FCC_PROCEEDING_COLUMNS,

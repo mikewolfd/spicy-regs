@@ -3923,26 +3923,6 @@
       ]
     },
     {
-      "table": "gao_decisions",
-      "label": "Government Accountability Office legal decisions",
-      "summary": "One row per GAO legal decision page, read from GAO's own listing of what it issued by month and year. A decision is keyed on its number as GAO spells it and its page: one teaser can name several B-numbers (`B-423916.2,B-423916.3`), and one B-number can have two pages released months apart (`b-331093` and `b-331093-0`). `listing_page` names the retained listing page that listed it, which the run keeps as evidence. A later walk refreshes the rows it lists; a run without one carries the table forward. All columns are stored as VARCHAR.",
-      "coverage": "True range from 2009 on: every legal decision GAO's own Month in Review and Annual Index list for each year or month a finished walk of those pages read: the B-numbered decisions (bid protests, appropriations law, vacancies letters, other decisions) and the Contract Appeals Board decisions GAO numbers as dockets (`2020-02`) or `P` numbers. Federal Agency Major Rule Reports, B-numbered from April 2017, are in `gao_reports`, not here. Entries GAO gives no number are left out. A year or month the walk has not finished adds nothing, and a month with no listed decision adds nothing either; this table does not record which case a missing month is. A walk reads a year's listing (`month-in-review/2025?page=N`) or a month's (`month-in-review/2026/August`), as its scopes name, and the held rows came from year scopes for 2009-2025 and month scopes for 2026, so one listing page can span several months and `listing_page` names a scope, not a month. A month inside a year scope read, or before the newest month scope read, with no rows is a publisher zero (October 2025, when GAO was closed by the lapse in appropriations, is one); a month after the newest month scope is unread.",
-      "kind": "true_range",
-      "measured_on": "2026-10-03",
-      "data_quality": null,
-      "columns": [
-        "decision_number",
-        "b_numbers_json",
-        "decision_type",
-        "title",
-        "released_date",
-        "topics_json",
-        "url",
-        "listing_page",
-        "source"
-      ]
-    },
-    {
       "table": "crs_reports",
       "label": "Congressional Research Service reports",
       "summary": "One row per Congressional Research Service (CRS) report, ingested from the Congress.gov v3 REST API (`/crsreport` list endpoint) by `build_crs_reports`. The nonpartisan policy-analysis layer over the same subjects agencies regulate — complementary to `congress_bills` (the legislative record) and `federal_register` (the rule-publication record). Scope is deliberately list-level only (no per-report detail fetches), so every column comes from the list payload. Incremental by `update_date`, deduped on `report_id`; each query is pooled over whole walks, varying the page size, until one walk is clean or the pool holds exactly the declared count, because the list shifts while it is read. All columns are stored as VARCHAR.",
@@ -5014,6 +4994,29 @@
         "title_bill_id",
         "found_by",
         "title_bill_id_rule"
+      ]
+    },
+    {
+      "table": "gao_decisions",
+      "label": "Government Accountability Office legal decisions",
+      "summary": "One row per GAO legal decision page, read from GAO's own listing of what it issued by month and year. A decision is keyed on its number as GAO spells it and its page: one teaser can name several B-numbers (`B-423916.2,B-423916.3`), and one B-number can have two pages released months apart (`b-331093` and `b-331093-0`). `listing_page` names the retained listing page that listed it, which the run keeps as evidence. A later walk refreshes the rows it lists; a run without one carries the table forward. `outcome` is read again from `decision_status` on every row each run, by spicy-docs' closed table of GAO's sentences, so a new table version reaches held rows without a re-read of the walk. All columns are stored as VARCHAR.",
+      "coverage": "True range from 2009 on: every legal decision GAO's own Month in Review and Annual Index list for each year or month a finished walk of those pages read: the B-numbered decisions (bid protests, appropriations law, vacancies letters, other decisions) and the Contract Appeals Board decisions GAO numbers as dockets (`2020-02`) or `P` numbers. Federal Agency Major Rule Reports, B-numbered from April 2017, are in `gao_reports`, not here. Entries GAO gives no number are left out. A year or month the walk has not finished adds nothing, and a month with no listed decision adds nothing either; this table does not record which case a missing month is. A walk reads a year's listing (`month-in-review/2025?page=N`) or a month's (`month-in-review/2026/August`), as its scopes name, and the held rows came from year scopes for 2009-2025 and month scopes for 2026, so one listing page can span several months and `listing_page` names a scope, not a month. A month inside a year scope read, or before the newest month scope read, with no rows is a publisher zero (October 2025, when GAO was closed by the lapse in appropriations, is one); a month after the newest month scope is unread.",
+      "kind": "true_range",
+      "measured_on": "2026-10-03",
+      "data_quality": "`released_date` is when GAO released the decision, not when it decided it; the decision page and `gao.gov/docket/<B-number>.1` state the decision date. Apply `html.unescape` when matching a `title`. `decision_status` is captured from spicy-docs 0.54.0, so it, `outcome` and `outcome_rule` are NULL on every row until a walk is read again; on gao-reports generation 42d9c8a5… (2026-10-03) none of the 6,616 rows carries one. Read again from the retained walk under 0.54.0, 5,903 rows get an outcome and 713 do not: 681 state no sentence and 32 state one the table leaves unmapped (an advisory or appropriations opinion), which each run's journal counts.",
+      "columns": [
+        "decision_number",
+        "b_numbers_json",
+        "decision_type",
+        "title",
+        "released_date",
+        "topics_json",
+        "url",
+        "listing_page",
+        "source",
+        "decision_status",
+        "outcome",
+        "outcome_rule"
       ]
     },
     {

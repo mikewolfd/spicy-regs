@@ -100,24 +100,14 @@ COLUMNS = (
 COUNT_COLUMNS = ("recommendation_count", "matters_for_congress_count", "page_count")
 _SCHEMA = pa.schema([(c, pa.int64() if c in COUNT_COLUMNS else pa.string()) for c in COLUMNS])
 
-#: GAO's legal decisions from its own listing: all VARCHAR, keyed on the number as GAO spells it and the page.
+#: GAO's legal decisions from its own listing: spicy-docs' ``gao_decisions`` contract from 0.54.0 (DRY X1).
 DECISIONS_OUTPUT = "gao_decisions.parquet"
+#: The contract's two last columns, read from ``decision_status`` on every merged row each run, never carried.
+DECISION_READINGS = ("outcome", "outcome_rule")
 #: Columns renamed in place, to the name a published prior still spells them with. ``released_date`` was
 #: ``decision_date`` until 2026-10-03 (owner decision): it is the date GAO released the decision, not the date
 #: GAO decided it (B-424477, decided 2026-08-07, released 2026-08-28).
 DECISION_RENAMES = {"released_date": "decision_date"}
-DECISION_COLUMNS = (
-    "decision_number",
-    "b_numbers_json",
-    "decision_type",
-    "title",
-    "released_date",
-    "topics_json",
-    "url",
-    "listing_page",
-    "source",
-)
-_DECISION_SCHEMA = pa.schema([(c, pa.string()) for c in DECISION_COLUMNS])
 
 # GAO's reports RSS feed carries published products (reports & testimonies).
 # The feed does not tag a finer product type, so we default to this label.
@@ -265,8 +255,8 @@ def _listing_rows(
             if row["report_id"] in numbers and row["report_id"] not in now and row.get("report_number") is None:
                 filled.append({**row, "report_number": numbers[row["report_id"]]})
         counts["report_number_filled"] += len(filled)
-    decisions, decision_counts = gao_listing.decision_rows(run)
-    counts.update(decision_counts)
+    decisions = _decision_rows(run)
+    counts.update(decision_rows=len(decisions), unnumbered_left_out=sum(o.product_number is None for o in run.others))
     logger.info("GAO reports: GAO listing {} (unfinished scopes left for a later run: {})", dict(counts),
                 list(run.incomplete_scopes))
     if evidence:
@@ -387,33 +377,68 @@ def build_gao_reports(
 
     total = pq.ParquetFile(out_file).metadata.num_rows
     logger.info("GAO reports: {:,} rows", total)
-    return out_file, _build_decisions(output_dir, decisions)
+    return out_file, _build_decisions(output_dir, decisions, evidence)
 
 
-def _build_decisions(output_dir: Path, decisions: list[dict]) -> Path:
-    """``gao_decisions.parquet``: the prior table, with this run's listed decisions over it on the same number and page."""
+def _decision_rows(run: gao_listing.ListingRun) -> list[dict]:
+    """One contract row per listed decision: every B-numbered one and every numbered other (a docket has no B-number).
+
+    Shaped by spicy-docs, with the outcome its sentence states; each listed item carries its first listing page.
+    """
+    from spicy_docs.interpretation.gao_decisions import decision_outcome
+    from spicy_docs.schemas.gao_decision_tables import shape_gao_decision
+
+    listed = [*run.decisions, *(other for other in run.others if other.product_number is not None)]
+    return [shape_gao_decision(item, outcome=decision_outcome(item.status)) for item in listed]
+
+
+def _build_decisions(output_dir: Path, decisions: list[dict], evidence: CaptureEvidence | None = None) -> Path:
+    """``gao_decisions.parquet``: the prior table with this run's listed decisions over it, every outcome read again.
+
+    The merge (on number and page) carries the stated columns; a prior that spells ``released_date`` as
+    ``decision_date`` (before 2026-10-03) is read renamed. ``outcome`` and ``outcome_rule`` are then read from each
+    merged row's ``decision_status`` by spicy-docs' closed table, so a new table version reaches every held row
+    without a re-read of the walk; sentences it does not read are counted in the run journal. O(rows).
+    """
     import duckdb
+    from spicy_docs.interpretation.gao_decisions import GAO_OUTCOME_RULE, decision_outcome, unmapped_sentences
+    from spicy_docs.schemas.gao_decision_tables import GAO_DECISIONS
 
+    stated = tuple(column for column in GAO_DECISIONS.columns if column not in DECISION_READINGS)
+    schema = pa.schema([(column, pa.string()) for column in stated])
     out_file = output_dir / DECISIONS_OUTPUT
     prior_file = output_dir / "_gao_decisions_prior.parquet"
     new_file = output_dir / "_gao_decisions_new.parquet"
+    merged_file = output_dir / "_gao_decisions_merged.parquet"
     have_prior = prior_file.exists() or r2.download(DECISIONS_OUTPUT, prior_file)
-    table = pa.Table.from_pylist(decisions, schema=_DECISION_SCHEMA) if decisions else _DECISION_SCHEMA.empty_table()
-    pq.write_table(table, new_file, compression="zstd")
+    rows = [{column: row[column] for column in stated} for row in decisions]
+    pq.write_table(pa.Table.from_pylist(rows, schema=schema), new_file, compression="zstd")
     con = duckdb.connect()
     con.execute("SET preserve_insertion_order=false")
     merge_local_prior(
         con,
-        columns=DECISION_COLUMNS,
-        identity=("decision_number", "url"),
+        columns=stated,
+        identity=GAO_DECISIONS.identity,
         order_by="released_date DESC, decision_number, url",
         renamed=DECISION_RENAMES,
         prior_file=prior_file if have_prior else None,
         new_file=new_file,
-        out_file=out_file,
+        out_file=merged_file,
     )
     con.close()
-    for scratch in (prior_file, new_file):
+    table = pq.read_table(merged_file)
+    statuses = table.column("decision_status").to_pylist()
+    findings = [decision_outcome(status) for status in statuses]
+    table = table.append_column("outcome", pa.array([f.outcome for f in findings], pa.string()))
+    table = table.append_column("outcome_rule", pa.array([f.rule for f in findings], pa.string()))
+    pq.write_table(table, out_file, compression="zstd", row_group_size=50_000)
+    for scratch in (prior_file, new_file, merged_file):
         scratch.unlink(missing_ok=True)
-    logger.info("GAO decisions: {:,} rows", pq.ParquetFile(out_file).metadata.num_rows)
+    unmapped = unmapped_sentences(statuses)
+    read = sum(f.outcome is not None for f in findings)
+    logger.info("GAO decisions: {:,} rows, {:,} with an outcome under {}; {:,} stated sentences the table does not "
+                "read", table.num_rows, read, GAO_OUTCOME_RULE, sum(unmapped.values()))
+    if evidence:
+        evidence.event("gao-decision-outcomes", rule=GAO_OUTCOME_RULE, rows=table.num_rows, with_outcome=read,
+                       stated=sum(status is not None for status in statuses), unmapped_sentences=dict(unmapped))
     return out_file

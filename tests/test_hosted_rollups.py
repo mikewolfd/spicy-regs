@@ -33,6 +33,7 @@ from spicy_regs.pipelines.rollups.members import MembersRollup
 from spicy_regs.pipelines.rollups.print_citations import PrintCitationsRollup
 from spicy_regs.pipelines.rollups.press_releases import PressReleasesRollup
 from spicy_regs.pipelines.rollups.roll_call_votes import RollCallVotesRollup
+from spicy_regs.pipelines.rollups.gao_reports import GaoReportsRollup
 from spicy_regs.pipelines.rollups.senate_expenditures import SenateExpendituresRollup
 
 # A8/A9 (laws and rosters)
@@ -71,6 +72,10 @@ OWN_TABLES = BILL_OWN_TABLES | {READS_TABLE: READ_COLUMNS}
 #: refresh's base families like ``documents`` itself, not by a standalone rollup (decisions 65-67).
 ETL_TABLES = {"document_attributes", "docket_attributes", "comment_attributes"}
 
+#: Tables of this repository's own that a hosted rollup publishes beside its contract: gao-reports' typed product
+#: table, whose schema is the transform's Arrow schema (``build_gao_reports._SCHEMA``).
+HOSTED_OWN_TABLES = {"gao_reports"}
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = REPO_ROOT / ".github" / "workflows"
@@ -103,6 +108,8 @@ HOSTED_ROLLUPS = (
     GaoRecommendationsRollup,
     # The fec-publish branch's fec_candidate_history contract (decision 53's shape).
     FecCandidateHistoryRollup,
+    # SpicyDocs 0.54.0's gao_decisions contract (DRY X1), written beside this repository's own gao_reports.
+    GaoReportsRollup,
 )
 
 #: Rollups that host contracts but run on demand over an explicit retained-input manifest, so they have no schedule
@@ -248,7 +255,7 @@ def test_every_hosted_table_has_exactly_one_writer():
         for key in _declared_keys(rollup):
             written.setdefault(key.removesuffix(".parquet"), []).append(rollup.name)
 
-    assert set(written) == set(dd.CONTRACT_TABLES) - ETL_TABLES | set(OWN_TABLES), (
+    assert set(written) == set(dd.CONTRACT_TABLES) - ETL_TABLES | set(OWN_TABLES) | HOSTED_OWN_TABLES, (
         "every contract, plus the bill family's own two tables, must be published by exactly one rollup"
     )
     doubled = {table: names for table, names in written.items() if len(names) > 1}
