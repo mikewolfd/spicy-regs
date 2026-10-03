@@ -314,6 +314,7 @@ def test_fcc_second_proceeding_failure_preserves_prior_output(monkeypatch, tmp_p
 def test_gao_validates_whole_feed_before_applying_selected_item_bound():
     assert list(selected("gao", Transport(FEED), max_records=1).iter_records()) == [
         {
+            "product_id": "gao-26-107974",
             "title": "One",
             "link": "https://www.gao.gov/products/gao-26-107974",
             "description": "Native text",
@@ -344,7 +345,7 @@ CASES = {
         "gao_reports.parquet",
         "_SCHEMA",
         "_shape",
-        {"link": "https://www.gao.gov/products/gao-26-107974", "title": "Prior"},
+        {"product_id": "gao-26-107974", "link": "https://www.gao.gov/products/gao-26-107974", "title": "Prior"},
     ),
     "usa": (
         "build_usaspending_recipients",

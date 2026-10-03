@@ -10,7 +10,6 @@ import pyarrow.parquet as pq
 from spicy_regs.transforms.build_gao_reports import (
     COLUMNS,
     _published_date,
-    _report_id,
     _shape,
     build_gao_reports,
 )
@@ -22,6 +21,7 @@ from tests.test_gao_listing import _run as _listing
 module = import_module("spicy_regs.transforms.build_gao_reports")
 
 _RAW_ITEM = {
+    "product_id": "gao-26-107974",
     "title": "Navy Ship Modernization",
     "link": "https://www.gao.gov/products/gao-26-107974",
     "description": "What GAO Found. The Navy is behind schedule.",
@@ -47,14 +47,6 @@ def test_shape_maps_fields():
     assert row["agencies_json"] == "[]"
     assert row["topics_json"] == "[]"
     assert row["url"] == "https://www.gao.gov/products/gao-26-107974"
-
-
-def test_report_id_extraction():
-    assert _report_id("https://www.gao.gov/products/gao-26-107974") == "gao-26-107974"
-    # Trailing slash and mixed case are normalized.
-    assert _report_id("https://www.gao.gov/products/GAO-26-108520/") == "gao-26-108520"
-    assert _report_id(None) is None
-    assert _report_id("") is None
 
 
 def test_published_date_parses_rfc822():
@@ -88,7 +80,7 @@ def _run(tmp_path, monkeypatch, *, prior=None, feed=(), history=None, listed=Non
             pass
 
         def iter_records(self):
-            return iter({"title": f"Feed {i}", "link": f"https://www.gao.gov/products/{i}",
+            return iter({"product_id": i, "title": f"Feed {i}", "link": f"https://www.gao.gov/products/{i}",
                          "description": "What GAO Found.", "pub_date": "Mon, 21 Sep 2026 10:00:00 -0400"} for i in feed)
 
     def read_listing(directory, evidence):

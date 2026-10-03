@@ -141,18 +141,6 @@ _LOWEST = gao_r_package.SOURCE
 MODS_PER_RUN = 6_500
 
 
-def _report_id(link: str | None) -> str | None:
-    """Extract the ``gao-##-######`` id from a product URL, or None.
-
-    Links look like ``https://www.gao.gov/products/gao-26-107974``; the id is the
-    last path segment, lowercased.
-    """
-    if not link:
-        return None
-    segment = link.rstrip("/").rsplit("/", 1)[-1].strip().lower()
-    return segment or None
-
-
 def _published_date(pub_date: str | None) -> str | None:
     """Parse the RFC-822 ``pubDate`` to an ISO date string, or None.
 
@@ -170,7 +158,8 @@ def _published_date(pub_date: str | None) -> str | None:
 def _shape(item: dict) -> dict:
     """Map one raw GAO RSS item onto the published column shape."""
     return {
-        "report_id": _report_id(item.get("link")),
+        # spicy-docs reads the id off the item's link and refuses any link that is not the product's canonical URL.
+        "report_id": item["product_id"],
         "title": item.get("title"),
         "report_type": _DEFAULT_REPORT_TYPE,
         "published_date": _published_date(item.get("pub_date")),
