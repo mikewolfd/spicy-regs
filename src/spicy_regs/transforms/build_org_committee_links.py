@@ -33,9 +33,11 @@ and must not be a :data:`GENERIC_ORG_CORES` entry; the blocklist matches the
 GROWERS ASSOCIATION`` free to match.
 
 **Coverage is small by upstream reality, not a bug.** ``comments.organization``
-is populated on ~20.7K of ~25.8M comments (0.08%) — the field is only captured
-when a submitter fills it in, and mass comment campaigns leave it blank — and of
-the ~14.2K distinct strings, ~12.7K clear the guards and a few hundred resolve.
+holds what the publisher's record states (a submitter's entry or a campaign's
+sponsor; EPA and FDA state none): 2,222,760 of 26,415,400 comments on the
+2026-10-03 export (receipt ``sha256:77a08369…``), after the comment re-read
+filled rows read before the field was (~20.7K of ~25.8M on 2026-09-22, when
+~14.2K distinct strings left ~12.7K past the guards and a few hundred resolved).
 Most commenting organizations run no federal PAC, so a low match rate is the
 correct answer rather than a matcher to tune harder; ``name_source`` is stamped
 on every row so text-derived names added later (comment title, letterhead,

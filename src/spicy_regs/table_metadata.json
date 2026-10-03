@@ -243,7 +243,7 @@
       {
         "column_name": "comment_on_document_id",
         "column_type": "VARCHAR",
-        "description": "Literal Regulations.gov commentOnDocumentId: the named parent document, independently nullable from docket_id. No identifier-prefix inference. NULL where the row predates reading this field, which today is most rows, including every row of the largest agencies; NULL does not mean the comment names no document."
+        "description": "Literal Regulations.gov commentOnDocumentId: the named parent document, independently nullable from docket_id. No identifier-prefix inference. The comment re-read filled it: on receipt sha256:77a08369… (2026-10-03) it is set on 26,388,456 of 26,415,400 rows, on at least 98.97% of each of the 12 largest agencies' rows, and below 95% only at MSHA (1,892 of 1,993) and TRAIN (1 of 114). NULL means the record states none or the row was not read; `comment_reference_values_json` tells the two apart. NULL does not mean the comment names no document."
       },
       {
         "column_name": "comment_on_object_id",
@@ -278,7 +278,7 @@
       {
         "column_name": "organization",
         "column_type": "VARCHAR",
-        "description": "The organization the commenter stated, where the row's read carried it. NULL where the publisher's record states none (FDA and EPA state none; EPA classifies submitters in `subtype` instead), where the row's read did not carry the field, and on mass comment campaigns; `count(organization)` by `agency_code` is the measure."
+        "description": "The organization the commenter stated, where the row's read carried it. NULL where the publisher's record states none (FDA and EPA state none; EPA classifies submitters in `subtype` instead) and where the row's read did not carry the field. A campaign record carries it where the publisher states it: on receipt sha256:77a08369… (2026-10-03) FWS states it on 340 of its 408 `Mass Mail Campaign` and 10 of its 13 `Late Mass Mail Campaign` records, EPA on none of 7,842. `count(organization)` by `agency_code` is the measure."
       },
       {
         "column_name": "category",
@@ -318,7 +318,7 @@
       {
         "column_name": "attachments_json",
         "column_type": "VARCHAR",
-        "description": "JSON array of any files attached to the comment: `[{title, formats:[{url, format, size}]}]`, from the object's `included` attachments. NULL when the comment lists none, and also where the row predates reading them: the extract gained this column on 2026-03-15 and rows ingested earlier kept NULL, since the ETL rewrites a row only when its modify_date moves (about 2.3M such rows, estimated 2026-09-28 in mirrulations-field-census-2026-09-28/attachments_weighted.json, every posted year from 1996; cause proven in comments-full-reread-2026-09-28/attachments-root-cause/). The comment re-read fills them; until then NULL does not mean no attachments."
+        "description": "JSON array of the comment's downloadable attachments: `[{title, formats:[{url, format, size}]}]`, from the object's `included` attachments, keeping only formats with a file URL. NULL, never `[]`, when it keeps none, so NULL does not mean no attachments: an attachment regulations.gov lists with no downloadable file (a `restrictReasonType` such as `Copyrighted`) is left out, and a comment whose attachments are all such reads NULL. The source records of EPA-HQ-OW-2022-0114 list 58 such attachments on 16 records, all Copyrighted; -1540, whose only attachment is one, reads NULL. Rows ingested before the extract gained this column (2026-03-15) kept NULL until the comment re-read (cause proven in comments-full-reread-2026-09-28/attachments-root-cause/), which on receipt sha256:77a08369… (2026-10-03) has written 26,414,926 of 26,415,400 rows: a non-NULL `comment_reference_values_json`, which the same extract always writes, marks a row it wrote, though the re-read leaves a column NULL where two copies of the record's version disagree."
       },
       {
         "column_name": "text_content",
@@ -343,7 +343,7 @@
       {
         "column_name": "duplicate_comments",
         "column_type": "INTEGER",
-        "description": "How many received submissions the agency says this posted record stands for (regulations.gov `duplicateComments`), as stated. Agencies that count (EPA and FWS among them) state 1 for a single comment and the campaign's size on a `Mass Mail Campaign` record (15,851 on EPA-HQ-OW-2022-0114-1811, National Wildlife Federation Action Fund); agencies that do not count state 0 on every record. Rows are posted records. To estimate submissions, sum `GREATEST(duplicate_comments, 1)`, each posted record standing for at least itself, and first count the NULL rows: GREATEST reads NULL as 1. The sum is the agency's posted accounting, not its official total: EPA-HQ-OW-2022-0114's 1,629 records sum to 53,707 (52,086 on 23 campaign records), while EPA's response to comments reports about 122,200 received. The 2026-09-28 sample found it stated on every record: 0 on 5,281, 1 on 660, more than 1 on 4. NULL where the row predates reading this field; 0 is a stated zero."
+        "description": "How many received submissions the agency says this posted record stands for (regulations.gov `duplicateComments`), as stated. Agencies that count (EPA and FWS among them) state 1 for a single comment and the campaign's size on a `Mass Mail Campaign` record (15,851 on EPA-HQ-OW-2022-0114-1811, National Wildlife Federation Action Fund); agencies that do not count state 0 on every record. Rows are posted records. To estimate submissions, sum `GREATEST(duplicate_comments, 1)`, each posted record standing for at least itself, and first count the NULL rows: GREATEST reads NULL as 1. The sum counts the submissions the agency says its posted records stand for, each record at least itself: its posted accounting, not its official total. On the comments export of receipt sha256:77a08369… (2026-10-03), EPA-HQ-OW-2022-0114's 1,629 records sum to 53,692, 52,086 of them on its 23 `Mass Mail Campaign` records, while EPA's response to comments reports about 122,200 received. The 2026-09-28 sample found it stated on every record: 0 on 5,281, 1 on 660, more than 1 on 4. NULL where the row predates reading this field; 0 is a stated zero."
       },
       {
         "column_name": "comment_text",
