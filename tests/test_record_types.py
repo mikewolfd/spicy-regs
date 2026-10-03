@@ -186,7 +186,7 @@ def test_comment_extract_packs_attachments_json() -> None:
                     "title": "Exhibit A",
                     "fileFormats": [
                         {"fileUrl": "https://example.gov/x.pdf", "format": "pdf", "size": 123},
-                        {"format": "pdf"},  # no fileUrl -> skipped
+                        {"format": "pdf"},  # no fileUrl: listed, url NULL (spicy-docs 0.54.0, E's b19b092)
                     ],
                 },
             },
@@ -204,7 +204,8 @@ def test_comment_extract_packs_attachments_json() -> None:
     assert attachments == [
         {
             "title": "Exhibit A",
-            "formats": [{"url": "https://example.gov/x.pdf", "format": "pdf", "size": 123}],
+            "formats": [{"url": "https://example.gov/x.pdf", "format": "pdf", "size": 123},
+                        {"url": None, "format": "pdf", "size": None}],
         }
     ]
 

@@ -5486,7 +5486,8 @@
         "record_package_id",
         "record_granule_id",
         "record_entry_text",
-        "reconstruction_rule_version"
+        "reconstruction_rule_version",
+        "detail_read"
       ]
     },
     {
@@ -5524,7 +5525,8 @@
         "document_urls_json",
         "videos_json",
         "update_date",
-        "url"
+        "url",
+        "detail_read"
       ]
     },
     {
@@ -5552,7 +5554,8 @@
         "article_count",
         "articles_url",
         "update_date",
-        "url"
+        "url",
+        "detail_read"
       ]
     },
     {
@@ -5587,7 +5590,8 @@
         "package_id",
         "package_id_rule",
         "update_date",
-        "url"
+        "url",
+        "detail_read"
       ]
     },
     {

@@ -31,6 +31,8 @@ def _package(package_id: str, doc_class: str = "REPORT", **fields) -> dict:
         ("GAOREPORTS-RCED-AIMD-94-221FS", "rcedaimd-94-221fs"),
         ("GAOREPORTS-GGD-RCED-94-272", "ggdrced-94-272"),
         ("GAOREPORTS-T-RCED-AIMD-95-131", "t-rcedaimd-95-131"),
+        # spicy-docs 0.54.0's grammar admits the dots GAO's own product URLs carry (aimd-10.1.22).
+        ("GAOREPORTS-FILE-291573.7", "file-291573.7"),
     ],
 )
 def test_a_package_id_maps_to_the_gao_product_id(package_id, product_id):
@@ -41,7 +43,6 @@ def test_a_package_id_maps_to_the_gao_product_id(package_id, product_id):
     "package_id",
     [
         "CRPT-118hrpt1",
-        "GAOREPORTS-FILE-291573.7",
         "GAOREPORTS-GAO-IMTEC-11_1_1",
         # SpicyDocs' product-id grammar is the one in force, its 128-character bound included.
         "GAOREPORTS-" + "A" * 129,

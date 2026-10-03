@@ -34,3 +34,4 @@ One row per daily Congressional Record issue, keyed `(volume, issue)`, the publi
 | `articles_url` | `VARCHAR` | The publisher's URL for the issue's article list. |
 | `update_date` | `VARCHAR` | The publisher's updateDate; the merge prefers the larger value. |
 | `url` | `VARCHAR` | The publisher's own URL for this issue. |
+| `detail_read` | `VARCHAR` | `true` where the Congress.gov detail route was read for this row, `false` where the row holds the list route's record only (a detail not yet reached under a run's cap, or refused). The one test of whether a detail was read: a list column cannot say it, because a read detail omits a list it does not state and the column is then NULL as for an unread one. |

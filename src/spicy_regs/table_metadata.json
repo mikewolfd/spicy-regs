@@ -1037,7 +1037,7 @@
       {
         "column_name": "stage",
         "column_type": "VARCHAR",
-        "description": "The whole bill's interpreted legislative stage, read from its actions under the current rule: `introduced`, `committee`, `passed_chamber`, `other_chamber`, `conference`, `presented` or `law` (the terminal rung; the literal is `law`, never `enacted`), or an outcome, `failed` or `vetoed`, which has no rung. `introduced` is also the default when no rule fires (see stage_rule). NULL where the bill's actions were not examined, which is not a statement about enactment. A calendar placement, the desk, a motion to proceed or cloture reads `other_chamber` only where the chamber that took it (as the text names it, else the system that entered it) is not the one the bill's type originates in; in its own chamber it moves nothing, so a bill reported and placed on its own calendar reads `committee`, and one placed there unreported (Senate Rule XIV, a discharge) keeps its earlier rung. The stage never moves back once a chamber has passed the bill: the other chamber's referral or report, a star print or an introduction phrase does not lower it, and only a passage the Senate states it vitiated is undone. Where the bill's actions carry publisher codes, the Library of Congress's passage code (8000 House, 17000 Senate) is what holds it. A motion's or a point of order's result (\"motion to proceed ... agreed to in Senate\") is not the measure's passage, and \"disagreed to in Senate\" reads `failed`."
+        "description": "The whole bill's interpreted legislative stage, read from its actions under the current rule: `introduced`, `committee`, `calendared`, `passed_chamber`, `other_chamber`, `passed_both`, `conference`, `presented` or `law` (the terminal rung; the literal is `law`, never `enacted`), or an outcome, `failed` or `vetoed`, which has no rung. `introduced` is also the default when no rule fires (see stage_rule). NULL where the bill's actions were not examined, which is not a statement about enactment. A calendar placement, the desk, a motion to proceed or cloture reads `other_chamber` only where the chamber that took it (as the text names it, else the system that entered it) is not the one the bill's type originates in. In its own chamber a placement on the Union, House or Senate Legislative Calendar reads `calendared` (a reported bill awaiting the floor, or one placed there unreported under Senate Rule XIV or a discharge), and the desk, a motion to proceed or cloture moves nothing. `passed_both` is the bill's state once both chambers have passed it (the Library of Congress's 8000 and 17000 where the actions carry codes, else the text), read from the passage that completed it; a later conference, presentation or law outranks it. The stage never moves back once a chamber has passed the bill: the other chamber's referral or report, a star print or an introduction phrase does not lower it, and only a passage the Senate states it vitiated is undone. Where the bill's actions carry publisher codes, the Library of Congress's passage code (8000 House, 17000 Senate) is what holds it. A motion's or a point of order's result (\"motion to proceed ... agreed to in Senate\") is not the measure's passage, and \"disagreed to in Senate\" reads `failed`."
       },
       {
         "column_name": "stage_rule",
@@ -1087,7 +1087,7 @@
       {
         "column_name": "money_bill_kind",
         "column_type": "VARCHAR",
-        "description": "Interpreted money-bill kind, or NULL when no rule claimed the measure. A title heuristic with unmeasured recall: an appropriations act whose title lacks the pattern, or an appropriations division inside another bill, is NULL (money_bill_rule names the rule that fired)."
+        "description": "Interpreted money-bill kind, or NULL when no rule claimed the measure. A title heuristic with unmeasured recall: an appropriations act whose title lacks the pattern, or an appropriations division inside another bill, is NULL (money_bill_rule names the rule that fired). A House special rule (an H. Res. \"Providing for consideration of\" or \"Waiving points of order against\" another measure) is never a money bill, though it names one, and `omnibus` is an appropriations omnibus only, not a statute named \"Omnibus\" (the Omnibus Crime Control and Safe Streets Act)."
       },
       {
         "column_name": "money_bill_rule",
@@ -17574,7 +17574,7 @@
       {
         "column_name": "stage",
         "column_type": "VARCHAR",
-        "description": "The stage this one action's qualified code and text classify as, in the same vocabulary as congress_bills.stage (`introduced`, `committee`, `passed_chamber`, `other_chamber`, `conference`, `presented`, `law`, or the outcomes `failed` and `vetoed`); `introduced` with stage_rule NULL when no rule classifies the action, as for a calendar or floor step in the bill's own chamber. One action's classification, not the bill's state."
+        "description": "The stage this one action's qualified code and text classify as, in the same vocabulary as congress_bills.stage (`introduced`, `committee`, `calendared`, `passed_chamber`, `other_chamber`, `conference`, `presented`, `law`, or the outcomes `failed` and `vetoed`; never `passed_both`, which is a bill's state, not one action's); `introduced` with stage_rule NULL when no rule classifies the action, as for the desk or a floor step in the bill's own chamber. One action's classification, not the bill's state."
       },
       {
         "column_name": "stage_rule",
@@ -20416,12 +20416,12 @@
       {
         "column_name": "outcome",
         "column_type": "VARCHAR",
-        "description": "The outcome decision_status states, read by a closed table of GAO's exact sentences: `sustained`, `sustained_in_part`, `denied`, `dismissed`, `denied_in_part_dismissed_in_part`, or `request` where the sentence decides a request (reconsideration, costs, reimbursement, dismissal), even beside a protest. NULL where no sentence is stated or the table does not read it (an advisory opinion, an appropriations opinion, a wording GAO wrote after the table was made): never a guess."
+        "description": "The outcome decision_status states, read by a closed table of GAO's exact sentences: `sustained`, `sustained_in_part`, `denied`, `dismissed`, `denied_in_part_dismissed_in_part`, or `request` where the sentence decides only a request (reconsideration, costs, reimbursement, dismissal); a sentence deciding the protest and a request reads the protest's outcome. NULL where no sentence is stated or the table does not read it (an advisory opinion, an appropriations opinion, a wording GAO wrote after the table was made): never a guess."
       },
       {
         "column_name": "outcome_rule",
         "column_type": "VARCHAR",
-        "description": "The table that read outcome, `gao-decision-outcome/001`; NULL where outcome is NULL. A row read under an earlier table names that table."
+        "description": "The table that read outcome, `gao-decision-outcome/002`; NULL where outcome is NULL. A row read under an earlier table names that table."
       }
     ],
     "grain": "One row per legal decision page GAO's own Month in Review or Annual Index lists with a number: every B-numbered decision and every docket- or P-numbered other. Federal Agency Major Rule Reports, B-numbered from April 2017, are products, not rows here.",
@@ -22169,6 +22169,11 @@
         "column_name": "reconstruction_rule_version",
         "column_type": "VARCHAR",
         "description": "The `record-communication-` rule identity that produced the derived fields (`RECORD_COMMUNICATION_RULE_VERSION`); NULL on a publisher-decomposed row."
+      },
+      {
+        "column_name": "detail_read",
+        "column_type": "VARCHAR",
+        "description": "`true` where the Congress.gov detail route was read for this row, `false` where the row holds the list route's record only (a detail not yet reached under a run's cap, or refused). The one test of whether a detail was read: a list column cannot say it, because a read detail omits a list it does not state and the column is then NULL as for an unread one. `false` on a `congressional-record-granule` row, which no detail route serves."
       }
     ],
     "grain": "One row per House executive communication: the Congress.gov house-communication routes where the publisher decomposes it, the Congressional Record entry it printed where the publisher does not.",
@@ -22321,6 +22326,11 @@
         "column_name": "url",
         "column_type": "VARCHAR",
         "description": "The publisher's own URL for this meeting, which only the list row states."
+      },
+      {
+        "column_name": "detail_read",
+        "column_type": "VARCHAR",
+        "description": "`true` where the Congress.gov detail route was read for this row, `false` where the row holds the list route's record only (a detail not yet reached under a run's cap, or refused). The one test of whether a detail was read: a list column cannot say it, because a read detail omits a list it does not state and the column is then NULL as for an unread one."
       }
     ],
     "grain": "One row per scheduled committee meeting, as the Congress.gov committee-meeting routes state it.",
@@ -22423,6 +22433,11 @@
         "column_name": "url",
         "column_type": "VARCHAR",
         "description": "The publisher's own URL for this issue."
+      },
+      {
+        "column_name": "detail_read",
+        "column_type": "VARCHAR",
+        "description": "`true` where the Congress.gov detail route was read for this row, `false` where the row holds the list route's record only (a detail not yet reached under a run's cap, or refused). The one test of whether a detail was read: a list column cannot say it, because a read detail omits a list it does not state and the column is then NULL as for an unread one."
       }
     ],
     "grain": "One row per daily Congressional Record issue, which is also one legislative day per chamber named.",
@@ -22559,6 +22574,11 @@
         "column_name": "url",
         "column_type": "VARCHAR",
         "description": "The publisher's own URL for this treaty, which only the list row states."
+      },
+      {
+        "column_name": "detail_read",
+        "column_type": "VARCHAR",
+        "description": "`true` where the Congress.gov detail route was read for this row, `false` where the row holds the list route's record only (a detail not yet reached under a run's cap, or refused). The one test of whether a detail was read: a list column cannot say it, because a read detail omits a list it does not state and the column is then NULL as for an unread one."
       }
     ],
     "grain": "One row per treaty document, as the Congress.gov treaty routes state it.",

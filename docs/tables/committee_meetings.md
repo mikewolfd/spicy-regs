@@ -46,3 +46,4 @@ The publisher's `NoChamber` value is stored as `nochamber`, matching its detail 
 | `videos_json` | `VARCHAR` | Every video link the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one. |
 | `update_date` | `VARCHAR` | The publisher's updateDate; the merge prefers the larger value. |
 | `url` | `VARCHAR` | The publisher's own URL for this meeting, which only the list row states. |
+| `detail_read` | `VARCHAR` | `true` where the Congress.gov detail route was read for this row, `false` where the row holds the list route's record only (a detail not yet reached under a run's cap, or refused). The one test of whether a detail was read: a list column cannot say it, because a read detail omits a list it does not state and the column is then NULL as for an unread one. |
