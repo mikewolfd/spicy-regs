@@ -466,7 +466,7 @@ def test_a_derived_table_names_the_parent_generation_it_was_built_from(monkeypat
         described = _tool_data(mcp, "describe_table", {"table": "discovery_signals"})["publication"]
         queried = _tool_data(mcp, "query_sql", {"sql": "SELECT * FROM discovery_signals"})["publication"]
     expected = [{"table": "documents", "family": "documents", "built_from": DOCS_OLD, "live": DOCS_LIVE,
-                 "current": False}]
+                 "input_table_current": False}]
     assert described["inputs"] == queried["discovery_signals"]["inputs"] == expected
     assert described["inputs_current"] is False
 
@@ -475,7 +475,7 @@ def test_a_derived_table_built_from_the_live_parent_is_current(monkeypatch):
     con, _ = _lineage(monkeypatch, _documents_parent(DOCS_LIVE, "sha256:" + "d" * 64))
     with con:
         described = _tool_data(server.build_server(), "describe_table", {"table": "discovery_signals"})["publication"]
-    assert described["inputs"][0]["current"] is True and described["inputs_current"] is True
+    assert described["inputs"][0]["input_table_current"] is True and described["inputs_current"] is True
 
 
 def test_a_parent_family_that_moved_for_another_table_still_counts_as_current(monkeypatch):
@@ -485,6 +485,11 @@ def test_a_parent_family_that_moved_for_another_table_still_counts_as_current(mo
         described = _tool_data(server.build_server(), "describe_table", {"table": "discovery_signals"})["publication"]
     assert (described["inputs"][0]["built_from"], described["inputs"][0]["live"]) == (DOCS_OLD, DOCS_LIVE)
     assert described["inputs_current"] is True
+
+
+def test_the_description_says_input_table_current_compares_the_parent_tables_bytes():
+    [tool] = [t for t in asyncio.run(server.build_server().list_tools()) if t.name == "describe_table"]
+    assert "input_table_current" in (tool.description or "") and "another table" in (tool.description or "")
 
 
 def test_a_family_without_parents_states_no_inputs(monkeypatch):
@@ -500,7 +505,7 @@ def test_a_storage_version_parent_is_reported_without_a_lag_claim(monkeypatch):
     with con:
         described = _tool_data(server.build_server(), "describe_table", {"table": "discovery_signals"})["publication"]
     assert described["inputs"][0] == {"table": "comments", "family": None, "built_from": '"7a81"', "live": None,
-                                      "current": None}
+                                      "input_table_current": None}
     assert described["inputs_current"] is False  # the managed parent still lags
     con, _ = _lineage(monkeypatch, {"comments.parquet": {"etag": '"7a81"', "byteSize": 9}})
     with con:

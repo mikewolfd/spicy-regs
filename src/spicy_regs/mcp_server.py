@@ -889,9 +889,9 @@ def _family_parents(base_url: str, entry: Mapping) -> dict[str, dict]:
 def _input_lineage(index: dict, name: str) -> dict[str, Any]:
     """The parent generations a managed table's family was built from beside the live ones; {} when it records none.
 
-    ``built_from`` and ``live`` are family generations. ``current`` compares the
-    parent table's own bytes where both pins state them, so a parent family that
-    moved for another table does not mark this one stale; a storage-version
+    ``built_from`` and ``live`` are family generations. ``input_table_current``
+    compares the parent table's own bytes where both pins state them, so a parent
+    family that moved for another table does not mark this one stale; a storage-version
     parent (an ETag, or a local copy's digest) makes no lag claim. An unreadable
     root is stated, never guessed.
     """
@@ -909,7 +909,8 @@ def _input_lineage(index: dict, name: str) -> dict[str, Any]:
     for key, parent in sorted(parents.items()):
         if "family" not in parent:
             inputs.append({"table": key.removesuffix(".parquet"), "family": None,
-                           "built_from": parent.get("etag") or parent.get("sha256"), "live": None, "current": None})
+                           "built_from": parent.get("etag") or parent.get("sha256"), "live": None,
+                           "input_table_current": None})
             continue
         live = table_owner(index, key)
         if live is None:  # no family publishes the parent now: nothing to compare
@@ -920,10 +921,10 @@ def _input_lineage(index: dict, name: str) -> dict[str, Any]:
             live_digest = live[1]["artifactDigest"]
             current = parent["artifactDigest"] == live_digest
         inputs.append({"table": key.removesuffix(".parquet"), "family": parent["family"],
-                       "built_from": parent["artifactDigest"], "live": live_digest, "current": current})
+                       "built_from": parent["artifactDigest"], "live": live_digest, "input_table_current": current})
     if not inputs:
         return {}
-    claims = [item["current"] for item in inputs if item["current"] is not None]
+    claims = [item["input_table_current"] for item in inputs if item["input_table_current"] is not None]
     return {"inputs": inputs, "inputs_current": all(claims) if claims else None}
 
 
@@ -1566,25 +1567,26 @@ def _register_tools(mcp: MCPServer) -> None:
     def describe_table(table: str, detail: bool = False) -> dict[str, Any]:
         """Return a table's columns with their meanings, row identity, coverage caveats and joins.
 
-        Coverage metadata describes supported output; it does not certify this
-        connection's population or freshness. columns are the loaded view's,
-        each with its dictionary meaning (an unavailable declared table returns
-        its declared columns); schema_differences names any column or type the
-        view does not share with the dictionary. publication is the live data
-        version with its pinned row count, published_at (when the publisher
-        moved the pointer to this generation, not when its data was read) and
-        coverage kind; prefer its rows to a count in prose. publication.inputs
-        names each parent generation a derived table was built from beside the
-        live one (current compares the parent's bytes); inputs_current is false
-        when any lags. qualification gives the live pin and the output ledger's
-        audited pin, date and disposition as separate fields, only for the
-        ledger's publisher; not_in_ledger means the table is absent from the
+        Coverage metadata describes supported output, not this connection's
+        population or freshness. columns are the loaded view's, each with its
+        dictionary meaning (an unavailable table returns its declared columns);
+        schema_differences names any column or type the view does not share
+        with the dictionary. publication is the live data version with its
+        pinned row count, published_at (when the publisher moved the pointer to
+        this generation, not when data was read) and coverage kind; prefer its
+        rows to a count in prose. publication.inputs names each parent
+        generation a derived table was built from beside the live one;
+        input_table_current compares the parent table's bytes (its family can
+        move for another table); inputs_current is false when any lags.
+        qualification gives the live pin and the output ledger's audited pin,
+        date and disposition as separate fields, only for the ledger's
+        publisher; not_in_ledger means the table is absent from the
         bundled output ledger, not that no other evidence exists. joins lists
-        the declared joins the table makes (outgoing) and receives (incoming).
-        detail=false (the default) omits each join's measurement record and the
-        ledger's own statements, naming them in detail.omitted; detail=true
-        returns them. A derived view's column carries its source column's
-        meaning when it projects it unchanged, else its declared meaning or null.
+        the declared joins it makes (outgoing) and receives (incoming).
+        detail=false (default) omits each join's measurement record and the
+        ledger's statements, named in detail.omitted; detail=true returns them.
+        A derived view's column carries its source column's meaning when it
+        projects it unchanged, else its declared meaning or null.
         For a FEC view, release_compatibility appears once: in publication when
         available, or relationship when unavailable; detail=false keeps its pins
         and reasons, each dependency's family and generation, and the receipts'

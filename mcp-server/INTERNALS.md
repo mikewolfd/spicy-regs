@@ -553,12 +553,14 @@ file its reader cannot page, so two of five personas never read a row.
   records `spec.parents`: each parent table's family, generation and bytes, or
   a storage version (an ETag, or a local copy's digest) for a parent no family
   pins. `_input_lineage` adds `inputs`, one `{table, family, built_from, live,
-  current}` per parent, and `inputs_current`: `built_from` and `live` are
-  family generations, and `current` compares the parent table's own `sha256`
-  where both pins state one, so a parent family that moved for another table
-  does not mark this one stale (else it compares generations). A
-  storage-version parent makes no lag claim (`current: null`, ignored by
-  `inputs_current`, which is null when no parent can be compared). A family
+  input_table_current}` per parent, and `inputs_current`. `built_from` and
+  `live` are family generations; `input_table_current` compares the parent
+  table's own `sha256` where both pins state one (else the generations), so a
+  parent family that moved for another table does not mark this one stale.
+  The name says so (coordinator answer 7): `built_from` can differ from `live`
+  while `input_table_current` is true. A storage-version parent makes no lag
+  claim (`input_table_current: null`, ignored by `inputs_current`, which is
+  null when no parent can be compared). A family
   whose root records no parents gets no `inputs` key. The root is read on the
   first reply that pins the generation, never at build, and kept per artifact
   digest (`_ROOT_PARENTS`; roots are immutable); a read that fails states
