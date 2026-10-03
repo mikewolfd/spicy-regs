@@ -41,7 +41,8 @@ def test_local_batch_exposes_selected_members_and_verified_pins(tmp_path, monkey
     con, server = serve(monkeypatch, directory)
     try:
         sources = _tool_data(server, "list_sources", {})
-        assert [entry["table"] for entry in _listed(sources)] == ["a", "dockets"]
+        # dockets has a subject in the dictionary; a file the dictionary does not know is listed after it.
+        assert [entry["table"] for entry in _listed(sources)] == ["dockets", "a"]
         assert sources["selected_directory"] == str(batch)
         pin = _tool_data(server, "describe_table", {"table": "a"})["publication"]
         assert pin["status"] == "managed_download"

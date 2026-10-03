@@ -448,6 +448,7 @@ def test_list_sources_groups_tables_by_subject_with_unassigned_tables_last(monke
     metadata = {name: dict(entry) for name, entry in server._table_metadata().items()}
     for name, subject in (("dockets", "rulemaking"), ("documents", "rulemaking"), ("laws", "congress")):
         metadata[name]["subject"] = subject
+    del metadata["comments"]["subject"]  # a table the dictionary gives no subject, as a local file can be
     monkeypatch.setattr(server, "_table_metadata", lambda: metadata)
     with duckdb.connect() as con:
         for name in ("laws", "documents", "dockets", "comments"):
