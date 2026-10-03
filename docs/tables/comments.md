@@ -8,7 +8,7 @@ One row per public comment — the largest table (tens of millions of rows). On 
 
 **Coverage.** True range, floored and open-ended. Posted dates are stated from 1990-01-01 rather than from the raw minimum of year 0000, on the same publisher defect as `documents`; the mirror is rebuilt from the catalog, so the latest posted date is a query (`SELECT max(posted_date)`), not a stated bound. See the data-quality note. *(measured 2026-10-03)*
 
-**Data quality.** Rows with a `posted_date` before 1990 carry the same publisher defect as `documents` (`WHERE posted_date < '1990'` counts them); filter on the date when recency matters.
+**Data quality.** Rows with a `posted_date` before 1990 carry the same publisher defect as `documents` (`WHERE posted_date < '1990'` counts them); filter on the date when recency matters. A comment on a posting Regulations.gov removed stays here, and where the publisher moved the posting it re-posted the comments under new ids, so one comment can appear twice: on 2026-10-03 FNA-2026-0301-0006 to -0009, on the removed FNA-2026-0301-0004, are FNA-2026-0313-0002 to -0005, body for body. `agency_stats` and `feed_summary` leave them out; to do the same, keep rows `WHERE comment_on_document_id IS NULL OR comment_on_document_id NOT IN (SELECT document_id FROM documents WHERE publisher_status = 'removed')`.
 
 - **Parquet file:** `comments.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.

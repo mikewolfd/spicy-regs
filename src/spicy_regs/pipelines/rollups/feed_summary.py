@@ -12,6 +12,8 @@ class FeedSummaryRollup(RollupPipeline):
 
     name: ClassVar[str] = "feed-summary"
     inputs: ClassVar[tuple[str, ...]] = ("dockets.parquet", "comments_index.parquet", "documents.parquet")
+    #: Read only for the comments held on a removed posting, three columns of the removed postings' agencies.
+    remote_inputs: ClassVar[tuple[str, ...]] = ("comments.parquet",)
     output: ClassVar[str] = "feed_summary.parquet"
 
     def build(self, output_dir: Path) -> Path:

@@ -254,7 +254,7 @@ def test_reference_proceeding_threads_rinless_docket_and_preserves_reopening(tmp
         periods[0]["opened_by_artifact_ids_json"]
     )
     assert all(row["method"] == "deterministic" for row in periods)
-    assert all(row["actor_id"] == "spicy-regs:comment-periods:v12" for row in periods)
+    assert all(row["actor_id"] == "spicy-regs:comment-periods:v13" for row in periods)
 
 
 def test_reused_rin_does_not_collapse_or_cross_assign_distinct_dockets(tmp_path):
@@ -927,7 +927,7 @@ def test_a_nonrulemaking_docket_is_a_proceeding_only_on_action_evidence(tmp_path
     assert json.loads(by_docket[staged]["fr_document_ids_json"]) == ["2023-00001@2023-01-03"]
     assert json.loads(by_docket[with_rin]["rins_json"]) == ["2120-AA64"]
     assert not any("2021-06210@2021-03-25" in row["fr_document_ids_json"] for row in proceedings)
-    assert {row["actor_id"] for row in proceedings} == {"spicy-regs:proceedings:v12"}
+    assert {row["actor_id"] for row in proceedings} == {"spicy-regs:proceedings:v13"}
 
     # Its comment period keeps the docket as its anchor, with no proceeding.
     (period,) = pq.read_table(build_comment_periods(tmp_path)).to_pylist()
@@ -1885,3 +1885,58 @@ def test_a_catch_all_docket_takes_nothing_from_the_documents_it_posts(tmp_path):
     assert (notice_period["docket_ids_json"], notice_period["anchor_kind"]) == ("[]", "proceeding")
     assert json.loads(notice_period["proceeding_ids_json"]) == [noaa_notice["proceeding_id"]]
     assert json.loads(notice_period["rins_json"]) == ["0648-BG81"]
+
+
+@pytest.mark.parametrize("withdrawn", ["true", "false"])
+def test_a_withdrawn_posting_names_no_proceeding_and_makes_no_docket_a_rulemaking(tmp_path, withdrawn):
+    """Real rows of documents generation 066964e8 (2026-10-03), round 6 (M4-A).
+
+    EPA-R09-OAR-2025-2833-0079, "G. Notice of Final Rulemaking", was withdrawn for a privilege label and replaced
+    by -0081, yet as the docket's latest-dated title it named the proceeding. FAA-2007-0273 is a Nonrulemaking
+    docket with no RIN whose one posting, a Boeing 757 special-conditions rule, FAA withdrew on 2008-03-03: it was a
+    rulemaking only through that posting.
+    """
+    epa, faa = "EPA-R09-OAR-2025-2833", "FAA-2007-0273"
+    attainment = (
+        "Determination of Attainment by the Attainment Date But For International Emissions for the 2015 Ozone "
+        "National Ambient Air Quality Standards; Phoenix-Mesa Nonattainment Area, Arizona"
+    )
+    _empty_rulemaking_inputs(tmp_path)
+    _fr_rows(tmp_path, [])
+    _write(
+        tmp_path / "dockets.parquet",
+        ("docket_id", "rin", "docket_type", "title", "agency_code", "modify_date"),
+        [
+            {"docket_id": epa, "rin": "Not Assigned", "docket_type": "Rulemaking", "title": attainment,
+             "agency_code": "EPA", "modify_date": "2026-03-24T17:09:31Z"},
+            {"docket_id": faa, "rin": None, "docket_type": "Nonrulemaking", "agency_code": "FAA",
+             "title": "Special Conditions: Boeing Model 757 Series Airplanes; Seats With Non-Traditional, Large, "
+             "Non-Metallic Panels", "modify_date": "2015-05-26T12:52:45Z"},
+        ],
+    )
+    _write(
+        tmp_path / "documents.parquet",
+        ("document_id", "docket_id", "document_type", "title", "agency_code", "posted_date", "withdrawn"),
+        [
+            {"document_id": f"{epa}-0001", "docket_id": epa, "document_type": "Proposed Rule", "agency_code": "EPA",
+             "title": "Air Quality State Implementation Plans; Approvals and Promulgations: Arizona",
+             "posted_date": "2025-11-19T05:00:00Z", "withdrawn": "false"},
+            {"document_id": f"{epa}-0079", "docket_id": epa, "document_type": "Supporting & Related Material",
+             "agency_code": "EPA", "title": "G. Notice of Final Rulemaking", "posted_date": "2026-04-09T04:00:00Z",
+             "withdrawn": withdrawn},
+            {"document_id": f"{faa}-0001", "docket_id": faa, "document_type": "Rule", "agency_code": "FAA",
+             "title": "Special Conditions: Boeing Model 757 Series Airplanes; Seats With Non-Traditional, Large, "
+             "Non-Metallic Panels", "posted_date": "2007-11-27T00:00:00Z", "withdrawn": withdrawn},
+        ],
+    )
+    by_docket = {
+        docket: row
+        for row in pq.read_table(build_proceedings(tmp_path)).to_pylist()
+        for docket in json.loads(row["docket_ids_json"])
+    }
+    if withdrawn == "true":
+        assert set(by_docket) == {epa}
+        assert by_docket[epa]["title"] == attainment
+    else:
+        assert set(by_docket) == {epa, faa}
+        assert by_docket[epa]["title"] == "G. Notice of Final Rulemaking"

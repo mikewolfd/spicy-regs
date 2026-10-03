@@ -46,8 +46,11 @@ EVENTS_OUTPUT = "lifecycle_events.parquet"
 # own title at time zero (55a).
 # v3 (one bump over published v2): code unchanged; a lifecycle copies its proceeding's agency_code, which moves
 # with proceedings v12 (FNS to FNA). The events carry no code, so their actor stays.
-LIFECYCLES_ACTOR_ID = "spicy-regs:rulemaking-lifecycles:v3"
-EVENTS_ACTOR_ID = "spicy-regs:lifecycle-events:v2"
+# v4 lifecycles, v3 events (one bump each over published v3 and v2): code unchanged; both move with proceedings v13,
+# where a withdrawn posting is no stage event. Rebuilt from snapshot_75e70455's own inputs, 783 events go, 121
+# lifecycles go with their proceedings, and 293 change kind or anchor (receipt round6/impl-C1/m4a_delta.out).
+LIFECYCLES_ACTOR_ID = "spicy-regs:rulemaking-lifecycles:v4"
+EVENTS_ACTOR_ID = "spicy-regs:lifecycle-events:v3"
 
 #: Regulations.gov's coverage is thin before this day (decision 54's coverage flag).
 COVERAGE_FROM = date(2008, 1, 1)

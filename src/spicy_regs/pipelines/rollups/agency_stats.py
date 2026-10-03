@@ -12,6 +12,8 @@ class AgencyStatsRollup(RollupPipeline):
 
     name: ClassVar[str] = "agency-stats"
     inputs: ClassVar[tuple[str, ...]] = ("dockets.parquet", "comments_index.parquet", "documents.parquet")
+    #: Read only for the comments held on a removed posting, three columns of the removed postings' agencies.
+    remote_inputs: ClassVar[tuple[str, ...]] = ("comments.parquet",)
     output: ClassVar[str] = "agency_stats.parquet"
 
     def build(self, output_dir: Path) -> Path:

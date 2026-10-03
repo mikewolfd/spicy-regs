@@ -1,4 +1,4 @@
-"""Dated FR record keys, number-only references, the dockets an FR link names, a document's rule stage and the catch-all dockets.
+"""Dated FR record keys, number-only references, the dockets an FR link names, a document's rule stage, withdrawn postings and the catch-all dockets.
 
 SpicyDocs owns the source key and the comparison key a reference number reduces to
 (dashes and case folded, the sequence's zero padding removed); RefSpec's number-only
@@ -214,6 +214,19 @@ def document_rule_stage(
     if register_copy is not None and register_copy not in fr_untyped:
         return fr_stages.get(register_copy)
     return rule_stage(row.get("document_type"), row.get("title"))
+
+
+def withdrawn_posting(row: dict) -> bool:
+    """Whether Regulations.gov flags this posting withdrawn, which makes it no evidence of its docket's rulemaking.
+
+    The flag marks a posting the agency took back from the docket; it is not the agency withdrawing
+    a rule, which the Register publishes as a document of its own. Of the 896 Rule and Proposed Rule postings
+    flagged on documents generation 066964e8 (2026-10-03), the agencies' stated reasons are
+    misfiled, duplicate, moved, replaced or posted in error, or none; 3 say the agency withdrew the
+    action itself, and the Register's own documents carry each of those stages (receipt
+    ``mcp-chaos-2026-10-02/round6/impl-C1/withdrawal_reasons.out``).
+    """
+    return str(row.get("withdrawn")).casefold() == "true"
 
 
 #: Regulations.gov's Federal Register feed dockets, one per agency (``EPA_FRDOC_0001``).

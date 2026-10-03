@@ -66,7 +66,9 @@ OUTPUT = "comment_periods.parquet"
 # v12 (one bump over published v11): a notice's Register record is evidence of its period even
 # when only its copies state a window (31,497 rows on snapshot_8758191f's inputs); ids and dates
 # are unchanged. Documents stating a close but no opening are counted as they are left out.
-ACTOR_ID = "spicy-regs:comment-periods:v12"
+# v13 (one bump over published v12): code unchanged; 124 periods drop a proceeding that proceedings v13 no longer
+# forms (a docket that was a rulemaking only through a withdrawn posting); ids, dates and anchors are unchanged.
+ACTOR_ID = "spicy-regs:comment-periods:v13"
 
 COLUMNS = (
     "comment_period_id",

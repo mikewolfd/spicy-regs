@@ -18,6 +18,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
+from spicy_regs.public_url import comments_source
 from spicy_regs.transforms.build_org_committee_links import (
     COLUMNS,
     GENERIC_ORG_CORES,
@@ -25,7 +26,6 @@ from spicy_regs.transforms.build_org_committee_links import (
     MIN_CORE_TOKENS,
     NAME_SOURCE_ORGANIZATION_FIELD,
     PREFIX_FANOUT_MEDIUM_MAX,
-    _resolve_comments_source,
     build_org_committee_links,
 )
 
@@ -435,12 +435,12 @@ def test_duplicate_comment_ids_are_deduplicated_newest_modify_date_wins(tmp_path
 def test_comments_source_prefers_a_local_file(tmp_path: Path) -> None:
     local = tmp_path / "comments.parquet"
     local.touch()
-    assert _resolve_comments_source(tmp_path) == str(local)
+    assert comments_source(tmp_path) == str(local)
 
 
 def test_comments_source_falls_back_to_the_public_bucket(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("R2_PUBLIC_URL", "https://data.example.dev/")
-    assert _resolve_comments_source(tmp_path) == "https://data.example.dev/comments.parquet"
+    assert comments_source(tmp_path) == "https://data.example.dev/comments.parquet"
 
 
 @pytest.mark.parametrize("bad", ["http://data.example.dev", "https://data.example.dev/'; DROP TABLE x --"])
@@ -449,7 +449,7 @@ def test_comments_source_rejects_an_unsafe_public_url(
 ) -> None:
     monkeypatch.setenv("R2_PUBLIC_URL", bad)
     with pytest.raises(RuntimeError):
-        _resolve_comments_source(tmp_path)
+        comments_source(tmp_path)
 
 
 def test_build_requires_the_committees_input(tmp_path: Path) -> None:

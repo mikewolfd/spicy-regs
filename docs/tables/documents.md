@@ -59,6 +59,21 @@ Read the notice's filing instructions and later notices before acting.
 `fr_docket_links` offers source docket navigation; `comment_periods` offers
 derived date-window candidates, not a complete legal extension history.
 
+Rows are additive. The Mirrulations mirror keeps every capture and never
+sees a deletion, so a posting Regulations.gov later removes, or moves to
+another docket, stays here: on 2026-10-03 FNA-2026-0301-0004, the Utah
+notice (FR 2026-18893) filed to the Idaho docket, answered 404 while this
+table held it with `withdrawn = 'false'`; Regulations.gov had re-posted it
+as FNA-2026-0313-0006, and its four comments appear under both. A daily
+step lists every docket with a document posted or modified in the past
+week and reads by id each held document the listing omits:
+`publisher_status` is `removed` where Regulations.gov answers 404 or 410.
+Older dockets are not checked, so NULL means never checked, not still
+published. Removed rows stay here; `agency_stats`, `feed_summary`,
+`agency_monthly_volume` and `discovery_signals` leave them and their
+comments out. Filter `publisher_status IS DISTINCT FROM 'removed'` to do
+the same.
+
 - **Parquet file:** `documents.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
 - **Publication status:** Not established by this schema page or its measurement date.
@@ -80,9 +95,11 @@ derived date-window candidates, not a complete legal extension history.
 | `attachments_json` | `VARCHAR` | JSON array of the main document's fileFormats renditions: `[{url, format, size}]`. This compatibility field does not contain separately listed attachment resources. Null when no main renditions were retained. |
 | `attachment_records_json` | `VARCHAR` | Literal records from an explicitly read document attachment relationship, preserving attachment IDs, restrictions and alternative file formats. Null means the relationship was not read; an empty array means a validated complete read returned no attachments. A main document response alone cannot establish attachment absence. |
 | `fr_doc_num` | `VARCHAR` | Federal Register document number, when the document was published in the FR. Often null. |
-| `withdrawn` | `VARCHAR` | Whether the document was withdrawn, as the string `"true"`/`"false"`. Often null. |
-| `reason_withdrawn` | `VARCHAR` | Agency-supplied reason for withdrawal, when withdrawn. Often null. |
+| `withdrawn` | `VARCHAR` | Whether regulations.gov flags the posting withdrawn, as the string `"true"`/`"false"`. Often null. A withdrawn posting is still held here; the rulemaking tables read it as no evidence (see `proceedings`). |
+| `reason_withdrawn` | `VARCHAR` | Agency-supplied reason for withdrawal, when withdrawn: usually that it was posted to the wrong docket, a duplicate, moved or replaced. Often null. |
 | `additional_rins` | `VARCHAR` | JSON array of additional Regulation Identifier Numbers beyond the docket's primary RIN. Often null. |
 | `text_content` | `VARCHAR` | Plain text extracted from the document's PDF attachment(s) by the PDF text-extraction step. Null until that step has run; see `text_extraction_status`. |
 | `text_extraction_status` | `VARCHAR` | Aggregate PDF outcome: `ok` means at least one PDF supplied text, even if another failed; otherwise `error`, `encrypted`, or `empty` (no extractable text) in that order. Null before an attempt. See `pdf_extraction_results_json` for each file. |
 | `pdf_extraction_results_json` | `VARCHAR` | Ordered JSON array from the latest PDF attempt: `{url, source_sha256, status, page_count, error}` per distinct selected URL. SHA-256 identifies observed bytes; no-bytes fetch failures have null digest/page count and a generic error. Null when no PDF attempt is recorded. Describes that attempt, not the provenance of older text retained after a failed overwrite. |
+| `publisher_status` | `VARCHAR` | What Regulations.gov last said of the document when the daily reconcile step checked its docket: `listed` (the docket's document listing names it, or, where the listing does not, its own record still answers) or `removed` (the listing omits it and its own record answers 404 or 410). NULL where the step has never checked it: it checks only dockets with a document posted or modified in the past week, so NULL does not mean the publisher still serves it. A removed document stays in this table (see data_quality). |
+| `removed_observed_at` | `VARCHAR` | When the reconcile step first found the document removed, as a UTC ISO 8601 instant; NULL unless `publisher_status` is `removed`. |

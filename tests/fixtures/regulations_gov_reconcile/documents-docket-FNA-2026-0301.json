@@ -1,0 +1,147 @@
+{
+  "data" : [ {
+    "type" : "documents",
+    "id" : "FNA-2026-0301-0002",
+    "attributes" : {
+      "agencyId" : "FNA",
+      "objectId" : "09000064b94fbe20",
+      "frDocNum" : null,
+      "documentType" : "Supporting & Related Material",
+      "withdrawn" : false,
+      "highlightedContent" : "",
+      "commentEndDate" : null,
+      "commentStartDate" : null,
+      "lastModifiedDate" : "2026-09-08T21:49:06Z",
+      "openForComment" : false,
+      "withinCommentPeriod" : false,
+      "postedDate" : "2026-09-08T04:00:00Z",
+      "title" : "ID initial approval",
+      "docketId" : "FNA-2026-0301",
+      "subtype" : null,
+      "allowLateComments" : false
+    }
+  }, {
+    "type" : "documents",
+    "id" : "FNA-2026-0301-0005",
+    "attributes" : {
+      "agencyId" : "FNA",
+      "objectId" : "09000064b955afbd",
+      "frDocNum" : "2026-18889",
+      "documentType" : "Notice",
+      "withdrawn" : false,
+      "highlightedContent" : "",
+      "commentEndDate" : "2026-10-16T03:59:59Z",
+      "commentStartDate" : "2026-09-15T04:00:00Z",
+      "lastModifiedDate" : "2026-09-29T09:00:26Z",
+      "openForComment" : true,
+      "withinCommentPeriod" : true,
+      "postedDate" : "2026-09-15T04:00:00Z",
+      "title" : "Supplemental Nutrition Assistance Program: State of Idaho Demonstration Project",
+      "docketId" : "FNA-2026-0301",
+      "subtype" : null,
+      "allowLateComments" : false
+    }
+  }, {
+    "type" : "documents",
+    "id" : "FNA-2026-0301-0003",
+    "attributes" : {
+      "agencyId" : "FNA",
+      "objectId" : "09000064b94fbe21",
+      "frDocNum" : null,
+      "documentType" : "Supporting & Related Material",
+      "withdrawn" : false,
+      "highlightedContent" : "",
+      "commentEndDate" : null,
+      "commentStartDate" : null,
+      "lastModifiedDate" : "2026-09-08T21:49:08Z",
+      "openForComment" : false,
+      "withinCommentPeriod" : false,
+      "postedDate" : "2026-09-08T04:00:00Z",
+      "title" : "ID initial request",
+      "docketId" : "FNA-2026-0301",
+      "subtype" : null,
+      "allowLateComments" : false
+    }
+  }, {
+    "type" : "documents",
+    "id" : "FNA-2026-0301-0001",
+    "attributes" : {
+      "agencyId" : "FNA",
+      "objectId" : "09000064b94fbe1b",
+      "frDocNum" : null,
+      "documentType" : "Supporting & Related Material",
+      "withdrawn" : false,
+      "highlightedContent" : "",
+      "commentEndDate" : null,
+      "commentStartDate" : null,
+      "lastModifiedDate" : "2026-09-08T21:48:52Z",
+      "openForComment" : false,
+      "withinCommentPeriod" : false,
+      "postedDate" : "2026-09-08T04:00:00Z",
+      "title" : "ID mod request",
+      "docketId" : "FNA-2026-0301",
+      "subtype" : null,
+      "allowLateComments" : false
+    }
+  } ],
+  "meta" : {
+    "aggregations" : {
+      "documentType" : [ {
+        "docCount" : 3,
+        "label" : "Supporting & Related Material"
+      }, {
+        "docCount" : 1,
+        "label" : "Notice"
+      } ],
+      "subtype" : [ ],
+      "withinCommentPeriod" : [ {
+        "docCount" : 1,
+        "label" : "true"
+      }, {
+        "docCount" : 3,
+        "label" : "false"
+      } ],
+      "agencyId" : [ {
+        "docCount" : 4,
+        "value" : "FNA"
+      } ],
+      "commentEndDate" : [ {
+        "label" : "Next 15 Days",
+        "fromDate" : "2026-10-03 00:00:00",
+        "toDate" : "2026-10-17 23:59:58",
+        "docCount" : 1
+      }, {
+        "label" : "Next 30 Days",
+        "fromDate" : "2026-10-03 00:00:00",
+        "toDate" : "2026-11-01 23:59:58",
+        "docCount" : 1
+      }, {
+        "label" : "Next 90 Days",
+        "fromDate" : "2026-10-03 00:00:00",
+        "toDate" : "2026-12-31 23:59:58",
+        "docCount" : 1
+      } ],
+      "postedDate" : [ {
+        "label" : "Last 30 Days",
+        "fromDate" : "2026-09-04 00:00:00",
+        "toDate" : "2026-10-03 23:59:59",
+        "docCount" : 4
+      }, {
+        "label" : "Last 90 Days",
+        "fromDate" : "2026-07-06 00:00:00",
+        "toDate" : "2026-10-03 23:59:59",
+        "docCount" : 4
+      } ]
+    },
+    "filters" : { },
+    "hasNextPage" : false,
+    "hasPreviousPage" : false,
+    "numberOfElements" : 4,
+    "pageNumber" : 1,
+    "pageSize" : 25,
+    "totalElements" : 4,
+    "totalPages" : 1,
+    "firstPage" : true,
+    "lastPage" : true
+  }
+}

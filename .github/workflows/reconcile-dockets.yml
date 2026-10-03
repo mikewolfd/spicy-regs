@@ -1,0 +1,68 @@
+name: Reconcile active dockets with Regulations.gov
+
+# The Mirrulations mirror only adds captures, so a document Regulations.gov removes or
+# moves stays in documents.parquet, unflagged, and its comments can appear twice
+# (FNA-2026-0301-0004, round-6 audit, 2026-10-03). This lists every docket with a
+# document posted or modified in the past week through the keyed API and reads by id
+# each held document the listing omits, recording the answers in the bare
+# docket_reconcile_outcomes.parquet (pipelines/docket_reconcile.py). The documents
+# family joins them at the next regulations refresh; nothing here writes the catalog,
+# the working copies or a family.
+#
+# Owner decision 2026-10-03: about 1,100 keyed requests a day. The key allows 1,000 an
+# hour and other readers share it, so the step paces one request every 5 seconds, stops
+# at --max-requests and resumes with the dockets it did not reach the next day. 12:40Z
+# keeps it clear of the 06:25Z and 18:25Z sweeps and the refreshes they start.
+on:
+  schedule:
+    - cron: '40 12 * * *'
+  workflow_dispatch:
+    inputs:
+      max_requests:
+        description: 'Most keyed requests this run makes (empty: the step default, 1,100)'
+        required: false
+        default: ''
+        type: string
+      dockets:
+        description: 'Reconcile only these held dockets, space-separated (empty: the active ones)'
+        required: false
+        default: ''
+        type: string
+      skip_upload:
+        description: 'Ask and report only; record nothing on R2'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: reconcile-dockets
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    # 1,100 requests at one per 5 seconds is about 92 minutes.
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v4
+      - run: uv sync --frozen
+      - name: Reconcile active dockets
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
+          DATA_GOV_API_KEY: ${{ secrets.DATA_GOV_API_KEY }}
+          MAX_REQUESTS: ${{ inputs.max_requests }}
+          DOCKETS: ${{ inputs.dockets }}
+          SKIP_UPLOAD: ${{ inputs.skip_upload && '--skip-upload' || '--no-skip-upload' }}
+        run: |
+          ARGS=("$SKIP_UPLOAD")
+          if [ -n "$MAX_REQUESTS" ]; then ARGS+=(--max-requests "$MAX_REQUESTS"); fi
+          for DOCKET in $DOCKETS; do ARGS+=(--docket "$DOCKET"); done
+          uv run --frozen reconcile-dockets "${ARGS[@]}"

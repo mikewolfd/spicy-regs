@@ -438,13 +438,13 @@ def test_labelled_dockets_and_padded_numbers_join_every_rulemaking_table(tmp_pat
         ("federal_register.document_type", "2010-02-05"),
     }
     assert not any(json.loads(r["docket_ids_json"]) == [] for r in proceedings)
-    assert {r["actor_id"] for r in proceedings} == {"spicy-regs:proceedings:v12"}
+    assert {r["actor_id"] for r in proceedings} == {"spicy-regs:proceedings:v13"}
 
     periods = pq.read_table(build_comment_periods(tmp_path)).to_pylist()
     (period,) = [r for r in periods if "federal_register.comments_close_on" in r["source"]]
     assert json.loads(period["docket_ids_json"]) == ["SSA-2010-0037"]
     assert json.loads(period["proceeding_ids_json"]) == [ssa["proceeding_id"]]
-    assert {r["actor_id"] for r in periods} == {"spicy-regs:comment-periods:v12"}
+    assert {r["actor_id"] for r in periods} == {"spicy-regs:comment-periods:v13"}
 
     items_path, relationships_path = build_regulatory_agenda(tmp_path)
     (item,) = pq.read_table(items_path).to_pylist()

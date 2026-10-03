@@ -28,7 +28,8 @@ from spicy_regs.transforms.build_lifecycles import LIFECYCLES_OUTPUT, ROUTINE_FA
 OUTPUT = "agency_lifecycle_stats.parquet"
 # v2 (one bump over published v1): code unchanged; its cells move with lifecycles v2 (decisions 54d and 55a).
 # v3 (one bump over published v2): code unchanged; FNS's cells move to FNA with lifecycles v3 (proceedings v12).
-ACTOR_ID = "spicy-regs:agency-lifecycle-stats:v3"
+# v4 (one bump over published v3): code unchanged; 95 of its cells move with lifecycles v4 (proceedings v13).
+ACTOR_ID = "spicy-regs:agency-lifecycle-stats:v4"
 
 #: A cell with fewer rules than this keeps its row, flagged, with no estimates (decision 55).
 MIN_RULES = 30

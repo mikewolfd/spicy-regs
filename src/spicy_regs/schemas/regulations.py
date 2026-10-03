@@ -174,6 +174,10 @@ COMMENT = RecordType(
 #: (``transforms.html_text``).
 COMMENT_MIRROR_COLUMNS: tuple[str, ...] = ("comment_text",)
 
+#: Columns the published documents family adds after the ETL's own: what the daily reconcile step last heard from
+#: Regulations.gov about each document (``pipelines.docket_reconcile``), never stored in the catalog or the working copy.
+DOCUMENT_FAMILY_COLUMNS: tuple[str, ...] = ("publisher_status", "removed_observed_at")
+
 
 # Registry keyed by record-type name. Order matters: it drives the default
 # set of data types the pipeline processes.

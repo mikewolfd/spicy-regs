@@ -14,15 +14,17 @@ from datetime import date
 import pytest
 
 from spicy_regs import data_dictionary as dd
-from spicy_regs.schemas.regulations import COMMENT_MIRROR_COLUMNS, RECORD_TYPES
+from spicy_regs.schemas.regulations import COMMENT_MIRROR_COLUMNS, DOCUMENT_FAMILY_COLUMNS, RECORD_TYPES
 
 
 def test_record_types_covered_by_expected_schemas():
-    """Every core RecordType column flows into the expected schema; the comments mirror's derived columns follow."""
+    """Every core RecordType column flows into the expected schema; the comments mirror's derived columns follow, and
+    so do the reconcile step's columns on the documents family."""
     expected = dd.expected_schemas()
+    derived_by_table = {"comments": COMMENT_MIRROR_COLUMNS, "documents": DOCUMENT_FAMILY_COLUMNS}
     for name, rt in RECORD_TYPES.items():
         assert name in expected
-        derived = COMMENT_MIRROR_COLUMNS if name == "comments" else ()
+        derived = derived_by_table.get(name, ())
         assert [c for c, _ in expected[name]] == [*rt.schema, *derived]
 
 

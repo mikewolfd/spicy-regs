@@ -127,6 +127,21 @@ tables:
       Read the notice's filing instructions and later notices before acting.
       `fr_docket_links` offers source docket navigation; `comment_periods` offers
       derived date-window candidates, not a complete legal extension history.
+
+      Rows are additive. The Mirrulations mirror keeps every capture and never
+      sees a deletion, so a posting Regulations.gov later removes, or moves to
+      another docket, stays here: on 2026-10-03 FNA-2026-0301-0004, the Utah
+      notice (FR 2026-18893) filed to the Idaho docket, answered 404 while this
+      table held it with `withdrawn = 'false'`; Regulations.gov had re-posted it
+      as FNA-2026-0313-0006, and its four comments appear under both. A daily
+      step lists every docket with a document posted or modified in the past
+      week and reads by id each held document the listing omits:
+      `publisher_status` is `removed` where Regulations.gov answers 404 or 410.
+      Older dockets are not checked, so NULL means never checked, not still
+      published. Removed rows stay here; `agency_stats`, `feed_summary`,
+      `agency_monthly_volume` and `discovery_signals` leave them and their
+      comments out. Filter `publisher_status IS DISTINCT FROM 'removed'` to do
+      the same.
     summary: >-
       One row per document posted to a docket — proposed rules, final rules,
       notices, supporting analyses, and public-submission stubs. Joins to
@@ -148,8 +163,10 @@ tables:
       attachments_json: "JSON array of the main document's fileFormats renditions: `[{url, format, size}]`. This compatibility field does not contain separately listed attachment resources. Null when no main renditions were retained."
       attachment_records_json: "Literal records from an explicitly read document attachment relationship, preserving attachment IDs, restrictions and alternative file formats. Null means the relationship was not read; an empty array means a validated complete read returned no attachments. A main document response alone cannot establish attachment absence."
       fr_doc_num: "Federal Register document number, when the document was published in the FR. Often null."
-      withdrawn: 'Whether the document was withdrawn, as the string `"true"`/`"false"`. Often null.'
-      reason_withdrawn: "Agency-supplied reason for withdrawal, when withdrawn. Often null."
+      withdrawn: 'Whether regulations.gov flags the posting withdrawn, as the string `"true"`/`"false"`. Often null. A withdrawn posting is still held here; the rulemaking tables read it as no evidence (see `proceedings`).'
+      reason_withdrawn: "Agency-supplied reason for withdrawal, when withdrawn: usually that it was posted to the wrong docket, a duplicate, moved or replaced. Often null."
+      publisher_status: "What Regulations.gov last said of the document when the daily reconcile step checked its docket: `listed` (the docket's document listing names it, or, where the listing does not, its own record still answers) or `removed` (the listing omits it and its own record answers 404 or 410). NULL where the step has never checked it: it checks only dockets with a document posted or modified in the past week, so NULL does not mean the publisher still serves it. A removed document stays in this table (see data_quality)."
+      removed_observed_at: "When the reconcile step first found the document removed, as a UTC ISO 8601 instant; NULL unless `publisher_status` is `removed`."
       additional_rins: "JSON array of additional Regulation Identifier Numbers beyond the docket's primary RIN. Often null."
       text_content: "Plain text extracted from the document's PDF attachment(s) by the PDF text-extraction step. Null until that step has run; see `text_extraction_status`."
       text_extraction_status: "Aggregate PDF outcome: `ok` means at least one PDF supplied text, even if another failed; otherwise `error`, `encrypted`, or `empty` (no extractable text) in that order. Null before an attempt. See `pdf_extraction_results_json` for each file."
@@ -167,7 +184,14 @@ tables:
     data_quality: >-
       Rows with a `posted_date` before 1990 carry the same publisher defect as
       `documents` (`WHERE posted_date < '1990'` counts them); filter on the
-      date when recency matters.
+      date when recency matters. A comment on a posting Regulations.gov removed
+      stays here, and where the publisher moved the posting it re-posted the
+      comments under new ids, so one comment can appear twice: on 2026-10-03
+      FNA-2026-0301-0006 to -0009, on the removed FNA-2026-0301-0004, are
+      FNA-2026-0313-0002 to -0005, body for body. `agency_stats` and
+      `feed_summary` leave them out; to do the same, keep rows `WHERE
+      comment_on_document_id IS NULL OR comment_on_document_id NOT IN (SELECT
+      document_id FROM documents WHERE publisher_status = 'removed')`.
     summary: >-
       One row per public comment — the largest table
       (tens of millions of rows). On R2 it is also published as Hive-partitioned
@@ -220,6 +244,11 @@ tables:
       agency posts in batches, so a spike here dates postings, and
       `comments.receive_date`, the agency's stated receipt date, dates
       receipt.
+    data_quality: >-
+      Its counts include the comments held on a posting Regulations.gov removed
+      (see `comments`), which `agency_stats` and `feed_summary` subtract. To
+      subtract them yourself, count those rows in `comments` by agency, docket
+      and posting month.
     columns:
       agency_code: "Agency code of the counted comments."
       docket_id: "Source docket identifier, or NULL when the source gives none."
@@ -246,9 +275,9 @@ tables:
       docket_type: "Docket category (from `dockets`)."
       modify_date: "Docket last-modified timestamp; the table is sorted by this descending."
       abstract: "Docket abstract (from `dockets`). Often null."
-      comment_count: "Posted comments on the docket, summed from `comments_index`. 0 when none. These are posted comment records, not comments received: an agency posts one record for a mass-mail campaign that can stand for thousands of submissions (EPA-HQ-OW-2022-0114 has 1,629 posted records for about 122,200 comments EPA received). To estimate submissions received, sum `comments.duplicate_comments` as its description says; this table does not carry it."
-      comment_end_date: "Latest comment-period end date across the docket's documents. Null when unknown."
-      date_created: "Earliest document `posted_date` on the docket, used as a creation date. Null when unknown."
+      comment_count: "Posted comments on the docket, summed from `comments_index`, less those on a posting Regulations.gov removed (`documents.publisher_status`). 0 when none. These are posted comment records, not comments received: an agency posts one record for a mass-mail campaign that can stand for thousands of submissions (EPA-HQ-OW-2022-0114 has 1,629 posted records for about 122,200 comments EPA received). To estimate submissions received, sum `comments.duplicate_comments` as its description says; this table does not carry it."
+      comment_end_date: "Latest comment-period end date across the docket's documents, less postings Regulations.gov removed. Null when unknown."
+      date_created: "Earliest document `posted_date` on the docket, less postings Regulations.gov removed, used as a creation date. Null when unknown."
 
   agency_stats:
     identity_columns: [agency_code]
@@ -264,8 +293,8 @@ tables:
     columns:
       agency_code: "Agency short code. One row per agency."
       docket_count: "Number of dockets posted by the agency."
-      document_count: "Number of documents posted by the agency."
-      comment_count: "Posted comments on the agency's dockets, summed from `comments_index`. These are posted comment records, not comments received: an agency posts one record for a mass-mail campaign that can stand for thousands of submissions (EPA-HQ-OW-2022-0114 has 1,629 posted records for about 122,200 comments EPA received). To estimate submissions received, sum `comments.duplicate_comments` as its description says; this table does not carry it."
+      document_count: "Number of documents posted by the agency, less postings Regulations.gov removed (`documents.publisher_status`)."
+      comment_count: "Posted comments on the agency's dockets, summed from `comments_index`, less those on a posting Regulations.gov removed. These are posted comment records, not comments received: an agency posts one record for a mass-mail campaign that can stand for thousands of submissions (EPA-HQ-OW-2022-0114 has 1,629 posted records for about 122,200 comments EPA received). To estimate submissions received, sum `comments.duplicate_comments` as its description says; this table does not carry it."
 
   agency_monthly_volume:
     identity_columns: [agency_code, year, month, document_type]
@@ -273,7 +302,9 @@ tables:
     coverage: >-
       Derived from `documents`: document counts by agency, month and document
       type. A document whose posted date is NULL or the publisher's year zero is
-      left out, and the file records each omitted date; other literal dates stay
+      left out, and so is a posting Regulations.gov removed
+      (`documents.publisher_status`); the file records how many of each it
+      left out. Other literal dates stay
       as the publisher wrote them, including documents dated before 1990 or in
       the future. Source values are unchanged. Receipts:
       fork-execution-2026-09-21/document-derivatives/MANUAL-AUDIT.md and
@@ -352,7 +383,8 @@ tables:
       2× their prior-year monthly mean, requiring ≥24 documents in the prior year
       to suppress tiny-denominator noise. Recomputed relative to the run date, so
       rows turn over on every rebuild; it is a current-state signal, not a time
-      series. Built by `build_discovery_signals` from `documents`.
+      series. Built by `build_discovery_signals` from `documents`, less postings
+      Regulations.gov removed (`documents.publisher_status`).
     columns:
       agency_code: "Agency short code."
       recent_30d: "Documents the agency posted in the trailing 30 days."
@@ -626,7 +658,11 @@ tables:
       One row per rulemaking proceeding: the dockets that are one action, the
       Register documents that joined it, their stage events, RINs and CFR
       targets. A RIN names a Unified Agenda item, never a proceeding: it is
-      carried as evidence and never groups dockets. A docket-less proceeding
+      carried as evidence and never groups dockets. A posting Regulations.gov
+      flags withdrawn (`documents.withdrawn = 'true'`) is no evidence: agencies
+      withdraw a posting filed to the wrong docket, duplicated, moved or
+      replaced, so it gives no stage event, title, agency or RIN, and makes no
+      docket a rulemaking. A docket-less proceeding
       is one Register document. Keyed `proceeding_id`, which continues across
       generations when its dockets or Register documents overlap a prior one.
       Joined by `agenda_item_proceedings`, `comment_periods` and
@@ -830,6 +866,9 @@ tables:
       'CMS-1849-F and CMS-0062-F' and no RIN). A Register proposal naming
       several dockets anchors one lifecycle per docket (502 proposals behind
       2,358 of 35,327 survival rows on snapshot_62318069's inputs; EPA 20%).
+      A posting Regulations.gov flags withdrawn (`documents.withdrawn`) anchors
+      nothing: it was misfiled, duplicated, moved or replaced, and the Register
+      publishes an agency's withdrawal of a rule as a document of its own.
 
       For `routine_family` `pesticide_tolerance` the proposal is usually EPA's
       notice that it received a pesticide petition (FFDCA 408(d)(3)), typed
@@ -909,7 +948,8 @@ tables:
       Register document typed Notice is never an event: a petition withdrawal or
       receipt the Register types Notice (EPA's withdrawals 2010-8292, 2010-13540,
       2011-8549 and 2011-16199; the receipts 2021-08335 and 2023-14192) neither
-      closes nor opens a lifecycle. An Agenda entry
+      closes nor opens a lifecycle. A posting Regulations.gov flags withdrawn is
+      never an event (see `proceedings`). An Agenda entry
       completed as withdrawn adds its dated withdrawal. Keyed
       (`proceeding_id`, `document_id`); `dated_by` says which kind of id
       `document_id` is. Joins `rulemaking_lifecycles` on `proceeding_id`.

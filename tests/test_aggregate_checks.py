@@ -25,7 +25,8 @@ def test_equal_totals_wrong_agency_are_mismatches_and_independent_generations_ab
     check = BY_NAME["agency-document"]
     args = lineage(check)
     with duckdb.connect() as con:
-        con.execute("CREATE TABLE documents AS SELECT * FROM (VALUES ('A'),('B'),(NULL)) t(agency_code)")
+        con.execute("""CREATE TABLE documents AS SELECT * FROM (VALUES ('A',NULL),('A','removed'),('B','listed'),
+            (NULL,NULL)) t(agency_code,publisher_status)""")
         con.execute("CREATE TABLE agency_stats AS SELECT 'A' agency_code,2 document_count")
         result = measure(con, check, **args)
         assert result["expected_total"] == result["observed_total"] == 2
@@ -52,8 +53,8 @@ def test_monthly_omits_invalid_year_zero_and_missing_dates_not_nullable_agency()
     check = BY_NAME["monthly-documents"]
     with duckdb.connect() as con:
         con.execute("""CREATE TABLE documents AS SELECT * FROM (VALUES
-            (NULL,'2025-01-02',NULL),('A','0000-01-01','Rule'),('A','bad','Rule'),('A',NULL,'Rule'))
-            t(agency_code,posted_date,document_type)""")
+            (NULL,'2025-01-02',NULL,NULL),('A','0000-01-01','Rule',NULL),('A','bad','Rule',NULL),('A',NULL,'Rule',NULL),
+            ('A','2025-01-03','Rule','removed')) t(agency_code,posted_date,document_type,publisher_status)""")
         con.execute("""CREATE TABLE agency_monthly_volume AS SELECT NULL::VARCHAR agency_code,2025 AS year,1 AS month,
             NULL::VARCHAR document_type,1 document_count""")
         assert measure(con, check, **lineage(check))["status"] == "OK"
@@ -79,9 +80,27 @@ def test_feed_comment_scope_excludes_orphans_and_null_dockets():
         con.execute(
             "CREATE TABLE comments_index AS SELECT * FROM (VALUES ('D',2),('orphan',4),(NULL,7)) t(docket_id,row_count)"
         )
-        con.execute("CREATE TABLE feed_summary AS SELECT * FROM (VALUES ('D',2),(NULL,0)) t(docket_id,comment_count)")
+        # One of D's two comments names a posting Regulations.gov removed.
+        con.execute("""CREATE TABLE comments AS SELECT * FROM (VALUES ('"D"','D-1'),('"D"','D-2')) t(docket_id,
+            comment_on_document_id)""")
+        con.execute("CREATE TABLE documents AS SELECT * FROM (VALUES ('D-1',NULL),('D-2','removed')) t(document_id,"
+                    "publisher_status)")
+        con.execute("CREATE TABLE feed_summary AS SELECT * FROM (VALUES ('D',1),(NULL,0)) t(docket_id,comment_count)")
         result = measure(con, check, **lineage(check))
-        assert result["status"] == "OK" and result["expected_total"] == 2
+        assert result["status"] == "OK" and result["expected_total"] == 1
+
+
+def test_agency_comments_leave_out_those_on_a_removed_posting():
+    check = BY_NAME["agency-comment"]
+    with duckdb.connect() as con:
+        con.execute("CREATE TABLE comments_index AS SELECT * FROM (VALUES ('A',5),(NULL,1)) t(agency_code,row_count)")
+        con.execute("""CREATE TABLE comments AS SELECT * FROM (VALUES ('A','R'),('A','R'),('A','K'),('A',NULL))
+            t(agency_code,comment_on_document_id)""")
+        con.execute("CREATE TABLE documents AS SELECT * FROM (VALUES ('R','removed'),('K','listed')) t(document_id,"
+                    "publisher_status)")
+        con.execute("CREATE TABLE agency_stats AS SELECT 'A' agency_code,3 comment_count")
+        result = measure(con, check, **lineage(check))
+        assert result["status"] == "OK" and result["expected_total"] == 3
 
 
 @pytest.mark.parametrize("status", ["failed", "capped", "acquired", "parsed"])
@@ -95,7 +114,7 @@ def test_valid_empty_missing_schema_and_unpinned_are_distinct():
     check = BY_NAME["agency-document"]
     with duckdb.connect() as con:
         assert measure(con, check, **lineage(check))["status"] == "READ_FAILURE"
-        con.execute("CREATE TABLE documents(agency_code VARCHAR)")
+        con.execute("CREATE TABLE documents(agency_code VARCHAR,publisher_status VARCHAR)")
         con.execute("CREATE TABLE agency_stats(agency_code VARCHAR,document_count BIGINT)")
         assert measure(con, check, **lineage(check))["status"] == "EMPTY"
         assert measure(con, check, pins={}, root={})["status"] == "UNPINNED"
