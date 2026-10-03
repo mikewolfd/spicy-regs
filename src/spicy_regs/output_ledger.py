@@ -21,6 +21,17 @@ LEDGER = Path(__file__).resolve().parents[2] / LEDGER_NAME
 RECORD = Path(__file__).with_name("table_qualification.json")
 RECORD_FORMAT = "spicy-regs-table-qualification"
 
+#: What a qualification in a description establishes, bundled as the record's ``basis`` so the server states the
+#: meaning beside the record it describes rather than holding a second copy.
+BASIS = (
+    "The output ledger's audits, bundled when the dictionary was generated. ledger_disposition is the "
+    "ledger's word for ledger_pin only; generation compares that pin with this connection's live pin. "
+    "'newer generation, not yet audited' means the live pin differs from every pin the ledger records "
+    "for the table. A disposition covers the scope its ledger statement names; it does not verify "
+    "relationships that metadata.data_quality calls heuristic or unresolved. Receipts named here are the "
+    "maintainer's retained evidence, not public files."
+)
+
 _ROW = re.compile(r"\| T\d")
 _CODE = re.compile(r"`([^`]+)`")
 _DESTINATION = re.compile(r"^Public data destination: `(https://[^`]+)`", re.M)
@@ -104,6 +115,7 @@ def qualification_record(text: str) -> dict:
     return {
         "format": RECORD_FORMAT,
         "version": 1,
+        "basis": BASIS,
         "ledger": LEDGER_NAME,
         "destination": ledger_destination(text),
         "rows": rows,

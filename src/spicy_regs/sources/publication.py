@@ -23,6 +23,7 @@ from collections.abc import Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
 from copy import deepcopy
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, BinaryIO, Callable, NamedTuple
 
@@ -59,6 +60,10 @@ _BLOB_KEY = re.compile(r"blobs/sha256/([0-9a-f]{64})\Z")
 _POINTER_ATTEMPTS = 8
 _NAME = re.compile(r"[a-z][a-z0-9_-]*\Z")
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
+_FAMILY_KEYS = frozenset({"prefix", "logicalId", "artifactDigest", "tables"})
+#: ``publishedAt``, the one optional family field: when the publisher moved the family's pointer to this
+#: generation, as a UTC instant. It says when the pointer moved, not when the data was read.
+_INSTANT = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?Z\Z")
 _PARTITION_VALUE = re.compile(r"[A-Za-z0-9_.-]+\Z")
 _PART = re.compile(r"part-\d{6}\.parquet\Z")
 _MEMBER_PATH = re.compile(r"generations/[a-z][a-z0-9_-]*/[0-9a-f]{64}/(.+)\Z")
@@ -186,8 +191,13 @@ def parse_index(raw: bytes) -> dict:
             raise ValueError("invalid publication index")
         seen = set()
         for family, entry in value["families"].items():
-            if not _NAME.fullmatch(family) or set(entry) != {"prefix", "logicalId", "artifactDigest", "tables"}:
+            if not _NAME.fullmatch(family) or not _FAMILY_KEYS <= set(entry) <= _FAMILY_KEYS | {"publishedAt"}:
                 raise ValueError("invalid family")
+            if "publishedAt" in entry:
+                instant = entry["publishedAt"]
+                if not isinstance(instant, str) or not _INSTANT.fullmatch(instant):
+                    raise ValueError("invalid publication instant")
+                datetime.fromisoformat(instant)  # a calendar instant, not only its shape
             digest = entry["artifactDigest"]
             if not isinstance(digest, str) or not _DIGEST.fullmatch(digest):
                 raise ValueError("invalid artifact pin")
@@ -444,11 +454,33 @@ def family_root(raw: bytes, entry: Mapping) -> dict:
     return root
 
 
-def load_family_root(base_url: str, entry: Mapping) -> tuple[bytes, dict]:
-    """Read only the pinned prior root for lineage over HTTPS; this does not re-admit its tables."""
+def _root_bytes(base_url: str, entry: Mapping) -> bytes:
     raw = _bounded_get(f"{base_url.rstrip('/')}/{entry['prefix']}/artifact.json", allow_missing=False)
     assert raw is not None
+    return raw
+
+
+def load_family_root(base_url: str, entry: Mapping) -> tuple[bytes, dict]:
+    """Read only the pinned prior root for lineage over HTTPS; this does not re-admit its tables."""
+    raw = _root_bytes(base_url, entry)
     return raw, family_root(raw, entry)
+
+
+def read_pinned_root(base_url: str, entry: Mapping) -> dict:
+    """The root at ``entry``'s immutable prefix, read the way the MCP server reads members.
+
+    The URL is pinned and the root must name the pin, but its digest is not
+    recomputed: the server image does not install rulespec-artifacts, which
+    :func:`load_family_root` verifies with for lineage.
+    """
+    try:
+        root = json.loads(_root_bytes(base_url, entry), object_pairs_hook=_pairs)
+    except ValueError as exc:
+        raise PublicationError("Pinned root is not JSON") from exc
+    if (not isinstance(root, dict) or root.get("artifactDigest") != entry["artifactDigest"]
+            or root.get("logicalId") != entry.get("logicalId")):
+        raise PublicationError("Pinned root differs from its captured pin")
+    return root
 
 
 def load_evidence_journal(base_url: str, pin: Mapping) -> bytes:
@@ -614,12 +646,13 @@ def _get_bounded(client, bucket: str, key: str) -> tuple[bytes, str] | None:
 
 
 def derive_v1(index: Mapping) -> dict:
-    """The version-1 view of ``index``: split tables omitted, and a family left with none omitted too."""
+    """The version-1 view of ``index``: split tables omitted, a family left with none omitted too, and no
+    ``publishedAt``, which version-1 readers predate and refuse."""
     families = {}
     for name, entry in index["families"].items():
         tables = {key: table for key, table in entry["tables"].items() if "members" not in table}
         if tables:
-            families[name] = {**entry, "tables": tables}
+            families[name] = {**{key: value for key, value in entry.items() if key != "publishedAt"}, "tables": tables}
     return {**empty_index(), "families": families}
 
 

@@ -74,6 +74,21 @@ def no_cbo_feed(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("spicy_regs.transforms.bill_family_cbo.CboAcquirer", _NoCboFeed, raising=False)
 
 
+def _no_generation_root(base_url, entry):
+    from spicy_regs.sources.publication import PublicationError
+
+    raise PublicationError(f"no generation root in a hermetic test ({entry.get('prefix')})")
+
+
+@pytest.fixture(autouse=True)
+def no_generation_roots(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep the MCP server's lazy generation-root reads off the network: every root reads as unavailable.
+
+    A test of the lineage surface passes its own reader; ``read_pinned_root`` itself is tested through a fake GET.
+    """
+    monkeypatch.setattr("spicy_regs.sources.publication.read_pinned_root", _no_generation_root)
+
+
 class _ObjectsListingClient:
     """ListObjectsV2 pages over a fake resource's ``objects.filter``, so its refusals and records still apply."""
 

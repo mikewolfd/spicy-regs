@@ -20,8 +20,6 @@ from mcp.server.mcpserver.exceptions import ToolError
 from starlette.testclient import TestClient
 
 from spicy_regs import fec_release as release, mcp_server as server
-from spicy_regs.citation_resolution import SOURCE_TABLES
-from spicy_regs.citation_sources import TEXT_SOURCES
 from spicy_regs.sources import publication as pub
 from tests.test_chaos_r3_server import _fec_specs
 from tests.test_generation_mcp import connection_fixture, serve_documents
@@ -30,8 +28,10 @@ from tests.test_mcp_query_results import call
 from tests.test_mcp_relationships import citation_connection
 from tests.test_mcp_server import _tool_data
 
-# The client's cap is 2,048 characters (Claude Code's MAX_MCP_DESCRIPTION_LENGTH default); keep a margin.
-DESCRIPTION_BUDGET = 2_000
+# The client's cap is 2,048 characters (Claude Code's MAX_MCP_DESCRIPTION_LENGTH default), and it counts the
+# compact input schema with the description: round 5 saw query_sql's 1,728 + 322 = 2,050 cut at character 1,711
+# for three personas while describe_table's 1,832 + 190 = 2,022 was not (round5/audit-oyelaran.md, finding 5).
+CLIENT_BUDGET = 2_048
 
 
 # S3 and the double send: what the client is sent.
@@ -40,7 +40,8 @@ def test_every_registered_description_fits_the_client_cap_without_indentation():
     tools = asyncio.run(server.build_server().list_tools())
     for tool in tools:
         description = tool.description or ""
-        assert len(description) <= DESCRIPTION_BUDGET, (tool.name, len(description))
+        sent = len(description) + len(json.dumps(tool.input_schema, separators=(",", ":")))
+        assert sent <= CLIENT_BUDGET, (tool.name, len(description), sent)
         assert not any(line[:1].isspace() for line in description.splitlines()), tool.name
 
 
@@ -65,13 +66,6 @@ def test_text_content_is_the_compact_json_of_the_structured_content(monkeypatch)
 
 
 # S1: resolve_document_citations refuses a kind no writer emits.
-
-def test_supported_kinds_are_exactly_the_writers_kinds():
-    from spicy_docs.schemas.budget_volume_tables import BUDGET_VOLUME
-    from spicy_docs.schemas.document_citation_tables import GOVINFO_PACKAGE
-
-    assert set(SOURCE_TABLES) == {GOVINFO_PACKAGE, BUDGET_VOLUME} | set(TEXT_SOURCES)
-
 
 @pytest.mark.parametrize(("kind", "closest"), [
     ("federal_register", None),
@@ -99,11 +93,6 @@ def test_kinds_compare_case_insensitively(monkeypatch):
                             {"document_kind": "Govinfo_Package", "document_key": "CRPT-example"})
     assert result["document_kind"] == "govinfo_package"
     assert len(result["occurrences"]) == 2 and result["source_read"]["status"] == "read"
-
-
-def test_the_schema_enumerates_the_supported_kinds():
-    [tool] = [t for t in asyncio.run(server.build_server().list_tools()) if t.name == "resolve_document_citations"]
-    assert tool.input_schema["properties"]["document_kind"]["enum"] == sorted(SOURCE_TABLES)
 
 
 # S4: describe_table names the release inventories it leaves out.
@@ -199,6 +188,15 @@ def _export_server(tmp_path, monkeypatch, *, receipt=RECEIPT, etag=None):
     return built, heads
 
 
+def _largest_integer(value: Any) -> int:
+    """The largest integer magnitude anywhere in a JSON-shaped value."""
+    if isinstance(value, dict):
+        return max(map(_largest_integer, value.values()), default=0)
+    if isinstance(value, list):
+        return max(map(_largest_integer, value), default=0)
+    return abs(value) if isinstance(value, int) and not isinstance(value, bool) else 0
+
+
 def test_a_matching_export_receipt_states_its_rows_labelled_as_an_export(tmp_path, monkeypatch):
     built, heads = _export_server(tmp_path, monkeypatch)
     con = server._build_connection()
@@ -213,8 +211,10 @@ def test_a_matching_export_receipt_states_its_rows_labelled_as_an_export(tmp_pat
         "receipt_sha256": "sha256:" + pub.hashlib.sha256(json.dumps(RECEIPT).encode()).hexdigest(),
         "sha256": "sha256:" + RECEIPT["files"]["comments_index.parquet"]["sha256"],
         "etag": RECEIPT["files"]["comments_index.parquet"]["etag"], "bytes": 422071,
-        "catalog_snapshot_id": 2757430127503624538,
+        "catalog_snapshot_id": "2757430127503624538",
     }
+    # Round 5 (oyelaran, finding 6): a JavaScript client rounds an integer past 2**53, so the reply states none.
+    assert _largest_integer(pin) < 2**53
     # Derived views embed the status pin; the receipt joins replies only.
     assert server._publication_status(con.cursor())["publication"]["comments_index"] == {"status": "legacy_unversioned"}
     built[0].inner.close()

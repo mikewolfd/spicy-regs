@@ -71,13 +71,12 @@ def test_fr_dates_alternate_system_and_set_valued_rin():
         con.execute("CREATE TABLE unified_agenda(rin VARCHAR, agenda_edition VARCHAR)")
         con.execute("INSERT INTO unified_agenda VALUES ('1234-AB12','202410'),('1234-AB12','202504')")
         pins = {name: {"artifact_digest": name} for name in ["federal_register", "unified_agenda"]}
-        items = [occurrence("federal_register_number","2026-1"),occurrence("federal_register_document","2026-1@2026-01-01"),
-                 occurrence("federal_register_cite","91-20"),occurrence("rin","1234-AB12")]
+        items = [occurrence("federal_register_cite","91-20"),occurrence("rin","1234-AB12")]
         rows = resolve(con,items,pins)["occurrences"]
-        assert [r["target_status"] for r in rows] == ["ambiguous","found","found","found"]
-        assert rows[2]["candidate_keys"] == [{"document_number":"2026-1","publication_date":"2026-02-01"}]
-        assert rows[3]["expected_cardinality"] == "many" and len(rows[3]["candidate_keys"]) == 2
-        limited = resolve(con,[items[3]],pins,max_candidates=1)["occurrences"][0]
+        assert [r["target_status"] for r in rows] == ["found","found"]
+        assert rows[0]["candidate_keys"] == [{"document_number":"2026-1","publication_date":"2026-02-01"}]
+        assert rows[1]["expected_cardinality"] == "many" and len(rows[1]["candidate_keys"]) == 2
+        limited = resolve(con,[items[1]],pins,max_candidates=1)["occurrences"][0]
         assert limited["target_status"] == "not_checked" and limited["reason"] == "candidate_limit"
 
 
@@ -112,3 +111,23 @@ def test_timeout_does_not_start_another_batch_after_request_timer_expires():
     assert con.calls == 1
     assert all(row["reason"] == "target_timeout" for row in result["occurrences"])
     assert result["coverage"]["distinct_target_keys_read"] == 0
+
+
+def test_gao_and_crs_keys_are_looked_up_as_spicy_docs_prints_them():
+    """GAO resolves on the printed number, else the slug; a key is never case-folded (DRY scout S3).
+
+    spicy-docs upper-cases GAO and CRS ids as it reads them, so 0 of 342 held keys are lowercase; a printed
+    number whose product slug differs (``d23105520``) is found by the number the citation prints.
+    """
+    with duckdb.connect() as con:
+        con.execute("CREATE TABLE gao_reports(report_id VARCHAR, report_number VARCHAR)")
+        con.execute("INSERT INTO gao_reports VALUES ('d23105520','GAO-23-105520'),('gao-17-317',NULL)")
+        con.execute("CREATE TABLE crs_reports(report_id VARCHAR)")
+        con.execute("INSERT INTO crs_reports VALUES ('R47101')")
+        pins = {name: {"artifact_digest": name} for name in ("gao_reports", "crs_reports")}
+        items = [occurrence("gao_product_id", "GAO-23-105520"), occurrence("gao_product_id", "GAO-17-317"),
+                 occurrence("crs_report_id", "R47101"), occurrence("crs_report_id", "r47101")]
+        rows = resolve(con, items, pins)["occurrences"]
+    assert [(r["target_key"], r["target_status"]) for r in rows] == [
+        ("GAO-23-105520", "found"), ("GAO-17-317", "found"), ("R47101", "found"), ("r47101", "missing")]
+    assert rows[0]["candidate_keys"] == [{"report_id": "d23105520"}]

@@ -12,6 +12,7 @@ refuses any copy whose sha256 is not the pinned one.
 from __future__ import annotations
 
 import hashlib
+import json
 from collections import defaultdict
 from functools import cache, lru_cache
 from importlib.resources import files
@@ -34,8 +35,9 @@ AGENCY_REGISTRY_BRIDGES_SHA256 = "2e33905b475c6a1adf27960ecf170a1b4c82df2baf20ac
 AGENCY_REGISTRY_EVENTS_SHA256 = "72f35636f9b5c93d708a364352122fb724e872f619a518c5e49ebb19518322b7"
 AGENCY_REGISTRY_NON_EMISSIONS_SHA256 = "da863e467f00f16a6b7a9ff1a3e1182fb8e7488f8b7d33f0d7f0c403a0663e24"
 
-#: The vendored projection table, and the registry view's directory (manifest plus ``tables/``).
+#: The vendored projection table and its abstentions, and the registry view's directory (manifest plus ``tables/``).
 AGENCY_PROJECTION_PATH = files("spicy_regs").joinpath("reference/refspec/agency-projection.parquet")
+AGENCY_PROJECTION_UNRESOLVED_PATH = files("spicy_regs").joinpath("reference/refspec/agency-projection-unresolved.parquet")
 AGENCY_REGISTRY_VIEW_PATH = files("spicy_regs").joinpath("reference/refspec/agency-registry-view")
 
 _REGISTRY_TABLE_SHA256 = {
@@ -44,7 +46,8 @@ _REGISTRY_TABLE_SHA256 = {
     "non-emissions": AGENCY_REGISTRY_NON_EMISSIONS_SHA256,
 }
 
-_FR_AGENCY = "urn:ref:federal-register-agency:"
+#: The RefSpec URN prefix of a Federal Register agency, followed by its FR agency id.
+FR_AGENCY_URN = "urn:ref:federal-register-agency:"
 
 
 @cache
@@ -70,6 +73,29 @@ def _read_pinned(path: Any, sha256: str) -> tuple[Mapping[str, Any], ...]:
 def projection_rows() -> tuple[Mapping[str, Any], ...]:
     """The vendored REF-038 projection rows, read once and cached."""
     return _read_pinned(AGENCY_PROJECTION_PATH, AGENCY_PROJECTION_SHA256)
+
+
+def unresolved_rows() -> tuple[Mapping[str, Any], ...]:
+    """The vendored REF-038 abstentions (codes the projection declined to map), read once and cached."""
+    return _read_pinned(AGENCY_PROJECTION_UNRESOLVED_PATH, AGENCY_PROJECTION_UNRESOLVED_SHA256)
+
+
+def registry_publication() -> dict[str, Any]:
+    """The vendored registry view's identity: its view id, release and digest, and every pinned table digest.
+
+    The manifest is read and its bytes held to the pinned digest on every call, as a lookup always did.
+    """
+    raw = AGENCY_REGISTRY_VIEW_PATH.joinpath("view-manifest.json").read_bytes()
+    if hashlib.sha256(raw).hexdigest() != AGENCY_REGISTRY_MANIFEST_SHA256:
+        raise ValueError("RefSpec registry manifest differs from its pinned bytes")
+    manifest = json.loads(raw)
+    return {
+        "view_id": manifest["viewId"],
+        "manifest_sha256": "sha256:" + AGENCY_REGISTRY_MANIFEST_SHA256,
+        "release": manifest["release"],
+        "digest": manifest["digest"],
+        "table_sha256": {name: "sha256:" + digest for name, digest in _REGISTRY_TABLE_SHA256.items()},
+    }
 
 
 def registry_rows(table: str) -> tuple[Mapping[str, Any], ...]:
@@ -172,9 +198,9 @@ def _build_projection(
     return _Projection(
         MappingProxyType(
             {
-                int(org.removeprefix(_FR_AGENCY)): next(iter(selecting))
+                int(org.removeprefix(FR_AGENCY_URN)): next(iter(selecting))
                 for org, selecting in codes.items()
-                if org.startswith(_FR_AGENCY) and len(selecting) == 1 and org not in unknown
+                if org.startswith(FR_AGENCY_URN) and len(selecting) == 1 and org not in unknown
             }
         ),
         MappingProxyType({org: ancestors_of(org) for org in parents}),
@@ -226,20 +252,20 @@ def agency_code_for_fr_agencies(agencies: Sequence[dict[str, Any]]) -> str | Non
         parent_id = parent_id if isinstance(parent_id, int) and not isinstance(parent_id, bool) else None
         named.append((fr_id, parent_id))
         if (code := projection.code_by_fr_id.get(fr_id)) is not None:
-            code_by_org[f"{_FR_AGENCY}{fr_id}"] = code
+            code_by_org[f"{FR_AGENCY_URN}{fr_id}"] = code
     specific = {
         org for org in code_by_org if not any(org in ancestors_of[other] for other in code_by_org if other != org)
     }
     if len(specific) != 1:
         return None
     chosen = next(iter(specific))
-    chosen_id = int(chosen.removeprefix(_FR_AGENCY))
+    chosen_id = int(chosen.removeprefix(FR_AGENCY_URN))
     allowed = {chosen, *ancestors_of[chosen]}
     for fr_id, parent_id in named:
-        if f"{_FR_AGENCY}{fr_id}" in allowed:
+        if f"{FR_AGENCY_URN}{fr_id}" in allowed:
             continue
         if parent_id is not None and (
-            parent_id == chosen_id or chosen in ancestors_of.get(f"{_FR_AGENCY}{parent_id}", frozenset())
+            parent_id == chosen_id or chosen in ancestors_of.get(f"{FR_AGENCY_URN}{parent_id}", frozenset())
         ):
             continue
         return None

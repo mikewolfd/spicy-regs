@@ -59,3 +59,22 @@ def test_registry_split_and_non_emission_are_not_silently_mapped():
     assert cisa["status"] == "reviewed_mapping"
     assert cisa["registry_evidence"]["non_emissions"][0]["reason"] == "noCounterpartInHeldFRRoster"
     assert lookup_agency(FEDERAL_REGISTER, "0406")["registry_evidence"]["current_lineage"]["code"] is None
+
+
+def test_the_mapping_reads_refspec_through_the_agencies_modules_public_names():
+    """DRY scout S4: no reach into agencies' private names, and the Federal Register URN prefix stated once."""
+    import ast
+    import inspect
+
+    from spicy_regs import vocabulary_mapping
+    from spicy_regs.ontology import agencies
+
+    source = inspect.getsource(vocabulary_mapping)
+    private = [node.attr for node in ast.walk(ast.parse(source))
+               if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name)
+               and node.value.id == "agencies" and node.attr.startswith("_")]
+    assert private == [] and agencies.FR_AGENCY_URN not in source
+    result = lookup_agency("regulations.gov:agency", "OPM")
+    assert result["registry_evidence"]["publication"] == agencies.registry_publication()
+    assert result["publication"]["unresolved_sha256"] == "sha256:" + agencies.AGENCY_PROJECTION_UNRESOLVED_SHA256
+    assert agencies.unresolved_rows() and all("source_value" in row for row in agencies.unresolved_rows())

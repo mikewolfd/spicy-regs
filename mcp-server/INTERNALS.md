@@ -26,8 +26,12 @@ signature with `functools.wraps` and registers the docstring through
 `inspect.cleandoc` as the description. MCPServer sends `__doc__` as written, and
 Claude Code cuts a description at 2,048 characters (`CLAUDE_CODE_MAX_MCP_DESCRIPTION_LENGTH`)
 with "… [truncated]": round 4 found `query_sql`'s 2,132 characters, 225 of them
-indentation, cut mid-word for three personas. `tests/test_chaos_r4_server.py`
-holds every registered description to 2,000 characters with no indented line. `describe_table`'s docstring is how a client learns
+indentation, cut mid-word for three personas. The cap counts the compact input
+schema too: round 5 saw `query_sql`'s 1,728 + 322 = 2,050 cut at character 1,711
+for three personas while `describe_table`'s 1,832 + 190 = 2,022 was not
+(`round5/audit-oyelaran.md`). `tests/test_chaos_r4_server.py` holds every
+registered description plus its compact input schema to 2,048 characters, with
+no indented line; a long field description or enum spends the same budget. `describe_table`'s docstring is how a client learns
 which tables are valid; `query_sql`'s is how it learns the available views.
 Strip them and the server still runs, but every client goes blind. Verify with
 `asyncio.run(build_server().list_tools())`.
@@ -272,20 +276,133 @@ carries its kind (`complete`, `scope`, `design`, `empty`), the reason for a
 partial one, and its measured baseline. `scripts/check_table_joins.py` holds the
 live tables to each floor nightly in `check-rollup-freshness.yml`.
 
+**The meaning text lives in the record (round 5).** `joins.basis` and
+`qualification.basis` are the records' own top-level `basis`, which
+`table_joins.joins_record()` and `output_ledger.qualification_record()` write
+(`table_joins.BASIS`, `output_ledger.BASIS`); the server holds no copy. Round 5
+found a persona reading a `complete` join as proof that the publisher paired
+each key correctly (CHRG-118hhrg63377 with meeting 116369, the wrong hearing on
+the same day), so the joins basis says `complete` checks only that each
+non-null child key names a parent row; the qualification basis says a receipt
+it names is the maintainer's retained evidence, not a public file. Editing
+either text is a `spicy-regs-dict generate`, and `check` refuses a stale copy.
+
 ## Citation lookup kinds (`resolve_document_citations`)
 
 The tool accepts exactly the keys of `citation_resolution.SOURCE_TABLES`: the
 kinds a writer puts in `document_citations.document_kind` (the print-citations
 rollup's `govinfo_package` and `budget_volume`, and every held-field kind in
-`citation_sources.TEXT_SOURCES`). The schema enumerates them, the server
-compares case-insensitively, and any other kind is a tool error naming the
-supported kinds and the closest one. Before round 4 an unknown kind ran its
-SELECT and answered `complete_held_selection` with no findings, which read as
-"this document cites nothing"; three aliases (`house_activity_report(s)`,
-`budget_volumes`) that no writer emits did the same with `source_read: read`.
-The enum is a schema hint, not pydantic validation, so a differently cased
-kind still reaches the server's own refusal. Raw SQL over `document_citations`
-is not checked.
+`citation_sources.TEXT_SOURCES`). The server compares case-insensitively, and
+any other kind is a tool error naming the supported kinds and the closest one.
+Before round 4 an unknown kind ran its SELECT and answered
+`complete_held_selection` with no findings, which read as "this document cites
+nothing"; three aliases (`house_activity_report(s)`, `budget_volumes`) that no
+writer emits did the same with `source_read: read`. Raw SQL over
+`document_citations` is not checked. The `document_kind` field description,
+built from `SOURCE_TABLES` (`kind: table`), lists each kind once with the table
+whose key `document_key` takes, so a new kind names its table without a
+docstring edit; `govinfo_package` covers only the reports
+`house_activity_reports` holds (no CHRG package has citation rows). Round 5
+dropped the round-4 enum: it listed the kinds a second time against the client
+budget above, and as a schema hint it never validated (the server's own refusal
+does).
+
+**Order and paging (round 5).** Rows come in `cite_kind` order, then
+`CAST(span_start AS BIGINT)`, `target_key`, `rule_version` and `text_sha256`.
+`span_start` is VARCHAR, as every column of the spicy-docs contract is, so the
+old `ORDER BY span_start` was text order: on CRPT-118hrpt964 the first bill
+citation (offset 18732) came 17th, and its four public-law rows sat at
+positions 167 to 170 behind the default cap of 100. `CAST`, not `TRY_CAST`: a
+span that is not an integer refuses the call instead of sorting somewhere.
+`target_key` separates the rows a range citation writes at one span (273 groups
+in print-citations 685f2e27) and `text_sha256`, part of the row identity, a
+re-read text's rows, so the order is total and `offset` pages neither skip nor
+repeat a row; a legacy file without the digest column sorts without it.
+`cite_kind` (case-insensitive) selects one kind, `offset` skips rows, and
+`coverage.cite_kind_counts` states the document's rows per kind, so a page
+says what it leaves out. A `cite_kind` outside `citation_resolution.CITE_KINDS`
+(spicy-docs' `DOCUMENT_CITATION_KINDS`, held equal by
+`tests/test_citation_parity.py`) is refused naming the kinds and the ones the
+document holds; any of those kinds with no rows is a complete, empty
+selection, `case_docket_number` (held, never routed) included. Until the DRY
+scout's S1, the check read `ROUTES`, which carried three kinds no writer emits
+(`federal_register_document`, `federal_register_number`, `bioguide_id`; deleted)
+and lacked `case_docket_number`.
+`occurrence_selection.status` is `capped`, `last_page` (an offset page that
+reached the end) or `complete_held_selection`. MCPServer drops an argument a
+tool does not declare, so a test of a new parameter asserts its effect, not
+its acceptance.
+
+**Pages and compaction (round 5, owner decision 2026-10-03).** `max_occurrences`
+defaults to 25 and is at most 100; a larger request is refused with how to page
+(the schema's `maximum` is only a hint to the client, so the refusal is the
+server's own). The cap and the paging land together: before `cite_kind`,
+`offset` and the counts, a smaller cap would have hidden more kinds. A reply
+states a fixed list of occurrence fields once (`_compact_occurrences`, a reply
+projection like `_query_reply_pins`): `OCCURRENCE_DOCUMENT_FIELDS`, fixed for a
+document's text, in `occurrence_fields.shared`, and `OCCURRENCE_KIND_FIELDS`,
+fixed for a kind's route and rule, in `occurrence_fields.by_cite_kind`; both
+lists are in `occurrence_fields.hoisted`. `target_kind` or `normalized_key`
+leaves an occurrence where it equals `cite_kind` or `target_key` (`same_as`).
+An occurrence is `{**shared, **by_cite_kind[cite_kind], **occurrence}`;
+`cite_kind` stays on every one. The list is fixed (coordinator answer 6), so a
+page whose rows happen to agree on a per-occurrence field (all `found`) keeps
+the same shape as the next. A listed field whose values differ in its scope (a
+document holding rows of two texts) stays on each occurrence and is named in
+`not_hoisted`: a stated-once value is never a guess. The acquisition queue is
+built from the whole rows and then projected the same way (`_compact_queue`):
+the fixed `QUEUE_ITEM_FIELDS` and `QUEUE_REQUEST_FIELDS` are stated once in
+`acquisition_queue.shared_fields`. Nothing stored changes. Measured on the
+live bucket (print-citations 685f2e27), characters per reply:
+
+| Request | Deployed (d2b5f53) | Fixed lists (this tree) | Hoisting any agreeing field (794beed) |
+|---|---|---|---|
+| CRPT-118hrpt964, 100 rows | 113,534 | 47,041 | 31,644 |
+| CRPT-118hrpt964, default page | 113,534 (100 rows) | 14,640 (25 rows) | 10,375 |
+| CRPT-118hrpt964, all 222 rows | 283,615 (one 500-row call) | 127,422 (3 pages) | 97,989 |
+| BUDGET-2025-APP, 100 rows | 148,361 | 80,933 | 65,838 |
+| BUDGET-2025-APP, default page | 148,361 (100 rows) | 24,941 (25 rows) | 21,427 |
+| BUDGET-2025-APP, all 4,456 rows | 893,849 for the first 500 | 4,151,031 (45 pages) | 2,998,213 |
+
+The stable shape costs a third to a half more than hoisting any field a page
+happens to agree on (`target_resolved`, `reason`, `rule_version`, ...). Without
+the queue projection the 45 pages came to 5,461,495 under the earlier rule: the
+queue repeated the document's pins on every requesting occurrence.
+
+**Read statuses (round 5).** `source_read.status` separates three answers that
+used to arrive as one `missing_digest` with no occurrences (`_source_read`):
+
+- `not_held`: the kind's table has no row for the key. With citation rows (a
+  document the table dropped) the occurrences read `unread_source`; with none,
+  the call is refused (below).
+- `not_read`: the table holds the document but records no read of it. A print
+  kind's table records the read in the row: `text_sha256`, `pages_read`,
+  `rule_set_version` and `citation_rows`. A held-field kind's table
+  (`report_sections`, `bill_sections`, `comments`, ...) records none: the
+  held-citations rollup reads only the fields an operator selects, at most 100
+  a run. Its reads are recorded in `document_citation_reads` (`document_kind`,
+  `document_key`, `text_sha256`, `rule_set_version`, `read_at`,
+  `citation_rows`), which the held-citations pipeline publishes from its
+  checkpoint beside `document_citations`. When that table is published, the
+  record is the latest read (`read_at`) of the field's current text
+  (`text_sha256` = `'sha256:' || sha256(field)`) that states its rule set;
+  until then, or with no such row, a held field with no citation rows is
+  `not_read`, never an answer that it cites nothing.
+- `read_none_found`: the read record states `citation_rows` 0. A read stating
+  rows that `document_citations` does not hold refuses: the publication
+  disagrees with itself.
+
+With citation rows the status names the digest they are checked against:
+`read`, `missing_digest` (a held row without one) or `ambiguous`. A key that
+neither the table nor any citation row of the kind holds is refused; the error
+names the table, says keys are exact and case-sensitive, and names any
+spelling `document_citations` holds that differs only in case, under any kind.
+That lookup reads `document_citations` alone, never a parent such as
+`comments`. Round 5 found `crpt-118hrpt964` and `CHRG-119hhrg64503` answering
+`missing_digest` with a complete, empty selection: the third time an empty
+selection passed as an answer, after unknown kinds in round 4.
+`coverage.partial` is true when the page was capped or offset, an occurrence
+was not looked up (`coverage.reason_counts`), or the document was not read.
 
 ## Ledger qualification (`_qualification`)
 
@@ -415,6 +532,50 @@ file its reader cannot page, so two of five personas never read a row.
   returns a `CallToolResult` whose text is the compact JSON: `list_sources` went
   from 86,603 to 75,403 bytes and a FEC view's description from 59,148 to
   17,168 with the release summary above.
+- **A managed pin states `published_at` (round 5): when the publisher moved the
+  family's pointer to this generation.** It is the index's optional
+  `publishedAt` family field (a UTC instant; `parse_index` refuses any other
+  spelling), read with the index the build already fetches, so it costs no
+  request. It is not "data as of": a generation published today can hold a
+  source read last week, and a derived family can lag the parent it was built
+  from. It is null until the publisher records it; the writer lands only after
+  an image that reads the field is live, because the earlier `parse_index`
+  required the family key set exactly and refuses the new key (a refresh would
+  keep the old connection and the next cold start would raise). `derive_v1`
+  strips it, so version-1 readers never see it. `_reply_pins` adds it for
+  `describe_table`, `query_sql` and the citation reply's `publication`; it is
+  not in `_publication_status`, whose pins derived views embed, nor in
+  `list_sources`. Reading each member's Parquet key-value metadata for a time
+  was measured and rejected: only `discovery_signals` records an `as_of`, and
+  the reads doubled a cold build's requests to the bucket (+519, +5.2 s).
+- **A derived table's pin states the parent generations it was built from
+  (round 5, owner decision 2026-10-03).** A generation root (`artifact.json`)
+  records `spec.parents`: each parent table's family, generation and bytes, or
+  a storage version (an ETag, or a local copy's digest) for a parent no family
+  pins. `_input_lineage` adds `inputs`, one `{table, family, built_from, live,
+  input_table_current}` per parent, and `inputs_current`. `built_from` and
+  `live` are family generations; `input_table_current` compares the parent
+  table's own `sha256` where both pins state one (else the generations), so a
+  parent family that moved for another table does not mark this one stale.
+  The name says so (coordinator answer 7): `built_from` can differ from `live`
+  while `input_table_current` is true. A storage-version parent makes no lag
+  claim (`input_table_current: null`, ignored by `inputs_current`, which is
+  null when no parent can be compared). A family
+  whose root records no parents gets no `inputs` key. The root is read on the
+  first reply that pins the generation, never at build, and kept per artifact
+  digest (`_ROOT_PARENTS`; roots are immutable); a read that fails states
+  `inputs: null` with `inputs_status: root_unavailable`, and the root is not
+  read again for 60 s (`ROOT_RETRY_SECONDS`, `_ROOT_FAILED_AT`), so a failing
+  bucket costs one GET a minute per generation, not one per reply. The read is `publication.read_pinned_root`: the
+  image does not install rulespec-artifacts, so the server checks that the
+  root at the pinned prefix names the pin, as it trusts pinned member URLs,
+  and does not recompute its digest (`load_family_root` does, for lineage).
+  A local download holds no roots: its pins state `root_unavailable`. Not in
+  `list_sources`. On 2026-10-03, 10 of 52 families recorded parents, and
+  bill-subjects (`congress_bills`) and member-vote-terms (`members`,
+  `member_terms`) were built from parent bytes no longer live. Tests keep root
+  reads off the network (`tests/conftest.py::no_generation_roots`). The
+  describe_table description is at 1,982 of its 2,000 characters.
 - **`list_sources` states each table's pinned `rows`** (the index descriptor's or
   the snapshot manifest's count; null for a legacy table no pointer pins) so a
   declared table whose generation publishes no rows is visible at discovery
@@ -427,7 +588,10 @@ file its reader cannot page, so two of five personas never read a row.
   `rows_basis: comments_export_receipt`; a moved file carries `rows: null` with
   `rows_basis: export_receipt_does_not_match_object`. `describe_table` and
   `query_sql` pins add `export_receipt` (receipt digest, file digest, ETag,
-  bytes, catalog snapshot). The status stays `legacy_unversioned`: the facts
+  bytes, catalog snapshot). `catalog_snapshot_id` is a string: an Iceberg
+  snapshot id passes 2^53, and a JavaScript client read 3797331542152182418 as
+  a JSON number and cited 3797331542152182300 (round 5, oyelaran). The status
+  stays `legacy_unversioned`: the facts
   join the reply in `_reply_pins` only, never `_publication_status`, whose pins
   the comment views embed in `source_publication_json`. A matching ETag proves
   the object is the one the receipt names, not that the receipt's count is

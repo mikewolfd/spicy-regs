@@ -43,6 +43,18 @@ BASELINE_RECEIPTS = (
     "~/.codex/artifacts/spicy-regs-mcp-repair-20260927/01-fr-composite-baseline.json",
 )
 
+#: What the declared joins in a description establish, bundled as the record's ``basis`` so the server states
+#: the meaning beside the record it describes rather than holding a second copy.
+BASIS = (
+    "Declared cross-table joins, bundled when the dictionary was generated. baseline_keys and "
+    "baseline_missing count distinct non-null child keys and those absent from the parent on the baseline "
+    "date; floor_pct is the resolution rate scripts/check_table_joins.py holds the live tables to. "
+    "'complete' says every non-null child key names a parent row; it does not check that the publisher paired "
+    "them correctly. A 'scope' or 'design' join resolves partly for the stated reason; it is not a defect. "
+    "This is not an exhaustive relationship catalog: JSON-array joins and other undeclared relationships "
+    "may be described in the column meanings. An empty join list does not establish that no relationship exists."
+)
+
 #: Expected resolution. ``complete``: every key should resolve and an orphan is
 #: a defect. ``scope``: the parent holds a narrower selection than the child
 #: references. ``design``: the columns deliberately hold values the parent does
@@ -429,6 +441,7 @@ def joins_record() -> dict:
     return {
         "format": RECORD_FORMAT,
         "version": 1,
+        "basis": BASIS,
         # The server ships this record to the public; receipts kept on a maintainer's machine
         # mean nothing there, so only repository-relative receipts are bundled.
         "baseline": {
