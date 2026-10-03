@@ -23,6 +23,7 @@ Senate expenditure granules use a separate acquisition pass
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
 import os
 from collections import Counter
@@ -33,7 +34,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple, Protocol
 
 import httpx
-import spicy_docs
 from loguru import logger
 from spicy_docs.extraction.body_text import BodyText, body_text
 from spicy_docs.interpretation.bill_actions import (
@@ -269,18 +269,37 @@ def _held_packages(prior_file: Path | None) -> dict[str, _Held]:
     }
 
 
-#: The SpicyDocs packages a print's text is derived in: ``extraction``
-#: (``body_text``, the PDF reader, ``gpo_normalize``) and ``reading``, which
-#: ``body_text`` reads markup renditions through. Whole packages, so no module
-#: inside them is missed; their only imports from elsewhere in SpicyDocs are
-#: transport byte bounds and credential checks, which never change a text.
-_DERIVATION_PACKAGES = ("extraction", "reading")
+#: What digesting a directory that holds no code gives: the SHA-256 of nothing.
+_NOTHING_DIGESTED = hashlib.sha256().hexdigest()
+
+
+def _code_digest(package: Path) -> str:
+    """``package``'s code and data digest (``.py``/``.json``/``.xsd``, as ``spicy_docs_code`` reads), refusing an empty one.
+
+    A moved or renamed package digests to the hash of nothing without a word,
+    and a key built on it would stop seeing derivation changes; this refuses
+    instead.
+    """
+    digest = source_digest(package, (".py", ".json", ".xsd"))
+    if digest == _NOTHING_DIGESTED:
+        raise RuntimeError(f"{package} holds no SpicyDocs code, so the print re-read key cannot digest the derivation")
+    return digest
 
 
 def _derivation_code() -> dict[str, str]:
-    """Digest of each package the body text is derived in (``.py``/``.json``/``.xsd``, as :func:`spicy_docs_code` reads)."""
-    root = Path(spicy_docs.__file__).parent
-    return {package: source_digest(root / package, (".py", ".json", ".xsd")) for package in _DERIVATION_PACKAGES}
+    """Digest of each SpicyDocs package a print's text is derived in, found from the modules that derive it.
+
+    The package holding ``body_text`` (``extraction``: the PDF reader and
+    ``gpo_normalize``) and the one holding the markup reader it reads other
+    renditions through (``reading``). Whole packages, so no module inside them
+    is missed; their only imports from elsewhere in SpicyDocs are transport
+    byte bounds and credential checks, which never change a text. To be
+    replaced by a derivation version SpicyDocs states itself (DRY scout X4).
+    """
+    from spicy_docs.reading import markup
+
+    packages = (Path(inspect.getfile(body_text)).parent, Path(inspect.getfile(markup)).parent)
+    return {package.name: _code_digest(package) for package in packages}
 
 
 def _processing_versions(vocabularies: Mapping[str, Mapping[str, tuple[tuple[str, str], ...]]]) -> dict[str, str]:

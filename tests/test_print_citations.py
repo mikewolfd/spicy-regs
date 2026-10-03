@@ -1071,3 +1071,18 @@ def test_each_named_reading_input_moves_the_processing_version(monkeypatch, move
     after = module._processing_versions({})
     assert {collection: after[collection] != baseline[collection] for collection in baseline} == {
         "CRPT": True, "BUDGET": True}
+
+
+def test_a_derivation_package_that_holds_no_code_refuses_rather_than_digesting_nothing(tmp_path):
+    """A moved or renamed SpicyDocs package digests to the hash of nothing; the re-read key must not rest on it."""
+    from spicy_regs.transforms.build_print_citations import _code_digest, _derivation_code
+
+    with pytest.raises(RuntimeError, match="holds no SpicyDocs code"):
+        _code_digest(tmp_path / "moved")
+    (tmp_path / "moved").mkdir()
+    (tmp_path / "moved" / "README.md").write_text("prose only")
+    with pytest.raises(RuntimeError, match="holds no SpicyDocs code"):
+        _code_digest(tmp_path / "moved")
+    (tmp_path / "moved" / "reader.py").write_text("RULE = 1\n")
+    assert len(_code_digest(tmp_path / "moved")) == 64
+    assert set(_derivation_code()) == {"extraction", "reading"}, "found from the modules that derive the text"
