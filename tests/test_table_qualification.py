@@ -6,7 +6,7 @@ import duckdb
 import pytest
 
 from spicy_regs import data_dictionary as dd
-from spicy_regs import mcp_server, output_ledger
+from spicy_regs import mcp_server, output_ledger, table_joins
 from spicy_regs.sources import publication
 from tests.test_check_ledger_pins import _family
 from tests.test_mcp_server import _tool_data
@@ -263,3 +263,29 @@ def test_an_audit_phrase_with_words_or_a_date_outside_the_vocabulary_refuses(sta
     text = "Public data destination: `https://pub.example`\n| T1 | `run-x` | `x.parquet` | " + state + " |\n"
     with pytest.raises(ValueError, match="outside the recognized phrases"):
         output_ledger.qualification_record(text)
+
+
+def test_a_ledger_row_naming_a_maintainer_path_refuses():
+    """The server ships each statement verbatim; a receipt on a maintainer's machine is named by its directory."""
+    text = output_ledger.LEDGER.read_text(encoding="utf-8")
+    row = "| T12 | `run-rollup-gao-reports` | `gao_reports.parquet` | qualified at `d5e6f3ac…` (2026-09-29): see "
+    with pytest.raises(ValueError, match="maintainer path"):
+        output_ledger.qualification_record(text + "\n" + row + "`~/Work/corpora/window1-2026-09-29/` |\n")
+
+
+def test_the_bundled_ledger_names_no_maintainer_path():
+    record = output_ledger.qualification_record(output_ledger.LEDGER.read_text(encoding="utf-8"))
+    assert not [row["task"] for row in record["rows"] if "~/" in row["statement"] or "/Users/" in row["statement"]]
+
+
+@pytest.mark.parametrize(("text", "found"), [
+    ("receipts `~/Work/corpora/window1-2026-09-29/`", "~/Work/corpora/window1-2026-09-29/"),
+    ("see /Users/someone/Work/receipt.json.", "/Users/someone/Work/receipt.json."),
+    ("moves `rule_version` from `/002` to `/003`", None),
+    ("receipt `window1-2026-09-29/native-publish/`", None),
+    ("destination `https://data.spicygov.ai/generations/x/`", None),
+    ("an and/or choice", None),
+])
+def test_the_shared_maintainer_path_check_names_only_machine_paths(text, found):
+    """One check for both served records (table_joins.joins_record and the ledger), so neither drifts from the other."""
+    assert table_joins.maintainer_path(text) == found

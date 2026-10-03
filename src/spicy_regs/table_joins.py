@@ -18,11 +18,15 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from dataclasses import dataclass, replace
 from pathlib import Path
 
 RECORD = Path(__file__).with_name("table_joins.json")
 RECORD_FORMAT = "spicy-regs-table-joins"
+#: A path on a maintainer's machine (``~/…`` or an absolute ``/dir/…``), which means nothing to a reader of a
+#: record the server ships. A repository-relative path, a URL and a token such as ``/002`` do not match.
+_MAINTAINER_PATH = re.compile(r"(?<![\w/.~])(?:~|/[A-Za-z][\w.-]*)/[^`\s]*")
 BASELINE_DATE = "2026-09-26"
 BASELINE_RECEIPTS = (
     "src/spicy_regs/join_measurements.json",
@@ -397,6 +401,12 @@ def references() -> dict[str, list[dict]]:
     return shaped
 
 
+def maintainer_path(text: str) -> str | None:
+    """The first path on a maintainer's machine ``text`` names, or None; a served record must name none."""
+    found = _MAINTAINER_PATH.search(text)
+    return found.group(0) if found else None
+
+
 def joins_record() -> dict:
     """The bundled ``table_joins.json`` document."""
     return {
@@ -406,7 +416,7 @@ def joins_record() -> dict:
         # mean nothing there, so only repository-relative receipts are bundled.
         "baseline": {
             "date": BASELINE_DATE,
-            "receipts": [receipt for receipt in BASELINE_RECEIPTS if not receipt.startswith(("~", "/"))],
+            "receipts": [receipt for receipt in BASELINE_RECEIPTS if not maintainer_path(receipt)],
         },
         "kinds": list(KINDS),
         "joins": [record(join) for join in JOINS],

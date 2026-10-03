@@ -14,6 +14,8 @@ import re
 from collections.abc import Iterator
 from pathlib import Path
 
+from spicy_regs.table_joins import maintainer_path
+
 LEDGER_NAME = "docs/research/fork-output-ledger-2026-09-21.md"
 LEDGER = Path(__file__).resolve().parents[2] / LEDGER_NAME
 RECORD = Path(__file__).with_name("table_qualification.json")
@@ -84,7 +86,8 @@ def qualification_record(text: str) -> dict:
     """The ledger's destination and, per row naming a table, its audits and verbatim delivery state.
 
     A row whose audit wording falls outside the recognized phrases refuses, so a
-    slip cannot silently read as "no audit recorded".
+    slip cannot silently read as "no audit recorded"; so does one naming a path on
+    a maintainer's machine, which the served record would expose.
     """
     rows = []
     for task, tables, state in ledger_rows(text):
@@ -93,6 +96,9 @@ def qualification_record(text: str) -> dict:
         found = audits(state)
         if len(_AUDIT_MENTION.findall(state)) != len(found):
             raise ValueError(f"Ledger row {task} ({', '.join(tables)}) states an audit outside the recognized phrases")
+        if path := maintainer_path(state):
+            # The server ships these statements: name a receipt by its directory, as joins_record does.
+            raise ValueError(f"Ledger row {task} ({', '.join(tables)}) names a maintainer path: {path!r}")
         names = [name.removesuffix(".parquet") for name in tables]
         rows.append({"task": task, "tables": names, "audits": found, "statement": state})
     return {
