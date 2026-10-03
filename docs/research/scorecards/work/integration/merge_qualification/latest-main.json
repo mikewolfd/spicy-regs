@@ -1,0 +1,12 @@
+{
+  "scorecard_merge": "c83a3a27",
+  "additional_main": "7c4153cc354882db93d808e232acf140278dc719",
+  "merge_conflicts": false,
+  "checks": {
+    "uv run --frozen pytest -q tests/test_explorer_metadata.py tests/test_explorer_join_audit.py": "33 passed",
+    "uv run --frozen spicy-regs-dict check": "passed",
+    "uv run --frozen ruff check .": "passed",
+    "uv run --frozen ty check": "passed"
+  },
+  "scope": "Additional explorer files integrated after the full consumer suite recorded in consumer-gates.json. No service deployment or data publication."
+}

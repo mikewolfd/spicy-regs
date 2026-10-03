@@ -1,0 +1,907 @@
+{
+  "format": "spicy-regs-explorer-sources",
+  "version": 1,
+  "sources": {
+    "congress": {
+      "id": "congress",
+      "name": "Congress.gov",
+      "url": "https://www.congress.gov/",
+      "kind": "government",
+      "note": ""
+    },
+    "govinfo-billstatus": {
+      "id": "govinfo-billstatus",
+      "name": "GovInfo BILLSTATUS",
+      "url": "https://www.govinfo.gov/bulkdata/BILLSTATUS",
+      "kind": "government",
+      "note": ""
+    },
+    "govinfo-bills": {
+      "id": "govinfo-bills",
+      "name": "GovInfo bill text",
+      "url": "https://www.govinfo.gov/app/collection/BILLS",
+      "kind": "government",
+      "note": ""
+    },
+    "govinfo-reports": {
+      "id": "govinfo-reports",
+      "name": "GovInfo committee reports",
+      "url": "https://www.govinfo.gov/app/collection/CRPT",
+      "kind": "government",
+      "note": ""
+    },
+    "govinfo-hearings": {
+      "id": "govinfo-hearings",
+      "name": "GovInfo hearings",
+      "url": "https://www.govinfo.gov/app/collection/CHRG",
+      "kind": "government",
+      "note": ""
+    },
+    "govinfo-cdoc": {
+      "id": "govinfo-cdoc",
+      "name": "GovInfo congressional documents",
+      "url": "https://www.govinfo.gov/app/collection/CDOC",
+      "kind": "government",
+      "note": ""
+    },
+    "govinfo-budget": {
+      "id": "govinfo-budget",
+      "name": "GovInfo federal budgets",
+      "url": "https://www.govinfo.gov/app/collection/BUDGET",
+      "kind": "government",
+      "note": ""
+    },
+    "govinfo-laws": {
+      "id": "govinfo-laws",
+      "name": "GovInfo public and private laws",
+      "url": "https://www.govinfo.gov/app/collection/PLAW",
+      "kind": "government",
+      "note": ""
+    },
+    "uscode": {
+      "id": "uscode",
+      "name": "Office of the Law Revision Counsel",
+      "url": "https://uscode.house.gov/",
+      "kind": "government",
+      "note": ""
+    },
+    "ecfr": {
+      "id": "ecfr",
+      "name": "Electronic Code of Federal Regulations",
+      "url": "https://www.ecfr.gov/",
+      "kind": "government",
+      "note": ""
+    },
+    "cfr": {
+      "id": "cfr",
+      "name": "GovInfo Code of Federal Regulations",
+      "url": "https://www.govinfo.gov/app/collection/CFR",
+      "kind": "government",
+      "note": ""
+    },
+    "members": {
+      "id": "members",
+      "name": "United States project",
+      "url": "https://github.com/unitedstates/congress-legislators",
+      "kind": "community",
+      "note": "Community-maintained identities and historical service records."
+    },
+    "house-votes": {
+      "id": "house-votes",
+      "name": "House Clerk roll calls",
+      "url": "https://clerk.house.gov/Votes",
+      "kind": "government",
+      "note": ""
+    },
+    "senate-votes": {
+      "id": "senate-votes",
+      "name": "Senate roll calls",
+      "url": "https://www.senate.gov/legislative/votes_new.htm",
+      "kind": "government",
+      "note": ""
+    },
+    "house-rosters": {
+      "id": "house-rosters",
+      "name": "House Clerk member records",
+      "url": "https://clerk.house.gov/xml/lists/MemberData.xml",
+      "kind": "government",
+      "note": ""
+    },
+    "senate-rosters": {
+      "id": "senate-rosters",
+      "name": "Senate member records",
+      "url": "https://www.senate.gov/legislative/LIS_MEMBER/cvc_member_data.xml",
+      "kind": "government",
+      "note": ""
+    },
+    "house-appropriations": {
+      "id": "house-appropriations",
+      "name": "House Appropriations Committee",
+      "url": "https://appropriations.house.gov/news/press-releases",
+      "kind": "government",
+      "note": ""
+    },
+    "senate-appropriations": {
+      "id": "senate-appropriations",
+      "name": "Senate Appropriations Committee",
+      "url": "https://www.appropriations.senate.gov/news/majority",
+      "kind": "government",
+      "note": ""
+    },
+    "cbo": {
+      "id": "cbo",
+      "name": "Congressional Budget Office",
+      "url": "https://www.cbo.gov/cost-estimates",
+      "kind": "government",
+      "note": ""
+    },
+    "regulations": {
+      "id": "regulations",
+      "name": "Regulations.gov",
+      "url": "https://www.regulations.gov/",
+      "kind": "government",
+      "note": ""
+    },
+    "mirrulations": {
+      "id": "mirrulations",
+      "name": "Mirrulations",
+      "url": "https://mirrulations.org/",
+      "kind": "community",
+      "note": "Mirror of public Regulations.gov comments."
+    },
+    "register": {
+      "id": "register",
+      "name": "FederalRegister.gov",
+      "url": "https://www.federalregister.gov/",
+      "kind": "government",
+      "note": ""
+    },
+    "agenda": {
+      "id": "agenda",
+      "name": "RegInfo.gov Unified Agenda",
+      "url": "https://www.reginfo.gov/public/do/eAgendaMain",
+      "kind": "government",
+      "note": ""
+    },
+    "fcc": {
+      "id": "fcc",
+      "name": "Federal Communications Commission ECFS",
+      "url": "https://www.fcc.gov/ecfs/",
+      "kind": "government",
+      "note": ""
+    },
+    "fec": {
+      "id": "fec",
+      "name": "Federal Election Commission",
+      "url": "https://www.fec.gov/data/",
+      "kind": "government",
+      "note": "Original source and retained request URL appear in each observation or its evidence record."
+    },
+    "courts": {
+      "id": "courts",
+      "name": "CourtListener / Free Law Project",
+      "url": "https://www.courtlistener.com/",
+      "kind": "community",
+      "note": "Public court records distributed through RECAP and bulk exports."
+    },
+    "gao": {
+      "id": "gao",
+      "name": "Government Accountability Office",
+      "url": "https://www.gao.gov/",
+      "kind": "government",
+      "note": ""
+    },
+    "gao-govinfo": {
+      "id": "gao-govinfo",
+      "name": "GovInfo GAO reports",
+      "url": "https://www.govinfo.gov/app/collection/GAOREPORTS",
+      "kind": "government",
+      "note": ""
+    },
+    "lobbying": {
+      "id": "lobbying",
+      "name": "Senate Lobbying Disclosure Act filings",
+      "url": "https://lda.senate.gov/",
+      "kind": "government",
+      "note": ""
+    },
+    "senate-spending": {
+      "id": "senate-spending",
+      "name": "Secretary of the Senate expenditure reports",
+      "url": "https://www.senate.gov/legislative/common/generic/report_secsen.htm",
+      "kind": "government",
+      "note": ""
+    },
+    "sam": {
+      "id": "sam",
+      "name": "SAM.gov Entity API",
+      "url": "https://open.gsa.gov/api/entity-api/",
+      "kind": "government",
+      "note": ""
+    },
+    "spending": {
+      "id": "spending",
+      "name": "USAspending.gov",
+      "url": "https://www.usaspending.gov/",
+      "kind": "government",
+      "note": ""
+    }
+  },
+  "families": {
+    "bill-family": {
+      "sources": [
+        "govinfo-billstatus",
+        "govinfo-bills",
+        "congress"
+      ]
+    },
+    "bill-subjects": {
+      "sources": [
+        "congress"
+      ]
+    },
+    "amendments": {
+      "sources": [
+        "congress"
+      ]
+    },
+    "committee-meetings": {
+      "sources": [
+        "congress"
+      ]
+    },
+    "house-communications": {
+      "sources": [
+        "congress"
+      ]
+    },
+    "nominations": {
+      "sources": [
+        "congress"
+      ]
+    },
+    "treaties": {
+      "sources": [
+        "congress"
+      ]
+    },
+    "record-issues": {
+      "sources": [
+        "congress"
+      ]
+    },
+    "crs-reports": {
+      "sources": [
+        "congress"
+      ]
+    },
+    "committee-reports": {
+      "sources": [
+        "govinfo-reports",
+        "govinfo-hearings"
+      ]
+    },
+    "committee-rosters": {
+      "sources": [
+        "congress",
+        "house-rosters",
+        "senate-rosters"
+      ]
+    },
+    "members": {
+      "sources": [
+        "members"
+      ]
+    },
+    "roll-call-votes": {
+      "sources": [
+        "house-votes",
+        "senate-votes"
+      ]
+    },
+    "press-releases": {
+      "sources": [
+        "house-appropriations",
+        "senate-appropriations"
+      ]
+    },
+    "laws": {
+      "sources": [
+        "congress",
+        "govinfo-laws",
+        "uscode"
+      ]
+    },
+    "cfr-sections": {
+      "sources": [
+        "cfr"
+      ]
+    },
+    "dockets": {
+      "sources": [
+        "regulations"
+      ]
+    },
+    "documents": {
+      "sources": [
+        "regulations"
+      ]
+    },
+    "docket-attributes": {
+      "sources": [
+        "regulations"
+      ]
+    },
+    "document-attributes": {
+      "sources": [
+        "regulations"
+      ]
+    },
+    "comment-attributes": {
+      "sources": [
+        "regulations",
+        "mirrulations"
+      ]
+    },
+    "federal-register": {
+      "sources": [
+        "register"
+      ]
+    },
+    "unified-agenda": {
+      "sources": [
+        "agenda"
+      ]
+    },
+    "fcc-filings": {
+      "sources": [
+        "fcc"
+      ]
+    },
+    "fcc-proceedings": {
+      "sources": [
+        "fcc"
+      ]
+    },
+    "fec-candidate-history": {
+      "sources": [
+        "fec"
+      ]
+    },
+    "fec-committee-history": {
+      "sources": [
+        "fec"
+      ]
+    },
+    "fec-committees": {
+      "sources": [
+        "fec"
+      ]
+    },
+    "fec-observations": {
+      "sources": [
+        "fec"
+      ]
+    },
+    "fec-query": {
+      "sources": [
+        "fec"
+      ],
+      "inputs": [
+        "fec_collections",
+        "fec_source_records"
+      ],
+      "transformation": "Maps retained FEC observations into typed query tables; record evidence preserves the collection and original source location.",
+      "evidence": "src/spicy_regs/transforms/build_fec_observations.py"
+    },
+    "fec-source-catalog": {
+      "sources": [
+        "fec"
+      ]
+    },
+    "court-citations": {
+      "sources": [
+        "courts"
+      ]
+    },
+    "court-docket-groups": {
+      "sources": [
+        "courts"
+      ]
+    },
+    "court-opinion-clusters": {
+      "sources": [
+        "courts"
+      ]
+    },
+    "court-opinion-pdf-extractions": {
+      "sources": [
+        "courts"
+      ]
+    },
+    "court-opinions": {
+      "sources": [
+        "courts"
+      ]
+    },
+    "courtlistener": {
+      "sources": [
+        "courts"
+      ]
+    },
+    "gao-reports": {
+      "sources": [
+        "gao",
+        "gao-govinfo"
+      ]
+    },
+    "gao-recommendations": {
+      "sources": [
+        "gao"
+      ]
+    },
+    "lobbying-filings": {
+      "sources": [
+        "lobbying"
+      ]
+    },
+    "senate-expenditures": {
+      "sources": [
+        "senate-spending",
+        "govinfo-cdoc"
+      ]
+    },
+    "sam-entities": {
+      "sources": [
+        "sam"
+      ]
+    },
+    "usaspending-recipients": {
+      "sources": [
+        "spending"
+      ]
+    },
+    "print-citations": {
+      "sources": [
+        "govinfo-reports",
+        "govinfo-budget"
+      ]
+    },
+    "agency-monthly-volume": {
+      "sources": [
+        "regulations",
+        "mirrulations"
+      ]
+    },
+    "agency-stats": {
+      "sources": [
+        "regulations",
+        "mirrulations"
+      ]
+    },
+    "discovery-signals": {
+      "sources": [
+        "regulations",
+        "mirrulations"
+      ]
+    },
+    "feed-summary": {
+      "sources": [
+        "regulations",
+        "mirrulations"
+      ]
+    },
+    "fr-docket-links": {
+      "sources": [
+        "register"
+      ]
+    },
+    "org-committee-links": {
+      "sources": [
+        "regulations",
+        "mirrulations",
+        "fec"
+      ]
+    },
+    "member-vote-terms": {
+      "sources": [
+        "house-votes",
+        "senate-votes",
+        "members"
+      ]
+    },
+    "native-legal-references": {
+      "sources": [
+        "govinfo-bills",
+        "govinfo-laws",
+        "ecfr",
+        "uscode"
+      ]
+    },
+    "scorecards": {
+      "sources": []
+    },
+    "scorecard-analysis": {
+      "sources": []
+    }
+  },
+  "tables": {
+    "bill_actions": {
+      "sources": [
+        "govinfo-billstatus"
+      ]
+    },
+    "bill_committee_activities": {
+      "sources": [
+        "govinfo-billstatus"
+      ]
+    },
+    "bill_committees": {
+      "sources": [
+        "govinfo-billstatus"
+      ]
+    },
+    "bill_cosponsors": {
+      "sources": [
+        "govinfo-billstatus"
+      ]
+    },
+    "bill_publisher_summaries": {
+      "sources": [
+        "govinfo-billstatus"
+      ]
+    },
+    "bill_vote_references": {
+      "sources": [
+        "govinfo-billstatus"
+      ]
+    },
+    "bill_versions": {
+      "sources": [
+        "govinfo-bills",
+        "govinfo-billstatus"
+      ]
+    },
+    "bill_sections": {
+      "sources": [
+        "govinfo-bills",
+        "govinfo-billstatus"
+      ]
+    },
+    "bill_family_archives": {
+      "sources": [
+        "govinfo-bills",
+        "govinfo-billstatus"
+      ]
+    },
+    "bill_family_backfills": {
+      "sources": [
+        "congress"
+      ]
+    },
+    "bill_family_backfill_walks": {
+      "sources": [
+        "congress"
+      ]
+    },
+    "cbo_cost_estimates": {
+      "sources": [
+        "cbo"
+      ]
+    },
+    "cbo_feed_items": {
+      "sources": [
+        "cbo"
+      ]
+    },
+    "committee_reports": {
+      "sources": [
+        "govinfo-reports"
+      ]
+    },
+    "committee_report_reads": {
+      "sources": [
+        "govinfo-reports",
+        "govinfo-hearings"
+      ]
+    },
+    "report_sections": {
+      "sources": [
+        "govinfo-reports"
+      ]
+    },
+    "hearing_transcripts": {
+      "sources": [
+        "govinfo-hearings"
+      ]
+    },
+    "hearing_bill_links": {
+      "sources": [
+        "govinfo-hearings"
+      ]
+    },
+    "committees": {
+      "sources": [
+        "congress"
+      ]
+    },
+    "committee_assignments": {
+      "sources": [
+        "house-rosters",
+        "senate-rosters"
+      ]
+    },
+    "law_sections": {
+      "sources": [
+        "govinfo-laws"
+      ]
+    },
+    "law_code_sections": {
+      "sources": [
+        "uscode"
+      ]
+    },
+    "table3_records": {
+      "sources": [
+        "uscode"
+      ]
+    },
+    "house_activity_reports": {
+      "sources": [
+        "govinfo-reports"
+      ]
+    },
+    "budget_volumes": {
+      "sources": [
+        "govinfo-budget"
+      ]
+    },
+    "gao_decisions": {
+      "sources": [
+        "gao"
+      ]
+    },
+    "agency_stats": {
+      "inputs": [
+        "dockets",
+        "documents",
+        "comments_index",
+        "comments"
+      ],
+      "transformation": "Counts use comments_index when available, with comments as a fallback. Removed postings are excluded; missing optional inputs stay distinguishable.",
+      "evidence": "src/spicy_regs/transforms/build_agency_stats.py"
+    },
+    "feed_summary": {
+      "inputs": [
+        "dockets",
+        "documents",
+        "comments_index",
+        "comments"
+      ],
+      "transformation": "Counts use comments_index when available, with comments as a fallback. Removed postings are excluded; missing optional inputs stay distinguishable.",
+      "evidence": "src/spicy_regs/transforms/build_feed_summary.py"
+    },
+    "agency_monthly_volume": {
+      "inputs": [
+        "documents"
+      ],
+      "transformation": "Monthly counts of non-removed documents by agency and document type; unusable dates are excluded.",
+      "evidence": "src/spicy_regs/transforms/build_agency_monthly_volume.py",
+      "sources": [
+        "regulations"
+      ]
+    },
+    "discovery_signals": {
+      "inputs": [
+        "documents"
+      ],
+      "transformation": "Compares recent agency document volume with the prior-year monthly baseline at the run time.",
+      "evidence": "src/spicy_regs/transforms/build_discovery_signals.py",
+      "sources": [
+        "regulations"
+      ]
+    },
+    "fr_docket_links": {
+      "inputs": [
+        "federal_register"
+      ],
+      "transformation": "Expands the docket references actually printed or linked by each Federal Register record.",
+      "evidence": "src/spicy_regs/transforms/build_fr_docket_links.py"
+    },
+    "org_committee_links": {
+      "inputs": [
+        "comments",
+        "fec_committees",
+        "fec_committee_history"
+      ],
+      "transformation": "Matches commenter organization names to non-candidate FEC committees; match method, confidence and fan-out remain explicit.",
+      "evidence": "src/spicy_regs/pipelines/rollups/org_committee_links.py"
+    },
+    "member_vote_terms": {
+      "inputs": [
+        "member_votes",
+        "member_terms"
+      ],
+      "transformation": "Assigns a vote to a historical service term using the vote date and member ID; ambiguous or missing identities remain unresolved.",
+      "evidence": "src/spicy_regs/transforms/build_member_vote_terms.py"
+    },
+    "court_docket_groups": {
+      "inputs": [
+        "court_dockets"
+      ],
+      "transformation": "Groups published docket rows using a retained CourtListener bulk docket edition.",
+      "evidence": "src/spicy_regs/pipelines/rollups/court_docket_groups.py"
+    },
+    "court_opinion_pdf_extractions": {
+      "inputs": [
+        "court_opinions"
+      ],
+      "transformation": "Reads selected opinion PDFs; extraction coverage and status remain recorded.",
+      "evidence": "src/spicy_regs/transforms/build_court_pdf_extractions.py"
+    },
+    "section_diffs": {
+      "inputs": [
+        "bill_sections",
+        "bill_versions"
+      ],
+      "transformation": "Computes changes between sections in bill versions.",
+      "evidence": "src/spicy_regs/transforms/build_bill_family.py"
+    },
+    "section_diff_items": {
+      "inputs": [
+        "section_diffs"
+      ],
+      "transformation": "Breaks computed bill-section differences into individual changes.",
+      "evidence": "src/spicy_regs/transforms/build_bill_family.py"
+    },
+    "financial_changes": {
+      "inputs": [
+        "section_diffs"
+      ],
+      "transformation": "Pairs financial amounts across bill text versions when that feature is enabled.",
+      "evidence": "src/spicy_regs/table_joins.py",
+      "emptyReason": "Financial amount pairing is disabled by design (pair_amounts=False)."
+    },
+    "bill_summaries": {
+      "inputs": [
+        "bill_sections"
+      ],
+      "transformation": "Model-generated bill summaries.",
+      "evidence": "src/spicy_regs/table_joins.py",
+      "modelGenerated": true,
+      "emptyReason": "These model outputs are intentionally disabled by the project owner."
+    },
+    "diff_summaries": {
+      "inputs": [
+        "section_diffs"
+      ],
+      "transformation": "Model-generated summaries of bill text changes.",
+      "evidence": "src/spicy_regs/table_joins.py",
+      "modelGenerated": true,
+      "emptyReason": "These model outputs are intentionally disabled by the project owner."
+    },
+    "section_classifications": {
+      "inputs": [
+        "bill_sections"
+      ],
+      "transformation": "Model-generated classifications of bill sections.",
+      "evidence": "src/spicy_regs/table_joins.py",
+      "modelGenerated": true,
+      "emptyReason": "These model outputs are intentionally disabled by the project owner."
+    },
+    "public_activity_events": {
+      "inputs": [
+        "congress_bills",
+        "bill_versions",
+        "bill_summaries"
+      ],
+      "transformation": "Compares bill metadata, versions and summaries between successive retained snapshots to produce activity events.",
+      "evidence": "src/spicy_regs/transforms/build_bill_family.py"
+    },
+    "document_citation_reads": {
+      "inputs": [
+        "document_citations"
+      ],
+      "transformation": "Records which retained citation fields were read and the result of each read.",
+      "evidence": "src/spicy_regs/transforms/held_citations.py:write_citation_reads"
+    },
+    "native_legal_references": {
+      "transformation": "Extracts references from retained legal XML, with source locators, editions and read evidence. These are external retained files, not reconstructed from the explorer tables.",
+      "evidence": "src/spicy_regs/transforms/native_legal_inputs.py"
+    },
+    "native_legal_reference_reads": {
+      "transformation": "Extracts references from retained legal XML, with source locators, editions and read evidence. These are external retained files, not reconstructed from the explorer tables.",
+      "evidence": "src/spicy_regs/transforms/native_legal_inputs.py"
+    },
+    "document_attributes": {
+      "sources": [
+        "regulations"
+      ],
+      "inputs": [],
+      "transformation": "Copies typed attributes directly from the original Regulations.gov API payload; the companion thin table is not the input.",
+      "evidence": "src/spicy_regs/transforms/regulations_attributes.py",
+      "modelGenerated": false
+    },
+    "docket_attributes": {
+      "sources": [
+        "regulations"
+      ],
+      "inputs": [],
+      "transformation": "Copies typed attributes directly from the original Regulations.gov API payload; the companion thin table is not the input.",
+      "evidence": "src/spicy_regs/transforms/regulations_attributes.py",
+      "modelGenerated": false
+    },
+    "comment_attributes": {
+      "sources": [
+        "regulations",
+        "mirrulations"
+      ],
+      "inputs": [],
+      "transformation": "Copies typed attributes directly from the original Regulations.gov API payload; the companion thin table is not the input.",
+      "evidence": "src/spicy_regs/transforms/regulations_attributes.py",
+      "modelGenerated": false
+    },
+    "scorecard_member_links": {
+      "inputs": [
+        "scorecard_members",
+        "members",
+        "member_terms"
+      ],
+      "transformation": "Resolves scorecard members against congressional identities; retains the identity method and unresolved cases.",
+      "evidence": "explorer_supplemental.json provenance",
+      "sources": [
+        "members"
+      ]
+    },
+    "scorecard_item_links": {
+      "inputs": [
+        "scorecard_items",
+        "congress_bills",
+        "amendments",
+        "roll_call_votes"
+      ],
+      "transformation": "Resolves publisher-scored items to bills, amendments or roll calls using their declared identifiers.",
+      "evidence": "explorer_supplemental.json provenance",
+      "sources": [
+        "congress",
+        "govinfo-billstatus",
+        "house-votes",
+        "senate-votes"
+      ]
+    },
+    "bill_committee_actions": {
+      "sources": [
+        "govinfo-reports"
+      ],
+      "inputs": [
+        "house_activity_reports"
+      ],
+      "transformation": "Extracts bill actions from selected original House activity report bodies; the corresponding report row records read depth.",
+      "evidence": "src/spicy_regs/transforms/build_print_citations.py"
+    },
+    "document_citations": {
+      "sources": [
+        "govinfo-reports",
+        "govinfo-budget",
+        "govinfo-bills",
+        "lobbying",
+        "regulations",
+        "mirrulations",
+        "congress",
+        "courts"
+      ],
+      "inputs": [
+        "house_activity_reports",
+        "budget_volumes",
+        "bill_sections",
+        "report_sections",
+        "lobbying_activities",
+        "comments",
+        "house_communications",
+        "court_opinion_pdf_extractions"
+      ],
+      "transformation": "Extracts references from selected held text fields and original package bodies. The read records identify which source and field were selected; this does not mean every input row was read.",
+      "evidence": "src/spicy_regs/citation_sources.py; src/spicy_regs/transforms/build_print_citations.py; src/spicy_regs/transforms/held_citations.py"
+    }
+  }
+}

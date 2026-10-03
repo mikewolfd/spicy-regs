@@ -1,0 +1,112 @@
+name: Publish explorer metadata
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/spicy_regs/table_metadata.json'
+      - 'src/spicy_regs/table_joins.json'
+      - 'src/spicy_regs/table_joins.py'
+      - 'src/spicy_regs/join_audit.json'
+      - 'src/spicy_regs/explorer_*'
+      - 'scripts/publish_explorer_metadata.py'
+      - 'tests/test_explorer_metadata.py'
+      - '.github/workflows/publish-explorer-metadata.yml'
+  workflow_dispatch:
+  # Also catches workstation publications and new publishing workflows. GitHub
+  # may delay scheduled runs; consumers expose missing/stale metadata meanwhile.
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+  workflow_run:
+    workflows:
+      - "Rollup — agency_monthly_volume"
+      - "Rollup — agency_stats"
+      - "Rollup — amendments"
+      - "Rollup — bill family"
+      - "Rollup — bill_subjects"
+      - "Rollup — cfr_sections"
+      - "Rollup — committee_meetings"
+      - "Rollup — committee_reports"
+      - "Rollup — committee_rosters"
+      - "Rollup — court_citations, court_citation_map, court_parentheticals"
+      - "Rollup — court_dockets"
+      - "Rollup — court_opinion_clusters"
+      - "Rollup — crs_reports"
+      - "Rollup — discovery_signals"
+      - "Rollup — docket_search"
+      - "Rollup — fcc_filings"
+      - "Rollup — fcc_proceedings"
+      - "Rollup — fec_candidate_history"
+      - "Rollup — fec_committee_history"
+      - "Rollup — fec_committees"
+      - "Rollup — fec_source_catalog"
+      - "Rollup — federal_register"
+      - "Rollup — feed_summary"
+      - "Rollup — fr_docket_links"
+      - "Rollup — gao_recommendations"
+      - "Rollup — gao_reports"
+      - "Rollup — house_communications"
+      - "Rollup — laws"
+      - "Rollup — lobbying_filings"
+      - "Rollup — member_vote_terms"
+      - "Rollup — members"
+      - "Rollup — nominations"
+      - "Rollup — org_committee_links"
+      - "Rollup — press_releases"
+      - "Rollup — print_citations"
+      - "Rollup — record_issues"
+      - "Rollup — retained FEC observations"
+      - "Rollup — roll_call_votes"
+      - "Rollup — sam_entities"
+      - "Rollup — senate_expenditures"
+      - "Rollup — treaties"
+      - "Rollup — unified_agenda"
+      - "Rollup — usaspending_recipients"
+      - "ETL (new pipeline)"
+      - "Refresh congressional votes and terms"
+      - "Sweep Regulations.gov attributes"
+      - "Publish comments mirror"
+      - "Materialize — rulemaking join surface"
+    types: [completed]
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: explorer-metadata
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # Always use trusted main, never the triggering run's artifacts or code.
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+      - name: Install locked dependencies
+        run: uv sync --frozen --no-group source-readers
+      - name: Validate metadata behavior
+        env:
+          PYTHONPATH: src
+        run: uv run --frozen --no-group source-readers pytest --noconftest tests/test_explorer_metadata.py -q
+      - name: Publish only the explorer metadata bundle
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL || format('https://data.{0}', vars.SPICYREGS_DOMAIN || 'spicy-regs.dev') }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+        run: uv run --frozen --no-group source-readers python scripts/publish_explorer_metadata.py --publish
+      - uses: actions/upload-artifact@v4
+        with:
+          name: explorer-metadata
+          path: output/explorer-metadata.v1.json
+          retention-days: 7
