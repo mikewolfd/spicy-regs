@@ -20,7 +20,7 @@ One row per dated Federal Register record, keyed by (`document_number`, `publica
 | `document_number` | `VARCHAR` | The Register's document number, spelled as it serves it (`2017-07442`, unpadded before 2013). |
 | `title` | `VARCHAR` | The document's title. |
 | `abstract` | `VARCHAR` | The agency's abstract of the document; often NULL. |
-| `document_type` | `VARCHAR` | The Register's category: `Rule`, `Proposed Rule`, `Notice` or `Presidential Document`. |
+| `document_type` | `VARCHAR` | The Register's category as the API states it: `Rule`, `Proposed Rule`, `Notice`, `Presidential Document`, and on older records `Uncategorized Document`, `Correction` (none after 2008-08-08) and `Sunshine Act Document`; NULL on a few records. Since 2008 a correction, an effective-date delay or a confirmation of a rule is itself typed `Rule` and shares the rule's RIN, docket and title; subtype is NULL on recent records, so tell them apart by title, abstract and publication_date. |
 | `publication_date` | `VARCHAR` | The date the document was published, canonical YYYY-MM-DD. |
 | `effective_on` | `VARCHAR` | The date the action takes effect, when stated; often NULL. |
 | `comments_close_on` | `VARCHAR` | The public comment deadline, for a document that opens a comment period; often NULL. |
@@ -28,7 +28,7 @@ One row per dated Federal Register record, keyed by (`document_number`, `publica
 | `agencies_json` | `VARCHAR` | The issuing agencies as the Register's agency objects, a JSON array. |
 | `agency_slugs` | `VARCHAR` | The issuing agencies' Register slugs, comma-separated; NULL when none. |
 | `docket_ids_json` | `VARCHAR` | The docket labels the document states, a JSON array, as printed (many are agency numbers). |
-| `regulation_id_numbers_json` | `VARCHAR` | The Regulation Identifier Numbers the document states, a JSON array; often `[]`. |
+| `regulation_id_numbers_json` | `VARCHAR` | The Regulation Identifier Numbers the API lists, a JSON array. `[]` on a large share of Rule documents every year, an API limit: some of those state a RIN in the printed text, and some print it inside docket_ids_json. |
 | `cfr_references_json` | `VARCHAR` | The CFR citations the document affects, a JSON array of `{title, part, chapter, citation_url}`. |
 | `topics_json` | `VARCHAR` | The Register's CFR index terms for the document (`topics`), a JSON array; `[]` when it lists none. |
 | `html_url` | `VARCHAR` | The document's page on federalregister.gov. |
@@ -37,7 +37,7 @@ One row per dated Federal Register record, keyed by (`document_number`, `publica
 | `volume` | `VARCHAR` | The Federal Register volume. |
 | `start_page` | `VARCHAR` | The document's first page. |
 | `end_page` | `VARCHAR` | The document's last page. |
-| `subtype` | `VARCHAR` | The Register's subtype, when set; often NULL. |
+| `subtype` | `VARCHAR` | The Register's subtype when the API sets it; NULL on recent records, so it does not separate a correction from its rule. |
 | `executive_order_number` | `VARCHAR` | The executive order number, for a presidential executive order; NULL otherwise. |
 | `modify_date` | `VARCHAR` | Always NULL: the Register's API states no update instant. |
 | `rin` | `VARCHAR` | The host's derived first RIN of `regulation_id_numbers_json`; NULL when it states none. |

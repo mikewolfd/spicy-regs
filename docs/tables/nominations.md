@@ -24,7 +24,7 @@ One row per nomination or part, as the Congress.gov nomination list route states
 | `description` | `VARCHAR` | The publisher's description of the nomination. |
 | `organization` | `VARCHAR` | The organization the nominee would serve in. |
 | `received_date` | `VARCHAR` | The date the Senate received the nomination. |
-| `is_civilian` | `VARCHAR` | Whether the publisher's nominationType says the nomination is civilian. |
+| `is_civilian` | `VARCHAR` | Whether the nomination is civilian, as the publisher's nominationType states it: `true` where it states isCivilian true (or isMilitary false), `false` where it states isMilitary true (or isCivilian false). The list route states exactly one of the two keys (2,287 of 2,287 rows of the 119th, 2026-10-03). NULL where it states neither, or both with contradicting values; nomination_type_json keeps what it stated, so `is_civilian IS NULL AND nomination_type_json IS NOT NULL` counts the contradictions. |
 | `nomination_type_json` | `VARCHAR` | The publisher's nominationType object, as JSON. |
 | `latest_action_date` | `VARCHAR` | Date of the publisher's latestAction entry. |
 | `latest_action_text` | `VARCHAR` | Text of the publisher's latestAction entry. |

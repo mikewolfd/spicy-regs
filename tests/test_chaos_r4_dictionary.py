@@ -15,6 +15,7 @@ import pytest
 from spicy_regs import data_dictionary as dd
 from spicy_regs import table_joins
 
+#: A local build the notes below name, standing for whichever build a real note would.
 VENDORED = "0.53.0+votes.8d7f3fe3b489"
 NOTE = f"The vendored column sentence is wrong. (interim until spicy-docs > {VENDORED})"
 
@@ -56,11 +57,14 @@ def test_the_check_refuses_an_expired_note_in_the_dictionary(monkeypatch):
 
 
 @pytest.mark.parametrize("table", ["congress_bills", "laws", "law_sections", "roll_call_votes"])
-def test_each_stand_in_for_an_unreleased_spicy_docs_fix_carries_its_expiry(table):
-    """W1 (stage), W3 (latest action), B2 (margin notes) and B3 (party totals) are fixed only on a spicy-docs branch."""
+def test_no_round4_stand_in_outlives_the_wheel_that_fixed_it(table):
+    """W1 (stage), W3 (latest action), B2 (margin notes) and B3 (party totals) ship in the adopted 0.54.0 build.
+
+    Their contract prose now states each rule (party_totals_json, the enactment-date pointer, the v2 margin-note
+    rule keyed on reader_version), so no interim paragraph stands in for them any more.
+    """
     note = dd.load_descriptions()[table].get("data_quality") or ""
-    stated = dd.INTERIM_MARKER.findall(" ".join(note.split()))
-    assert stated and all(version == dd.installed_spicy_docs() for version in stated), (table, stated)
+    assert not dd.INTERIM_MARKER.findall(" ".join(note.split())), table
 
 
 # --------------------------------------------------------------------------- #

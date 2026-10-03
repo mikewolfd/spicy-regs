@@ -8,8 +8,6 @@ One row per native section occurrence in a published law's main body. These are 
 
 **Coverage.** Derived: source-native sections from identity-validated GovInfo public and private law XML acquired by the laws rollup. Join law_id to laws.law_id, then laws.bill_id to congress_bills.bill_id. A missing section row does not establish that the law has no text: check laws.law_text_outcome and law_section_count. Coverage follows successfully read XML, not all enacted laws. PDF-only sources are outside this reader. *(measured 2026-10-02)*
 
-**Data quality.** Under `reader_version` `law-sections-uslm-v1`, every row of laws generation c1ed486d… (2026-10-03), the USLM margin notes are lines of `body`, unflagged: citation notes such as `42 USC 405 note.`, the approval date, catchwords such as `Contracts.`; `issues_json` names only page furniture, though the vendored `body` sentence says print furniture is excluded. Remove them before quoting; the same holds for `laws.law_body_remainder`. Reader `law-sections-uslm-v2` excludes them as print furniture. (interim until spicy-docs > 0.53.0+votes.8d7f3fe3b489)
-
 - **Parquet file:** `law_sections.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
 - **Publication status:** Not established by this schema page or its measurement date.
@@ -27,7 +25,7 @@ One row per native section occurrence in a published law's main body. These are 
 | `parent_seq` | `VARCHAR` | Occurrence of the nearest containing native section; NULL for sections without a section ancestor. |
 | `hierarchy_json` | `VARCHAR` | Source-order structural ancestors with element, namespace-qualified path, native IDs, number and heading. |
 | `native_path` | `VARCHAR` | Absolute XPath 1.0 using local-name and namespace-uri predicates into the exact source XML. |
-| `body` | `VARCHAR` | Section-owned source text: block boundaries become newlines; inline adjacency survives. Excludes own number/heading, print furniture and nested sections, which have separate rows. This is not consolidated or applied law text. |
+| `body` | `VARCHAR` | Section-owned source text: block boundaries become newlines; inline adjacency survives, amending actions included. Excludes own number/heading, print furniture and nested sections, which have separate rows. Print furniture is the page's apparatus beside the enacted words: page numbers, running heads and, from law_text_reader_version law-sections-uslm-v2, the USLM sidenote margin notes (`42 USC 405 note.`, a topical catchword such as `Contracts.`), each flagged in issues_json as print_furniture_excluded:<element>; under law-sections-uslm-v1 the margin notes were kept as body lines. This is not consolidated or applied law text. |
 | `is_quoted` | `VARCHAR` | true when a native quotedContent ancestor encloses this section; a quoted section is not a separate enacted section. |
 | `issues_json` | `VARCHAR` | Observed missing/repeated labels or IDs, unknown elements, excluded nested text and print furniture; these observations do not interpret legal effect. |
 | `source_sha256` | `VARCHAR` | SHA-256 of the exact identity-validated law XML shared with the parent law metadata capture. |

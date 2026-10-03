@@ -29,20 +29,20 @@ The publisher's `NoChamber` value is stored as `nochamber`, matching its detail 
 | `location_building` | `VARCHAR` | The building the detail names. |
 | `location_room` | `VARCHAR` | The room the detail names. |
 | `committee_system_code` | `VARCHAR` | System code of the first committee the detail lists. |
-| `committee_count` | `VARCHAR` | How many committees the detail lists; every one is in committees_json. |
-| `committees_json` | `VARCHAR` | Every committee the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read. |
+| `committee_count` | `VARCHAR` | How many committees the detail lists; every one is in committees_json, and NULL where it is NULL. |
+| `committees_json` | `VARCHAR` | Every committee the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one. |
 | `hearing_jacket` | `VARCHAR` | The first hearing transcript jacket number the detail lists, where it lists any. |
-| `hearing_jacket_count` | `VARCHAR` | How many transcript jackets the detail lists; every one is in hearing_jackets_json. |
-| `hearing_jackets_json` | `VARCHAR` | Every transcript jacket number the detail lists, as a JSON array of strings. NULL where no detail was read. |
-| `bill_count` | `VARCHAR` | How many bills the detail relates to the meeting; every one is in bill_ids_json. |
-| `bill_ids_json` | `VARCHAR` | Natural keys of every bill in relatedItems.bills, as a JSON array, in publisher order. NULL where no detail was read. |
-| `witness_count` | `VARCHAR` | How many witnesses the detail lists. |
-| `witnesses_json` | `VARCHAR` | Every witness the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read. |
-| `witness_document_count` | `VARCHAR` | How many witness documents the detail lists. |
-| `witness_documents_json` | `VARCHAR` | Every witness document the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read. |
-| `meeting_document_count` | `VARCHAR` | How many meeting documents the detail lists. |
-| `meeting_documents_json` | `VARCHAR` | Every meeting document the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read. |
-| `document_urls_json` | `VARCHAR` | The URL of every document the meeting lists, witness documents first then meeting documents, in publisher order: what the map's meeting-to-documents edge resolves. NULL where no detail was read. |
-| `videos_json` | `VARCHAR` | Every video link the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read. |
+| `hearing_jacket_count` | `VARCHAR` | How many transcript jackets the detail lists; every one is in hearing_jackets_json, and NULL where it is NULL. |
+| `hearing_jackets_json` | `VARCHAR` | Every transcript jacket number the detail lists, as a JSON array of strings. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one. |
+| `bill_count` | `VARCHAR` | How many bills the detail relates to the meeting; every one is in bill_ids_json, and NULL where it is NULL. |
+| `bill_ids_json` | `VARCHAR` | Natural keys of every bill in relatedItems.bills, as a JSON array, in publisher order; a bill named only in a meeting document is not here. NULL where no detail was read or the detail states no relatedItems.bills; `[]` where it states an empty one. |
+| `witness_count` | `VARCHAR` | How many witness entries the detail lists, repeats included; not a count of people. NULL where witnesses_json is NULL. |
+| `witnesses_json` | `VARCHAR` | Every witness entry the detail lists, as a JSON array of the publisher's objects, in publisher order and as published: an entry can repeat within one meeting, so count people by name, not entries. NULL where no detail was read or the detail states no witnesses (the Senate and NoChamber details retained so far omit the key: no witness list, not an empty one); `[]` where it states an empty one. |
+| `witness_document_count` | `VARCHAR` | How many witness documents the detail lists; NULL where witness_documents_json is NULL. |
+| `witness_documents_json` | `VARCHAR` | Every witness document the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one. |
+| `meeting_document_count` | `VARCHAR` | How many meeting documents the detail lists; NULL where meeting_documents_json is NULL. |
+| `meeting_documents_json` | `VARCHAR` | Every meeting document the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one. |
+| `document_urls_json` | `VARCHAR` | The URL of every document the meeting lists, witness documents first then meeting documents, in publisher order: what the map's meeting-to-documents edge resolves. NULL where neither list is stated (or no detail was read); `[]` where the stated lists carry no URL. |
+| `videos_json` | `VARCHAR` | Every video link the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one. |
 | `update_date` | `VARCHAR` | The publisher's updateDate; the merge prefers the larger value. |
 | `url` | `VARCHAR` | The publisher's own URL for this meeting, which only the list row states. |

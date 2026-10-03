@@ -30,10 +30,10 @@ One row per treaty document, as the Congress.gov treaty list and detail routes s
 | `resolution_text` | `VARCHAR` | The resolution of ratification text, where the detail states one. |
 | `formal_title` | `VARCHAR` | The detail's `Treaty - Formal Title` entry. |
 | `short_title` | `VARCHAR` | The detail's `Treaty - Short Title` entry. |
-| `titles_json` | `VARCHAR` | Every title the detail lists, as a JSON array of the publisher's objects. |
-| `countries_json` | `VARCHAR` | Every country party the detail names, as a JSON array of names. |
-| `index_terms_json` | `VARCHAR` | Every index term the detail names, as a JSON array of names. |
-| `related_docs_json` | `VARCHAR` | Every related document the detail lists, as a JSON array of the publisher's objects. |
+| `titles_json` | `VARCHAR` | Every title the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one. |
+| `countries_json` | `VARCHAR` | Every country party the detail names, as a JSON array of names. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one. |
+| `index_terms_json` | `VARCHAR` | Every index term the detail names, as a JSON array of names. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one. |
+| `related_docs_json` | `VARCHAR` | Every related document the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one. |
 | `parts_json` | `VARCHAR` | The publisher's parts object, as JSON. |
 | `action_count` | `VARCHAR` | How many actions the detail says the treaty has. |
 | `actions_url` | `VARCHAR` | The publisher's URL for the treaty's action list. |

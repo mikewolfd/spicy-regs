@@ -26,7 +26,7 @@ One row per line of an OLRC per-Congress classification table: a U.S. Code place
 | `number` | `VARCHAR` | The law's number within its Congress. |
 | `usc_title` | `VARCHAR` | The U.S. Code title as printed; a trailing A means the title's appendix, per the page's legend. |
 | `usc_section` | `VARCHAR` | The U.S. Code section as printed. |
-| `action` | `VARCHAR` | Column 3 verbatim (nt, new, nt new, nt [tbl], prec, fr, to, gen amd, omitted, repealed, ed chg); NULL where the page left it blank, which the page's legend reads as amended. |
+| `action` | `VARCHAR` | Column 3 verbatim; NULL where the page left it blank. The page's own legend (Explanation of Table, column 3, as the retained tbl119pl_2nd.htm prints it): `nt` means note; `nt [tbl]` means note [table]; `prec` means preceding; `fr` means a transfer from another section; `to` means a transfer to another section; `new` means a new section or new note; `gen amd` means the section or note is generally amended; `omitted` means the section is omitted; `repealed` means the section or note is repealed; `nt ed chg` and `ed chg` refer to the Editorial Classification Change Table; no entry or `nt` by itself means the section or note is amended. Tokens combine (`nt new`: a new note). |
 | `act_section` | `VARCHAR` | The law's own section that did it, as printed; a quoted item after it names a new section. |
 | `statutes_at_large_volume` | `VARCHAR` | The volume the page's column header names. |
 | `statutes_at_large_page` | `VARCHAR` | The page as printed: one page, or a span such as two pages joined by a comma or a dash. |

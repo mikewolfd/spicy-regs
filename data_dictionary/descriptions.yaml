@@ -498,25 +498,6 @@ tables:
       bills of the 108th-111th and 117th that stayed in doubt after every read
       on 2026-09-29 list a printing twice or without a type, so their
       `version_count` exceeds their `bill_versions` rows.
-
-      `stage` `other_chamber` is not chamber-aware, here and in the per-action
-      `bill_actions.stage`: the rule reads calendar, motion-to-proceed and
-      cloture text from either chamber, so a bill placed on its own chamber's
-      calendar reads `other_chamber`. On bill-family generation fd1bb730…
-      (2026-10-03), 659 of the 1,453 bills of the 119th that read
-      `other_chamber` are still in their own chamber: Senate bills by `placed
-      on senate legislative calendar` (353), `motion to proceed` (52),
-      `cloture` (1) and `calendar` (1), House bills by `placed on the union
-      calendar` (238) and `calendar` (14). `stage_matcher` names the text that
-      fired; `received in the senate`, `received in the house` and `held at the
-      desk` are the other chamber's own acts. The 108th-112th still carry the
-      rule from before spicy-docs 0.51.0, which also reads `referred` and `star
-      print` as `other_chamber`. A chamber-aware rule is on a spicy-docs
-      branch: once its wheel is adopted the scheduled bill-family run
-      re-stages the 119th, while the 113th-118th and the 108th-112th are
-      re-staged only by a bill-family dispatch scoped to them, so the note
-      then narrows to the Congresses not yet dispatched.
-      (interim until spicy-docs > 0.53.0+votes.8d7f3fe3b489)
     columns_from: spicy_docs
 
   bill_subjects:
@@ -2567,16 +2548,6 @@ tables:
       merging, so a row published before the column existed gains it without a
       re-fetch. An incomplete capture is not held: it is re-fetched first each run
       and takes its day from the file. A linkage-only row keeps NULL.
-
-      The vendored `tallies_json` sentence says it holds every count the
-      publisher stated; it holds each roll call's overall totals only, under
-      the publisher's names (the Clerk's `yea-total`, `nay-total`,
-      `present-total` and `not-voting-total`; the Senate's `yeas`, `nays`,
-      `present` and `absent`; a candidate's name in a Speaker election). The
-      Clerk's `totals-by-party` are not carried: count `member_votes` by
-      `party` for a party split, which matched the Clerk's party totals on
-      the House roll calls checked 2026-10-03.
-      (interim until spicy-docs > 0.53.0+votes.8d7f3fe3b489)
     columns_from: spicy_docs
 
   member_votes:
@@ -2999,17 +2970,6 @@ tables:
       approved in January 2026 on bills cleared in December 2025, are in volume
       139, and 119-70 and 119-74 on are in volume 140. All columns are stored
       as VARCHAR.
-
-      Two vendored column sentences are wrong. `latest_action_date` is not the
-      became-law action but the publisher's latest action, which can follow
-      enactment (119-public-68: a committee report filed 2026-02-11 after
-      approval on 2025-12-29). For the enactment date use `approved_date`, else
-      `congress_bills.signed_date` through `bill_id` (NULL on a private law,
-      rule `no_public_law`). `uslm_observed_at` is not only a capture time: it
-      is when the read this row's outcome states got its response, the 404 on
-      an `unavailable` row included, and NULL when no read was attempted or the
-      attempt got no response.
-      (interim until spicy-docs > 0.53.0+votes.8d7f3fe3b489)
     summary: >-
       One row per enacted law the Congress.gov law list route states, with the
       Statutes at Large citation from the law's own PLAW USLM file where
@@ -3041,16 +3001,6 @@ tables:
       all numbered sections, including appropriation blocks. Hierarchy and
       issues_json retain context and source irregularities. All columns are
       VARCHAR, including boolean and numeric observations.
-    data_quality: >-
-      Under `reader_version` `law-sections-uslm-v1`, every row of laws
-      generation c1ed486d… (2026-10-03), the USLM margin notes are lines of
-      `body`, unflagged: citation notes such as `42 USC 405 note.`, the
-      approval date, catchwords such as `Contracts.`; `issues_json` names only
-      page furniture, though the vendored `body` sentence says print furniture
-      is excluded. Remove them before quoting; the same holds for
-      `laws.law_body_remainder`. Reader `law-sections-uslm-v2` excludes them as
-      print furniture.
-      (interim until spicy-docs > 0.53.0+votes.8d7f3fe3b489)
     columns_from: spicy_docs
 
   law_code_sections:

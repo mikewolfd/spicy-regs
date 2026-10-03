@@ -22,12 +22,12 @@ One row per daily Congressional Record issue, keyed `(volume, issue)`, the publi
 | `congress` | `VARCHAR` | The numbered Congress the issue belongs to. |
 | `session` | `VARCHAR` | The session of Congress the issue belongs to. |
 | `issue_date` | `VARCHAR` | The issue date instant as the publisher states it. |
-| `chambers` | `VARCHAR` | Which chambers this issue records a sitting of, unit-separator joined and sorted (`house`, `senate`); NULL where no detail was read, empty where the detail names no chamber section. |
+| `chambers` | `VARCHAR` | Which chambers this issue records a sitting of, unit-separator joined and sorted (`house`, `senate`); NULL where sections_json is NULL, empty where the detail names no chamber section. |
 | `chambers_rule` | `VARCHAR` | How chambers was derived: `section_name`, from the detail's section names. |
-| `section_count` | `VARCHAR` | How many sections the detail lists. |
-| `section_names` | `VARCHAR` | Every section name the detail lists, unit-separator joined, in publisher order. |
-| `sections_json` | `VARCHAR` | Every section the detail lists, as a JSON array of the publisher's objects. |
-| `entire_issue_json` | `VARCHAR` | Every whole-issue rendition the detail lists, as a JSON array of the publisher's objects. |
+| `section_count` | `VARCHAR` | How many sections the detail lists; NULL where sections_json is NULL. |
+| `section_names` | `VARCHAR` | Every section name the detail lists, unit-separator joined, in publisher order; NULL where sections_json is NULL. |
+| `sections_json` | `VARCHAR` | Every section the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one. |
+| `entire_issue_json` | `VARCHAR` | Every whole-issue rendition the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one. |
 | `package_id` | `VARCHAR` | The GovInfo CREC package id read from the file stem of the whole-issue link for part 1. NULL where the detail lists no part 1, or part 1 links under two stems. |
 | `package_id_rule` | `VARCHAR` | How package_id was derived: `entire_issue_url_stem/2`. |
 | `article_count` | `VARCHAR` | How many articles the detail says the issue has. |

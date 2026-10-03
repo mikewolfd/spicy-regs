@@ -28,6 +28,6 @@ One row per entry of the bill's own action list (`actions` in its BILLSTATUS doc
 | `source_system_name` | `VARCHAR` | Name of the system that reported the action. |
 | `recorded_vote_count` | `VARCHAR` | How many recordedVote entries this action carries. |
 | `is_latest_action` | `VARCHAR` | True on the one actions[] entry the publisher's separate latestAction element names. |
-| `stage` | `VARCHAR` | Stage this one action's qualified code and text classify as, including failed/vetoed outcomes. |
+| `stage` | `VARCHAR` | The stage this one action's qualified code and text classify as, in the same vocabulary as congress_bills.stage (`introduced`, `committee`, `passed_chamber`, `other_chamber`, `conference`, `presented`, `law`, or the outcomes `failed` and `vetoed`); `introduced` with stage_rule NULL when no rule classifies the action, as for a calendar or floor step in the bill's own chamber. One action's classification, not the bill's state. |
 | `stage_rule` | `VARCHAR` | Which stage rule fired on this action, or NULL when none did. |
 | `stage_matcher` | `VARCHAR` | The matched text pattern, publisher code or vote-result reading used by the named rule. |
