@@ -1,0 +1,87 @@
+{
+  "reviewed_at": "2026-10-03T21:44:13.280680+00:00",
+  "schema_version": "hrc-118-source-facts/3",
+  "source_sha256": "sha256:804c1157e71da53a00821fdcaf15a1790448c682eb49d44613a577cfce9cb855",
+  "status": "bounded_original_source_readback_passed",
+  "public_evidence_policy": "metadata_only_review_receipt",
+  "source_evidence_policy": "hash_only",
+  "production_reader_qualified": false,
+  "full_edition": false,
+  "checks": [
+    {
+      "scope": "gemini-v3-senate-legend",
+      "physical_page": 6,
+      "result_definitions_checked": 5,
+      "scoring_notes_checked": 0,
+      "status": "passed",
+      "artifacts": [
+        {
+          "private_relative_path": "gemini-v3-senate-legend/input.png",
+          "sha256": "sha256:f8d7caf6276b4284641ee3418d336fdf3541c7384dfe170b3affbdf0daf8a0f7",
+          "byte_size": 20614
+        },
+        {
+          "private_relative_path": "gemini-v3-senate-legend/outcome.json",
+          "sha256": "sha256:e567a1a53867ea79ad82181f33f263d10d287ad2fa31330a7cd0324b1e320f0c",
+          "byte_size": 562
+        },
+        {
+          "private_relative_path": "gemini-v3-senate-legend/observation.pickle",
+          "sha256": "sha256:0c10902021e36d10e710ee08fc4fa00f6765f56a79537e3451ed483c122e53d7",
+          "byte_size": 57904
+        },
+        {
+          "private_relative_path": "gemini-v3-senate-legend/receipt.json",
+          "sha256": "sha256:d1f29f00174df8277b33332df1a5e458f643f769a4fb30b6afb32ced774ea9f6",
+          "byte_size": 461
+        }
+      ]
+    },
+    {
+      "scope": "gemini-v3-house-legend-method",
+      "physical_page": 26,
+      "result_definitions_checked": 4,
+      "scoring_notes_checked": 1,
+      "status": "passed",
+      "artifacts": [
+        {
+          "private_relative_path": "gemini-v3-house-legend-method/input.png",
+          "sha256": "sha256:cfd0b699e1a7f1e15d26857adffc30d3cdc99d45432f4f57e06b3a75b2664bef",
+          "byte_size": 49390
+        },
+        {
+          "private_relative_path": "gemini-v3-house-legend-method/outcome.json",
+          "sha256": "sha256:5dc4b8dfa510ee11f14417eebca59a399efb0ec8cdd9090813da129b10baf86a",
+          "byte_size": 691
+        },
+        {
+          "private_relative_path": "gemini-v3-house-legend-method/observation.pickle",
+          "sha256": "sha256:2e454f4f11f9ae74d880966f66413be71d4555cb7a03d9b8ebf501811d16f575",
+          "byte_size": 125216
+        },
+        {
+          "private_relative_path": "gemini-v3-house-legend-method/receipt.json",
+          "sha256": "sha256:1daca53432d9a3c35ee2ae84b6315e0f7d688971f171b6ea4fc7830e756d7ee2",
+          "byte_size": 477
+        }
+      ]
+    }
+  ],
+  "method": [
+    "Read original legend strips and complete delegate-method sentence directly against untouched model JSON.",
+    "Checked displayed glyphs, literal meanings, curved apostrophes, score suffix meaning and the complete delegate rule."
+  ],
+  "counts": {
+    "result_definitions": 9,
+    "delegate_scoring_notes": 1
+  },
+  "earlier_refusal_preserved": {
+    "scope": "Earlier v2 physical6 member observation legend collection",
+    "reason": "Normalized publisher curved apostrophes to straight apostrophes; only separately qualified member collections can remain selected."
+  },
+  "all_model_outputs_unchanged": true,
+  "limits": [
+    "These bounded strips do not prove full edition completeness or production-reader support.",
+    "The legend describes publisher position agreement, not official vote direction."
+  ]
+}

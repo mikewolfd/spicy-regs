@@ -1,0 +1,632 @@
+{
+  "reviewed_at": "2026-10-03T21:21:51Z",
+  "status": "independent_original_source_inventory",
+  "production_qualification": false,
+  "model_output_used_as_gold": false,
+  "count_basis": "independently counted visible source rows, supported by diagnostic native text; not publisher-declared aggregate totals",
+  "source": {
+    "manifest_source_id": "118-pdf",
+    "sha256": "sha256:804c1157e71da53a00821fdcaf15a1790448c682eb49d44613a577cfce9cb855",
+    "observed_at": "2026-10-03T20:33:48.042800+00:00",
+    "physical_pages": 27,
+    "public_evidence_policy": "hash_only"
+  },
+  "methods": {
+    "visual": "SpicyDocs DefaultReader full physical-page renders; House endnote crops at 300 dpi",
+    "diagnostic": "pypdf layout native text for names/counts; unsuitable for action glyph ground truth"
+  },
+  "house_pages": [
+    {
+      "physical_page": 10,
+      "printed_pages": [
+        18,
+        19
+      ],
+      "named_member_rows": 26,
+      "vacancy_rows": 0,
+      "state_district_spans": "AL1–7; AKAL; AZ1–9; AR1–4; CA1–5",
+      "left_items": "A–N",
+      "right_items": "O–OO",
+      "association": "same source row band across spread",
+      "item_headers_repeated": true
+    },
+    {
+      "physical_page": 11,
+      "printed_pages": [
+        20,
+        21
+      ],
+      "named_member_rows": 31,
+      "vacancy_rows": 0,
+      "state_district_spans": "CA6–36",
+      "left_items": "A–N",
+      "right_items": "O–OO",
+      "association": "same source row band across spread",
+      "item_headers_repeated": false
+    },
+    {
+      "physical_page": 12,
+      "printed_pages": [
+        22,
+        23
+      ],
+      "named_member_rows": 29,
+      "vacancy_rows": 0,
+      "state_district_spans": "CA37–52; CO1–8; CT1–5",
+      "left_items": "A–N",
+      "right_items": "O–OO",
+      "association": "same source row band across spread",
+      "item_headers_repeated": false
+    },
+    {
+      "physical_page": 13,
+      "printed_pages": [
+        24,
+        25
+      ],
+      "named_member_rows": 29,
+      "vacancy_rows": 0,
+      "state_district_spans": "DEAL; FL1–28",
+      "left_items": "A–N",
+      "right_items": "O–OO",
+      "association": "same source row band across spread",
+      "item_headers_repeated": true
+    },
+    {
+      "physical_page": 14,
+      "printed_pages": [
+        26,
+        27
+      ],
+      "named_member_rows": 27,
+      "vacancy_rows": 0,
+      "state_district_spans": "GA1–14; HI1–2; ID1–2; IL1–9",
+      "left_items": "A–N",
+      "right_items": "O–OO",
+      "association": "same source row band across spread",
+      "item_headers_repeated": false
+    },
+    {
+      "physical_page": 15,
+      "printed_pages": [
+        28,
+        29
+      ],
+      "named_member_rows": 27,
+      "vacancy_rows": 0,
+      "state_district_spans": "IL10–17; IN1–9; IA1–4; KS1–4; KY1–2",
+      "left_items": "A–N",
+      "right_items": "O–OO",
+      "association": "same source row band across spread",
+      "item_headers_repeated": false
+    },
+    {
+      "physical_page": 16,
+      "printed_pages": [
+        30,
+        31
+      ],
+      "named_member_rows": 27,
+      "vacancy_rows": 0,
+      "state_district_spans": "KY3–6; LA1–6; ME1–2; MD1–8; MA1–7",
+      "left_items": "A–N",
+      "right_items": "O–OO",
+      "association": "same source row band across spread",
+      "item_headers_repeated": true
+    },
+    {
+      "physical_page": 17,
+      "printed_pages": [
+        32,
+        33
+      ],
+      "named_member_rows": 27,
+      "vacancy_rows": 0,
+      "state_district_spans": "MA8–9; MI1–13; MN1–8; MS1–4",
+      "left_items": "A–N",
+      "right_items": "O–OO",
+      "association": "same source row band across spread",
+      "item_headers_repeated": false
+    },
+    {
+      "physical_page": 18,
+      "printed_pages": [
+        34,
+        35
+      ],
+      "named_member_rows": 25,
+      "vacancy_rows": 0,
+      "state_district_spans": "MO1–8; MT1–2; NE1–3; NV1–4; NH1–2; NJ1–6",
+      "left_items": "A–N",
+      "right_items": "O–OO",
+      "association": "same source row band across spread",
+      "item_headers_repeated": false
+    },
+    {
+      "physical_page": 19,
+      "printed_pages": [
+        36,
+        37
+      ],
+      "named_member_rows": 28,
+      "vacancy_rows": 1,
+      "state_district_spans": "NJ7–12, including9Vacant; NM1–3; NY1–20",
+      "left_items": "A–N",
+      "right_items": "O–OO",
+      "association": "same source row band across spread",
+      "item_headers_repeated": true
+    },
+    {
+      "physical_page": 20,
+      "printed_pages": [
+        38,
+        39
+      ],
+      "named_member_rows": 28,
+      "vacancy_rows": 0,
+      "state_district_spans": "NY21–26; NC1–14; NDAL; OH1–7",
+      "left_items": "A–N",
+      "right_items": "O–OO",
+      "association": "same source row band across spread",
+      "item_headers_repeated": false
+    },
+    {
+      "physical_page": 21,
+      "printed_pages": [
+        40,
+        41
+      ],
+      "named_member_rows": 28,
+      "vacancy_rows": 0,
+      "state_district_spans": "OH8–15; OK1–5; OR1–6; PA1–9",
+      "left_items": "A–N",
+      "right_items": "O–OO",
+      "association": "same source row band across spread",
+      "item_headers_repeated": false
+    },
+    {
+      "physical_page": 22,
+      "printed_pages": [
+        42,
+        43
+      ],
+      "named_member_rows": 27,
+      "vacancy_rows": 0,
+      "state_district_spans": "PA10–17; RI1–2; SC1–7; SDAL; TN1–9",
+      "left_items": "A–N",
+      "right_items": "O–OO",
+      "association": "same source row band across spread",
+      "item_headers_repeated": true
+    },
+    {
+      "physical_page": 23,
+      "printed_pages": [
+        44,
+        45
+      ],
+      "named_member_rows": 30,
+      "vacancy_rows": 0,
+      "state_district_spans": "TX1–30",
+      "left_items": "A–N",
+      "right_items": "O–OO",
+      "association": "same source row band across spread",
+      "item_headers_repeated": false
+    },
+    {
+      "physical_page": 24,
+      "printed_pages": [
+        46,
+        47
+      ],
+      "named_member_rows": 27,
+      "vacancy_rows": 0,
+      "state_district_spans": "TX31–38; UT1–4; VTAL; VA1–11; WA1–3",
+      "left_items": "A–N",
+      "right_items": "O–OO",
+      "association": "same source row band across spread",
+      "item_headers_repeated": false
+    },
+    {
+      "physical_page": 25,
+      "printed_pages": [
+        48,
+        49
+      ],
+      "named_member_rows": 18,
+      "vacancy_rows": 0,
+      "state_district_spans": "WA4–10; WV1–2; WI1–8; WYAL",
+      "left_items": "A–N",
+      "right_items": "O–OO",
+      "association": "same source row band across spread",
+      "item_headers_repeated": true
+    },
+    {
+      "physical_page": 26,
+      "printed_pages": [
+        50,
+        51
+      ],
+      "named_member_rows": 6,
+      "vacancy_rows": 0,
+      "state_district_spans": "American Samoa; DC; Guam; Northern Mariana Islands; Puerto Rico; Virgin Islands",
+      "left_items": "A–N",
+      "right_items": "O–OO",
+      "association": "same source row band across spread",
+      "item_headers_repeated": true
+    }
+  ],
+  "house_totals": {
+    "named_member_rows": 440,
+    "named_state_representatives": 434,
+    "delegates": 6,
+    "vacancy_rows": 1,
+    "score_periods_per_row": 3,
+    "items_per_row": 41,
+    "named_member_score_positions": 1320,
+    "named_member_item_positions": 18040,
+    "vacancy_score_positions": 3,
+    "vacancy_blank_item_positions": 41
+  },
+  "senate_pages": [
+    {
+      "physical_page": 4,
+      "left_named_rows": 20,
+      "right_named_rows": 20,
+      "left_scope": "AL–GA",
+      "right_scope": "HI–MD",
+      "relationship": "independent member panels"
+    },
+    {
+      "physical_page": 5,
+      "left_named_rows": 20,
+      "right_named_rows": 20,
+      "left_scope": "MA–NJ",
+      "right_scope": "NM–SC",
+      "relationship": "independent member panels"
+    },
+    {
+      "physical_page": 6,
+      "left_named_rows": 20,
+      "right_named_rows": 0,
+      "left_scope": "SD–WY",
+      "right_scope": "endnotes1–7",
+      "relationship": "member panel and notes"
+    }
+  ],
+  "senate_totals": {
+    "named_member_rows": 100,
+    "score_periods_per_row": 3,
+    "items_per_row": 15,
+    "score_positions": 300,
+    "item_positions": 1500
+  },
+  "item_description_pages": [
+    {
+      "physical_page": 3,
+      "chamber": "Senate",
+      "left": "A–G",
+      "right": "H–O"
+    },
+    {
+      "physical_page": 7,
+      "chamber": "House",
+      "left": "A–F",
+      "right": "G–L"
+    },
+    {
+      "physical_page": 8,
+      "chamber": "House",
+      "left": "M–R",
+      "right": "S–Y"
+    },
+    {
+      "physical_page": 9,
+      "chamber": "House",
+      "left": "Z, AA–GG",
+      "right": "HH, II, JJ, KK–OO"
+    }
+  ],
+  "score_period_labels": [
+    "118th",
+    "117th",
+    "116th"
+  ],
+  "required_special_cases": [
+    "NJ9 vacancy retained for continuation alignment",
+    "Radewagen wrapped name is one row",
+    "Senate prior House-score caret context",
+    "Schiff/Kim Senate vote credited toward House score",
+    "votes-only leader scores despite disclosed cosponsorships",
+    "delegate N/A floor-action scope",
+    "source judgment differs from official procedural vote",
+    "ineligible member remains in source grid"
+  ],
+  "remaining_limits": [
+    "No full result-cell transcription qualified by this inventory",
+    "No historical edition qualification",
+    "Vacancy requires explicit downstream disposition",
+    "Grid position counts do not imply nonblank result counts"
+  ],
+  "private_artifact_hashes": [
+    {
+      "private_relative_path": "independent-source-inventory/native-row-inventory.json",
+      "sha256": "sha256:6d9fc70025de620bed18830b283005b7bc45df2363433509ee48f040ca2efae3",
+      "byte_size": 14583
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-1.native.txt",
+      "sha256": "sha256:26c5b6f419a942007220f62d56e496a16d8baf44dc23f637e2198ef2c3d7d492",
+      "byte_size": 296
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-10.native.txt",
+      "sha256": "sha256:17949d440f01be608d88a3ed780e5bc382c16525011d3a14dd62e8b3e67865ab",
+      "byte_size": 32335
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-10.png",
+      "sha256": "sha256:90de0f9245eb3c3c2d54cf61673de762eb8a01e368947118350236411fbacc42",
+      "byte_size": 353947
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-11.native.txt",
+      "sha256": "sha256:76e8dfad58bf5987d40ef12db9c46e38751d90dcf25dae470a384295145a4bbe",
+      "byte_size": 10669
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-11.png",
+      "sha256": "sha256:c89cb799ce76a8f4f9cc2f401522d9d0cf0739044ec2ef13bdc06d96872b5a22",
+      "byte_size": 364709
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-12.native.txt",
+      "sha256": "sha256:c1ddcdcb0e7247c04cc7b14df917596c147a7a1774342207065f3ef8784b6e67",
+      "byte_size": 10252
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-12.png",
+      "sha256": "sha256:18e90bc6fa795d3d3db2d83c6b5eac7aad76a058e012fa64d7d3dc78e81cd852",
+      "byte_size": 349678
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-13.native.txt",
+      "sha256": "sha256:dafdc0f30982ea19183fc0d66a699461f0f4791455bb6656a228ed2edf6a4eb2",
+      "byte_size": 9751
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-13.png",
+      "sha256": "sha256:e95be8ea925e8262caa5038ba0f55a39cbe63f80ed1275606caf184e7e5986ff",
+      "byte_size": 369137
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-14.native.txt",
+      "sha256": "sha256:540df3ad39c84625655058f2c3914148adde2aa3b64ad423ce02832c6f69a652",
+      "byte_size": 9440
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-14.png",
+      "sha256": "sha256:b4ceb287c866abbd9457e482042552acefec7735778570fccf5cc6cfba5cc86f",
+      "byte_size": 339742
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-15.native.txt",
+      "sha256": "sha256:d8e87371a913963d6462586c4677af2a6f4eccdfaee2bf89c1691c427c6fd1e5",
+      "byte_size": 9193
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-15.png",
+      "sha256": "sha256:e6fe76741a2e4b31010932083c6e129eadc015adfb8a7d9363e86ecaa44897bb",
+      "byte_size": 343499
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-16.native.txt",
+      "sha256": "sha256:94f55d151c0051780f53e86ecd7bb620dd944e4c0470881a216dce8eb9163bdd",
+      "byte_size": 9472
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-16.png",
+      "sha256": "sha256:1e28155d06dc738a95cb761f1d6625d5405f99230fec2f180552642c14ddfcdc",
+      "byte_size": 340401
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-17.native.txt",
+      "sha256": "sha256:ac07942e0849f329e00da4e716ac03e8400b91cc7135c51e86b08d26a3d401ec",
+      "byte_size": 9328
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-17.png",
+      "sha256": "sha256:099bfeb8c8a309076ecc85d3e7dd13735029ccc2ef36a5d81e4d89d4a7fcc0d6",
+      "byte_size": 339985
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-18.native.txt",
+      "sha256": "sha256:2e58989827577c0106bdff2613dabebd28ce50e455bd2c20d9c834e177aeadf3",
+      "byte_size": 8859
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-18.png",
+      "sha256": "sha256:a5b294018420b9c5ab7d505b399e7b33ad257b36367d319bbeb23e434eaff270",
+      "byte_size": 340082
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-19.native.txt",
+      "sha256": "sha256:2a7c7c59a59ed300768a4d19eaf9b2247a90d85baef354502e4f89d50bb9f179",
+      "byte_size": 10552
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-19.png",
+      "sha256": "sha256:a7b763f3dc9e85c61fcee1bac3995d025359a83d2790816ed1788395999394e3",
+      "byte_size": 370215
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-2.native.txt",
+      "sha256": "sha256:130f7006d49a3730449282f80e9f02a19e320fa6e3d72cfabb8495280e51340e",
+      "byte_size": 6505
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-2.png",
+      "sha256": "sha256:f183b297934275ebf6dc0cc5118a526c615f8e3cd90947c3c39a9eeb9c7d835d",
+      "byte_size": 460724
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-20.native.txt",
+      "sha256": "sha256:6f337976f9631542a44c30514fe9da4b261b554e686d94752fa690f2a960fe1e",
+      "byte_size": 9980
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-20.png",
+      "sha256": "sha256:f894ba8290215cf637596d4c15d76c9489ee471837bf5893c3c6ad3928dd2949",
+      "byte_size": 370786
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-21.native.txt",
+      "sha256": "sha256:f4e363e48aa4f58aa02dc888cc8dda4db4d9d87e38519b3a2c647676044b2003",
+      "byte_size": 9552
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-21.png",
+      "sha256": "sha256:e438ba9e85dfd09e35a9bc01997fa53f282945145e3dd2b102beb469e1b2fb2b",
+      "byte_size": 355641
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-22.native.txt",
+      "sha256": "sha256:c572fa3c18016020a1c3abbdd77b637c73351761c07e0342267ea1757ee7f352",
+      "byte_size": 9299
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-22.png",
+      "sha256": "sha256:13c205d8ef5ff7e64b26a041161b9afe99535d81a483d0e4f323791b7593c2df",
+      "byte_size": 348034
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-23.native.txt",
+      "sha256": "sha256:0c8ea65b0b691b59eb39904cc153a31270a6c232eff0ae36f77b2e28e41fa94e",
+      "byte_size": 10201
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-23.png",
+      "sha256": "sha256:c2a52e82bcca167bededbd66eaedd4bf2517979b99b438b092ea699cb36f9a9c",
+      "byte_size": 372114
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-24.native.txt",
+      "sha256": "sha256:61bf2da6f54dbe5fac3e0deda4b7eb66635fefaa661b94d92a7b696f803e48f0",
+      "byte_size": 9617
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-24.png",
+      "sha256": "sha256:3fc6bcd640ecf4ebb6de3b7f6bca68950bee31ea0467bbf37c92508b6c6ef51b",
+      "byte_size": 353132
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-25.native.txt",
+      "sha256": "sha256:81b3b7a05b3fdb8eb6c493ccfeef77ccef182fe7e72988056245f31702f5191a",
+      "byte_size": 6858
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-25.png",
+      "sha256": "sha256:b7cefc702d5775e39030ba5f2ee401a0d5c873076f3133d2115e22b71faa1150",
+      "byte_size": 280893
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-26-notes-left.png",
+      "sha256": "sha256:279e918b325885f8d43abe76643b334f12eb667c7c26098ce7110eadcc5db8a9",
+      "byte_size": 281674
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-26-notes-middle.png",
+      "sha256": "sha256:4a556c16726d54b78cdefb04c1dc2c7af70542c41b9176bf8ec89852e068a376",
+      "byte_size": 238162
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-26-notes-right.png",
+      "sha256": "sha256:764dde13a4369449872bb4dddfba57e249199cca5a6dfc37af46b10aca86110d",
+      "byte_size": 189879
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-26.native.txt",
+      "sha256": "sha256:622000049b74ab2743bc386b7de981f2b35b6062a672b40f5e4e27c0d2245f7d",
+      "byte_size": 16822
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-26.png",
+      "sha256": "sha256:91127936cb216d43666ef9aa12985e6d19a172b6b8087e7ab6ead2441bd89831",
+      "byte_size": 490923
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-27.native.txt",
+      "sha256": "sha256:4433a73a6c89acc5dd8afea13a2023b964f8191fc0d7dc55731931cf7c0cd2b0",
+      "byte_size": 87
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-3.native.txt",
+      "sha256": "sha256:ab48150c1fcee4d6057516b9ca6cf8c09561dff2cb5a7ede469ef866d10abd36",
+      "byte_size": 25672
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-3.png",
+      "sha256": "sha256:ef489ca1b9c3709f6935923231ce02af8302985c511a5b28f9653bc3346200bd",
+      "byte_size": 597538
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-4.native.txt",
+      "sha256": "sha256:5b1d60de047f98860c460099552970eb11faafa862aa4dfecb9a6bfd5e3ac1c8",
+      "byte_size": 112106
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-4.png",
+      "sha256": "sha256:d694a43d92a2c4b55fe44d07e0ab79a5533156acc1e4ec29abcc727eaa164cb4",
+      "byte_size": 322094
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-5.native.txt",
+      "sha256": "sha256:ca5aece48318601d2b37b368c7188103d0bb76c92e4aaf6f0eddf8bf30186183",
+      "byte_size": 107715
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-5.png",
+      "sha256": "sha256:ca02afd68a25d4dc687540324fa58773a66c3d2eb82456a6785c5d42331dff23",
+      "byte_size": 305481
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-6.native.txt",
+      "sha256": "sha256:d970d5e2e1d3f9b6c110710c82280b7240beedac9cdc996dfa9dd54adb07f9be",
+      "byte_size": 52705
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-6.png",
+      "sha256": "sha256:e5aac3012a2872cccf7c529f4d5a4b93fe79074c4a694c4eeba50eed7f75c5e3",
+      "byte_size": 288751
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-7.native.txt",
+      "sha256": "sha256:0c04841836a103be0f172e5c83c07d697e02a8b95f08afcc99645cdf1bf23a20",
+      "byte_size": 27181
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-7.png",
+      "sha256": "sha256:6fc5a12f18ef59f9c81bc834be9c6e2994cb7d2438ce8ba1220e23d7c2af1c4b",
+      "byte_size": 547034
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-8.native.txt",
+      "sha256": "sha256:c39c3cff2c297e8544fc96a5e49f0df86825a17bfb0442d8e5d4223226f44c5f",
+      "byte_size": 25968
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-8.png",
+      "sha256": "sha256:9dca51cb97a96d427eeb48065a4224d794e24ec6c6e83efe47e558b44b831e9c",
+      "byte_size": 538040
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-9.native.txt",
+      "sha256": "sha256:d6468488617ff3db3ca5a0ca075df42738c2a3dbcb33c188a999f7720bddb09e",
+      "byte_size": 15521
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-9.png",
+      "sha256": "sha256:49cdd4b12870a98cac26bdd2adbe11ba4b503672204a326b071e9b56e4261783",
+      "byte_size": 552818
+    }
+  ]
+}

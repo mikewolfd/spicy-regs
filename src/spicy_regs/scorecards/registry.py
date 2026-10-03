@@ -9,7 +9,7 @@ import yaml
 from spicy_regs.source_evidence import POLICIES
 
 REGISTRY = Path(__file__).with_name("sources.yaml")
-ADAPTERS = frozenset({"lcv", "afl_cio", "heritage_action", "humane_world_action", "nea", "c4ip", "afp", "ijm"})
+ADAPTERS = frozenset({"lcv", "afl_cio", "heritage_action", "humane_world_action", "nea", "c4ip", "afp", "ijm", "hrc"})
 CADENCES = {"daily": timedelta(days=1), "weekly": timedelta(days=7), "monthly": timedelta(days=30)}
 
 

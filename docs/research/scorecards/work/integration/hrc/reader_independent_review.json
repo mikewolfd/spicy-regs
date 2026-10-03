@@ -1,0 +1,74 @@
+{
+  "reviewed_at": "2026-10-03T22:49:45.929658+00:00",
+  "verdict": "approve_pinned_reader_scope",
+  "production_publication_qualified": false,
+  "source_sha256": "sha256:804c1157e71da53a00821fdcaf15a1790448c682eb49d44613a577cfce9cb855",
+  "qualified_asset_sha256": "sha256:d8ac93e130bfb17bbb8657b6d25b6419bd79ca964fe03608a889b21c9385bebb",
+  "source_files": [
+    {
+      "workspace_relative_path": "spicy-docs/src/spicy_docs/sources/scorecards/hrc.py",
+      "sha256": "sha256:657c880c673cdd3caeac1b205765730ef25af128ebc9914c5a7a4bac49066339"
+    },
+    {
+      "workspace_relative_path": "spicy-docs/src/spicy_docs/sources/scorecards/hrc_outcomes.py",
+      "sha256": "sha256:81ccad71b0ad36f6ccf541550c13ef4ab4b361de25e5cc46e86ddb3b8ac1789e"
+    },
+    {
+      "workspace_relative_path": "spicy-docs/tests/test_scorecards_hrc.py",
+      "sha256": "sha256:91fe9b6ae2185cc60e66a72c3631b11d09fee8faf672b638b4d21493105aa411"
+    },
+    {
+      "workspace_relative_path": "spicy-docs/tests/test_scorecards_hrc_outcomes.py",
+      "sha256": "sha256:5a4d67409fa9dcc30c5cedf1259c739c7ded712e0d530dc3730f1fd852e260d1"
+    },
+    {
+      "workspace_relative_path": "spicy-docs/src/spicy_docs/sources/scorecards/common.py",
+      "sha256": "sha256:075e589b78932533298aa5b5732bbdf9ebbad2cd0f2ed1bc24abc518b55e5683"
+    },
+    {
+      "workspace_relative_path": "spicy-regs/src/spicy_regs/transforms/build_scorecards.py",
+      "sha256": "sha256:a64dccd3405e5bb729c64fefc637cae7bd9b56fd8fceb69626d6cacc2bd480a4"
+    }
+  ],
+  "independent_runtime_mapping_counts": {
+    "members": 540,
+    "ratings": 1620,
+    "member_item_results": 19540,
+    "items": 56,
+    "metrics": 6,
+    "vacancy_member_rows": 0
+  },
+  "literal_comparison": "Every member identity field, published value and action glyph; every item title, target, date, session, roll and ordered citation array compared directly with qualified source record. Historical score periods do not become member terms.",
+  "verification": [
+    {
+      "command": "uv run --frozen --no-sync pytest -q tests/test_scorecards_hrc.py tests/test_scorecards_hrc_outcomes.py",
+      "working_directory": "spicy-docs",
+      "result": "45 passed"
+    },
+    {
+      "command": "uv run --frozen --no-sync ruff check src/spicy_docs/sources/scorecards/hrc.py src/spicy_docs/sources/scorecards/hrc_outcomes.py tests/test_scorecards_hrc.py tests/test_scorecards_hrc_outcomes.py",
+      "working_directory": "spicy-docs",
+      "result": "All checks passed"
+    }
+  ],
+  "private_artifacts": [
+    {
+      "private_relative_path": "independent-source-inventory/verify_qualified_asset.py",
+      "sha256": "sha256:a9a50fdda99432c665c6f4e29cda2fdfaf29b8312ffee51a8b7b7a9863841c88"
+    },
+    {
+      "private_relative_path": "independent-source-inventory/qualified-asset-selector-review.json",
+      "sha256": "sha256:fb4536abc484fd5fade0a07c89536ea277ccd1faf8c858208c7ef097bb5c817e"
+    },
+    {
+      "private_relative_path": "independent-source-inventory/hrc-runtime-review-tables.json",
+      "sha256": "sha256:cec6144da82cb04dead966bc1834080b617328e0a8fa7b8fc0c84979f17dc313"
+    }
+  ],
+  "report_sha256": "sha256:8ff3b355b9e2c23e523f39f02e69f3842881e69bee02a74abd0e331e9b67af88",
+  "limits": [
+    "Installed-package consumer wiring and public release are separate gates.",
+    "Non-member vacancy facts remain retained evidence outside typed V1 tables.",
+    "Introductory prose is excluded from exact typed-source qualification."
+  ]
+}

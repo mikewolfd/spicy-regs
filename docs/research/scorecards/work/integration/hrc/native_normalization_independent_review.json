@@ -1,0 +1,88 @@
+{
+  "reviewed_at": "2026-10-03T23:00:02.732728+00:00",
+  "verdict": "approve_exact_native_normalization",
+  "parser_version": "hrc-118-qualified-gemini/2",
+  "raw_asset_unchanged": true,
+  "all_other_native_fact_fields_equal": true,
+  "normalized_rating_count": 1,
+  "changes": [
+    {
+      "table": "scorecard_member_ratings",
+      "field": "value_text",
+      "publisher_member_key": "House:NORTH%20CAROLINA:4:Foushee%2C%20Valerie",
+      "metric_id": "House:116th%20SCORE",
+      "old": "NA",
+      "new": "N/A",
+      "source_path": "pdf:page=20;observation=OBSERVATION_UUID;/members/385/record/ratings/2"
+    }
+  ],
+  "table_counts": {
+    "scorecard_items": 56,
+    "scorecard_member_item_results": 19540,
+    "scorecard_member_ratings": 1620,
+    "scorecard_members": 540,
+    "scorecard_methodologies": 10,
+    "scorecard_metric_components": 0,
+    "scorecard_metric_items": 0,
+    "scorecard_metrics": 6,
+    "scorecard_publishers": 1,
+    "scorecard_snapshots": 1,
+    "scorecards": 1
+  },
+  "inputs": [
+    {
+      "private_relative_path": "reader-qualification/qualified.tables.json",
+      "sha256": "sha256:1adc6d7cb6f8d068efa60d8d311fd4968f61e756c2ab0728d644c5b57e4f952e"
+    },
+    {
+      "private_relative_path": "reader-qualification-v2/qualified.tables.json",
+      "sha256": "sha256:1c01a89e0d323f8b3bb581f039e1a4da88f671723c193a8f8c677c7aed304545"
+    },
+    {
+      "private_relative_path": "qualified-118-observations.json",
+      "sha256": "sha256:d8ac93e130bfb17bbb8657b6d25b6419bd79ca964fe03608a889b21c9385bebb"
+    },
+    {
+      "private_relative_path": "reader-qualification-v2/retained-qualified-observations.json",
+      "sha256": "sha256:d8ac93e130bfb17bbb8657b6d25b6419bd79ca964fe03608a889b21c9385bebb"
+    }
+  ],
+  "source_path_points_to_original_raw_rating": true,
+  "publication_admitted": false,
+  "source_files": [
+    {
+      "workspace_relative_path": "spicy-docs/src/spicy_docs/sources/scorecards/hrc.py",
+      "sha256": "sha256:6f7f1a2e2fac5b0e323f50fc19a85bff97b2d3d2814caa52cfb2c9a635847120"
+    },
+    {
+      "workspace_relative_path": "spicy-docs/tests/test_scorecards_hrc.py",
+      "sha256": "sha256:c414874a024da72c225c834ee1145eab52b7f842f476a5f942eddd3275d8cba6"
+    },
+    {
+      "workspace_relative_path": "spicy-docs/src/spicy_docs/sources/scorecards/hrc_outcomes.py",
+      "sha256": "sha256:81ccad71b0ad36f6ccf541550c13ef4ab4b361de25e5cc46e86ddb3b8ac1789e"
+    }
+  ],
+  "private_verifier": {
+    "private_relative_path": "independent-source-inventory/verify_native_normalization.py",
+    "sha256": "sha256:f17568e37d439672326f7cb229321f83332582da464e23af89a58baa1c9dda1f"
+  },
+  "verification": [
+    {
+      "working_directory": "spicy-regs",
+      "command": "uv run --frozen --no-sync python <private HRC corpus>/independent-source-inventory/verify_native_normalization.py",
+      "result": "passed: one native normalization and no other fact changes"
+    },
+    {
+      "working_directory": "spicy-docs",
+      "command": "uv run --frozen --no-sync pytest -q tests/test_scorecards_hrc.py tests/test_scorecards_hrc_outcomes.py",
+      "result": "45 passed"
+    },
+    {
+      "working_directory": "spicy-docs",
+      "command": "uv run --frozen --no-sync ruff check src/spicy_docs/sources/scorecards/hrc.py tests/test_scorecards_hrc.py",
+      "result": "All checks passed"
+    }
+  ],
+  "scope": "Supplement to parser1 reader_independent_review.json; user-requested native normalization only, source selection and observations unchanged. Placeholder observation UUID in comparison locator only; actual runtime retains its opaque observation UUID."
+}

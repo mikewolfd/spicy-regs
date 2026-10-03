@@ -1,0 +1,522 @@
+{
+  "reviewed_at": "2026-10-03T21:46:28.484482+00:00",
+  "source_sha256": "sha256:804c1157e71da53a00821fdcaf15a1790448c682eb49d44613a577cfce9cb855",
+  "schema_version": "hrc-118-source-facts/3",
+  "status": "bounded_original_source_readback_passed",
+  "checks": [
+    {
+      "scope": "gemini-v3-house-items-7-left",
+      "physical_page": 7,
+      "status": "bounded_original_source_readback_passed",
+      "scope_issues": [],
+      "artifacts": [
+        {
+          "private_relative_path": "gemini-v3-house-items-7-left/input.png",
+          "sha256": "sha256:a5726ec15528c09ab782ca3ae6ca6730ed6468df23a7b5a7b8195a7a6513418c",
+          "byte_size": 630516
+        },
+        {
+          "private_relative_path": "gemini-v3-house-items-7-left/outcome.json",
+          "sha256": "sha256:e76f5922384d63418ce3fdd800673850a322099a95633f7775bb8b298afa18ea",
+          "byte_size": 6048
+        },
+        {
+          "private_relative_path": "gemini-v3-house-items-7-left/observation.pickle",
+          "sha256": "sha256:0a30126d8a7fe6c13c9c2a4a97c85752dcb183813a58c852921dcf56f0f6571a",
+          "byte_size": 1494381
+        },
+        {
+          "private_relative_path": "gemini-v3-house-items-7-left/receipt.json",
+          "sha256": "sha256:f470411cfbe39d69e9bc0f0bb23ca009aee7f624aba5e7a32698126d1ae6db7e",
+          "byte_size": 444
+        }
+      ],
+      "selected_record_locators": [
+        {
+          "item_key": "A",
+          "json_pointer": "/scored_items/0",
+          "record_sha256": "sha256:0ac7eb55b524c982461c22f4085cde5730873cbe09de89436dcf2d7675cbadd6"
+        },
+        {
+          "item_key": "B",
+          "json_pointer": "/scored_items/1",
+          "record_sha256": "sha256:4d079da110e6b8c8de368d6637b5b026b7c8d8e7ef64621a2feefed27a0a6bff"
+        },
+        {
+          "item_key": "C",
+          "json_pointer": "/scored_items/2",
+          "record_sha256": "sha256:e1faeb99e77ae2c300535f1aa52295a4712e0617baec0e3635c3f77208c4f8f9"
+        },
+        {
+          "item_key": "D",
+          "json_pointer": "/scored_items/3",
+          "record_sha256": "sha256:2db723f6e221d4102b5c6595a560362592ad25a99b9ff6fde4d55ad7623fd7a1"
+        },
+        {
+          "item_key": "E",
+          "json_pointer": "/scored_items/4",
+          "record_sha256": "sha256:00816bac970cf2c7079fc31c5bbbbd49212ad43e695b6ad723f3a872ce380df6"
+        },
+        {
+          "item_key": "F",
+          "json_pointer": "/scored_items/5",
+          "record_sha256": "sha256:85319dbcdd9722e0094ef1f147563c5f236511ba797c5de841e3d6fcbe09aa95"
+        }
+      ]
+    },
+    {
+      "scope": "gemini-v3-house-items-7-right",
+      "physical_page": 7,
+      "status": "bounded_original_source_readback_passed",
+      "scope_issues": [],
+      "artifacts": [
+        {
+          "private_relative_path": "gemini-v3-house-items-7-right/input.png",
+          "sha256": "sha256:d157e622df4ccca05b08ee2f32337c8f9825888b7338729265f3eab2653a3ea2",
+          "byte_size": 744708
+        },
+        {
+          "private_relative_path": "gemini-v3-house-items-7-right/outcome.json",
+          "sha256": "sha256:6dca20d2928ea04b100c5c9b865718f27c4a1f67dde649062e5e0860ccb51026",
+          "byte_size": 6999
+        },
+        {
+          "private_relative_path": "gemini-v3-house-items-7-right/observation.pickle",
+          "sha256": "sha256:ae1800a538f8794ffcc8b1063665bf8c7dc7a0fd06893d6b28eb36f66f18fa8e",
+          "byte_size": 1763641
+        },
+        {
+          "private_relative_path": "gemini-v3-house-items-7-right/receipt.json",
+          "sha256": "sha256:f7d4c8ee271412b4600370aabf20dab799537849cbe2e52dcfaa3114696b064a",
+          "byte_size": 444
+        }
+      ],
+      "selected_record_locators": [
+        {
+          "item_key": "G",
+          "json_pointer": "/scored_items/0",
+          "record_sha256": "sha256:1a64be18cd8f3f9b699219663cb2d70e7b62b7a5c6ce19cbd21a15ed60ccfdf3"
+        },
+        {
+          "item_key": "H",
+          "json_pointer": "/scored_items/1",
+          "record_sha256": "sha256:6f396c5f31888640a84f062371573e782f4cfe21070e4463a3166f76f6984ac8"
+        },
+        {
+          "item_key": "I",
+          "json_pointer": "/scored_items/2",
+          "record_sha256": "sha256:044fde2e58ef7e0ea3715780efe98ba938db52df26ed44f235a381ccdd3507e7"
+        },
+        {
+          "item_key": "J",
+          "json_pointer": "/scored_items/3",
+          "record_sha256": "sha256:08f202cfbf90042e418dbe949b584344ed520aa1c6fb03a48ef868863788db4b"
+        },
+        {
+          "item_key": "K",
+          "json_pointer": "/scored_items/4",
+          "record_sha256": "sha256:d58863609fd1e7be7a0b38e3e565d4b9160386e41632b19518cfad986b90eb42"
+        },
+        {
+          "item_key": "L",
+          "json_pointer": "/scored_items/5",
+          "record_sha256": "sha256:5bd4a56e715a6460c4d59e4c8aee5bc19efbb00c3dd0dffc3cef1977c2b3bc3e"
+        }
+      ]
+    },
+    {
+      "scope": "gemini-v3-house-items-8-left",
+      "physical_page": 8,
+      "status": "bounded_original_source_readback_passed",
+      "scope_issues": [],
+      "artifacts": [
+        {
+          "private_relative_path": "gemini-v3-house-items-8-left/input.png",
+          "sha256": "sha256:e000d88eaf681b32c477aad887288a8c62ab7f2b060e506729100250f5e15470",
+          "byte_size": 652908
+        },
+        {
+          "private_relative_path": "gemini-v3-house-items-8-left/outcome.json",
+          "sha256": "sha256:91ac71d6399ec47d7b27bef775cef1e3aff3607d8b9d32d0ae4b2e88071c22ba",
+          "byte_size": 6178
+        },
+        {
+          "private_relative_path": "gemini-v3-house-items-8-left/observation.pickle",
+          "sha256": "sha256:9ba429a5699e90b6231eb794546bd0433e343b07fc4dab235d63c7a163728dec",
+          "byte_size": 1547645
+        },
+        {
+          "private_relative_path": "gemini-v3-house-items-8-left/receipt.json",
+          "sha256": "sha256:9da2e2f2c29bc8b62ce3089a4417a93db86081733d78d72663ff0bfcbda80f8c",
+          "byte_size": 444
+        }
+      ],
+      "selected_record_locators": [
+        {
+          "item_key": "M",
+          "json_pointer": "/scored_items/0",
+          "record_sha256": "sha256:cc757dd2cdca112f82263c937bf69b5bf1870023dc93221f6d9909e4f60307e5"
+        },
+        {
+          "item_key": "N",
+          "json_pointer": "/scored_items/1",
+          "record_sha256": "sha256:49cc7345540f720a1f6c88da8e56cdd306022e4d07697c6ff146e0864d21e8a4"
+        },
+        {
+          "item_key": "O",
+          "json_pointer": "/scored_items/2",
+          "record_sha256": "sha256:56c70726ae37ea2a1c06cf5ed5ceb227fcc242298b4ce81c1817d842b9fd5477"
+        },
+        {
+          "item_key": "P",
+          "json_pointer": "/scored_items/3",
+          "record_sha256": "sha256:611edae2d44aae5405911ee4382130e968b594df4d4c61ab121001986f04933d"
+        },
+        {
+          "item_key": "Q",
+          "json_pointer": "/scored_items/4",
+          "record_sha256": "sha256:1d20244a28d5acc5593028e4c9e4415621e8a099984726506f24e95ff0177cfd"
+        },
+        {
+          "item_key": "R",
+          "json_pointer": "/scored_items/5",
+          "record_sha256": "sha256:354f1393d4448a99856a1dc4cccbe3063502cf6c2364a71860e3f30e38fbc0e2"
+        }
+      ]
+    },
+    {
+      "scope": "gemini-v3-house-items-8-right",
+      "physical_page": 8,
+      "status": "bounded_original_source_readback_passed",
+      "scope_issues": [],
+      "artifacts": [
+        {
+          "private_relative_path": "gemini-v3-house-items-8-right/input.png",
+          "sha256": "sha256:2e29146d1c6b0e65413e041f39870b6465ec73250bb13644fab7cdb82b21cb3c",
+          "byte_size": 766860
+        },
+        {
+          "private_relative_path": "gemini-v3-house-items-8-right/outcome.json",
+          "sha256": "sha256:48539a3489dd2a9d273ccb9c2ad82dbb741fad2f03afc01a4228fe76426aec3d",
+          "byte_size": 7416
+        },
+        {
+          "private_relative_path": "gemini-v3-house-items-8-right/observation.pickle",
+          "sha256": "sha256:67f6f9b23e436ed438f0553789ccc98f9ff83de97058888f1a853ebc9254eaaf",
+          "byte_size": 1816137
+        },
+        {
+          "private_relative_path": "gemini-v3-house-items-8-right/receipt.json",
+          "sha256": "sha256:5202233a626f841f337d9cf177b476e2e3b52c0a28d3cf0c210397a5842e1385",
+          "byte_size": 444
+        }
+      ],
+      "selected_record_locators": [
+        {
+          "item_key": "S",
+          "json_pointer": "/scored_items/0",
+          "record_sha256": "sha256:9f6287773fd51bdb5b6a42cd84ab62bfd6ea2a40fb0ddd9fc02fb79db25f9f6b"
+        },
+        {
+          "item_key": "T",
+          "json_pointer": "/scored_items/1",
+          "record_sha256": "sha256:8df8435f4e222d3e9da47b44a4c6ba09750c70b8930851e5f44cfabd245ffc1b"
+        },
+        {
+          "item_key": "U",
+          "json_pointer": "/scored_items/2",
+          "record_sha256": "sha256:56e329bd614cecccfd2d849608904071258d150559b5299a9fe22739c9d3e328"
+        },
+        {
+          "item_key": "V",
+          "json_pointer": "/scored_items/3",
+          "record_sha256": "sha256:4cc70881399c6c658166762fbc3d713ae2fe38281dbb7c9aef0352c01d0c347e"
+        },
+        {
+          "item_key": "W",
+          "json_pointer": "/scored_items/4",
+          "record_sha256": "sha256:cf374f2606bfd912a68b2664ee9c48c45bca3e7591fee44e88a70cd71c1bc336"
+        },
+        {
+          "item_key": "X",
+          "json_pointer": "/scored_items/5",
+          "record_sha256": "sha256:10ef5fca29920589958b626fbefd3ac82452d1c258422607d209993694b5e024"
+        },
+        {
+          "item_key": "Y",
+          "json_pointer": "/scored_items/6",
+          "record_sha256": "sha256:f5e85c52b7a05476f9f765dd434f27cad3e04046241195c66b7dd40064d429ad"
+        }
+      ]
+    },
+    {
+      "scope": "gemini-v3-house-items-9-left",
+      "physical_page": 9,
+      "status": "bounded_original_source_readback_passed",
+      "scope_issues": [],
+      "artifacts": [
+        {
+          "private_relative_path": "gemini-v3-house-items-9-left/input.png",
+          "sha256": "sha256:3ce0fbed95fe92327f280d49419f44474880c33ed13e03da0f9168979975b274",
+          "byte_size": 738405
+        },
+        {
+          "private_relative_path": "gemini-v3-house-items-9-left/outcome.json",
+          "sha256": "sha256:1957bf8df03de31303a12fcfc410fa8674680c571b8d69e32179d23e7bb04a18",
+          "byte_size": 7470
+        },
+        {
+          "private_relative_path": "gemini-v3-house-items-9-left/observation.pickle",
+          "sha256": "sha256:fbcf05fcabb19dcb509bad5c134199dd50bb4c1f04dab832d4fe432a40398c01",
+          "byte_size": 1749364
+        },
+        {
+          "private_relative_path": "gemini-v3-house-items-9-left/receipt.json",
+          "sha256": "sha256:8e2062b0ff8d91d841b2af9c2c97da7c4639a37348d5222ba485bbab02a8e22c",
+          "byte_size": 444
+        }
+      ],
+      "selected_record_locators": [
+        {
+          "item_key": "Z",
+          "json_pointer": "/scored_items/0",
+          "record_sha256": "sha256:329774fe830ae28b8607d99cbc7e5b94b7ae051cab586cb890a45a7aaced81a5"
+        },
+        {
+          "item_key": "AA",
+          "json_pointer": "/scored_items/1",
+          "record_sha256": "sha256:ec20f75516d706765ef1e6c4e7559d74ed2a294295ab35a85e7a68a4b9790e85"
+        },
+        {
+          "item_key": "BB",
+          "json_pointer": "/scored_items/2",
+          "record_sha256": "sha256:6faba36292693669a3b070d7de7c638806e3332ec3932337100a04dc3d07597f"
+        },
+        {
+          "item_key": "CC",
+          "json_pointer": "/scored_items/3",
+          "record_sha256": "sha256:4a2b0fe9b468402fbafa1aebb8e29e7679da98f973ea9cf03585f61034f71b2d"
+        },
+        {
+          "item_key": "EE",
+          "json_pointer": "/scored_items/5",
+          "record_sha256": "sha256:d82917c79c8f00caf8383525d1ea153d9696984ef51aaab0586f2bad1e336569"
+        },
+        {
+          "item_key": "FF",
+          "json_pointer": "/scored_items/6",
+          "record_sha256": "sha256:7a4b2cd87c134e19a8b408f2996a46c03a23882bfb4e2ecd00a762e573eaedd3"
+        },
+        {
+          "item_key": "GG",
+          "json_pointer": "/scored_items/7",
+          "record_sha256": "sha256:59c7df63632cd05f5fdd247d7a8c7f7fa59c8b4d9d081f5256d90bbd7e822d8e"
+        }
+      ]
+    },
+    {
+      "scope": "gemini-v3-house-item-DD",
+      "physical_page": 9,
+      "status": "bounded_original_source_readback_passed",
+      "scope_issues": [],
+      "artifacts": [
+        {
+          "private_relative_path": "gemini-v3-house-item-DD/input.png",
+          "sha256": "sha256:869df30d8127a72fa7c86f0792cf8263f10fb01d64c98ae3dd8f07483c85d905",
+          "byte_size": 103412
+        },
+        {
+          "private_relative_path": "gemini-v3-house-item-DD/outcome.json",
+          "sha256": "sha256:3665ce4461411de9f82d8ef02bd4178e9191ea3e0c89cd9b3890a11f2e952f8e",
+          "byte_size": 1119
+        },
+        {
+          "private_relative_path": "gemini-v3-house-item-DD/observation.pickle",
+          "sha256": "sha256:54b0fdb1e55250e18b7624147d28b6ea5b321fd58a8ca7c8eac527f24ab379f5",
+          "byte_size": 252882
+        },
+        {
+          "private_relative_path": "gemini-v3-house-item-DD/receipt.json",
+          "sha256": "sha256:440a7951e02c2c7182b9643a2cca82bb7e1a383ef918496a71c91a05a67338d8",
+          "byte_size": 476
+        }
+      ],
+      "selected_record_locators": [
+        {
+          "item_key": "DD",
+          "json_pointer": "/scored_items/0",
+          "record_sha256": "sha256:fbab86a74a424f03d24b9ef36f8adfc2b66aec10d7d7342fdee96854198cd904"
+        }
+      ]
+    },
+    {
+      "scope": "gemini-v3-house-items-9-right",
+      "physical_page": 9,
+      "status": "bounded_original_source_readback_passed",
+      "scope_issues": [],
+      "artifacts": [
+        {
+          "private_relative_path": "gemini-v3-house-items-9-right/input.png",
+          "sha256": "sha256:8d69451179dd41fa5d682e9f0cfc999e4eb2d77226eab06c5fad22597cdffc0b",
+          "byte_size": 691283
+        },
+        {
+          "private_relative_path": "gemini-v3-house-items-9-right/outcome.json",
+          "sha256": "sha256:7513cfa601ea309fd7a6c1dcb46975051b83aec86edb639a87ccef3d352b1270",
+          "byte_size": 8919
+        },
+        {
+          "private_relative_path": "gemini-v3-house-items-9-right/observation.pickle",
+          "sha256": "sha256:cf8e3b211565ae556941a13d293170afc262a974f14e51def65e56e090c767f7",
+          "byte_size": 1647480
+        },
+        {
+          "private_relative_path": "gemini-v3-house-items-9-right/receipt.json",
+          "sha256": "sha256:568d0138b06b2eba6b0232338b0cafe398e52a574aaca6a2757ff019c793f1cd",
+          "byte_size": 444
+        }
+      ],
+      "selected_record_locators": [
+        {
+          "item_key": "HH",
+          "json_pointer": "/scored_items/0",
+          "record_sha256": "sha256:2b0c4490b0e9134125a68f070ab4aa0c2d81b5649ae432725f32f797816eae0e"
+        },
+        {
+          "item_key": "II",
+          "json_pointer": "/scored_items/1",
+          "record_sha256": "sha256:12a66cd81303715645d9ecc164022668f508a222799922725c0acea2fc931a03"
+        },
+        {
+          "item_key": "JJ",
+          "json_pointer": "/scored_items/2",
+          "record_sha256": "sha256:4def269fc385b0bd5de9a5ff78404ac7073285d26b95220c3be1dea340019ef2"
+        },
+        {
+          "item_key": "KK",
+          "json_pointer": "/scored_items/3",
+          "record_sha256": "sha256:3e08350e22c46169b72cfa77354965e28fac8713276a3706671fa39b3d4604cc"
+        },
+        {
+          "item_key": "LL",
+          "json_pointer": "/scored_items/4",
+          "record_sha256": "sha256:c6a76f8a82977a11d803956f989b8d4b528eca246c26276130ec015a599547c9"
+        },
+        {
+          "item_key": "MM",
+          "json_pointer": "/scored_items/5",
+          "record_sha256": "sha256:577426901f99ca58791e20dc28a49e8eb8db0def5e13c59bda6e29589f5b04d4"
+        },
+        {
+          "item_key": "NN",
+          "json_pointer": "/scored_items/6",
+          "record_sha256": "sha256:6e43fbf6e7138adbc4abea58a849a96ae9aad7192534d539516e9799c3ce1269"
+        }
+      ]
+    },
+    {
+      "scope": "gemini-v3-house-items-NN-OO",
+      "physical_page": 9,
+      "status": "bounded_original_source_readback_passed",
+      "scope_issues": [],
+      "artifacts": [
+        {
+          "private_relative_path": "gemini-v3-house-items-NN-OO/input.png",
+          "sha256": "sha256:220bee8d2b97705828352f7e30f7063b425fbcf92160dd57928ed0b507f4f7a0",
+          "byte_size": 164293
+        },
+        {
+          "private_relative_path": "gemini-v3-house-items-NN-OO/outcome.json",
+          "sha256": "sha256:9587ae2a0bd3e5293bcb1da4b7923e5a0bc080dcb101f3e0ee8504b12f1224d0",
+          "byte_size": 2398
+        },
+        {
+          "private_relative_path": "gemini-v3-house-items-NN-OO/observation.pickle",
+          "sha256": "sha256:9a43cf2154deff92b860f5f16757312920b12f2febff887c668b839bb2e64fba",
+          "byte_size": 397760
+        },
+        {
+          "private_relative_path": "gemini-v3-house-items-NN-OO/receipt.json",
+          "sha256": "sha256:647d99c9d9ce522ea6eb073ea9cf1c9876a723393e446a45b31caf22e30c8d1f",
+          "byte_size": 490
+        }
+      ],
+      "selected_record_locators": [
+        {
+          "item_key": "OO",
+          "json_pointer": "/scored_items/1",
+          "record_sha256": "sha256:de9272cd6aa812392dd6ec77912a2efbbc2768e8e2e2ecc0945dbad2a86fc9e4"
+        }
+      ]
+    }
+  ],
+  "all_model_outputs_unchanged": true,
+  "private_verifier_sha256": "sha256:2bd33a246ffea22446bf4bd298a5e67e5a41ee14a52c637c9619eeddb63c69e2",
+  "original_source_native_paragraphs_sha256": "sha256:17e79c43f71aee4336c4e3ba0fe22092ffeaa2e433dc427da672918bbb011811",
+  "public_evidence_policy": "metadata_only_review_receipt",
+  "source_evidence_policy": "hash_only",
+  "production_reader_qualified": false,
+  "full_edition": false,
+  "counts": {
+    "scored_items": 41,
+    "vote_items": 36,
+    "cosponsorship_items": 5
+  },
+  "checked_fields": [
+    "item_key",
+    "category_text when displayed within crop",
+    "title_text",
+    "description_text",
+    "publisher_target_text",
+    "bill_citations",
+    "amendment_citations",
+    "date_text",
+    "congress_text",
+    "session_text",
+    "roll_number_text"
+  ],
+  "method": [
+    "Independently viewed every original House item crop and checked untouched model records against their own original source paragraph.",
+    "Compared complete titles and descriptions against original native-font paragraph runs after whitespace-only normalization; punctuation, digits and words remain significant.",
+    "Checked structured citation sets and exact roll/date/session/congress values within each item; cosponsorship items carry no invented vote references.",
+    "Verified the final selector has all41 distinct source item keys exactly once.",
+    "Selection copies complete unchanged per-item records from immutable observations. No field repair, punctuation substitution, or merging fields from different records."
+  ],
+  "selection_rule": "Use only the selected_record_locators below. Exclude DD from the physical9 left half-crop and OO from the physical9 right half-crop; select their narrower replacement records. The NN record from NN+OO is corroboration only, since NN already has a selected complete record.",
+  "earlier_refusals_preserved": [
+    {
+      "scope": "gemini-v3-items-7-8/page-7.json",
+      "issue": "ItemH source curved apostrophe normalized to straight."
+    },
+    {
+      "scope": "gemini-v3-items-7-8/page-8.json",
+      "issue": "ItemsS/T source curved apostrophes normalized to straight."
+    },
+    {
+      "scope": "gemini-v3-items-9-frontmatter/page-9.json",
+      "issue": "ItemBB vote-tally digits differed from source."
+    },
+    {
+      "scope": "gemini-v3-house-items-9-left/outcome.json",
+      "excluded_item_keys": [
+        "DD"
+      ],
+      "issue": "DD inserted a phrase from a neighboring item; original observation remains refused as a whole. Only separately verified unchanged other records are selectable."
+    },
+    {
+      "scope": "gemini-v3-house-items-9-right/outcome.json",
+      "excluded_item_keys": [
+        "OO"
+      ],
+      "issue": "OO curved apostrophe normalized to straight; original observation remains refused as a whole. Only separately verified unchanged other records are selectable."
+    },
+    {
+      "scope": "gemini-v3-house-item-OO/outcome.json",
+      "issue": "Source letter key OO misread as numeric00; observation excluded entirely."
+    }
+  ],
+  "limits": [
+    "Some bounded crops omit preceding category headings. Their null category fields remain null; no inherited context is fabricated.",
+    "This receipt validates the complete selected House item set, not the entire scorecard, member coverage, methodology completeness, production adapter, or publication."
+  ]
+}

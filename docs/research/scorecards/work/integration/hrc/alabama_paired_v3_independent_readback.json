@@ -1,0 +1,58 @@
+{
+  "reviewed_at": "2026-10-03T21:32:05.633249+00:00",
+  "status": "bounded_original_source_readback_passed",
+  "source_sha256": "sha256:804c1157e71da53a00821fdcaf15a1790448c682eb49d44613a577cfce9cb855",
+  "schema_version": "hrc-118-source-facts/3",
+  "physical_page": 10,
+  "scope": "Alabama districts1–7; paired A–N identity/score image and O–OO continuation image",
+  "members_checked": 7,
+  "ratings_checked": 21,
+  "item_results_checked": 287,
+  "method": "Every identity, period/value and glyph read directly from retained original images. Manually recorded reference compared to unmodified model JSON, including all continuation keys.",
+  "all_model_outputs_unchanged": true,
+  "full_edition": false,
+  "production_reader_qualified": false,
+  "public_evidence_policy": "metadata_only_review_receipt",
+  "source_evidence_policy": "hash_only",
+  "artifact_hashes": [
+    {
+      "private_relative_path": "gemini-page10-v3-alabama-paired-shared/input-1.png",
+      "sha256": "sha256:a626123e21dd52bbdef586c6186cc29c09f549766c4b41e8e93743980fe08662"
+    },
+    {
+      "private_relative_path": "gemini-page10-v3-alabama-paired-shared/input-2.png",
+      "sha256": "sha256:20adc1d5d5d6328678bee07e0219f85da817d018c3dfcfe92c9c26c243f22064"
+    },
+    {
+      "private_relative_path": "gemini-page10-v3-alabama-paired-shared/outcome.json",
+      "sha256": "sha256:7d9df23303592c397e75237d28369770a0b6a4ea83102b1023636cbed34b6cab"
+    },
+    {
+      "private_relative_path": "gemini-page10-v3-alabama-paired-shared/observation.pickle",
+      "sha256": "sha256:789cd224a4bb3c131887e90247a48b0723e7cec2c99baf0e14c982f6d2e1e9e7"
+    },
+    {
+      "private_relative_path": "gemini-page10-v3-alabama-paired-shared/receipt.json",
+      "sha256": "sha256:c2dc5d04a0046fe00a90b3424adb4dcec2e0189847cbcd0ff190833e10f2a502"
+    },
+    {
+      "private_relative_path": "gemini-page10-v3-alabama-paired-shared/settings.json",
+      "sha256": "sha256:da4f48e8edf111fe9c7965431a0f7ad536e93a58a7b4b06cc86df5ca60680b59"
+    },
+    {
+      "private_relative_path": "gemini-page10-v3-alabama-paired-shared/request.json",
+      "sha256": "sha256:b70fe02496e8d5407b0d1de5e11f6f3112f47df05f574ca16b247f5874560960"
+    },
+    {
+      "private_relative_path": "gemini-page10-v3-alabama-paired-shared/response.json",
+      "sha256": "sha256:49d8604531db744c0a42d0918d86c1e0b4d32a0c148c46b81b00579a7c8595b7"
+    }
+  ],
+  "private_reference_sha256": "sha256:786420fd40c77af47b40a38e5db1bf7ffd866e596b141e8e08d00abdfcd8af0f",
+  "private_verifier_sha256": "sha256:36a9a1e842d4814efa0f785ccc15c3cdad8af90d11e028dedf46cc48f25e7324",
+  "differences": [],
+  "remaining_limits": [
+    "Other House source rows and member-specific exceptions require separate qualification.",
+    "No fullHouse or completeedition claim."
+  ]
+}

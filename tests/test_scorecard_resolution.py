@@ -810,3 +810,129 @@ def test_duplicate_source_ids_or_official_ids_refuse():
         resolve_scorecard_links(sources([member(), member()]), official(), pins())
     with pytest.raises(ValueError, match="repeated identity"):
         link(member(), official([person(), person()]))
+
+
+def edition_measure(fields, *, edition=None, data=None):
+    source = sources(items=[fact(item_id="edition-measure", **fields)])
+    source["scorecards"][0].update(edition or {})
+    before = deepcopy(source)
+    result = resolve_scorecard_links(source, data or official(), pins())["scorecard_item_links"]
+    assert source == before
+    return result
+
+
+@pytest.mark.parametrize(
+    ("field", "citation", "target", "identifier"),
+    [
+        ("bill_citation_text", "H.R. 1", "bill_id", "118-hr-1"),
+        ("amendment_citation_text", "H.Amdt. 3", "amendment_id", "118-hamdt-3"),
+    ],
+)
+def test_explicit_edition_congress_qualifies_only_the_unstated_measure_context(field, citation, target, identifier):
+    row = edition_measure({field: citation, "item_date_text": "March 28, 2023"})[0]
+    assert row[target] == identifier and row["congress"] == "118"
+    assert row["vote_id"] is row["session"] is row["roll_number"] is None
+    assert row["resolution_rule"].endswith("_edition_congress")
+    assert row["rule_version"] == "scorecard-resolution-v1.4"
+    assert "explicit_edition_congress_for_measure" in row["reason"]
+    context = json.loads(row["source_context_json"])
+    assert context["item"].get("congress_text") is None
+    assert context["reference"].get("congress_text") is None
+    assert context["edition"]["congress_text"] == "118th Congress"
+
+
+def test_edition_context_preserves_independent_citation_occurrences():
+    references = [
+        {"occurrence_id": "bill", "kind": "bill", "citation_text": "H.R. 1", "source_path": "items/0/bill"},
+        {"occurrence_id": "amend", "kind": "amendment", "citation_text": "H.Amdt. 3", "source_path": "items/0/amend"},
+    ]
+    rows = edition_measure({"references_json": json.dumps(references)})
+    assert [r["reference_id"] for r in rows] == ["reference:bill", "reference:amend"]
+    assert rows[0]["bill_id"] == "118-hr-1" and rows[1]["amendment_id"] == "118-hamdt-3"
+    assert all(r["vote_id"] is None for r in rows)
+    assert [json.loads(r["source_context_json"])["reference"] for r in rows] == references
+
+
+@pytest.mark.parametrize("literal", ["117-hr-1", "hr1-117"])
+def test_edition_context_never_replaces_an_embedded_historical_congress(literal):
+    data = official()
+    data["congress_bills"].append({"bill_id": "117-hr-1"})
+    row = edition_measure({"bill_citation_text": literal}, data=data)[0]
+    assert row["bill_id"] == "117-hr-1" and row["congress"] == "117"
+    assert row["resolution_rule"] == "exact_bill"
+    assert "explicit_edition_congress_for_measure" not in row["reason"]
+
+
+@pytest.mark.parametrize("context", ["117", "unknown", "117 / 118"])
+def test_reference_cannot_use_edition_over_explicit_item_congress(context):
+    reference = {"occurrence_id": "bill", "kind": "bill", "citation_text": "H.R. 1", "source_path": "bill"}
+    rows = edition_measure({"congress_text": context, "references_json": json.dumps([reference])})
+    row = next(r for r in rows if r["reference_id"] == "reference:bill")
+    assert row["bill_id"] is None and "explicit_edition_congress_for_measure" not in row["reason"]
+
+
+@pytest.mark.parametrize("context", ["unknown", "117 / 118"])
+def test_edition_cannot_repair_malformed_reference_congress(context):
+    reference = {
+        "occurrence_id": "bill",
+        "kind": "bill",
+        "citation_text": "H.R. 1",
+        "source_path": "bill",
+        "congress_text": context,
+    }
+    row = edition_measure({"references_json": json.dumps([reference])})[0]
+    assert row["bill_id"] is None and row["congress"] is None
+
+
+@pytest.mark.parametrize(
+    "edition",
+    [
+        {"congress_text": None},
+        {"congress_text": "117 and 118"},
+        {"congress_text": "0"},
+        {"timespan_text": "Lifetime"},
+        {"year_text": "2015"},
+        {"periods_json": '[{"kind":"relative","period_text":"current and prior six sessions"}]'},
+        {"periods_json": '[{"kind":"explicit","period_text":"117th Congress"}]'},
+        {"periods_json": '[{"kind":"explicit","period_text":"118th Congress","congress_text":"117"}]'},
+    ],
+)
+def test_edition_fallback_requires_single_consistent_explicit_scope(edition):
+    row = edition_measure({"bill_citation_text": "H.R. 1"}, edition=edition)[0]
+    assert row["bill_id"] is None and row["congress"] is None
+
+
+@pytest.mark.parametrize("period", ["2015", "2015-04-01", "April 1, 2015", "March 32, 2023", "yesterday", "2025-01-03"])
+def test_historical_or_malformed_item_dates_prevent_edition_fallback(period):
+    row = edition_measure({"bill_citation_text": "H.R. 1", "item_date_text": period})[0]
+    assert row["bill_id"] is None and row["congress"] is None
+    assert "historical_or_unqualified_period" in row["reason"]
+
+
+def test_edition_context_never_supplies_roll_or_calendar_session():
+    for extra in ({"chamber_text": "House", "roll_number_text": "4", "session_text": "1"}, {"session_text": "2023"}):
+        row = edition_measure({"bill_citation_text": "H.R. 1", **extra})[0]
+        assert row["bill_id"] is None and row["vote_id"] is None
+        assert "explicit_edition_congress_for_measure" not in row["reason"]
+
+
+def test_mixed_historical_reference_context_prevents_guessing_for_unnumbered_citation():
+    refs = [
+        {"occurrence_id": "current-unknown", "kind": "bill", "citation_text": "H.R. 1", "source_path": "a"},
+        {"occurrence_id": "historical", "kind": "bill", "citation_text": "117-hr-1", "source_path": "b"},
+    ]
+    data = official()
+    data["congress_bills"].append({"bill_id": "117-hr-1"})
+    rows = edition_measure({"references_json": json.dumps(refs)}, data=data)
+    assert rows[0]["bill_id"] is None and rows[1]["bill_id"] == "117-hr-1"
+
+
+@pytest.mark.parametrize("citation", ["117-house-1-4", "h4-117.2021", "unknown"])
+def test_edition_context_does_not_qualify_measure_beside_a_separate_roll_reference(citation):
+    refs = [
+        {"occurrence_id": "bill", "kind": "bill", "citation_text": "H.R. 1", "source_path": "a"},
+        {"occurrence_id": "roll", "kind": "roll_call", "citation_text": citation, "source_path": "b"},
+    ]
+    rows = edition_measure({"references_json": json.dumps(refs)})
+    assert rows[0]["bill_id"] is None
+    assert "edition_congress_not_used_with_sibling_vote_context" in rows[0]["reason"]

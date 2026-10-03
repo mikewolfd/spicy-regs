@@ -1,0 +1,130 @@
+{
+  "observed_checkpoint_at": "2026-10-03T22:57:43.088223+00:00",
+  "status": "normalized_provider_reader_qualified_adoption_pending",
+  "original_publisher_url": "https://hrc-prod-requests.s3-us-west-2.amazonaws.com/files/documents/118th-Congressional-Scorecard-HRC-2024-Final.pdf",
+  "source_sha256": "sha256:804c1157e71da53a00821fdcaf15a1790448c682eb49d44613a577cfce9cb855",
+  "edition": "118th Congress final scorecard",
+  "private_corpus": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-hrc-2026-10-03",
+  "counts_basis": "Independently counted and checked original PDF records, not publisher-declared aggregate totals or official roster estimates.",
+  "checked_source_scope": {
+    "senate_named_members": 100,
+    "senate_ratings": 300,
+    "senate_item_results": 1500,
+    "house_named_members": 440,
+    "house_ratings": 1320,
+    "house_item_results": 18040,
+    "vacancies": 1,
+    "vacancy_rating_positions": 3,
+    "vacancy_blank_item_positions": 41,
+    "senate_scored_items": 15,
+    "house_scored_items": 41,
+    "senate_endnotes": 7,
+    "house_endnotes": 24,
+    "result_definitions": 9,
+    "delegate_method_statements": 1
+  },
+  "house_selected_candidate": {
+    "private_relative_path": "house-selected-candidate-before-na-rule.json",
+    "sha256": "sha256:ead318234836ee0a64e37ea599146c7bbffc818251b9717329595ae54821a552",
+    "missing_source_rows": 0,
+    "installed_validator_status": "Historical pre-fix candidate receipt retained unchanged; current provider source admits exact printed NA."
+  },
+  "remaining_work": [
+    {
+      "kind": "provider_adoption",
+      "issue": "Build and adopt the tested provider wheel through the normal release workflow.",
+      "complete": false
+    },
+    {
+      "kind": "publication",
+      "issue": "Run consumer additive/scoped qualification and publication with hash-only evidence.",
+      "complete": false
+    }
+  ],
+  "independent_review_receipts": [
+    {
+      "path": "senate_pages4_5_independent_readback.json",
+      "sha256": "sha256:87a92b88c6ff4003bbe3ab796ba05eaaa092e25102ea7cb60b93088567de20e9"
+    },
+    {
+      "path": "semantic_qualification.json",
+      "sha256": "sha256:adbd433c4763028010afc994ad68376b2962f19a3a2fb1226fb8e6e76477cb1c"
+    },
+    {
+      "path": "senate_items_notes_independent_readback.json",
+      "sha256": "sha256:cc5b8b9a7099cda1d7ba0a27bec52914d35c6034dfa7f09bebe82a912c5b99b4"
+    },
+    {
+      "path": "house_items_independent_readback.json",
+      "sha256": "sha256:247e3922297a437f2a014b41b9fb699ada2a2916179226023222d2ab4d3ad67f"
+    },
+    {
+      "path": "house_notes_independent_readback.json",
+      "sha256": "sha256:4d29b5453ffaaa47c4234fab79e1624b86e8fe072df811a71fad2bd4613206de"
+    },
+    {
+      "path": "legends_independent_readback.json",
+      "sha256": "sha256:748abe4934a02daedf6bba6655e6334173c2c3957ab27c0edd07fd5fb341ec0b"
+    },
+    {
+      "path": "house_glyph_reference_independent_readback.json",
+      "sha256": "sha256:601eed2aa0d578a3d30004ed9b667cf8c998667f355644e702302ef81515429b"
+    },
+    {
+      "path": "house_complete_selection_independent_readback.json",
+      "sha256": "sha256:7125ba2ff3a88d6255d4f92cdb0ef7812b27bfcbe0fb41b716739222fd828198"
+    },
+    {
+      "path": "house_na_literal_independent_readback.json",
+      "sha256": "sha256:214f6120dc5ab8813a20bbe5c6ae22485323696ee737da1adbe6299242ac270d"
+    },
+    {
+      "path": "reader_independent_review.json",
+      "sha256": "sha256:4af0185434f3730893d9aa268da0d6162aaa310850a8e9b958f431183d42a43e"
+    }
+  ],
+  "evidence_policy": "hash_only_public_receipts; original PDF, images and full model requests/responses remain private",
+  "refused_outputs_preserved": true,
+  "source_values_patched": false,
+  "official_congressional_data_reacquired": false,
+  "production_reader_qualified": true,
+  "published": false,
+  "registry_enabled": false,
+  "current_provider": "0.53.0+scorecards.fd38daf2d185",
+  "reuse_note": "Reviewed Senate member observations retain original semantic v2 provenance; newer observations use v3. No old observation has been relabeled.",
+  "reader": {
+    "module": "spicy_docs.sources.scorecards.hrc",
+    "entrypoint": "HRCReader",
+    "parser_version": "hrc-118-qualified-gemini/2",
+    "source_tree_replay_passed": true,
+    "qualified_asset_sha256": "sha256:d8ac93e130bfb17bbb8657b6d25b6419bd79ca964fe03608a889b21c9385bebb",
+    "reference_tables_sha256": "sha256:1c01a89e0d323f8b3bb581f039e1a4da88f671723c193a8f8c677c7aed304545",
+    "table_counts": {
+      "scorecard_publishers": 1,
+      "scorecards": 1,
+      "scorecard_snapshots": 1,
+      "scorecard_methodologies": 10,
+      "scorecard_metrics": 6,
+      "scorecard_items": 56,
+      "scorecard_metric_items": 0,
+      "scorecard_metric_components": 0,
+      "scorecard_members": 540,
+      "scorecard_member_ratings": 1620,
+      "scorecard_member_item_results": 19540
+    },
+    "reference_tables_private_relative_path": "reader-qualification-v2/qualified.tables.json"
+  },
+  "literal_na_fix_applied": true,
+  "vacancy_mapping_decision": "Retain complete non-member disposition privately; public completeness explicitly accounts for exclusion from member-dependent tables.",
+  "current_qualification_receipt": "reader_qualification_v2.json",
+  "raw_source_and_model_observations_unchanged": true,
+  "native_value_normalization": {
+    "rule": "Only exact standalone NA in native rating value_text becomes N/A; value_number remains NULL and raw observations retain NA.",
+    "normalized_native_rating_count": 1,
+    "native_na_remaining": 0,
+    "native_n_slash_a_count": 280,
+    "all_other_native_fact_fields_equal": true,
+    "private_readback_relative_path": "reader-qualification-v2/normalization_readback.json",
+    "private_readback_sha256": "sha256:cafc16e000cdc24fc1c9e485b6498f67b075c90eb7d9223035e06e9e997c2b07"
+  }
+}

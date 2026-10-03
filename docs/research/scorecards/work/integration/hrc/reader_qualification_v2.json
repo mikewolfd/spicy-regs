@@ -1,0 +1,53 @@
+{
+  "parser_version": "hrc-118-qualified-gemini/2",
+  "qualified_sha256": "d8ac93e130bfb17bbb8657b6d25b6419bd79ca964fe03608a889b21c9385bebb",
+  "source_sha256": "sha256:804c1157e71da53a00821fdcaf15a1790448c682eb49d44613a577cfce9cb855",
+  "observed_at": "2026-10-03T22:43:07.281262Z",
+  "table_counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 10,
+    "scorecard_metrics": 6,
+    "scorecard_items": 56,
+    "scorecard_metric_items": 0,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 540,
+    "scorecard_member_ratings": 1620,
+    "scorecard_member_item_results": 19540
+  },
+  "tables_sha256": "1c01a89e0d323f8b3bb581f039e1a4da88f671723c193a8f8c677c7aed304545",
+  "full_edition_typed_scope_qualified": true,
+  "non_member_dispositions": {
+    "vacant_seats": 1,
+    "ratings": 3,
+    "blank_item_results": 41
+  },
+  "public_source_declared_counts": {},
+  "published": false,
+  "status": "normalized_native_columns_qualified_package_adoption_pending",
+  "provider_installed_adoption_pending": true,
+  "production_reader_qualified": true,
+  "public_evidence_policy": "hash_only",
+  "raw_source_and_model_observations_unchanged": true,
+  "previous_reader_receipt": {
+    "path": "reader_qualification.json",
+    "sha256": "sha256:8636c4cf4460d120bf9ebd516ff80843995994185a1fef6628ec034d92b51b22"
+  },
+  "normalization": {
+    "rule": "Only exact standalone NA in native rating value_text becomes N/A; value_number remains NULL and raw observations retain NA.",
+    "normalized_native_rating_count": 1,
+    "native_na_remaining": 0,
+    "native_n_slash_a_count": 280,
+    "all_other_native_fact_fields_equal": true,
+    "private_readback_relative_path": "reader-qualification-v2/normalization_readback.json",
+    "private_readback_sha256": "sha256:cafc16e000cdc24fc1c9e485b6498f67b075c90eb7d9223035e06e9e997c2b07"
+  },
+  "source_scope_review": {
+    "path": "reader_independent_review.json",
+    "sha256": "sha256:4af0185434f3730893d9aa268da0d6162aaa310850a8e9b958f431183d42a43e",
+    "scope": "Original immutable source records and parser1 mapping; user-requested native NA normalization independently compared in parser2 readback."
+  },
+  "previous_qualification_artifacts_preserved": true,
+  "official_congressional_data_reacquired": false
+}

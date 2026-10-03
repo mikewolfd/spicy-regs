@@ -1,0 +1,166 @@
+{
+  "reviewed_at": "2026-10-03T21:31:06.863047+00:00",
+  "schema_version": "hrc-118-source-facts/3",
+  "source_sha256": "sha256:804c1157e71da53a00821fdcaf15a1790448c682eb49d44613a577cfce9cb855",
+  "status": "bounded_original_source_readback_passed",
+  "public_evidence_policy": "metadata_only_review_receipt",
+  "source_evidence_policy": "hash_only",
+  "production_reader_qualified": false,
+  "full_edition": false,
+  "checked_fields": [
+    "item_key",
+    "title_text",
+    "bill_citations",
+    "amendment_citations",
+    "date_text",
+    "congress_text",
+    "session_text",
+    "roll_number_text",
+    "publisher_target_text",
+    "description_text",
+    "note marker and complete text"
+  ],
+  "checks": [
+    {
+      "scope": "gemini-v3-senate-items-left",
+      "status": "bounded_original_source_readback_passed",
+      "item_keys": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F",
+        "G"
+      ],
+      "note_markers": [],
+      "artifacts": [
+        {
+          "private_relative_path": "gemini-v3-senate-items-left/input.png",
+          "sha256": "sha256:c57338f112d2a6b298a9f7c69f8a4cf68e369f9553b107a8cd873261580993de",
+          "byte_size": 676223
+        },
+        {
+          "private_relative_path": "gemini-v3-senate-items-left/outcome.json",
+          "sha256": "sha256:0b61e0a6376b002fb382534ccc4abaeb225dea55b1be509f05118230814ab402",
+          "byte_size": 6990
+        },
+        {
+          "private_relative_path": "gemini-v3-senate-items-left/observation.pickle",
+          "sha256": "sha256:0d6b1d9161057f01cbffcfc29f773049810a72cc691e38401426c88896485709",
+          "byte_size": 1610592
+        },
+        {
+          "private_relative_path": "gemini-v3-senate-items-left/receipt.json",
+          "sha256": "sha256:654406c3baaaea61190efdc92af6c41b5951f2c17ed9f38a01b4dc9c741d2387",
+          "byte_size": 444
+        }
+      ]
+    },
+    {
+      "scope": "gemini-v3-senate-items-right",
+      "status": "bounded_original_source_readback_passed",
+      "item_keys": [
+        "H",
+        "I",
+        "J",
+        "K",
+        "L",
+        "M",
+        "N",
+        "O"
+      ],
+      "note_markers": [],
+      "artifacts": [
+        {
+          "private_relative_path": "gemini-v3-senate-items-right/input.png",
+          "sha256": "sha256:1a7baf1afc523bc860d011f30bf0a652d9d7e18a2db11ea05fc0c9299a789d21",
+          "byte_size": 707737
+        },
+        {
+          "private_relative_path": "gemini-v3-senate-items-right/outcome.json",
+          "sha256": "sha256:12ec2a7abbb2750e1cdbe667fc212936b8f4ac7e25ee57dea425837af152e4f2",
+          "byte_size": 8966
+        },
+        {
+          "private_relative_path": "gemini-v3-senate-items-right/observation.pickle",
+          "sha256": "sha256:60f45c399ba640f00fbee30899cd1842b7412a8e8b1e9f962c5a3ebbfb8f5850",
+          "byte_size": 1689004
+        },
+        {
+          "private_relative_path": "gemini-v3-senate-items-right/receipt.json",
+          "sha256": "sha256:036123613dc6118fc22c4d67d7b54eba1001757c4a0f4f7aa3f67157cf8fa080",
+          "byte_size": 444
+        }
+      ]
+    },
+    {
+      "scope": "gemini-v3-senate-notes",
+      "status": "bounded_original_source_readback_passed",
+      "item_keys": [],
+      "note_markers": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7"
+      ],
+      "artifacts": [
+        {
+          "private_relative_path": "gemini-v3-senate-notes/input.png",
+          "sha256": "sha256:59c08f5eca99348c262f421bdc4a3de22ded86798b26869901370ffb68fc533b",
+          "byte_size": 242669
+        },
+        {
+          "private_relative_path": "gemini-v3-senate-notes/outcome.json",
+          "sha256": "sha256:9dd934089629ea4edc038b7d73150366801514926680055348d786c05f12c6ee",
+          "byte_size": 1694
+        },
+        {
+          "private_relative_path": "gemini-v3-senate-notes/observation.pickle",
+          "sha256": "sha256:cd1149f842f4996d5c594dcb2cc4510fe85e22baf98b4d215d089cfcee3961e7",
+          "byte_size": 580788
+        },
+        {
+          "private_relative_path": "gemini-v3-senate-notes/receipt.json",
+          "sha256": "sha256:a85f834bf390723949ceaa4b6d0ec6653288240488728c5cf6ec4a9c83940255",
+          "byte_size": 444
+        }
+      ]
+    }
+  ],
+  "counts": {
+    "scored_items": 15,
+    "vote_items": 10,
+    "cosponsorship_items": 5,
+    "notes": 7
+  },
+  "method": [
+    "Read both original Senate item image crops and original notes crop directly.",
+    "Checked each emitted item against its own original source paragraph, not a page-wide substring.",
+    "Native-font item diagnostic corroborates full titles and descriptions after whitespace-only comparison; punctuation, digits and words remain significant.",
+    "All structured citations and printed roll/date/session fields checked against source; cosponsorships carry no invented roll/session.",
+    "Every note marker and text read from original image."
+  ],
+  "special_cases_verified": [
+    "Senate J title and citation both preserve H.R.5009; date December18,2024, roll325, secondsession.",
+    "Senate C preserves both amendment references, without inventing a bill identifier.",
+    "Cosponsorship dates remain dates of the legislation introduction as described by the publisher.",
+    "Senate note6 preserves the source distinction between official No votes and HRC-supported positions."
+  ],
+  "earlier_refusal_preserved": {
+    "artifact": "gemini-page3-semantic/outcome.json",
+    "reason": "Earlier wholepage observation misidentified Senate J as H.R.8070. This review does not repair or admit that output."
+  },
+  "all_model_outputs_unchanged": true,
+  "remaining_limits": [
+    "House item probes and member continuations require separate qualification.",
+    "No complete edition, historical-layout or production-publication claim."
+  ],
+  "private_diagnostic_script": {
+    "private_relative_path": "independent-source-inventory/audit_items.py",
+    "sha256": "sha256:b822753fbb1f3acd0da2bd99d3d96ce5cca61cae00cadebbe80ed5f25c51cb91"
+  }
+}
