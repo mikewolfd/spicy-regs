@@ -4,7 +4,7 @@
 
 **Rulemaking lifecycle events**
 
-One row per staged document of a docketed proceeding: the events each `rulemaking_lifecycles` row is paired from. A Regulations.gov document whose own `fr_doc_num` resolves to one Register document is that document, dated by the Register (decision 60); a document that states no number keeps Regulations.gov's type and its upload day. An Agenda entry completed as withdrawn adds its dated withdrawal. Keyed (`proceeding_id`, `document_id`); `dated_by` says which kind of id `document_id` is. Joins `rulemaking_lifecycles` on `proceeding_id`. Built by `build_lifecycles`; `event_date` is DATE.
+One row per staged document of a docketed proceeding: the events each `rulemaking_lifecycles` row is paired from. A Regulations.gov document whose own `fr_doc_num` resolves to one Register document is that document, dated by the Register (decision 60); a document that states no number keeps Regulations.gov's type and its upload day. A stage comes only from a document's own Rule or Proposed Rule type (decision 58), so a Register document typed Notice is never an event: a petition withdrawal or receipt the Register types Notice (EPA's withdrawals 2010-8292, 2010-13540, 2011-8549 and 2011-16199; the receipts 2021-08335 and 2023-14192) neither closes nor opens a lifecycle. An Agenda entry completed as withdrawn adds its dated withdrawal. Keyed (`proceeding_id`, `document_id`); `dated_by` says which kind of id `document_id` is. Joins `rulemaking_lifecycles` on `proceeding_id`. Built by `build_lifecycles`; `event_date` is DATE.
 
 **Coverage.** Derived, and bounded by its inputs: the stage events of every docketed proceeding, one per document, less those undated or dated after the run's day. *(measured 2026-09-28)*
 
@@ -29,4 +29,4 @@ One row per staged document of a docketed proceeding: the events each `rulemakin
 | `actor_id` | `VARCHAR` | The builder that asserted the row, with its version (`spicy-regs:lifecycle-events:v<n>`), bumped when its published rows change. |
 | `run_id` | `VARCHAR` | The materialization run that built the snapshot (e.g. `rulemaking-20260927T062656Z`). |
 | `asserted_at` | `VARCHAR` | When that run asserted the row, as a UTC ISO 8601 instant. |
-| `supersedes_id` | `VARCHAR` | Id of a prior row this one continues; always NULL here. |
+| `supersedes_id` | `VARCHAR` | Id of a prior row this one continues; always NULL here: events are recomputed each snapshot and continue no prior row. `proceedings.supersedes_id` differs: there a continuing proceeding names its own id. |

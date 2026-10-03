@@ -9,6 +9,7 @@ Decision metadata from CourtListener opinion-clusters bulk data and opinion-sear
 **Coverage.** Not a range. The complete 2026-06-30 CourtListener opinion-clusters export, every mapped source field checked against the original export; the court fields agree with the same-edition docket map and court reference data. A search catch-up adds every cluster whose id is above the export's highest, whatever its filing date; a correction to an exported cluster arrives with the next export. Opinion bodies and broader historical coverage are separate. Per-court gaps are the publisher's: cadc has no unpublished cluster between 2001-04 and 2020-07. See docs/research/fork-output-ledger-2026-09-21.md and receipt join-gaps-2026-09-26/i/. *(measured 2026-09-22)*
 
 **Data quality.** Bulk and search records expose different fields. ingest_source identifies the selected row's route; unavailable fields are NULL and metadata empty strings are normalized to NULL. A search row never replaces a bulk row of the same export, whose ids it lies above, and a later export's bulk row replaces it. Opinion search does not index RECAP trial-court clusters, so one created after the export arrives only with the next export. Missing court scope is unknown, not proof of a non-federal court. court_dockets is a narrower selection, so unmatched docket IDs are expected. Names, judge strings and citations do not establish cross-source identity.
+One decision can be several clusters. On the 2026-06-30 export (measured 2026-10-03), 131 of the 140 Supreme Court decisions reported in 600-606 U.S., grouped by `cl_docket_id` and U.S. citation, have two to five clusters, none with an `scdb_id`. That grouping is a heuristic: it cannot see a decision with no reporter citation yet.
 
 - **Parquet file:** `court_opinion_clusters.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -17,11 +18,11 @@ Decision metadata from CourtListener opinion-clusters bulk data and opinion-sear
 
 | Column | Type | Description |
 | --- | --- | --- |
-| `cluster_id` | `VARCHAR` | CourtListener opinion-cluster ID, the decision-level primary/dedup key. Join to court_opinions.cluster_id and court_citations.cluster_id; not an opinion_id. |
+| `cluster_id` | `VARCHAR` | CourtListener opinion-cluster ID: this table's primary/dedup key, one per CourtListener record of a decision, not per decision. The publisher can hold several clusters for one decision, a Supreme Court slip opinion and its later U.S. Reports print above all, and later opinions cite either (Loper Bright: 9986254 and 10600041). Count decisions by `scdb_id`, the publisher's decision key, where it is set; it is unset on every Supreme Court cluster filed after 2019. Otherwise group by `cl_docket_id` and reporter citation (court_citations), a heuristic that misses a decision with no reporter citation yet. Join to court_opinions.cluster_id and court_citations.cluster_id; not an opinion_id. |
 | `cl_docket_id` | `VARCHAR` | CourtListener docket ID, renamed from docket_id. Joins court_dockets.cl_docket_id only where both tables hold the same publisher docket object (an appellate case often has two: the court-website scraper's, named here, and RECAP's, held there), so match on the docket number when the id does not join; unrelated to regulations.gov docket_id. |
 | `court_id` | `VARCHAR` | CourtListener court identifier from the docket map or search record; NULL when unresolved. |
 | `court_jurisdiction` | `VARCHAR` | CourtListener jurisdiction code from the court reference lookup; NULL when unavailable. |
-| `court_is_federal` | `VARCHAR` | Derived federal classification from court jurisdiction: t or f as a string; NULL when the classification is unavailable. |
+| `court_is_federal` | `VARCHAR` | `t` where CourtListener's jurisdiction code for the court starts with F (F appellate, FD district, FB bankruptcy, FBP bankruptcy appellate panel, FS special), `f` otherwise, as a string; NULL when the classification is unavailable. FS covers courts outside the circuit system, Article I courts and executive adjudicators among them (`cit`, `uscfc`, `cavc`, `bia`, `mspb`), so `t` does not mean an Article III court: filter `court_jurisdiction` for that. |
 | `case_name` | `VARCHAR` | Source case caption; not a stable identity or affiliation link. |
 | `case_name_short` | `VARCHAR` | Source short case caption, when supplied by bulk data. |
 | `case_name_full` | `VARCHAR` | Source full case caption when supplied. |
@@ -31,7 +32,7 @@ Decision metadata from CourtListener opinion-clusters bulk data and opinion-sear
 | `nature_of_suit` | `VARCHAR` | Source nature-of-suit text when supplied; this cluster table is not limited to the docket rollup's 899 query. |
 | `precedential_status` | `VARCHAR` | CourtListener's source precedential-status value; this table does not independently assess legal authority. |
 | `citation_count` | `VARCHAR` | The publisher's count of citing opinions at observation time, as a string: opinions, not decisions, and only decisions carrying a reporter citation are ever cited. |
-| `scdb_id` | `VARCHAR` | Supreme Court Database identifier as supplied by CourtListener, when available. |
+| `scdb_id` | `VARCHAR` | Supreme Court Database identifier as supplied by CourtListener: the publisher's decision key for a Supreme Court decision where it is set. NULL on every Supreme Court cluster filed after 2019 (2026-06-30 export), whose decisions only the heuristic `cluster_id` names can group. |
 | `scdb_decision_direction` | `VARCHAR` | Source Supreme Court Database decision-direction code; retained without interpretation. |
 | `scdb_votes_majority` | `VARCHAR` | Source Supreme Court Database majority-vote count, stored as a string. |
 | `scdb_votes_minority` | `VARCHAR` | Source Supreme Court Database minority-vote count, stored as a string. |

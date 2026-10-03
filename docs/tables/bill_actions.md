@@ -4,9 +4,11 @@
 
 **Bill actions**
 
-One row per action entry in a bill's BILLSTATUS document, in publisher order. Each row also carries the stage the action text implies, with the rule and matcher that fired, which makes `congress_bills.stage` auditable action by action. All columns are stored as VARCHAR.
+One row per entry of the bill's own action list (`actions` in its BILLSTATUS document), in publisher order; actions recorded under the bill's amendments (`amendments/amendment/actions`) are not rows, so a roll call on an amendment can have no action here. Each row also carries the stage the action text implies, with the rule and matcher that fired, which makes `congress_bills.stage` auditable action by action. All columns are stored as VARCHAR.
 
 **Coverage.** Sampled: bills the bill family has read from GovInfo BILLSTATUS, Congress by Congress from the 108th on; group by the Congress in bill_id to see which Congresses are filled. *(measured 2026-09-28)*
+
+**Data quality.** One event is often entered by more than one system (`source_system_name`). Library of Congress and House floor rows carry an `action_code`; Senate and House committee rows carry none. The same event can appear once per system in different words, and some events appear in one system only (S. 545's committee report has a Senate row and no Library of Congress row; 119th Congress, checked 2026-10-03). Counting rows counts entries, not events; filtering to one system, or to rows with an `action_code`, drops the events the other systems alone record.
 
 - **Parquet file:** `bill_actions.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.

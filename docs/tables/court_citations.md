@@ -4,11 +4,11 @@
 
 **Court reporter citations**
 
-Every reporter citation CourtListener records for a decision, such as "410 U.S. 113", "93 S. Ct. 705" or a WestLaw or neutral cite. Join cluster_id to court_opinion_clusters.cluster_id to reach the decision; a U.S. Reports citation found in a document (SpicyDocs' us_reports_cite rule) resolves through the row with reporter 'U.S.'. Rebuilt whole from each quarterly export. All columns are VARCHAR, copied as the publisher wrote them.
+Every reporter citation CourtListener records for a decision, such as "410 U.S. 113", "93 S. Ct. 705" or a WestLaw or neutral cite. Join cluster_id to court_opinion_clusters.cluster_id to reach the decision; a U.S. Reports citation found in a document (SpicyDocs' us_reports_cite rule) resolves through the rows with reporter 'U.S.', to every cluster carrying it (often two for a recent Supreme Court decision). Rebuilt whole from each quarterly export. All columns are VARCHAR, copied as the publisher wrote them.
 
 **Coverage.** Not a range. The complete 2026-06-30 CourtListener citations export, copied field for field: every (cluster_id, volume, reporter, page) unique as the publisher's schema requires. The publisher cut this export hours after the cluster export, so a few citations name a cluster court_opinion_clusters lacks (63 on 2026-09-26, 43 of them added by the clusters' catch-up; receipt join-gaps-2026-09-26/i/). *(measured 2026-09-22)*
 
-**Data quality.** Citations are the publisher's, not re-derived from opinion text; a decision missing a citation here may still carry one in print. Reporter strings are the publisher's abbreviations and are not normalized. page is text because some reporters page with letters or asterisks. A new export is refused until the published court_opinion_clusters reaches every cluster id it names; a cluster the publisher merged away after the export still dangles.
+**Data quality.** Citations are the publisher's, not re-derived from opinion text; a decision missing a citation here may still carry one in print. Reporter strings are the publisher's abbreviations and are not normalized. page is text because some reporters page with letters or asterisks. A new export is refused until the published court_opinion_clusters reaches every cluster id it names; a cluster the publisher merged away after the export still dangles. The 2026-06-30 export holds no S. Ct. citation in volumes 143 and 144 (measured 2026-10-03).
 
 - **Parquet file:** `court_citations.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.

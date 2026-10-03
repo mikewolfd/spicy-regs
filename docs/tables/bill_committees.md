@@ -4,7 +4,7 @@
 
 **Bill committee referrals**
 
-One row per committee or subcommittee a bill reached, as its BILLSTATUS document names it. `referral_signal` is set only for the six appropriations committees the money-bill classifier keys on; it is NULL elsewhere rather than absent. All columns are stored as VARCHAR.
+One row per committee or subcommittee a bill reached, as its BILLSTATUS document names it. `referral_signal` is set only for the six appropriations committees the money-bill classifier keys on; it is NULL elsewhere rather than absent. It names committees, not what they did: the committee activities BILLSTATUS lists under each committee (Referred To, Markup By, Reported By, with their dates) are not published, so find a committee's report in `bill_actions`. `bill_committee_actions` is a different source, the House committees' activity-report prints, filed at the end of each Congress, so it holds no rows for the sitting Congress. All columns are stored as VARCHAR.
 
 **Coverage.** Sampled: bills the bill family has read from GovInfo BILLSTATUS, Congress by Congress from the 108th on; group by the Congress in bill_id to see which Congresses are filled. *(measured 2026-09-28)*
 
