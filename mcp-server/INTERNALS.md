@@ -60,6 +60,17 @@ found nothing it could map. That was wrong: an agent took the status as an
 answer about the identifier. With the two namespaces advertised in the schema,
 another one is a malformed argument, and it is refused naming both.
 
+`lookup_agency` names no organization itself (round 6, L7). `parent_labels`
+gives each parent URN in the reply the name the vendored RefSpec rows state
+for it (`vocabulary_mapping._names`, through `ontology.agencies`' public
+readers): a preferred label first, then a publisher's name on a mapping's
+evidence record, a bridge end or an event result; null where no row names it,
+which is a registry change for the search lane. On 2026-10-03, 24 of 30
+parents were named; the three eCFR and three Federal Hierarchy parents were
+not, nor 9 of 10 event originals. The text says `current_lineage` is computed
+for Federal Register ids only and points at each evidence row's `reasoning`
+sentence for whether two names are one agency.
+
 ## Connection setup (`_build_connection`, `_get_connection`, `_apply_security_settings`)
 
 - A local directory (`SPICY_REGS_DATA_DIR`) replaces R2 for the whole

@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import date
+from functools import cache
 from importlib.resources import files
 from typing import Literal, get_args
 
@@ -17,6 +18,41 @@ from typing import Literal, get_args
 #: id (the occurrence views' namespace). Any other is refused; the MCP tool's schema advertises this closed set.
 Namespace = Literal["regulations.gov:agency", "federal_register_agency"]
 REGULATIONS, FEDERAL_REGISTER = get_args(Namespace)
+
+
+@cache
+def _names() -> dict[str, str]:
+    """Each organization the vendored rows name, with that name; none is written here.
+
+    RefSpec's preferred label for a projected organization or abstention comes first, then the publisher's name a
+    row records for a resource: a mapping's source or target record, either end of a bridge, an event's result.
+    """
+    from spicy_regs.ontology import agencies
+
+    names: dict[str, str] = {}
+    for row in agencies.projection_rows():
+        names.setdefault(row["org"], row["pref_label"])
+    for row in agencies.unresolved_rows():
+        names.setdefault(row["source_org"], row["pref_label"])
+    for row in agencies.projection_rows():
+        for record in row["evidence_records"] or ():
+            for side in (record.get("source_record") or {}, record.get("target_record") or {}):
+                if side.get("resource") and side.get("publisher_name"):
+                    names.setdefault(side["resource"], side["publisher_name"])
+    for row in agencies.registry_rows("bridges"):
+        names.setdefault(row["subject"], row["subject_publisher_name"])
+        names.setdefault(row["object"], row["object_publisher_name"])
+    for row in agencies.registry_rows("events"):
+        names.setdefault(row["result"], row["result_publisher_name"])
+    return names
+
+
+def _parent_labels(candidates: list[dict], abstentions: list[dict], registry: dict) -> dict[str, str | None]:
+    """Each parent organization the reply names, with the name the vendored rows give it; null where none does."""
+    parents = [row["parent_org"] for row in candidates] + [row["source_parent_org"] for row in abstentions]
+    parents += [row[end] for row in registry["bridges"] for end in ("subject_parent", "object_parent")]
+    parents += [parent for row in registry["events"] for parent in row["original_parents"]]
+    return {parent: _names().get(parent) for parent in sorted(set(parents) - {None})}
 
 
 def _registry_evidence(namespace: str, identifier: str, candidates: list[dict]) -> dict:
@@ -124,6 +160,7 @@ def lookup_agency(namespace: str, identifier: str, *, on_date: str | None = None
         "mapping_scope": "undated reviewed roster identity; parent_org is a separate relationship",
         "temporal_policy": "REF-072 event dates are retained as evidence; current-lineage lookup ignores dates and does not establish requested-date identity. Adjudication dates are not validity dates.",
         "registry_evidence": registry,
+        "parent_labels": _parent_labels(candidates, abstentions, registry),
         "publication": {
             "view_id": manifest["viewId"],
             "manifest_sha256": "sha256:" + agencies.VIEW_MANIFEST_SHA256,

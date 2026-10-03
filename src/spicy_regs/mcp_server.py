@@ -1716,10 +1716,15 @@ def _tools() -> list[Tool]:
         Namespaces are regulations.gov:agency (e.g. OPM) and
         federal_register_agency (e.g. 406). Labels are not identifiers.
         Return mapping evidence, publication pins and documented abstentions.
-        Parent relationships and succession events are not identity. REF-072 bridge
-        and event evidence stays separate from REF-038 candidates. Current-lineage
-        lookup follows the owner policy without dates; on_date preserves evidence
-        but cannot establish historical identity.
+        Parent relationships and succession events are not identity: whether
+        two names are one agency is the registry's own judgment, stated in each
+        evidence row's reasoning sentence. parent_labels gives each parent's
+        name where the registry's rows state one (null where none does).
+        REF-072 bridge and event evidence stays separate from REF-038
+        candidates. registry_evidence.current_lineage is computed for
+        federal_register_agency ids only (a regulations.gov code reads
+        not_applicable) and follows the owner policy without dates; on_date
+        preserves evidence but cannot establish historical identity.
         No acquisition, new adjudication, or money attribution is performed.
         """
         from spicy_regs.vocabulary_mapping import lookup_agency as lookup

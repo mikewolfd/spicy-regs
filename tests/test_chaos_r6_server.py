@@ -412,3 +412,31 @@ def test_the_catalog_replies_stay_under_the_budget_so_none_is_ever_refused_or_cu
             for detail in (False, True):
                 sizes[(name, detail)] = _size(_tool_data(mcp, "describe_table", {"table": name, "detail": detail}))
     assert {key: size for key, size in sizes.items() if size > server.REPLY_CHARS - LIVE_ROOM} == {}
+
+
+# L7: lookup_agency says what current_lineage covers, points at the registry's reasoning, and labels parents.
+
+def _lookup(namespace, identifier):
+    return _tool_data(server.build_server(), "lookup_agency", {"namespace": namespace, "identifier": identifier})
+
+
+def test_a_parent_is_labelled_where_the_registrys_rows_name_it_and_null_where_none_does():
+    assert _lookup("regulations.gov:agency", "FAA")["parent_labels"] == {
+        "urn:ref:federal-register-agency:492": "Transportation Department"}
+    # ACL's Federal Hierarchy parent is named by no vendored row; the bridge's Register parent is.
+    assert _lookup("regulations.gov:agency", "ACL")["parent_labels"] == {
+        "urn:ref:federal-hierarchy-org:100004222": None,
+        "urn:ref:federal-register-agency:221": "Health and Human Services Department"}
+
+
+def test_event_and_bridge_parents_are_labelled_too():
+    labels = _lookup("federal_register_agency", "559")["parent_labels"]  # HCFA: an event original under HHS
+    assert labels["urn:ref:federal-register-agency:221"] == "Health and Human Services Department"
+
+
+def test_the_text_says_current_lineage_is_for_register_ids_and_points_at_the_reasoning():
+    [tool] = [t for t in asyncio.run(server.build_server().list_tools()) if t.name == "lookup_agency"]
+    text = " ".join((tool.description or "").split())
+    assert "current_lineage is computed for federal_register_agency ids only" in text
+    assert "reasoning" in text and "parent_labels" in text
+    assert _lookup("regulations.gov:agency", "FNS")["registry_evidence"]["current_lineage"]["status"] == "not_applicable"
