@@ -44,6 +44,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from loguru import logger
 
+from spicy_regs.transforms.parquet_rows import str_or_none
 from spicy_regs.sources import r2
 from spicy_regs.sources.unified_agenda import DEFAULT_EDITION, UnifiedAgendaReader, newest_edition
 
@@ -82,12 +83,6 @@ COLUMNS = (
 )
 _SCHEMA = pa.schema([(c, pa.string()) for c in COLUMNS])
 
-
-def _s(value: object) -> str | None:
-    """Coerce a scalar to str, preserving NULL. (some fields arrive as ints/bools.)"""
-    if value is None:
-        return None
-    return str(value)
 
 
 # reginfo timetable dates are ``MM/DD/YYYY``; anything else (``To Be Determined``)
@@ -136,24 +131,24 @@ def _shape(doc: dict) -> dict:
         earliest = dates[0]  # str, not str | None — keeps the comparison well-typed
         next_action = next((d for d in dates if d > earliest), None)
 
-    rin = _s(doc.get("rin"))
-    edition = _s(doc.get("agenda_edition"))
+    rin = str_or_none(doc.get("rin"))
+    edition = str_or_none(doc.get("agenda_edition"))
     url = None
     if rin and edition:
         url = f"https://www.reginfo.gov/public/do/eAgendaViewRule?pubId={edition}&RIN={rin}"
 
     return {
         "rin": rin,
-        "agency_code": _s(doc.get("agency_code")),
-        "agency_name": _s(doc.get("agency_name")),
-        "title": _s(doc.get("title")),
-        "abstract": _s(doc.get("abstract")),
-        "rin_status": _s(doc.get("rin_status")),
-        "rule_stage": _s(doc.get("rule_stage")),
-        "priority_category": _s(doc.get("priority_category")),
+        "agency_code": str_or_none(doc.get("agency_code")),
+        "agency_name": str_or_none(doc.get("agency_name")),
+        "title": str_or_none(doc.get("title")),
+        "abstract": str_or_none(doc.get("abstract")),
+        "rin_status": str_or_none(doc.get("rin_status")),
+        "rule_stage": str_or_none(doc.get("rule_stage")),
+        "priority_category": str_or_none(doc.get("priority_category")),
         "agenda_edition": edition,
-        "major": _s(doc.get("major")),
-        "publication_id": _s(doc.get("publication_id")),
+        "major": str_or_none(doc.get("major")),
+        "publication_id": str_or_none(doc.get("publication_id")),
         "timetable_json": json.dumps(timetable),
         "cfr_references_json": json.dumps(doc.get("cfr_references") or []),
         "legal_authority_json": json.dumps(doc.get("legal_authority") or []),

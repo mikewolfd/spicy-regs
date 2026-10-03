@@ -26,6 +26,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from loguru import logger
 
+from spicy_regs.transforms.parquet_rows import str_or_none
 from spicy_regs.sources import r2
 from spicy_regs.sources.crs_reports import CrsReportsReader
 from spicy_regs.transforms.table_merge import merge_local_prior
@@ -51,12 +52,6 @@ COLUMNS = (
 _SCHEMA = pa.schema([(c, pa.string()) for c in COLUMNS])
 
 
-def _s(value: object) -> str | None:
-    """Coerce a scalar to str, preserving NULL. (version comes as an int.)"""
-    if value is None:
-        return None
-    return str(value)
-
 
 def _shape(doc: dict) -> dict:
     """Map one raw Congress.gov CRS report onto the published column shape."""
@@ -67,7 +62,7 @@ def _shape(doc: dict) -> dict:
         "status": doc.get("status"),
         "published_date": doc.get("publishDate"),
         "update_date": doc.get("updateDate"),
-        "version": _s(doc.get("version")),
+        "version": str_or_none(doc.get("version")),
         "url": doc.get("url"),
     }
 

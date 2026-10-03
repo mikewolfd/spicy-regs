@@ -36,6 +36,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from loguru import logger
 
+from spicy_regs.transforms.parquet_rows import str_or_none
 from spicy_regs.sources import r2
 from spicy_regs.transforms.table_merge import merge_local_prior
 
@@ -173,12 +174,6 @@ LOBBYIST_COLUMNS = (
 )
 
 
-def _s(value: object) -> str | None:
-    """Coerce a scalar to str, preserving NULL. (ids come as ints.)"""
-    if value is None:
-        return None
-    return str(value)
-
 
 def _activities(filing: dict) -> list[dict]:
     """Project lobbying_activities to their issue codes + descriptions."""
@@ -226,13 +221,13 @@ def _shape(filing: dict) -> dict:
     return {
         "filing_uuid": filing.get("filing_uuid"),
         "filing_type": filing.get("filing_type"),
-        "filing_year": _s(filing.get("filing_year")),
+        "filing_year": str_or_none(filing.get("filing_year")),
         "filing_period": filing.get("filing_period"),
         "dt_posted": filing.get("dt_posted"),
         "registrant_name": registrant.get("name") if isinstance(registrant, dict) else None,
-        "registrant_id": _s(registrant.get("id")) if isinstance(registrant, dict) else None,
+        "registrant_id": str_or_none(registrant.get("id")) if isinstance(registrant, dict) else None,
         "client_name": client.get("name") if isinstance(client, dict) else None,
-        "client_id": _s(client.get("id") or client.get("client_id")) if isinstance(client, dict) else None,
+        "client_id": str_or_none(client.get("id") or client.get("client_id")) if isinstance(client, dict) else None,
         "income": filing.get("income"),
         "expenses": filing.get("expenses"),
         "lobbying_activities_json": json.dumps(_activities(filing)),
@@ -275,7 +270,7 @@ def _lobbyist_rows(filing: dict) -> list[dict]:
                 "filing_uuid": filing.get("filing_uuid"),
                 "activity_index": str(index),
                 "lobbyist_index": str(position),
-                "lobbyist_id": _s(person.get("id")),
+                "lobbyist_id": str_or_none(person.get("id")),
                 "prefix": person.get("prefix"),
                 "first_name": person.get("first_name"),
                 "nickname": person.get("nickname"),
@@ -283,7 +278,7 @@ def _lobbyist_rows(filing: dict) -> list[dict]:
                 "last_name": person.get("last_name"),
                 "suffix": person.get("suffix"),
                 "covered_position": entry.get("covered_position"),
-                "new": _s(entry.get("new")),
+                "new": str_or_none(entry.get("new")),
             })
     return rows
 

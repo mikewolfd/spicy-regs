@@ -43,6 +43,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from loguru import logger
 
+from spicy_regs.transforms.parquet_rows import str_or_none
 from spicy_regs.env_values import first_env
 from spicy_regs.sources import r2
 from spicy_regs.transforms.table_merge import merge_local_prior, retired_rows
@@ -249,12 +250,6 @@ COLUMNS = (
 _SCHEMA = pa.schema([(c, pa.string()) for c in COLUMNS])
 
 
-def _s(value: object) -> str | None:
-    """Coerce a scalar to str, preserving NULL. (some fields come as ints.)"""
-    if value is None:
-        return None
-    return str(value)
-
 
 def _shape(doc: dict) -> dict:
     """Map one raw SAM.gov entity onto the published column shape.
@@ -284,8 +279,8 @@ def _shape(doc: dict) -> dict:
         "state": address.get("stateOrProvinceCode"),
         "city": address.get("city"),
         "zip_code": address.get("zipCode"),
-        "congressional_district": _s(core.get("congressionalDistrict")),
-        "primary_naics": _s(goods.get("primaryNaics")),
+        "congressional_district": str_or_none(core.get("congressionalDistrict")),
+        "primary_naics": str_or_none(goods.get("primaryNaics")),
         "registration_status": reg.get("registrationStatus"),
         "registration_date": reg.get("registrationDate"),
         "registration_expiration_date": reg.get("registrationExpirationDate"),

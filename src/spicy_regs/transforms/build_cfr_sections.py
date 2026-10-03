@@ -65,6 +65,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from loguru import logger
 
+from spicy_regs.transforms.parquet_rows import str_or_none
 from spicy_regs.sources import r2
 from spicy_regs.sources.cfr_sections import INDEX_PACKAGE_RE, CfrSectionsError, CfrSectionsReader
 from spicy_regs.transforms.table_merge import merge_local_prior
@@ -106,12 +107,6 @@ COLUMNS = (
 )
 _SCHEMA = pa.schema([(c, pa.string()) for c in COLUMNS])
 
-
-def _s(value: object) -> str | None:
-    """Coerce a scalar to str, preserving NULL. (title/part come as ints.)"""
-    if value is None:
-        return None
-    return str(value)
 
 
 #: Title 41 numbers parts by chapter and part (60-1, 60-2), and GovInfo's part granule ids keep only the chapter
@@ -177,13 +172,13 @@ def _shape(granule: dict) -> dict:
         raise CfrSectionsError("CFR row requires a nonempty granuleId")
     from spicy_docs.interpretation.citation_grammar import cfr_key
 
-    package_id = _s(granule.get("_package_id") or granule.get("packageId"))
+    package_id = str_or_none(granule.get("_package_id") or granule.get("packageId"))
     # Title and edition from the package id where one is stated (always well formed), else the granule id; part and
     # section from the granule id (both nullable -- see the module docstring). The edition falls back to dateIssued.
     ids = _ids(granule_id, package_id)
     edition_year = ids.edition_year
     if edition_year is None:
-        date_issued = _s(granule.get("dateIssued"))
+        date_issued = str_or_none(granule.get("dateIssued"))
         edition_year = date_issued[:4] if date_issued else None
 
     return {
@@ -194,10 +189,10 @@ def _shape(granule: dict) -> dict:
         "part": ids.part,
         "section": ids.section,
         # The granule list-level ``title`` field is the heading text.
-        "heading": _s(granule.get("title")),
-        "structure_level": _s(granule.get("granuleClass")),
+        "heading": str_or_none(granule.get("title")),
+        "structure_level": str_or_none(granule.get("granuleClass")),
         "edition_year": edition_year,
-        "last_modified": _s(granule.get("lastModified") or granule.get("_package_last_modified")),
+        "last_modified": str_or_none(granule.get("lastModified") or granule.get("_package_last_modified")),
         "url": f"https://www.govinfo.gov/app/details/{package_id}/{granule_id}" if package_id and granule_id else None,
     }
 
