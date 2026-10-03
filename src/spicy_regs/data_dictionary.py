@@ -41,7 +41,7 @@ from dotenv import load_dotenv
 
 from spicy_regs import output_ledger, table_joins
 from spicy_regs.duckdb_settings import load_public_http
-from spicy_regs.schemas.regulations import RECORD_TYPES
+from spicy_regs.schemas.regulations import COMMENT_MIRROR_COLUMNS, RECORD_TYPES
 from spicy_regs.sources.publication import SNAPSHOT_POINTER, PublicationError, parquet_scan
 
 # Repo layout anchors (this file lives at src/spicy_regs/data_dictionary.py).
@@ -995,6 +995,8 @@ def expected_schemas() -> dict[str, list[tuple[str, str]]]:
         elif name in RECORD_TYPES:
             rt = RECORD_TYPES[name]
             schemas[name] = [(col, rt.sql_type(col)) for col in rt.schema]
+            if name == "comments":
+                schemas[name] += [(col, "VARCHAR") for col in COMMENT_MIRROR_COLUMNS]
         elif name in DERIVED_SCHEMAS:
             schemas[name] = list(DERIVED_SCHEMAS[name])
         else:  # pragma: no cover - guards against TABLES/registry drift

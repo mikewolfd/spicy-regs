@@ -11,6 +11,7 @@ from spicy_docs.schemas import TABLE_CONTRACTS
 from spicy_docs.schemas.regulations import COMMENT as SOURCE_COMMENT
 
 from spicy_regs.schemas import COMMENT
+from spicy_regs.schemas.regulations import COMMENT_MIRROR_COLUMNS
 from spicy_regs.sources import iceberg
 from spicy_regs.transforms.write_staging import write_staging
 
@@ -99,7 +100,7 @@ def test_ingested_values_reach_the_mirror_typed_with_null_and_zero_distinct(tmp_
     monkeypatch.setattr(iceberg, "_read_snapshot", lambda *_: iceberg.CatalogSnapshot("local", 1, 1))
     monkeypatch.setattr(iceberg, "_snapshot_query", lambda rt, _: f"SELECT * FROM {iceberg._qualified(rt)}")
     result = iceberg.export_public_comments(tmp_path / "out", COMMENT)
-    assert pl.read_parquet(result["comments"]).columns == list(TABLE_CONTRACTS["comments"].columns)
+    assert pl.read_parquet(result["comments"]).columns == [*TABLE_CONTRACTS["comments"].columns, *COMMENT_MIRROR_COLUMNS]
     with duckdb.connect() as con:
         described = dict(con.execute(f"SELECT column_name, column_type FROM (DESCRIBE '{result['comments']}')").fetchall())
         assert described["duplicate_comments"] == "INTEGER" and described["subtype"] == "VARCHAR"
@@ -120,7 +121,7 @@ def test_legacy_catalog_gains_both_columns_and_old_rows_read_as_unread(tmp_path,
     monkeypatch.setattr(iceberg, "_read_snapshot", lambda *_: iceberg.CatalogSnapshot("local", 1, 1))
     monkeypatch.setattr(iceberg, "_snapshot_query", lambda rt, _: f"SELECT * FROM {iceberg._qualified(rt)}")
     early = iceberg.export_public_comments(tmp_path / "early", COMMENT)
-    assert pl.read_parquet(early["comments"]).columns == list(TABLE_CONTRACTS["comments"].columns)
+    assert pl.read_parquet(early["comments"]).columns == [*TABLE_CONTRACTS["comments"].columns, *COMMENT_MIRROR_COLUMNS]
     assert pl.read_parquet(early["comments"]).select(added).to_dicts() == [dict.fromkeys(added)]
 
     with iceberg._connect_for_table(COMMENT) as con:
