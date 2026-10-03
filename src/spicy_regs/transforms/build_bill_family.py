@@ -245,7 +245,10 @@ VOTE_REFERENCE_COLUMNS: tuple[str, ...] = (
 #: "On passage" and "Motion to reconsider"), so the action is part of the key.
 #: ``url``, ``date`` and ``full_action_name`` are values, not key parts:
 #: ``full_action_name`` is NULL on every entry measured, and a NULL key part
-#: would have ``merge_table`` drop the row rather than publish it.
+#: would have ``merge_table`` drop the row rather than publish it. The position
+#: is the publisher's newest-first list position, so it moves as actions are
+#: added: a re-read bill's rows replace its prior ones whole, and a bill's rows
+#: come from its newest capture only (``_latest_capture_only``).
 VOTE_REFERENCE_IDENTITY: tuple[str, ...] = ("bill_id", "chamber", "congress", "session", "roll_number", "action_index")
 
 #: The oldest Congress the ``bill`` list route reaches (measured:
@@ -1020,6 +1023,32 @@ def _full_action_name(action: Any, reference: VoteReference) -> str | None:
         except VoteMatchError:  # an entry the reader refused has no name to give
             continue
     return None
+
+
+def _latest_capture_only(path: Path) -> int:
+    """Drop each bill's reference rows from any capture but its newest; return how many went.
+
+    Congress.gov lists a bill's actions newest-first, so ``action_index`` moves with every action added and an
+    earlier capture's row no longer names its action. A bill this run read is replaced at the merge
+    (``replace_parents``); this sweeps the bills a run does not read again, whose rows from two captures survived
+    before that scope existed (33 rows over 9 bills in the live table on 2026-10-03). One capture per bill per run,
+    so the newest ``observed_at`` is the bill's current statement.
+    """
+    import duckdb
+
+    source = f"read_parquet('{path}')"
+    superseded = "observed_at IS DISTINCT FROM max(observed_at) OVER (PARTITION BY bill_id)"
+    counted = duckdb.sql(f"SELECT count(*) FROM (SELECT 1 FROM {source} QUALIFY {superseded})").fetchone()
+    swept = int(counted[0]) if counted else 0
+    if swept:
+        staged = path.with_name(f".{path.name}.partial")
+        duckdb.sql(
+            f"COPY (SELECT * FROM {source} QUALIFY NOT ({superseded}) "
+            f"ORDER BY observed_at DESC, {', '.join(VOTE_REFERENCE_IDENTITY)}) "
+            f"TO '{staged}' (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 50000)"
+        )
+        staged.replace(path)
+    return swept
 
 
 def vote_reference_rows(status: Any, *, observed_at: str | None) -> tuple[list[dict], int]:
@@ -1943,6 +1972,9 @@ def build_bill_family(
     retired_versions: set[tuple[str, ...]] = set(index.invalid_targets)
     archive_rows: list[dict] = []
     vote_rows: list[dict] = []
+    # The bills whose status this run read whole: a read status is the complete statement of its actions'
+    # recorded votes, so their prior reference rows are replaced at the merge, including when it states none.
+    votes_restated: set[str] = set()
     # Each parsed bill's own report citations, which its CBO feed rows carry.
     citations: dict[BillIdentity, tuple[str, ...]] = {}
     bills = unchanged = skipped = archives_skipped = votes_refused = 0
@@ -2026,6 +2058,7 @@ def build_bill_family(
                 rows, refused = vote_reference_rows(member.status, observed_at=observed_at)
                 vote_rows.extend(rows)
                 votes_refused += refused
+                votes_restated.add(identifier)
                 touched.add(identifier)
                 bills += 1
             for dropped in status_bills.get(scope, set()) - held_bills:
@@ -2306,18 +2339,23 @@ def build_bill_family(
             },
         )
     )
-    paths.append(
-        merge_table(
-            output_dir,
-            name=VOTE_REFERENCES_TABLE,
-            columns=VOTE_REFERENCE_COLUMNS,
-            identity=VOTE_REFERENCE_IDENTITY,
-            version_column="observed_at",
-            rows=vote_rows,
-            remote_key=f"{VOTE_REFERENCES_TABLE}.parquet",
-            download_prior=download_prior,
-        )
+    references = merge_table(
+        output_dir,
+        name=VOTE_REFERENCES_TABLE,
+        columns=VOTE_REFERENCE_COLUMNS,
+        identity=VOTE_REFERENCE_IDENTITY,
+        version_column="observed_at",
+        rows=vote_rows,
+        remote_key=f"{VOTE_REFERENCES_TABLE}.parquet",
+        download_prior=download_prior,
+        replace_parents=("bill_id", votes_restated),
     )
+    paths.append(references)
+    swept = _latest_capture_only(references)
+    if swept:
+        logger.info("Bill family: {:,} recorded-vote references from superseded captures swept", swept)
+    if evidence is not None:
+        evidence.event("vote-references-merged", restated_bills=len(votes_restated), rows=len(vote_rows), swept=swept)
     # The backfill's own retained state, beside the archives table: what was
     # filled under which list stamp, and, per Congress walked, the route's
     # declared total against what was reached. Both merge like the archives —

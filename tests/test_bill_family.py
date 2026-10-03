@@ -1189,6 +1189,89 @@ def test_references_are_keyed_by_action_so_one_roll_call_on_two_actions_is_two_r
     assert {r["roll_number"] for r in rows} == {"306"}
 
 
+def _shifted_status(status: bytes, *, votes: bool) -> bytes:
+    """``status`` as a later capture: one more action at the head of the newest-first list, so every recorded vote
+    sits one position later, and a moved text stamp so the family reads the bill again."""
+    raw = (status if votes else (FIXTURES / "status-119hr6028.xml").read_bytes()).decode()
+    stamp = "<updateDateIncludingText>2026-09-09T17:31:22Z</updateDateIncludingText>"
+    assert stamp in raw
+    return (
+        raw.replace("<actions>", "<actions><item><actionDate>2026-06-10</actionDate><text>Held at the desk.</text>"
+                    "<type>Floor</type></item>", 1)
+        .replace(stamp, "<updateDateIncludingText>2026-09-10T00:00:00Z</updateDateIncludingText>", 1)
+        .encode()
+    )
+
+
+def _reread(first: Path, status: bytes) -> dict[str, Path]:
+    """A second run over ``first``'s outputs whose bulk zip changed and whose status is ``status``."""
+    second = first.parent / "second"
+    return _run(second, StubBulkAcquirer(entry=lambda c, t: zip_entry(c, t, size=31_658_670), status=status),
+                _priors(first))
+
+
+def test_a_re_read_bill_replaces_its_recorded_vote_references(tmp_path, scoped):
+    """The publisher's action list is newest-first, so a position moves with every action added; a read status is
+    the complete statement of its recorded votes, and the positions an earlier capture stated go with it. The votes
+    rollup, which takes the lowest position, then points at the action that recorded the vote today."""
+    from spicy_docs.interpretation.vote_matching import VoteKey
+
+    from spicy_regs.transforms.build_roll_call_votes import _link_columns, _recorded_vote_references
+
+    first = tmp_path / "first"
+    _run(first, StubBulkAcquirer(status=_voted_status()))
+    paths = _reread(first, _shifted_status(_voted_status(), votes=True))
+    rows = pq.read_table(paths[VOTE_REFERENCES_TABLE]).to_pylist()
+    assert sorted(row["action_index"] for row in rows) == ["1", "2"], "only the latest capture's positions survive"
+    assert {row["observed_at"] for row in rows} == {OBSERVED_AT}
+
+    key = VoteKey(119, "senate", 2, 312)
+    votes = tmp_path / "votes"
+    votes.mkdir()
+    published = _prior_from(paths[VOTE_REFERENCES_TABLE].parent)
+    references = [r for r in _recorded_vote_references(votes, (119,), published) or () if r.vote == key]
+    assert _link_columns(key, references, None)["match_action_index"] == "1"
+
+
+def test_an_unread_bill_keeps_its_recorded_vote_references(tmp_path, scoped):
+    first = tmp_path / "first"
+    before = pq.read_table(_run(first, StubBulkAcquirer(status=_voted_status()))[VOTE_REFERENCES_TABLE]).to_pylist()
+    second = tmp_path / "second"
+    after = pq.read_table(_run(second, StubBulkAcquirer(), _priors(first))[VOTE_REFERENCES_TABLE]).to_pylist()
+    assert after == before, "an unchanged zip is not read, so the bill's references stand"
+
+
+def test_a_bill_not_read_again_keeps_only_its_newest_captures_references(tmp_path, scoped):
+    """The sweep for rows two captures left behind before re-read bills replaced theirs: the newest capture stands."""
+    held = [
+        {"bill_id": "119-hr-1", "chamber": "senate", "congress": "119", "session": "2", "roll_number": "235",
+         "action_index": index, "url": "https://www.senate.gov/x.xml", "date": "2026-09-15T22:25:00Z",
+         "full_action_name": None, "observed_at": observed}
+        for index, observed in (("8", "2026-09-23T00:00:00Z"), ("9", "2026-09-25T00:00:00Z"), ("16", "2026-10-03T00:00:00Z"))
+    ] + [
+        {"bill_id": "119-hr-2", "chamber": "house", "congress": "119", "session": "2", "roll_number": "7",
+         "action_index": index, "url": "https://clerk.house.gov/evs/2026/roll007.xml", "date": "2026-09-15T00:00:00Z",
+         "full_action_name": None, "observed_at": "2026-09-23T00:00:00Z"}
+        for index in ("0", "1")
+    ]
+    pq.write_table(
+        pa.Table.from_pylist(held, schema=pa.schema([(c, pa.string()) for c in VOTE_REFERENCE_COLUMNS])),
+        prior_scratch_path(tmp_path, VOTE_REFERENCES_TABLE),
+    )
+    paths = _run(tmp_path, StubBulkAcquirer(status=_voted_status()))
+    rows = pq.read_table(paths[VOTE_REFERENCES_TABLE]).to_pylist()
+    assert sorted((r["bill_id"], r["action_index"]) for r in rows) == [
+        ("119-hr-1", "16"), ("119-hr-2", "0"), ("119-hr-2", "1"), ("119-hr-6028", "0"), ("119-hr-6028", "1"),
+    ], "one capture per held bill, both of a same-capture pair kept, the read bill's own rows beside them"
+
+
+def test_a_re_read_status_recording_no_vote_empties_the_bills_references(tmp_path, scoped):
+    first = tmp_path / "first"
+    _run(first, StubBulkAcquirer(status=_voted_status()))
+    paths = _reread(first, _shifted_status(b"", votes=False))
+    assert pq.read_table(paths[VOTE_REFERENCES_TABLE]).num_rows == 0
+
+
 # --------------------------------------------------------------------------- #
 # The PDF rendition: reachable since 0.21.1 put PDF last in the preference
 # rather than outside it, and the one branch that fills the cleanup_* columns.
