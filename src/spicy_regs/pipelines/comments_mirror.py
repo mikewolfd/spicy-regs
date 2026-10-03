@@ -72,6 +72,29 @@ def _retain_empty_agencies(result: dict[str, Path], predecessor: PublicPredecess
             pq.write_table(pa.Table.from_batches([], schema=schema), path, compression="zstd")
 
 
+def check_receipt_rows(output_dir: Path, files: dict[str, dict], exported_rows: int) -> None:
+    """Refuse a receipt whose ``rows`` the published files do not bear out.
+
+    The server states ``rows`` from the receipt without opening a file, so each must be the sum of its own file's row
+    groups; the monolith's must be the count the export validated; and the agency files must sum to it, the rule
+    :func:`_receipt_matches` holds a published receipt to, applied before one is written.
+    """
+    errors = []
+    for key, item in files.items():
+        metadata = pq.ParquetFile(output_dir / key).metadata
+        grouped = sum(metadata.row_group(i).num_rows for i in range(metadata.num_row_groups))
+        if item["rows"] != grouped:
+            errors.append(f"{key} states {item['rows']:,} rows and its row groups hold {grouped:,}")
+    if files["comments.parquet"]["rows"] != exported_rows:
+        errors.append(f"comments.parquet states {files['comments.parquet']['rows']:,} rows; the export validated "
+                      f"{exported_rows:,}")
+    agencies = sum(item["rows"] for key, item in files.items() if _AGENCY_KEY.fullmatch(key))
+    if agencies != exported_rows:
+        errors.append(f"the agency files hold {agencies:,} rows; the export validated {exported_rows:,}")
+    if errors:
+        raise RuntimeError("Refusing the comments receipt: " + "; ".join(errors))
+
+
 def _receipt_matches(receipt: dict | None, snapshot: iceberg.CatalogSnapshot, base_url: str) -> bool:
     """A successful receipt plus unchanged public/storage versions permits a no-op."""
     if not isinstance(receipt, dict) or receipt.get("format_version") != FORMAT_VERSION:
@@ -170,6 +193,7 @@ def publish_comments_mirror(output_dir: Path, *, resources: ExportResources | No
 
     with ThreadPoolExecutor(max_workers=4) as pool:
         descriptors = dict(pool.map(verify, files))
+    check_receipt_rows(output_dir, descriptors, n_rows)
     receipt = {"format_version": FORMAT_VERSION, "source": asdict(snapshot), "files": descriptors}
     receipt_path = output_dir / RECEIPT_KEY
     receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")

@@ -330,6 +330,29 @@ def test_every_member_is_republished_together_from_the_pinned_snapshot(published
     assert receipt["files"]["comments.parquet"]["rows"] == sum(index.values())
 
 
+def _member(path, rows: int, row_group: int):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pq.write_table(pa.table({"comment_id": [str(i) for i in range(rows)]}), path, row_group_size=row_group)
+    return {"rows": rows}
+
+
+def test_a_receipt_whose_agency_rows_do_not_sum_to_the_monolith_is_refused(tmp_path):
+    files = {"comments.parquet": _member(tmp_path / "comments.parquet", 3, 2),
+             "comments_index.parquet": _member(tmp_path / "comments_index.parquet", 1, 1),
+             "comments/agency/agency_code=EPA/part-0.parquet":
+                 _member(tmp_path / "comments/agency/agency_code=EPA/part-0.parquet", 2, 1)}
+    with pytest.raises(RuntimeError, match="agency files hold 2 rows; the export validated 3"):
+        mirror.check_receipt_rows(tmp_path, files, 3)
+    files["comments/agency/agency_code=CMS/part-0.parquet"] = _member(
+        tmp_path / "comments/agency/agency_code=CMS/part-0.parquet", 1, 1)
+    mirror.check_receipt_rows(tmp_path, files, 3)
+    with pytest.raises(RuntimeError, match="comments.parquet states 3 rows; the export validated 4"):
+        mirror.check_receipt_rows(tmp_path, files, 4)
+    files["comments_index.parquet"]["rows"] = 2
+    with pytest.raises(RuntimeError, match="comments_index.parquet states 2 rows and its row groups hold 1"):
+        mirror.check_receipt_rows(tmp_path, files, 3)
+
+
 def test_export_refuses_a_catalog_moved_from_the_pinned_snapshot(tmp_path, monkeypatch):
     monkeypatch.setattr(iceberg, "_connect", duckdb.connect)
     monkeypatch.setattr(iceberg, "_read_snapshot", lambda con, rt: iceberg.CatalogSnapshot("table-uuid", 42, 0))
