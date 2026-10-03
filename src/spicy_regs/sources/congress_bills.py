@@ -38,11 +38,12 @@ Congress every day from BILLSTATUS.
 
 from __future__ import annotations
 
-import os
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 import httpx
+
+from spicy_regs.env_values import first_env
 
 if TYPE_CHECKING:
     from spicy_regs.source_evidence import CaptureEvidence
@@ -174,8 +175,4 @@ def _resolve_api_key() -> str | None:
     The same api.data.gov key is valid across regulations.gov, Congress.gov, and
     GovInfo, so we accept whichever the environment already provides.
     """
-    for var in API_KEY_ENV_VARS:
-        value = os.environ.get(var)
-        if value:
-            return value
-    return None
+    return first_env(API_KEY_ENV_VARS)

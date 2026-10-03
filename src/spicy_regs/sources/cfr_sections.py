@@ -14,7 +14,6 @@ A section identifier's numeric prefix does not establish its enclosing part.
 from __future__ import annotations
 
 import datetime as dt
-import os
 import re
 from collections.abc import Iterator, Mapping
 from typing import TYPE_CHECKING, Any
@@ -22,6 +21,7 @@ from typing import TYPE_CHECKING, Any
 import httpx
 from loguru import logger
 
+from spicy_regs.env_values import first_env
 from spicy_regs.sources.base import Reader
 
 if TYPE_CHECKING:
@@ -47,11 +47,7 @@ class CfrSectionsError(ValueError):
 
 def _resolve_api_key() -> str | None:
     """Return the first nonempty configured api.data.gov key."""
-    for name in API_KEY_ENV_VARS:
-        value = os.environ.get(name)
-        if value and value.strip():
-            return value.strip()
-    return None
+    return first_env(API_KEY_ENV_VARS)
 
 
 class CfrSectionsReader(Reader):

@@ -28,7 +28,6 @@ from __future__ import annotations
 
 import json
 import hashlib
-import os
 from collections.abc import Generator, Hashable, Iterable, Iterator, Mapping
 from contextlib import closing
 from datetime import UTC, date, datetime, timedelta
@@ -39,6 +38,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from loguru import logger
 
+from spicy_regs.env_values import first_env
 from spicy_regs.sources import r2
 from spicy_regs.transforms.parquet_rows import write_rows
 from spicy_regs.transforms.table_merge import merge_local_prior
@@ -213,11 +213,8 @@ class FccEcfsError(ValueError):
 
 
 def _resolve_api_key() -> str | None:
-    for name in API_KEY_ENV_VARS:
-        value = os.environ.get(name, "").strip()
-        if value:
-            return value
-    return None
+    """Return the first nonempty configured api.data.gov key."""
+    return first_env(API_KEY_ENV_VARS)
 
 
 def _fetch_fcc(

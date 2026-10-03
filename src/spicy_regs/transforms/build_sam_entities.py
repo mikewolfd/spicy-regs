@@ -43,6 +43,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from loguru import logger
 
+from spicy_regs.env_values import first_env
 from spicy_regs.sources import r2
 from spicy_regs.transforms.table_merge import merge_local_prior, retired_rows
 
@@ -94,12 +95,8 @@ PAGED_BUDGET = None  # built lazily beside the reader that needs it
 
 def _resolve_sam_api_key() -> str:
     """The first api.data.gov key set in :data:`SAM_API_KEY_ENV_VARS`; a missing key refuses."""
-    import os
-
-    for var in SAM_API_KEY_ENV_VARS:
-        value = os.environ.get(var)
-        if value:
-            return value
+    if key := first_env(SAM_API_KEY_ENV_VARS):
+        return key
     from spicy_docs.sources.sam_extract import SamExtractError
 
     raise SamExtractError("SAM entities require a SAM-authorized API key; set SAM_API_KEY")

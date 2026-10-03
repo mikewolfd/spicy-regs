@@ -33,6 +33,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from loguru import logger
 
+from spicy_regs.env_values import first_env
 from spicy_regs.sources import r2
 from spicy_regs.transforms.parquet_rows import write_rows
 from spicy_regs.transforms.table_merge import merge_local_prior
@@ -84,7 +85,7 @@ _SCHEMA = pa.schema([(c, pa.string()) for c in COLUMNS])
 
 def _resolve_api_key() -> str | None:
     """Resolve the repository's shared api.data.gov key without logging it."""
-    return next((os.environ[var] for var in API_KEY_ENV_VARS if os.environ.get(var)), None)
+    return first_env(API_KEY_ENV_VARS)
 
 
 def _json_array(value: object) -> str:
