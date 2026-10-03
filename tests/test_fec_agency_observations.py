@@ -110,8 +110,8 @@ def test_agency_inputs_preserve_every_native_record_without_invented_relationshi
         json.loads(r["source_record_json"])["record"]["record"] == native
         for r, native in zip(records, metadata, strict=True)
     )
-    assert collections[0]["record_count"] == str(len(records))
-    assert collections[0]["relationship_count"] == "0"
+    assert collections[0]["record_count"] == len(records)
+    assert collections[0]["relationship_count"] == 0
     assert collections[0]["artifact_sha256"] == item.get("artifact_sha256")
     assert json.loads(collections[0]["coverage_limits_json"])[0].startswith("One selected retained original")
 

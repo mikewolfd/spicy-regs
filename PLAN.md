@@ -24,6 +24,37 @@ Mike's.
   to Eugene's `1f02a7f`. While the commits were on `main`, GitHub marked our
   seven PRs merged (#181–#183, #193–#196); their content is not on origin.
 
+## Dataset and ETL receipt separation
+
+User decision, October 3, 2026: this applies to every SpicyRegs dataset,
+not only the FEC retained-data audit. Subject tables contain useful domain
+values and stable record keys. Processing provenance, source coordinates,
+parser versions, raw conversion inputs, refusals, extraction attempts and
+validation details belong in a separate shared `etl_receipts` table, bound
+to the dataset, record identity and selected generation. Rejected inputs may
+have receipts without subject rows. Preserve all source witnesses.
+
+Repeated domain values use native lists and structures, not JSON serialized
+into text columns. Preserve source order, repetitions and meaningful nulls.
+Domain statuses such as candidate status, canceled meetings and withdrawal
+remain domain values; processing statuses move to receipts. Classify fields
+explicitly by meaning, not by a naming suffix.
+
+The local FEC cleanup is an intermediate implementation and does not yet meet
+this decision: it still stores processing columns alongside subject values
+and encodes some repeated values as JSON strings. The required migration
+must cover producer schemas, every writer, incremental-build readers,
+financial qualification and evidence consumers, dictionary declarations and
+native-list navigation together. The existing output ledger describes table
+qualification; it does not replace per-record ETL receipts. Publish subject
+outputs and their receipts as one validated generation; refuse missing or
+ambiguous receipt joins rather than weakening existing qualification checks.
+
+For FEC history, `treasurer_name` remains subject data. `treasurer_text` is
+a source PostgreSQL `tsvector`; preserve that literal search-index value in
+the receipt/source evidence. Candidate IDs and cycle arrays must become
+native string and integer lists respectively.
+
 ## State
 
 Two fixed points, and one command for everything that moves. The first draft of
@@ -220,6 +251,10 @@ a best-effort post-merge step so a corrupt `laws` table cannot fail the
 bill run. Re-measure before re-opening.
 
 ## Downstream consumers
+Catalog format 4 adds explicit FEC dataset categories and logical child-view
+declarations. Physical table classes remain distinct from views; adopting consumers
+must re-vendor the catalog, and a view declaration is not a published Parquet file.
+
 `data_dictionary/catalog.json` is a **vendored contract**, not a fetched one.
 spicysearch holds a copy pinned by the digest in `catalog.json.sha256`; it
 cannot import `spicy_regs`. Changing the file means the consumer must

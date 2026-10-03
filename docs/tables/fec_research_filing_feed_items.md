@@ -2,7 +2,7 @@
 
 # `fec_research_filing_feed_items`
 
-**Retained filing feed items**
+**FEC filing feed items**
 
 One RSS item occurrence in a captured source feed. Inspect literal title, link, GUID, publication text and native fields. A feed item is not a resolved filing submission or a complete current filing population. Resolve collection_id to fec_collections in the captured source generation and source_context_pointer into its retained context. Context witnesses use their own digest and native coordinates; they do not require a fictional source_record_id.
 
@@ -28,7 +28,18 @@ One RSS item occurrence in a captured source feed. Inspect literal title, link, 
 | `link` | `VARCHAR` | Literal RSS item link retained from the source feed. |
 | `guid` | `VARCHAR` | Source RSS item GUID, scoped to the feed; not promoted to a filing number or a globally resolved identity. |
 | `published_at_raw` | `VARCHAR` | Publication timestamp exactly as supplied by the RSS item; distinct from filing receipt date. |
-| `description` | `VARCHAR` | Literal source description or narrative associated with this observation. |
-| `native_fields_json` | `VARCHAR` | Retained native field values for the source row or feed item, including fields beyond the typed mapping. |
-| `source_parts_json` | `VARCHAR` | Exact native RSS parts and addresses retained to locate each item field. |
 | `current_record_status` | `VARCHAR` | Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record. |
+| `reported_filer_id` | `VARCHAR` | Literal identifier labelled CommitteeId in the source feed; candidate filings can carry candidate identifiers under this label. |
+| `committee_id` | `VARCHAR` | OpenFEC committee identifier (e.g. `C00684373`). Primary key / dedup key. Joins `fec_committee_history.committee_id` for per-cycle names and the connected organization. |
+| `candidate_id` | `VARCHAR` | Literal candidate identifier reported by API metadata or a verified named bulk field such as CAND_ID. Blanks and aggregate codes remain literal; an ID-shaped aggregate value does not establish a person. Names are not converted to identifiers. |
+| `source_label_status` | `VARCHAR` | Whether the feed's CommitteeId label contains a committee identifier, a candidate identifier, a missing value or an unsupported spelling. |
+| `filing_id` | `VARCHAR` | Source-reported sub_id of a filing metadata row when present; not an inferred original-file number. Amendment/current-record meaning remains in native metadata. |
+| `form_type` | `VARCHAR` | Literal filing form or record-type code from the source layout; does not prove submission conformance. |
+| `report_type` | `VARCHAR` | Source-reported report classification, interpreted within its namespace rather than as a universal period code. |
+| `coverage_start_raw` | `VARCHAR` | Literal CoverageFrom value from the feed's explicitly labelled metadata. |
+| `coverage_end_raw` | `VARCHAR` | Literal CoverageThrough value from the feed's explicitly labelled metadata. |
+| `parsing_status` | `VARCHAR` | Interpretation of source parsing: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
+| `filing_link_status` | `VARCHAR` | Source feed assertion only; the value does not qualify a filing match or establish the target exists. |
+| `coverage_start_date` | `DATE` | Build-parsed CoverageFrom date; requires exact MM/DD/YYYY spelling and a valid calendar date. |
+| `coverage_end_date` | `DATE` | Build-parsed CoverageThrough date; requires exact MM/DD/YYYY spelling and a valid calendar date. |
+| `published_at` | `TIMESTAMP WITH TIME ZONE` | Build-parsed feed publication instant from an exact four-digit-year GMT timestamp; invalid input remains null with parsing status. |

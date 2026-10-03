@@ -367,3 +367,30 @@ def test_invalid_membership_or_tree_refuses_mapping(mutation):
         rows[-1]["metadata_json"] = json.dumps(n)
     with pytest.raises(ValueError):
         map_rows(rows)
+
+
+@pytest.mark.parametrize(
+    "text,status", [("I.", "reported"), (" \t\n\u00a0", "whitespace_only"), ("", "source_empty"), (None, "source_null")]
+)
+def test_agency_text_primary_rows_keep_blank_diagnostics_and_built_order(text, status):
+    rows = oversight_rows()
+    native = dict(
+        kind="oversight-body",
+        ordinal_in_report=1,
+        body=dict(kind="report_description", text=text, source_position=dict(line=18, column=4)),
+    )
+    rows.append(row(native, 19, url="https://www.oversight.gov/reports/test"))
+    original = rows[-1]["metadata_json"]
+    mapped = map_rows(rows)
+    result = next(
+        r for r in mapped.tables["fec_agency_report_text"] if r["source_record_id"] == rows[-1]["source_record_id"]
+    )
+    assert result["text"] == text and result["text_status"] == status
+    assert (result["source_ordinal"], result["native_line"], result["native_column"]) == (19, 18, 4)
+    assert result["native_element"] is None
+    assert "native_location_json" not in result
+    assert rows[-1]["metadata_json"] == original
+    assert any(
+        e["target_record_id"] == result["record_id"] and e["source_record_id"] == rows[-1]["source_record_id"]
+        for e in mapped.evidence
+    )

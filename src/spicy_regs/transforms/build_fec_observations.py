@@ -58,7 +58,8 @@ COLLECTION_COLUMNS = (
     "artifact_sha256",
 )
 RECORD_SCHEMA = pa.schema([(name, pa.string()) for name in RECORD_COLUMNS])
-COLLECTION_SCHEMA = pa.schema([(name, pa.string()) for name in COLLECTION_COLUMNS])
+COLLECTION_SCHEMA = pa.schema([(name, pa.int64() if name in {"record_count", "relationship_count"} else pa.string())
+                              for name in COLLECTION_COLUMNS])
 OUTPUTS = ("fec_source_records.parquet", "fec_collections.parquet", "fec_relationships.parquet")
 _PROFILES = {
     "committee": ("profile", "FEC_COMMITTEE_CENSUS_PROFILE", "iter_retained_committee_pages"),
@@ -628,8 +629,8 @@ def build_fec_observations(manifest: Path, output_dir: Path, *, batch_size: int 
                             **dict.fromkeys(COLLECTION_COLUMNS),
                             "collection_id": item["collection_id"],
                             "source_family": item["source_family"],
-                            "record_count": "0",
-                            "relationship_count": "0",
+                            "record_count": 0,
+                            "relationship_count": 0,
                             "record_outcome": disposition["status"],
                             "collection_outcome_json": _json(
                                 {
@@ -695,8 +696,8 @@ def build_fec_observations(manifest: Path, output_dir: Path, *, batch_size: int 
                         "profile": item["profile"],
                         "source_system_id": profile.source_system_id,
                         "source_state_scope": outcome["sourceStateScope"],
-                        "record_count": str(record_count),
-                        "relationship_count": str(relationship_count),
+                        "record_count": record_count,
+                        "relationship_count": relationship_count,
                         "record_outcome": outcome["recordOutcome"],
                         "requested_scope_json": _json(outcome["requestedScope"]),
                         "coverage_limits_json": _json(outcome["acquisitionPolicy"].get("coverageLimits", [])),

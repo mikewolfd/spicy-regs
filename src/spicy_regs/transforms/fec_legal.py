@@ -24,7 +24,7 @@ from .fec_query import (
     record_evidence,
 )
 
-MAPPING_VERSION = "fec-retained-legal/1"
+MAPPING_VERSION = "fec-retained-legal/3"
 MATTERS = "fec_legal_matters"
 PARTIES = "fec_legal_parties"
 EVENTS = "fec_legal_events"
@@ -46,12 +46,20 @@ _COMMON = (
 ).split()
 _MATTER_TEXT = (
     "matter_type source_namespace native_matter_id native_document_id title title_status description description_status "
-    "status status_status source_url source_url_status committee_id candidate_id audit_id reported_cycle "
-    "pending_status published_status current_state_status collection_states_json native_facts_json "
+    "status status_status source_url source_url_status committee_id candidate_id audit_id reported_cycle_status "
+    "is_pending_status is_published_status current_state_status collection_states_json native_facts_json "
     "final_determination_amount_status final_determination_amount_raw payment_amount_status payment_amount_raw "
     "reason_to_believe_fine_amount_status reason_to_believe_fine_amount_raw "
     "treasury_referral_amount_status treasury_referral_amount_raw currency"
 ).split()
+# Scalar source assertions belong in the matter row. Structured collections
+# remain separate from these fields for ordered child queries.
+_FACT_TEXT = (
+    "challenge_outcome civil_penalty_payment_status report_type mur_type "
+    "committee_description committee_designation committee_type rm_id rm_number"
+).split()
+_FACT_TYPES: dict[str, pa.DataType] = {**dict.fromkeys(_FACT_TEXT, pa.string()), "report_year": pa.int32(), "is_open_for_comment": pa.bool_()}
+_MATTER_TEXT = [*_MATTER_TEXT, *(name + "_status" for name in _FACT_TYPES)]
 _PARTY_TEXT = (
     "role role_status reported_name reported_name_status native_entity_id native_entity_id_status "
     "entity_namespace entity_type identity_resolution_status document_record_id"
@@ -78,7 +86,9 @@ def _schema(text_fields, typed=()):
 SCHEMAS = {
     MATTERS: _schema(
         _MATTER_TEXT,
-        [
+        [("reported_cycle", pa.int32()), ("is_pending", pa.bool_()), ("is_published", pa.bool_())]
+        + list(_FACT_TYPES.items())
+        + [
             (k, AMOUNT_TYPE)
             for k in (
                 "final_determination_amount",
@@ -120,6 +130,29 @@ def _scalar(value):
     if type(value) is bool:
         return "true" if value else "false"
     raise ValueError("Legal scalar must preserve text, integer, exact decimal, boolean or null")
+
+
+def _typed_scalar(obj, key, dtype):
+    """Interpret a known primitive without rounding numbers or guessing flags."""
+    state = _state(obj, key)
+    if state != "reported":
+        return None, state
+    raw = obj[key]
+    if pa.types.is_string(dtype):
+        return (raw, "reported") if isinstance(raw, str) else (None, "unsupported_spelling")
+    if pa.types.is_boolean(dtype):
+        if type(raw) is bool:
+            return raw, "reported"
+        if isinstance(raw, str) and raw.lower() in {"true", "false"}:
+            return raw.lower() == "true", "parsed"
+        return None, "unsupported_spelling"
+    if type(raw) is int:
+        value = raw
+    elif isinstance(raw, str) and re.fullmatch(r"[+-]?[0-9]+", raw):
+        value = int(raw)
+    else:
+        return None, "unsupported_spelling"
+    return (value, "parsed") if -(2**31) <= value < 2**31 else (None, "overflow")
 
 
 def _first_key(obj, keys):
@@ -323,13 +356,11 @@ def map_legal(row, selection: CollectionSelection):
             "no_tier_documents",
         )
     }
-    # Preserve small structured classifications/statuses without treating them as
-    # interpreted legal findings or extracting embedded search highlights.
+    # Keep only structured collections here. Scalars are mapped below; the
+    # complete object, including unknown keys, remains in fec_source_records.
     facts = {
-        k: v
-        for k, v in native.items()
-        if k
-        in {
+        k: native[k]
+        for k in (
             "ao_citations",
             "aos_cited_by",
             "regulatory_citations",
@@ -340,21 +371,23 @@ def map_legal(row, selection: CollectionSelection):
             "election_cycles",
             "non_monetary_terms",
             "non_monetary_terms_respondents",
-            "challenge_outcome",
-            "civil_penalty_payment_status",
-            "report_type",
-            "report_year",
-            "mur_type",
-            "is_open_for_comment",
-            "committee_description",
-            "committee_designation",
-            "committee_type",
-            "rm_id",
-            "rm_number",
-            "ao_no",
-            "case_serial",
-        }
+        )
+        if k in native
     }
+    scalars = {}
+    for name, dtype in {
+        "reported_cycle": pa.int32(),
+        "is_pending": pa.bool_(),
+        "is_published": pa.bool_(),
+        **_FACT_TYPES,
+    }.items():
+        native_name = {"reported_cycle": "cycle", "is_published": "published_flg"}.get(name, name)
+        if name == "rm_id" and type(native.get(native_name)) is int:
+            # Alternate native identifiers need their exact spelling, not a
+            # numerical measure or an assumed equivalence to the matter number.
+            scalars[name], scalars[name + "_status"] = str(native[native_name]), "reported"
+        else:
+            scalars[name], scalars[name + "_status"] = _typed_scalar(native, native_name, dtype)
     add(
         MATTERS,
         base_pointer,
@@ -374,14 +407,12 @@ def map_legal(row, selection: CollectionSelection):
             committee_id=_scalar(native.get("committee_id")),
             candidate_id=_scalar(native.get("candidate_id")),
             audit_id=_scalar(native.get("audit_id")),
-            reported_cycle=_scalar(native.get("cycle")),
-            pending_status=_scalar(native.get("is_pending")),
-            published_status=_scalar(native.get("published_flg")),
             current_state_status="unqualified",
             collection_states_json=_json(collections),
             native_facts_json=_json(facts),
             currency="USD" if native_type == "admin_fines" else None,
             **amounts,
+            **scalars,
         ),
     )
 

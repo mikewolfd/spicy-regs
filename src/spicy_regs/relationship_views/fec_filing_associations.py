@@ -10,9 +10,9 @@ import re
 
 from .core import literal, quoted
 
-POLICY_VERSION = "fec-retained-filing-association/1"
+POLICY_VERSION = "fec-retained-filing-association/2"
 TARGET_IDENTITY_VERSION = "fec-typed-observation/1"
-TARGET_MAPPING_VERSION = "fec-identity-observations/1"
+TARGET_MAPPING_VERSION = "fec-identity-observations/2"
 FILE_NUMBER_MAPPINGS = {
     "fec-bulk-individual-contributions": "fec-bulk-individual-receipt/1",
     **{

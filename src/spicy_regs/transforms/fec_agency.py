@@ -18,7 +18,7 @@ import pyarrow as pa
 
 from .fec_query import AMOUNT_TYPE, IDENTITY_VERSION, exact_amount, observation_id, record_evidence
 
-MAPPING_VERSION = "fec-agency-native/1"
+MAPPING_VERSION = "fec-agency-native/2"
 FOIA_NAMESPACES = frozenset(f"http://leisp.usdoj.gov/niem/FoiaAnnualReport/extension/{v}" for v in ("1.02", "1.03"))
 NIEM = "{http://niem.gov/niem/structures/2.0}"
 WORD = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
@@ -58,7 +58,10 @@ RECOMMENDATION_SCHEMA = pa.schema(
     ]
     + [("questioned_costs", AMOUNT_TYPE), ("funds_for_better_use", AMOUNT_TYPE)]
 )
-TEXT_SCHEMA = pa.schema([(n, pa.string()) for n in COMMON + "report_id text_kind text native_location_json".split()])
+TEXT_SCHEMA = pa.schema(
+    [(n, pa.string()) for n in COMMON + "report_id text_kind text text_status".split()]
+    + [(n, pa.int64()) for n in ("source_ordinal", "native_element", "native_line", "native_column")]
+)
 DOCUMENT_SCHEMA = pa.schema(
     [(n, pa.string()) for n in COMMON + "report_id url label relation_type body_status native_location_json".split()]
 )
@@ -247,6 +250,30 @@ class _Mapper:
             d["target_record_ids_json"] = _json(ids)
 
     def emit(self, table, row, values, *, pointer=None, context=()):
+        if table == "fec_agency_report_text":
+            # Keep empty and unknown fragments as evidence-bearing rows. Reading
+            # and search clients can filter text_status without another table.
+            values = dict(values)
+            text = values.get("text")
+            values["text_status"] = (
+                "source_null"
+                if text is None
+                else "source_empty"
+                if text == ""
+                else "whitespace_only"
+                if text.isspace()
+                else "reported"
+            )
+            location = json.loads(values.pop("native_location_json", "null"))
+            location = location if isinstance(location, dict) else {}
+            locator = json.loads(row["source_locator_json"])
+            for column, raw in (
+                ("source_ordinal", locator.get("ordinal")),
+                ("native_element", location.get("element")),
+                ("native_line", location.get("line")),
+                ("native_column", location.get("column")),
+            ):
+                values[column] = raw if type(raw) is int and 0 <= raw <= 2**63 - 1 else None
         result = {**self.common(table, row, pointer), **values}
         self.result.tables[table].append(result)
         seen = set()

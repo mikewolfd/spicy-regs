@@ -196,3 +196,56 @@ def test_arrow_roundtrip_keeps_decimal_and_day_types(tmp_path):
         pq.write_table(table, path)
         assert pq.read_table(path).equals(table)
     assert legal.SCHEMAS[legal.MATTERS].field("final_determination_amount").type == pa.decimal128(38, 9)
+
+
+def test_matter_scalars_are_built_once_with_types_and_original_evidence():
+    native = dict(
+        type="admin_fines",
+        no="42",
+        cycle="2024",
+        is_pending=False,
+        published_flg="true",
+        is_open_for_comment=True,
+        report_year="2023",
+        report_type="Q3",
+        challenge_outcome="Withdrawn",
+        mur_type="archived",
+        civil_penalty_payment_status="Paid",
+        committee_type="N",
+        citations={"regulations": [{"text": "11 CFR 104.3"}]},
+        subject=[{"text": "Reporting", "children": [{"text": "Late"}]}],
+        case_serial=42,
+        rm_id=3472947,
+        rm_number="REG 2024-08",
+    )
+    original = source(native)
+    metadata_before = original["metadata_json"]
+    tables, evidence = legal.map_legal(original, SELECTED)
+    matter = tables[legal.MATTERS][0]
+    assert matter["reported_cycle"] == 2024 and matter["report_year"] == 2023
+    assert matter["is_pending"] is False and matter["is_published"] is True
+    assert matter["is_open_for_comment"] is True
+    assert matter["challenge_outcome"] == "Withdrawn"
+    assert matter["rm_id"] == "3472947" and matter["rm_number"] == "REG 2024-08"
+    assert matter["civil_penalty_payment_status"] == "Paid"
+    facts = json.loads(matter["native_facts_json"])
+    assert facts == {"citations": native["citations"], "subject": native["subject"]}
+    assert {"pending_status", "published_status"}.isdisjoint(matter)
+    assert pa.Table.from_pylist([matter], schema=legal.SCHEMAS[legal.MATTERS]).to_pylist() == [matter]
+    assert original["metadata_json"] == metadata_before
+    primary = next(e for e in evidence if e["target_record_id"] == matter["record_id"])
+    assert primary["collection_id"] == original["collection_id"]
+    assert primary["source_record_id"] == original["source_record_id"]
+    assert json.loads(original["metadata_json"])["metadata"]["case_serial"] == 42
+
+
+@pytest.mark.parametrize("year", ["2024.5", "1e3", True, 2**40])
+def test_matter_bad_scalar_values_remain_uninterpreted_with_status(year):
+    original = source(dict(type="murs", no="42", report_year=year, is_pending="yes", published_flg=None))
+    tables, _ = legal.map_legal(original, SELECTED)
+    matter = tables[legal.MATTERS][0]
+    assert matter["report_year"] is None
+    assert matter["report_year_status"] in {"unsupported_spelling", "overflow"}
+    assert matter["is_pending"] is None and matter["is_pending_status"] == "unsupported_spelling"
+    assert matter["is_published"] is None and matter["is_published_status"] == "source_null"
+    assert matter["mapping_status"] == "partial"

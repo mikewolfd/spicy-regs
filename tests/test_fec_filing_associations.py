@@ -31,7 +31,7 @@ def filing(rid="metadata-1", number="123"):
     return dict(
         record_id=rid,
         identity_version="fec-typed-observation/1",
-        mapping_version="fec-identity-observations/1",
+        mapping_version="fec-identity-observations/2",
         filing_key=filing_key(number),
         report_number=number,
         source_authority="official-fec",
@@ -315,3 +315,12 @@ def test_unknown_policy_cannot_be_filtered_away_before_duplicate_detection():
         (result,) = db.sql(financial_header_association_sql("fec_receipts", GEN)).to_arrow_table().to_pylist()
     assert result["association_status"] == "unresolved_header_association_ambiguous"
     assert result["filing_key"] is None
+
+
+@pytest.mark.parametrize("version", ["fec-identity-observations/1", "fec-identity-observations/3", "unknown"])
+def test_only_rebuilt_v2_filing_metadata_can_establish_associations(version):
+    target = {**filing(), "mapping_version": version}
+    for result in (numbers(filings=[target])[0], headers(filings=[target])[0]):
+        assert result["filing_key"] is None
+        assert result["association_status"] == "unresolved_target_identity_conflict"
+    assert numbers()[0]["policy_version"] == "fec-retained-filing-association/2"

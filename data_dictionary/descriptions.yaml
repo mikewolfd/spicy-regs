@@ -1093,7 +1093,7 @@ tables:
       catalogued_at: "Time this catalogue output was built; not the time source data was acquired or last changed."
       coverage_note: "Explicit scope limitation: catalogue entries describe routes and do not certify underlying data acquisition or publication."
   fec_collections:
-    label: "Retained FEC collection scopes and outcomes"
+    label: "FEC collection scopes and outcomes"
     grain: "One row per selected input collection or explicitly declared caller coverage disposition."
     identity_columns: [collection_id]
     coverage: >-
@@ -3744,7 +3744,7 @@ tables:
       native_location_json: Native XML, HTML or Word coordinates for the emitted text or link, retaining row, cell
         or element addresses.
   fec_agency_report_text:
-    label: Retained agency report text
+    label: FEC agency report text
     grain: One supported text observation at a native agency-report location.
     identity_columns:
     - record_id
@@ -3782,8 +3782,13 @@ tables:
       text_kind: Kind of retained source text, such as a Word paragraph or source narrative; not a metric classification.
       text: Literal supported source text at the stated locator, without inferring a legal conclusion or numerical
         measure.
-      native_location_json: Native XML, HTML or Word coordinates for the emitted text or link, retaining row, cell
-        or element addresses.
+      text_status: 'Build-time text classification: source_null, blank or reported. Blank and null observations remain
+        available for diagnosis.'
+      source_ordinal: Zero-based fragment position within this source report; use with parent record and selected
+        generation.
+      native_element: Source document element position stated by the retained location evidence; NULL when unavailable.
+      native_line: Source document line position stated by retained evidence; NULL when unavailable.
+      native_column: Source document column position stated by retained evidence; NULL when unavailable.
   fec_agency_reports:
     label: Agency report edition observations
     grain: One retained agency report edition observation with its source context.
@@ -4284,7 +4289,7 @@ tables:
       overlapping summaries and two-sided transfers at their declared grains. Quality notices do not automatically
       exclude records.
   fec_api_response_controls:
-    label: Retained FEC API response controls
+    label: FEC API response controls
     grain: One native top-level API response field or result-container observation.
     identity_columns:
     - record_id
@@ -4303,7 +4308,6 @@ tables:
       identity_version: Version of the source-observation identity rule; it does not select a current or canonical
         record.
       mapping_version: Named, versioned source-to-field mapping used for this observation.
-      value_mapping_version: Version of the exact monetary and date conversion rules used for supported values.
       mapping_status: Whether this source observation mapped fully, partially, or received an explicit nondata/refusal
         disposition; inspect the reason alongside NULL values.
       mapping_reason_json: JSON object naming unsupported, missing or otherwise limited field interpretations; native
@@ -4321,39 +4325,32 @@ tables:
         scope; not a financial inclusion decision.
       source_representation_role: Selected source role such as snapshot, insertion or deletion. Amount signs and ordinary
         amendment flags do not establish correction applicability.
-      correction_operation: Source-supported correction operation, when applicable; a positive amount in a deletion
-        stream is not a new receipt or an inferred refund.
-      correction_applicability_status: Whether the captured correction can be applied to an evidenced base and target
-        population; unresolved applicability prevents a qualified current total.
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
-      filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
-        share it; group proven filing identity before joining.
-      filing_link_status: Status of the relationship to a submitted filing version; unresolved references preserve
-        the financial observation.
-      currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
-      amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
-        is not an aggregation permission.
       source_namespace: Namespace identifying the native layout or identifier system. Similar numbers or field names
         across namespaces are not equivalent.
       source_url: Captured source URL for this observation; it does not assert current availability or body retrieval.
       source_pointer: Exact pointer within the provider-owned native record to the mapped value or metadata object.
-      original_result_pointer: Original API results-array pointer retained separately from the provider wrapper's
-        pointer.
       query_completeness: Whether complete traversal of the stated source query was established. A retained page or
         rejected response is not a completed query.
       registry_scope_status: Explicit retained-observation scope; this table does not replace the broader current
         candidate/committee registry.
-      native_metadata_json: Complete native metadata object retained for this observation, including fields outside
-        the typed mapping.
-      native_field_states_json: JSON map of field presence states such as source_missing, source_null, source_empty
-        or reported.
       response_field: Native API response field name represented by this control row.
       response_field_role: Distinguishes a result container from pagination/control metadata; neither is an invented
         entity record.
-      value_json: Exact JSON value of the native response control or result container, including NULL and empty shapes.
       value_status: Explicit interpretation or source-presence state for value; a NULL typed value must be read with
         this status.
+      api_version: Literal API version string supplied by the captured response.
+      parsing_status: 'Interpretation of source parsing: distinguishes reported/parsed values, missing/null/empty
+        source states and unsupported spellings. A NULL typed value alone does not identify the cause.'
+      page: Nonnegative exact page number supplied in the captured pagination object; not inferred from result count.
+      per_page: Nonnegative exact requested page size reported by pagination; not proof that all rows were returned.
+      reported_count: Count explicitly supplied by the source for this group; NULL means no supported count, not zero.
+      reported_pages: Nonnegative exact total page count reported by the API at capture time.
+      observed_count: Number of results in the held API response array; the array remains source evidence and is not
+        copied into this row.
+      is_count_exact: Native JSON boolean declaring whether the API count is exact; numeric or string booleans are
+        refused.
       source_cycle: Election cycle established by the selected source evidence. Distinct from transaction year, candidate
         election year and agency fiscal year.
   fec_audit_findings:
@@ -4559,7 +4556,7 @@ tables:
       overlapping summaries and two-sided transfers at their declared grains. Quality notices do not automatically
       exclude records.
   fec_candidate_api_observations:
-    label: Retained candidate API observations
+    label: FEC candidate API observations
     grain: One candidate result occurrence in a retained API response.
     identity_columns:
     - record_id
@@ -4578,7 +4575,6 @@ tables:
       identity_version: Version of the source-observation identity rule; it does not select a current or canonical
         record.
       mapping_version: Named, versioned source-to-field mapping used for this observation.
-      value_mapping_version: Version of the exact monetary and date conversion rules used for supported values.
       mapping_status: Whether this source observation mapped fully, partially, or received an explicit nondata/refusal
         disposition; inspect the reason alongside NULL values.
       mapping_reason_json: JSON object naming unsupported, missing or otherwise limited field interpretations; native
@@ -4596,19 +4592,8 @@ tables:
         scope; not a financial inclusion decision.
       source_representation_role: Selected source role such as snapshot, insertion or deletion. Amount signs and ordinary
         amendment flags do not establish correction applicability.
-      correction_operation: Source-supported correction operation, when applicable; a positive amount in a deletion
-        stream is not a new receipt or an inferred refund.
-      correction_applicability_status: Whether the captured correction can be applied to an evidenced base and target
-        population; unresolved applicability prevents a qualified current total.
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
-      filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
-        share it; group proven filing identity before joining.
-      filing_link_status: Status of the relationship to a submitted filing version; unresolved references preserve
-        the financial observation.
-      currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
-      amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
-        is not an aggregation permission.
       source_namespace: Namespace identifying the native layout or identifier system. Similar numbers or field names
         across namespaces are not equivalent.
       candidate_id: Literal FEC candidate identifier when the source reports one. Syntax checks do not prove identity
@@ -4627,9 +4612,17 @@ tables:
       incumbent_challenge: Source code for incumbent, challenger or open-seat status.
       incumbent_challenge_full: Source-supplied expanded incumbent/challenger label.
       cycles_json: Literal JSON array of cycles stated by the API, retaining missing, NULL and empty distinctions.
+      cycles_status: 'Source array state for cycles: source_missing, source_null, source_empty, reported or unsupported_array;
+        arrays are independent and preserve order.'
       election_years_json: Literal JSON array of election years supplied for this candidate observation.
+      election_years_status: 'Source array state for election_years: source_missing, source_null, source_empty, reported
+        or unsupported_array; arrays are independent and preserve order.'
       election_districts_json: Literal JSON array of election district values supplied for this candidate observation.
+      election_districts_status: 'Source array state for election_districts: source_missing, source_null, source_empty,
+        reported or unsupported_array; arrays are independent and preserve order.'
       inactive_election_years_json: Literal JSON array of inactive election years supplied by the API.
+      inactive_election_years_status: 'Source array state for inactive_election_years: source_missing, source_null,
+        source_empty, reported or unsupported_array; arrays are independent and preserve order.'
       source_url: Captured source URL for this observation; it does not assert current availability or body retrieval.
       source_pointer: Exact pointer within the provider-owned native record to the mapped value or metadata object.
       original_result_pointer: Original API results-array pointer retained separately from the provider wrapper's
@@ -4637,14 +4630,46 @@ tables:
       candidate_id_status: State or syntax check of the reported candidate ID; a valid shape is not a resolved identity.
       query_completeness: Whether complete traversal of the stated source query was established. A retained page or
         rejected response is not a completed query.
-      native_metadata_json: Complete native metadata object retained for this observation, including fields outside
-        the typed mapping.
-      native_field_states_json: JSON map of field presence states such as source_missing, source_null, source_empty
-        or reported.
+      active_through: Last active year reported by the source; not an inferred termination date.
+      candidate_inactive: Source-reported candidate inactive flag. NULL indicates missing or unsupported source value.
+      has_raised_funds: Source-reported fundraising flag; it is not a computed total or complete-history assertion.
+      federal_funds_flag: Source-reported federal-funds flag; no eligibility determination is inferred.
+      first_file_date: First filing date as reported in this source observation, not independently reconstructed history.
+      last_file_date: Last filing date as reported in this source observation; later filings may exist.
+      last_f2_date: Last Form 2 date reported by the source, without a completeness assertion.
+      active_through_raw: Literal source value for active_through before conversion; consult active_through_status
+        for interpretation.
+      active_through_status: 'Interpretation of source active_through: distinguishes reported/parsed values, missing/null/empty
+        source states and unsupported spellings. A NULL typed value alone does not identify the cause.'
+      candidate_inactive_raw: Literal source value for candidate_inactive before conversion; consult candidate_inactive_status
+        for interpretation.
+      candidate_inactive_status: 'Interpretation of source candidate_inactive: distinguishes reported/parsed values,
+        missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the
+        cause.'
+      has_raised_funds_raw: Literal source value for has_raised_funds before conversion; consult has_raised_funds_status
+        for interpretation.
+      has_raised_funds_status: 'Interpretation of source has_raised_funds: distinguishes reported/parsed values, missing/null/empty
+        source states and unsupported spellings. A NULL typed value alone does not identify the cause.'
+      federal_funds_flag_raw: Literal source value for federal_funds_flag before conversion; consult federal_funds_flag_status
+        for interpretation.
+      federal_funds_flag_status: 'Interpretation of source federal_funds_flag: distinguishes reported/parsed values,
+        missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the
+        cause.'
+      first_file_date_raw: Literal source value for first_file_date before conversion; consult first_file_date_status
+        for interpretation.
+      first_file_date_status: 'Interpretation of source first_file_date: distinguishes reported/parsed values, missing/null/empty
+        source states and unsupported spellings. A NULL typed value alone does not identify the cause.'
+      last_file_date_raw: Literal source value for last_file_date before conversion; consult last_file_date_status
+        for interpretation.
+      last_file_date_status: 'Interpretation of source last_file_date: distinguishes reported/parsed values, missing/null/empty
+        source states and unsupported spellings. A NULL typed value alone does not identify the cause.'
+      last_f2_date_raw: Literal source value for last_f2_date before conversion; consult last_f2_date_status for interpretation.
+      last_f2_date_status: 'Interpretation of source last_f2_date: distinguishes reported/parsed values, missing/null/empty
+        source states and unsupported spellings. A NULL typed value alone does not identify the cause.'
       source_cycle: Election cycle established by the selected source evidence. Distinct from transaction year, candidate
         election year and agency fiscal year.
   fec_collection_selection:
-    label: Retained FEC representation-selection decisions
+    label: FEC representation-selection decisions
     grain: One source collection/member decision under a named snapshot-selection policy.
     identity_columns:
     - record_id
@@ -4684,7 +4709,7 @@ tables:
       source_observations: Exact count of native observations covered by this collection selection decision; not a
         monetary total.
   fec_committee_master_observations:
-    label: Retained committee master observations
+    label: FEC committee master observations
     grain: One physical committee-master row within its retained cycle/file capture.
     identity_columns:
     - record_id
@@ -4703,7 +4728,6 @@ tables:
       identity_version: Version of the source-observation identity rule; it does not select a current or canonical
         record.
       mapping_version: Named, versioned source-to-field mapping used for this observation.
-      value_mapping_version: Version of the exact monetary and date conversion rules used for supported values.
       mapping_status: Whether this source observation mapped fully, partially, or received an explicit nondata/refusal
         disposition; inspect the reason alongside NULL values.
       mapping_reason_json: JSON object naming unsupported, missing or otherwise limited field interpretations; native
@@ -4721,31 +4745,17 @@ tables:
         scope; not a financial inclusion decision.
       source_representation_role: Selected source role such as snapshot, insertion or deletion. Amount signs and ordinary
         amendment flags do not establish correction applicability.
-      correction_operation: Source-supported correction operation, when applicable; a positive amount in a deletion
-        stream is not a new receipt or an inferred refund.
-      correction_applicability_status: Whether the captured correction can be applied to an evidenced base and target
-        population; unresolved applicability prevents a qualified current total.
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
-      filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
-        share it; group proven filing identity before joining.
-      filing_link_status: Status of the relationship to a submitted filing version; unresolved references preserve
-        the financial observation.
-      currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
-      amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
-        is not an aggregation permission.
       source_namespace: Namespace identifying the native layout or identifier system. Similar numbers or field names
         across namespaces are not equivalent.
       source_url: Captured source URL for this observation; it does not assert current availability or body retrieval.
-      capture_json: Retained capture request, source digest and scope metadata used to validate this history observation.
       history_scope_status: Explicit historical scope limitation; repeated snapshots remain source observations instead
         of replacing committee/cycle identity rows.
       source_cycle: Election cycle established by the selected source evidence. Distinct from transaction year, candidate
         election year and agency fiscal year.
       committee_id: Literal FEC committee identifier as reported in this observation. Use cycle and source scope for
         historical joins.
-      cycle: Cycle exactly as supplied by the history source; raw PostgreSQL text is retained without inferring a
-        new integer value.
       name: Candidate or committee name exactly as captured in this API/history observation; no cross-record name
         merge.
       treasurer_name: Treasurer name stated by the committee or filing source at this observation.
@@ -4759,15 +4769,18 @@ tables:
       committee_type: Source committee-type code; interpret using the matching source dictionary.
       party: Source-reported political-party code or label within the native layout.
       filing_frequency: Source-stated filing frequency code; not proof that all required reports are retained.
-      organization_type: Source-stated organization-type code for the reporting committee.
+      organization_type: Literal source organization-type code; interpretation follows the source namespace.
       connected_organization_name: Name of the connected organization reported by the committee source; not a resolved
         corporate identity.
       candidate_id: Literal FEC candidate identifier when the source reports one. Syntax checks do not prove identity
         resolution or a target match.
-      native_fields: Named struct of every literal committee-master field in its verified header order. Original values
-        remain text beside the source-owned committee-history mapping.
+      cycle: Cycle exactly as supplied by the history source; raw PostgreSQL text is retained without inferring a
+        new integer value.
+      cycle_raw: Literal source value for cycle before conversion; consult cycle_status for interpretation.
+      cycle_status: 'Interpretation of source cycle: distinguishes reported/parsed values, missing/null/empty source
+        states and unsupported spellings. A NULL typed value alone does not identify the cause.'
   fec_committee_observations:
-    label: Retained committee API observations
+    label: FEC committee API observations
     grain: One committee result occurrence in a retained API response.
     identity_columns:
     - record_id
@@ -4786,7 +4799,6 @@ tables:
       identity_version: Version of the source-observation identity rule; it does not select a current or canonical
         record.
       mapping_version: Named, versioned source-to-field mapping used for this observation.
-      value_mapping_version: Version of the exact monetary and date conversion rules used for supported values.
       mapping_status: Whether this source observation mapped fully, partially, or received an explicit nondata/refusal
         disposition; inspect the reason alongside NULL values.
       mapping_reason_json: JSON object naming unsupported, missing or otherwise limited field interpretations; native
@@ -4804,19 +4816,8 @@ tables:
         scope; not a financial inclusion decision.
       source_representation_role: Selected source role such as snapshot, insertion or deletion. Amount signs and ordinary
         amendment flags do not establish correction applicability.
-      correction_operation: Source-supported correction operation, when applicable; a positive amount in a deletion
-        stream is not a new receipt or an inferred refund.
-      correction_applicability_status: Whether the captured correction can be applied to an evidenced base and target
-        population; unresolved applicability prevents a qualified current total.
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
-      filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
-        share it; group proven filing identity before joining.
-      filing_link_status: Status of the relationship to a submitted filing version; unresolved references preserve
-        the financial observation.
-      currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
-      amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
-        is not an aggregation permission.
       source_namespace: Namespace identifying the native layout or identifier system. Similar numbers or field names
         across namespaces are not equivalent.
       committee_id: Literal FEC committee identifier as reported in this observation. Use cycle and source scope for
@@ -4826,21 +4827,14 @@ tables:
       committee_type: Source committee-type code; interpret using the matching source dictionary.
       committee_type_full: Source-supplied expanded committee type label.
       designation: Source committee-designation code for this observation.
-      designation_full: Source-supplied expanded committee designation label.
+      designation_full: Source-provided description of the committee designation.
       party: Source-reported political-party code or label within the native layout.
       party_full: Source-supplied expanded party label; not independently inferred from a code.
       state: State value reported by the source for this entity; not necessarily the election state or transaction
         jurisdiction.
       treasurer_name: Treasurer name stated by the committee or filing source at this observation.
-      organization_type_full: Source-supplied expanded organization type label.
+      organization_type_full: Source-provided expansion of its organization-type code.
       filing_frequency: Source-stated filing frequency code; not proof that all required reports are retained.
-      first_file_date: First filing date as stated by the retained API profile; not inferred from the local filing
-        population.
-      last_file_date: Last filing date as stated by the retained API profile; not proof that the corresponding filing
-        was retained.
-      cycles_json: Literal JSON array of cycles stated by the API, retaining missing, NULL and empty distinctions.
-      candidate_ids_json: Literal JSON array of candidate IDs stated by the committee API; relationships require their
-        own evidence and state checks.
       source_url: Captured source URL for this observation; it does not assert current availability or body retrieval.
       source_pointer: Exact pointer within the provider-owned native record to the mapped value or metadata object.
       original_result_pointer: Original API results-array pointer retained separately from the provider wrapper's
@@ -4849,11 +4843,40 @@ tables:
         rejected response is not a completed query.
       registry_scope_status: Explicit retained-observation scope; this table does not replace the broader current
         candidate/committee registry.
-      native_metadata_json: Complete native metadata object retained for this observation, including fields outside
-        the typed mapping.
-      native_field_states_json: JSON map of field presence states such as source_missing, source_null, source_empty
-        or reported.
       committee_id_status: State or syntax check of the reported committee ID; a valid shape is not a resolved identity.
+      affiliated_committee_name: Literal affiliated committee name stated by the source; a name is not a verified
+        committee link.
+      organization_type: Literal source organization-type code; interpretation follows the source namespace.
+      cycles_json: Literal JSON array of cycles stated by the API, retaining missing, NULL and empty distinctions.
+      cycles_status: 'Source array state for cycles: source_missing, source_null, source_empty, reported or unsupported_array;
+        arrays are independent and preserve order.'
+      candidate_ids_json: Literal JSON array of candidate IDs stated by the committee API; relationships require their
+        own evidence and state checks.
+      candidate_ids_status: 'Source array state for candidate_ids: source_missing, source_null, source_empty, reported
+        or unsupported_array; arrays are independent and preserve order.'
+      sponsor_candidate_ids_json: Independent ordered array of source sponsor-candidate references; never pair positions
+        with cycles or candidate_ids.
+      sponsor_candidate_ids_status: 'Source array state for sponsor_candidate_ids: source_missing, source_null, source_empty,
+        reported or unsupported_array; arrays are independent and preserve order.'
+      first_file_date: First filing date as reported in this source observation, not independently reconstructed history.
+      last_file_date: Last filing date as reported in this source observation; later filings may exist.
+      first_f1_date: First Form 1 date reported by the source, without a completeness assertion.
+      last_f1_date: Last Form 1 date reported by the source, without a completeness assertion.
+      first_file_date_raw: Literal source value for first_file_date before conversion; consult first_file_date_status
+        for interpretation.
+      first_file_date_status: 'Interpretation of source first_file_date: distinguishes reported/parsed values, missing/null/empty
+        source states and unsupported spellings. A NULL typed value alone does not identify the cause.'
+      last_file_date_raw: Literal source value for last_file_date before conversion; consult last_file_date_status
+        for interpretation.
+      last_file_date_status: 'Interpretation of source last_file_date: distinguishes reported/parsed values, missing/null/empty
+        source states and unsupported spellings. A NULL typed value alone does not identify the cause.'
+      first_f1_date_raw: Literal source value for first_f1_date before conversion; consult first_f1_date_status for
+        interpretation.
+      first_f1_date_status: 'Interpretation of source first_f1_date: distinguishes reported/parsed values, missing/null/empty
+        source states and unsupported spellings. A NULL typed value alone does not identify the cause.'
+      last_f1_date_raw: Literal source value for last_f1_date before conversion; consult last_f1_date_status for interpretation.
+      last_f1_date_status: 'Interpretation of source last_f1_date: distinguishes reported/parsed values, missing/null/empty
+        source states and unsupported spellings. A NULL typed value alone does not identify the cause.'
       source_cycle: Election cycle established by the selected source evidence. Distinct from transaction year, candidate
         election year and agency fiscal year.
   fec_communication_costs:
@@ -5699,7 +5722,7 @@ tables:
       overlapping summaries and two-sided transfers at their declared grains. Quality notices do not automatically
       exclude records.
   fec_filing_definition_evidence:
-    label: Retained filing layout evidence
+    label: FEC filing layout evidence
     grain: One exact association from a normalized filing definition to a source context witness.
     identity_columns:
     - target_table
@@ -5863,21 +5886,21 @@ tables:
       source_sha256: SHA-256 of the original source witness bytes; distinct from the typed table's publication digest.
       source_locator_json: Exact source row or subrecord coordinates, including available member, ordinal, byte span
         and field-definition references. Resolve in the pinned source generation.
-      source_pointer: Exact pointer within the provider-owned native record to the mapped value or metadata object.
       source_authority: Authority assigned to the selected source, preserving official FEC, unofficial originals and
         third-party research distinctions.
       selection_evidence_sha256: Digest of the retained selection evidence used to authorize this mapper's source
         scope; not a financial inclusion decision.
-      source_namespace: Namespace identifying the native layout or identifier system. Similar numbers or field names
-        across namespaces are not equivalent.
-      filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
-        share it; group proven filing identity before joining.
-      filing_link_status: Status of the relationship to a submitted filing version; unresolved references preserve
-        the financial observation.
-      native_field_states_json: JSON map of field presence states such as source_missing, source_null, source_empty
-        or reported.
+      source_representation_role: Selected source role such as snapshot, insertion or deletion. Amount signs and ordinary
+        amendment flags do not establish correction applicability.
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
+      source_namespace: Namespace identifying the native layout or identifier system. Similar numbers or field names
+        across namespaces are not equivalent.
+      source_pointer: Exact pointer within the provider-owned native record to the mapped value or metadata object.
+      filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
+        share it; group proven filing identity before joining.
+      filing_link_status: Source feed assertion only; the value does not qualify a filing match or establish the target
+        exists.
       source_filing_record_id: Retained filing observation from which this directed filing reference was reported.
       target_filing_key: Qualified target filing-version key when the native reference has a supported namespace.
       native_target_file_number: Literal source file number referenced by the filing link; not an image or transaction
@@ -5894,7 +5917,7 @@ tables:
       source_cycle: Election cycle established by the selected source evidence. Distinct from transaction year, candidate
         election year and agency fiscal year.
   fec_filing_report_observations:
-    label: Retained filing cover and summary observations
+    label: FEC filing cover and summary observations
     grain: One source filing report/statement/cover record version.
     identity_columns:
     - record_id
@@ -5942,8 +5965,8 @@ tables:
         do not establish the current record.
       filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
         share it; group proven filing identity before joining.
-      filing_link_status: Status of the relationship to a submitted filing version; unresolved references preserve
-        the financial observation.
+      filing_link_status: Source feed assertion only; the value does not qualify a filing match or establish the target
+        exists.
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
         is not an aggregation permission.
@@ -6020,14 +6043,11 @@ tables:
         value and conversion status; capture time is not substituted.
       effective_date: Date parsed from the effective date stated on the source form. NULL requires the source value
         and conversion status; capture time is not substituted.
-      native_fields: Ordered native fields as structs of position, definition_label, definition_cell, presence, raw_value
-        and body_reference_json. Preserves every source value, including undefined positions and missing/null/empty
-        states.
       reported_measures: 'Ordered measure structs: native_position, native_label, definition_cell, raw_value, exact
         decimal value, value_status, quantity_kind, measure_role and period_basis. Parent totals/subtotals are not
         added to itemized children.'
   fec_filing_text_observations:
-    label: Retained original filing narratives
+    label: FEC original filing narratives
     grain: One source narrative or text record version at its native file position.
     identity_columns:
     - record_id
@@ -6049,7 +6069,6 @@ tables:
       identity_version: Version of the source-observation identity rule; it does not select a current or canonical
         record.
       mapping_version: Named, versioned source-to-field mapping used for this observation.
-      value_mapping_version: Version of the exact monetary and date conversion rules used for supported values.
       mapping_status: Whether this source observation mapped fully, partially, or received an explicit nondata/refusal
         disposition; inspect the reason alongside NULL values.
       mapping_reason_json: JSON object naming unsupported, missing or otherwise limited field interpretations; native
@@ -6067,21 +6086,14 @@ tables:
         scope; not a financial inclusion decision.
       source_representation_role: Selected source role such as snapshot, insertion or deletion. Amount signs and ordinary
         amendment flags do not establish correction applicability.
-      correction_operation: Source-supported correction operation, when applicable; a positive amount in a deletion
-        stream is not a new receipt or an inferred refund.
-      correction_applicability_status: Whether the captured correction can be applied to an evidenced base and target
-        population; unresolved applicability prevents a qualified current total.
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
-      filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
-        share it; group proven filing identity before joining.
-      filing_link_status: Status of the relationship to a submitted filing version; unresolved references preserve
-        the financial observation.
-      currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
-      amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
-        is not an aggregation permission.
       source_namespace: Namespace identifying the native layout or identifier system. Similar numbers or field names
         across namespaces are not equivalent.
+      filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
+        share it; group proven filing identity before joining.
+      filing_link_status: Source feed assertion only; the value does not qualify a filing match or establish the target
+        exists.
       definition_set_id: Key of the pinned source layout in fec_filing_definitions. Join its definition evidence for
         exact workbook cells; the layout does not validate the submission.
       declared_format_version: Format version declared by the filing header, retained separately from the reviewed
@@ -6105,13 +6117,11 @@ tables:
       text_record_kind: Source layout's narrative/text record kind, retained independently from transaction rows.
       source_cycle: Election cycle established by the selected source evidence. Distinct from transaction year, candidate
         election year and agency fiscal year.
-      native_fields: Ordered native narrative fields as structs of position, definition_label, definition_cell, presence,
-        raw_value and body_reference_json, preserving literal source values and states.
       text_fragments: 'Ordered fragment structs: field_position, source_column, source_pointer, text, text_status
         and body_reference_json. Retains exact native addresses and missing/null states; no inferred money or PDF
         extraction.'
   fec_filings:
-    label: Retained filing metadata observations
+    label: FEC filing metadata observations
     grain: One retained metadata observation of a submitted report or statement version.
     identity_columns:
     - record_id
@@ -6142,21 +6152,17 @@ tables:
       source_sha256: SHA-256 of the original source witness bytes; distinct from the typed table's publication digest.
       source_locator_json: Exact source row or subrecord coordinates, including available member, ordinal, byte span
         and field-definition references. Resolve in the pinned source generation.
-      source_pointer: Exact pointer within the provider-owned native record to the mapped value or metadata object.
       source_authority: Authority assigned to the selected source, preserving official FEC, unofficial originals and
         third-party research distinctions.
       selection_evidence_sha256: Digest of the retained selection evidence used to authorize this mapper's source
         scope; not a financial inclusion decision.
-      source_namespace: Namespace identifying the native layout or identifier system. Similar numbers or field names
-        across namespaces are not equivalent.
-      filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
-        share it; group proven filing identity before joining.
-      filing_link_status: Status of the relationship to a submitted filing version; unresolved references preserve
-        the financial observation.
-      native_field_states_json: JSON map of field presence states such as source_missing, source_null, source_empty
-        or reported.
+      source_representation_role: Selected source role such as snapshot, insertion or deletion. Amount signs and ordinary
+        amendment flags do not establish correction applicability.
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
+      source_namespace: Namespace identifying the native layout or identifier system. Similar numbers or field names
+        across namespaces are not equivalent.
+      source_pointer: Exact pointer within the provider-owned native record to the mapped value or metadata object.
       report_number: Literal source file/report number, retained separately from source row, image and transaction
         identifiers. A filing join requires a qualified number namespace.
       source_record_identifier: Source-reported row identifier such as sub_id; it is not promoted to a global event
@@ -6175,9 +6181,6 @@ tables:
       report_type: Source-reported report classification, interpreted within its namespace rather than as a universal
         period code.
       report_type_full: Source-supplied expanded report type label.
-      report_year: Year reported for the filing/report, preserved independently of cycle and transaction date.
-      reported_cycle: Cycle exactly as reported in a native field; kept separate from the selection's source_cycle.
-      election_year: Election year stated by the source, distinct from source cycle, fiscal year and capture time.
       means_filed: Source-stated filing channel or method; file format alone does not prove amendment scope.
       beginning_image_number: First image number reported for the filing; not a financial record key.
       ending_image_number: Last image number reported for the filing; does not prove retained body coverage.
@@ -6186,11 +6189,6 @@ tables:
         scope or current record.
       amendment_version: Amendment version as stated by the source; no automatic current-version selection.
       amendment_number: Source-stated amendment number, distinct from a proven replacement order or complete chain.
-      is_amended: Literal API amendment state at capture time; it does not establish a complete retained amendment
-        chain.
-      most_recent: Literal publisher most-recent flag captured for this observation; not an independently qualified
-        current selection.
-      pages: Page count stated in filing metadata; no PDF-body processing is implied.
       office: Source-reported office code or label; source-specific meanings remain distinct.
       state: State value reported by the source for this entity; not necessarily the election state or transaction
         jurisdiction.
@@ -6200,6 +6198,10 @@ tables:
       csv_url: Source-reported CSV representation URL; not proof of equivalence to other retained representations.
       html_url: Source-reported HTML representation URL; availability is not checked by this field.
       pdf_url: Source-reported PDF URL, retained as metadata while body processing remains deferred.
+      filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
+        share it; group proven filing identity before joining.
+      filing_link_status: Source feed assertion only; the value does not qualify a filing match or establish the target
+        exists.
       filer_entity_type: Source-specific classification of the filer, preserving committee and other reporting entities.
       filer_id_status: State or syntax check of the native filer ID; not an independently resolved identity.
       reporting_committee_id: Literal FEC ID of the reporting committee where that source field identifies a committee.
@@ -6245,14 +6247,41 @@ tables:
         and conversion status; capture time is not substituted.
       filed_date: Date parsed from the source-stated filing date. NULL requires the source value and conversion status;
         capture time is not substituted.
-      coverage_start_date: Date parsed from the start of the filing coverage period. NULL requires the source value
-        and conversion status; capture time is not substituted.
-      coverage_end_date: Date parsed from the end of the filing coverage period. NULL requires the source value and
-        conversion status; capture time is not substituted.
+      coverage_start_date: Build-parsed CoverageFrom date; requires exact MM/DD/YYYY spelling and a valid calendar
+        date.
+      coverage_end_date: Build-parsed CoverageThrough date; requires exact MM/DD/YYYY spelling and a valid calendar
+        date.
       update_date: Date parsed from the source-stated update date, not a current-selection rule. NULL requires the
         source value and conversion status; capture time is not substituted.
       load_timestamp: Date parsed from the date component of the source load timestamp; the full native timestamp
         remains in load_timestamp_raw. NULL requires the source value and conversion status; capture time is not substituted.
+      pages: Page count stated in filing metadata; no PDF-body processing is implied.
+      report_year: Year reported for the filing/report, preserved independently of cycle and transaction date.
+      reported_cycle: Cycle exactly as reported in a native field; kept separate from the selection's source_cycle.
+      election_year: Election year stated by the source, distinct from source cycle, fiscal year and capture time.
+      is_amended: Literal API amendment state at capture time; it does not establish a complete retained amendment
+        chain.
+      most_recent: Literal publisher most-recent flag captured for this observation; not an independently qualified
+        current selection.
+      pages_raw: Literal source value for pages before conversion; consult pages_status for interpretation.
+      pages_status: 'Interpretation of source pages: distinguishes reported/parsed values, missing/null/empty source
+        states and unsupported spellings. A NULL typed value alone does not identify the cause.'
+      report_year_raw: Literal source value for report_year before conversion; consult report_year_status for interpretation.
+      report_year_status: Whether the CSV source report year has an exact four-digit spelling, is missing, or is unsupported.
+      reported_cycle_raw: Literal source value for reported_cycle before conversion; consult reported_cycle_status
+        for interpretation.
+      reported_cycle_status: 'Interpretation of source reported_cycle: distinguishes reported/parsed values, missing/null/empty
+        source states and unsupported spellings. A NULL typed value alone does not identify the cause.'
+      election_year_raw: Literal source value for election_year before conversion; consult election_year_status for
+        interpretation.
+      election_year_status: 'Interpretation of source election_year: distinguishes reported/parsed values, missing/null/empty
+        source states and unsupported spellings. A NULL typed value alone does not identify the cause.'
+      is_amended_raw: Literal source value for is_amended before conversion; consult is_amended_status for interpretation.
+      is_amended_status: 'Interpretation of source is_amended: distinguishes reported/parsed values, missing/null/empty
+        source states and unsupported spellings. A NULL typed value alone does not identify the cause.'
+      most_recent_raw: Literal source value for most_recent before conversion; consult most_recent_status for interpretation.
+      most_recent_status: 'Interpretation of source most_recent: distinguishes reported/parsed values, missing/null/empty
+        source states and unsupported spellings. A NULL typed value alone does not identify the cause.'
   fec_historical_ie_statistics:
     label: Historical independent-expenditure statistics
     grain: One native statistical worksheet row with its stated row grain.
@@ -6728,7 +6757,7 @@ tables:
       overlapping summaries and two-sided transfers at their declared grains. Quality notices do not automatically
       exclude records.
   fec_legal_documents:
-    label: Retained legal document references
+    label: FEC legal document references
     grain: One source legal-document occurrence or rendition associated with a matter observation.
     identity_columns:
     - record_id
@@ -6863,7 +6892,7 @@ tables:
       amount: Exact decimal for the source-reported amount for this record and its amount_kind. Signs are preserved;
         use the corresponding status and source-specific financial policy before adding observations.
   fec_legal_matters:
-    label: Retained legal matter observations
+    label: FEC legal matter observations
     grain: One source observation of a namespaced legal matter.
     identity_columns:
     - record_id
@@ -6925,15 +6954,18 @@ tables:
       candidate_id: Literal FEC candidate identifier when the source reports one. Syntax checks do not prove identity
         resolution or a target match.
       audit_id: Literal source audit identifier; it does not replace the namespaced matter identity.
-      reported_cycle: Cycle exactly as reported in a native field; kept separate from the selection's source_cycle.
-      pending_status: Native pending state retained as an observation rather than an inferred current disposition.
-      published_status: Native publication state reported for the matter; not this application's publication state.
+      reported_cycle_status: 'Interpretation of source reported_cycle: distinguishes reported/parsed values, missing/null/empty
+        source states and unsupported spellings. A NULL typed value alone does not identify the cause.'
+      is_pending_status: 'Interpretation of source is_pending: distinguishes reported/parsed values, missing/null/empty
+        source states and unsupported spellings. A NULL typed value alone does not identify the cause.'
+      is_published_status: 'Interpretation of source is_published: distinguishes reported/parsed values, missing/null/empty
+        source states and unsupported spellings. A NULL typed value alone does not identify the cause.'
       current_state_status: Whether a current legal matter state has been selected; retained observations alone do
         not establish one.
       collection_states_json: JSON states for native child collections, preserving absent, NULL, empty and populated
         collections.
-      native_facts_json: Complete retained legal facts not reduced to the named scalar columns, with native states
-        and source context.
+      native_facts_json: Structured source citation and subject arrays used by child navigation. Scalar facts are
+        explicit columns; the complete original remains at source evidence.
       final_determination_amount_status: Source-presence or conversion state for final_determination_amount, distinguishing
         supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility.
       final_determination_amount_raw: Literal source value before conversion for final_determination_amount. Preserves
@@ -6952,6 +6984,49 @@ tables:
       treasury_referral_amount_raw: Literal source value before conversion for treasury_referral_amount. Preserves
         spelling, signs and empty values; the typed value and its status are separate.
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
+      challenge_outcome_status: 'Interpretation of source challenge_outcome: distinguishes reported/parsed values,
+        missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the
+        cause.'
+      civil_penalty_payment_status_status: 'Interpretation of source civil_penalty_payment_status: distinguishes reported/parsed
+        values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify
+        the cause.'
+      report_type_status: 'Interpretation of source report_type: distinguishes reported/parsed values, missing/null/empty
+        source states and unsupported spellings. A NULL typed value alone does not identify the cause.'
+      mur_type_status: 'Interpretation of source mur_type: distinguishes reported/parsed values, missing/null/empty
+        source states and unsupported spellings. A NULL typed value alone does not identify the cause.'
+      committee_description_status: 'Interpretation of source committee_description: distinguishes reported/parsed
+        values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify
+        the cause.'
+      committee_designation_status: 'Interpretation of source committee_designation: distinguishes reported/parsed
+        values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify
+        the cause.'
+      committee_type_status: 'Interpretation of source committee_type: distinguishes reported/parsed values, missing/null/empty
+        source states and unsupported spellings. A NULL typed value alone does not identify the cause.'
+      rm_id_status: 'Interpretation of source rm_id: distinguishes reported/parsed values, missing/null/empty source
+        states and unsupported spellings. A NULL typed value alone does not identify the cause.'
+      rm_number_status: 'Interpretation of source rm_number: distinguishes reported/parsed values, missing/null/empty
+        source states and unsupported spellings. A NULL typed value alone does not identify the cause.'
+      report_year_status: Whether the CSV source report year has an exact four-digit spelling, is missing, or is unsupported.
+      is_open_for_comment_status: 'Interpretation of source is_open_for_comment: distinguishes reported/parsed values,
+        missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the
+        cause.'
+      reported_cycle: Cycle exactly as reported in a native field; kept separate from the selection's source_cycle.
+      is_pending: Source-reported pending flag for this legal matter; not an independently determined legal status.
+      is_published: Source-reported publication flag for this legal matter; not proof that a document body was acquired.
+      challenge_outcome: Literal administrative challenge outcome reported by the source.
+      civil_penalty_payment_status: Literal source-reported civil-penalty payment status; distinct from the parsing
+        status of this field.
+      report_type: Source-reported report classification, interpreted within its namespace rather than as a universal
+        period code.
+      mur_type: Literal Matter Under Review type stated by the source.
+      committee_description: Source-provided description of the committee associated with this legal matter.
+      committee_designation: Literal designation of the committee referenced by this legal matter.
+      committee_type: Single-letter committee type code (e.g. `P` presidential, `H` House, `S` Senate, `N`/`Q`/`O`
+        PAC variants).
+      rm_id: Source rulemaking identifier, preserved exactly as text; distinct from native_matter_id and rm_number.
+      rm_number: Source rulemaking number including its literal prefix; distinct from rm_id and native_matter_id.
+      report_year: Year reported for the filing/report, preserved independently of cycle and transaction date.
+      is_open_for_comment: Source-reported comment-window flag; it is not recalculated using the current clock.
       final_determination_amount: Exact decimal for the source-stated final determination in the legal matter. Signs
         are preserved; use the corresponding status and source-specific financial policy before adding observations.
       payment_amount: Exact decimal for the payment amount stated in the legal matter observation. Signs are preserved;
@@ -7479,7 +7554,7 @@ tables:
       overlapping summaries and two-sided transfers at their declared grains. Quality notices do not automatically
       exclude records.
   fec_lobbyist_registrations:
-    label: Retained lobbyist registration observations
+    label: FEC lobbyist registration observations
     grain: One native committee registration/lobbyist observation.
     identity_columns:
     - record_id
@@ -7509,21 +7584,17 @@ tables:
       source_sha256: SHA-256 of the original source witness bytes; distinct from the typed table's publication digest.
       source_locator_json: Exact source row or subrecord coordinates, including available member, ordinal, byte span
         and field-definition references. Resolve in the pinned source generation.
-      source_pointer: Exact pointer within the provider-owned native record to the mapped value or metadata object.
       source_authority: Authority assigned to the selected source, preserving official FEC, unofficial originals and
         third-party research distinctions.
       selection_evidence_sha256: Digest of the retained selection evidence used to authorize this mapper's source
         scope; not a financial inclusion decision.
-      source_namespace: Namespace identifying the native layout or identifier system. Similar numbers or field names
-        across namespaces are not equivalent.
-      filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
-        share it; group proven filing identity before joining.
-      filing_link_status: Status of the relationship to a submitted filing version; unresolved references preserve
-        the financial observation.
-      native_field_states_json: JSON map of field presence states such as source_missing, source_null, source_empty
-        or reported.
+      source_representation_role: Selected source role such as snapshot, insertion or deletion. Amount signs and ordinary
+        amendment flags do not establish correction applicability.
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
+      source_namespace: Namespace identifying the native layout or identifier system. Similar numbers or field names
+        across namespaces are not equivalent.
+      source_pointer: Exact pointer within the provider-owned native record to the mapped value or metadata object.
       committee_id: Literal FEC committee identifier as reported in this observation. Use cycle and source scope for
         historical joins.
       committee_name: The committee's name as reported, without a name-based identity merge.
@@ -7603,7 +7674,7 @@ tables:
       funds_for_better_use: Exact decimal for the funds-for-better-use amount stated by the oversight recommendation.
         Signs are preserved; use the corresponding status and source-specific financial policy before adding observations.
   fec_postgres_committee_history_observations:
-    label: Retained PostgreSQL committee history observations
+    label: FEC PostgreSQL committee history observations
     grain: One native COPY row from a selected retained history derivation.
     identity_columns:
     - record_id
@@ -7622,7 +7693,6 @@ tables:
       identity_version: Version of the source-observation identity rule; it does not select a current or canonical
         record.
       mapping_version: Named, versioned source-to-field mapping used for this observation.
-      value_mapping_version: Version of the exact monetary and date conversion rules used for supported values.
       mapping_status: Whether this source observation mapped fully, partially, or received an explicit nondata/refusal
         disposition; inspect the reason alongside NULL values.
       mapping_reason_json: JSON object naming unsupported, missing or otherwise limited field interpretations; native
@@ -7640,37 +7710,177 @@ tables:
         scope; not a financial inclusion decision.
       source_representation_role: Selected source role such as snapshot, insertion or deletion. Amount signs and ordinary
         amendment flags do not establish correction applicability.
-      correction_operation: Source-supported correction operation, when applicable; a positive amount in a deletion
-        stream is not a new receipt or an inferred refund.
-      correction_applicability_status: Whether the captured correction can be applied to an evidenced base and target
-        population; unresolved applicability prevents a qualified current total.
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
-      filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
-        share it; group proven filing identity before joining.
-      filing_link_status: Status of the relationship to a submitted filing version; unresolved references preserve
-        the financial observation.
-      currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
-      amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
-        is not an aggregation permission.
       source_namespace: Namespace identifying the native layout or identifier system. Similar numbers or field names
         across namespaces are not equivalent.
       source_url: Captured source URL for this observation; it does not assert current availability or body retrieval.
-      capture_json: Retained capture request, source digest and scope metadata used to validate this history observation.
       history_scope_status: Explicit historical scope limitation; repeated snapshots remain source observations instead
         of replacing committee/cycle identity rows.
       source_cycle: Election cycle established by the selected source evidence. Distinct from transaction year, candidate
         election year and agency fiscal year.
       committee_id: Literal FEC committee identifier as reported in this observation. Use cycle and source scope for
         historical joins.
+      name: Committee name as registered with the FEC.
+      treasurer_name: Name of the committee's treasurer.
+      organization_type: Literal source organization-type code; interpretation follows the source namespace.
+      organization_type_full: Source-provided expansion of its organization-type code.
+      street_1: The first street line of the committee's address (`CMTE_ST1`); NULL when blank.
+      street_2: The second street line (`CMTE_ST2`); NULL when blank.
+      city: The address city (`CMTE_CITY`); NULL when blank.
+      state: Two-letter state associated with the committee. Often null.
+      state_full: Source-provided state name corresponding to the source state code.
+      zip: The address ZIP code as filed (`CMTE_ZIP`); NULL when blank.
+      treasurer_city: Source-reported city for the committee treasurer in this observation; preserve source spelling
+        and do not infer person identity.
+      treasurer_name_1: Source-reported first name component for the committee treasurer in this observation; preserve
+        source spelling and do not infer person identity.
+      treasurer_name_2: Source-reported second name component for the committee treasurer in this observation; preserve
+        source spelling and do not infer person identity.
+      treasurer_name_middle: Source-reported middle name component for the committee treasurer in this observation;
+        preserve source spelling and do not infer person identity.
+      treasurer_phone: Source-reported phone number for the committee treasurer in this observation; preserve source
+        spelling and do not infer person identity.
+      treasurer_name_prefix: Source-reported name prefix for the committee treasurer in this observation; preserve
+        source spelling and do not infer person identity.
+      treasurer_state: Source-reported state for the committee treasurer in this observation; preserve source spelling
+        and do not infer person identity.
+      treasurer_street_1: Source-reported first street-address line for the committee treasurer in this observation;
+        preserve source spelling and do not infer person identity.
+      treasurer_street_2: Source-reported second street-address line for the committee treasurer in this observation;
+        preserve source spelling and do not infer person identity.
+      treasurer_name_suffix: Source-reported name suffix for the committee treasurer in this observation; preserve
+        source spelling and do not infer person identity.
+      treasurer_name_title: Source-reported title for the committee treasurer in this observation; preserve source
+        spelling and do not infer person identity.
+      treasurer_zip: Source-reported postal code for the committee treasurer in this observation; preserve source
+        spelling and do not infer person identity.
+      custodian_city: Source-reported city for the committee custodian in this observation; preserve source spelling
+        and do not infer person identity.
+      custodian_name_1: Source-reported first name component for the committee custodian in this observation; preserve
+        source spelling and do not infer person identity.
+      custodian_name_2: Source-reported second name component for the committee custodian in this observation; preserve
+        source spelling and do not infer person identity.
+      custodian_name_middle: Source-reported middle name component for the committee custodian in this observation;
+        preserve source spelling and do not infer person identity.
+      custodian_name_full: Source-reported full name for the committee custodian in this observation; preserve source
+        spelling and do not infer person identity.
+      custodian_phone: Source-reported phone number for the committee custodian in this observation; preserve source
+        spelling and do not infer person identity.
+      custodian_name_prefix: Source-reported name prefix for the committee custodian in this observation; preserve
+        source spelling and do not infer person identity.
+      custodian_state: Source-reported state for the committee custodian in this observation; preserve source spelling
+        and do not infer person identity.
+      custodian_street_1: Source-reported first street-address line for the committee custodian in this observation;
+        preserve source spelling and do not infer person identity.
+      custodian_street_2: Source-reported second street-address line for the committee custodian in this observation;
+        preserve source spelling and do not infer person identity.
+      custodian_name_suffix: Source-reported name suffix for the committee custodian in this observation; preserve
+        source spelling and do not infer person identity.
+      custodian_name_title: Source-reported title for the committee custodian in this observation; preserve source
+        spelling and do not infer person identity.
+      custodian_zip: Source-reported postal code for the committee custodian in this observation; preserve source
+        spelling and do not infer person identity.
+      email: Public contact email stated in this source observation; not verified current contact information.
+      fax: Public fax number stated in this source observation, preserved as text.
+      website: Source-reported website URL; no successful retrieval or present-day affiliation is asserted.
+      form_type: Literal filing form or record-type code from the source layout; does not prove submission conformance.
+      leadership_pac: Literal source leadership-PAC code. It is not a boolean; native codes remain distinct.
+      lobbyist_registrant_pac: Literal source lobbyist/registrant-PAC code. It is not a boolean; native codes remain
+        distinct.
+      party_type: Literal party-type code supplied in the source history row.
+      party_type_full: Source-provided description of its party-type code.
+      designation: Single-letter committee designation code (e.g. `P` principal campaign committee, `A` authorized,
+        `U` unauthorized, `J` joint fundraiser).
+      designation_full: Source-provided description of the committee designation.
+      committee_type: Single-letter committee type code (e.g. `P` presidential, `H` House, `S` Senate, `N`/`Q`/`O`
+        PAC variants).
+      committee_type_full: Human-readable committee type (e.g. `Presidential`, `PAC - Qualified`).
+      filing_frequency: Single-letter filing frequency code (e.g. `A` administratively terminated, `M` monthly, `Q`
+        quarterly, `T` terminated).
+      party: Political party code, when set (e.g. `DEM`, `REP`, `W`). Often null for non-party committees.
+      party_full: Human-readable political party (e.g. `DEMOCRATIC PARTY`, `WRITE-IN`). Often null.
+      affiliated_committee_name: Literal affiliated committee name stated by the source; a name is not a verified
+        committee link.
+      former_committee_name: Former committee name stated by the source, without an inferred effective period.
+      former_candidate_id: Literal former candidate identifier; no target existence or unique-person claim.
+      former_candidate_name: Former candidate name stated by the source; not a resolved identity.
       cycle: Cycle exactly as supplied by the history source; raw PostgreSQL text is retained without inferring a
         new integer value.
-      derivation_json: Retained evidence for the SQL/PostgreSQL derivation, including source column definitions; distinct
-        from original dump bytes.
-      raw_copy_fields: Ordered literal PostgreSQL COPY field strings, preserving original NULL markers and escaping
-        beside named decoded fields.
-      native_fields: Named source fields retained as a struct. PostgreSQL NULL, array text, date text and boolean
-        text remain literal; no current-profile inference.
+      qualifying_date: Qualification calendar date as stated by the source; no independent legal determination.
+      first_file_date: First filing date as reported in this source observation, not independently reconstructed history.
+      last_file_date: Last filing date as reported in this source observation; later filings may exist.
+      last_f1_date: Last Form 1 date reported by the source, without a completeness assertion.
+      last_cycle_has_financial: Last source-reported cycle with financial activity; not derived from transaction rows.
+      last_cycle_has_activity: Last source-reported cycle with activity; not a completeness assertion.
+      is_active: Source-reported active flag in this dated observation; not a present-day registry decision.
+      convert_to_pac_flag: Source-reported conversion-to-PAC flag, preserving null or unsupported values.
+      former_candidate_election_year: Election year reported for the former candidate association.
+      first_f1_date: First Form 1 date reported by the source, without a completeness assertion.
+      cycle_raw: Literal source value for cycle before conversion; consult cycle_status for interpretation.
+      cycle_status: 'Interpretation of source cycle: distinguishes reported/parsed values, missing/null/empty source
+        states and unsupported spellings. A NULL typed value alone does not identify the cause.'
+      qualifying_date_raw: Literal source value for qualifying_date before conversion; consult qualifying_date_status
+        for interpretation.
+      qualifying_date_status: 'Interpretation of source qualifying_date: distinguishes reported/parsed values, missing/null/empty
+        source states and unsupported spellings. A NULL typed value alone does not identify the cause.'
+      first_file_date_raw: Literal source value for first_file_date before conversion; consult first_file_date_status
+        for interpretation.
+      first_file_date_status: 'Interpretation of source first_file_date: distinguishes reported/parsed values, missing/null/empty
+        source states and unsupported spellings. A NULL typed value alone does not identify the cause.'
+      last_file_date_raw: Literal source value for last_file_date before conversion; consult last_file_date_status
+        for interpretation.
+      last_file_date_status: 'Interpretation of source last_file_date: distinguishes reported/parsed values, missing/null/empty
+        source states and unsupported spellings. A NULL typed value alone does not identify the cause.'
+      last_f1_date_raw: Literal source value for last_f1_date before conversion; consult last_f1_date_status for interpretation.
+      last_f1_date_status: 'Interpretation of source last_f1_date: distinguishes reported/parsed values, missing/null/empty
+        source states and unsupported spellings. A NULL typed value alone does not identify the cause.'
+      last_cycle_has_financial_raw: Literal source value for last_cycle_has_financial before conversion; consult last_cycle_has_financial_status
+        for interpretation.
+      last_cycle_has_financial_status: 'Interpretation of source last_cycle_has_financial: distinguishes reported/parsed
+        values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify
+        the cause.'
+      last_cycle_has_activity_raw: Literal source value for last_cycle_has_activity before conversion; consult last_cycle_has_activity_status
+        for interpretation.
+      last_cycle_has_activity_status: 'Interpretation of source last_cycle_has_activity: distinguishes reported/parsed
+        values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify
+        the cause.'
+      is_active_raw: Literal source value for is_active before conversion; consult is_active_status for interpretation.
+      is_active_status: 'Interpretation of source is_active: distinguishes reported/parsed values, missing/null/empty
+        source states and unsupported spellings. A NULL typed value alone does not identify the cause.'
+      convert_to_pac_flag_raw: Literal source value for convert_to_pac_flag before conversion; consult convert_to_pac_flag_status
+        for interpretation.
+      convert_to_pac_flag_status: 'Interpretation of source convert_to_pac_flag: distinguishes reported/parsed values,
+        missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the
+        cause.'
+      former_candidate_election_year_raw: Literal source value for former_candidate_election_year before conversion;
+        consult former_candidate_election_year_status for interpretation.
+      former_candidate_election_year_status: 'Interpretation of source former_candidate_election_year: distinguishes
+        reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone
+        does not identify the cause.'
+      first_f1_date_raw: Literal source value for first_f1_date before conversion; consult first_f1_date_status for
+        interpretation.
+      first_f1_date_status: 'Interpretation of source first_f1_date: distinguishes reported/parsed values, missing/null/empty
+        source states and unsupported spellings. A NULL typed value alone does not identify the cause.'
+      cycles_json: JSON array of election-cycle years the committee was active in (e.g. `[2018, 2020, 2022]`).
+      cycles_status: 'Source array state for cycles: source_missing, source_null, source_empty, reported or unsupported_array;
+        arrays are independent and preserve order.'
+      candidate_ids_json: JSON array of OpenFEC candidate IDs associated with the committee (e.g. `["P00008052"]`).
+        Often `[]`.
+      candidate_ids_status: 'Source array state for candidate_ids: source_missing, source_null, source_empty, reported
+        or unsupported_array; arrays are independent and preserve order.'
+      cycles_has_financial_json: Ordered source array of cycles marked as having financial activity; not independently
+        verified completeness.
+      cycles_has_financial_status: 'Source array state for cycles_has_financial: source_missing, source_null, source_empty,
+        reported or unsupported_array; arrays are independent and preserve order.'
+      cycles_has_activity_json: Ordered source array of cycles marked as having activity; not independently verified
+        completeness.
+      cycles_has_activity_status: 'Source array state for cycles_has_activity: source_missing, source_null, source_empty,
+        reported or unsupported_array; arrays are independent and preserve order.'
+      sponsor_candidate_ids_json: Independent ordered array of source sponsor-candidate references; never pair positions
+        with cycles or candidate_ids.
+      sponsor_candidate_ids_status: 'Source array state for sponsor_candidate_ids: source_missing, source_null, source_empty,
+        reported or unsupported_array; arrays are independent and preserve order.'
   fec_quality_notices:
     label: Source-issued FEC quality notices
     grain: One source notice observation about an explicitly stated filing/committee scope.
@@ -7702,21 +7912,17 @@ tables:
       source_sha256: SHA-256 of the original source witness bytes; distinct from the typed table's publication digest.
       source_locator_json: Exact source row or subrecord coordinates, including available member, ordinal, byte span
         and field-definition references. Resolve in the pinned source generation.
-      source_pointer: Exact pointer within the provider-owned native record to the mapped value or metadata object.
       source_authority: Authority assigned to the selected source, preserving official FEC, unofficial originals and
         third-party research distinctions.
       selection_evidence_sha256: Digest of the retained selection evidence used to authorize this mapper's source
         scope; not a financial inclusion decision.
-      source_namespace: Namespace identifying the native layout or identifier system. Similar numbers or field names
-        across namespaces are not equivalent.
-      filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
-        share it; group proven filing identity before joining.
-      filing_link_status: Status of the relationship to a submitted filing version; unresolved references preserve
-        the financial observation.
-      native_field_states_json: JSON map of field presence states such as source_missing, source_null, source_empty
-        or reported.
+      source_representation_role: Selected source role such as snapshot, insertion or deletion. Amount signs and ordinary
+        amendment flags do not establish correction applicability.
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
+      source_namespace: Namespace identifying the native layout or identifier system. Similar numbers or field names
+        across namespaces are not equivalent.
+      source_pointer: Exact pointer within the provider-owned native record to the mapped value or metadata object.
       committee_id: Literal FEC committee identifier as reported in this observation. Use cycle and source scope for
         historical joins.
       committee_name: The committee's name as reported, without a name-based identity merge.
@@ -7993,7 +8199,7 @@ tables:
       witness_locator_json: Native source coordinates of the witness, including worksheet cells, source row address
         or definition location.
   fec_registration_statements:
-    label: Retained candidate and committee registration statements
+    label: FEC candidate and committee registration statements
     grain: One source Form 1 or Form 2 registration observation.
     identity_columns:
     - record_id
@@ -8024,21 +8230,17 @@ tables:
       source_sha256: SHA-256 of the original source witness bytes; distinct from the typed table's publication digest.
       source_locator_json: Exact source row or subrecord coordinates, including available member, ordinal, byte span
         and field-definition references. Resolve in the pinned source generation.
-      source_pointer: Exact pointer within the provider-owned native record to the mapped value or metadata object.
       source_authority: Authority assigned to the selected source, preserving official FEC, unofficial originals and
         third-party research distinctions.
       selection_evidence_sha256: Digest of the retained selection evidence used to authorize this mapper's source
         scope; not a financial inclusion decision.
-      source_namespace: Namespace identifying the native layout or identifier system. Similar numbers or field names
-        across namespaces are not equivalent.
-      filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
-        share it; group proven filing identity before joining.
-      filing_link_status: Status of the relationship to a submitted filing version; unresolved references preserve
-        the financial observation.
-      native_field_states_json: JSON map of field presence states such as source_missing, source_null, source_empty
-        or reported.
+      source_representation_role: Selected source role such as snapshot, insertion or deletion. Amount signs and ordinary
+        amendment flags do not establish correction applicability.
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
+      source_namespace: Namespace identifying the native layout or identifier system. Similar numbers or field names
+        across namespaces are not equivalent.
+      source_pointer: Exact pointer within the provider-owned native record to the mapped value or metadata object.
       committee_id: Literal FEC committee identifier as reported in this observation. Use cycle and source scope for
         historical joins.
       committee_name: The committee's name as reported, without a name-based identity merge.
@@ -8047,13 +8249,13 @@ tables:
       committee_city: The committee's reported city.
       committee_state: The committee's reported state value.
       committee_zip: The committee's reported postal code, preserving leading zeroes.
-      affiliated_committee_name: Name of an affiliated committee reported in the registration statement; a name is
-        not an inferred committee ID.
+      affiliated_committee_name: Literal affiliated committee name stated by the source; a name is not a verified
+        committee link.
       filed_committee_type: Committee type as reported on the filing or quality-notice source, separate from current
         registry type.
       filed_committee_designation: Designation stated on this filing version, separate from current registry designation.
       filing_frequency: Source-stated filing frequency code; not proof that all required reports are retained.
-      organization_type: Source-stated organization-type code for the reporting committee.
+      organization_type: Literal source organization-type code; interpretation follows the source namespace.
       treasurer_name: Treasurer name stated by the committee or filing source at this observation.
       committee_email: Committee email address reported in the retained registration source.
       committee_web_url: Committee website URL reported by the source; not a live availability check.
@@ -8071,8 +8273,6 @@ tables:
       candidate_city: The candidate's reported city.
       candidate_state: The candidate's reported state value.
       candidate_zip: The candidate's reported postal code, preserving leading zeroes.
-      election_year: Election year stated by the source, distinct from source cycle, fiscal year and capture time.
-      report_year: Year reported for the filing/report, preserved independently of cycle and transaction date.
       form_type: Literal filing form or record-type code from the source layout; does not prove submission conformance.
       committee_id_status: State or syntax check of the reported committee ID; a valid shape is not a resolved identity.
       candidate_id_status: State or syntax check of the reported candidate ID; a valid shape is not a resolved identity.
@@ -8086,6 +8286,14 @@ tables:
         election year and agency fiscal year.
       receipt_date: Date parsed from the filing receipt date stated by the source. NULL requires the source value
         and conversion status; capture time is not substituted.
+      election_year: Election year stated by the source, distinct from source cycle, fiscal year and capture time.
+      report_year: Year reported for the filing/report, preserved independently of cycle and transaction date.
+      election_year_raw: Literal source value for election_year before conversion; consult election_year_status for
+        interpretation.
+      election_year_status: 'Interpretation of source election_year: distinguishes reported/parsed values, missing/null/empty
+        source states and unsupported spellings. A NULL typed value alone does not identify the cause.'
+      report_year_raw: Literal source value for report_year before conversion; consult report_year_status for interpretation.
+      report_year_status: Whether the CSV source report year has an exact four-digit spelling, is missing, or is unsupported.
   fec_report_metrics:
     label: Defined agency report metric observations
     grain: One defined measure occurrence within an agency report edition.
@@ -8235,7 +8443,7 @@ tables:
       measures: 'Source-specific monetary measures as a list of structs: native_field, raw_value, exact DECIMAL value,
         value_status and unit. Unnest with record_id; never add parent summaries to their itemized details.'
   fec_research_context_dispositions:
-    label: Retained context mapping and coverage outcomes
+    label: FEC context mapping and coverage outcomes
     grain: One explicit mapping disposition for a retained collection context.
     identity_columns:
     - collection_id
@@ -8256,12 +8464,12 @@ tables:
       source_url: Captured source URL for this observation; it does not assert current availability or body retrieval.
       context_sha256: Digest of the sealed retained context object used by this mapping; separate from original-source
         bytes and typed output.
-      source_fact_count: Count of native context facts examined for this disposition; not a source population count
-        or an emitted transaction count.
       outputs_json: JSON object recording emitted table counts for this context; an empty output has an explicit mapping
         reason.
+      source_fact_count: Number of held native facts or events processed in this collection context, stored as an
+        integer.
   fec_research_document_observations:
-    label: Retained research document and case references
+    label: FEC research document and case references
     grain: One source document/case-reference metadata occurrence in retained context.
     identity_columns:
     - record_id
@@ -8302,10 +8510,17 @@ tables:
         imply extracted content.
       fec_relationship_status: Explicit resolution state of any FEC relationship; third-party metadata does not establish
         an FEC matter join.
-      native_metadata_json: Complete native metadata object retained for this observation, including fields outside
-        the typed mapping.
+      language: Language code reported by the discovery provider; not independently detected from a document body.
+      evidence_use: Discovery-only research lead; does not establish a verified FEC matter relationship or fetched
+        document body.
+      page_count_status: Whether the document provider supplied an exact nonnegative integer page count, no value,
+        or an invalid count.
+      page_count: Nonnegative exact page count reported by the discovery provider; no document-body acquisition is
+        implied.
+      created_at: Provider-reported creation timestamp; distinct from source capture time.
+      updated_at: Provider-reported update timestamp; distinct from source capture time.
   fec_research_filing_feed_items:
-    label: Retained filing feed items
+    label: FEC filing feed items
     grain: One RSS item occurrence in a captured source feed.
     identity_columns:
     - record_id
@@ -8337,14 +8552,36 @@ tables:
       link: Literal RSS item link retained from the source feed.
       guid: Source RSS item GUID, scoped to the feed; not promoted to a filing number or a globally resolved identity.
       published_at_raw: Publication timestamp exactly as supplied by the RSS item; distinct from filing receipt date.
-      description: Literal source description or narrative associated with this observation.
-      native_fields_json: Retained native field values for the source row or feed item, including fields beyond the
-        typed mapping.
-      source_parts_json: Exact native RSS parts and addresses retained to locate each item field.
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
+      reported_filer_id: Literal identifier labelled CommitteeId in the source feed; candidate filings can carry candidate
+        identifiers under this label.
+      committee_id: OpenFEC committee identifier (e.g. `C00684373`). Primary key / dedup key. Joins `fec_committee_history.committee_id`
+        for per-cycle names and the connected organization.
+      candidate_id: Literal candidate identifier reported by API metadata or a verified named bulk field such as CAND_ID.
+        Blanks and aggregate codes remain literal; an ID-shaped aggregate value does not establish a person. Names
+        are not converted to identifiers.
+      source_label_status: Whether the feed's CommitteeId label contains a committee identifier, a candidate identifier,
+        a missing value or an unsupported spelling.
+      filing_id: Source-reported sub_id of a filing metadata row when present; not an inferred original-file number.
+        Amendment/current-record meaning remains in native metadata.
+      form_type: Literal filing form or record-type code from the source layout; does not prove submission conformance.
+      report_type: Source-reported report classification, interpreted within its namespace rather than as a universal
+        period code.
+      coverage_start_raw: Literal CoverageFrom value from the feed's explicitly labelled metadata.
+      coverage_end_raw: Literal CoverageThrough value from the feed's explicitly labelled metadata.
+      parsing_status: 'Interpretation of source parsing: distinguishes reported/parsed values, missing/null/empty
+        source states and unsupported spellings. A NULL typed value alone does not identify the cause.'
+      filing_link_status: Source feed assertion only; the value does not qualify a filing match or establish the target
+        exists.
+      coverage_start_date: Build-parsed CoverageFrom date; requires exact MM/DD/YYYY spelling and a valid calendar
+        date.
+      coverage_end_date: Build-parsed CoverageThrough date; requires exact MM/DD/YYYY spelling and a valid calendar
+        date.
+      published_at: Build-parsed feed publication instant from an exact four-digit-year GMT timestamp; invalid input
+        remains null with parsing status.
   fec_research_meeting_observations:
-    label: Retained meeting table observations
+    label: FEC meeting table observations
     grain: One native HTML table row describing a meeting listing.
     identity_columns:
     - record_id
@@ -8381,12 +8618,10 @@ tables:
       date_status: Conversion state for the reported transaction/context date; distinguishes exact values, source
         NULL/empty and invalid or unsupported spelling.
       links_json: Source links with their labels and exact native locations; metadata does not imply body retrieval.
-      native_cells_json: Exact retained source cells and addresses supporting this row; includes literal text and
-        available worksheet/formula context.
       table_ordinal: Zero-based ordinal of the source HTML table containing this observation.
       table_row: Native row address in the retained HTML table; use native_cells_json for exact cell evidence.
   fec_research_response_outcomes:
-    label: Retained OpenFEC response outcomes
+    label: FEC OpenFEC response outcomes
     grain: One retained response/context outcome observation.
     identity_columns:
     - record_id
@@ -8421,12 +8656,12 @@ tables:
       payload_shape: Observed native response shape, distinguishing result arrays, error objects and unsupported structures.
       outcome_status: Explicit retained response outcome, including rejection or empty payload. Neither establishes
         a completed successful query by itself.
-      native_payload_json: Native response body facts already retained in collection context; no new request or fabricated
-        entity row.
+      capture_disposition: Distinguishes a provider refusal from an empty or present held payload. No value asserts
+        successful source coverage.
       observed_payload_records: Count of result entries actually visible in the retained payload, distinct from a
         claimed complete query population.
   fec_research_source_pages:
-    label: Retained FEC source documentation pages
+    label: FEC source documentation pages
     grain: One supported source-documentation page observation from retained context.
     identity_columns:
     - record_id
@@ -8434,8 +8669,8 @@ tables:
       The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does
       not establish complete FEC history or current publication.
     measured_on: '2026-10-01'
-    summary: One supported source-documentation page observation from retained context. Read retained headings, text,
-      time elements and links with exact context evidence. Source documentation explains forms and access routes without
+    summary: One source-documentation page observation with build-extracted body text, content status and retained
+      links. Complete original page context remains available through exact context evidence. Source documentation explains forms and access routes without
       becoming financial transactions or legal events. Resolve collection_id to fec_collections in the captured source
       generation and source_context_pointer into its retained context. Context witnesses use their own digest and
       native coordinates; they do not require a fictional source_record_id.
@@ -8456,15 +8691,15 @@ tables:
       observed_at_json: Retained capture time value(s) as JSON without collapsing separately observed captures.
       page_type: Supported type of retained source documentation page, such as a form page or statutory filing reference.
       title: Source title or explicitly labeled mapper title; consult title_basis or title_status when present.
-      text: Literal supported source text at the stated locator, without inferring a legal conclusion or numerical
-        measure.
+      text: Build-extracted body text when content_status is body_extracted; null for failed, empty or unsupported
+        pages. Original page text and context remain at the evidence reference.
       content_scope: Scope of retained page content; text, headings and links are source documentation rather than
         inferred transactions.
+      content_status: 'Page body disposition: body_extracted, failed_page, empty_page or unsupported_body_boundaries.
+        Filter body_extracted for subject search; every capture retains its source evidence pointer.'
       links_json: Source links with their labels and exact native locations; metadata does not imply body retrieval.
-      times_json: Literal time elements and native attributes retained from the source page.
-      headings_json: Ordered source headings with their native context, preserving document structure.
   fec_retained_csv_observations:
-    label: Retained CSV context observations
+    label: FEC CSV context observations
     grain: One physical CSV row exposed by retained collection context.
     identity_columns:
     - record_id
@@ -8507,19 +8742,35 @@ tables:
       date_raw: Literal date field of the retained CSV context row before source-specific interpretation.
       date_status: Conversion state for the reported transaction/context date; distinguishes exact values, source
         NULL/empty and invalid or unsupported spelling.
-      native_fields_json: Retained native field values for the source row or feed item, including fields beyond the
-        typed mapping.
       native_row_locator_json: Exact original CSV row and field coordinates retained by the source context.
       coverage_status: Explicit completeness/retention scope of the context rows; a retained prefix does not become
         complete source history.
       current_total_status: Explicit limitation or refusal for current financial totals; historical/context observations
         are not silently treated as a current population.
+      amendment_indicator: Literal source amendment flag. It does not by itself prove the amendment chain, replacement
+        scope or current record.
+      amendment_indicator_desc: Source-provided description of the amendment indicator; not a current-record selection.
+      memo_code: Literal source memo code; no automatic financial exclusion is inferred.
+      memo_text: Source memo or explanation text associated with the reported record.
+      file_number: Literal source filing number; not a qualified filing identity or association.
+      filing_form: Literal source form label associated with this sample row.
+      report_type: Source-reported report classification, interpreted within its namespace rather than as a universal
+        period code.
+      line_number: Literal report line reference from the source; not the physical row ordinal or a globally unique
+        item key.
+      schedule_type: Native schedule classification within the report layout.
+      image_number: Literal FEC image reference; it is not a transaction ID or filing number.
+      back_reference_transaction_id: Source-stated transaction back-reference. Resolve only within the evidenced filing
+        and schedule scope; no automatic parent match.
+      back_reference_schedule_name: Literal schedule name for the source back-reference; no resolved transaction relationship
+        is implied.
+      report_year: Year reported for the filing/report, preserved independently of cycle and transaction date.
+      report_year_status: Whether the CSV source report year has an exact four-digit spelling, is missing, or is unsupported.
       amount: Exact decimal for the source-reported amount for this record and its amount_kind. Signs are preserved;
         use the corresponding status and source-specific financial policy before adding observations.
       reported_date: Date parsed from the date stated for this historical/context observation. NULL requires the source
         value and conversion status; capture time is not substituted.
       source_row_ordinal: Native row ordinal supplied by the retained CSV context.
-
   scorecard_publishers:
     label: "Scorecard publishers"
     coverage: >-

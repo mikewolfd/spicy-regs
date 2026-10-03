@@ -13,6 +13,14 @@ import re
 
 import pyarrow as pa
 
+# Subject observations share provenance, not financial interpretation defaults.
+SOURCE_TEXT = (
+    "record_id identity_version mapping_version mapping_status mapping_reason_json collection_id source_record_id "
+    "source_sha256 source_locator_json source_authority selection_evidence_sha256 source_representation_role "
+    "current_record_status source_namespace"
+).split()
+
+
 IDENTITY_VERSION = "fec-typed-observation/1"
 RECEIPT_MAPPING_VERSION = "fec-bulk-individual-receipt/1"
 VALUE_MAPPING_VERSION = "fec-exact-financial-values/2"
@@ -229,15 +237,14 @@ class CollectionSelection:
 ReceiptSelection = CollectionSelection
 
 
-def observation_fields(table, row, selection: CollectionSelection, mapping_version):
-    """Common typed fields, with no inferred filing or current-record status."""
+def subject_observation_fields(table, row, selection: CollectionSelection, mapping_version):
+    """Shared provenance for a typed subject observation, without financial defaults."""
     if row["collection_id"] != selection.collection_id or row["source_sha256"] != selection.source_sha256:
-        raise ValueError("Financial row differs from its pinned selected collection")
+        raise ValueError("Source row differs from its pinned selected collection")
     return dict(
         record_id=observation_id(table, row, selection.source_authority),
         identity_version=IDENTITY_VERSION,
         mapping_version=mapping_version,
-        value_mapping_version=VALUE_MAPPING_VERSION,
         collection_id=row["collection_id"],
         source_record_id=row["source_record_id"],
         source_sha256=row["source_sha256"],
@@ -246,13 +253,21 @@ def observation_fields(table, row, selection: CollectionSelection, mapping_versi
         source_cycle=selection.source_cycle,
         selection_evidence_sha256=selection.selection_evidence_sha256,
         source_representation_role=selection.representation_role,
+        current_record_status="unqualified",
+    )
+
+
+def observation_fields(table, row, selection: CollectionSelection, mapping_version):
+    """Financial observation provenance plus explicit interpretation limitations."""
+    return dict(
+        **subject_observation_fields(table, row, selection, mapping_version),
+        value_mapping_version=VALUE_MAPPING_VERSION,
         correction_operation=selection.representation_role
         if selection.representation_role in {"insertion", "deletion", "other_correction"}
         else "none"
         if selection.representation_role == "snapshot"
         else "unknown",
         correction_applicability_status="unqualified",
-        current_record_status="unqualified",
         filing_key=None,
         filing_link_status="unresolved",
     )

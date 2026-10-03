@@ -84,7 +84,7 @@ def test_raw_queries_keep_complete_metadata_empty_collections_and_parent_join(tm
     assert json.loads(record["metadata_json"]) == original[0]
     assert record["source_sha256"] == item["captures"][0]["responseSha256"]
     assert record["observed_at"] == item["captures"][0]["observedAt"]
-    assert [row["record_count"] for row in collections] == ["1", "0"]
+    assert [row["record_count"] for row in collections] == [1, 0]
     assert collections[1]["record_outcome"] == "empty"
     assert json.loads(collections[1]["requested_scope_json"])["captures"] == empty["captures"]
     assert all(row["artifact_sha256"] is None for row in collections)
@@ -241,7 +241,7 @@ def test_direct_zip_rows_preserve_header_blank_duplicate_negative_and_member_byt
         archive.writestr("other.csv", b"not selected")
     item = _positional(tmp_path, buf.getvalue(), member={"ordinal": 0, "name": "selected.csv"})
     records, collections, relations = _rows(build_fec_observations(_manifest(tmp_path, [item]), tmp_path / "out"))
-    assert len(records) == 4 and collections[0]["record_count"] == "4" and relations == []
+    assert len(records) == 4 and collections[0]["record_count"] == 4 and relations == []
     assert [json.loads(row["metadata_json"])["fields"] for row in records] == [
         ["ID", "AMOUNT", "NOTE"],
         ["C00000001", "-1.00", "literal, note"],

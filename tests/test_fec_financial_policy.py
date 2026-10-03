@@ -30,7 +30,7 @@ def row(identity="observation", **values):
         namespace = "fec-electronic-filing-schedule"
         values.setdefault("declared_format_version", "8.5")
     if "notice_kind" in values:
-        mapping = "fec-identity-observations/1"
+        mapping = "fec-identity-observations/2"
         namespace = "fec-bulk-false-fictitious-notice"
     return dict(
         record_id=pin(identity),
@@ -441,3 +441,18 @@ def test_other_known_mapper_cannot_authorize_summary_or_state_labels():
     assert policy.state_measure([{**loan, **other}], table="fec_loans", field="outstanding_balance").status == "refused"
     allocation = row(definition_set_id=policy._ALLOCATION_LAYOUT, **amount("total_amount", "100"))
     assert policy.allocated_payment({**allocation, **other}).status == "refused"
+
+
+@pytest.mark.parametrize("version", ["fec-identity-observations/1", "fec-identity-observations/3", "unknown"])
+def test_quality_notice_rejects_old_and_future_mapper_versions(version):
+    observation = bulk(reporting_committee_id="C12345678")
+    notice = row(
+        "notice",
+        committee_id="C12345678",
+        notice_kind="publisher_false_fictitious_filings_list",
+        notice_scope="source_listed_committee",
+        exclusion_status="no_automatic_exclusion",
+    )
+    assert policy.quality_notice_effect(observation, notice)["association"] == "same_reported_committee_id"
+    result = policy.quality_notice_effect(observation, {**notice, "mapping_version": version})
+    assert result["association"] == "no_qualified_record_association" and result["automatic_exclusion"] is False

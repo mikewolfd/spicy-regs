@@ -71,15 +71,13 @@ def test_literal_candidate_preserves_arrays_null_missing_native_fields_and_no_cy
         extra={"integer": 0},
     )
     r = mapped(native)
-    assert json.loads(r["native_metadata_json"]) == native
+    assert "native_metadata_json" not in r and "native_field_states_json" not in r
+    assert r["has_raised_funds"] is False and r["has_raised_funds_status"] == "parsed"
     assert r["name"] == "  Native name  " and r["source_cycle"] is None
     assert r["current_record_status"] == "unqualified" and r["candidate_id_status"] == "source_id_shape"
-    states = json.loads(r["native_field_states_json"])
-    assert (
-        states["election_years"] == "source_empty"
-        and states["inactive_election_years"] == "source_null"
-        and states["election_districts"] == "source_missing"
-    )
+    assert r["election_years_status"] == "source_empty"
+    assert r["inactive_election_years_status"] == "source_null"
+    assert r["election_districts_status"] == "source_missing"
     assert r["cycles_json"] == "[2022,2024,2026]" and r["election_districts_json"] is None
 
 
@@ -87,7 +85,8 @@ def test_literal_candidate_preserves_arrays_null_missing_native_fields_and_no_cy
 def test_results_container_is_control_not_another_candidate(value):
     r = mapped(value, "results")
     assert r["response_field_role"] == "result-container"
-    assert json.loads(r["value_json"]) == value and "candidate_id" not in r
+    assert r["observed_count"] == len(value) and "candidate_id" not in r
+    assert "value_json" not in r and "native_metadata_json" not in r
 
 
 @pytest.mark.parametrize("value,state", [(None, "source_null"), ({}, "reported"), ({"count": 0}, "reported")])
@@ -124,3 +123,25 @@ def test_source_owned_request_route_validation():
     e["scope"]["capture"]["requestUrl"] = URL.replace("candidates", "committees")
     with pytest.raises(ValueError):
         candidate.prepare_candidate_api(e, source_generation_pin=GEN)
+
+
+def test_useful_candidate_fields_are_typed_once_and_identity_stays_stable():
+    from datetime import date
+    from spicy_regs.transforms.fec_query import observation_id
+
+    native = dict(
+        candidate_id="H2AK01158",
+        active_through=2026,
+        first_file_date="2022-04-01",
+        candidate_inactive=False,
+        has_raised_funds=True,
+        last_file_date="24-11-08",
+    )
+    result = mapped(native)
+    assert result["active_through"] == 2026 and result["first_file_date"] == date(2022, 4, 1)
+    assert result["candidate_inactive"] is False and result["has_raised_funds"] is True
+    assert result["last_file_date"] is None and result["last_file_date_status"] == "unsupported_date"
+    assert result["record_id"] == observation_id(candidate.CANDIDATES, row(native), "official-fec")
+    assert (
+        not {"currency", "amount_kind", "value_mapping_version", "filing_key", "correction_operation"} & result.keys()
+    )

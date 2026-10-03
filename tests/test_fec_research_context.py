@@ -252,7 +252,8 @@ def test_csv_maps_only_complete_rows_and_preserves_partial_scope():
     assert rows[0]["reported_date"] == date(2024, 2, 17)
     assert rows[0]["coverage_status"] == "complete_records_of_truncated_capture"
     assert rows[0]["current_total_status"] == "unqualified_partial_capture"
-    assert "partial,unconfirmed" not in rows[0]["native_fields_json"]
+    assert "native_fields_json" not in rows[0]
+    assert rows[0]["source_context_pointer"] == ROOT + "/parsing/complete_records/1"
 
 
 @pytest.mark.parametrize("change", ["duplicate_header", "short_row"])
@@ -364,6 +365,10 @@ def test_unsupported_api_native_context_remains_visible():
 
 def test_court_page_retains_native_text_and_deferred_links_without_legal_identity():
     facts = [
+        event("text", text="Your web browser is not supported"),
+        event("text", text="Federal Election Commission | United States of America"),
+        event("text", text="Menu"),
+        event("text", text="Federal Election Commission | United States of America"),
         event("start", "h1"),
         event("text", text="Fieger v. FEC"),
         event("end", "h1"),
@@ -376,6 +381,7 @@ def test_court_page_retains_native_text_and_deferred_links_without_legal_identit
         event("start", "a", attrs=[["href", "/opinion.pdf"]]),
         event("text", text="Court opinion"),
         event("end", "a"),
+        event("text", text="About\nCareers\nPress\nContact\nPrivacy and security policy"),
     ]
     result = run(
         context(
@@ -449,7 +455,8 @@ def test_rss_item_across_context_parts_preserves_fields_and_both_witnesses():
     result = map_filing_feed_contexts([second, first], PIN)
     item = result.tables["fec_research_filing_feed_items"][0]
     assert item["guid"] == "FEC-2011478" and item["title"] == "A committee filed F1A"
-    assert set(json.loads(item["source_parts_json"])) == {"rss-0", "rss-1"}
+    assert "source_parts_json" not in item
+    assert item["parsing_status"] == "missing_identifiers"
     assert {e["collection_id"] for e in result.evidence} == {"rss-0", "rss-1"}
     assert item["current_record_status"] == "source_feed_observation_only"
     assert pa.Table.from_pylist([item], schema=SCHEMAS["fec_research_filing_feed_items"]).to_pylist() == [item]

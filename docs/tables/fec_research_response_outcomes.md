@@ -2,7 +2,7 @@
 
 # `fec_research_response_outcomes`
 
-**Retained OpenFEC response outcomes**
+**FEC OpenFEC response outcomes**
 
 One retained response/context outcome observation. Makes source-reader refusals and native response shapes explicit. Empty captured results and errors do not establish successful complete queries; no entity rows are invented for missing data. Resolve collection_id to fec_collections in the captured source generation and source_context_pointer into its retained context. Context witnesses use their own digest and native coordinates; they do not require a fictional source_record_id.
 
@@ -28,5 +28,5 @@ One retained response/context outcome observation. Makes source-reader refusals 
 | `query_completeness` | `VARCHAR` | Whether complete traversal of the stated source query was established. A retained page or rejected response is not a completed query. |
 | `payload_shape` | `VARCHAR` | Observed native response shape, distinguishing result arrays, error objects and unsupported structures. |
 | `outcome_status` | `VARCHAR` | Explicit retained response outcome, including rejection or empty payload. Neither establishes a completed successful query by itself. |
-| `native_payload_json` | `VARCHAR` | Native response body facts already retained in collection context; no new request or fabricated entity row. |
+| `capture_disposition` | `VARCHAR` | Distinguishes a provider refusal from an empty or present held payload. No value asserts successful source coverage. |
 | `observed_payload_records` | `INTEGER` | Count of result entries actually visible in the retained payload, distinct from a claimed complete query population. |

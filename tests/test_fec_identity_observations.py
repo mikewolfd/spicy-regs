@@ -60,7 +60,7 @@ def test_statement_image_and_source_row_id_are_not_filing_identifiers():
         identity.FORM1,
     )
     assert row["committee_id"] == "C00000001" and row["committee_id_status"] == "source_id_shape"
-    assert row["filing_key"] is None and row["filing_link_status"] == "unresolved_no_report_number"
+    assert "filing_key" not in row and "filing_link_status" not in row
     assert row["beginning_image_number"] == "202412319740048774" and row["affiliation_status"] == "source_reported_none"
     assert row["receipt_date"] is None and row["receipt_date_status"] == "unresolved_century"
     assert row["current_record_status"] == "unqualified"
@@ -75,7 +75,7 @@ def test_form2_uses_report_year_not_election_cycle_for_receipt_date():
         identity.FORM2,
     )
     assert row["receipt_date"] == date(2025, 11, 13) and row["receipt_date_status"] == "exact_with_year_bounds"
-    assert row["election_year"] == "2024" and row["source_cycle"] == 2024
+    assert row["election_year"] == 2024 and row["source_cycle"] == 2024
     bad, _ = identity.map_registry(
         registry(identity.FORM2, RECEIPT_DATE="13-NOV-25", REPORT_YEAR="2024"), SELECTION, identity.FORM2
     )
@@ -95,7 +95,7 @@ def test_lobbyist_blank_is_not_false_and_names_do_not_create_links():
             identity.LOBBYIST,
         )
         assert row["is_lobbyist"] is expected and row["lobbyist_status"] == status
-        assert row["committee_id_status"] == "not_reported" and row["filing_key"] is None
+        assert row["committee_id_status"] == "not_reported" and "filing_key" not in row
     bad, _ = identity.map_registry(registry(identity.LOBBYIST, Is_Lobbyist="UNKNOWN"), SELECTION, identity.LOBBYIST)
     assert bad["mapping_status"] == "partial" and bad["lobbyist_status"] == "unsupported_source_code"
 
@@ -166,12 +166,8 @@ def test_candidate_filer_is_not_reported_committee_and_references_are_not_replac
 def test_source_null_missing_and_empty_filing_fields_remain_distinct():
     tables, _ = identity.map_filing_metadata(api(dict(file_number=None, candidate_id="", pdf_url=None)), SELECTION)
     row = tables[identity.FILINGS][0]
-    states = json.loads(row["native_field_states_json"])
-    assert (
-        states["file_number"] == "source_null"
-        and states["candidate_id"] == "source_empty"
-        and states["sub_id"] == "source_missing"
-    )
+    assert "native_field_states_json" not in row
+    assert row["candidate_id"] == "" and row["source_record_identifier"] is None
     assert row["filing_link_status"] == "unresolved_no_file_number"
     assert row["receipt_date_status"] == "source_missing" and row["pdf_body_status"] == "source_null"
 
@@ -209,3 +205,31 @@ def test_output_schemas_roundtrip(tmp_path):
         pq.write_table(arrow, path)
         assert pq.read_table(path).equals(arrow)
     assert tables[identity.FILINGS][0]["pdf_body_status"] == "deferred_pdf"
+
+
+def test_filing_flags_counts_and_years_are_typed_in_producer():
+    tables, _ = identity.map_filing_metadata(
+        api(
+            dict(
+                file_number=1,
+                pages=23,
+                report_year=2026,
+                cycle=2026,
+                election_year="2026",
+                is_amended=True,
+                most_recent=False,
+            )
+        ),
+        SELECTION,
+    )
+    row = tables[identity.FILINGS][0]
+    assert row["pages"] == 23 and row["report_year"] == 2026 and row["reported_cycle"] == 2026
+    assert row["is_amended"] is True and row["most_recent"] is False
+    bad, _ = identity.map_filing_metadata(
+        api(dict(file_number=1, pages=2.5, report_year="26", is_amended=1)), SELECTION
+    )
+    invalid = bad[identity.FILINGS][0]
+    assert (
+        invalid["pages"] is None and invalid["pages_raw"] == "2.5" and invalid["pages_status"] == "unsupported_integer"
+    )
+    assert invalid["report_year"] is None and invalid["is_amended"] is None and invalid["mapping_status"] == "partial"

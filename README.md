@@ -351,6 +351,10 @@ relationship. Older published document schemas report these views as unsupported
 In newly shaped rows, NULL means unread; `[]` means a validated complete empty
 response. Restricted attachment records remain visible even without a file URL.
 
+FEC subject tables are shaped at build time. Necessary response/array child views
+appear in the same table list with `role: child_query` and their `source_tables`.
+See [FEC tables and child rows](docs/fec-query-views.md) for grains, evidence and release limits.
+
 `list_sources` returns each queryable table in `tables` with its label and
 coverage kind (`true_range`, `window`, `sampled` or `derived`), the relationship
 views grouped under their shared summary, and declared names without a loaded

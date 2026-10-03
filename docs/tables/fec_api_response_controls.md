@@ -2,7 +2,7 @@
 
 # `fec_api_response_controls`
 
-**Retained FEC API response controls**
+**FEC API response controls**
 
 One native top-level API response field or result-container observation. Inspect pagination, result containers and source response states without inventing committee/candidate rows. A page's presence does not prove query traversal completed. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates.
 
@@ -18,7 +18,6 @@ One native top-level API response field or result-container observation. Inspect
 | `record_id` | `VARCHAR` | Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event. |
 | `identity_version` | `VARCHAR` | Version of the source-observation identity rule; it does not select a current or canonical record. |
 | `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
-| `value_mapping_version` | `VARCHAR` | Version of the exact monetary and date conversion rules used for supported values. |
 | `mapping_status` | `VARCHAR` | Whether this source observation mapped fully, partially, or received an explicit nondata/refusal disposition; inspect the reason alongside NULL values. |
 | `mapping_reason_json` | `VARCHAR` | JSON object naming unsupported, missing or otherwise limited field interpretations; native values remain reachable through evidence. |
 | `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
@@ -28,23 +27,21 @@ One native top-level API response field or result-container observation. Inspect
 | `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
 | `selection_evidence_sha256` | `VARCHAR` | Digest of the retained selection evidence used to authorize this mapper's source scope; not a financial inclusion decision. |
 | `source_representation_role` | `VARCHAR` | Selected source role such as snapshot, insertion or deletion. Amount signs and ordinary amendment flags do not establish correction applicability. |
-| `correction_operation` | `VARCHAR` | Source-supported correction operation, when applicable; a positive amount in a deletion stream is not a new receipt or an inferred refund. |
-| `correction_applicability_status` | `VARCHAR` | Whether the captured correction can be applied to an evidenced base and target population; unresolved applicability prevents a qualified current total. |
 | `current_record_status` | `VARCHAR` | Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record. |
-| `filing_key` | `VARCHAR` | Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. |
-| `filing_link_status` | `VARCHAR` | Status of the relationship to a submitted filing version; unresolved references preserve the financial observation. |
-| `currency` | `VARCHAR` | Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately. |
-| `amount_kind` | `VARCHAR` | Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It is not an aggregation permission. |
 | `source_namespace` | `VARCHAR` | Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent. |
 | `source_url` | `VARCHAR` | Captured source URL for this observation; it does not assert current availability or body retrieval. |
 | `source_pointer` | `VARCHAR` | Exact pointer within the provider-owned native record to the mapped value or metadata object. |
-| `original_result_pointer` | `VARCHAR` | Original API results-array pointer retained separately from the provider wrapper's pointer. |
 | `query_completeness` | `VARCHAR` | Whether complete traversal of the stated source query was established. A retained page or rejected response is not a completed query. |
 | `registry_scope_status` | `VARCHAR` | Explicit retained-observation scope; this table does not replace the broader current candidate/committee registry. |
-| `native_metadata_json` | `VARCHAR` | Complete native metadata object retained for this observation, including fields outside the typed mapping. |
-| `native_field_states_json` | `VARCHAR` | JSON map of field presence states such as source_missing, source_null, source_empty or reported. |
 | `response_field` | `VARCHAR` | Native API response field name represented by this control row. |
 | `response_field_role` | `VARCHAR` | Distinguishes a result container from pagination/control metadata; neither is an invented entity record. |
-| `value_json` | `VARCHAR` | Exact JSON value of the native response control or result container, including NULL and empty shapes. |
 | `value_status` | `VARCHAR` | Explicit interpretation or source-presence state for value; a NULL typed value must be read with this status. |
+| `api_version` | `VARCHAR` | Literal API version string supplied by the captured response. |
+| `parsing_status` | `VARCHAR` | Interpretation of source parsing: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
+| `page` | `BIGINT` | Nonnegative exact page number supplied in the captured pagination object; not inferred from result count. |
+| `per_page` | `BIGINT` | Nonnegative exact requested page size reported by pagination; not proof that all rows were returned. |
+| `reported_count` | `BIGINT` | Count explicitly supplied by the source for this group; NULL means no supported count, not zero. |
+| `reported_pages` | `BIGINT` | Nonnegative exact total page count reported by the API at capture time. |
+| `observed_count` | `BIGINT` | Number of results in the held API response array; the array remains source evidence and is not copied into this row. |
+| `is_count_exact` | `BOOLEAN` | Native JSON boolean declaring whether the API count is exact; numeric or string booleans are refused. |
 | `source_cycle` | `INTEGER` | Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year. |

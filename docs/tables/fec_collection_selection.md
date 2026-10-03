@@ -2,7 +2,7 @@
 
 # `fec_collection_selection`
 
-**Retained FEC representation-selection decisions**
+**FEC representation-selection decisions**
 
 One source collection/member decision under a named snapshot-selection policy. Shows which retained representation is selected once and which shares the proved row-multiplicity population. The policy does not apply daily corrections or qualify a current, net or source-complete money total.
 

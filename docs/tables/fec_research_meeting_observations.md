@@ -2,7 +2,7 @@
 
 # `fec_research_meeting_observations`
 
-**Retained meeting table observations**
+**FEC meeting table observations**
 
 One native HTML table row describing a meeting listing. Keeps meeting type, title, source date cells, links and explicit reported cancellation status. Repeated listings remain source observations, and no meeting-to-matter relation is inferred. Resolve collection_id to fec_collections in the captured source generation and source_context_pointer into its retained context. Context witnesses use their own digest and native coordinates; they do not require a fictional source_record_id.
 
@@ -30,6 +30,5 @@ One native HTML table row describing a meeting listing. Keeps meeting type, titl
 | `dates_json` | `VARCHAR` | Literal date cells and available date interpretations for the meeting row; multiple dates remain separate. |
 | `date_status` | `VARCHAR` | Conversion state for the reported transaction/context date; distinguishes exact values, source NULL/empty and invalid or unsupported spelling. |
 | `links_json` | `VARCHAR` | Source links with their labels and exact native locations; metadata does not imply body retrieval. |
-| `native_cells_json` | `VARCHAR` | Exact retained source cells and addresses supporting this row; includes literal text and available worksheet/formula context. |
 | `table_ordinal` | `INTEGER` | Zero-based ordinal of the source HTML table containing this observation. |
 | `table_row` | `INTEGER` | Native row address in the retained HTML table; use native_cells_json for exact cell evidence. |

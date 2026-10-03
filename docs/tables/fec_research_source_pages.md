@@ -2,9 +2,9 @@
 
 # `fec_research_source_pages`
 
-**Retained FEC source documentation pages**
+**FEC source documentation pages**
 
-One supported source-documentation page observation from retained context. Read retained headings, text, time elements and links with exact context evidence. Source documentation explains forms and access routes without becoming financial transactions or legal events. Resolve collection_id to fec_collections in the captured source generation and source_context_pointer into its retained context. Context witnesses use their own digest and native coordinates; they do not require a fictional source_record_id.
+One source-documentation page observation with build-extracted body text, content status and retained links. Complete original page context remains available through exact context evidence. Source documentation explains forms and access routes without becoming financial transactions or legal events. Resolve collection_id to fec_collections in the captured source generation and source_context_pointer into its retained context. Context witnesses use their own digest and native coordinates; they do not require a fictional source_record_id.
 
 **Coverage.** Sampled. Supported observations from retained form pages and other useful structured source documentation. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
 
@@ -26,8 +26,7 @@ One supported source-documentation page observation from retained context. Read 
 | `observed_at_json` | `VARCHAR` | Retained capture time value(s) as JSON without collapsing separately observed captures. |
 | `page_type` | `VARCHAR` | Supported type of retained source documentation page, such as a form page or statutory filing reference. |
 | `title` | `VARCHAR` | Source title or explicitly labeled mapper title; consult title_basis or title_status when present. |
-| `text` | `VARCHAR` | Literal supported source text at the stated locator, without inferring a legal conclusion or numerical measure. |
+| `text` | `VARCHAR` | Build-extracted body text when content_status is body_extracted; null for failed, empty or unsupported pages. Original page text and context remain at the evidence reference. |
 | `content_scope` | `VARCHAR` | Scope of retained page content; text, headings and links are source documentation rather than inferred transactions. |
+| `content_status` | `VARCHAR` | Page body disposition: body_extracted, failed_page, empty_page or unsupported_body_boundaries. Filter body_extracted for subject search; every capture retains its source evidence pointer. |
 | `links_json` | `VARCHAR` | Source links with their labels and exact native locations; metadata does not imply body retrieval. |
-| `times_json` | `VARCHAR` | Literal time elements and native attributes retained from the source page. |
-| `headings_json` | `VARCHAR` | Ordered source headings with their native context, preserving document structure. |

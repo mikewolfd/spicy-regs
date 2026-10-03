@@ -8,23 +8,36 @@ import pyarrow as pa
 from spicy_docs.sources.fec.candidate_profile import candidate_query_scope
 from spicy_docs.sources.fec.originals import original_capture
 
-from .fec_bulk_financial import COMMON_TEXT
 from .fec_committee_observations import CONTROLS, SCHEMAS as COMMITTEE_SCHEMAS
-from .fec_identity_observations import _json, _scalar, _state
-from .fec_query import CollectionSelection, observation_fields, record_evidence
+from .fec_identity_observations import _json, _scalar
+from .fec_identity_shape import array_values, typed_columns, typed_values
+from .fec_context_shape import api_control_values
+from .fec_query import CollectionSelection, SOURCE_TEXT, subject_observation_fields, record_evidence
 from .fec_relationships import _id_status
 
 CANDIDATES = "fec_candidate_api_observations"
-MAPPING_VERSION = "fec-retained-candidate-api/1"
+MAPPING_VERSION = "fec-retained-candidate-api/2"
 FIELDS = "candidate_id name party party_full office office_full state district candidate_status incumbent_challenge incumbent_challenge_full".split()
 ARRAYS = "cycles election_years election_districts inactive_election_years".split()
+TYPED = {
+    "active_through": "year",
+    "candidate_inactive": "boolean",
+    "has_raised_funds": "boolean",
+    "federal_funds_flag": "boolean",
+    "first_file_date": "date",
+    "last_file_date": "date",
+    "last_f2_date": "date",
+}
 SCHEMAS = {
     CANDIDATES: pa.schema(
-        [(n, pa.string()) for n in COMMON_TEXT + FIELDS + [n + "_json" for n in ARRAYS]]
-        + [
+        [
             (n, pa.string())
-            for n in "source_url source_pointer original_result_pointer candidate_id_status query_completeness native_metadata_json native_field_states_json".split()
+            for n in SOURCE_TEXT
+            + FIELDS
+            + [n + suffix for n in ARRAYS for suffix in ("_json", "_status")]
+            + "source_url source_pointer original_result_pointer candidate_id_status query_completeness".split()
         ]
+        + typed_columns(TYPED)
         + [("source_cycle", pa.int32())]
     ),
     CONTROLS: COMMITTEE_SCHEMAS[CONTROLS],
@@ -74,7 +87,7 @@ def prepare_candidate_api(entry, *, source_generation_pin):
 
 
 def map_candidate_api(row, prepared: CandidateSelection):
-    """Retain every native field and every response control without new entities."""
+    """Expose useful facts with exact links to native evidence, without new entities."""
     selection = prepared.selection
     native = json.loads(row["metadata_json"])
     locator = json.loads(row["source_locator_json"])
@@ -101,16 +114,17 @@ def map_candidate_api(row, prepared: CandidateSelection):
         result = dict.fromkeys(SCHEMAS[table].names)
         result.update({name: _scalar(doc.get(name)) for name in FIELDS})
         for name in ARRAYS:
-            result[name + "_json"] = _json(doc[name]) if name in doc else None
+            result.update(array_values(doc, name))
             if name in doc and doc[name] is not None and not isinstance(doc[name], list):
                 problems[name] = "source_value_is_not_an_array"
         result.update(
             source_pointer="/metadata",
             original_result_pointer=pointer,
-            native_metadata_json=_json(doc),
-            native_field_states_json=_json({k: _state(doc, k) for k in sorted(set(doc) | set(FIELDS) | set(ARRAYS))}),
             candidate_id_status=_id_status(result["candidate_id"], "candidate"),
         )
+        values, invalid = typed_values(doc, TYPED)
+        result.update(values)
+        problems.update(invalid)
     elif (
         native.get("kind") == "api-response-field"
         and isinstance(native.get("field"), str)
@@ -119,19 +133,11 @@ def map_candidate_api(row, prepared: CandidateSelection):
     ):
         table = CONTROLS
         result = dict.fromkeys(SCHEMAS[table].names)
-        result.update(
-            source_pointer="/value",
-            response_field=native["field"],
-            response_field_role="result-container" if native["field"] == "results" else "response-control",
-            value_json=_json(native["value"]),
-            value_status=_state(native, "value"),
-            native_metadata_json=_json(native),
-            native_field_states_json=_json({"value": _state(native, "value")}),
-            registry_scope_status="retained-source-observations-only",
-        )
+        result.update(api_control_values(native))
+        result.update(source_pointer="/value", registry_scope_status="retained-source-observations-only")
     else:
         raise ValueError("Expected a source-owned candidate result or response control")
-    result.update(observation_fields(table, row, selection, MAPPING_VERSION))
+    result.update(subject_observation_fields(table, row, selection, MAPPING_VERSION))
     result.update(
         mapping_status="partial" if problems else "mapped",
         mapping_reason_json=_json(problems),

@@ -1,8 +1,8 @@
 """Retained committee API observations, separate from the current registry.
 
-Core committee fields reuse the maintained retained-record mapping. Each source
-observation keeps its own identity and full native metadata. Response controls
-have their own rows; three selected pages do not imply a completed traversal.
+Core committee fields reuse the maintained source mapping. Each observation
+keeps its own identity and links to exact native evidence. Response controls
+keep typed counts without copying results; captures do not imply a full traversal.
 """
 
 import json
@@ -11,25 +11,34 @@ from urllib.parse import urlsplit
 import pyarrow as pa
 
 from .build_fec_committees import COLUMNS, _shape
-from .fec_bulk_financial import COMMON_TEXT
-from .fec_identity_observations import _json, _scalar, _state
-from .fec_query import CollectionSelection, observation_fields, record_evidence
+from .fec_identity_observations import _json, _scalar
+from .fec_identity_shape import array_values, typed_columns, typed_values
+from .fec_context_shape import API_CONTROL_FIELDS, api_control_values
+from .fec_query import CollectionSelection, SOURCE_TEXT, subject_observation_fields, record_evidence
 from .fec_relationships import _id_status
 
 COMMITTEES = "fec_committee_observations"
 CONTROLS = "fec_api_response_controls"
-MAPPING_VERSION = "fec-retained-committee-api/1"
-_EXTRA = "source_url source_pointer original_result_pointer query_completeness registry_scope_status native_metadata_json native_field_states_json".split()
+MAPPING_VERSION = "fec-retained-committee-api/2"
+_EXTRA = "source_url source_pointer original_result_pointer query_completeness registry_scope_status".split()
+TYPED = {name: "date" for name in ("first_file_date", "last_file_date", "first_f1_date", "last_f1_date")}
+ARRAYS = ("cycles", "candidate_ids", "sponsor_candidate_ids")
 SCHEMAS = {
     COMMITTEES: pa.schema(
-        [(n, pa.string()) for n in COMMON_TEXT + list(COLUMNS) + _EXTRA + ["committee_id_status"]]
+        [
+            (n, pa.string())
+            for n in SOURCE_TEXT
+            + [n for n in COLUMNS if n not in TYPED and not n.endswith("_json")]
+            + _EXTRA
+            + ["committee_id_status", "affiliated_committee_name", "organization_type"]
+            + [name + suffix for name in ARRAYS for suffix in ("_json", "_status")]
+        ]
+        + typed_columns(TYPED)
         + [("source_cycle", pa.int32())]
     ),
     CONTROLS: pa.schema(
-        [
-            (n, pa.string())
-            for n in COMMON_TEXT + _EXTRA + ["response_field", "response_field_role", "value_json", "value_status"]
-        ]
+        [(n, pa.string()) for n in SOURCE_TEXT + [c for c in _EXTRA if c != "original_result_pointer"]]
+        + API_CONTROL_FIELDS
         + [("source_cycle", pa.int32())]
     ),
 }
@@ -80,20 +89,20 @@ def map_committee_api(row, selection: CollectionSelection):
         shaped = _shape(doc)
         problems = {}
         for column in COLUMNS:
-            if column in {"candidate_ids_json", "cycles_json"}:
-                field = column.removesuffix("_json")
-                shaped[column] = _json(doc[field]) if field in doc else None
-                if field in doc and doc[field] is not None and not isinstance(doc[field], list):
-                    problems[field] = "source_value_is_not_an_array"
-            else:
-                shaped[column] = _scalar(shaped[column])
-        result.update(shaped)
-        expected = {n.removesuffix("_json") for n in COLUMNS}
+            if column not in TYPED and not column.endswith("_json"):
+                result[column] = _scalar(shaped[column])
+        for name in ARRAYS:
+            result.update(array_values(doc, name))
+            if result[name + "_status"] == "unsupported_shape":
+                problems[name] = "source_value_is_not_an_array"
+        for name in ("affiliated_committee_name", "organization_type"):
+            result[name] = _scalar(doc.get(name))
+        values, invalid = typed_values(doc, TYPED)
+        result.update(values)
+        problems.update(invalid)
         result.update(
             source_pointer="/metadata",
             original_result_pointer=pointer,
-            native_metadata_json=_json(doc),
-            native_field_states_json=_json({field: _state(doc, field) for field in sorted(set(doc) | expected)}),
             committee_id_status=_id_status(result["committee_id"], "committee"),
         )
     elif (
@@ -102,18 +111,11 @@ def map_committee_api(row, selection: CollectionSelection):
         table = CONTROLS
         result = dict.fromkeys(SCHEMAS[table].names)
         problems = {}
-        result.update(
-            source_pointer="/value",
-            response_field=native["field"],
-            response_field_role="result-container" if native["field"] == "results" else "response-control",
-            value_json=_json(native["value"]),
-            value_status=_state(native, "value"),
-            native_metadata_json=_json(native),
-            native_field_states_json=_json({"value": _state(native, "value")}),
-        )
+        result.update(api_control_values(native))
+        result["source_pointer"] = "/value"
     else:
         raise ValueError("Expected a source-owned committee result or response control")
-    result.update(observation_fields(table, row, selection, MAPPING_VERSION))
+    result.update(subject_observation_fields(table, row, selection, MAPPING_VERSION))
     result.update(
         mapping_status="partial" if problems else "mapped",
         mapping_reason_json=_json(problems),

@@ -2,7 +2,7 @@
 
 # `fec_legal_documents`
 
-**Retained legal document references**
+**FEC legal document references**
 
 One source legal-document occurrence or rendition associated with a matter observation. Discover native document IDs, titles, categories, URLs and source associations. Byte equality does not merge document editions; deferred bodies remain separate from available metadata. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates.
 

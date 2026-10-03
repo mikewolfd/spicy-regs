@@ -2,7 +2,7 @@
 
 # `fec_research_document_observations`
 
-**Retained research document and case references**
+**FEC research document and case references**
 
 One source document/case-reference metadata occurrence in retained context. Preserves publisher, authority, native document reference, dates and URL without inferring an FEC matter join. Bodies remain explicitly deferred or reference-only as supported by the retained evidence. Resolve collection_id to fec_collections in the captured source generation and source_context_pointer into its retained context. Context witnesses use their own digest and native coordinates; they do not require a fictional source_record_id.
 
@@ -34,4 +34,9 @@ One source document/case-reference metadata occurrence in retained context. Pres
 | `original_extension` | `VARCHAR` | Original file extension reported in research metadata, without body parsing or format validation. |
 | `body_status` | `VARCHAR` | Explicit body availability or processing status. A PDF link remains deferred; metadata does not imply extracted content. |
 | `fec_relationship_status` | `VARCHAR` | Explicit resolution state of any FEC relationship; third-party metadata does not establish an FEC matter join. |
-| `native_metadata_json` | `VARCHAR` | Complete native metadata object retained for this observation, including fields outside the typed mapping. |
+| `language` | `VARCHAR` | Language code reported by the discovery provider; not independently detected from a document body. |
+| `evidence_use` | `VARCHAR` | Discovery-only research lead; does not establish a verified FEC matter relationship or fetched document body. |
+| `page_count_status` | `VARCHAR` | Whether the document provider supplied an exact nonnegative integer page count, no value, or an invalid count. |
+| `page_count` | `BIGINT` | Nonnegative exact page count reported by the discovery provider; no document-body acquisition is implied. |
+| `created_at` | `TIMESTAMP WITH TIME ZONE` | Provider-reported creation timestamp; distinct from source capture time. |
+| `updated_at` | `TIMESTAMP WITH TIME ZONE` | Provider-reported update timestamp; distinct from source capture time. |

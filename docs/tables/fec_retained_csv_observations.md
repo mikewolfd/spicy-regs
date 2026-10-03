@@ -2,7 +2,7 @@
 
 # `fec_retained_csv_observations`
 
-**Retained CSV context observations**
+**FEC CSV context observations**
 
 One physical CSV row exposed by retained collection context. Preserves source values, amounts and dates under the context's actual coverage status. A complete retained prefix is still not an asserted complete source population or current financial total. Resolve collection_id to fec_collections in the captured source generation and source_context_pointer into its retained context. Context witnesses use their own digest and native coordinates; they do not require a fictional source_record_id.
 
@@ -34,10 +34,23 @@ One physical CSV row exposed by retained collection context. Preserves source va
 | `amount_status` | `VARCHAR` | Source-presence or conversion state for amount, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
 | `date_raw` | `VARCHAR` | Literal date field of the retained CSV context row before source-specific interpretation. |
 | `date_status` | `VARCHAR` | Conversion state for the reported transaction/context date; distinguishes exact values, source NULL/empty and invalid or unsupported spelling. |
-| `native_fields_json` | `VARCHAR` | Retained native field values for the source row or feed item, including fields beyond the typed mapping. |
 | `native_row_locator_json` | `VARCHAR` | Exact original CSV row and field coordinates retained by the source context. |
 | `coverage_status` | `VARCHAR` | Explicit completeness/retention scope of the context rows; a retained prefix does not become complete source history. |
 | `current_total_status` | `VARCHAR` | Explicit limitation or refusal for current financial totals; historical/context observations are not silently treated as a current population. |
+| `amendment_indicator` | `VARCHAR` | Literal source amendment flag. It does not by itself prove the amendment chain, replacement scope or current record. |
+| `amendment_indicator_desc` | `VARCHAR` | Source-provided description of the amendment indicator; not a current-record selection. |
+| `memo_code` | `VARCHAR` | Literal source memo code; no automatic financial exclusion is inferred. |
+| `memo_text` | `VARCHAR` | Source memo or explanation text associated with the reported record. |
+| `file_number` | `VARCHAR` | Literal source filing number; not a qualified filing identity or association. |
+| `filing_form` | `VARCHAR` | Literal source form label associated with this sample row. |
+| `report_type` | `VARCHAR` | Source-reported report classification, interpreted within its namespace rather than as a universal period code. |
+| `line_number` | `VARCHAR` | Literal report line reference from the source; not the physical row ordinal or a globally unique item key. |
+| `schedule_type` | `VARCHAR` | Native schedule classification within the report layout. |
+| `image_number` | `VARCHAR` | Literal FEC image reference; it is not a transaction ID or filing number. |
+| `back_reference_transaction_id` | `VARCHAR` | Source-stated transaction back-reference. Resolve only within the evidenced filing and schedule scope; no automatic parent match. |
+| `back_reference_schedule_name` | `VARCHAR` | Literal schedule name for the source back-reference; no resolved transaction relationship is implied. |
+| `report_year` | `INTEGER` | Year reported for the filing/report, preserved independently of cycle and transaction date. |
+| `report_year_status` | `VARCHAR` | Whether the CSV source report year has an exact four-digit spelling, is missing, or is unsupported. |
 | `amount` | `DECIMAL(38,9)` | Exact decimal for the source-reported amount for this record and its amount_kind. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations. |
 | `reported_date` | `DATE` | Date parsed from the date stated for this historical/context observation. NULL requires the source value and conversion status; capture time is not substituted. |
 | `source_row_ordinal` | `INTEGER` | Native row ordinal supplied by the retained CSV context. |

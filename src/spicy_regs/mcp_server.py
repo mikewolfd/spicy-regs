@@ -1115,6 +1115,9 @@ def _register_tools(mcp: MCPServer) -> None:
     def list_sources() -> dict[str, Any]:
         """List the queryable tables: each one's label and coverage kind, with derived views grouped.
 
+        FEC subject tables contain the build-shaped facts. Entries marked child_query
+        expose a distinct response or array-element grain and name their source_tables.
+        Categories distinguish query data, diagnostics, evidence, leads and samples.
         coverage is the dictionary's kind: true_range, window, sampled,
         not_a_range or derived; a window or a sample does not hold the
         source's full history.
@@ -1128,16 +1131,21 @@ def _register_tools(mcp: MCPServer) -> None:
             available = _available_tables(cursor)
         metadata = _table_metadata()
         relationships = _connection_relationships(cursor)
-        # A relationship family's occurrence, pair and field-state views share one summary; list it once.
         views: dict[str, list[str]] = {}
         for name, entry in relationships.items():
-            if name in available:
+            if name in available and entry["metadata"].get("view_role") != "child_query":
                 views.setdefault(entry["metadata"]["summary"], []).append(name)
         return {
             **_source_details(cursor),
             "tables": [
-                {"table": name, "label": metadata.get(name, {}).get("label"), "coverage": metadata.get(name, {}).get("kind")}
-                for name in available if name not in relationships
+                {"table": name,
+                 "label": metadata.get(name, {}).get("label", relationships.get(name, {}).get("metadata", {}).get("label")),
+                 "coverage": metadata.get(name, {}).get("kind", "derived"),
+                 **({"category": metadata[name]["category"]} if metadata.get(name, {}).get("category") else {}),
+                 **({"role": "child_query", "source_tables": relationships[name]["dependencies"]}
+                    if name in relationships else {})}
+                for name in available
+                if name not in relationships or relationships[name]["metadata"].get("view_role") == "child_query"
             ],
             "relationship_views": [{"views": names, "summary": summary} for summary, names in views.items()],
             "unavailable_tables": [name for name in (*TABLES, *relationships) if name not in available],
@@ -1178,7 +1186,8 @@ def _register_tools(mcp: MCPServer) -> None:
             from spicy_regs.relationship_views import view_columns
 
             # A derived view declares its bound schema; it is described here, not at connection build.
-            entry = {"table": table, **relationships[table]["metadata"], "columns": view_columns(rows)}
+            entry = {"table": table, **relationships[table]["metadata"],
+                     "columns": view_columns(rows, _table_metadata().get(table, {}).get("column_descriptions"))}
         else:
             entry = _table_metadata().get(table, {"table": table, "columns": []})
         declared = {column["column_name"]: column for column in entry["columns"]}

@@ -2,7 +2,7 @@
 
 # `fec_filing_definition_evidence`
 
-**Retained filing layout evidence**
+**FEC filing layout evidence**
 
 One exact association from a normalized filing definition to a source context witness. Resolves fec_filing_definitions.record_id to the actual workbook labels/rules at the captured context pointer. Source-record IDs are NULL for these context endpoints; no workbook cells are invented as source records.
 

@@ -32,12 +32,12 @@ def schemas():
     }
 
 
-def test_complete_qualified_union_declaration_matches_exact_bytes_and_parquet_types(tmp_path):
+def test_supported_schema_declaration_matches_exact_bytes_and_parquet_types(tmp_path):
     """Exercise every declared union, including nested/decimal types, through actual Parquet."""
     document, declared = schemas()
-    assert document["format_version"] == 1
+    assert document["format_version"] == 2
     assert set(declared) == set(dd.FEC_TYPED_TABLES)
-    for field in ("union_receipt_sha256", "source_generation_pin"):
+    for field in ("baseline_union_receipt_sha256", "source_generation_pin"):
         assert document[field].startswith("sha256:") and len(document[field]) == 71
     with duckdb.connect() as con:
         con.execute("SET memory_limit='64MB'")
@@ -65,6 +65,8 @@ def test_current_mapper_schemas_remain_compatible_with_the_complete_declared_uni
     ):
         module = importlib.import_module("spicy_regs.transforms." + module_name)
         producer_schemas.extend(module.SCHEMAS.items())
+        for table, schema in module.SCHEMAS.items():
+            assert declared[table].equals(schema, check_metadata=False), table
     from spicy_regs.transforms import fec_api_financial, fec_bulk_financial, fec_filing_forms, fec_summaries
     from spicy_regs.transforms.fec_bulk_selection import SELECTION_SCHEMA
     from spicy_regs.transforms.fec_filing_associations import ASSOCIATION_SCHEMA

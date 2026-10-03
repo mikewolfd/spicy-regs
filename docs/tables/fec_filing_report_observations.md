@@ -2,7 +2,7 @@
 
 # `fec_filing_report_observations`
 
-**Retained filing cover and summary observations**
+**FEC filing cover and summary observations**
 
 One source filing report/statement/cover record version. Keeps every native field with definition positions and supported financial measures. Source totals, subtotals and period bases stay named in reported_measures; ambiguous source layouts retain native values without fabricated monetary/date interpretation. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. For original-filing rows, definition_set_id joins fec_filing_definitions.record_id and its fec_filing_definition_evidence context witnesses; filing_header_record_id and filing_header_locator_json identify the separate actual header witness. Other source layouts retain their own dictionary evidence.
 
@@ -32,7 +32,7 @@ One source filing report/statement/cover record version. Keeps every native fiel
 | `correction_applicability_status` | `VARCHAR` | Whether the captured correction can be applied to an evidenced base and target population; unresolved applicability prevents a qualified current total. |
 | `current_record_status` | `VARCHAR` | Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record. |
 | `filing_key` | `VARCHAR` | Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. |
-| `filing_link_status` | `VARCHAR` | Status of the relationship to a submitted filing version; unresolved references preserve the financial observation. |
+| `filing_link_status` | `VARCHAR` | Source feed assertion only; the value does not qualify a filing match or establish the target exists. |
 | `currency` | `VARCHAR` | Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately. |
 | `amount_kind` | `VARCHAR` | Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It is not an aggregation permission. |
 | `source_namespace` | `VARCHAR` | Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent. |
@@ -76,5 +76,4 @@ One source filing report/statement/cover record version. Keeps every native fiel
 | `election_date` | `DATE` | Date parsed from the source-stated election date. NULL requires the source value and conversion status; capture time is not substituted. |
 | `source_amendment_date` | `DATE` | Date parsed from the date of amendment stated in the source form. NULL requires the source value and conversion status; capture time is not substituted. |
 | `effective_date` | `DATE` | Date parsed from the effective date stated on the source form. NULL requires the source value and conversion status; capture time is not substituted. |
-| `native_fields` | `STRUCT("position" INTEGER, definition_label VARCHAR, definition_cell VARCHAR, presence VARCHAR, raw_value VARCHAR, body_reference_json VARCHAR)[]` | Ordered native fields as structs of position, definition_label, definition_cell, presence, raw_value and body_reference_json. Preserves every source value, including undefined positions and missing/null/empty states. |
 | `reported_measures` | `STRUCT(native_position INTEGER, native_label VARCHAR, definition_cell VARCHAR, raw_value VARCHAR, "value" DECIMAL(38,9), value_status VARCHAR, quantity_kind VARCHAR, measure_role VARCHAR, period_basis VARCHAR)[]` | Ordered measure structs: native_position, native_label, definition_cell, raw_value, exact decimal value, value_status, quantity_kind, measure_role and period_basis. Parent totals/subtotals are not added to itemized children. |

@@ -49,6 +49,7 @@ nav:
   - Changelog: changelog.md
   - Querying with Python: querying-python.md
   - FEC:
+      - FEC tables and child rows: fec-query-views.md
       - Integration: fec-integration.md
       - Delivery plan and tasks: fec-delivery-plan.md
       - Table ontology and relationships: fec-data-model.md

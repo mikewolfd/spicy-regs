@@ -54,7 +54,7 @@ DEFAULT_MCP_METADATA_PATH = Path(__file__).with_name("table_metadata.json")
 
 #: Bumped when the catalog document's shape changes, so a reader can refuse a
 #: shape it does not know rather than guess at a missing field.
-CATALOG_FORMAT_VERSION = 3
+CATALOG_FORMAT_VERSION = 4
 
 #: The five kinds a coverage statement can be, as machine-readable tokens,
 #: keyed by the prose prefix so the two cannot disagree.
@@ -794,17 +794,17 @@ def contract_grain(table: str) -> str:
 
 
 def fec_typed_schemas() -> dict[str, list[tuple[str, str]]]:
-    """Read the qualified retained union declaration without importing its producers.
+    """Read the supported producer declaration without importing its producers.
 
     This resource retains exact Arrow schema bytes and their digest beside the
     DuckDB spelling measured from those bytes. The dictionary tests reconcile
-    both and check producer schema compatibility. The generating receipt binds
-    the complete selected union, including the declared bulk schemas. It makes
+    both and check producer schema compatibility. The baseline receipt describes the original selected union; schema revisions
+    are support declarations and require their own output qualification. It makes
     no assertion that any table is currently published or fully populated.
     """
     path = REPO_ROOT / "data_dictionary" / "fec_typed_schemas.json"
     document = json.loads(path.read_text(encoding="utf-8"))
-    if document.get("format_version") != 1 or set(document.get("tables", {})) != set(FEC_TYPED_TABLES):
+    if document.get("format_version") != 2 or set(document.get("tables", {})) != set(FEC_TYPED_TABLES):
         raise ValueError("Retained FEC schema declaration differs from the supported table set")
     result = {}
     for table, entry in document["tables"].items():
@@ -829,7 +829,7 @@ def expected_schemas() -> dict[str, list[tuple[str, str]]]:
     from spicy_regs.transforms.build_proceedings import COLUMNS as PROCEEDING_COLUMNS
     from spicy_regs.transforms.build_regulatory_agenda import ITEM_COLUMNS, RELATIONSHIP_COLUMNS
     from spicy_regs.transforms.build_rule_targets import COLUMNS as RULE_TARGET_COLUMNS
-    from spicy_regs.transforms.build_fec_observations import COLLECTION_COLUMNS, RECORD_COLUMNS
+    from spicy_regs.transforms.build_fec_observations import COLLECTION_SCHEMA, RECORD_COLUMNS
     from spicy_regs.transforms.build_fec_source_catalog import COLUMNS as FEC_CATALOG_COLUMNS
     from spicy_regs.transforms.fec_relationships import COLUMNS as FEC_RELATIONSHIP_COLUMNS
     from spicy_regs.transforms.enrich_bill_subjects import COLUMNS as BILL_SUBJECT_COLUMNS
@@ -849,7 +849,6 @@ def expected_schemas() -> dict[str, list[tuple[str, str]]]:
     builder_columns = {
         **SCORECARD_LINK_COLUMNS,
         "fec_source_catalog": FEC_CATALOG_COLUMNS,
-        "fec_collections": COLLECTION_COLUMNS,
         "fec_source_records": RECORD_COLUMNS,
         "fec_relationships": FEC_RELATIONSHIP_COLUMNS,
         "bill_subjects": BILL_SUBJECT_COLUMNS,
@@ -873,6 +872,7 @@ def expected_schemas() -> dict[str, list[tuple[str, str]]]:
     }
     # Writers that type their columns natively (DATE, INTEGER, BOOLEAN), spelled as DuckDB describes the file.
     builder_schemas = {
+        "fec_collections": COLLECTION_SCHEMA,
         "rulemaking_lifecycles": LIFECYCLE_SCHEMA,
         "lifecycle_events": EVENT_SCHEMA,
         "agency_lifecycle_stats": AGENCY_LIFECYCLE_STATS_SCHEMA,
@@ -1323,14 +1323,18 @@ def build_catalog(descriptions: dict, schemas: dict[str, list[tuple[str, str]]])
     depending on the phrasing, so a whitespace split fails on seven of the
     twenty-four classes.
     """
+    from spicy_regs.fec_query_catalog import table_category
+
     coverage = table_coverage(descriptions)
     return {
         "format_version": CATALOG_FORMAT_VERSION,
         "declares": "supported table schemas; publication and search availability are verified separately",
+        "views": list(build_fec_child_metadata(descriptions, schemas).values()),
         "classes": [
             {
                 "table": table,
                 "label": coverage[table]["label"],
+                **({"category": table_category(table)} if table_category(table) else {}),
                 "summary": coverage[table]["summary"],
                 "coverage": coverage[table]["coverage"],
                 "kind": coverage_kind(coverage[table]["coverage"]),
@@ -1343,6 +1347,33 @@ def build_catalog(descriptions: dict, schemas: dict[str, list[tuple[str, str]]])
     }
 
 
+def build_fec_child_metadata(descriptions, schemas):
+    """Bind empty declared parent schemas to document child rows without reading data."""
+    from spicy_regs.relationship_views import FEC_QUERY_VIEWS
+    from spicy_regs.fec_query_catalog import child_column_descriptions
+    from spicy_regs.relationship_views.core import quoted
+
+    result = {}
+    with duckdb.connect() as con:
+        parents = {table for spec in FEC_QUERY_VIEWS for table in spec.required}
+        for table in sorted(parents):
+            con.execute(f'CREATE TABLE {quoted(table)} (' + ', '.join(
+                f'{quoted(name)} {dtype}' for name, dtype in schemas[table]) + ')')
+        for spec in FEC_QUERY_VIEWS:
+            described = con.execute('DESCRIBE ' + spec.query({})).fetchall()
+            meanings = child_column_descriptions(spec, described, descriptions)
+            result[spec.name] = {
+                'table': spec.name, 'label': spec.name.replace('_', ' '), 'summary': spec.meaning,
+                'grain': spec.meaning, 'kind': 'derived', 'category': spec.category,
+                'view_role': spec.role, 'source_tables': list(spec.required),
+                'rule_version': spec.rule_version, 'identity_columns': list(spec.identity_columns),
+                'column_descriptions': meanings,
+                'columns': [{'column_name': row[0], 'column_type': row[1], 'description': meanings[row[0]]}
+                            for row in described],
+            }
+    return result
+
+
 def build_mcp_metadata(descriptions: dict, schemas: dict[str, list[tuple[str, str]]]) -> dict:
     """Bundle dictionary meaning for MCP without a runtime source-reader dependency.
 
@@ -1351,6 +1382,7 @@ def build_mcp_metadata(descriptions: dict, schemas: dict[str, list[tuple[str, st
     from the same inputs. It describes supported output, not observed publication.
     """
     from spicy_regs.aggregate_checks import AGGREGATES
+    from spicy_regs.fec_query_catalog import table_category
 
     classes = build_catalog(descriptions, schemas)["classes"]
     result = {}
@@ -1368,6 +1400,7 @@ def build_mcp_metadata(descriptions: dict, schemas: dict[str, list[tuple[str, st
         )
         result[table] = {
             **entry,
+            **({"category": table_category(table)} if table_category(table) else {}),
             "grain": contract.grain if contract is not None else description.get("grain"),
             "identity_columns": identity,
             "columns": [
@@ -1388,6 +1421,7 @@ def build_mcp_metadata(descriptions: dict, schemas: dict[str, list[tuple[str, st
                   for check in AGGREGATES if table in (check.output, *check.inputs)]
         if checks:
             result[table]["aggregate_checks"] = checks
+    result.update(build_fec_child_metadata(descriptions, schemas))
     return result
 
 

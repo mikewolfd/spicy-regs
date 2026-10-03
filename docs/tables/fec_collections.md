@@ -2,7 +2,7 @@
 
 # `fec_collections`
 
-**Retained FEC collection scopes and outcomes**
+**FEC collection scopes and outcomes**
 
 Collection-level scope, counts and evidence for fec_source_records. Join collection_id to that table to distinguish observed records from empty results and uncollected populations. Join source_family to fec_source_catalog for the official access routes. Counts are stored as strings; cast explicitly for arithmetic.
 
@@ -20,8 +20,8 @@ Collection-level scope, counts and evidence for fec_source_records. Join collect
 | `profile` | `VARCHAR` | Provider reader profile: committee, candidate, filing, legal, audit, bulk, positional, agency, agency-document, postgres or document. NULL for caller disposition/context rows, which were not parsed by a provider profile. |
 | `source_system_id` | `VARCHAR` | Provider identifier for the source system; NULL for caller disposition/context rows. |
 | `source_state_scope` | `VARCHAR` | Provider observation scope, such as observed-crawl; this does not imply a frozen publisher snapshot. |
-| `record_count` | `VARCHAR` | Emitted source-record count as a decimal integer string. A metadata-only row emits zero; its unknown source population count remains NULL in receiverDisposition.sourceRecordCount. |
-| `relationship_count` | `VARCHAR` | Number of relationship observations emitted from this collection, including explicit absence states rather than only positive edges. |
+| `record_count` | `BIGINT` | Emitted source-record count as a decimal integer string. A metadata-only row emits zero; its unknown source population count remains NULL in receiverDisposition.sourceRecordCount. |
+| `relationship_count` | `BIGINT` | Number of relationship observations emitted from this collection, including explicit absence states rather than only positive edges. |
 | `record_outcome` | `VARCHAR` | Provider record outcome for parsed inputs. Metadata-only rows instead state retained_unparsed, refused, unresolved, inventory_only or selection_context; none means successful empty parsing. |
 | `requested_scope_json` | `VARCHAR` | JSON object preserving the query, source selection or bounds requested for this collection. |
 | `coverage_limits_json` | `VARCHAR` | JSON value preserving provider-stated coverage limits for the selected input. |

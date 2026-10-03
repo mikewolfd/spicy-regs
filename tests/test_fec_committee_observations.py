@@ -61,7 +61,7 @@ def test_core_fields_reuse_maintained_mapping_and_unknown_native_fields_survive(
             assert json.loads(result[column]) == json.loads(expected[column])
         else:
             assert result[column] == expected[column]
-    assert json.loads(result["native_metadata_json"]) == native
+    assert "native_metadata_json" not in result
     assert result["source_pointer"] == "/metadata" and result["original_result_pointer"] == "/results/0"
     assert result["current_record_status"] == "unqualified" and result["source_cycle"] is None
     assert result["registry_scope_status"] == "retained-source-observations-only"
@@ -83,8 +83,8 @@ def test_arrays_distinguish_missing_null_empty_and_reported(present, value, expe
         native["candidate_ids"] = value
     result = mapped(native)
     assert result["candidate_ids_json"] == expected
-    assert json.loads(result["native_field_states_json"])["candidate_ids"] == state
-    assert json.loads(result["native_metadata_json"]) == native
+    assert result["candidate_ids_status"] == state
+    assert "native_metadata_json" not in result
 
 
 def test_unexpected_array_shape_stays_literal_with_explicit_partial_status():
@@ -106,9 +106,9 @@ def test_unexpected_array_shape_stays_literal_with_explicit_partial_status():
 def test_response_controls_are_separate_from_committee_and_financial_rows(value, state):
     result = mapped(value, control="pagination", ordinal=1)
     assert "committee_id" not in result
-    assert json.loads(result["value_json"]) == value
+    assert "value_json" not in result
     assert result["value_status"] == state and result["response_field"] == "pagination"
-    assert result["currency"] is None and result["amount_kind"] is None
+    assert "currency" not in result and "amount_kind" not in result
 
 
 def test_same_committee_in_different_snapshots_or_positions_remains_distinct():
@@ -157,5 +157,24 @@ def test_native_results_container_is_preserved_without_creating_duplicate_entiti
     payload = [{"committee_id": "C00000001"}]
     result = mapped(payload, control="results")
     assert result["response_field_role"] == "result-container"
-    assert json.loads(result["value_json"]) == payload
+    assert result["observed_count"] == len(payload) and "value_json" not in result
     assert "committee_id" not in result
+
+
+def test_committee_native_dates_affiliations_and_sponsors_are_promoted():
+    from datetime import date
+
+    result = mapped(
+        dict(
+            committee_id="C00000001",
+            first_file_date="1975-07-08",
+            first_f1_date="1976-03-11",
+            affiliated_committee_name="Example",
+            organization_type="L",
+            sponsor_candidate_ids=["H2AK01158", "H2AK01158"],
+        )
+    )
+    assert result["first_file_date"] == date(1975, 7, 8) and result["first_f1_date"] == date(1976, 3, 11)
+    assert result["affiliated_committee_name"] == "Example" and result["organization_type"] == "L"
+    assert json.loads(result["sponsor_candidate_ids_json"]) == ["H2AK01158", "H2AK01158"]
+    assert result["sponsor_candidate_ids_status"] == "reported"

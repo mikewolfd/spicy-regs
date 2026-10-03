@@ -2,7 +2,7 @@
 
 # `fec_filing_text_observations`
 
-**Retained original filing narratives**
+**FEC original filing narratives**
 
 One source narrative or text record version at its native file position. Read exact source text with ordered field positions, status and body-reference evidence. Back-references remain literal; narrative tokens do not become financial measures. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. For original-filing rows, definition_set_id joins fec_filing_definitions.record_id and its fec_filing_definition_evidence context witnesses; filing_header_record_id and filing_header_locator_json identify the separate actual header witness. Other source layouts retain their own dictionary evidence.
 
@@ -18,7 +18,6 @@ One source narrative or text record version at its native file position. Read ex
 | `record_id` | `VARCHAR` | Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event. |
 | `identity_version` | `VARCHAR` | Version of the source-observation identity rule; it does not select a current or canonical record. |
 | `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
-| `value_mapping_version` | `VARCHAR` | Version of the exact monetary and date conversion rules used for supported values. |
 | `mapping_status` | `VARCHAR` | Whether this source observation mapped fully, partially, or received an explicit nondata/refusal disposition; inspect the reason alongside NULL values. |
 | `mapping_reason_json` | `VARCHAR` | JSON object naming unsupported, missing or otherwise limited field interpretations; native values remain reachable through evidence. |
 | `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
@@ -28,14 +27,10 @@ One source narrative or text record version at its native file position. Read ex
 | `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
 | `selection_evidence_sha256` | `VARCHAR` | Digest of the retained selection evidence used to authorize this mapper's source scope; not a financial inclusion decision. |
 | `source_representation_role` | `VARCHAR` | Selected source role such as snapshot, insertion or deletion. Amount signs and ordinary amendment flags do not establish correction applicability. |
-| `correction_operation` | `VARCHAR` | Source-supported correction operation, when applicable; a positive amount in a deletion stream is not a new receipt or an inferred refund. |
-| `correction_applicability_status` | `VARCHAR` | Whether the captured correction can be applied to an evidenced base and target population; unresolved applicability prevents a qualified current total. |
 | `current_record_status` | `VARCHAR` | Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record. |
-| `filing_key` | `VARCHAR` | Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. |
-| `filing_link_status` | `VARCHAR` | Status of the relationship to a submitted filing version; unresolved references preserve the financial observation. |
-| `currency` | `VARCHAR` | Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately. |
-| `amount_kind` | `VARCHAR` | Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It is not an aggregation permission. |
 | `source_namespace` | `VARCHAR` | Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent. |
+| `filing_key` | `VARCHAR` | Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. |
+| `filing_link_status` | `VARCHAR` | Source feed assertion only; the value does not qualify a filing match or establish the target exists. |
 | `definition_set_id` | `VARCHAR` | Key of the pinned source layout in fec_filing_definitions. Join its definition evidence for exact workbook cells; the layout does not validate the submission. |
 | `declared_format_version` | `VARCHAR` | Format version declared by the filing header, retained separately from the reviewed source layout version. |
 | `filing_header_record_id` | `VARCHAR` | Source-record key of the actual file header. Resolve with collection_id and filing_header_locator_json in the source generation. |
@@ -49,5 +44,4 @@ One source narrative or text record version at its native file position. Read ex
 | `source_amendment_code` | `VARCHAR` | Literal native amendment code; it does not establish replacement scope from the retained filing layout. |
 | `text_record_kind` | `VARCHAR` | Source layout's narrative/text record kind, retained independently from transaction rows. |
 | `source_cycle` | `INTEGER` | Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year. |
-| `native_fields` | `STRUCT("position" INTEGER, definition_label VARCHAR, definition_cell VARCHAR, presence VARCHAR, raw_value VARCHAR, body_reference_json VARCHAR)[]` | Ordered native narrative fields as structs of position, definition_label, definition_cell, presence, raw_value and body_reference_json, preserving literal source values and states. |
 | `text_fragments` | `STRUCT(field_position INTEGER, source_column VARCHAR, source_pointer VARCHAR, "text" VARCHAR, text_status VARCHAR, body_reference_json VARCHAR)[]` | Ordered fragment structs: field_position, source_column, source_pointer, text, text_status and body_reference_json. Retains exact native addresses and missing/null states; no inferred money or PDF extraction. |

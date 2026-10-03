@@ -2,7 +2,7 @@
 
 # `fec_research_context_dispositions`
 
-**Retained context mapping and coverage outcomes**
+**FEC context mapping and coverage outcomes**
 
 One explicit mapping disposition for a retained collection context. Accounts for mapped facts, reference-only inventories/definitions, empty/refused responses and unsupported context with concrete reasons. A reference-only disposition is useful retained evidence, not an invented data row.
 
@@ -20,5 +20,5 @@ One explicit mapping disposition for a retained collection context. Accounts for
 | `mapping_reason` | `VARCHAR` | Concrete reason for the retained context's mapping, reference-only classification or source-reader refusal. |
 | `source_url` | `VARCHAR` | Captured source URL for this observation; it does not assert current availability or body retrieval. |
 | `context_sha256` | `VARCHAR` | Digest of the sealed retained context object used by this mapping; separate from original-source bytes and typed output. |
-| `source_fact_count` | `VARCHAR` | Count of native context facts examined for this disposition; not a source population count or an emitted transaction count. |
 | `outputs_json` | `VARCHAR` | JSON object recording emitted table counts for this context; an empty output has an explicit mapping reason. |
+| `source_fact_count` | `BIGINT` | Number of held native facts or events processed in this collection context, stored as an integer. |

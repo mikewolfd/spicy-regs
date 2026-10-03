@@ -151,10 +151,11 @@ def test_master_reuses_owner_names_preserves_blank_and_snapshot_identity():
     prepared = history.prepare_history(entry, source_generation_pin=GEN, header_row=header)
     result, evidence = history.map_history(row, prepared)
     assert typed_batch([result], prepared.schema).to_pylist() == [result]
-    assert result["native_fields"] == json.loads(row["metadata_json"])
+    assert "native_fields" not in result
+    assert "currency" not in result and "capture_json" not in result
     assert result["name"] == "  Native name  "
-    assert result["candidate_id"] is None and result["native_fields"]["CAND_ID"] == ""
-    assert result["cycle"] == "2024" and result["source_cycle"] == 2024
+    assert result["candidate_id"] is None and json.loads(row["metadata_json"])["CAND_ID"] == ""
+    assert result["cycle"] == 2024 and result["source_cycle"] == 2024
     assert result["current_record_status"] == "unqualified"
     assert [e["role"] for e in evidence] == ["primary", "field_definition"]
     changed = copy.deepcopy(entry)
@@ -199,14 +200,15 @@ def test_postgres_native_null_empty_escapes_array_and_columns_roundtrip():
     result, evidence = history.map_history(row, prepared)
     assert typed_batch([result], prepared.schema).to_pylist() == [result]
     native = json.loads(row["metadata_json"])
-    assert result["native_fields"] == native["named_fields"]
-    assert result["raw_copy_fields"] == native["fields"]
-    assert result["native_fields"]["nullable"] is None and result["native_fields"]["empty"] == ""
-    assert result["native_fields"]["array"] == "{}"
-    assert result["cycle"] == "1992" and result["source_cycle"] is None
+    assert {k: result[k] for k in ("empty", "nullable", "array", "escaped")} == {
+        k: native["named_fields"][k] for k in ("empty", "nullable", "array", "escaped")
+    }
+    assert not {"raw_copy_fields", "native_fields", "capture_json", "derivation_json"} & result.keys()
+    assert result["nullable"] is None and result["empty"] == ""
+    assert result["array"] == "{}"
+    assert result["cycle"] == 1992 and result["source_cycle"] is None
     assert result["current_record_status"] == "unqualified" and len(evidence) == 1
-    assert json.loads(result["derivation_json"]) == entry["scope"]["derivation"]
-    assert json.loads(result["capture_json"])["responseSha256"] == PIN
+    assert result["source_locator_json"] == history._json(json.loads(row["source_locator_json"]))
 
 
 @pytest.mark.parametrize(
@@ -251,3 +253,43 @@ def test_postgres_early_derivation_drift_refuses():
     entry["scope"]["derivation"]["arguments"] = {}
     with pytest.raises(ValueError):
         history.prepare_history(entry, source_generation_pin=GEN)
+
+
+def test_history_values_type_known_fields_and_preserve_pac_codes():
+    from datetime import date
+
+    values, problems = history._history_values(
+        dict(
+            committee_id="C00000000",
+            cycle="1992",
+            first_file_date="1975-07-08",
+            qualifying_date="1976-10-08 00:00:00",
+            is_active="f",
+            convert_to_pac_flag="t",
+            leadership_pac="X",
+            lobbyist_registrant_pac="E",
+            cycles="{1976,1978}",
+            candidate_ids="{}",
+            idx="3",
+            treasurer_text="database index",
+        )
+    )
+    assert not problems
+    assert values["cycle"] == 1992 and values["is_active"] is False and values["convert_to_pac_flag"] is True
+    assert values["first_file_date"] == date(1975, 7, 8) and values["qualifying_date"] == date(1976, 10, 8)
+    assert values["leadership_pac"] == "X" and values["lobbyist_registrant_pac"] == "E"
+    assert values["cycles_json"] == "[1976,1978]" and values["candidate_ids_json"] == "[]"
+    assert "idx" not in values and "treasurer_text" not in values
+
+
+def test_mixed_native_candidate_arrays_keep_valid_and_invalid_identifiers():
+    values, problems = history._history_values(
+        dict(candidate_ids="{C00728394,P60005147}", sponsor_candidate_ids="{N/A}")
+    )
+    assert problems == {}
+    assert json.loads(values["candidate_ids_json"]) == ["C00728394", "P60005147"]
+    assert json.loads(values["sponsor_candidate_ids_json"]) == ["N/A"]
+    assert values["candidate_ids_status"] == "reported"
+    unsupported, problems = history._history_values(dict(candidate_ids="{NULL}"))
+    assert problems == {"candidate_ids": "unsupported_array_spelling"}
+    assert unsupported["candidate_ids_status"] == "unsupported_shape"

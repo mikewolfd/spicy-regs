@@ -2,7 +2,7 @@
 
 # `fec_committee_master_observations`
 
-**Retained committee master observations**
+**FEC committee master observations**
 
 One physical committee-master row within its retained cycle/file capture. Keeps all source snapshots and raw named fields. Unlike the existing committee history table's logical committee/cycle grain, these rows preserve duplicate or overlapping source observations. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates.
 
@@ -18,7 +18,6 @@ One physical committee-master row within its retained cycle/file capture. Keeps 
 | `record_id` | `VARCHAR` | Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event. |
 | `identity_version` | `VARCHAR` | Version of the source-observation identity rule; it does not select a current or canonical record. |
 | `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
-| `value_mapping_version` | `VARCHAR` | Version of the exact monetary and date conversion rules used for supported values. |
 | `mapping_status` | `VARCHAR` | Whether this source observation mapped fully, partially, or received an explicit nondata/refusal disposition; inspect the reason alongside NULL values. |
 | `mapping_reason_json` | `VARCHAR` | JSON object naming unsupported, missing or otherwise limited field interpretations; native values remain reachable through evidence. |
 | `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
@@ -28,20 +27,12 @@ One physical committee-master row within its retained cycle/file capture. Keeps 
 | `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
 | `selection_evidence_sha256` | `VARCHAR` | Digest of the retained selection evidence used to authorize this mapper's source scope; not a financial inclusion decision. |
 | `source_representation_role` | `VARCHAR` | Selected source role such as snapshot, insertion or deletion. Amount signs and ordinary amendment flags do not establish correction applicability. |
-| `correction_operation` | `VARCHAR` | Source-supported correction operation, when applicable; a positive amount in a deletion stream is not a new receipt or an inferred refund. |
-| `correction_applicability_status` | `VARCHAR` | Whether the captured correction can be applied to an evidenced base and target population; unresolved applicability prevents a qualified current total. |
 | `current_record_status` | `VARCHAR` | Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record. |
-| `filing_key` | `VARCHAR` | Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. |
-| `filing_link_status` | `VARCHAR` | Status of the relationship to a submitted filing version; unresolved references preserve the financial observation. |
-| `currency` | `VARCHAR` | Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately. |
-| `amount_kind` | `VARCHAR` | Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It is not an aggregation permission. |
 | `source_namespace` | `VARCHAR` | Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent. |
 | `source_url` | `VARCHAR` | Captured source URL for this observation; it does not assert current availability or body retrieval. |
-| `capture_json` | `VARCHAR` | Retained capture request, source digest and scope metadata used to validate this history observation. |
 | `history_scope_status` | `VARCHAR` | Explicit historical scope limitation; repeated snapshots remain source observations instead of replacing committee/cycle identity rows. |
 | `source_cycle` | `INTEGER` | Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year. |
 | `committee_id` | `VARCHAR` | Literal FEC committee identifier as reported in this observation. Use cycle and source scope for historical joins. |
-| `cycle` | `VARCHAR` | Cycle exactly as supplied by the history source; raw PostgreSQL text is retained without inferring a new integer value. |
 | `name` | `VARCHAR` | Candidate or committee name exactly as captured in this API/history observation; no cross-record name merge. |
 | `treasurer_name` | `VARCHAR` | Treasurer name stated by the committee or filing source at this observation. |
 | `street_1` | `VARCHAR` | First street-address line reported for the committee; no address normalization or identity match. |
@@ -53,7 +44,9 @@ One physical committee-master row within its retained cycle/file capture. Keeps 
 | `committee_type` | `VARCHAR` | Source committee-type code; interpret using the matching source dictionary. |
 | `party` | `VARCHAR` | Source-reported political-party code or label within the native layout. |
 | `filing_frequency` | `VARCHAR` | Source-stated filing frequency code; not proof that all required reports are retained. |
-| `organization_type` | `VARCHAR` | Source-stated organization-type code for the reporting committee. |
+| `organization_type` | `VARCHAR` | Literal source organization-type code; interpretation follows the source namespace. |
 | `connected_organization_name` | `VARCHAR` | Name of the connected organization reported by the committee source; not a resolved corporate identity. |
 | `candidate_id` | `VARCHAR` | Literal FEC candidate identifier when the source reports one. Syntax checks do not prove identity resolution or a target match. |
-| `native_fields` | `STRUCT(CMTE_ID VARCHAR, CMTE_NM VARCHAR, TRES_NM VARCHAR, CMTE_ST1 VARCHAR, CMTE_ST2 VARCHAR, CMTE_CITY VARCHAR, CMTE_ST VARCHAR, CMTE_ZIP VARCHAR, CMTE_DSGN VARCHAR, CMTE_TP VARCHAR, CMTE_PTY_AFFILIATION VARCHAR, CMTE_FILING_FREQ VARCHAR, ORG_TP VARCHAR, CONNECTED_ORG_NM VARCHAR, CAND_ID VARCHAR)` | Named struct of every literal committee-master field in its verified header order. Original values remain text beside the source-owned committee-history mapping. |
+| `cycle` | `INTEGER` | Cycle exactly as supplied by the history source; raw PostgreSQL text is retained without inferring a new integer value. |
+| `cycle_raw` | `VARCHAR` | Literal source value for cycle before conversion; consult cycle_status for interpretation. |
+| `cycle_status` | `VARCHAR` | Interpretation of source cycle: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
