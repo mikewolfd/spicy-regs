@@ -213,6 +213,11 @@ def test_the_fill_workflow_is_manual_holds_the_writers_lock_and_always_restores_
     for step in steps[order[-3]:]:
         assert step["if"].startswith("always()"), step["name"]
     assert "--sha256" in steps[order[0]]["run"] and "fetch" in steps[order[0]]["run"]
+    from spicy_regs.pipelines.comment_fields_write import PROFILES
+
+    profile = workflow[True]["workflow_dispatch"]["inputs"]["profile"]
+    assert (profile["default"], profile["options"]) == ("all", list(PROFILES))
+    assert '--profile "$PROFILE"' in steps[order[3]]["run"] and steps[order[3]]["env"]["PROFILE"] == "${{ inputs.profile }}"
 
 
 def test_the_attributes_seed_projects_every_copy_and_keeps_the_newest(tmp_path):
