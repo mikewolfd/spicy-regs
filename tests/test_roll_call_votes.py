@@ -1512,3 +1512,66 @@ def test_the_house_listing_starts_at_each_sessions_largest_held_roll(tmp_path, s
     acquirer = StubVoteAcquirer(house_rolls=(3, 7, 8))
     build_roll_call_votes(tmp_path, acquirer=acquirer, download_prior=_carried(first), open_congresses=(119,))
     assert acquirer.house_starts == [(119, 1, 7), (119, 2, 1)], "a session holding nothing starts at roll 1"
+
+
+# --------------------------------------------------------------------------- #
+# A House session that has begun with no roll call yet: the Clerk serves no roll 1.
+# --------------------------------------------------------------------------- #
+class UnservedSession(StubVoteAcquirer):
+    """The Clerk serves no roll ``start_roll`` of the sessions in ``unserved`` (its not-served envelope), or 404s it."""
+
+    def __init__(self, unserved: dict[tuple[int, int], Exception], **kwargs):
+        super().__init__(**kwargs)
+        self.unserved = unserved
+
+    def list_house_votes(self, congress, session, *, start_roll=1):
+        if (congress, session) in self.unserved:
+            self.house_starts.append((congress, session, start_roll))
+            raise self.unserved[(congress, session)]
+        return super().list_house_votes(congress, session, start_roll=start_roll)
+
+
+def _not_served(session: int, roll: int = 1):
+    from spicy_docs.sources.congress.votes import ClerkRollNotServedError, VoteLocator
+
+    return ClerkRollNotServedError(VoteLocator("house", 119, session, roll), "<xml>Error sanitizing file</xml>")
+
+
+def test_a_session_whose_first_roll_is_not_served_yet_is_empty_not_a_refusal(tmp_path, scoped):
+    """January of a new session: no House vote yet, so roll 1 answers the Clerk's not-served envelope.
+
+    With nothing held there, that is the session's own state, so it lists nothing and the run succeeds; the
+    other session and the Senate land, and the empty session is journaled.
+    """
+    from spicy_regs.source_evidence import CaptureEvidence
+
+    evidence = CaptureEvidence(tmp_path / "audit", "roll-call-votes")
+    acquirer = UnservedSession({(119, 2): _not_served(2)}, house_rolls=(7,), senate_rolls=(1,))
+    paths = build_roll_call_votes(tmp_path, acquirer=acquirer, download_prior=_no_prior, evidence=evidence,
+                                  open_congresses=(119,))
+    assert {row["vote_id"] for row in pq.read_table(paths[0]).to_pylist()} == {"119-house-1-7", "119-senate-1-1"}
+    [event] = _events(evidence, "vote-session-empty")
+    assert (event["chamber"], event["congress"], event["session"]) == ("house", 119, 2)
+
+
+def test_a_held_roll_the_clerk_no_longer_serves_still_refuses_the_house(tmp_path, scoped):
+    """Where a roll is held, its envelope is not an empty session: the Clerk stopped serving what it served."""
+    from spicy_regs.transforms.build_roll_call_votes import ChamberListingRefused
+
+    first = tmp_path / "held"
+    first.mkdir()
+    build_roll_call_votes(first, acquirer=StubVoteAcquirer(house_rolls=(7,)), download_prior=_no_prior,
+                          open_congresses=(119,))
+    acquirer = UnservedSession({(119, 1): _not_served(1, roll=7)}, senate_rolls=(1,))
+    with pytest.raises(ChamberListingRefused):
+        build_roll_call_votes(tmp_path, acquirer=acquirer, download_prior=_carried(first), open_congresses=(119,))
+    assert (119, 1, 7) in acquirer.house_starts
+
+
+def test_a_404_at_roll_one_still_refuses_the_house(tmp_path, scoped):
+    from spicy_regs.transforms.build_roll_call_votes import ChamberListingRefused
+
+    acquirer = UnservedSession({(119, 2): _not_found("https://clerk.house.gov/evs/2026/roll001.xml")},
+                               house_rolls=(7,), senate_rolls=(1,))
+    with pytest.raises(ChamberListingRefused):
+        build_roll_call_votes(tmp_path, acquirer=acquirer, download_prior=_no_prior, open_congresses=(119,))

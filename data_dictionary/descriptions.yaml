@@ -2482,8 +2482,9 @@ tables:
       Sampled, and accumulating: both chambers' roll calls from each chamber's
       own session listing (the Senate LIS menu, and the House Clerk's roll
       files, read forward from the session's last held roll until the Clerk
-      stops serving the next ones; both keyless), newest first under a per-run
-      cap. The Clerk's EVS index pages answer 404 since 2026-10-02 and are not
+      stops serving the next ones; a session the Clerk serves no roll of yet,
+      as before its first vote, lists none; both keyless), newest first under
+      a per-run cap. The Clerk's EVS index pages answer 404 since 2026-10-02 and are not
       read. Each chamber is listed on its own: a run whose listing of one
       chamber refuses reads none of that chamber's roll calls, keeps its
       published rows as they were, publishes the other chamber and then fails,

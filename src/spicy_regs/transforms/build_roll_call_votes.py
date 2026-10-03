@@ -88,6 +88,7 @@ from spicy_docs.interpretation.vote_matching import (
 from spicy_docs.schemas.congress_activity_tables import shape_member_vote, shape_roll_call_vote
 from spicy_docs.sources.congress.bill_status import BillIdentity, BillSourceError
 from spicy_docs.sources.congress.votes import (
+    ClerkRollNotServedError,
     VoteAcquirer,
     VoteBudget,
     VoteLocator,
@@ -557,6 +558,7 @@ def _last_house_rolls(held: Collection[tuple[str, ...]]) -> dict[tuple[int, int]
 
 def _list_chamber(
     acquirer: VoteSource, chamber: str, congresses: Sequence[int], last_house_rolls: Mapping[tuple[int, int], int],
+    evidence: CaptureEvidence | None = None,
 ) -> tuple[set[VoteKey], list[tuple[VoteKey, str]]]:
     """One chamber's roll calls over the Congresses in scope, and the Senate menu's withheld votes.
 
@@ -567,6 +569,13 @@ def _list_chamber(
     again, so the listing rests on a file served now) or roll 1 when none is
     held: from roll 1 it would re-read a whole session every run, about 682
     requests for the 119th. It still lists rolls 1..N.
+
+    One answer is a session's own state, not a refusal: a session with no held
+    roll whose roll 1 the Clerk answers with its not-served envelope (HTTP 200,
+    ``ClerkRollNotServedError``) has held no House vote yet, as every session
+    does from its first day to its first vote. It lists nothing, the run goes
+    on, and the empty session is journaled. A held roll the Clerk no longer
+    serves, or any other answer (a 404), still refuses the chamber.
     """
     keys: set[VoteKey] = set()
     withheld: list[tuple[VoteKey, str]] = []
@@ -576,7 +585,16 @@ def _list_chamber(
             if chamber == "house":
                 if session in house_sessions(congress):
                     start_roll = last_house_rolls.get((congress, session), 1)
-                    index = acquirer.list_house_votes(congress, session, start_roll=start_roll).index
+                    try:
+                        index = acquirer.list_house_votes(congress, session, start_roll=start_roll).index
+                    except ClerkRollNotServedError as error:
+                        if (congress, session) in last_house_rolls:
+                            raise
+                        logger.info("Roll-call votes: House {}-{} holds no roll call yet: {}", congress, session, error)
+                        if evidence is not None:
+                            evidence.event("vote-session-empty", chamber="house", congress=congress, session=session,
+                                           statement=error.statement)
+                        continue
                     keys.update(locator_from_index_entry(index, entry).as_vote_key() for entry in index.votes)
                 continue
             menu = acquirer.list_senate_votes(congress, session).menu
@@ -641,7 +659,7 @@ def build_roll_call_votes(
     refused_chambers: dict[str, BaseException] = {}
     for chamber in chambers:
         try:
-            keys, chamber_withheld = _list_chamber(acquirer, chamber, congresses, last_house_rolls)
+            keys, chamber_withheld = _list_chamber(acquirer, chamber, congresses, last_house_rolls, evidence)
         except _LISTING_REFUSALS as error:
             refused_chambers[chamber] = error
             logger.error("Roll-call votes: the {} listing refused, so no {} roll call is read or changed this run: {}",
