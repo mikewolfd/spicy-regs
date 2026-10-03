@@ -2,8 +2,9 @@
 
 The catalog replaces a row only when its ``modify_date`` moves, and the manifest skips keys already read, so rows
 ingested before a field was retained keep it NULL: the four comment-reference columns, ``subtype`` and
-``duplicate_comments`` (``iceberg._COMMENT_ADDED_COLUMNS``), and ``attachments_json`` wherever the row's first read
-lacked the attachments. One pass keeps, per object: its key and the GET's ETag and size; the whole thin-table row
+``duplicate_comments`` (``iceberg._COMMENT_ADDED_COLUMNS``), ``attachments_json`` wherever the row's first read
+lacked the attachments, and the submitter's name, organization and category on every row read before the extract
+mapped them (2026-06-15). One pass keeps, per object: its key and the GET's ETag and size; the whole thin-table row
 through ``COMMENT.extract`` (one spelling), with the body as its SHA-256 and length; and every other stated attribute
 as compact JSON (``attributes_json``: the keys the extract does not map, non-null only), which ``comment_attributes``
 is built from.
@@ -36,7 +37,15 @@ import polars as pl
 from cyclopts import App
 from loguru import logger
 
-from spicy_regs.pipelines.comment_fields_write import BATCH_BYTES, fetch_staged, prepare, sync_journals, undo, write
+from spicy_regs.pipelines.comment_fields_write import (
+    BATCH_BYTES,
+    HOST_COLUMNS,
+    fetch_staged,
+    prepare,
+    sync_journals,
+    undo,
+    write,
+)
 from spicy_regs.schemas import COMMENT
 
 #: Keys per chunk: the resume unit, about 17 s of reads at the measured rate.
@@ -50,11 +59,9 @@ EXTRACTED_ATTRIBUTES = frozenset({
     "duplicateComments", "firstName", "lastName", "modifyDate", "organization", "originalDocumentId", "postedDate",
     "receiveDate", "subtype", "title",
 })
-#: Host enrichment columns: never in the source record, so never read here.
-_HOST_COLUMNS = ("text_content", "text_extraction_status", "pdf_extraction_results_json")
 PART_SCHEMA = {
     "key": pl.Utf8, "etag": pl.Utf8, "size": pl.Int64,
-    **{c: t for c, t in COMMENT.schema.items() if c not in (*_HOST_COLUMNS, "comment")},
+    **{c: t for c, t in COMMENT.schema.items() if c not in (*HOST_COLUMNS, "comment")},
     "comment_sha256": pl.Utf8, "comment_length": pl.Int64, "attributes_json": pl.Utf8,
 }
 

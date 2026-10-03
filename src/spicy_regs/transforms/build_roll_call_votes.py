@@ -23,7 +23,12 @@ body element and ``vote_desc`` with them.
 House files before 2003 (the 101st-107th Congresses) name no legislator by
 bioguide id; spicy-docs reads them with ``name:`` member keys and NULL
 ``bioguide_id``, a key that identifies the row within its roll call and never a
-person (``member_vote_terms`` leaves such a row ``unresolved_member``). A vote
+person (``member_vote_terms`` leaves such a row ``unresolved_member``). A
+Senate file names its members by LIS id alone; after the ``member_votes``
+merge, the published ``members`` crosswalk fills each row's ``bioguide_id``
+through it (``table_merge.fill_senate_bioguide_ids``), best-effort, held rows
+included, so the base table carries the id its column promises and
+``member_vote_terms`` reads it rather than resolving again. A vote
 the House vacated before recording a position publishes its row with
 ``member_vote_count`` 0 and no member rows. The Clerk's archive begins in
 1990, so the 101st Congress's first session has no House index and is not
@@ -91,7 +96,7 @@ from spicy_regs.transforms.congress_scope import (
     default_congresses,
     sessions_of,
 )
-from spicy_regs.transforms.table_merge import merge_contract_table, published_table
+from spicy_regs.transforms.table_merge import fill_senate_bioguide_ids, merge_contract_table, published_table
 
 if TYPE_CHECKING:
     import pyarrow as pa
@@ -687,13 +692,17 @@ def build_roll_call_votes(
         refused,
         len(withheld),
     )
+    members = merge_contract_table(
+        output_dir,
+        "member_votes",
+        member_rows,
+        download_prior=download_prior,
+        replace_parents=("vote_id", {str(row["vote_id"]) for row in vote_rows}),
+    )
+    # The Senate file names its members by LIS id alone; the published ``members`` crosswalk resolves each to the
+    # bioguide id the column promises, on held rows as well as this run's. Best-effort, like every merge-time join.
+    fill_senate_bioguide_ids(output_dir, members, download_prior)
     return (
         merge_contract_table(output_dir, NAME, vote_rows, prior_present=have_prior, download_prior=download_prior),
-        merge_contract_table(
-            output_dir,
-            "member_votes",
-            member_rows,
-            download_prior=download_prior,
-            replace_parents=("vote_id", {str(row["vote_id"]) for row in vote_rows}),
-        ),
+        members,
     )

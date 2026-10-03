@@ -49,8 +49,17 @@ from spicy_regs.duckdb_settings import ExportResources
 from spicy_regs.schemas import COMMENT
 from spicy_regs.sources import iceberg
 
-#: The columns a fill writes: the nullable columns added after the catalog table was created, and attachments_json.
-FILL_COLUMNS = (*iceberg._COMMENT_ADDED_COLUMNS, "attachments_json")
+#: The catalog's key and version, which :func:`prepare` selects on their own and a fill never writes.
+KEY_COLUMNS = ("comment_id", "agency_code", "docket_id", "modify_date")
+#: Host enrichment columns: never in the source record, so never in a read part and never filled.
+HOST_COLUMNS = ("text_content", "text_extraction_status", "pdf_extraction_results_json")
+#: The columns a fill writes: every column of the table a read part holds, so a cell the row predates is filled
+#: whichever column it is in. That is the table minus its key, the body (a part keeps only its digest) and the host's
+#: columns; the parts' own shape is ``comment_fields.PART_SCHEMA``, and a test holds the two to each other. Until
+#: 2026-10-03 this was the six columns added after the table was created plus ``attachments_json``, which left the
+#: submitter's ``first_name``, ``last_name``, ``organization`` and ``category`` NULL on every row ingested before the
+#: extract mapped them (ff812e5, 2026-06-15) although the 2026-09-28 re-read had them in hand.
+FILL_COLUMNS = tuple(c for c in COMMENT.schema if c not in (*KEY_COLUMNS, "comment", *HOST_COLUMNS))
 #: What :func:`prepare` reads of each read copy: the object key naming the copy, the version, and the fill values.
 #: The staged fill input (runbook) holds exactly these.
 READ_COLUMNS = ("key", "comment_id", "modify_date", *FILL_COLUMNS)

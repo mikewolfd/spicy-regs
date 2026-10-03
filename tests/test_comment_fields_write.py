@@ -124,6 +124,24 @@ def test_only_null_cells_are_filled_and_a_stated_zero_is_a_value(tmp_path, catal
                                            "duplicate_comments": 2, "attachments_json": 1}
 
 
+def test_submitter_fields_the_row_predates_are_filled_and_a_stated_one_is_kept(tmp_path, catalog):
+    """Rows ingested before the extract mapped the submitter (ff812e5, 2026-06-15) hold NULL where the object states
+    a name: FWS-HQ-ES-2025-0034-212973 states Earthjustice / Kristen / Boyles at the publisher and NULL in the catalog.
+    The read copy fills them; a value the catalog already states is never overwritten."""
+    seed(catalog, [row("A"), row("B", organization="Kept, Inc.")])
+    reads(tmp_path, [
+        {"key": "a", "comment_id": "A", "organization": "Earthjustice", "first_name": "Kristen", "last_name": "Boyles"},
+        {"key": "b", "comment_id": "B", "organization": "Other"},
+    ])
+    prepared, written = fill(tmp_path, catalog)
+    rows = table(catalog)
+    assert (rows["A"]["organization"], rows["A"]["first_name"], rows["A"]["last_name"]) == ("Earthjustice", "Kristen", "Boyles")
+    assert rows["B"]["organization"] == "Kept, Inc."
+    assert {c: prepared["cells_by_column"][c] for c in ("organization", "first_name", "last_name")} == {
+        "organization": 1, "first_name": 1, "last_name": 1}
+    assert (prepared["rows_to_fill"], written["rows_changed"]) == (1, 1)
+
+
 def test_a_read_of_another_version_fills_nothing(tmp_path, catalog):
     seed(catalog, [row("A")])
     reads(tmp_path, [{"key": "a", "comment_id": "A", "modify_date": "2021-06-01T00:00:00Z", "subtype": "Read"}])

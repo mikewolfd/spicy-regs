@@ -56,9 +56,13 @@ longer lists, is published, its whole row set replaced. A failed read, or one
 the retirement guard or the reader refuses, publishes nothing for Table III and
 keeps every checkpoint, while ``laws`` and ``law_code_sections`` publish as
 usual; a refusal is journaled, and the nightly
-``scripts/check_source_refusals.py`` fails on it. A ``401``/``403`` from any of
-the three publishers aborts the run. Needs an api.data.gov key for the list
-route; the PLAW and OLRC routes are keyless.
+``scripts/check_source_refusals.py`` fails on it. A ``401``/``403`` from the
+list or PLAW route aborts the run. Table III's is a journaled refusal with
+reason :data:`ACCESS_REFUSED` (the route is keyless, so it is the publisher
+blocking the read, as Akamai did on 2026-10-02 and -03), after which the laws
+rollup publishes the family and then fails the run
+(:func:`table3_access_refused`). Needs an api.data.gov key for the list route;
+the PLAW and OLRC routes are keyless.
 """
 
 from __future__ import annotations
@@ -91,7 +95,7 @@ from spicy_docs.sources.govinfo.uslm_acquisition import (
 from spicy_docs.sources.uscode import Table3Page, Table3Record, UsCodeSourceError, iter_table3_acts
 from spicy_docs.sources.uscode.acquisition import UsCodeAcquirer, UsCodeAcquisitionBudget
 from spicy_docs.transport.captured import attached_capture
-from spicy_docs.transport.credentials import scrub_credential
+from spicy_docs.transport.credentials import CredentialRefusedError, scrub_credential
 
 from spicy_regs.generations import spicy_docs_code
 from spicy_regs.sources import r2
@@ -168,6 +172,9 @@ CAPTURED = "captured"
 VALIDATED = ("captured", "captured_partial")
 #: The one classification order read; see the module docstring.
 TABLE_ORDER = "public-law"
+#: The ``table3-bulk-refused`` reason for a 401/403 from the keyless OLRC route: a blocked read, which the laws
+#: rollup fails the run on after publishing (:func:`table3_access_refused`).
+ACCESS_REFUSED = "access-refused"
 
 
 class HeldLaw(NamedTuple):
@@ -329,7 +336,11 @@ def _uslm_row(
     except UslmSourceUnavailableError as error:
         if evidence:
             evidence.refusal(error, stage=stage)
-        return shape_law(record, law, uslm_outcome="unavailable", uslm_reason="source_unavailable")
+        # The 404 is an observation at a time; the row carries it so a reader can tell a lag the folder may
+        # since have closed from one established today. The locator is the row's ``package_id`` under
+        # GovInfo's PLAW bulkdata folder, and the response itself is in the evidence journal.
+        return shape_law(record, law, uslm_outcome="unavailable", uslm_reason="source_unavailable",
+                         uslm_observed_at=error.capture.observed_at)
     except (UslmSourceError, httpx.HTTPError, ConnectionError) as error:
         if evidence:
             evidence.refusal(error, stage=stage)
@@ -340,7 +351,7 @@ def _uslm_row(
             record, law, uslm_outcome="captured_refused" if refused else "request_failed",
             uslm_reason=reason if refused else "request_failed",
             uslm_sha256=capture.sha256 if refused else None,
-            uslm_observed_at=capture.observed_at if refused else None,
+            uslm_observed_at=None if capture is None else capture.observed_at,
         )
     if evidence:
         evidence.capture(acquired.capture, stage=stage)
@@ -565,7 +576,8 @@ def _table3_rows(
     table or a checkpoint states), when it drops an act without advancing past
     it, when it drops more than :data:`TABLE3_MAX_RETIRED_PER_RELEASE`, or when
     the reader refuses the file itself (a renamed or reshaped member, a
-    malformed zip, a ``404``). Each refusal journals ``table3-bulk-refused``,
+    malformed zip, a ``404``), or when the publisher answers ``401``/``403``
+    (:data:`ACCESS_REFUSED`). Each refusal journals ``table3-bulk-refused``,
     which the nightly ``scripts/check_source_refusals.py`` fails on, because it
     repeats every run until someone acts: the rest of the laws family still
     publishes. A transport failure changes nothing and is only logged; the next
@@ -588,6 +600,13 @@ def _table3_rows(
         if evidence:
             evidence.refusal(error, stage="table3:bulk")
         return refuse("file-refused", error_type=type(error).__name__, message=_transport_error(error)[:500])
+    except CredentialRefusedError as error:
+        # This route is keyless, so a 401/403 is the publisher blocking the read (Akamai, 2026-10-02 and -03),
+        # not a revoked credential: nothing is published as absence, the laws family publishes, and the rollup
+        # fails the run after publishing (:func:`table3_access_refused`) so the block is not hidden.
+        if evidence:
+            evidence.refusal(error, stage="table3:bulk")
+        return refuse(ACCESS_REFUSED, error_type=type(error).__name__, message=_transport_error(error)[:500])
     except (httpx.HTTPError, ConnectionError) as error:
         if evidence:
             evidence.refusal(error, stage="table3:bulk")
@@ -648,6 +667,25 @@ def _table3_rows(
                        acts={str(congress): sorted(acts) for congress, acts in derived.items()},
                        published=changed, retiring=retiring, rows=len(rows))
     return Table3Read(rows, retiring, bulk.release_point)
+
+
+def table3_access_refused(evidence: CaptureEvidence) -> bool:
+    """Whether this run journaled its Table III read as :data:`ACCESS_REFUSED`.
+
+    Read from the run's own journal so the rollup can publish the family first and fail the run after: an exception
+    from the build would publish nothing, which is what hid the 2026-10-02 and -03 blocks behind a red run.
+    """
+    import json
+
+    from spicy_regs.source_evidence import JOURNAL
+
+    journal = evidence.artifact_dir / JOURNAL
+    if not journal.exists():
+        return False
+    return any(
+        event.get("event") == "table3-bulk-refused" and event.get("reason") == ACCESS_REFUSED
+        for event in map(json.loads, journal.read_text().splitlines())
+    )
 
 
 def _journal_retired(prior_file: Path | None, read: Table3Read, scratch_dir: Path,

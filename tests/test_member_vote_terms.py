@@ -37,7 +37,7 @@ def _term(bioguide, index, kind, start, end):
     return {"bioguide_id": bioguide, "term_index": index, "term_type": kind, "term_start": start, "term_end": end}
 
 
-def _build(tmp_path, votes, terms, members=()):
+def _build(tmp_path, votes, terms):
     _write(
         tmp_path / "member_votes.parquet",
         votes,
@@ -46,7 +46,6 @@ def _build(tmp_path, votes, terms, members=()):
     _write(
         tmp_path / "member_terms.parquet", terms, ["bioguide_id", "term_index", "term_type", "term_start", "term_end"]
     )
-    _write(tmp_path / "members.parquet", list(members), ["bioguide_id", "lis_id"])
     out = build_member_vote_terms(tmp_path)
     assert pq.read_schema(out).names == list(COLUMNS)
     return {(r["vote_id"], r["member_key"]): r for r in pq.read_table(out).to_pylist()}
@@ -59,7 +58,8 @@ def test_half_open_terms_with_a_unique_inclusive_end_fallback(tmp_path):
             _vote("119-house-1-1", "A000370", "house", "3-Jan-2025", bioguide="A000370"),  # boundary day
             _vote("119-house-1-56", "T000489", "house", "4-Mar-2025", bioguide="T000489"),  # its term's end day
             _vote("119-house-1-1", "G000578", "house", "3-Jan-2025", bioguide="G000578"),  # after the term ended
-            _vote("119-senate-1-1", "S421", "senate", "January 9, 2025,  02:54 PM", lis="S421"),
+            # The votes rollup resolved S421 through ``members`` at its merge; S999 it could not.
+            _vote("119-senate-1-1", "S421", "senate", "January 9, 2025,  02:54 PM", bioguide="V000137", lis="S421"),
             _vote("119-senate-1-1", "S999", "senate", "January 9, 2025,  02:54 PM", lis="S999"),
             _vote("119-house-1-2", "O000001", "house", "7-Jan-2025", bioguide="O000001"),
         ],
@@ -72,7 +72,6 @@ def test_half_open_terms_with_a_unique_inclusive_end_fallback(tmp_path):
             _term("V000137", "1", "rep", "2025-01-01", "2027-01-03"),  # the other chamber's term never counts
             _term("O000001", "0", "rep", "2025-01-03", None),  # an unknown end is not open-ended
         ],
-        members=[{"bioguide_id": "V000137", "lis_id": "S421"}],
     )
     assert [(k, r["term_match"], r["term_index"]) for k, r in rows.items()] == [
         (("119-house-1-1", "A000370"), "half_open", "6"),
@@ -112,14 +111,13 @@ def test_a_vote_whose_file_prints_no_date_is_undated_not_matched(tmp_path, liter
         tmp_path,
         [
             _vote("119-house-1-9", "A000370", "house", literal, bioguide="A000370"),
-            _vote("119-senate-1-9", "S421", "senate", literal, lis="S421"),
+            _vote("119-senate-1-9", "S421", "senate", literal, bioguide="V000137", lis="S421"),
             _vote("119-house-1-1", "A000370", "house", "3-Jan-2025", bioguide="A000370"),
         ],
         [
             _term("A000370", "6", "rep", "2025-01-03", "2027-01-03"),
             _term("V000137", "0", "sen", "2025-01-03", "2031-01-03"),
         ],
-        members=[{"bioguide_id": "V000137", "lis_id": "S421"}],
     )
     assert {k: (r["bioguide_id"], r["vote_day"], r["term_match"], r["term_index"]) for k, r in rows.items()} == {
         ("119-house-1-9", "A000370"): ("A000370", None, "undated", None),
@@ -128,8 +126,9 @@ def test_a_vote_whose_file_prints_no_date_is_undated_not_matched(tmp_path, liter
     }
 
 
-def test_a_stated_bioguide_id_stands_before_the_lis_crosswalk(tmp_path):
-    """spicy-docs' rule order: a Bioguide id the row states wins, even one members does not hold."""
+def test_the_rows_own_bioguide_id_is_read_and_a_null_one_is_unresolved(tmp_path):
+    """One crosswalk, applied once: the votes rollup resolved each LIS id at its merge, so this build reads the
+    column as published and resolves nothing again; a Senate row still NULL is an unresolved LIS id."""
     rows = _build(
         tmp_path,
         [
@@ -140,7 +139,6 @@ def test_a_stated_bioguide_id_stands_before_the_lis_crosswalk(tmp_path):
             _term("X000001", "0", "sen", "2025-01-03", "2031-01-03"),
             _term("V000137", "0", "sen", "2025-01-03", "2031-01-03"),
         ],
-        members=[{"bioguide_id": "V000137", "lis_id": "S421"}, {"bioguide_id": None, "lis_id": "S422"}],
     )
     assert {k[1]: (r["bioguide_id"], r["term_match"]) for k, r in rows.items()} == {
         "S421": ("X000001", "half_open"),
@@ -181,14 +179,12 @@ def test_rows_stream_out_in_input_order_and_whole_row_groups(tmp_path, monkeypat
     assert [metadata.row_group(i).num_rows for i in range(metadata.num_row_groups)] == [2, 2, 1]
 
 
-def test_a_repeated_vote_row_or_a_shared_lis_id_refuses(tmp_path):
+def test_a_repeated_vote_row_refuses(tmp_path):
+    """A LIS id two members share is no longer this build's to refuse: the votes rollup's fill leaves such a row
+    NULL (``test_roll_call_votes``), which reads here as ``unresolved_member``."""
     vote = _vote("v", "M", "house", "10-Feb-2025", bioguide="M")
     with pytest.raises(ValueError, match="appears twice"):
         _build(tmp_path, [vote, vote], [])
-    with pytest.raises(ValueError, match="names two members"):
-        _build(
-            tmp_path, [vote], [], members=[{"bioguide_id": "A", "lis_id": "S1"}, {"bioguide_id": "B", "lis_id": "S1"}]
-        )
 
 
 def test_the_rollup_is_registered_scheduled_and_described():
