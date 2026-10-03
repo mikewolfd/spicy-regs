@@ -22,7 +22,7 @@ from spicy_docs.schemas.tables import bill_id, usc_section_key
 from spicy_regs.citation_resolution import CITE_KINDS, ROUTES, SOURCE_TABLES, resolve_citations
 from spicy_regs.citation_sources import TEXT_SOURCES
 from spicy_regs.identifiers import normalize_rin
-from spicy_regs.transforms.build_cfr_sections import _cfr_ref
+from spicy_docs.interpretation.citation_grammar import cfr_key
 
 
 def test_document_kinds_are_exactly_the_writers_kinds():
@@ -47,7 +47,7 @@ TARGETS = {
     "law_code_sections": [{"usc_title": title, "usc_section_key": usc_section_key(section), "congress": "117",
                            "session": "2", "seq": str(seq)} for seq, (title, section) in enumerate((("5", "553"),
                                                                                                     ("26", "45Q")))],
-    "cfr_sections": [{"cfr_ref": _cfr_ref(40, 60, 1), "package_id": "CFR-2025-title40-vol7",
+    "cfr_sections": [{"cfr_ref": cfr_key(40, 60, 1), "package_id": "CFR-2025-title40-vol7",
                       "granule_id": "CFR-2025-title40-vol7-sec60-1"}],
     "federal_register": [{"volume": "88", "start_page": "12345", "document_number": "2023-01234",
                           "publication_date": "2023-02-28"}],
