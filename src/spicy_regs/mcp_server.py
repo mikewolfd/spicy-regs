@@ -845,20 +845,34 @@ def _published_at(index: dict, name: str) -> str | None:
 
 
 #: Each family generation's ``spec.parents`` by (base URL, artifact digest): roots are immutable, so one read
-#: serves the process. A concurrent first use may read twice; a failed read is not kept.
+#: serves the process. A concurrent first use may read twice. A failed read is kept only as its time, and the
+#: root is not read again for ROOT_RETRY_SECONDS, so a failing bucket costs one GET a minute, not one a reply.
 _ROOT_PARENTS: dict[tuple[str, str], dict[str, dict]] = {}
+_ROOT_FAILED_AT: dict[tuple[str, str], float] = {}
+ROOT_RETRY_SECONDS = 60.0
 
 
 def _family_parents(base_url: str, entry: Mapping) -> dict[str, dict]:
     """``spec.parents`` of the family generation ``entry`` pins, read on first use; {} when the root records none."""
-    from spicy_regs.sources.publication import read_pinned_root
+    from spicy_regs.sources.publication import PublicationError, read_pinned_root
 
     key = (base_url, entry["artifactDigest"])
-    if key not in _ROOT_PARENTS:
-        if len(_ROOT_PARENTS) >= 1024:  # generations move daily; a long-lived process forgets old ones
-            _ROOT_PARENTS.clear()
-        _ROOT_PARENTS[key] = read_pinned_root(base_url, entry).get("spec", {}).get("parents") or {}
-    return _ROOT_PARENTS[key]
+    if key in _ROOT_PARENTS:
+        return _ROOT_PARENTS[key]
+    failed = _ROOT_FAILED_AT.get(key)
+    if failed is not None and _monotonic() - failed < ROOT_RETRY_SECONDS:
+        raise PublicationError("generation root unavailable at the last read; not retried within a minute")
+    for cache in (_ROOT_PARENTS, _ROOT_FAILED_AT):
+        if len(cache) >= 1024:  # generations move daily; a long-lived process forgets old ones
+            cache.clear()
+    try:
+        parents = read_pinned_root(base_url, entry).get("spec", {}).get("parents") or {}
+    except (PublicationError, httpx.HTTPError, OSError):
+        _ROOT_FAILED_AT[key] = _monotonic()
+        raise
+    _ROOT_FAILED_AT.pop(key, None)
+    _ROOT_PARENTS[key] = parents
+    return parents
 
 
 def _input_lineage(index: dict, name: str) -> dict[str, Any]:

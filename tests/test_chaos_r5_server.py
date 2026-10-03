@@ -434,6 +434,7 @@ def _lineage(monkeypatch, parents, documents=DOCS_LIVE, documents_sha="sha256:" 
 
     monkeypatch.setattr(pub, "read_pinned_root", read_root)
     monkeypatch.setattr(server, "_ROOT_PARENTS", {})
+    monkeypatch.setattr(server, "_ROOT_FAILED_AT", {})
     monkeypatch.setattr(server, "_get_connection", lambda: con)
     return con, reads
 
@@ -491,15 +492,18 @@ def test_a_storage_version_parent_is_reported_without_a_lag_claim(monkeypatch):
     assert alone["inputs_current"] is None
 
 
-def test_an_unreadable_root_is_stated_never_guessed_and_retried(monkeypatch):
+def test_an_unreadable_root_is_stated_never_guessed_and_retried_after_60_seconds(monkeypatch):
     roots = {SIGNALS: pub.PublicationError("Pinned root differs from its captured pin"), DOCS_LIVE: {"spec": {}}}
     con, reads = _lineage(monkeypatch, {}, roots=roots)
+    clock = [1000.0]
+    monkeypatch.setattr(server, "_monotonic", lambda: clock[0])
     with con:
         mcp = server.build_server()
-        for _ in range(2):
+        for now in (1000.0, 1059.0, 1061.0):
+            clock[0] = now
             described = _tool_data(mcp, "describe_table", {"table": "discovery_signals"})["publication"]
             assert described["inputs"] is None and described["inputs_status"] == "root_unavailable"
-    assert reads == [SIGNALS, SIGNALS]
+    assert reads == [SIGNALS, SIGNALS]  # the read at 1059 s waited out the failure at 1000 s
 
 
 def test_roots_are_read_lazily_once_per_generation_and_never_for_discovery(monkeypatch):

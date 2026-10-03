@@ -558,8 +558,9 @@ file its reader cannot page, so two of five personas never read a row.
   whose root records no parents gets no `inputs` key. The root is read on the
   first reply that pins the generation, never at build, and kept per artifact
   digest (`_ROOT_PARENTS`; roots are immutable); a read that fails states
-  `inputs: null` with `inputs_status: root_unavailable`, is not kept, and is
-  retried by the next reply. The read is `publication.read_pinned_root`: the
+  `inputs: null` with `inputs_status: root_unavailable`, and the root is not
+  read again for 60 s (`ROOT_RETRY_SECONDS`, `_ROOT_FAILED_AT`), so a failing
+  bucket costs one GET a minute per generation, not one per reply. The read is `publication.read_pinned_root`: the
   image does not install rulespec-artifacts, so the server checks that the
   root at the pinned prefix names the pin, as it trusts pinned member URLs,
   and does not recompute its digest (`load_family_root` does, for lineage).
