@@ -70,12 +70,17 @@ FILL_COLUMNS = tuple(c for c in COMMENT.schema if c not in (*KEY_COLUMNS, "comme
 PROFILES = {"all": FILL_COLUMNS, "attachments": ("attachments_json",)}
 
 
+def fill_columns(profile: str) -> tuple[str, ...]:
+    """The fill columns ``profile`` names; an unknown profile is refused."""
+    if profile not in PROFILES:
+        raise ValueError(f"no fill profile {profile!r}; one of {sorted(PROFILES)}")
+    return PROFILES[profile]
+
+
 def read_columns(profile: str) -> tuple[str, ...]:
     """What :func:`prepare` reads of each read copy: the object key naming the copy, the version, and the profile's
     fill values. A staged fill input (runbook) holds exactly these."""
-    if profile not in PROFILES:
-        raise ValueError(f"no fill profile {profile!r}; one of {sorted(PROFILES)}")
-    return ("key", "comment_id", "modify_date", *PROFILES[profile])
+    return ("key", "comment_id", "modify_date", *fill_columns(profile))
 
 
 READ_COLUMNS = read_columns("all")
@@ -320,7 +325,7 @@ def prepare(
     data commit (runbook), never from this tool. Refuses a read that lacks one, and while any batch committed and
     failed its check. Touches no catalog row and needs no lock.
     """
-    columns = read_columns(profile)[3:]
+    columns = fill_columns(profile)
     additive = [c for c in columns if c in ADDITIVE]
     _refuse_committed_failures(workdir)
     own = con is None
