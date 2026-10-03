@@ -92,10 +92,10 @@ def test_no_default_congress_or_unqualified_treaty():
 
 def test_meeting_full_keys_independent_arrays():
     con: Any = duckdb.connect()
-    fixture(con, 'committee_meetings', ['congress', 'chamber', 'event_id', 'meeting_status',
+    fixture(con, 'committee_meetings', ['congress', 'chamber', 'event_id', 'meeting_status', 'detail_read',
                                       'bill_ids_json', 'hearing_jackets_json'], [
-        ('119', 'house', '119565', 'Canceled', '["119-hr-1653","119-hr-1653"]', '["63019","64431"]'),
-        ('118', 'house', '119565', 'Scheduled', '["118-hr-1"]', '[]'),
+        ('119', 'house', '119565', 'Canceled', 'true', '["119-hr-1653","119-hr-1653"]', '["63019","64431"]'),
+        ('118', 'house', '119565', 'Scheduled', 'true', '["118-hr-1"]', '[]'),
     ])
     install(con, ['meeting_bills', 'meeting_hearing_jackets'])
     assert len(rows(con, 'meeting_bills_occurrences')) == 3
@@ -103,6 +103,37 @@ def test_meeting_full_keys_independent_arrays():
     jackets = rows(con, 'meeting_hearing_jackets_occurrences')
     assert {r['target_key'] for r in jackets} == {'119:house:63019', '119:house:64431'}
     assert all(r['meeting_status'] == 'Canceled' for r in jackets)
+
+
+def test_a_detail_backed_list_says_whether_its_detail_was_read():
+    """committee-meetings c0f7ef36 rows (round-6 audit L15): 119573 lists bills, 338678 was read and lists none,
+    338764 was read and lists an empty array; a meeting whose detail is unread holds what the shaper writes for it."""
+    con: Any = duckdb.connect()
+    fixture(con, 'committee_meetings', ['congress', 'chamber', 'event_id', 'meeting_status', 'detail_read',
+                                      'bill_ids_json'], [
+        ('119', 'house', '119573', 'Scheduled', 'true', '["119-hr-2713","119-hr-6207"]'),
+        ('119', 'senate', '338678', 'Scheduled', 'true', None),
+        ('119', 'senate', '338764', 'Scheduled', 'true', '[]'),
+        ('119', 'senate', '338999', 'Scheduled', 'false', None),
+    ])
+    install(con, ['meeting_bills'])
+    states = {r['event_id']: (r['detail_read'], r['field_state']) for r in rows(con, 'meeting_bills_field_states')}
+    assert states == {'119573': ('true', 'stated'), '338678': ('true', 'not_stated'),
+                      '338764': ('true', 'stated_empty'), '338999': ('false', 'unread')}
+
+
+@pytest.mark.parametrize(('detail_read', 'value', 'state'), [
+    ('false', '[]', 'unread'),        # nothing read can state an empty list
+    (None, None, 'unread'),           # a row that never said
+    (None, '["119-hr-1"]', 'stated'),  # a list is a statement whoever read it
+    ('true', '{}', 'unsupported_shape'),
+])
+def test_detail_states_at_the_edges(detail_read, value, state):
+    con: Any = duckdb.connect()
+    fixture(con, 'committee_meetings', ['congress', 'chamber', 'event_id', 'meeting_status', 'detail_read',
+                                      'bill_ids_json'], [('119', 'house', '1', 'Scheduled', detail_read, value)])
+    install(con, ['meeting_bills'])
+    assert [r['field_state'] for r in rows(con, 'meeting_bills_field_states')] == [state]
 
 
 def test_fr_dated_identity_and_rins_do_not_zip():

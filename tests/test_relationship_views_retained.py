@@ -45,7 +45,8 @@ def test_native_meeting_keeps_independent_jackets_witnesses_and_offered_document
     data = json.loads((FIXTURES / 'meeting-119-house-119003.json').read_text())
     con: Any = duckdb.connect()
     fields = ['congress','chamber','event_id','meeting_status','committees_json','hearing_jackets_json',
-              'bill_ids_json','witnesses_json','witness_documents_json','meeting_documents_json','document_urls_json']
+              'bill_ids_json','witnesses_json','witness_documents_json','meeting_documents_json','document_urls_json',
+              'detail_read']
     con.execute('CREATE TABLE committee_meetings (' + ','.join(f'{f} VARCHAR' for f in fields) + ')')
     witness_docs = data['witnessDocuments']
     meeting_docs = data['meetingDocuments']
@@ -53,7 +54,7 @@ def test_native_meeting_keeps_independent_jackets_witnesses_and_offered_document
         str(data['congress']),data['chamber'].lower(),str(data['eventId']),data['meetingStatus'],
         json.dumps(data['committees']),json.dumps([str(j['jacketNumber']) for j in data['hearingTranscript']]),
         '[]',json.dumps(data['witnesses']),json.dumps(witness_docs),json.dumps(meeting_docs),
-        json.dumps([d['url'] for d in witness_docs+meeting_docs]),
+        json.dumps([d['url'] for d in witness_docs+meeting_docs]), 'true',
     ])
     install_relationship_views(con, ['committee_meetings'])
     for view, expected in [('meeting_committees',len(data['committees'])),

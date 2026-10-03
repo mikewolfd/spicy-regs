@@ -175,7 +175,10 @@ def test_lineage_of_array_views_matches_their_templates_structurally(registry_se
             spec.names[0]: {c: [spec.source_table, c] for c in passthrough},
             spec.names[1]: {c: [spec.source_table, c] for c in spec.source_keys},
             # the field-state view projects the held field itself under the registry's raw_field_value name
-            spec.names[2]: {**{c: [spec.source_table, c] for c in passthrough}, "raw_field_value": [spec.source_table, spec.source_field]},
+            spec.names[2]: {**{c: [spec.source_table, c] for c in passthrough},
+                            **({spec.detail_read_column: [spec.source_table, spec.detail_read_column]}
+                               if spec.detail_read_column else {}),
+                            "raw_field_value": [spec.source_table, spec.source_field]},
         }
         for name, lineage in expected.items():
             assert relationships[name]["metadata"]["column_lineage"] == lineage, name
