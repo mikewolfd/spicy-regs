@@ -318,8 +318,6 @@ def _read_prior(prior_file: Path) -> _Prior:
 
     An unchanged package keeps its prior rows unread by this run, so the prior carries :func:`compound_parts` itself.
     """
-    import pyarrow.compute as pc
-
     [(key, value)] = PLACEMENT_MARKER.items()
     placed = (pq.read_schema(prior_file).metadata or {}).get(key.encode()) == value.encode()
     table = pq.read_table(prior_file)
@@ -331,10 +329,11 @@ def _read_prior(prior_file: Path) -> _Prior:
         packages = table["package_id"].to_pylist()
         rewrite = True
         logger.info("CFR: dropped {} prior index-package row(s); they are not CFR sections", keep.count(False))
-    compound = pc.fill_null(pc.equal(table["title"], COMPOUND_PART_TITLE), False)
-    held = table.filter(compound).to_pylist()
+    compound = [title == COMPOUND_PART_TITLE for title in table["title"].to_pylist()]
+    held = table.filter(pa.array(compound)).to_pylist()
     if (fixed := compound_parts(held)) != held:
-        table = pa.concat_tables([table.filter(pc.invert(compound)), pa.Table.from_pylist(fixed, schema=table.schema)])
+        others = table.filter(pa.array([not row for row in compound]))
+        table = pa.concat_tables([others, pa.Table.from_pylist(fixed, schema=table.schema)])
         packages = table["package_id"].to_pylist()
         rewrite = True
         logger.info("CFR: {} prior Title {} row(s) took their compound part", sum(a != b for a, b in zip(fixed, held)),
