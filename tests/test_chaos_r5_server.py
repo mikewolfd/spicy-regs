@@ -1,4 +1,4 @@
-"""Round-5 chaos repairs at the server boundary: citation order and paging, read statuses and kind scopes.
+"""Round-5 chaos repairs at the server boundary: citation order and paging, read statuses, kind scopes, published_at.
 
 Evidence: corpora/mcp-chaos-2026-10-02/round5/phase2-server.md (S5-1..S5-4, freshness) and phase3-review.md (the
 recorded decisions: three read statuses from existing parent columns; meaning text moved into the artifacts).
@@ -7,12 +7,14 @@ recorded decisions: three read statuses from existing parent columns; meaning te
 from __future__ import annotations
 
 import asyncio
+import json
 
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 
 from spicy_regs import mcp_server as server
 from spicy_regs.citation_resolution import SOURCE_TABLES
+from spicy_regs.sources import publication as pub
 from tests.test_mcp_relationships import citation_connection
 from tests.test_mcp_server import _tool_data
 
@@ -199,3 +201,45 @@ def test_the_description_defines_partial_the_key_rule_and_the_read_statuses():
     assert "coverage.partial" in description and "case-sensitive" in description
     assert all(status in description for status in ("read_none_found", "not_read", "not_held"))
     assert "govinfo_package covers only" in description
+
+
+# Freshness: the publisher states when it moved a family's pointer; every reply that pins a generation says so.
+
+def _index(**family):
+    return {"format": "spicy-regs-publication", "version": 2, "families": {"laws": {
+        "prefix": "generations/laws/" + "a" * 64, "logicalId": "urn:example", "artifactDigest": "sha256:" + "a" * 64,
+        "tables": {"laws.parquet": {"sha256": "sha256:" + "b" * 64, "byteSize": 1, "rows": 1,
+                                    "columns": [["law_id", "VARCHAR"]]}}, **family}}}
+
+
+def test_the_index_admits_a_publication_instant_that_version_1_omits():
+    index = pub.parse_index(json.dumps(_index(publishedAt="2026-10-01T03:12:26Z")).encode())
+    assert index["families"]["laws"]["publishedAt"] == "2026-10-01T03:12:26Z"
+    assert "publishedAt" not in pub.derive_v1(index)["families"]["laws"]
+    assert pub.parse_index(json.dumps(_index(publishedAt="2026-10-01T03:12:26.123456Z")).encode())
+    for invalid in ("yesterday", "2026-10-01 03:12:26", "2026-10-01T03:12:26+00:00", "2026-13-01T03:12:26Z",
+                    1759288346, None):
+        with pytest.raises(pub.PublicationError):
+            pub.parse_index(json.dumps(_index(publishedAt=invalid)).encode())
+    with pytest.raises(pub.PublicationError):
+        pub.parse_index(json.dumps(_index(publishedBy="someone")).encode())
+
+
+@pytest.mark.parametrize("published_at", ["2026-10-01T03:12:26Z", None])
+def test_replies_state_when_the_publisher_moved_the_pointer(monkeypatch, published_at):
+    with citation_connection() as con:
+        family = {"publishedAt": published_at} if published_at else {}
+        con.execute("UPDATE _spicy_publication SET snapshot = ?", [json.dumps(_index(**family))])
+        monkeypatch.setattr(server, "_get_connection", lambda: con)
+        mcp = server.build_server()
+        described = _tool_data(mcp, "describe_table", {"table": "laws"})["publication"]
+        queried = _tool_data(mcp, "query_sql", {"sql": "SELECT count(*) AS n FROM laws"})["publication"]["laws"]
+        cited = _tool_data(mcp, "resolve_document_citations",
+                           {"document_kind": "govinfo_package", "document_key": "CRPT-example"})
+        listed = {row["table"]: row for row in _tool_data(mcp, "list_sources", {})["tables"]}
+        status = server._publication_status(con)["publication"]["laws"]
+    assert described["published_at"] == queried["published_at"] == published_at
+    assert "published_at" in described and "published_at" in queried
+    # The citation reply's target pins come from the same projection; derived views' embedded pins do not move.
+    assert cited["occurrences"][0]["target_snapshot"] == status
+    assert "published_at" not in status and "published_at" not in listed["laws"]

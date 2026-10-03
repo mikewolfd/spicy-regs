@@ -829,6 +829,15 @@ def _pinned_rows(index: dict, rulemaking: dict, name: str) -> int | None:
     return pinned["rows"] if pinned is not None else None
 
 
+def _published_at(index: dict, name: str) -> str | None:
+    """When the publisher moved the pointer to ``name``'s generation (the index's ``publishedAt``); None for a
+    table no family pins, or a generation published before the index recorded the instant. Not a data-as-of."""
+    from spicy_regs.sources.publication import table_owner
+
+    owner = table_owner(index, f"{name}.parquet")
+    return owner[1].get("publishedAt") if owner is not None else None
+
+
 def _export_rows(cursor: duckdb.DuckDBPyConnection) -> dict[str, dict]:
     """``rows``, ``rows_basis`` and ``export_receipt`` for each fixed-URL comments export this connection matched.
 
@@ -853,8 +862,11 @@ def _export_rows(cursor: duckdb.DuckDBPyConnection) -> dict[str, dict]:
 def _reply_pins(cursor: duckdb.DuckDBPyConnection, publication: dict[str, dict], names: list[str]) -> dict[str, dict]:
     """Each named table's pin with the facts a reply states instead of prose that decays.
 
-    ``rows`` is the pinned index's or snapshot manifest's count, a snapshot
-    table adds its manifest's ``run_id`` and ``asserted_at``, a comments export
+    ``rows`` is the pinned index's or snapshot manifest's count, a managed
+    generation adds ``published_at`` (when the publisher moved the pointer to
+    it; null until the publisher records it, and never when the data was
+    read), a snapshot table adds its manifest's ``run_id`` and
+    ``asserted_at``, a comments export
     adds its receipt's count with ``rows_basis`` (:func:`_export_rows`), and
     ``coverage`` is the dictionary's coverage kind. They join the pin only here:
     derived views embed :func:`_publication_status` pins in provenance columns
@@ -868,7 +880,7 @@ def _reply_pins(cursor: duckdb.DuckDBPyConnection, publication: dict[str, dict],
     for name in names:
         pin = dict(publication[name])
         if pin["status"] in ("managed_generation", "managed_download"):
-            pin["rows"] = _pinned_rows(index, rulemaking, name)
+            pin |= {"rows": _pinned_rows(index, rulemaking, name), "published_at": _published_at(index, name)}
         elif pin["status"] == "rulemaking_snapshot":
             manifest = rulemaking["manifest"]
             pin |= {"rows": rulemaking["tables"][f"{name}.parquet"]["rows"],
@@ -1400,8 +1412,9 @@ def _register_tools(mcp: MCPServer) -> None:
         view's, each with its dictionary meaning; an unavailable declared table
         returns its declared columns. schema_differences names any column or
         type the view does not share with the dictionary. publication is the
-        live data version with its pinned row count and coverage kind; prefer
-        its rows to a count stated in prose. qualification gives the live pin,
+        live data version with its pinned row count, published_at (when the
+        publisher moved the pointer to this generation, not when its data was
+        read) and coverage kind; prefer its rows to a count stated in prose. qualification gives the live pin,
         the output ledger's audited pin, date and disposition, whether they
         match, and the ledger's own statement, as separate fields; it is
         reported only for the ledger's publisher. joins lists the declared joins
@@ -1522,8 +1535,8 @@ def _register_tools(mcp: MCPServer) -> None:
         match, lower() for case). Selected columns must have unique names; alias
         shared names in joins. sql echoes the statement this reply answers.
         publication gives each table the query names: its live data version,
-        pinned row count and coverage kind (a window or sample is not the source's
-        full history). Qualified-view pins keep the registered meaning and purpose
+        pinned row count, published_at and coverage kind (a window or sample is
+        not the source's full history). Qualified-view pins keep the registered meaning and purpose
         limits even for SELECT value only. Release compatible is not financial
         eligibility or current/net-money qualification. Call describe_table for
         full release evidence. Compare receipt, SQL, input and evidence pins
@@ -1667,9 +1680,10 @@ def _register_tools(mcp: MCPServer) -> None:
                 intended_query="Resolve the cited target for this held document", max_items=max_occurrences,
             ),
             # Each resolved target carries its own target_snapshot; this names the tables the lookup read.
-            "publication": {
-                name: pin for name, pin in status["publication"].items() if name in {"document_citations", parent}
-            },
+            "publication": _reply_pins(
+                cursor, status["publication"],
+                [name for name in ("document_citations", parent) if name in status["publication"]],
+            ),
         }
 
 

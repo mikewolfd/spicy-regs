@@ -471,6 +471,22 @@ file its reader cannot page, so two of five personas never read a row.
   returns a `CallToolResult` whose text is the compact JSON: `list_sources` went
   from 86,603 to 75,403 bytes and a FEC view's description from 59,148 to
   17,168 with the release summary above.
+- **A managed pin states `published_at` (round 5): when the publisher moved the
+  family's pointer to this generation.** It is the index's optional
+  `publishedAt` family field (a UTC instant; `parse_index` refuses any other
+  spelling), read with the index the build already fetches, so it costs no
+  request. It is not "data as of": a generation published today can hold a
+  source read last week, and a derived family can lag the parent it was built
+  from. It is null until the publisher records it; the writer lands only after
+  an image that reads the field is live, because the earlier `parse_index`
+  required the family key set exactly and refuses the new key (a refresh would
+  keep the old connection and the next cold start would raise). `derive_v1`
+  strips it, so version-1 readers never see it. `_reply_pins` adds it for
+  `describe_table`, `query_sql` and the citation reply's `publication`; it is
+  not in `_publication_status`, whose pins derived views embed, nor in
+  `list_sources`. Reading each member's Parquet key-value metadata for a time
+  was measured and rejected: only `discovery_signals` records an `as_of`, and
+  the reads doubled a cold build's requests to the bucket (+519, +5.2 s).
 - **`list_sources` states each table's pinned `rows`** (the index descriptor's or
   the snapshot manifest's count; null for a legacy table no pointer pins) so a
   declared table whose generation publishes no rows is visible at discovery
