@@ -1,0 +1,758 @@
+{
+  "bounded_pass": "All preexisting sources not already profiled were reviewed through available captures, named publisher searches and directory comparison. This is not an exhaustive web/archive search. New directory leads stay in a separate queue until federal scope and original locations are checked.",
+  "outcomes": [
+    {
+      "source_id": "aauw:federal",
+      "publisher_name": "American Association of University Women",
+      "prior_status": "discovered",
+      "outcome": "profile_added",
+      "capture_ids": [
+        "census-aauw-118",
+        "census-votesmart-root"
+      ],
+      "votesmart_group_ids": [
+        "164"
+      ],
+      "notes": "Profile and readiness assessment added.",
+      "source_model_fit": "see_profile",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "acec:federal",
+      "publisher_name": "American Council of Engineering Companies",
+      "prior_status": "verified",
+      "outcome": "profile_added",
+      "capture_ids": [
+        "census-acec-116-issues-pdf",
+        "census-acec-116-pdf",
+        "census-votesmart-root"
+      ],
+      "votesmart_group_ids": [
+        "2074"
+      ],
+      "notes": "Profile and readiness assessment added.",
+      "source_model_fit": "see_profile",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "aclu:federal",
+      "publisher_name": "American Civil Liberties Union",
+      "prior_status": "verified",
+      "outcome": "unverified_after_bounded_search",
+      "capture_ids": [
+        "aclu-index"
+      ],
+      "votesmart_group_ids": [],
+      "notes": "Delivered original scorecard landing page contains no usable method, member rows or edition links. Keep verified series; acquisition is incomplete.",
+      "source_model_fit": "not_assessed",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "ada:federal",
+      "publisher_name": "Americans for Democratic Action",
+      "prior_status": "verified",
+      "outcome": "profile_added",
+      "capture_ids": [
+        "ada-index",
+        "census-ada-1947",
+        "census-ada-2023"
+      ],
+      "votesmart_group_ids": [],
+      "notes": "Profile and readiness assessment added.",
+      "source_model_fit": "see_profile",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "afp:federal",
+      "publisher_name": "Americans for Prosperity",
+      "prior_status": "verified",
+      "outcome": "unverified_after_bounded_search",
+      "capture_ids": [
+        "afp-index",
+        "census-votesmart-root"
+      ],
+      "votesmart_group_ids": [
+        "310"
+      ],
+      "notes": "Delivered page has educational-use disclaimer and unloaded application; no member rows qualified.",
+      "source_model_fit": "not_assessed",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "afscme:federal",
+      "publisher_name": "American Federation of State, County and Municipal Employees",
+      "prior_status": "verified",
+      "outcome": "unverified_after_bounded_search",
+      "capture_ids": [
+        "afscme-index"
+      ],
+      "votesmart_group_ids": [],
+      "notes": "Original method states selected roll calls; delivered sample UI contains lorem ipsum and generic 82% placeholders. Those values must never become ratings.",
+      "source_model_fit": "not_assessed",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "alaska_wilderness_action:federal",
+      "publisher_name": "Alaska Wilderness Action",
+      "prior_status": "discovered",
+      "outcome": "unverified_after_bounded_search",
+      "capture_ids": [],
+      "votesmart_group_ids": [],
+      "notes": "Bounded publisher-name/domain scorecard search and directory comparison did not establish a captured original edition. No inference of retirement or nonexistence.",
+      "source_model_fit": "not_assessed",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "animal_welfare_institute:federal",
+      "publisher_name": "Animal Welfare Institute",
+      "prior_status": "discovered",
+      "outcome": "access_or_content_block",
+      "capture_ids": [
+        "census-awi-2006",
+        "census-votesmart-root"
+      ],
+      "votesmart_group_ids": [
+        "1574"
+      ],
+      "notes": "Publisher 2006 magazine search reveals jointly developed Compassion Index with American Humane Association and SAPL; direct original response was403. Verify joint attribution and current successor series before merging identities.",
+      "source_model_fit": "not_assessed",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "ara:federal",
+      "publisher_name": "Alliance for Retired Americans",
+      "prior_status": "verified",
+      "outcome": "profile_added",
+      "capture_ids": [
+        "ara-index",
+        "census-ara-2025",
+        "census-votesmart-root"
+      ],
+      "votesmart_group_ids": [
+        "959"
+      ],
+      "notes": "Profile and readiness assessment added.",
+      "source_model_fit": "see_profile",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "arts_action:federal",
+      "publisher_name": "Americans for the Arts Action Fund",
+      "prior_status": "discovered",
+      "outcome": "access_or_content_block",
+      "capture_ids": [
+        "census-arts-index",
+        "census-votesmart-root"
+      ],
+      "votesmart_group_ids": [
+        "1425"
+      ],
+      "notes": "Original partner page is indexed as offering a Congressional Arts Report Card, but direct response403 prevents captured verification.",
+      "source_model_fit": "not_assessed",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "boilermakers:federal",
+      "publisher_name": "International Brotherhood of Boilermakers",
+      "prior_status": "discovered",
+      "outcome": "profile_added",
+      "capture_ids": [
+        "census-boilermakers-1999",
+        "census-boilermakers-compare",
+        "census-votesmart-root"
+      ],
+      "votesmart_group_ids": [
+        "374"
+      ],
+      "notes": "Historic independent ratings are verified; current AFL-CIO redistribution is a different relationship and must not erase the historical series.",
+      "source_model_fit": "see_profile",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "childrens_defense:federal",
+      "publisher_name": "Children's Defense Fund",
+      "prior_status": "discovered",
+      "outcome": "profile_added",
+      "capture_ids": [
+        "census-cdf-117",
+        "census-votesmart-root"
+      ],
+      "votesmart_group_ids": [
+        "1144"
+      ],
+      "notes": "Profile and readiness assessment added.",
+      "source_model_fit": "see_profile",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "cpac:federal",
+      "publisher_name": "CPAC Foundation",
+      "prior_status": "verified",
+      "outcome": "profile_added",
+      "capture_ids": [
+        "census-cpac-2025-pdf",
+        "census-votesmart-root"
+      ],
+      "votesmart_group_ids": [
+        "1481"
+      ],
+      "notes": "Profile and readiness assessment added.",
+      "source_model_fit": "see_profile",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "dav:federal",
+      "publisher_name": "Disabled American Veterans",
+      "prior_status": "discovered",
+      "outcome": "unverified_after_bounded_search",
+      "capture_ids": [
+        "census-votesmart-root"
+      ],
+      "votesmart_group_ids": [
+        "1336"
+      ],
+      "notes": "Bounded publisher-name/domain scorecard search and directory comparison did not establish a captured original edition. No inference of retirement or nonexistence.",
+      "source_model_fit": "not_assessed",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "defenders_action:federal",
+      "publisher_name": "Defenders of Wildlife Action Fund",
+      "prior_status": "discovered",
+      "outcome": "unverified_after_bounded_search",
+      "capture_ids": [
+        "census-votesmart-root"
+      ],
+      "votesmart_group_ids": [
+        "109"
+      ],
+      "notes": "Bounded publisher-name/domain scorecard search and directory comparison did not establish a captured original edition. No inference of retirement or nonexistence.",
+      "source_model_fit": "not_assessed",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "drug_policy_action:federal",
+      "publisher_name": "Drug Policy Action",
+      "prior_status": "discovered",
+      "outcome": "unverified_after_bounded_search",
+      "capture_ids": [],
+      "votesmart_group_ids": [],
+      "notes": "Bounded publisher-name/domain scorecard search and directory comparison did not establish a captured original edition. No inference of retirement or nonexistence.",
+      "source_model_fit": "not_assessed",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "drum_major:federal",
+      "publisher_name": "Drum Major Institute for Public Policy",
+      "prior_status": "discovered",
+      "outcome": "access_or_content_block",
+      "capture_ids": [
+        "census-drummajor-2005-history"
+      ],
+      "votesmart_group_ids": [],
+      "notes": "Original annual report discovered but direct capture failed. Keep historical lead; no false current support claim.",
+      "source_model_fit": "not_assessed",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "end_citizens_united:federal",
+      "publisher_name": "End Citizens United",
+      "prior_status": "discovered",
+      "outcome": "profile_added",
+      "capture_ids": [
+        "census-ecu-119",
+        "census-votesmart-root"
+      ],
+      "votesmart_group_ids": [
+        "2568"
+      ],
+      "notes": "Profile and readiness assessment added.",
+      "source_model_fit": "see_profile",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "environment_america:federal",
+      "publisher_name": "Environment America",
+      "prior_status": "discovered",
+      "outcome": "unverified_after_bounded_search",
+      "capture_ids": [
+        "census-votesmart-root"
+      ],
+      "votesmart_group_ids": [
+        "1826"
+      ],
+      "notes": "Bounded publisher-name/domain scorecard search and directory comparison did not establish a captured original edition. No inference of retirement or nonexistence.",
+      "source_model_fit": "not_assessed",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "few:federal",
+      "publisher_name": "Federally Employed Women",
+      "prior_status": "discovered",
+      "outcome": "access_or_content_block",
+      "capture_ids": [
+        "census-few-117",
+        "census-votesmart-root"
+      ],
+      "votesmart_group_ids": [
+        "1343"
+      ],
+      "notes": "The requested PDF path returned an HTML homepage (soft failure), not the expected legislative scorecard.",
+      "source_model_fit": "not_assessed",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "first_focus:federal",
+      "publisher_name": "First Focus Campaign for Children",
+      "prior_status": "blocked",
+      "outcome": "unverified_after_bounded_search",
+      "capture_ids": [
+        "firstfocus-index"
+      ],
+      "votesmart_group_ids": [],
+      "notes": "Old dedicated scorecard domain failed in baseline; current original publisher search locates newer scorecard. Follow-up acquisition remains pending; never retire based on old route.",
+      "source_model_fit": "not_assessed",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "flyersrights:federal",
+      "publisher_name": "FlyersRights.org",
+      "prior_status": "discovered",
+      "outcome": "unverified_after_bounded_search",
+      "capture_ids": [],
+      "votesmart_group_ids": [],
+      "notes": "Bounded publisher-name/domain scorecard search and directory comparison did not establish a captured original edition. No inference of retirement or nonexistence.",
+      "source_model_fit": "not_assessed",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "food_policy_action:federal",
+      "publisher_name": "Food Policy Action",
+      "prior_status": "discovered",
+      "outcome": "unverified_after_bounded_search",
+      "capture_ids": [
+        "census-votesmart-root"
+      ],
+      "votesmart_group_ids": [
+        "2171"
+      ],
+      "notes": "A 113th publisher-authored PDF was found at an academic mirror; publisher origin/edition authentication remains pending. Mirror alone does not verify original location.",
+      "source_model_fit": "not_assessed",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "foreign_policy_america:federal",
+      "publisher_name": "Foreign Policy for America",
+      "prior_status": "discovered",
+      "outcome": "profile_added",
+      "capture_ids": [
+        "census-fp4a-118-pdf",
+        "census-votesmart-root"
+      ],
+      "votesmart_group_ids": [
+        "3179"
+      ],
+      "notes": "Profile and readiness assessment added.",
+      "source_model_fit": "see_profile",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "frc_action:federal",
+      "publisher_name": "FRC Action",
+      "prior_status": "verified",
+      "outcome": "profile_added",
+      "capture_ids": [
+        "frc-index"
+      ],
+      "votesmart_group_ids": [],
+      "notes": "Profile and readiness assessment added.",
+      "source_model_fit": "see_profile",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "freedomworks:federal",
+      "publisher_name": "FreedomWorks",
+      "prior_status": "discovered",
+      "outcome": "access_or_content_block",
+      "capture_ids": [
+        "census-freedomworks-route",
+        "census-votesmart-root"
+      ],
+      "votesmart_group_ids": [
+        "1658"
+      ],
+      "notes": "Original scorecard route failed transport. Historic directory evidence is not a retirement decision.",
+      "source_model_fit": "not_assessed",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "global_solutions:federal",
+      "publisher_name": "Citizens for Global Solutions",
+      "prior_status": "discovered",
+      "outcome": "unverified_after_bounded_search",
+      "capture_ids": [
+        "census-votesmart-root"
+      ],
+      "votesmart_group_ids": [
+        "329"
+      ],
+      "notes": "Bounded publisher-name/domain scorecard search and directory comparison did not establish a captured original edition. No inference of retirement or nonexistence.",
+      "source_model_fit": "not_assessed",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "goa:federal",
+      "publisher_name": "Gun Owners of America",
+      "prior_status": "verified",
+      "outcome": "unverified_after_bounded_search",
+      "capture_ids": [
+        "goa-index"
+      ],
+      "votesmart_group_ids": [],
+      "notes": "2024 voter guide mixes incumbent and challenger grades; original distinct congressional scorecard route is an unloaded application. Keep guide separate from source-defined congressional scorecard.",
+      "source_model_fit": "not_assessed",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "iava:federal",
+      "publisher_name": "Iraq and Afghanistan Veterans of America",
+      "prior_status": "discovered",
+      "outcome": "original_series_verified_edition_unqualified",
+      "capture_ids": [
+        "census-iava-2008-history",
+        "census-votesmart-root"
+      ],
+      "votesmart_group_ids": [
+        "1250"
+      ],
+      "notes": "Publisher annual report confirms 2008 report-card existence and old veteranreportcard.org hub. Actual rating edition not recovered.",
+      "source_model_fit": "not_assessed",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "ila:federal",
+      "publisher_name": "Institute for Legislative Analysis",
+      "prior_status": "verified",
+      "outcome": "profile_added",
+      "capture_ids": [
+        "ila-index"
+      ],
+      "votesmart_group_ids": [],
+      "notes": "Profile and readiness assessment added.",
+      "source_model_fit": "see_profile",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "leadership_conference:federal",
+      "publisher_name": "Leadership Conference on Civil and Human Rights",
+      "prior_status": "discovered",
+      "outcome": "profile_added",
+      "capture_ids": [
+        "census-leadership-118"
+      ],
+      "votesmart_group_ids": [],
+      "notes": "Profile and readiness assessment added.",
+      "source_model_fit": "see_profile",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "naacp:federal",
+      "publisher_name": "NAACP",
+      "prior_status": "discovered",
+      "outcome": "original_series_verified_edition_unqualified",
+      "capture_ids": [
+        "census-naacp-index",
+        "census-naacp-115"
+      ],
+      "votesmart_group_ids": [],
+      "notes": "Original site links 115th report PDF. All pages are image-based; OCR and member-cell validation deferred.",
+      "source_model_fit": "not_assessed",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "national_farmers_union:federal",
+      "publisher_name": "National Farmers Union",
+      "prior_status": "discovered",
+      "outcome": "original_series_verified_edition_unqualified",
+      "capture_ids": [
+        "census-nfu-2012-method",
+        "census-votesmart-root"
+      ],
+      "votesmart_group_ids": [
+        "1120"
+      ],
+      "notes": "Publisher 2012 article identifies selected Farm Bill amendments and preferred actions; actual full rating edition remains unacquired.",
+      "source_model_fit": "not_assessed",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "national_parks_action:federal",
+      "publisher_name": "National Parks Action Fund",
+      "prior_status": "discovered",
+      "outcome": "profile_added",
+      "capture_ids": [
+        "census-nationalparks-index"
+      ],
+      "votesmart_group_ids": [],
+      "notes": "Profile and readiness assessment added.",
+      "source_model_fit": "see_profile",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "network:federal",
+      "publisher_name": "NETWORK Lobby",
+      "prior_status": "verified",
+      "outcome": "profile_added",
+      "capture_ids": [
+        "census-network-2025"
+      ],
+      "votesmart_group_ids": [],
+      "notes": "Profile and readiness assessment added.",
+      "source_model_fit": "see_profile",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "new_american:federal",
+      "publisher_name": "The New American",
+      "prior_status": "verified",
+      "outcome": "unverified_after_bounded_search",
+      "capture_ids": [
+        "new-american-index"
+      ],
+      "votesmart_group_ids": [],
+      "notes": "Original archive links are enumerated, but no whole edition parsed in this bounded pass.",
+      "source_model_fit": "not_assessed",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "nfib:federal",
+      "publisher_name": "National Federation of Independent Business",
+      "prior_status": "blocked",
+      "outcome": "access_or_content_block",
+      "capture_ids": [
+        "census-nfib-119-release"
+      ],
+      "votesmart_group_ids": [],
+      "notes": "Bounded publisher-name/domain scorecard search and directory comparison did not establish a captured original edition. No inference of retirement or nonexistence.",
+      "source_model_fit": "not_assessed",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "niac_action:federal",
+      "publisher_name": "NIAC Action",
+      "prior_status": "verified",
+      "outcome": "profile_added",
+      "capture_ids": [
+        "niac-117"
+      ],
+      "votesmart_group_ids": [],
+      "notes": "Profile and readiness assessment added.",
+      "source_model_fit": "see_profile",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "nra_pvf:federal",
+      "publisher_name": "NRA Political Victory Fund",
+      "prior_status": "verified",
+      "outcome": "unverified_after_bounded_search",
+      "capture_ids": [
+        "nra-index"
+      ],
+      "votesmart_group_ids": [],
+      "notes": "Election candidate guide mixes federal/state offices and contains no qualified incumbent-only source snapshot. Exclude candidate-only portion from V1.",
+      "source_model_fit": "not_assessed",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "nrf:federal",
+      "publisher_name": "National Retail Federation",
+      "prior_status": "verified",
+      "outcome": "profile_added",
+      "capture_ids": [
+        "census-nrf-119-senate"
+      ],
+      "votesmart_group_ids": [],
+      "notes": "Profile and readiness assessment added.",
+      "source_model_fit": "see_profile",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "numbersusa:federal",
+      "publisher_name": "NumbersUSA Action",
+      "prior_status": "verified",
+      "outcome": "unverified_after_bounded_search",
+      "capture_ids": [
+        "numbersusa-method",
+        "numbersusa-members",
+        "census-votesmart-root"
+      ],
+      "votesmart_group_ids": [
+        "1985"
+      ],
+      "notes": "Delivered page requests member lookup; member data and methodology remain unqualified.",
+      "source_model_fit": "not_assessed",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "peace_action:federal",
+      "publisher_name": "Peace Action",
+      "prior_status": "verified",
+      "outcome": "unverified_after_bounded_search",
+      "capture_ids": [
+        "peace-index",
+        "census-votesmart-root"
+      ],
+      "votesmart_group_ids": [
+        "1110"
+      ],
+      "notes": "Page explicitly stops at summer2024 and lists actions, but no complete member grade grid acquired.",
+      "source_model_fit": "not_assessed",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "planned_parenthood:federal",
+      "publisher_name": "Planned Parenthood Action Fund",
+      "prior_status": "discovered",
+      "outcome": "profile_added",
+      "capture_ids": [
+        "census-plannedparenthood-index",
+        "census-votesmart-root"
+      ],
+      "votesmart_group_ids": [
+        "1578"
+      ],
+      "notes": "Profile and readiness assessment added.",
+      "source_model_fit": "see_profile",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "reproductive_freedom:federal",
+      "publisher_name": "NARAL Pro-Choice America",
+      "prior_status": "discovered",
+      "outcome": "profile_added",
+      "capture_ids": [
+        "census-reproductive-budd",
+        "census-votesmart-root"
+      ],
+      "votesmart_group_ids": [
+        "1016",
+        "3326"
+      ],
+      "notes": "Profile and readiness assessment added.",
+      "source_model_fit": "see_profile",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "sace_action:federal",
+      "publisher_name": "Southern Alliance for Clean Energy Action Fund",
+      "prior_status": "discovered",
+      "outcome": "profile_added",
+      "capture_ids": [
+        "census-sace-2012",
+        "census-votesmart-root"
+      ],
+      "votesmart_group_ids": [
+        "1870"
+      ],
+      "notes": "Profile and readiness assessment added.",
+      "source_model_fit": "see_profile",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "sba:federal",
+      "publisher_name": "Susan B. Anthony Pro-Life America",
+      "prior_status": "verified",
+      "outcome": "unverified_after_bounded_search",
+      "capture_ids": [
+        "sba-index",
+        "census-votesmart-root"
+      ],
+      "votesmart_group_ids": [
+        "1946"
+      ],
+      "notes": "Delivered landing page does not expose qualified member rows or the scoring formula.",
+      "source_model_fit": "not_assessed",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "shriver:federal",
+      "publisher_name": "Sargent Shriver National Center on Poverty Law",
+      "prior_status": "discovered",
+      "outcome": "unverified_after_bounded_search",
+      "capture_ids": [
+        "census-votesmart-root"
+      ],
+      "votesmart_group_ids": [
+        "1781"
+      ],
+      "notes": "Bounded publisher-name/domain scorecard search and directory comparison did not establish a captured original edition. No inference of retirement or nonexistence.",
+      "source_model_fit": "not_assessed",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    },
+    {
+      "source_id": "wilberforce:federal",
+      "publisher_name": "21Wilberforce",
+      "prior_status": "discovered",
+      "outcome": "access_or_content_block",
+      "capture_ids": [
+        "census-wilberforce-116",
+        "census-wilberforce-history",
+        "census-votesmart-root"
+      ],
+      "votesmart_group_ids": [
+        "2567"
+      ],
+      "notes": "Old scorecard PDF domain returned unrelated gambling HTML. Current original publisher article request failed. Retain discovery evidence and block that acquisition route.",
+      "source_model_fit": "not_assessed",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_assessed"
+    }
+  ]
+}

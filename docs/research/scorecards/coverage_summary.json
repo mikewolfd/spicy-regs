@@ -1,0 +1,59 @@
+{
+  "surveyed_at": "2026-10-03T17:48:51.414495+00:00",
+  "input_sha256": {
+    "scorecard_source_catalog.json": "727baa5d9ca48c54c53838475d4a628f233dc50c6b7fa3497d4be0c64343c6d6",
+    "shape_profiles.json": "6339c8189e69b1a9dcb0021c9c70e511e34338e14b66cc85b45102dca25c3ea9",
+    "capture_receipts.json": "6a70784bb69c08314631fb7f47a05144a7199dc015905e4379502fbf730ee5db",
+    "schema_breakers.json": "1e0a8cd8e55cc25ae8a2c1465f5fa857b1d416713b24e0f8561021ee58298b06",
+    "proposed_schema.json": "ac7f946fb4026a725acd89760db27bbf110e82f08152e03ebfb9199df15546d2",
+    "schema_examples.json": "08db294a3d1033f580eac8029688c212809510c4a62a1d5f5fced1f7e00d9932",
+    "discovery_log.json": "4183a1d7a2ca64e4a2863e49070976e56f66606f8dde878d7b2ed35b91432c44",
+    "work/samples/sample_profiles.json": "26b62786e9d30543a19f2ec717b3d814c7ce2744a8eb31a4b9c147b1045edbdb",
+    "work/samples/row_examples.json": "4a6bdaaa392dca0f0444463098591bb5d75245a054eba885c6ec9f69e6268798",
+    "work/samples/measurements.json": "4e75d8efcd3f8a24f6ada13a35ef968cd83ed7076d1407ed7e739cf90af94819",
+    "work/gate/qualification.json": "3af99eef3ea732dfcded898da0f8420eef1254ff04aabe789b0c42a74426e5c0",
+    "work/gate/freeze_receipt.json": "86d333cf4af455310413bd4f571e2091ffe5fa9e3b7a300ac2c50c32e779bab2"
+  },
+  "catalog_series_candidates": 125,
+  "distinct_publisher_candidates": 125,
+  "status_counts": {
+    "blocked": 2,
+    "discovered": 79,
+    "profiled": 34,
+    "retired": 0,
+    "supported": 0,
+    "verified": 10
+  },
+  "verified_or_profiled_series": 44,
+  "profiled_publishers": 34,
+  "sample_profiles": 38,
+  "profile_depths": {
+    "edition_sample": 26,
+    "edition_scope_only": 1,
+    "historical_format_only": 1,
+    "item_and_methodology_sample": 1,
+    "methodology_and_summary": 1,
+    "methodology_only": 8
+  },
+  "schema_dispositions": {
+    "fits_proposal": 35,
+    "unsupported": 3
+  },
+  "acquisition_dispositions": {
+    "source_snapshot_not_qualified": 38
+  },
+  "reproduction_dispositions": {
+    "blocked_undisclosed_formula": 2,
+    "not_qualified": 36
+  },
+  "captured_responses": 197,
+  "capture_attempts": 201,
+  "complete_scorecard_snapshots": 0,
+  "research_sample_scopes": 7,
+  "schema_frozen": true,
+  "production_supported": 0,
+  "all_sampled_profiles_classified": true,
+  "bounded_row_example_cases": 35,
+  "all_discovered_series_profiled": false,
+  "limitation": "Candidate publishers are not confirmed federal scorecard coverage. Response EOF is not scorecard completeness. Classification validates research metadata, not parser or publication qualification."
+}

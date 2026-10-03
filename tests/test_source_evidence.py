@@ -170,7 +170,10 @@ def test_no_lis_postcondition_preserves_original_and_no_generation(tmp_path, mon
 def test_both_roster_originals_reach_member_and_term_outputs(tmp_path, monkeypatch):
     monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
     evidence = CaptureEvidence(tmp_path, "members")
-    current = roster()
+    current_record = json.loads(roster())[0]
+    current_record["id"].update(votesmart=123456, bioguide_previous=["Z000001"])
+    current_record["other_names"] = [{"last": "Previous", "middle": None, "end": "2024-12-31"}]
+    current = json.dumps([current_record]).encode()
     historical = roster(lis=False).replace(b"A000001", b"B000001")
 
     def respond(request):
@@ -188,6 +191,12 @@ def test_both_roster_originals_reach_member_and_term_outputs(tmp_path, monkeypat
     term_rows = pq.read_table(terms).to_pylist()
     assert {row["bioguide_id"] for row in member_rows} == {"A000001", "B000001"}
     assert {row["roster"] for row in member_rows} == {"current", "historical"}
+    by_id = {row["bioguide_id"]: row for row in member_rows}
+    assert by_id["A000001"]["votesmart_id"] == "123456"
+    assert json.loads(by_id["A000001"]["bioguide_previous_json"]) == ["Z000001"]
+    assert json.loads(by_id["A000001"]["other_names_json"]) == current_record["other_names"]
+    assert all(by_id["B000001"][field] is None for field in
+               ("votesmart_id", "bioguide_previous_json", "other_names_json"))
     assert len(term_rows) == 2
     assert all(row["observed_at"] == "2026-09-19T00:00:00Z" for row in member_rows + term_rows)
     assert set(bodies(evidence)) == {current, historical}

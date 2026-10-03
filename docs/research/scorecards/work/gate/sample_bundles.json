@@ -1,0 +1,1945 @@
+{
+  "schema_version": "scorecards-v1",
+  "fixture_only": true,
+  "meaning": "Every complete snapshot is closure of its stated bounded fixture, never a production or full-edition completeness claim.",
+  "numeric_adjustment_ledger": "Deferred: no sampled standalone per-member numeric ledger was qualified.",
+  "bundles": [
+    {
+      "sample_id": "afl_cio:2025:bounded-schema",
+      "fixture_only": true,
+      "fixture_scope": "One House member, annual/lifetime ratings, one letter result and two independently identified dated H.R. 4 items.",
+      "production_snapshot": false,
+      "identity_policy": "Checked research-local semantic keys; no production stability qualification is asserted.",
+      "limits": [
+        "Workbook membership is complete in the research capture, but this fixture deliberately selects one member and three items.",
+        "No historical lifetime item ledger, official-action comparison or score reproduction is asserted.",
+        "No standalone numeric member adjustment is observed or fabricated.",
+        "The identical H.R. 4 workbook headers do not provide a proven column-to-item URL crosswalk. Their dated item records remain separate from member-result facts."
+      ],
+      "tables": {
+        "scorecard_publishers": [
+          {
+            "publisher_id": "afl_cio",
+            "name": "AFL-CIO",
+            "abbreviation": null,
+            "aliases_json": null,
+            "homepage_url": null,
+            "scorecard_index_url": null,
+            "observed_at": "2026-10-03T17:31:04.114388+00:00",
+            "capture_id": "afl-house-2025-xlsx",
+            "source_url": "https://aflcio.org/scorecard/export/2025/house?_format=xlsx",
+            "source_path": "Publisher attribution on selected source"
+          }
+        ],
+        "scorecards": [
+          {
+            "scorecard_id": "fixture:afl_cio:2025",
+            "publisher_id": "afl_cio",
+            "series_id": "fixture:afl_cio:federal",
+            "publisher_edition_key": null,
+            "publisher_name_text": "AFL-CIO",
+            "title": "Legislative Scorecard",
+            "edition_label_text": "2025",
+            "chamber_scope_text": "House",
+            "year_text": "2025",
+            "congress_text": null,
+            "session_text": null,
+            "timespan_text": null,
+            "periods_json": null,
+            "source_url": "https://aflcio.org/scorecard/export/2025/house?_format=xlsx",
+            "methodology_url": null,
+            "published_at_text": null,
+            "updated_at_text": null,
+            "observed_at": "2026-10-03T17:31:04.114388+00:00",
+            "snapshot_id": "fixture:afl_cio:2025:bounded-snapshot-v1",
+            "capture_id": "afl-house-2025-xlsx",
+            "source_path": "Selected edition label and fixture scope"
+          }
+        ],
+        "scorecard_snapshots": [
+          {
+            "snapshot_id": "fixture:afl_cio:2025:bounded-snapshot-v1",
+            "scorecard_id": "fixture:afl_cio:2025",
+            "observed_at": "2026-10-03T17:31:04.114388+00:00",
+            "capture_ids_json": "[\"afl-house-2025-xlsx\",\"afl2025-house-item-07\",\"afl2025-house-item-04\",\"afl2025-house-item-12\",\"afl-2025-method\"]",
+            "parser_version": "source-grounded-fixture-builder-v1",
+            "methodology_digest": null,
+            "completeness_status": "complete",
+            "completeness_rule": "Complete fixture closure only: all selected bounded observations and required references are present. No source-edition completeness or production acceptance is asserted.",
+            "source_declared_counts_json": null,
+            "parsed_counts_json": "{\"scorecards\":1,\"scorecard_snapshots\":1,\"scorecard_methodologies\":1,\"scorecard_metrics\":2,\"scorecard_items\":3,\"scorecard_metric_items\":1,\"scorecard_metric_components\":0,\"scorecard_members\":1,\"scorecard_member_ratings\":2,\"scorecard_member_item_results\":1}",
+            "evidence_policy": "hash_only",
+            "capture_roles_json": "[{\"capture_id\":\"afl-house-2025-xlsx\",\"role\":\"primary\",\"field_groups\":[\"member_identity\",\"metric_headers\",\"rating_values\",\"member_item_cells\"]},{\"capture_id\":\"afl2025-house-item-07\",\"role\":\"primary\",\"field_groups\":[\"hr4_june_item\"]},{\"capture_id\":\"afl2025-house-item-04\",\"role\":\"primary\",\"field_groups\":[\"hr4_july_item\"]},{\"capture_id\":\"afl2025-house-item-12\",\"role\":\"primary\",\"field_groups\":[\"letter_item\",\"letter_semantics\"]},{\"capture_id\":\"afl-2025-method\",\"role\":\"primary\",\"field_groups\":[\"edition_context\"]}]",
+            "rendition_selection_rule": "Workbook strings are primary for rating and result cells. Selected item pages supply distinct dates, item URLs and the explicit letter encoding explanation; their paginated member grids are not used.",
+            "identity_rule_version": "research-semantic-keys-v1",
+            "capture_id": "afl-house-2025-xlsx",
+            "source_url": "https://aflcio.org/scorecard/export/2025/house?_format=xlsx",
+            "source_path": "Research fixture closure, not a publisher completeness claim"
+          }
+        ],
+        "scorecard_methodologies": [
+          {
+            "scorecard_id": "fixture:afl_cio:2025",
+            "methodology_id": "fixture:letter-encoding",
+            "chamber_text": "House",
+            "cohort_text": null,
+            "effective_at_text": null,
+            "methodology_text": "a \"no\" vote indicates the person signed the letter protesting the firing of Wilcox",
+            "methodology_url": "https://aflcio.org/scorecard/votes/2025/house/letter-president-trump-demanding-reinstatement-nlrb-member-gwynn-wilcox",
+            "disclosure_status": "explicit",
+            "capture_id": "afl2025-house-item-12",
+            "source_path": "Article note immediately after position description",
+            "snapshot_id": "fixture:afl_cio:2025:bounded-snapshot-v1",
+            "source_url": "https://aflcio.org/scorecard/votes/2025/house/letter-president-trump-demanding-reinstatement-nlrb-member-gwynn-wilcox"
+          }
+        ],
+        "scorecard_metrics": [
+          {
+            "scorecard_id": "fixture:afl_cio:2025",
+            "metric_id": "fixture:annual",
+            "methodology_id": null,
+            "name": "Score",
+            "value_unit_text": null,
+            "chamber_text": "House",
+            "cohort_text": null,
+            "period_text": "2025",
+            "periods_json": null,
+            "is_primary": null,
+            "scale_text": null,
+            "rank_population_text": null,
+            "snapshot_id": "fixture:afl_cio:2025:bounded-snapshot-v1",
+            "capture_id": "afl-house-2025-xlsx",
+            "source_url": "https://aflcio.org/scorecard/export/2025/house?_format=xlsx",
+            "source_path": "Worksheet!E1"
+          },
+          {
+            "scorecard_id": "fixture:afl_cio:2025",
+            "metric_id": "fixture:lifetime",
+            "methodology_id": null,
+            "name": "Lifetime Score",
+            "value_unit_text": null,
+            "chamber_text": "House",
+            "cohort_text": null,
+            "period_text": null,
+            "periods_json": null,
+            "is_primary": null,
+            "scale_text": null,
+            "rank_population_text": null,
+            "snapshot_id": "fixture:afl_cio:2025:bounded-snapshot-v1",
+            "capture_id": "afl-house-2025-xlsx",
+            "source_url": "https://aflcio.org/scorecard/export/2025/house?_format=xlsx",
+            "source_path": "Worksheet!F1"
+          }
+        ],
+        "scorecard_items": [
+          {
+            "scorecard_id": "fixture:afl_cio:2025",
+            "item_id": "fixture:hr4-june-12",
+            "publisher_item_id": "https://aflcio.org/scorecard/votes/2025/house/hr-4-rescissions-act-2025",
+            "item_kind_text": null,
+            "title": "H.R. 4, Rescissions Act of 2025",
+            "item_date_text": "June 12, 2025",
+            "congress_text": null,
+            "chamber_text": "House",
+            "session_text": null,
+            "roll_number_text": null,
+            "bill_citation_text": "H.R. 4",
+            "amendment_citation_text": null,
+            "references_json": "[{\"occurrence_id\":\"source-bill\",\"citation_text\":\"H.R. 4\",\"kind\":\"bill\",\"source_path\":\"Article heading and date\",\"bill_citation_text\":\"H.R. 4\"}]",
+            "source_url": "https://aflcio.org/scorecard/votes/2025/house/hr-4-rescissions-act-2025",
+            "source_path": "Article heading and date",
+            "publisher_position_text": null,
+            "position_basis": null,
+            "position_source_path": null,
+            "snapshot_id": "fixture:afl_cio:2025:bounded-snapshot-v1",
+            "capture_id": "afl2025-house-item-07"
+          },
+          {
+            "scorecard_id": "fixture:afl_cio:2025",
+            "item_id": "fixture:hr4-july-18",
+            "publisher_item_id": "https://aflcio.org/scorecard/votes/2025/house/hr-4-rescissions-act-2025-0",
+            "item_kind_text": null,
+            "title": "H.R. 4, Rescissions Act of 2025",
+            "item_date_text": "July 18, 2025",
+            "congress_text": null,
+            "chamber_text": "House",
+            "session_text": null,
+            "roll_number_text": null,
+            "bill_citation_text": "H.R. 4",
+            "amendment_citation_text": null,
+            "references_json": "[{\"occurrence_id\":\"source-bill\",\"citation_text\":\"H.R. 4\",\"kind\":\"bill\",\"source_path\":\"Article heading and date\",\"bill_citation_text\":\"H.R. 4\"}]",
+            "source_url": "https://aflcio.org/scorecard/votes/2025/house/hr-4-rescissions-act-2025-0",
+            "source_path": "Article heading and date",
+            "publisher_position_text": null,
+            "position_basis": null,
+            "position_source_path": null,
+            "snapshot_id": "fixture:afl_cio:2025:bounded-snapshot-v1",
+            "capture_id": "afl2025-house-item-04"
+          },
+          {
+            "scorecard_id": "fixture:afl_cio:2025",
+            "item_id": "fixture:wilcox-letter",
+            "publisher_item_id": "https://aflcio.org/scorecard/votes/2025/house/letter-president-trump-demanding-reinstatement-nlrb-member-gwynn-wilcox",
+            "item_kind_text": "letter",
+            "title": "Letter to President Trump demanding reinstatement of NLRB Member Gwynn Wilcox",
+            "item_date_text": "February 13, 2025",
+            "congress_text": null,
+            "chamber_text": "House",
+            "session_text": null,
+            "roll_number_text": null,
+            "bill_citation_text": null,
+            "amendment_citation_text": null,
+            "references_json": "[]",
+            "source_url": "https://aflcio.org/scorecard/votes/2025/house/letter-president-trump-demanding-reinstatement-nlrb-member-gwynn-wilcox",
+            "source_path": "Article heading and date",
+            "publisher_position_text": null,
+            "position_basis": null,
+            "position_source_path": null,
+            "snapshot_id": "fixture:afl_cio:2025:bounded-snapshot-v1",
+            "capture_id": "afl2025-house-item-12"
+          }
+        ],
+        "scorecard_metric_items": [
+          {
+            "scorecard_id": "fixture:afl_cio:2025",
+            "metric_id": "fixture:annual",
+            "item_id": "fixture:wilcox-letter",
+            "participation_id": "fixture:annual-workbook-inclusion",
+            "methodology_id": "fixture:letter-encoding",
+            "publisher_position_text": null,
+            "position_basis": null,
+            "weight_text": null,
+            "weight_number": null,
+            "contribution_rule_text": null,
+            "counts_toward_metric": null,
+            "snapshot_id": "fixture:afl_cio:2025:bounded-snapshot-v1",
+            "capture_id": "afl-house-2025-xlsx",
+            "source_url": "https://aflcio.org/scorecard/export/2025/house?_format=xlsx",
+            "source_path": "Worksheet!G1 and E1"
+          }
+        ],
+        "scorecard_metric_components": [],
+        "scorecard_members": [
+          {
+            "scorecard_id": "fixture:afl_cio:2025",
+            "publisher_member_key": "fixture:house:AK:0:nicholas-j-begich-iii",
+            "publisher_member_id": null,
+            "identifiers_json": null,
+            "member_name": "Rep. Nicholas J. Begich III",
+            "chamber_text": "House",
+            "state": "AK",
+            "district": "0",
+            "party": "Republican",
+            "period_text": null,
+            "eligibility_text": null,
+            "notes_text": null,
+            "snapshot_id": "fixture:afl_cio:2025:bounded-snapshot-v1",
+            "capture_id": "afl-house-2025-xlsx",
+            "source_url": "https://aflcio.org/scorecard/export/2025/house?_format=xlsx",
+            "source_path": "Worksheet!A2:D2"
+          }
+        ],
+        "scorecard_member_ratings": [
+          {
+            "scorecard_id": "fixture:afl_cio:2025",
+            "metric_id": "fixture:annual",
+            "publisher_member_key": "fixture:house:AK:0:nicholas-j-begich-iii",
+            "value_text": "0%",
+            "value_number": null,
+            "value_status_text": null,
+            "rank_text": null,
+            "notes_text": null,
+            "source_url": "https://aflcio.org/scorecard/export/2025/house?_format=xlsx",
+            "source_path": "Worksheet!E2",
+            "snapshot_id": "fixture:afl_cio:2025:bounded-snapshot-v1",
+            "capture_id": "afl-house-2025-xlsx"
+          },
+          {
+            "scorecard_id": "fixture:afl_cio:2025",
+            "metric_id": "fixture:lifetime",
+            "publisher_member_key": "fixture:house:AK:0:nicholas-j-begich-iii",
+            "value_text": "0%",
+            "value_number": null,
+            "value_status_text": null,
+            "rank_text": null,
+            "notes_text": null,
+            "source_url": "https://aflcio.org/scorecard/export/2025/house?_format=xlsx",
+            "source_path": "Worksheet!F2",
+            "snapshot_id": "fixture:afl_cio:2025:bounded-snapshot-v1",
+            "capture_id": "afl-house-2025-xlsx"
+          }
+        ],
+        "scorecard_member_item_results": [
+          {
+            "scorecard_id": "fixture:afl_cio:2025",
+            "result_id": "fixture:workbook-cell",
+            "metric_id": "fixture:annual",
+            "item_id": "fixture:wilcox-letter",
+            "participation_id": "fixture:annual-workbook-inclusion",
+            "publisher_member_key": "fixture:house:AK:0:nicholas-j-begich-iii",
+            "action_text": null,
+            "result_text": "◯",
+            "contribution_text": null,
+            "contribution_number": null,
+            "eligibility_text": null,
+            "counts_toward_metric": null,
+            "adjustment_text": null,
+            "reason_text": null,
+            "snapshot_id": "fixture:afl_cio:2025:bounded-snapshot-v1",
+            "capture_id": "afl-house-2025-xlsx",
+            "source_url": "https://aflcio.org/scorecard/export/2025/house?_format=xlsx",
+            "source_path": "Worksheet!G2"
+          }
+        ]
+      },
+      "snapshot_captures": {
+        "fixture:afl_cio:2025:bounded-snapshot-v1": [
+          "afl-house-2025-xlsx",
+          "afl2025-house-item-07",
+          "afl2025-house-item-04",
+          "afl2025-house-item-12",
+          "afl-2025-method"
+        ]
+      },
+      "literal_assertions": [
+        {
+          "table": "scorecard_member_ratings",
+          "key": [
+            "fixture:afl_cio:2025",
+            "fixture:annual",
+            "fixture:house:AK:0:nicholas-j-begich-iii"
+          ],
+          "field": "value_text",
+          "expected": "0%"
+        },
+        {
+          "table": "scorecard_member_ratings",
+          "key": [
+            "fixture:afl_cio:2025",
+            "fixture:lifetime",
+            "fixture:house:AK:0:nicholas-j-begich-iii"
+          ],
+          "field": "value_text",
+          "expected": "0%"
+        },
+        {
+          "table": "scorecard_items",
+          "key": [
+            "fixture:afl_cio:2025",
+            "fixture:hr4-june-12"
+          ],
+          "field": "item_date_text",
+          "expected": "June 12, 2025"
+        },
+        {
+          "table": "scorecard_items",
+          "key": [
+            "fixture:afl_cio:2025",
+            "fixture:hr4-june-12"
+          ],
+          "field": "publisher_item_id",
+          "expected": "https://aflcio.org/scorecard/votes/2025/house/hr-4-rescissions-act-2025"
+        },
+        {
+          "table": "scorecard_items",
+          "key": [
+            "fixture:afl_cio:2025",
+            "fixture:hr4-july-18"
+          ],
+          "field": "item_date_text",
+          "expected": "July 18, 2025"
+        },
+        {
+          "table": "scorecard_items",
+          "key": [
+            "fixture:afl_cio:2025",
+            "fixture:hr4-july-18"
+          ],
+          "field": "publisher_item_id",
+          "expected": "https://aflcio.org/scorecard/votes/2025/house/hr-4-rescissions-act-2025-0"
+        },
+        {
+          "table": "scorecard_items",
+          "key": [
+            "fixture:afl_cio:2025",
+            "fixture:wilcox-letter"
+          ],
+          "field": "item_date_text",
+          "expected": "February 13, 2025"
+        },
+        {
+          "table": "scorecard_items",
+          "key": [
+            "fixture:afl_cio:2025",
+            "fixture:wilcox-letter"
+          ],
+          "field": "publisher_item_id",
+          "expected": "https://aflcio.org/scorecard/votes/2025/house/letter-president-trump-demanding-reinstatement-nlrb-member-gwynn-wilcox"
+        },
+        {
+          "table": "scorecard_member_item_results",
+          "key": [
+            "fixture:afl_cio:2025",
+            "fixture:wilcox-letter",
+            "fixture:house:AK:0:nicholas-j-begich-iii",
+            "fixture:workbook-cell"
+          ],
+          "field": "result_text",
+          "expected": "◯"
+        }
+      ],
+      "corroborating_observations": [
+        {
+          "capture_id": "afl2025-house-item-12",
+          "source_path": "Letter explanatory note",
+          "observation": "The publisher says the template passed/failed result does not apply because this measure is a letter. Its raw no encoding does not establish an official vote."
+        },
+        {
+          "capture_id": "afl-house-2025-xlsx",
+          "source_path": "Worksheet!M1, P1, M2 and P2",
+          "header_literal": "H.R. 4, Rescissions Act of 2025 (H.R. 4)",
+          "member_cell_literals": {
+            "M2": "ｘ",
+            "P2": "ｘ"
+          },
+          "observation": "Two source columns are retained as a duplicate-title challenge. The workbook contains no hyperlinks, and these equal member cells cannot establish which dated source item each column represents. The fixture creates no H.R. 4 metric participation or member-result join."
+        }
+      ]
+    },
+    {
+      "sample_id": "lcv:2025:bounded-schema",
+      "fixture_only": true,
+      "fixture_scope": "Katie Britt annual/lifetime CSV cells and an Alan Armstrong member occurrence with absent annual rating.",
+      "production_snapshot": false,
+      "identity_policy": "Checked research-local semantic keys; no production stability qualification is asserted.",
+      "limits": [
+        "The source export includes both chambers despite chamber query selection.",
+        "An absent annual cell creates no invented annual metric value.",
+        "No complete member-item ledger is claimed."
+      ],
+      "tables": {
+        "scorecard_publishers": [
+          {
+            "publisher_id": "lcv",
+            "name": "League of Conservation Voters",
+            "abbreviation": null,
+            "aliases_json": null,
+            "homepage_url": null,
+            "scorecard_index_url": null,
+            "observed_at": "2026-10-03T17:32:48.647384+00:00",
+            "capture_id": "lcv-2025-senate-csv",
+            "source_url": "https://www.lcv.org/congressional-scorecard/members-of-congress/?export=true&sort=state-a-z&active_tab=&chamber=senate&street_address=&zip=&session_year=2025&state=&party=All&last_name=&include_former=1&export-type=moc-listing",
+            "source_path": "Publisher attribution on selected source"
+          }
+        ],
+        "scorecards": [
+          {
+            "scorecard_id": "fixture:lcv:2025",
+            "publisher_id": "lcv",
+            "series_id": "fixture:lcv:federal",
+            "publisher_edition_key": null,
+            "publisher_name_text": "League of Conservation Voters",
+            "title": "National Environmental Scorecard",
+            "edition_label_text": "2025",
+            "chamber_scope_text": "Senate",
+            "year_text": "2025",
+            "congress_text": null,
+            "session_text": null,
+            "timespan_text": null,
+            "periods_json": null,
+            "source_url": "https://www.lcv.org/congressional-scorecard/members-of-congress/?export=true&sort=state-a-z&active_tab=&chamber=senate&street_address=&zip=&session_year=2025&state=&party=All&last_name=&include_former=1&export-type=moc-listing",
+            "methodology_url": null,
+            "published_at_text": null,
+            "updated_at_text": null,
+            "observed_at": "2026-10-03T17:32:48.647384+00:00",
+            "snapshot_id": "fixture:lcv:2025:bounded-snapshot-v1",
+            "capture_id": "lcv-2025-senate-csv",
+            "source_path": "Selected edition label and fixture scope"
+          }
+        ],
+        "scorecard_snapshots": [
+          {
+            "snapshot_id": "fixture:lcv:2025:bounded-snapshot-v1",
+            "scorecard_id": "fixture:lcv:2025",
+            "observed_at": "2026-10-03T17:32:48.647384+00:00",
+            "capture_ids_json": "[\"lcv-2025-senate-csv\",\"lcv-2025-senate-html\",\"lcv-method\"]",
+            "parser_version": "source-grounded-fixture-builder-v1",
+            "methodology_digest": null,
+            "completeness_status": "complete",
+            "completeness_rule": "Complete fixture closure only: all selected bounded observations and required references are present. No source-edition completeness or production acceptance is asserted.",
+            "source_declared_counts_json": null,
+            "parsed_counts_json": "{\"scorecards\":1,\"scorecard_snapshots\":1,\"scorecard_methodologies\":0,\"scorecard_metrics\":2,\"scorecard_items\":0,\"scorecard_metric_items\":0,\"scorecard_metric_components\":0,\"scorecard_members\":2,\"scorecard_member_ratings\":3,\"scorecard_member_item_results\":0}",
+            "evidence_policy": "hash_only",
+            "capture_roles_json": "[{\"capture_id\":\"lcv-2025-senate-csv\",\"role\":\"primary\",\"field_groups\":[\"members\",\"rating_values\",\"metric_headers\"]},{\"capture_id\":\"lcv-2025-senate-html\",\"role\":\"corroboration\",\"field_groups\":[\"members\",\"rating_values\",\"metric_headers\"]},{\"capture_id\":\"lcv-method\",\"role\":\"primary\",\"field_groups\":[\"methodology\"]}]",
+            "rendition_selection_rule": "CSV is authoritative for these member/rating rows. HTML 0%/2% and N/A corroborate CSV 0/2 and na without replacing the CSV strings.",
+            "identity_rule_version": "research-semantic-keys-v1",
+            "capture_id": "lcv-2025-senate-csv",
+            "source_url": "https://www.lcv.org/congressional-scorecard/members-of-congress/?export=true&sort=state-a-z&active_tab=&chamber=senate&street_address=&zip=&session_year=2025&state=&party=All&last_name=&include_former=1&export-type=moc-listing",
+            "source_path": "Research fixture closure, not a publisher completeness claim"
+          }
+        ],
+        "scorecard_methodologies": [],
+        "scorecard_metrics": [
+          {
+            "scorecard_id": "fixture:lcv:2025",
+            "metric_id": "fixture:annual",
+            "methodology_id": null,
+            "name": "Year Score",
+            "value_unit_text": null,
+            "chamber_text": "Senate",
+            "cohort_text": null,
+            "period_text": "2025",
+            "periods_json": null,
+            "is_primary": null,
+            "scale_text": null,
+            "rank_population_text": null,
+            "snapshot_id": "fixture:lcv:2025:bounded-snapshot-v1",
+            "capture_id": "lcv-2025-senate-csv",
+            "source_url": "https://www.lcv.org/congressional-scorecard/members-of-congress/?export=true&sort=state-a-z&active_tab=&chamber=senate&street_address=&zip=&session_year=2025&state=&party=All&last_name=&include_former=1&export-type=moc-listing",
+            "source_path": "CSV record2, Year Score header"
+          },
+          {
+            "scorecard_id": "fixture:lcv:2025",
+            "metric_id": "fixture:lifetime",
+            "methodology_id": null,
+            "name": "Lifetime Score",
+            "value_unit_text": null,
+            "chamber_text": "Senate",
+            "cohort_text": null,
+            "period_text": null,
+            "periods_json": null,
+            "is_primary": null,
+            "scale_text": null,
+            "rank_population_text": null,
+            "snapshot_id": "fixture:lcv:2025:bounded-snapshot-v1",
+            "capture_id": "lcv-2025-senate-csv",
+            "source_url": "https://www.lcv.org/congressional-scorecard/members-of-congress/?export=true&sort=state-a-z&active_tab=&chamber=senate&street_address=&zip=&session_year=2025&state=&party=All&last_name=&include_former=1&export-type=moc-listing",
+            "source_path": "CSV record2, Lifetime Score header"
+          }
+        ],
+        "scorecard_items": [],
+        "scorecard_metric_items": [],
+        "scorecard_metric_components": [],
+        "scorecard_members": [
+          {
+            "scorecard_id": "fixture:lcv:2025",
+            "publisher_member_key": "fixture:lcv-url:katie-britt",
+            "publisher_member_id": "https://www.lcv.org/moc/katie-britt/",
+            "identifiers_json": null,
+            "member_name": "Katie Britt",
+            "chamber_text": "Senate",
+            "state": "Alabama",
+            "district": "",
+            "party": "R",
+            "period_text": null,
+            "eligibility_text": null,
+            "notes_text": null,
+            "snapshot_id": "fixture:lcv:2025:bounded-snapshot-v1",
+            "capture_id": "lcv-2025-senate-csv",
+            "source_url": "https://www.lcv.org/congressional-scorecard/members-of-congress/?export=true&sort=state-a-z&active_tab=&chamber=senate&street_address=&zip=&session_year=2025&state=&party=All&last_name=&include_former=1&export-type=moc-listing",
+            "source_path": "CSV record4 with preceding state heading"
+          },
+          {
+            "scorecard_id": "fixture:lcv:2025",
+            "publisher_member_key": "fixture:lcv-url:alan-armstrong",
+            "publisher_member_id": "https://www.lcv.org/moc/alan-armstrong/",
+            "identifiers_json": null,
+            "member_name": "Alan Armstrong",
+            "chamber_text": "Senate",
+            "state": "Oklahoma",
+            "district": "",
+            "party": "R",
+            "period_text": null,
+            "eligibility_text": null,
+            "notes_text": null,
+            "snapshot_id": "fixture:lcv:2025:bounded-snapshot-v1",
+            "capture_id": "lcv-2025-senate-csv",
+            "source_url": "https://www.lcv.org/congressional-scorecard/members-of-congress/?export=true&sort=state-a-z&active_tab=&chamber=senate&street_address=&zip=&session_year=2025&state=&party=All&last_name=&include_former=1&export-type=moc-listing",
+            "source_path": "CSV record111 with preceding state heading"
+          }
+        ],
+        "scorecard_member_ratings": [
+          {
+            "scorecard_id": "fixture:lcv:2025",
+            "metric_id": "fixture:annual",
+            "publisher_member_key": "fixture:lcv-url:katie-britt",
+            "value_text": "0",
+            "value_number": "0",
+            "value_status_text": null,
+            "rank_text": null,
+            "notes_text": null,
+            "source_url": "https://www.lcv.org/congressional-scorecard/members-of-congress/?export=true&sort=state-a-z&active_tab=&chamber=senate&street_address=&zip=&session_year=2025&state=&party=All&last_name=&include_former=1&export-type=moc-listing",
+            "source_path": "CSV record4, Year Score",
+            "snapshot_id": "fixture:lcv:2025:bounded-snapshot-v1",
+            "capture_id": "lcv-2025-senate-csv"
+          },
+          {
+            "scorecard_id": "fixture:lcv:2025",
+            "metric_id": "fixture:lifetime",
+            "publisher_member_key": "fixture:lcv-url:katie-britt",
+            "value_text": "2",
+            "value_number": "2",
+            "value_status_text": null,
+            "rank_text": null,
+            "notes_text": null,
+            "source_url": "https://www.lcv.org/congressional-scorecard/members-of-congress/?export=true&sort=state-a-z&active_tab=&chamber=senate&street_address=&zip=&session_year=2025&state=&party=All&last_name=&include_former=1&export-type=moc-listing",
+            "source_path": "CSV record4, Lifetime Score",
+            "snapshot_id": "fixture:lcv:2025:bounded-snapshot-v1",
+            "capture_id": "lcv-2025-senate-csv"
+          },
+          {
+            "scorecard_id": "fixture:lcv:2025",
+            "metric_id": "fixture:lifetime",
+            "publisher_member_key": "fixture:lcv-url:alan-armstrong",
+            "value_text": "na",
+            "value_number": null,
+            "value_status_text": null,
+            "rank_text": null,
+            "notes_text": null,
+            "source_url": "https://www.lcv.org/congressional-scorecard/members-of-congress/?export=true&sort=state-a-z&active_tab=&chamber=senate&street_address=&zip=&session_year=2025&state=&party=All&last_name=&include_former=1&export-type=moc-listing",
+            "source_path": "CSV record111, Lifetime Score",
+            "snapshot_id": "fixture:lcv:2025:bounded-snapshot-v1",
+            "capture_id": "lcv-2025-senate-csv"
+          }
+        ],
+        "scorecard_member_item_results": []
+      },
+      "snapshot_captures": {
+        "fixture:lcv:2025:bounded-snapshot-v1": [
+          "lcv-2025-senate-csv",
+          "lcv-2025-senate-html",
+          "lcv-method"
+        ]
+      },
+      "literal_assertions": [
+        {
+          "table": "scorecard_member_ratings",
+          "key": [
+            "fixture:lcv:2025",
+            "fixture:annual",
+            "fixture:lcv-url:katie-britt"
+          ],
+          "field": "value_text",
+          "expected": "0"
+        },
+        {
+          "table": "scorecard_member_ratings",
+          "key": [
+            "fixture:lcv:2025",
+            "fixture:lifetime",
+            "fixture:lcv-url:katie-britt"
+          ],
+          "field": "value_text",
+          "expected": "2"
+        },
+        {
+          "table": "scorecard_member_ratings",
+          "key": [
+            "fixture:lcv:2025",
+            "fixture:lifetime",
+            "fixture:lcv-url:alan-armstrong"
+          ],
+          "field": "value_text",
+          "expected": "na"
+        }
+      ],
+      "corroborating_observations": [
+        {
+          "capture_id": "lcv-2025-senate-html",
+          "source_path": "Katie Britt card / 2025 Score",
+          "literal": "0%",
+          "primary_literal": "0"
+        },
+        {
+          "capture_id": "lcv-2025-senate-html",
+          "source_path": "Alan Armstrong card",
+          "literal": "N/A",
+          "observation": "Annual score control is absent; CSV annual cell is empty. Member presence is retained independently."
+        }
+      ]
+    },
+    {
+      "sample_id": "nea:119:bounded-schema",
+      "fixture_only": true,
+      "fixture_scope": "Pete Ricketts published grade and one disclosed Senate amendment item with multiple literal references.",
+      "production_snapshot": false,
+      "identity_policy": "Checked research-local semantic keys; no production stability qualification is asserted.",
+      "limits": [
+        "Underlying leadership/accessibility contributions are undisclosed; no synthetic item-result rows are created.",
+        "An item listing does not itself link this member to an observed item result."
+      ],
+      "tables": {
+        "scorecard_publishers": [
+          {
+            "publisher_id": "nea",
+            "name": "National Education Association",
+            "abbreviation": null,
+            "aliases_json": null,
+            "homepage_url": null,
+            "scorecard_index_url": null,
+            "observed_at": "2026-10-03T17:31:04.114930+00:00",
+            "capture_id": "nea-119-html",
+            "source_url": "https://www.nea.org/advocating-for-change/action-center/nea-in-congress/report-card",
+            "source_path": "Publisher attribution on selected source"
+          }
+        ],
+        "scorecards": [
+          {
+            "scorecard_id": "fixture:nea:119-2025",
+            "publisher_id": "nea",
+            "series_id": "fixture:nea:federal",
+            "publisher_edition_key": null,
+            "publisher_name_text": "National Education Association",
+            "title": "Legislative Report Card",
+            "edition_label_text": "119th Congress (2025)",
+            "chamber_scope_text": "Senate",
+            "year_text": "2025",
+            "congress_text": "119",
+            "session_text": "1",
+            "timespan_text": null,
+            "periods_json": null,
+            "source_url": "https://www.nea.org/advocating-for-change/action-center/nea-in-congress/report-card",
+            "methodology_url": null,
+            "published_at_text": null,
+            "updated_at_text": null,
+            "observed_at": "2026-10-03T17:31:04.114930+00:00",
+            "snapshot_id": "fixture:nea:119-2025:bounded-snapshot-v1",
+            "capture_id": "nea-119-html",
+            "source_path": "Selected edition label and fixture scope"
+          }
+        ],
+        "scorecard_snapshots": [
+          {
+            "snapshot_id": "fixture:nea:119-2025:bounded-snapshot-v1",
+            "scorecard_id": "fixture:nea:119-2025",
+            "observed_at": "2026-10-03T17:31:04.114930+00:00",
+            "capture_ids_json": "[\"nea-119-html\",\"nea-119-pdf\",\"nea-119-votes-pdf\"]",
+            "parser_version": "source-grounded-fixture-builder-v1",
+            "methodology_digest": null,
+            "completeness_status": "complete",
+            "completeness_rule": "Complete fixture closure only: all selected bounded observations and required references are present. No source-edition completeness or production acceptance is asserted.",
+            "source_declared_counts_json": null,
+            "parsed_counts_json": "{\"scorecards\":1,\"scorecard_snapshots\":1,\"scorecard_methodologies\":0,\"scorecard_metrics\":1,\"scorecard_items\":1,\"scorecard_metric_items\":0,\"scorecard_metric_components\":0,\"scorecard_members\":1,\"scorecard_member_ratings\":1,\"scorecard_member_item_results\":0}",
+            "evidence_policy": "hash_only",
+            "capture_roles_json": "[{\"capture_id\":\"nea-119-html\",\"role\":\"primary\",\"field_groups\":[\"members\",\"grades\",\"grade_metric\"]},{\"capture_id\":\"nea-119-pdf\",\"role\":\"corroboration\",\"field_groups\":[\"members\",\"grades\",\"grade_metric\"]},{\"capture_id\":\"nea-119-votes-pdf\",\"role\":\"primary\",\"field_groups\":[\"scored_items\"]}]",
+            "rendition_selection_rule": "HTML grade cells are primary and exactly corroborated by the official PDF. Scored-item citations and positions come from the separate publisher vote supplement.",
+            "identity_rule_version": "research-semantic-keys-v1",
+            "capture_id": "nea-119-html",
+            "source_url": "https://www.nea.org/advocating-for-change/action-center/nea-in-congress/report-card",
+            "source_path": "Research fixture closure, not a publisher completeness claim"
+          }
+        ],
+        "scorecard_methodologies": [],
+        "scorecard_metrics": [
+          {
+            "scorecard_id": "fixture:nea:119-2025",
+            "metric_id": "fixture:senate-grade",
+            "methodology_id": null,
+            "name": "119th Congressional Grade",
+            "value_unit_text": null,
+            "chamber_text": "Senate",
+            "cohort_text": null,
+            "period_text": "119th",
+            "periods_json": null,
+            "is_primary": null,
+            "scale_text": null,
+            "rank_population_text": null,
+            "snapshot_id": "fixture:nea:119-2025:bounded-snapshot-v1",
+            "capture_id": "nea-119-html",
+            "source_url": "https://www.nea.org/advocating-for-change/action-center/nea-in-congress/report-card",
+            "source_path": "U.S. Senate Report Card / column heading"
+          }
+        ],
+        "scorecard_items": [
+          {
+            "scorecard_id": "fixture:nea:119-2025",
+            "item_id": "fixture:senate-amendment-2382",
+            "publisher_item_id": null,
+            "item_kind_text": "amendment",
+            "title": "On the Amendment No. 2382 to H.R.1",
+            "item_date_text": null,
+            "congress_text": null,
+            "chamber_text": "Senate",
+            "session_text": null,
+            "roll_number_text": "1-\n358",
+            "bill_citation_text": "H.R. 1",
+            "amendment_citation_text": "S.Amdt. 2382 to S.Amdt. 2360 to H.R. 1",
+            "references_json": "[{\"occurrence_id\":\"source-outer-amendment\",\"citation_text\":\"S.Amdt. 2382\",\"kind\":\"amendment\",\"source_path\":\"Physical page2 / On the Amendment No.2382 paragraph\",\"amendment_citation_text\":\"S.Amdt. 2382\"},{\"occurrence_id\":\"source-inner-amendment\",\"citation_text\":\"S.Amdt. 2360\",\"kind\":\"amendment\",\"source_path\":\"Physical page2 / On the Amendment No.2382 paragraph\",\"amendment_citation_text\":\"S.Amdt. 2360\"},{\"occurrence_id\":\"source-bill\",\"citation_text\":\"H.R. 1\",\"kind\":\"bill\",\"source_path\":\"Physical page2 / On the Amendment No.2382 paragraph\",\"bill_citation_text\":\"H.R. 1\"}]",
+            "source_url": "https://www.nea.org/sites/default/files/2026-01/119th-congress-session-1-scored-votes.pdf",
+            "source_path": "Physical page2 / On the Amendment No.2382 paragraph",
+            "publisher_position_text": "supported",
+            "position_basis": "explicit publisher statement",
+            "position_source_path": "Physical page2 / On the Amendment No.2382 paragraph",
+            "snapshot_id": "fixture:nea:119-2025:bounded-snapshot-v1",
+            "capture_id": "nea-119-votes-pdf"
+          }
+        ],
+        "scorecard_metric_items": [],
+        "scorecard_metric_components": [],
+        "scorecard_members": [
+          {
+            "scorecard_id": "fixture:nea:119-2025",
+            "publisher_member_key": "fixture:senate:NES:pete-ricketts",
+            "publisher_member_id": null,
+            "identifiers_json": null,
+            "member_name": "Pete Ricketts",
+            "chamber_text": "Senate",
+            "state": "NES",
+            "district": null,
+            "party": null,
+            "period_text": null,
+            "eligibility_text": null,
+            "notes_text": null,
+            "snapshot_id": "fixture:nea:119-2025:bounded-snapshot-v1",
+            "capture_id": "nea-119-html",
+            "source_url": "https://www.nea.org/advocating-for-change/action-center/nea-in-congress/report-card",
+            "source_path": "U.S. Senate Report Card / Pete Ricketts row"
+          }
+        ],
+        "scorecard_member_ratings": [
+          {
+            "scorecard_id": "fixture:nea:119-2025",
+            "metric_id": "fixture:senate-grade",
+            "publisher_member_key": "fixture:senate:NES:pete-ricketts",
+            "value_text": "F",
+            "value_number": null,
+            "value_status_text": null,
+            "rank_text": null,
+            "notes_text": null,
+            "source_url": "https://www.nea.org/advocating-for-change/action-center/nea-in-congress/report-card",
+            "source_path": "U.S. Senate Report Card / Pete Ricketts / 119th Congressional Grade",
+            "snapshot_id": "fixture:nea:119-2025:bounded-snapshot-v1",
+            "capture_id": "nea-119-html"
+          }
+        ],
+        "scorecard_member_item_results": []
+      },
+      "snapshot_captures": {
+        "fixture:nea:119-2025:bounded-snapshot-v1": [
+          "nea-119-html",
+          "nea-119-pdf",
+          "nea-119-votes-pdf"
+        ]
+      },
+      "literal_assertions": [
+        {
+          "table": "scorecard_members",
+          "key": [
+            "fixture:nea:119-2025",
+            "fixture:senate:NES:pete-ricketts"
+          ],
+          "field": "state",
+          "expected": "NES"
+        },
+        {
+          "table": "scorecard_member_ratings",
+          "key": [
+            "fixture:nea:119-2025",
+            "fixture:senate-grade",
+            "fixture:senate:NES:pete-ricketts"
+          ],
+          "field": "value_text",
+          "expected": "F"
+        },
+        {
+          "table": "scorecard_items",
+          "key": [
+            "fixture:nea:119-2025",
+            "fixture:senate-amendment-2382"
+          ],
+          "field": "roll_number_text",
+          "expected": "1-\n358"
+        }
+      ],
+      "corroborating_observations": []
+    },
+    {
+      "sample_id": "humane:2025:bounded-schema",
+      "fixture_only": true,
+      "fixture_scope": "Three Senate members, 100+ and leadership exclusion ratings, and checked PDF result glyphs.",
+      "production_snapshot": false,
+      "identity_policy": "Checked research-local semantic keys; no production stability qualification is asserted.",
+      "limits": [
+        "Full PDF captured; this fixture selects Senate observations only. House parsing must qualify before whole-edition replacement.",
+        "Published result_text contains visually checked display glyphs. Raw extraction tokens remain outside table facts. A parser must qualify and version its font decoding for this PDF layout before reuse.",
+        "Leadership credit supplies no standalone numeric adjustment ledger."
+      ],
+      "tables": {
+        "scorecard_publishers": [
+          {
+            "publisher_id": "humane_world_action",
+            "name": "Humane World Action Fund",
+            "abbreviation": null,
+            "aliases_json": null,
+            "homepage_url": null,
+            "scorecard_index_url": null,
+            "observed_at": "2026-10-03T17:33:08.239147+00:00",
+            "capture_id": "humane-2025-final",
+            "source_url": "https://humaneaction.org/sites/default/files/2026-02/FINAL%20humane-scorecard-2025.pdf",
+            "source_path": "Publisher attribution on selected source"
+          }
+        ],
+        "scorecards": [
+          {
+            "scorecard_id": "fixture:humane_world_action:2025",
+            "publisher_id": "humane_world_action",
+            "series_id": "fixture:humane_world_action:federal",
+            "publisher_edition_key": null,
+            "publisher_name_text": "Humane World Action Fund",
+            "title": "Humane Scorecard",
+            "edition_label_text": "2025",
+            "chamber_scope_text": "Senate",
+            "year_text": "2025",
+            "congress_text": "119",
+            "session_text": null,
+            "timespan_text": null,
+            "periods_json": null,
+            "source_url": "https://humaneaction.org/sites/default/files/2026-02/FINAL%20humane-scorecard-2025.pdf",
+            "methodology_url": null,
+            "published_at_text": null,
+            "updated_at_text": null,
+            "observed_at": "2026-10-03T17:33:08.239147+00:00",
+            "snapshot_id": "fixture:humane_world_action:2025:bounded-snapshot-v1",
+            "capture_id": "humane-2025-final",
+            "source_path": "Selected edition label and fixture scope"
+          }
+        ],
+        "scorecard_snapshots": [
+          {
+            "snapshot_id": "fixture:humane_world_action:2025:bounded-snapshot-v1",
+            "scorecard_id": "fixture:humane_world_action:2025",
+            "observed_at": "2026-10-03T17:33:08.239147+00:00",
+            "capture_ids_json": "[\"humane-2025-final\",\"humane-method\"]",
+            "parser_version": "source-grounded-fixture-builder-v1",
+            "methodology_digest": null,
+            "completeness_status": "complete",
+            "completeness_rule": "Complete fixture closure only: all selected bounded observations and required references are present. No source-edition completeness or production acceptance is asserted.",
+            "source_declared_counts_json": null,
+            "parsed_counts_json": "{\"scorecards\":1,\"scorecard_snapshots\":1,\"scorecard_methodologies\":1,\"scorecard_metrics\":1,\"scorecard_items\":2,\"scorecard_metric_items\":0,\"scorecard_metric_components\":0,\"scorecard_members\":3,\"scorecard_member_ratings\":3,\"scorecard_member_item_results\":2}",
+            "evidence_policy": "hash_only",
+            "capture_roles_json": "[{\"capture_id\":\"humane-2025-final\",\"role\":\"primary\",\"field_groups\":[\"members\",\"metrics\",\"ratings\",\"items\",\"results\",\"methodology\"]},{\"capture_id\":\"humane-method\",\"role\":\"corroboration\",\"field_groups\":[\"methodology\"]}]",
+            "rendition_selection_rule": "Use the final PDF chart and embedded legend. Apply visually checked font decoding humane-final-2025-pdf-font-map-v1. Published result_text stores displayed glyphs; raw tokens and the checked mapping remain in extraction observations outside table facts. This decoding does not infer an action or numeric contribution.",
+            "identity_rule_version": "research-semantic-keys-v1",
+            "capture_id": "humane-2025-final",
+            "source_url": "https://humaneaction.org/sites/default/files/2026-02/FINAL%20humane-scorecard-2025.pdf",
+            "source_path": "Research fixture closure, not a publisher completeness claim"
+          }
+        ],
+        "scorecard_methodologies": [
+          {
+            "scorecard_id": "fixture:humane_world_action:2025",
+            "methodology_id": "fixture:leader-exclusion",
+            "chamber_text": "Senate",
+            "cohort_text": null,
+            "effective_at_text": null,
+            "methodology_text": "••",
+            "methodology_url": "https://humaneaction.org/sites/default/files/2026-02/FINAL%20humane-scorecard-2025.pdf",
+            "disclosure_status": "explicit",
+            "capture_id": "humane-2025-final",
+            "source_path": "Physical page7 / Key to Senate Chart / ••",
+            "snapshot_id": "fixture:humane_world_action:2025:bounded-snapshot-v1",
+            "source_url": "https://humaneaction.org/sites/default/files/2026-02/FINAL%20humane-scorecard-2025.pdf"
+          }
+        ],
+        "scorecard_metrics": [
+          {
+            "scorecard_id": "fixture:humane_world_action:2025",
+            "metric_id": "fixture:senate-score",
+            "methodology_id": null,
+            "name": "Score",
+            "value_unit_text": null,
+            "chamber_text": "Senate",
+            "cohort_text": null,
+            "period_text": "2025",
+            "periods_json": null,
+            "is_primary": null,
+            "scale_text": null,
+            "rank_population_text": null,
+            "snapshot_id": "fixture:humane_world_action:2025:bounded-snapshot-v1",
+            "capture_id": "humane-2025-final",
+            "source_url": "https://humaneaction.org/sites/default/files/2026-02/FINAL%20humane-scorecard-2025.pdf",
+            "source_path": "Physical pages6–8 / Senate chart / Score"
+          }
+        ],
+        "scorecard_items": [
+          {
+            "scorecard_id": "fixture:humane_world_action:2025",
+            "item_id": "fixture:awa-enforcement",
+            "publisher_item_id": null,
+            "item_kind_text": null,
+            "title": "AWA enforcement co-sponsor",
+            "item_date_text": null,
+            "congress_text": null,
+            "chamber_text": "Senate",
+            "session_text": null,
+            "roll_number_text": null,
+            "bill_citation_text": null,
+            "amendment_citation_text": null,
+            "references_json": null,
+            "source_url": "https://humaneaction.org/sites/default/files/2026-02/FINAL%20humane-scorecard-2025.pdf",
+            "source_path": "Physical page6 / Senate chart column heading",
+            "publisher_position_text": null,
+            "position_basis": null,
+            "position_source_path": null,
+            "snapshot_id": "fixture:humane_world_action:2025:bounded-snapshot-v1",
+            "capture_id": "humane-2025-final"
+          },
+          {
+            "scorecard_id": "fixture:humane_world_action:2025",
+            "item_id": "fixture:leader",
+            "publisher_item_id": null,
+            "item_kind_text": null,
+            "title": "Leader",
+            "item_date_text": null,
+            "congress_text": null,
+            "chamber_text": "Senate",
+            "session_text": null,
+            "roll_number_text": null,
+            "bill_citation_text": null,
+            "amendment_citation_text": null,
+            "references_json": null,
+            "source_url": "https://humaneaction.org/sites/default/files/2026-02/FINAL%20humane-scorecard-2025.pdf",
+            "source_path": "Physical page6 / Senate chart column heading",
+            "publisher_position_text": null,
+            "position_basis": null,
+            "position_source_path": null,
+            "snapshot_id": "fixture:humane_world_action:2025:bounded-snapshot-v1",
+            "capture_id": "humane-2025-final"
+          }
+        ],
+        "scorecard_metric_items": [],
+        "scorecard_metric_components": [],
+        "scorecard_members": [
+          {
+            "scorecard_id": "fixture:humane_world_action:2025",
+            "publisher_member_key": "fixture:senate:AZ:ruben-gallego",
+            "publisher_member_id": null,
+            "identifiers_json": null,
+            "member_name": "Gallego, Ruben (D)",
+            "chamber_text": "Senate",
+            "state": "Arizona",
+            "district": null,
+            "party": "D",
+            "period_text": null,
+            "eligibility_text": null,
+            "notes_text": null,
+            "snapshot_id": "fixture:humane_world_action:2025:bounded-snapshot-v1",
+            "capture_id": "humane-2025-final",
+            "source_url": "https://humaneaction.org/sites/default/files/2026-02/FINAL%20humane-scorecard-2025.pdf",
+            "source_path": "Physical page6 / Arizona / Gallego"
+          },
+          {
+            "scorecard_id": "fixture:humane_world_action:2025",
+            "publisher_member_key": "fixture:senate:LA:john-kennedy",
+            "publisher_member_id": null,
+            "identifiers_json": null,
+            "member_name": "Kennedy, John (R)",
+            "chamber_text": "Senate",
+            "state": "Louisiana",
+            "district": null,
+            "party": "R",
+            "period_text": null,
+            "eligibility_text": null,
+            "notes_text": null,
+            "snapshot_id": "fixture:humane_world_action:2025:bounded-snapshot-v1",
+            "capture_id": "humane-2025-final",
+            "source_url": "https://humaneaction.org/sites/default/files/2026-02/FINAL%20humane-scorecard-2025.pdf",
+            "source_path": "Physical page7 / Louisiana / Kennedy"
+          },
+          {
+            "scorecard_id": "fixture:humane_world_action:2025",
+            "publisher_member_key": "fixture:senate:NY:chuck-schumer",
+            "publisher_member_id": null,
+            "identifiers_json": null,
+            "member_name": "Schumer, Chuck (D)",
+            "chamber_text": "Senate",
+            "state": "New York",
+            "district": null,
+            "party": "D",
+            "period_text": null,
+            "eligibility_text": null,
+            "notes_text": null,
+            "snapshot_id": "fixture:humane_world_action:2025:bounded-snapshot-v1",
+            "capture_id": "humane-2025-final",
+            "source_url": "https://humaneaction.org/sites/default/files/2026-02/FINAL%20humane-scorecard-2025.pdf",
+            "source_path": "Physical page7 / New York / Schumer"
+          }
+        ],
+        "scorecard_member_ratings": [
+          {
+            "scorecard_id": "fixture:humane_world_action:2025",
+            "metric_id": "fixture:senate-score",
+            "publisher_member_key": "fixture:senate:AZ:ruben-gallego",
+            "value_text": "100+",
+            "value_number": null,
+            "value_status_text": null,
+            "rank_text": null,
+            "notes_text": null,
+            "source_url": "https://humaneaction.org/sites/default/files/2026-02/FINAL%20humane-scorecard-2025.pdf",
+            "source_path": "Physical page6 / Arizona / Gallego / Score",
+            "snapshot_id": "fixture:humane_world_action:2025:bounded-snapshot-v1",
+            "capture_id": "humane-2025-final"
+          },
+          {
+            "scorecard_id": "fixture:humane_world_action:2025",
+            "metric_id": "fixture:senate-score",
+            "publisher_member_key": "fixture:senate:LA:john-kennedy",
+            "value_text": "100+",
+            "value_number": null,
+            "value_status_text": null,
+            "rank_text": null,
+            "notes_text": null,
+            "source_url": "https://humaneaction.org/sites/default/files/2026-02/FINAL%20humane-scorecard-2025.pdf",
+            "source_path": "Physical page7 / Louisiana / Kennedy / Score",
+            "snapshot_id": "fixture:humane_world_action:2025:bounded-snapshot-v1",
+            "capture_id": "humane-2025-final"
+          },
+          {
+            "scorecard_id": "fixture:humane_world_action:2025",
+            "metric_id": "fixture:senate-score",
+            "publisher_member_key": "fixture:senate:NY:chuck-schumer",
+            "value_text": "••",
+            "value_number": null,
+            "value_status_text": null,
+            "rank_text": null,
+            "notes_text": null,
+            "source_url": "https://humaneaction.org/sites/default/files/2026-02/FINAL%20humane-scorecard-2025.pdf",
+            "source_path": "Physical page7 / New York / Schumer / Score",
+            "snapshot_id": "fixture:humane_world_action:2025:bounded-snapshot-v1",
+            "capture_id": "humane-2025-final"
+          }
+        ],
+        "scorecard_member_item_results": [
+          {
+            "scorecard_id": "fixture:humane_world_action:2025",
+            "result_id": "fixture:pdf-cell",
+            "metric_id": null,
+            "item_id": "fixture:awa-enforcement",
+            "participation_id": null,
+            "publisher_member_key": "fixture:senate:AZ:ruben-gallego",
+            "action_text": null,
+            "result_text": "✓",
+            "contribution_text": null,
+            "contribution_number": null,
+            "eligibility_text": null,
+            "counts_toward_metric": null,
+            "adjustment_text": null,
+            "reason_text": null,
+            "snapshot_id": "fixture:humane_world_action:2025:bounded-snapshot-v1",
+            "capture_id": "humane-2025-final",
+            "source_url": "https://humaneaction.org/sites/default/files/2026-02/FINAL%20humane-scorecard-2025.pdf",
+            "source_path": "Physical page6 / Arizona / Gallego / AWA enforcement co-sponsor"
+          },
+          {
+            "scorecard_id": "fixture:humane_world_action:2025",
+            "result_id": "fixture:pdf-cell",
+            "metric_id": null,
+            "item_id": "fixture:leader",
+            "participation_id": null,
+            "publisher_member_key": "fixture:senate:LA:john-kennedy",
+            "action_text": null,
+            "result_text": "★",
+            "contribution_text": null,
+            "contribution_number": null,
+            "eligibility_text": null,
+            "counts_toward_metric": null,
+            "adjustment_text": null,
+            "reason_text": null,
+            "snapshot_id": "fixture:humane_world_action:2025:bounded-snapshot-v1",
+            "capture_id": "humane-2025-final",
+            "source_url": "https://humaneaction.org/sites/default/files/2026-02/FINAL%20humane-scorecard-2025.pdf",
+            "source_path": "Physical page7 / Louisiana / Kennedy / Leader"
+          }
+        ]
+      },
+      "snapshot_captures": {
+        "fixture:humane_world_action:2025:bounded-snapshot-v1": [
+          "humane-2025-final",
+          "humane-method"
+        ]
+      },
+      "literal_assertions": [
+        {
+          "table": "scorecard_member_ratings",
+          "key": [
+            "fixture:humane_world_action:2025",
+            "fixture:senate-score",
+            "fixture:senate:AZ:ruben-gallego"
+          ],
+          "field": "value_text",
+          "expected": "100+"
+        },
+        {
+          "table": "scorecard_member_ratings",
+          "key": [
+            "fixture:humane_world_action:2025",
+            "fixture:senate-score",
+            "fixture:senate:LA:john-kennedy"
+          ],
+          "field": "value_text",
+          "expected": "100+"
+        },
+        {
+          "table": "scorecard_member_ratings",
+          "key": [
+            "fixture:humane_world_action:2025",
+            "fixture:senate-score",
+            "fixture:senate:NY:chuck-schumer"
+          ],
+          "field": "value_text",
+          "expected": "••"
+        },
+        {
+          "table": "scorecard_member_item_results",
+          "key": [
+            "fixture:humane_world_action:2025",
+            "fixture:awa-enforcement",
+            "fixture:senate:AZ:ruben-gallego",
+            "fixture:pdf-cell"
+          ],
+          "field": "result_text",
+          "expected": "✓"
+        },
+        {
+          "table": "scorecard_member_item_results",
+          "key": [
+            "fixture:humane_world_action:2025",
+            "fixture:leader",
+            "fixture:senate:LA:john-kennedy",
+            "fixture:pdf-cell"
+          ],
+          "field": "result_text",
+          "expected": "★"
+        }
+      ],
+      "corroborating_observations": [
+        {
+          "capture_id": "humane-2025-final",
+          "source_path": "Rendered physical page6 / Gallego / AWA enforcement",
+          "raw_extraction": "ü",
+          "checked_visible_glyph": "✓",
+          "decoding_rule_version": "humane-final-2025-pdf-font-map-v1",
+          "readback": "Rendered physical page6 shows the check in Gallego's AWA enforcement cell and the chart legend. The raw token is a font decoding artifact, not the published display character."
+        },
+        {
+          "capture_id": "humane-2025-final",
+          "source_path": "Rendered physical page7 / Kennedy / Leader",
+          "raw_extraction": "ê",
+          "checked_visible_glyph": "★",
+          "decoding_rule_version": "humane-final-2025-pdf-font-map-v1",
+          "readback": "Rendered physical page7 shows the star in Kennedy's Leader cell and the chart legend. The raw token is a font decoding artifact, not the published display character."
+        },
+        {
+          "capture_id": "humane-2025-final",
+          "source_path": "Physical page7 / Senate chart key",
+          "literal": "••",
+          "observation": "The publisher states top party leaders have no numerical scores. No conversion to zero or inferred numeric adjustment."
+        }
+      ]
+    },
+    {
+      "sample_id": "heritage_action:119:bounded-schema",
+      "fixture_only": true,
+      "fixture_scope": "One explicit Senate cosponsorship item, one source-identified member, group membership and attached overall score.",
+      "production_snapshot": false,
+      "identity_policy": "Checked research-local semantic keys; no production stability qualification is asserted.",
+      "limits": [
+        "A sponsor-group observation is not an official roll-call vote or a metric-specific numeric contribution.",
+        "Historical full member-list editions remain refused because the route embeds current members."
+      ],
+      "tables": {
+        "scorecard_publishers": [
+          {
+            "publisher_id": "heritage_action",
+            "name": "Heritage Action",
+            "abbreviation": null,
+            "aliases_json": null,
+            "homepage_url": null,
+            "scorecard_index_url": null,
+            "observed_at": "2026-10-03T17:39:27.226095+00:00",
+            "capture_id": "heritage119-cosponsor-s382-119",
+            "source_url": "https://heritageaction.com/api/scorecard/cosponsorship?identifier=s382-119",
+            "source_path": "Publisher attribution on selected source"
+          }
+        ],
+        "scorecards": [
+          {
+            "scorecard_id": "fixture:heritage_action:119",
+            "publisher_id": "heritage_action",
+            "series_id": "fixture:heritage_action:federal",
+            "publisher_edition_key": null,
+            "publisher_name_text": "Heritage Action",
+            "title": "Scorecard",
+            "edition_label_text": "119",
+            "chamber_scope_text": "Senate",
+            "year_text": null,
+            "congress_text": "119",
+            "session_text": null,
+            "timespan_text": null,
+            "periods_json": null,
+            "source_url": "https://heritageaction.com/api/scorecard/cosponsorship?identifier=s382-119",
+            "methodology_url": null,
+            "published_at_text": null,
+            "updated_at_text": null,
+            "observed_at": "2026-10-03T17:39:27.226095+00:00",
+            "snapshot_id": "fixture:heritage_action:119:bounded-snapshot-v1",
+            "capture_id": "heritage119-cosponsor-s382-119",
+            "source_path": "Selected edition label and fixture scope"
+          }
+        ],
+        "scorecard_snapshots": [
+          {
+            "snapshot_id": "fixture:heritage_action:119:bounded-snapshot-v1",
+            "scorecard_id": "fixture:heritage_action:119",
+            "observed_at": "2026-10-03T17:39:27.226095+00:00",
+            "capture_ids_json": "[\"heritage119-cosponsor-s382-119\",\"heritage-119-cosponsorships\",\"heritage-119-members\"]",
+            "parser_version": "source-grounded-fixture-builder-v1",
+            "methodology_digest": null,
+            "completeness_status": "complete",
+            "completeness_rule": "Complete fixture closure only: all selected bounded observations and required references are present. No source-edition completeness or production acceptance is asserted.",
+            "source_declared_counts_json": null,
+            "parsed_counts_json": "{\"scorecards\":1,\"scorecard_snapshots\":1,\"scorecard_methodologies\":0,\"scorecard_metrics\":1,\"scorecard_items\":1,\"scorecard_metric_items\":0,\"scorecard_metric_components\":0,\"scorecard_members\":1,\"scorecard_member_ratings\":1,\"scorecard_member_item_results\":1}",
+            "evidence_policy": "hash_only",
+            "capture_roles_json": "[{\"capture_id\":\"heritage119-cosponsor-s382-119\",\"role\":\"primary\",\"field_groups\":[\"item\",\"member_identity\",\"member_result\",\"score\"]},{\"capture_id\":\"heritage-119-cosponsorships\",\"role\":\"corroboration\",\"field_groups\":[\"item\"]},{\"capture_id\":\"heritage-119-members\",\"role\":\"corroboration\",\"field_groups\":[\"member_identity\",\"score\"]}]",
+            "rendition_selection_rule": "Exact item JSON is primary for this fixture. Its explicit sponsor group and attached overall score remain separate observations; public lists corroborate identity and scope.",
+            "identity_rule_version": "research-semantic-keys-v1",
+            "capture_id": "heritage119-cosponsor-s382-119",
+            "source_url": "https://heritageaction.com/api/scorecard/cosponsorship?identifier=s382-119",
+            "source_path": "Research fixture closure, not a publisher completeness claim"
+          }
+        ],
+        "scorecard_methodologies": [],
+        "scorecard_metrics": [
+          {
+            "scorecard_id": "fixture:heritage_action:119",
+            "metric_id": "fixture:overall-score",
+            "methodology_id": null,
+            "name": "score",
+            "value_unit_text": null,
+            "chamber_text": "Senate",
+            "cohort_text": null,
+            "period_text": "119",
+            "periods_json": null,
+            "is_primary": null,
+            "scale_text": null,
+            "rank_population_text": null,
+            "snapshot_id": "fixture:heritage_action:119:bounded-snapshot-v1",
+            "capture_id": "heritage119-cosponsor-s382-119",
+            "source_url": "https://heritageaction.com/api/scorecard/cosponsorship?identifier=s382-119",
+            "source_path": "data.sponsors.data[0].score"
+          }
+        ],
+        "scorecard_items": [
+          {
+            "scorecard_id": "fixture:heritage_action:119",
+            "item_id": "fixture:s382-119",
+            "publisher_item_id": "s382-119",
+            "item_kind_text": "cosponsorship",
+            "title": "The Dismantle DEI Act",
+            "item_date_text": "02/04/2025",
+            "congress_text": "119",
+            "chamber_text": "senate",
+            "session_text": null,
+            "roll_number_text": null,
+            "bill_citation_text": "S.382",
+            "amendment_citation_text": null,
+            "references_json": "[{\"occurrence_id\":\"source-bill\",\"citation_text\":\"S.382\",\"kind\":\"bill\",\"source_path\":\"data.number\",\"congress_text\":\"119\",\"chamber_text\":\"senate\",\"bill_citation_text\":\"S.382\"}]",
+            "source_url": "https://heritageaction.com/api/scorecard/cosponsorship?identifier=s382-119",
+            "source_path": "data",
+            "publisher_position_text": "yes",
+            "position_basis": "explicit sponsor_position field",
+            "position_source_path": "data.sponsor_position",
+            "snapshot_id": "fixture:heritage_action:119:bounded-snapshot-v1",
+            "capture_id": "heritage119-cosponsor-s382-119"
+          }
+        ],
+        "scorecard_metric_items": [],
+        "scorecard_metric_components": [],
+        "scorecard_members": [
+          {
+            "scorecard_id": "fixture:heritage_action:119",
+            "publisher_member_key": "fixture:congId:B001243",
+            "publisher_member_id": "B001243",
+            "identifiers_json": "[{\"scheme\":\"cong_id\",\"value\":\"B001243\"}]",
+            "member_name": "Marsha Blackburn",
+            "chamber_text": "Senate",
+            "state": "TN",
+            "district": "00",
+            "party": "R",
+            "period_text": null,
+            "eligibility_text": null,
+            "notes_text": null,
+            "snapshot_id": "fixture:heritage_action:119:bounded-snapshot-v1",
+            "capture_id": "heritage119-cosponsor-s382-119",
+            "source_url": "https://heritageaction.com/api/scorecard/cosponsorship?identifier=s382-119",
+            "source_path": "data.sponsors.data[0]"
+          }
+        ],
+        "scorecard_member_ratings": [
+          {
+            "scorecard_id": "fixture:heritage_action:119",
+            "metric_id": "fixture:overall-score",
+            "publisher_member_key": "fixture:congId:B001243",
+            "value_text": "98",
+            "value_number": "98",
+            "value_status_text": null,
+            "rank_text": null,
+            "notes_text": null,
+            "source_url": "https://heritageaction.com/api/scorecard/cosponsorship?identifier=s382-119",
+            "source_path": "data.sponsors.data[0].score",
+            "snapshot_id": "fixture:heritage_action:119:bounded-snapshot-v1",
+            "capture_id": "heritage119-cosponsor-s382-119"
+          }
+        ],
+        "scorecard_member_item_results": [
+          {
+            "scorecard_id": "fixture:heritage_action:119",
+            "result_id": "fixture:sponsor-group-membership",
+            "metric_id": null,
+            "item_id": "fixture:s382-119",
+            "participation_id": null,
+            "publisher_member_key": "fixture:congId:B001243",
+            "action_text": "sponsors",
+            "result_text": null,
+            "contribution_text": null,
+            "contribution_number": null,
+            "eligibility_text": null,
+            "counts_toward_metric": null,
+            "adjustment_text": null,
+            "reason_text": null,
+            "snapshot_id": "fixture:heritage_action:119:bounded-snapshot-v1",
+            "capture_id": "heritage119-cosponsor-s382-119",
+            "source_url": "https://heritageaction.com/api/scorecard/cosponsorship?identifier=s382-119",
+            "source_path": "data.sponsors.data[0]"
+          }
+        ]
+      },
+      "snapshot_captures": {
+        "fixture:heritage_action:119:bounded-snapshot-v1": [
+          "heritage119-cosponsor-s382-119",
+          "heritage-119-cosponsorships",
+          "heritage-119-members"
+        ]
+      },
+      "literal_assertions": [
+        {
+          "table": "scorecard_member_ratings",
+          "key": [
+            "fixture:heritage_action:119",
+            "fixture:overall-score",
+            "fixture:congId:B001243"
+          ],
+          "field": "value_text",
+          "expected": "98"
+        },
+        {
+          "table": "scorecard_items",
+          "key": [
+            "fixture:heritage_action:119",
+            "fixture:s382-119"
+          ],
+          "field": "publisher_position_text",
+          "expected": "yes"
+        },
+        {
+          "table": "scorecard_member_item_results",
+          "key": [
+            "fixture:heritage_action:119",
+            "fixture:s382-119",
+            "fixture:congId:B001243",
+            "fixture:sponsor-group-membership"
+          ],
+          "field": "action_text",
+          "expected": "sponsors"
+        }
+      ],
+      "corroborating_observations": []
+    },
+    {
+      "sample_id": "c4ip:2024:grades-and-component-challenges",
+      "fixture_only": true,
+      "fixture_scope": "C4IP published grade and three dimension definitions, plus a separate Chamber methodology-only edition with explicit component weights.",
+      "production_snapshot": false,
+      "identity_policy": "Checked research-local semantic keys; no production stability qualification is asserted.",
+      "limits": [
+        "Chamber is a source-attributed schema challenge, not a selected adapter or a member-data acquisition claim.",
+        "No C4IP component member scores or Data Annex values are fabricated.",
+        "No grade-to-number conversion, universal scoring formula or numeric member-adjustment ledger is asserted."
+      ],
+      "tables": {
+        "scorecard_publishers": [
+          {
+            "publisher_id": "c4ip",
+            "name": "Council for Innovation Promotion",
+            "abbreviation": null,
+            "aliases_json": null,
+            "homepage_url": null,
+            "scorecard_index_url": null,
+            "observed_at": "2026-10-03T16:34:56.121455+00:00",
+            "capture_id": "c4ip-2024-pdf",
+            "source_url": "https://c4ip.org/wp-content/uploads/2024/03/2024-Congressional-Innovation-Scorecard.pdf",
+            "source_path": "Publisher attribution on selected source"
+          },
+          {
+            "publisher_id": "us_chamber",
+            "name": "U.S. Chamber of Commerce",
+            "abbreviation": null,
+            "aliases_json": null,
+            "homepage_url": null,
+            "scorecard_index_url": null,
+            "observed_at": "2026-10-03T17:35:38.248416+00:00",
+            "capture_id": "chamber-method-current",
+            "source_url": "https://www.uschamber.com/improving-government/how-they-voted-methodology",
+            "source_path": "Publisher attribution on selected source"
+          }
+        ],
+        "scorecards": [
+          {
+            "scorecard_id": "fixture:c4ip:2024",
+            "publisher_id": "c4ip",
+            "series_id": "fixture:c4ip:federal",
+            "publisher_edition_key": null,
+            "publisher_name_text": "Council for Innovation Promotion",
+            "title": "Congressional Innovation Scorecard",
+            "edition_label_text": "First Edition, March 2024",
+            "chamber_scope_text": "Senate",
+            "year_text": "2024",
+            "congress_text": null,
+            "session_text": null,
+            "timespan_text": null,
+            "periods_json": "[{\"occurrence_id\":\"source-period:116th Congress\",\"period_text\":\"116th Congress\",\"kind\":\"explicit\",\"source_path\":\"Physical page19\",\"congress_text\":\"116\"},{\"occurrence_id\":\"source-period:117th Congress\",\"period_text\":\"117th Congress\",\"kind\":\"explicit\",\"source_path\":\"Physical page19\",\"congress_text\":\"117\"},{\"occurrence_id\":\"source-period:118th Congress (session 1, January-December 2023)\",\"period_text\":\"118th Congress (session 1, January-December 2023)\",\"kind\":\"explicit\",\"source_path\":\"Physical page19\",\"congress_text\":\"118\",\"session_text\":\"1\",\"year_text\":\"2023\"}]",
+            "source_url": "https://c4ip.org/wp-content/uploads/2024/03/2024-Congressional-Innovation-Scorecard.pdf",
+            "methodology_url": null,
+            "published_at_text": null,
+            "updated_at_text": null,
+            "observed_at": "2026-10-03T16:34:56.121455+00:00",
+            "snapshot_id": "fixture:c4ip:2024:bounded-snapshot-v1",
+            "capture_id": "c4ip-2024-pdf",
+            "source_path": "Selected edition label and fixture scope"
+          },
+          {
+            "scorecard_id": "fixture:us_chamber:116-methodology",
+            "publisher_id": "us_chamber",
+            "series_id": "fixture:us_chamber:federal",
+            "publisher_edition_key": null,
+            "publisher_name_text": "U.S. Chamber of Commerce",
+            "title": "How They Voted",
+            "edition_label_text": "116th Congress",
+            "chamber_scope_text": "both",
+            "year_text": null,
+            "congress_text": "116",
+            "session_text": null,
+            "timespan_text": null,
+            "periods_json": null,
+            "source_url": "https://www.uschamber.com/improving-government/how-they-voted-methodology",
+            "methodology_url": null,
+            "published_at_text": null,
+            "updated_at_text": null,
+            "observed_at": "2026-10-03T17:35:38.248416+00:00",
+            "snapshot_id": "fixture:us_chamber:116-methodology:bounded-snapshot-v1",
+            "capture_id": "chamber-method-current",
+            "source_path": "Selected edition label and fixture scope"
+          }
+        ],
+        "scorecard_snapshots": [
+          {
+            "snapshot_id": "fixture:c4ip:2024:bounded-snapshot-v1",
+            "scorecard_id": "fixture:c4ip:2024",
+            "observed_at": "2026-10-03T16:34:56.121455+00:00",
+            "capture_ids_json": "[\"c4ip-2024-pdf\"]",
+            "parser_version": "source-grounded-fixture-builder-v1",
+            "methodology_digest": null,
+            "completeness_status": "complete",
+            "completeness_rule": "Complete fixture closure only: all selected bounded observations and required references are present. No source-edition completeness or production acceptance is asserted.",
+            "source_declared_counts_json": null,
+            "parsed_counts_json": "{\"scorecards\":1,\"scorecard_snapshots\":1,\"scorecard_methodologies\":1,\"scorecard_metrics\":5,\"scorecard_items\":0,\"scorecard_metric_items\":0,\"scorecard_metric_components\":3,\"scorecard_members\":1,\"scorecard_member_ratings\":1,\"scorecard_member_item_results\":0}",
+            "evidence_policy": "hash_only",
+            "capture_roles_json": "[{\"capture_id\":\"c4ip-2024-pdf\",\"role\":\"primary\",\"field_groups\":[\"edition\",\"members\",\"grade\",\"dimensions\",\"methodology\"]}]",
+            "rendition_selection_rule": "Published grade cells and dimension descriptions come from the same PDF. Methodology definitions create no invented member component values.",
+            "identity_rule_version": "research-semantic-keys-v1",
+            "capture_id": "c4ip-2024-pdf",
+            "source_url": "https://c4ip.org/wp-content/uploads/2024/03/2024-Congressional-Innovation-Scorecard.pdf",
+            "source_path": "Research fixture closure, not a publisher completeness claim"
+          },
+          {
+            "snapshot_id": "fixture:us_chamber:116-methodology:bounded-snapshot-v1",
+            "scorecard_id": "fixture:us_chamber:116-methodology",
+            "observed_at": "2026-10-03T17:35:38.248416+00:00",
+            "capture_ids_json": "[\"chamber-method-current\"]",
+            "parser_version": "source-grounded-fixture-builder-v1",
+            "methodology_digest": null,
+            "completeness_status": "complete",
+            "completeness_rule": "Complete fixture closure only: all selected bounded observations and required references are present. No source-edition completeness or production acceptance is asserted.",
+            "source_declared_counts_json": null,
+            "parsed_counts_json": "{\"scorecards\":1,\"scorecard_snapshots\":1,\"scorecard_methodologies\":1,\"scorecard_metrics\":4,\"scorecard_items\":0,\"scorecard_metric_items\":0,\"scorecard_metric_components\":3,\"scorecard_members\":0,\"scorecard_member_ratings\":0,\"scorecard_member_item_results\":0}",
+            "evidence_policy": "hash_only",
+            "capture_roles_json": "[{\"capture_id\":\"chamber-method-current\",\"role\":\"primary\",\"field_groups\":[\"methodology\",\"metric_definitions\",\"component_weights\"]}]",
+            "rendition_selection_rule": "This independent Chamber edition contains only the captured methodology definitions and weights. No member rating rows are asserted.",
+            "identity_rule_version": "research-semantic-keys-v1",
+            "capture_id": "chamber-method-current",
+            "source_url": "https://www.uschamber.com/improving-government/how-they-voted-methodology",
+            "source_path": "Research fixture closure, not a publisher completeness claim"
+          }
+        ],
+        "scorecard_methodologies": [
+          {
+            "scorecard_id": "fixture:c4ip:2024",
+            "methodology_id": "fixture:dimensions",
+            "chamber_text": null,
+            "cohort_text": null,
+            "effective_at_text": null,
+            "methodology_text": "Table 1: Scorecard Dimensions",
+            "methodology_url": "https://c4ip.org/wp-content/uploads/2024/03/2024-Congressional-Innovation-Scorecard.pdf",
+            "disclosure_status": "partial",
+            "capture_id": "c4ip-2024-pdf",
+            "source_path": "Physical pages19–22 / dimensions and final grades",
+            "snapshot_id": "fixture:c4ip:2024:bounded-snapshot-v1",
+            "source_url": "https://c4ip.org/wp-content/uploads/2024/03/2024-Congressional-Innovation-Scorecard.pdf"
+          },
+          {
+            "scorecard_id": "fixture:us_chamber:116-methodology",
+            "methodology_id": "fixture:annual-composite",
+            "chamber_text": null,
+            "cohort_text": null,
+            "effective_at_text": null,
+            "methodology_text": "The Annual score has three components: Legislative (80%), Leadership (10%), and Bipartisanship (10%).",
+            "methodology_url": "https://www.uschamber.com/improving-government/how-they-voted-methodology",
+            "disclosure_status": "explicit",
+            "capture_id": "chamber-method-current",
+            "source_path": "Annual Score / component sections",
+            "snapshot_id": "fixture:us_chamber:116-methodology:bounded-snapshot-v1",
+            "source_url": "https://www.uschamber.com/improving-government/how-they-voted-methodology"
+          }
+        ],
+        "scorecard_metrics": [
+          {
+            "scorecard_id": "fixture:c4ip:2024",
+            "metric_id": "fixture:overall-grade",
+            "methodology_id": "fixture:dimensions",
+            "name": "Alphabetical Grade",
+            "value_unit_text": null,
+            "chamber_text": "Senate",
+            "cohort_text": null,
+            "period_text": null,
+            "periods_json": null,
+            "is_primary": null,
+            "scale_text": null,
+            "rank_population_text": null,
+            "snapshot_id": "fixture:c4ip:2024:bounded-snapshot-v1",
+            "capture_id": "c4ip-2024-pdf",
+            "source_url": "https://c4ip.org/wp-content/uploads/2024/03/2024-Congressional-Innovation-Scorecard.pdf",
+            "source_path": "Physical page28 / Table4 / column heading"
+          },
+          {
+            "scorecard_id": "fixture:c4ip:2024",
+            "metric_id": "fixture:overall-numerical",
+            "methodology_id": "fixture:dimensions",
+            "name": "overall numerical score",
+            "value_unit_text": null,
+            "chamber_text": null,
+            "cohort_text": null,
+            "period_text": null,
+            "periods_json": null,
+            "is_primary": null,
+            "scale_text": null,
+            "rank_population_text": null,
+            "snapshot_id": "fixture:c4ip:2024:bounded-snapshot-v1",
+            "capture_id": "c4ip-2024-pdf",
+            "source_url": "https://c4ip.org/wp-content/uploads/2024/03/2024-Congressional-Innovation-Scorecard.pdf",
+            "source_path": "Physical page22 / grading methodology"
+          },
+          {
+            "scorecard_id": "fixture:c4ip:2024",
+            "metric_id": "fixture:dimension-1",
+            "methodology_id": "fixture:dimensions",
+            "name": "Congressional voting record (current and historic)",
+            "value_unit_text": null,
+            "chamber_text": null,
+            "cohort_text": null,
+            "period_text": null,
+            "periods_json": null,
+            "is_primary": null,
+            "scale_text": null,
+            "rank_population_text": null,
+            "snapshot_id": "fixture:c4ip:2024:bounded-snapshot-v1",
+            "capture_id": "c4ip-2024-pdf",
+            "source_url": "https://c4ip.org/wp-content/uploads/2024/03/2024-Congressional-Innovation-Scorecard.pdf",
+            "source_path": "Physical page19 / Table1"
+          },
+          {
+            "scorecard_id": "fixture:c4ip:2024",
+            "metric_id": "fixture:dimension-2",
+            "methodology_id": "fixture:dimensions",
+            "name": "Non-voting congressional and legislative activity (current and historic)",
+            "value_unit_text": null,
+            "chamber_text": null,
+            "cohort_text": null,
+            "period_text": null,
+            "periods_json": null,
+            "is_primary": null,
+            "scale_text": null,
+            "rank_population_text": null,
+            "snapshot_id": "fixture:c4ip:2024:bounded-snapshot-v1",
+            "capture_id": "c4ip-2024-pdf",
+            "source_url": "https://c4ip.org/wp-content/uploads/2024/03/2024-Congressional-Innovation-Scorecard.pdf",
+            "source_path": "Physical page19 / Table1"
+          },
+          {
+            "scorecard_id": "fixture:c4ip:2024",
+            "metric_id": "fixture:dimension-3",
+            "methodology_id": "fixture:dimensions",
+            "name": "IP and innovation national leadership and advocacy",
+            "value_unit_text": null,
+            "chamber_text": null,
+            "cohort_text": null,
+            "period_text": null,
+            "periods_json": null,
+            "is_primary": null,
+            "scale_text": null,
+            "rank_population_text": null,
+            "snapshot_id": "fixture:c4ip:2024:bounded-snapshot-v1",
+            "capture_id": "c4ip-2024-pdf",
+            "source_url": "https://c4ip.org/wp-content/uploads/2024/03/2024-Congressional-Innovation-Scorecard.pdf",
+            "source_path": "Physical page19 / Table1"
+          },
+          {
+            "scorecard_id": "fixture:us_chamber:116-methodology",
+            "metric_id": "fixture:annual",
+            "methodology_id": "fixture:annual-composite",
+            "name": "Annual Score",
+            "value_unit_text": null,
+            "chamber_text": null,
+            "cohort_text": null,
+            "period_text": null,
+            "periods_json": null,
+            "is_primary": null,
+            "scale_text": null,
+            "rank_population_text": null,
+            "snapshot_id": "fixture:us_chamber:116-methodology:bounded-snapshot-v1",
+            "capture_id": "chamber-method-current",
+            "source_url": "https://www.uschamber.com/improving-government/how-they-voted-methodology",
+            "source_path": "Annual Score heading"
+          },
+          {
+            "scorecard_id": "fixture:us_chamber:116-methodology",
+            "metric_id": "fixture:legislative",
+            "methodology_id": "fixture:annual-composite",
+            "name": "Legislative",
+            "value_unit_text": null,
+            "chamber_text": null,
+            "cohort_text": null,
+            "period_text": null,
+            "periods_json": null,
+            "is_primary": null,
+            "scale_text": null,
+            "rank_population_text": null,
+            "snapshot_id": "fixture:us_chamber:116-methodology:bounded-snapshot-v1",
+            "capture_id": "chamber-method-current",
+            "source_url": "https://www.uschamber.com/improving-government/how-they-voted-methodology",
+            "source_path": "Legislative section"
+          },
+          {
+            "scorecard_id": "fixture:us_chamber:116-methodology",
+            "metric_id": "fixture:leadership",
+            "methodology_id": "fixture:annual-composite",
+            "name": "Leadership",
+            "value_unit_text": null,
+            "chamber_text": null,
+            "cohort_text": null,
+            "period_text": null,
+            "periods_json": null,
+            "is_primary": null,
+            "scale_text": null,
+            "rank_population_text": null,
+            "snapshot_id": "fixture:us_chamber:116-methodology:bounded-snapshot-v1",
+            "capture_id": "chamber-method-current",
+            "source_url": "https://www.uschamber.com/improving-government/how-they-voted-methodology",
+            "source_path": "Leadership section"
+          },
+          {
+            "scorecard_id": "fixture:us_chamber:116-methodology",
+            "metric_id": "fixture:bipartisanship",
+            "methodology_id": "fixture:annual-composite",
+            "name": "Bipartisanship",
+            "value_unit_text": null,
+            "chamber_text": null,
+            "cohort_text": null,
+            "period_text": null,
+            "periods_json": null,
+            "is_primary": null,
+            "scale_text": null,
+            "rank_population_text": null,
+            "snapshot_id": "fixture:us_chamber:116-methodology:bounded-snapshot-v1",
+            "capture_id": "chamber-method-current",
+            "source_url": "https://www.uschamber.com/improving-government/how-they-voted-methodology",
+            "source_path": "Bipartisanship section"
+          }
+        ],
+        "scorecard_items": [],
+        "scorecard_metric_items": [],
+        "scorecard_metric_components": [
+          {
+            "scorecard_id": "fixture:c4ip:2024",
+            "parent_metric_id": "fixture:overall-numerical",
+            "component_metric_id": "fixture:dimension-1",
+            "weight_text": null,
+            "weight_number": null,
+            "combination_rule_text": null,
+            "snapshot_id": "fixture:c4ip:2024:bounded-snapshot-v1",
+            "capture_id": "c4ip-2024-pdf",
+            "source_url": "https://c4ip.org/wp-content/uploads/2024/03/2024-Congressional-Innovation-Scorecard.pdf",
+            "source_path": "Physical pages19–22 / scorecard dimensions"
+          },
+          {
+            "scorecard_id": "fixture:c4ip:2024",
+            "parent_metric_id": "fixture:overall-numerical",
+            "component_metric_id": "fixture:dimension-2",
+            "weight_text": null,
+            "weight_number": null,
+            "combination_rule_text": null,
+            "snapshot_id": "fixture:c4ip:2024:bounded-snapshot-v1",
+            "capture_id": "c4ip-2024-pdf",
+            "source_url": "https://c4ip.org/wp-content/uploads/2024/03/2024-Congressional-Innovation-Scorecard.pdf",
+            "source_path": "Physical pages19–22 / scorecard dimensions"
+          },
+          {
+            "scorecard_id": "fixture:c4ip:2024",
+            "parent_metric_id": "fixture:overall-numerical",
+            "component_metric_id": "fixture:dimension-3",
+            "weight_text": null,
+            "weight_number": null,
+            "combination_rule_text": null,
+            "snapshot_id": "fixture:c4ip:2024:bounded-snapshot-v1",
+            "capture_id": "c4ip-2024-pdf",
+            "source_url": "https://c4ip.org/wp-content/uploads/2024/03/2024-Congressional-Innovation-Scorecard.pdf",
+            "source_path": "Physical pages19–22 / scorecard dimensions"
+          },
+          {
+            "scorecard_id": "fixture:us_chamber:116-methodology",
+            "parent_metric_id": "fixture:annual",
+            "component_metric_id": "fixture:legislative",
+            "weight_text": "80%",
+            "weight_number": null,
+            "combination_rule_text": null,
+            "snapshot_id": "fixture:us_chamber:116-methodology:bounded-snapshot-v1",
+            "capture_id": "chamber-method-current",
+            "source_url": "https://www.uschamber.com/improving-government/how-they-voted-methodology",
+            "source_path": "Legislative section heading"
+          },
+          {
+            "scorecard_id": "fixture:us_chamber:116-methodology",
+            "parent_metric_id": "fixture:annual",
+            "component_metric_id": "fixture:leadership",
+            "weight_text": "10%",
+            "weight_number": null,
+            "combination_rule_text": null,
+            "snapshot_id": "fixture:us_chamber:116-methodology:bounded-snapshot-v1",
+            "capture_id": "chamber-method-current",
+            "source_url": "https://www.uschamber.com/improving-government/how-they-voted-methodology",
+            "source_path": "Leadership section heading"
+          },
+          {
+            "scorecard_id": "fixture:us_chamber:116-methodology",
+            "parent_metric_id": "fixture:annual",
+            "component_metric_id": "fixture:bipartisanship",
+            "weight_text": "10%",
+            "weight_number": null,
+            "combination_rule_text": null,
+            "snapshot_id": "fixture:us_chamber:116-methodology:bounded-snapshot-v1",
+            "capture_id": "chamber-method-current",
+            "source_url": "https://www.uschamber.com/improving-government/how-they-voted-methodology",
+            "source_path": "Bipartisanship section heading"
+          }
+        ],
+        "scorecard_members": [
+          {
+            "scorecard_id": "fixture:c4ip:2024",
+            "publisher_member_key": "fixture:senate:DE:christopher-coons",
+            "publisher_member_id": null,
+            "identifiers_json": null,
+            "member_name": "Christopher Coons",
+            "chamber_text": "Senate",
+            "state": "DE",
+            "district": null,
+            "party": "Democrat",
+            "period_text": null,
+            "eligibility_text": null,
+            "notes_text": null,
+            "snapshot_id": "fixture:c4ip:2024:bounded-snapshot-v1",
+            "capture_id": "c4ip-2024-pdf",
+            "source_url": "https://c4ip.org/wp-content/uploads/2024/03/2024-Congressional-Innovation-Scorecard.pdf",
+            "source_path": "Physical page28 / Table4 / Christopher Coons"
+          }
+        ],
+        "scorecard_member_ratings": [
+          {
+            "scorecard_id": "fixture:c4ip:2024",
+            "metric_id": "fixture:overall-grade",
+            "publisher_member_key": "fixture:senate:DE:christopher-coons",
+            "value_text": "A+",
+            "value_number": null,
+            "value_status_text": null,
+            "rank_text": null,
+            "notes_text": null,
+            "source_url": "https://c4ip.org/wp-content/uploads/2024/03/2024-Congressional-Innovation-Scorecard.pdf",
+            "source_path": "Physical page28 / Table4 / Christopher Coons / Alphabetical Grade",
+            "snapshot_id": "fixture:c4ip:2024:bounded-snapshot-v1",
+            "capture_id": "c4ip-2024-pdf"
+          }
+        ],
+        "scorecard_member_item_results": []
+      },
+      "snapshot_captures": {
+        "fixture:c4ip:2024:bounded-snapshot-v1": [
+          "c4ip-2024-pdf"
+        ],
+        "fixture:us_chamber:116-methodology:bounded-snapshot-v1": [
+          "chamber-method-current"
+        ]
+      },
+      "literal_assertions": [
+        {
+          "table": "scorecard_member_ratings",
+          "key": [
+            "fixture:c4ip:2024",
+            "fixture:overall-grade",
+            "fixture:senate:DE:christopher-coons"
+          ],
+          "field": "value_text",
+          "expected": "A+"
+        },
+        {
+          "table": "scorecard_metric_components",
+          "key": [
+            "fixture:us_chamber:116-methodology",
+            "fixture:annual",
+            "fixture:legislative"
+          ],
+          "field": "weight_text",
+          "expected": "80%"
+        },
+        {
+          "table": "scorecard_metric_components",
+          "key": [
+            "fixture:us_chamber:116-methodology",
+            "fixture:annual",
+            "fixture:leadership"
+          ],
+          "field": "weight_text",
+          "expected": "10%"
+        },
+        {
+          "table": "scorecard_metric_components",
+          "key": [
+            "fixture:us_chamber:116-methodology",
+            "fixture:annual",
+            "fixture:bipartisanship"
+          ],
+          "field": "weight_text",
+          "expected": "10%"
+        }
+      ],
+      "corroborating_observations": []
+    }
+  ]
+}

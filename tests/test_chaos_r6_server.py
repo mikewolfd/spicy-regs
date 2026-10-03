@@ -394,7 +394,7 @@ def test_a_file_without_a_same_as_field_is_not_given_one():
     assert "target_rule" not in fields["same_as"]
 
 
-#: What a live connection adds to a catalog reply that the dictionary-typed fixture lacks: pins with inputs (a
+#: What a live connection adds to a description that the dictionary-typed fixture lacks: pins with inputs (a
 #: snapshot table's are about 1,600 characters, round 6) and release summaries. Measured 2026-10-03 on the live
 #: bucket: list_sources 34,243 characters, the largest default description congress_bills' 27,748 (27,476 here).
 LIVE_ROOM = 5_000
@@ -412,7 +412,25 @@ def test_the_catalog_replies_stay_under_the_budget_so_none_is_ever_refused_or_cu
         server._install_relationship_views(con)
         monkeypatch.setattr(server, "_get_connection", lambda: con)
         mcp = server.build_server()
-        sizes = {("list_sources", None): _size(_tool_data(mcp, "list_sources", {}))}
+        listed = _tool_data(mcp, "list_sources", {})
+        # Discovery contains row counts and a compact release identity, not describe_table's parent inventories.
+        # Exercise those fields directly instead of assigning it the description's 5,000-character reserve.
+        # A signed 64-bit row count uses 19 characters versus NULL's 4, for every table at once. The two fixed-URL
+        # exports also state their count basis. Both release statuses are included at their maximum count width.
+        for subject in listed["subjects"]:
+            for table in subject["tables"]:
+                table["rows"] = (1 << 63) - 1
+                if table["table"] in {"comments", "comments_index"}:
+                    table["rows_basis"] = "export_receipt_does_not_match_object"
+        from spicy_regs.fec_release import runtime_consumer
+
+        listed["fec_release"].update(
+            receipt_sha256="sha256:" + "a" * 64,
+            consumer=runtime_consumer("sha256:" + "b" * 64),
+            status_counts={"compatible": len(server.FEC_QUALIFIED_VIEWS), "disabled": len(server.FEC_QUALIFIED_VIEWS)},
+        )
+        assert _size(listed) <= server.REPLY_CHARS
+        sizes = {}
         for name in [*server.TABLES, *server._connection_relationships(con.cursor())]:
             for detail in (False, True):
                 sizes[(name, detail)] = _size(_tool_data(mcp, "describe_table", {"table": name, "detail": detail}))

@@ -1,0 +1,212 @@
+{
+  "qualification_id": "afp-3933-current-api-2026-10-03",
+  "created_at": "2026-10-03T20:25:20.520466+00:00",
+  "publisher_id": "afp",
+  "scorecard_id": "afp:3933",
+  "status": "qualified_observed_current_api_scope",
+  "production_enabled": false,
+  "published_remotely": false,
+  "installed_provider": "spicy-docs==0.53.0+scorecards.f0059f78a27f",
+  "parser_version": "afp-rds-bt50-current-api/1",
+  "schema_version": "scorecards-v1",
+  "runtime_verified": "spicy-regs/.venv site-packages; no sibling SpicyDocs path",
+  "source_scope": "Public current federal API roster, all current score-set literals, complete declared bill catalog, all roster member details including ungraded member; API-authoritative rendition",
+  "completeness_witness": [
+    "Original logged-out frontend selects scorecards[0] and fetches unpaginated member/bill arrays; browser pagination slices local members.",
+    "Native current scorecard3933, federal US, title119th Congressional Scorecard and session959/niceTitle119th checked.",
+    "Publisher ratedBills13 reconciled with unique catalog billIDs.",
+    "Every one of the531 source roster members had successful typed detail arrays; all details and catalogs/styles repeated unchanged.",
+    "Both source capture passes completed; parser validates every frozen relationship before accepting one snapshot."
+  ],
+  "raw_readback": {
+    "row_comparison": "all emitted literal member/rating/coefficient/action/reference fields agree with raw JSON locators",
+    "counts": {
+      "scorecard_publishers": 1,
+      "scorecards": 1,
+      "scorecard_snapshots": 1,
+      "scorecard_methodologies": 1,
+      "scorecard_metrics": 4,
+      "scorecard_items": 54,
+      "scorecard_metric_items": 80,
+      "scorecard_metric_components": 0,
+      "scorecard_members": 531,
+      "scorecard_member_ratings": 2120,
+      "scorecard_member_item_results": 6120
+    },
+    "source_roster": 531,
+    "source_current_rated_members": 530,
+    "source_ungraded_members": 1,
+    "source_vote_occurrences": 5992,
+    "source_sponsorship_occurrences": 128,
+    "selected_captures": 1071,
+    "observed_at_start": "2026-10-03T20:13:16.756574+00:00",
+    "observed_at_end": "2026-10-03T20:22:57.273282+00:00",
+    "method": "Direct raw JSON object readback preceded implementation. Independent verifier follows each emitted JSON locator and compares member/rating/coefficient/action/reference literals to parse_float=str raw values, then reconciles complete source-array totals.",
+    "raw_examples": [
+      "Current API publicFlag=false while logged-out app selects edition without consulting flag; this is not interpreted as permission denial.",
+      "Tom Barrett native20925 score/vote_index100, possible_score12, presence_score0.9925 are preserved without display rounding.",
+      "Christian Menefee native30764 has score_sets=[] and literal state=usa; member and one Nay on HJRes139 survive with no invented rating.",
+      "HR4776 includes distinct amendment/passagemotions RC#354 and356 on12/18/2025.",
+      "API referenceUrl and referenceUrlText preserve publisher key-vote alert links and titles; no preferred-action conversion."
+    ]
+  },
+  "independent_review": "Census agent read the raw frontend/API and latest implementation; approved after ungraded-roster, numeric-target, repeated-weight and reference-locator fixes.",
+  "source_code_sha256": {
+    "src/spicy_docs/sources/scorecards/afp.py": "120ca60e0718ef69674712978f55c5ee34efa2c618f798befb03b45488963b50",
+    "src/spicy_docs/sources/scorecards/ijm.py": "7ad30961d915a20532c95a71f3dc9d3de739dfe9215b2bbdd16490e5cfcc05ac",
+    "src/spicy_docs/sources/scorecards/rds_bt50.py": "f00baae65044753ab3b358ce15b3774efad9f73fb8955f6bc765d362fe0e2905"
+  },
+  "checks": {
+    "synthetic_suite": "43 passed: tests/test_scorecards_afp.py tests/test_scorecards_ijm.py",
+    "ruff": "passed for new source modules and tests",
+    "real_corpus_replay": "passed through source checkout and installed consumer provider",
+    "raw_literal_comparison": "passed through installed consumer provider"
+  },
+  "limits": [
+    "Observed stable crawl, not a transactionally frozen publisher version or official congressional roster census.",
+    "General catalog rationale comments/categories remain unmapped in V1; raw capture remains private.",
+    "API score, vote_index, presence_score and possible_score are separate literal measurements; calculated lifetime and browser-rounded display values are not reproduced.",
+    "Signed coefficients preserved as weights; preferred-action fields remain null. No universal score formula asserted.",
+    "No historical editions, adjustment ledgers, grade conversion or changed/hidden display scopes qualified.",
+    "Rights remain unknown; no original third-party body was committed or publicly republished."
+  ],
+  "capture_manifest": "afp_capture_manifest.json",
+  "failed_attempts": [
+    {
+      "capture_id": "afp-detail-19202-first",
+      "requested_url": "https://americansforprosperity.org/wp-json/rds-bt50-scorecard/v1/legislators/detail/?legislatorId=19202&scorecardId=3933",
+      "resolved_url": "https://americansforprosperity.org/wp-json/rds-bt50-scorecard/v1/legislators/detail/?legislatorId=19202&scorecardId=3933",
+      "observed_at": "2026-10-03T20:21:11.435338+00:00",
+      "http_status": 500,
+      "content_type": "text/html; charset=UTF-8",
+      "byte_size": 2679,
+      "sha256": "235515fb61913ed465341abdbf530f3d7b1c5eaeee1514b614ba005466144e79"
+    },
+    {
+      "capture_id": "afp-detail-23036-first",
+      "requested_url": "https://americansforprosperity.org/wp-json/rds-bt50-scorecard/v1/legislators/detail/?legislatorId=23036&scorecardId=3933",
+      "resolved_url": "https://americansforprosperity.org/wp-json/rds-bt50-scorecard/v1/legislators/detail/?legislatorId=23036&scorecardId=3933",
+      "observed_at": "2026-10-03T20:21:00.742850+00:00",
+      "http_status": 500,
+      "content_type": "text/html; charset=UTF-8",
+      "byte_size": 2679,
+      "sha256": "235515fb61913ed465341abdbf530f3d7b1c5eaeee1514b614ba005466144e79"
+    },
+    {
+      "capture_id": "afp-detail-15812-first",
+      "requested_url": "https://americansforprosperity.org/wp-json/rds-bt50-scorecard/v1/legislators/detail/?legislatorId=15812&scorecardId=3933",
+      "resolved_url": "https://americansforprosperity.org/wp-json/rds-bt50-scorecard/v1/legislators/detail/?legislatorId=15812&scorecardId=3933",
+      "observed_at": "2026-10-03T20:17:40.354271+00:00",
+      "http_status": 500,
+      "content_type": "text/html; charset=UTF-8",
+      "byte_size": 2679,
+      "sha256": "235515fb61913ed465341abdbf530f3d7b1c5eaeee1514b614ba005466144e79"
+    },
+    {
+      "capture_id": "afp-detail-27917-first",
+      "requested_url": "https://americansforprosperity.org/wp-json/rds-bt50-scorecard/v1/legislators/detail/?legislatorId=27917&scorecardId=3933",
+      "resolved_url": "https://americansforprosperity.org/wp-json/rds-bt50-scorecard/v1/legislators/detail/?legislatorId=27917&scorecardId=3933",
+      "observed_at": "2026-10-03T20:14:36.010910+00:00",
+      "http_status": 500,
+      "content_type": "text/html; charset=UTF-8",
+      "byte_size": 2679,
+      "sha256": "235515fb61913ed465341abdbf530f3d7b1c5eaeee1514b614ba005466144e79"
+    },
+    {
+      "capture_id": "afp-detail-29543-first",
+      "requested_url": "https://americansforprosperity.org/wp-json/rds-bt50-scorecard/v1/legislators/detail/?legislatorId=29543&scorecardId=3933",
+      "resolved_url": "https://americansforprosperity.org/wp-json/rds-bt50-scorecard/v1/legislators/detail/?legislatorId=29543&scorecardId=3933",
+      "observed_at": "2026-10-03T20:19:06.101587+00:00",
+      "http_status": 500,
+      "content_type": "text/html; charset=UTF-8",
+      "byte_size": 2679,
+      "sha256": "235515fb61913ed465341abdbf530f3d7b1c5eaeee1514b614ba005466144e79"
+    },
+    {
+      "capture_id": "afp-detail-20785-first",
+      "requested_url": "https://americansforprosperity.org/wp-json/rds-bt50-scorecard/v1/legislators/detail/?legislatorId=20785&scorecardId=3933",
+      "resolved_url": "https://americansforprosperity.org/wp-json/rds-bt50-scorecard/v1/legislators/detail/?legislatorId=20785&scorecardId=3933",
+      "observed_at": "2026-10-03T20:19:15.624156+00:00",
+      "http_status": 500,
+      "content_type": "text/html; charset=UTF-8",
+      "byte_size": 2679,
+      "sha256": "235515fb61913ed465341abdbf530f3d7b1c5eaeee1514b614ba005466144e79"
+    },
+    {
+      "capture_id": "afp-detail-23901-first",
+      "requested_url": "https://americansforprosperity.org/wp-json/rds-bt50-scorecard/v1/legislators/detail/?legislatorId=23901&scorecardId=3933",
+      "resolved_url": "https://americansforprosperity.org/wp-json/rds-bt50-scorecard/v1/legislators/detail/?legislatorId=23901&scorecardId=3933",
+      "observed_at": "2026-10-03T20:14:36.614610+00:00",
+      "http_status": 500,
+      "content_type": "text/html; charset=UTF-8",
+      "byte_size": 2679,
+      "sha256": "235515fb61913ed465341abdbf530f3d7b1c5eaeee1514b614ba005466144e79"
+    },
+    {
+      "capture_id": "afp-detail-22379-first",
+      "requested_url": "https://americansforprosperity.org/wp-json/rds-bt50-scorecard/v1/legislators/detail/?legislatorId=22379&scorecardId=3933",
+      "resolved_url": "https://americansforprosperity.org/wp-json/rds-bt50-scorecard/v1/legislators/detail/?legislatorId=22379&scorecardId=3933",
+      "observed_at": "2026-10-03T20:19:47.697158+00:00",
+      "http_status": 500,
+      "content_type": "text/html; charset=UTF-8",
+      "byte_size": 2679,
+      "sha256": "235515fb61913ed465341abdbf530f3d7b1c5eaeee1514b614ba005466144e79"
+    },
+    {
+      "capture_id": "afp-detail-16053-first",
+      "requested_url": "https://americansforprosperity.org/wp-json/rds-bt50-scorecard/v1/legislators/detail/?legislatorId=16053&scorecardId=3933",
+      "resolved_url": "https://americansforprosperity.org/wp-json/rds-bt50-scorecard/v1/legislators/detail/?legislatorId=16053&scorecardId=3933",
+      "observed_at": "2026-10-03T20:19:59.142324+00:00",
+      "http_status": 500,
+      "content_type": "text/html; charset=UTF-8",
+      "byte_size": 2679,
+      "sha256": "235515fb61913ed465341abdbf530f3d7b1c5eaeee1514b614ba005466144e79"
+    },
+    {
+      "capture_id": "afp-detail-27926-first",
+      "requested_url": "https://americansforprosperity.org/wp-json/rds-bt50-scorecard/v1/legislators/detail/?legislatorId=27926&scorecardId=3933",
+      "resolved_url": "https://americansforprosperity.org/wp-json/rds-bt50-scorecard/v1/legislators/detail/?legislatorId=27926&scorecardId=3933",
+      "observed_at": "2026-10-03T20:14:36.620719+00:00",
+      "http_status": 500,
+      "content_type": "text/html; charset=UTF-8",
+      "byte_size": 2679,
+      "sha256": "235515fb61913ed465341abdbf530f3d7b1c5eaeee1514b614ba005466144e79"
+    },
+    {
+      "capture_id": "afp-detail-839-first",
+      "requested_url": "https://americansforprosperity.org/wp-json/rds-bt50-scorecard/v1/legislators/detail/?legislatorId=839&scorecardId=3933",
+      "resolved_url": "https://americansforprosperity.org/wp-json/rds-bt50-scorecard/v1/legislators/detail/?legislatorId=839&scorecardId=3933",
+      "observed_at": "2026-10-03T20:18:55.516508+00:00",
+      "http_status": 500,
+      "content_type": "text/html; charset=UTF-8",
+      "byte_size": 2679,
+      "sha256": "235515fb61913ed465341abdbf530f3d7b1c5eaeee1514b614ba005466144e79"
+    }
+  ],
+  "private_replay": {
+    "campaign": "scorecards-api-readers-2026-10-03",
+    "scripts": [
+      "replay_afp.py",
+      "verify_afp.py",
+      "crawl_afp.py",
+      "capture.py"
+    ],
+    "commands": [
+      "uv run --frozen --no-sync python <private_campaign>/replay_afp.py",
+      "uv run --frozen --no-sync python <private_campaign>/verify_afp.py"
+    ],
+    "working_directory": "spicy-regs"
+  },
+  "subsequent_installed_regressions": [
+    {
+      "tested_at": "2026-10-03T20:39:29.710779+00:00",
+      "installed_provider": "spicy-docs==0.53.0+scorecards.6faacdb84390",
+      "result": "Full retained source replay and independent raw-locator verification passed with identical source row counts after IJM-only grade configuration support."
+    },
+    {
+      "tested_at": "2026-10-03T20:55:46.430481+00:00",
+      "installed_provider": "spicy-docs==0.53.0+scorecards.d9f59c96d398",
+      "result": "Full AFP retained source replay and every independent raw-locator comparison passed unchanged after explicit IJM DOM-rendition support."
+    }
+  ]
+}

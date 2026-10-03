@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "task_id": "ss-75b6",
+  "mode": "local_installed_candidate",
+  "provider_version": "0.53.0+scorecards.2be7a4de0796",
+  "provider_module_path": "/Users/mikewolfd/Work/spicy-stack/spicy-regs/.venv/lib/python3.12/site-packages/spicy_docs/sources/scorecards/govtrack_discovery.py",
+  "provider_module_sha256": "6dd905d88ceb261dcc2dc059056838850d8e2dc1ef9e22864a46d7f596dec25b",
+  "path_override_used_for_final_replay": false,
+  "repository_commit": "fa63a2b5326edd4b8835386082c2317627f058ce",
+  "root_tree_sha": "a87ecf4ecbeb4dde80e348fb0a461ba5c36b07c1",
+  "private_capture_count": 9,
+  "counts": {
+    "matched": 7
+  },
+  "novel_leads": 0,
+  "ambiguous_leads": 0,
+  "upstream_ratings_imported": false,
+  "canonical_catalog_modified": false,
+  "production_status_modified": false,
+  "checks": {
+    "provider_focused_tests": "29 passed",
+    "consumer_installed_candidate_tests": "26 passed",
+    "consumer_ruff": "passed",
+    "consumer_ty": "passed",
+    "cli_help": "passed",
+    "live_capture": "complete",
+    "offline_reconciliation": "complete"
+  },
+  "input_pins": {
+    "catalog_sha256": "727baa5d9ca48c54c53838475d4a628f233dc50c6b7fa3497d4be0c64343c6d6",
+    "aliases_sha256": "38c382f51ffaab7ae970b539a27c207f862fc67afeb3c5adae77ff6ce92fd834",
+    "manifest_sha256": "c89c94cb42bc6c1f7ad809cf712f4a0dd1999c88aff02b7df0d9239d3043e4ca",
+    "commit": "fa63a2b5326edd4b8835386082c2317627f058ce",
+    "capture_count": 9
+  },
+  "artifact_sha256": {
+    "src/spicy_regs/scorecards/govtrack_discovery.py": "df0f690f5a8bfe509a0af83c8a5edfb758e3bc752b5a7325a8aba1e1737b68c2",
+    "tests/test_govtrack_discovery.py": "4363b64acc4d569ad7414b3c6d992aa8aff7d78f190d7e902ed5a3f0fc5c8239",
+    "docs/research/scorecards/work/integration/govtrack_discovery/aliases.json": "38c382f51ffaab7ae970b539a27c207f862fc67afeb3c5adae77ff6ce92fd834",
+    "docs/research/scorecards/work/integration/govtrack_discovery/reconciliation.json": "e147033979ef56c771efcb12271203851e6170ed572609c35c5a5229c4492f6b"
+  },
+  "final_candidate_replay": {
+    "version": "0.53.0+scorecards.d030db4a182c",
+    "byte_identical": true,
+    "path_override_used": false,
+    "reconciliation_sha256": "e147033979ef56c771efcb12271203851e6170ed572609c35c5a5229c4492f6b"
+  }
+}

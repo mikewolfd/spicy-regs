@@ -1,0 +1,666 @@
+{
+  "afl-house-2025-xlsx": {
+    "dimension": "A1:S439",
+    "member_rows": 438,
+    "metrics": 2,
+    "rating_cells": 876,
+    "item_columns": 13,
+    "member_item_cells": 5694,
+    "item_cell_tokens": {
+      "◯": 65,
+      "ｘ": 2864,
+      "✓": 2694,
+      "": 71
+    },
+    "first_member": [
+      "Rep. Nicholas J. Begich III",
+      "AK",
+      "0",
+      "Republican",
+      "0%",
+      "0%"
+    ],
+    "last_member": [
+      "Rep. Harriet Hageman",
+      "WY",
+      "0",
+      "Republican",
+      "0%",
+      "5%"
+    ],
+    "all_rows_same_width": true,
+    "unique_member_identity_tuples": 438,
+    "zip_integrity": "passed",
+    "sheet_count": 1,
+    "header_columns": [
+      "Name",
+      "State",
+      "District",
+      "Party",
+      "Score",
+      "Lifetime Score",
+      "Letter to President Trump demanding reinstatement of NLRB Member Gwynn Wilcox",
+      "H.R. 77, the Midnight Rules Relief Act. (H.R. 77)",
+      "H.R. 1526, The No Rogue Ruling Act (“NORRA”) (H.R. 1526)",
+      "H.Con.Res.14, House Fiscal Year 2025 Budget Resolution (H.Con.Res.14)",
+      "H.R. 22, The Safeguard American Voter Eligibility (SAVE) Act (H.R. 22)",
+      "H.R. 1, One Big Beautiful Bill Act (H.R. 1)",
+      "H.R. 4, Rescissions Act of 2025 (H.R. 4)",
+      "H.R. 1, One Big Beautiful Bill Act, Cruz Amendment (H.R. 1)",
+      "H.R. 3633, Digital Asset Market Clarity Act of 2025 (H.R. 3633)",
+      "H.R. 4, Rescissions Act of 2025 (H.R. 4)",
+      "H.Res. 936, Rule for National Defense Authorization Act for Fiscal Year 2026 (H.Res. 936)",
+      "H.R. 2550, Protecting America's Workforce Act (H.R. 2550)",
+      "H.R. 6703, Lower Health Care Premiums for All Americans Act  (H.R. 6703)"
+    ]
+  },
+  "afl-senate-2025-xlsx": {
+    "dimension": "A1:N103",
+    "member_rows": 102,
+    "metrics": 2,
+    "rating_cells": 204,
+    "item_columns": 9,
+    "member_item_cells": 918,
+    "item_cell_tokens": {
+      "ｘ": 453,
+      "✓": 439,
+      "": 18,
+      "◯": 8
+    },
+    "first_member": [
+      "Sen. Lisa Murkowski",
+      "AK",
+      "Republican",
+      "33%",
+      "39%"
+    ],
+    "last_member": [
+      "Sen. Cynthia M. Lummis",
+      "WY",
+      "Republican",
+      "0%",
+      "9%"
+    ],
+    "all_rows_same_width": true,
+    "unique_member_identity_tuples": 102,
+    "zip_integrity": "passed",
+    "sheet_count": 1,
+    "header_columns": [
+      "Name",
+      "State",
+      "Party",
+      "Score",
+      "Lifetime Score",
+      "H.R. 1968, Full-Year Continuing Appropriations and Extensions Act (H.R. 1968)",
+      "S.Con.Res.7, Senate 2025 Budget Resolution (S.Con.Res.7)",
+      "S.J.Res.37, A Joint Resolution Terminating the National Emergency Declared to Impose Duties on Articles Imported from Canada (S.J.Res.37)",
+      "Letter to President Trump demanding reinstatement of NLRB Member Gwynn Wilcox",
+      "S.1582, GENIUS Act (S.1582)",
+      "H.R. 1, One Big Beautiful Bill Act (H.R. 1)",
+      "Nomination of Emil Bove (PN346-2)",
+      "S. 3386, Health Care Freedom for Patients Act (S. 3386)",
+      "S. 3385, Lower Health Care Costs Act (S. 3385)"
+    ]
+  },
+  "lcv-2025": {
+    "member_rows": 551,
+    "chamber_counts": {
+      "Senate": 103,
+      "House": 448
+    },
+    "rating_cells": 1102,
+    "member_urls_unique": 551,
+    "html_csv_membership_matches": true,
+    "html_csv_scores_match_with_explicit_check_only_percent_and_na_representation_rules": true,
+    "item_rows": 66,
+    "item_chamber_counts": {
+      "Senate Votes": 34,
+      "House Votes": 32
+    },
+    "chamber_csv_bodies_identical": true
+  },
+  "nea-119": {
+    "rating_rows": 531,
+    "senate": 100,
+    "house": 431,
+    "html_pdf_all_cells_equal": true,
+    "pdf_pages": 13,
+    "listed_vote_references": [
+      [
+        "House",
+        "1-12"
+      ],
+      [
+        "House",
+        "1-102"
+      ],
+      [
+        "House",
+        "1-128"
+      ],
+      [
+        "House",
+        "1-145"
+      ],
+      [
+        "House",
+        "1-190"
+      ],
+      [
+        "House",
+        "1-332"
+      ],
+      [
+        "Senate",
+        "1-99"
+      ],
+      [
+        "Senate",
+        "1-100"
+      ],
+      [
+        "Senate",
+        "1-191"
+      ],
+      [
+        "Senate",
+        "1-372"
+      ],
+      [
+        "Senate",
+        "1-\n358"
+      ],
+      [
+        "Senate",
+        "1-644"
+      ]
+    ]
+  },
+  "humane-2025-senate": {
+    "rating_rows": 100,
+    "states": 50,
+    "member_item_cells": 200,
+    "raw_outcome_tokens": {
+      "": 115,
+      "ü": 48,
+      "ê": 35,
+      "SP": 2
+    },
+    "score_tokens": {
+      "0": 48,
+      "50": 4,
+      "100+": 35,
+      "100": 11,
+      "••": 2
+    },
+    "pdf_pages": 20,
+    "rating_page_numbers": [
+      6,
+      7,
+      8
+    ],
+    "methodology_page": 5,
+    "unique_members": true,
+    "two_members_per_source_state": true
+  },
+  "heritage-119": {
+    "live_roster_rows": 531,
+    "live_roster_chambers": {
+      "House": 431,
+      "Senate": 100
+    },
+    "live_roster_declared_na": 4,
+    "distinct_item_roster_members": 544,
+    "item_roster_chambers": {
+      "Senate": 102,
+      "House": 442
+    },
+    "former_members_not_in_live_list": 13,
+    "declared_vote_count": 20,
+    "vote_detail_count": 20,
+    "cosponsorship_detail_count": 8,
+    "member_item_rows": 8780,
+    "all_item_score_observations_consistent": true,
+    "all_live_members_present_in_item_groups": true,
+    "all_catalogs_stable_on_repeat": true,
+    "item_details": [
+      {
+        "capture_id": "heritage119-vote-s253-2026",
+        "item_key": "s253-2026",
+        "kind": "vote",
+        "chamber": "Senate",
+        "group_counts": {
+          "yesBallots": 53,
+          "noBallots": 47,
+          "notVotingBallots": 0
+        },
+        "member_rows": 100,
+        "outside_live_roster": 0
+      },
+      {
+        "capture_id": "heritage119-vote-h280-2026",
+        "item_key": "h280-2026",
+        "kind": "vote",
+        "chamber": "House",
+        "group_counts": {
+          "yesBallots": 231,
+          "noBallots": 196,
+          "notVotingBallots": 1
+        },
+        "member_rows": 428,
+        "outside_live_roster": 0
+      },
+      {
+        "capture_id": "heritage119-vote-h266-2026",
+        "item_key": "h266-2026",
+        "kind": "vote",
+        "chamber": "House",
+        "group_counts": {
+          "yesBallots": 211,
+          "noBallots": 211,
+          "notVotingBallots": 5
+        },
+        "member_rows": 427,
+        "outside_live_roster": 0
+      },
+      {
+        "capture_id": "heritage119-vote-h269-2026",
+        "item_key": "h269-2026",
+        "kind": "vote",
+        "chamber": "House",
+        "group_counts": {
+          "yesBallots": 211,
+          "noBallots": 212,
+          "notVotingBallots": 5
+        },
+        "member_rows": 428,
+        "outside_live_roster": 0
+      },
+      {
+        "capture_id": "heritage119-vote-s152-2026",
+        "item_key": "s152-2026",
+        "kind": "vote",
+        "chamber": "Senate",
+        "group_counts": {
+          "yesBallots": 48,
+          "noBallots": 51,
+          "notVotingBallots": 1
+        },
+        "member_rows": 100,
+        "outside_live_roster": 1
+      },
+      {
+        "capture_id": "heritage119-vote-h207-2026",
+        "item_key": "h207-2026",
+        "kind": "vote",
+        "chamber": "House",
+        "group_counts": {
+          "yesBallots": 224,
+          "noBallots": 195,
+          "notVotingBallots": 9
+        },
+        "member_rows": 428,
+        "outside_live_roster": 0
+      },
+      {
+        "capture_id": "heritage119-vote-h151-2026",
+        "item_key": "h151-2026",
+        "kind": "vote",
+        "chamber": "House",
+        "group_counts": {
+          "yesBallots": 183,
+          "noBallots": 235,
+          "notVotingBallots": 8
+        },
+        "member_rows": 426,
+        "outside_live_roster": 0
+      },
+      {
+        "capture_id": "heritage119-vote-h120-2026",
+        "item_key": "h120-2026",
+        "kind": "vote",
+        "chamber": "House",
+        "group_counts": {
+          "yesBallots": 223,
+          "noBallots": 203,
+          "notVotingBallots": 3
+        },
+        "member_rows": 429,
+        "outside_live_roster": 2
+      },
+      {
+        "capture_id": "heritage119-vote-s60-2026",
+        "item_key": "s60-2026",
+        "kind": "vote",
+        "chamber": "Senate",
+        "group_counts": {
+          "yesBallots": 49,
+          "noBallots": 41,
+          "notVotingBallots": 10
+        },
+        "member_rows": 100,
+        "outside_live_roster": 2
+      },
+      {
+        "capture_id": "heritage119-vote-h69-2026",
+        "item_key": "h69-2026",
+        "kind": "vote",
+        "chamber": "House",
+        "group_counts": {
+          "yesBallots": 218,
+          "noBallots": 212,
+          "notVotingBallots": 1
+        },
+        "member_rows": 431,
+        "outside_live_roster": 4
+      },
+      {
+        "capture_id": "heritage119-vote-s15-2026",
+        "item_key": "s15-2026",
+        "kind": "vote",
+        "chamber": "Senate",
+        "group_counts": {
+          "yesBallots": 67,
+          "noBallots": 33,
+          "notVotingBallots": 0
+        },
+        "member_rows": 100,
+        "outside_live_roster": 2
+      },
+      {
+        "capture_id": "heritage119-vote-h44-2026",
+        "item_key": "h44-2026",
+        "kind": "vote",
+        "chamber": "House",
+        "group_counts": {
+          "yesBallots": 135,
+          "noBallots": 286,
+          "notVotingBallots": 7
+        },
+        "member_rows": 428,
+        "outside_live_roster": 4
+      },
+      {
+        "capture_id": "heritage119-vote-h27-2026",
+        "item_key": "h27-2026",
+        "kind": "vote",
+        "chamber": "House",
+        "group_counts": {
+          "yesBallots": 126,
+          "noBallots": 287,
+          "notVotingBallots": 14
+        },
+        "member_rows": 427,
+        "outside_live_roster": 4
+      },
+      {
+        "capture_id": "heritage119-vote-h11-2026",
+        "item_key": "h11-2026",
+        "kind": "vote",
+        "chamber": "House",
+        "group_counts": {
+          "yesBallots": 228,
+          "noBallots": 195,
+          "notVotingBallots": 5
+        },
+        "member_rows": 428,
+        "outside_live_roster": 4
+      },
+      {
+        "capture_id": "heritage119-vote-h4-2026",
+        "item_key": "h4-2026",
+        "kind": "vote",
+        "chamber": "House",
+        "group_counts": {
+          "yesBallots": 219,
+          "noBallots": 204,
+          "notVotingBallots": 5
+        },
+        "member_rows": 428,
+        "outside_live_roster": 4
+      },
+      {
+        "capture_id": "heritage119-vote-s411-2025",
+        "item_key": "s411-2025",
+        "kind": "vote",
+        "chamber": "Senate",
+        "group_counts": {
+          "yesBallots": 51,
+          "noBallots": 48,
+          "notVotingBallots": 1
+        },
+        "member_rows": 100,
+        "outside_live_roster": 2
+      },
+      {
+        "capture_id": "heritage119-vote-h201-2025",
+        "item_key": "h201-2025",
+        "kind": "vote",
+        "chamber": "House",
+        "group_counts": {
+          "yesBallots": 219,
+          "noBallots": 210,
+          "notVotingBallots": 3
+        },
+        "member_rows": 432,
+        "outside_live_roster": 8
+      },
+      {
+        "capture_id": "heritage119-vote-h190-2025",
+        "item_key": "h190-2025",
+        "kind": "vote",
+        "chamber": "House",
+        "group_counts": {
+          "yesBallots": 218,
+          "noBallots": 214,
+          "notVotingBallots": 0
+        },
+        "member_rows": 432,
+        "outside_live_roster": 8
+      },
+      {
+        "capture_id": "heritage119-vote-s372-2025",
+        "item_key": "s372-2025",
+        "kind": "vote",
+        "chamber": "Senate",
+        "group_counts": {
+          "yesBallots": 50,
+          "noBallots": 50,
+          "notVotingBallots": 0
+        },
+        "member_rows": 100,
+        "outside_live_roster": 2
+      },
+      {
+        "capture_id": "heritage119-vote-h168-2025",
+        "item_key": "h168-2025",
+        "kind": "vote",
+        "chamber": "House",
+        "group_counts": {
+          "yesBallots": 214,
+          "noBallots": 212,
+          "notVotingBallots": 6
+        },
+        "member_rows": 432,
+        "outside_live_roster": 8
+      },
+      {
+        "capture_id": "heritage119-cosponsor-s382-119",
+        "item_key": "s382-119",
+        "kind": "cosponsor",
+        "chamber": "senate",
+        "group_counts": {
+          "sponsors": 21,
+          "nonSponsors": 81
+        },
+        "member_rows": 102,
+        "outside_live_roster": 2
+      },
+      {
+        "capture_id": "heritage119-cosponsor-s2343-119",
+        "item_key": "s2343-119",
+        "kind": "cosponsor",
+        "chamber": "senate",
+        "group_counts": {
+          "sponsors": 5,
+          "nonSponsors": 97
+        },
+        "member_rows": 102,
+        "outside_live_roster": 2
+      },
+      {
+        "capture_id": "heritage119-cosponsor-s128-119",
+        "item_key": "s128-119",
+        "kind": "cosponsor",
+        "chamber": "senate",
+        "group_counts": {
+          "sponsors": 50,
+          "nonSponsors": 52
+        },
+        "member_rows": 102,
+        "outside_live_roster": 2
+      },
+      {
+        "capture_id": "heritage119-cosponsor-s2376-119",
+        "item_key": "s2376-119",
+        "kind": "cosponsor",
+        "chamber": "senate",
+        "group_counts": {
+          "sponsors": 14,
+          "nonSponsors": 88
+        },
+        "member_rows": 102,
+        "outside_live_roster": 2
+      },
+      {
+        "capture_id": "heritage119-cosponsor-hr7651-119",
+        "item_key": "hr7651-119",
+        "kind": "cosponsor",
+        "chamber": "house",
+        "group_counts": {
+          "sponsors": 87,
+          "nonSponsors": 355
+        },
+        "member_rows": 442,
+        "outside_live_roster": 11
+      },
+      {
+        "capture_id": "heritage119-cosponsor-hr4448-119",
+        "item_key": "hr4448-119",
+        "kind": "cosponsor",
+        "chamber": "house",
+        "group_counts": {
+          "sponsors": 61,
+          "nonSponsors": 381
+        },
+        "member_rows": 442,
+        "outside_live_roster": 11
+      },
+      {
+        "capture_id": "heritage119-cosponsor-hr4620-119",
+        "item_key": "hr4620-119",
+        "kind": "cosponsor",
+        "chamber": "house",
+        "group_counts": {
+          "sponsors": 75,
+          "nonSponsors": 367
+        },
+        "member_rows": 442,
+        "outside_live_roster": 11
+      },
+      {
+        "capture_id": "heritage119-cosponsor-hr925-119",
+        "item_key": "hr925-119",
+        "kind": "cosponsor",
+        "chamber": "house",
+        "group_counts": {
+          "sponsors": 110,
+          "nonSponsors": 332
+        },
+        "member_rows": 442,
+        "outside_live_roster": 11
+      }
+    ]
+  },
+  "c4ip-2024-senate": {
+    "rating_rows": 99,
+    "source_table_pages": [
+      28,
+      29,
+      30
+    ],
+    "unique_names": 99,
+    "state_counts": {
+      "WI": 2,
+      "WY": 2,
+      "CO": 2,
+      "TN": 2,
+      "CT": 2,
+      "NJ": 2,
+      "AR": 2,
+      "IN": 2,
+      "AL": 2,
+      "OH": 2,
+      "NC": 2,
+      "WA": 2,
+      "WV": 2,
+      "MD": 2,
+      "DE": 2,
+      "PA": 2,
+      "LA": 2,
+      "ME": 2,
+      "TX": 2,
+      "NV": 2,
+      "ND": 2,
+      "ID": 2,
+      "MT": 2,
+      "IL": 2,
+      "IA": 2,
+      "NE": 2,
+      "NY": 2,
+      "SC": 2,
+      "NH": 2,
+      "MO": 2,
+      "NM": 2,
+      "HI": 2,
+      "MS": 2,
+      "VA": 2,
+      "AZ": 2,
+      "MN": 2,
+      "OK": 2,
+      "UT": 2,
+      "MA": 2,
+      "KS": 2,
+      "KY": 2,
+      "OR": 2,
+      "AK": 2,
+      "GA": 2,
+      "CA": 1,
+      "MI": 2,
+      "RI": 2,
+      "SD": 2,
+      "FL": 2,
+      "VT": 2
+    },
+    "unreported_states_or_members_not_filled": true
+  },
+  "c4ip-2024-house": {
+    "rating_rows": 431,
+    "source_table_pages": [
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43
+    ],
+    "unique_names_with_state_district": 431,
+    "unreported_states_or_members_not_filled": true
+  }
+}

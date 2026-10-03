@@ -1,0 +1,519 @@
+{
+  "format_version": 1,
+  "task_id": "ss-vbf9",
+  "status": "planned_behavior_not_executed_runtime_tests",
+  "source": "README.md and code_receipt.json",
+  "cases": [
+    {
+      "id": "E01",
+      "area": "evidence",
+      "setup": "Synthetic complete body and optional request body, full policy with established grant.",
+      "trigger": "Capture then seal and publish evidence.",
+      "expected": [
+        "Exact bodies are members with matching measured sizes and SHA-256.",
+        "Body claims name only admitted blob members."
+      ],
+      "target_tests": [
+        "tests/test_source_evidence.py",
+        "tests/test_evidence_blobs.py"
+      ],
+      "coverage_status": "extend existing full-mode regressions"
+    },
+    {
+      "id": "E02",
+      "area": "evidence",
+      "setup": "Same synthetic capture, hash_only.",
+      "trigger": "Capture through ordinary capture and file paths.",
+      "expected": [
+        "Receipt contains metadata, exact size, digest, parser version and body_retained=false.",
+        "No source-body member, blob locator, replay claim, temporary source path or payload sentinel is present in uploadable trees."
+      ],
+      "target_tests": [
+        "tests/test_source_evidence.py",
+        "tests/test_source_evidence_files.py"
+      ],
+      "coverage_status": "new"
+    },
+    {
+      "id": "E03",
+      "area": "evidence",
+      "setup": "Same capture, metadata_only.",
+      "trigger": "Capture and seal.",
+      "expected": [
+        "No public source SHA-256, blob locator or payload exists.",
+        "Measured size is labeled measured; Content-Length is not substituted.",
+        "capture_id, snapshot_id, URLs and errors do not encode or indirectly publish the raw body digest; dataset-generation digests remain a distinct identity."
+      ],
+      "target_tests": [
+        "tests/test_source_evidence.py"
+      ],
+      "coverage_status": "new"
+    },
+    {
+      "id": "E04",
+      "area": "evidence",
+      "setup": "One artifact receives concurrent publisher-bound full/hash_only/metadata_only captures.",
+      "trigger": "Interleave acquisition and refusal events.",
+      "expected": [
+        "Each capture obeys its immutable source policy.",
+        "One evidence input binds the generation.",
+        "A public blob from another scope is never referenced by hash_only."
+      ],
+      "target_tests": [
+        "tests/test_source_evidence.py",
+        "tests/test_evidence_blobs.py"
+      ],
+      "coverage_status": "new"
+    },
+    {
+      "id": "E05",
+      "area": "evidence",
+      "setup": "Refusal carries attached CapturedBodyResponse; another carries a legacy RefusedResponse.",
+      "trigger": "Call refusal under all policies.",
+      "expected": [
+        "Both code paths obey the selected policy, including refused request bodies.",
+        "Non-full diagnostics use reason codes and omit raw exception payload snippets."
+      ],
+      "target_tests": [
+        "tests/test_source_evidence.py"
+      ],
+      "coverage_status": "new"
+    },
+    {
+      "id": "E06",
+      "area": "evidence",
+      "setup": "Stream redirects, request body, malformed gzip, then final parser rejection.",
+      "trigger": "Acquire through transport under hash_only.",
+      "expected": [
+        "Complete native response hashes survive parse/decoding refusal.",
+        "No body is admitted at redirect, retry or failure stages.",
+        "Journal records the observed encoding."
+      ],
+      "target_tests": [
+        "tests/test_source_evidence_files.py"
+      ],
+      "coverage_status": "new"
+    },
+    {
+      "id": "E07",
+      "area": "evidence",
+      "setup": "Stream fails, overruns byte cap, or reaches deadline before completion.",
+      "trigger": "Cancel or interrupt consumption.",
+      "expected": [
+        "Receipt records incomplete bytes_received without complete source digest or completeness claim.",
+        "No candidate accepted scope; prior data survives."
+      ],
+      "target_tests": [
+        "tests/test_source_evidence_files.py",
+        "tests/test_scorecard_refresh.py"
+      ],
+      "coverage_status": "new"
+    },
+    {
+      "id": "E08",
+      "area": "evidence",
+      "setup": "Capture includes 401/403 or a configured credential split across chunks.",
+      "trigger": "Capture or stream with each policy.",
+      "expected": [
+        "Run aborts, no source body is stored.",
+        "Metadata is scrubbed before truncation; credential prefixes do not survive."
+      ],
+      "target_tests": [
+        "tests/test_source_evidence.py",
+        "tests/test_source_evidence_files.py"
+      ],
+      "coverage_status": "extend existing credential tests"
+    },
+    {
+      "id": "E09",
+      "area": "evidence",
+      "setup": "Journal write failure or corrupt blob write occurs inside a publisher task.",
+      "trigger": "Task mistakenly catches broad exception and continues.",
+      "expected": [
+        "Poisoned run cannot seal build-complete or publish.",
+        "Failure outcome retained when storage permits."
+      ],
+      "target_tests": [
+        "tests/test_source_evidence.py"
+      ],
+      "coverage_status": "extend existing retention-poison tests"
+    },
+    {
+      "id": "E10",
+      "area": "evidence",
+      "setup": "New version-2 artifact claims hash_only but has a source-body blob, orphan file, forbidden URL, or digest/size mismatch.",
+      "trigger": "Locally and remotely verify evidence.",
+      "expected": [
+        "Semantic admission refuses before pointer movement."
+      ],
+      "target_tests": [
+        "tests/test_source_evidence.py",
+        "tests/test_evidence_blobs.py"
+      ],
+      "coverage_status": "new"
+    },
+    {
+      "id": "E11",
+      "area": "compatibility",
+      "setup": "Pinned legacy full artifact, older artifact-local blob layout and newer shared-blob layout.",
+      "trigger": "Read and audit with new implementation.",
+      "expected": [
+        "Old artifacts retain original identity and remain readable.",
+        "Missing evidence_version means legacy full; an unknown explicit version refuses.",
+        "Existing federal callers retain full source bodies by default without new configuration."
+      ],
+      "target_tests": [
+        "tests/test_source_evidence.py",
+        "tests/test_generation_audit.py"
+      ],
+      "coverage_status": "new"
+    },
+    {
+      "id": "E12",
+      "area": "evidence",
+      "setup": "Hash-only and metadata-only receipts; prior lineage root remains producer-owned metadata.",
+      "trigger": "Run generation audit.",
+      "expected": [
+        "Digest-only captures do not require blob members.",
+        "Body shape, authenticity and replay checks explicitly unavailable by policy.",
+        "Public metadata and table-cell credential checks still run.",
+        "Prior metadata cannot be confused with source-body retention."
+      ],
+      "target_tests": [
+        "tests/test_generation_audit.py"
+      ],
+      "coverage_status": "new"
+    },
+    {
+      "id": "E13",
+      "area": "workflow",
+      "setup": "Synthetic source sentinel is spooled, extracted and rendered; process exits abnormally or is killed.",
+      "trigger": "Collect exact workflow artifact globs.",
+      "expected": [
+        "No source bytes or full extraction assets enter output/source-evidence or output/.",
+        "Private spool sits outside all upload roots even when cleanup cannot run."
+      ],
+      "target_tests": [
+        "tests/test_source_evidence_files.py",
+        "tests/test_scorecard_refresh.py"
+      ],
+      "coverage_status": "new"
+    },
+    {
+      "id": "E14",
+      "area": "evidence",
+      "setup": "Server returns 304 with no retained source body.",
+      "trigger": "Run V1 acquisition.",
+      "expected": [
+        "Do not parse a bodyless response or claim a new complete snapshot.",
+        "Unconditional refetch or refusal preserves prior scope."
+      ],
+      "target_tests": [
+        "tests/test_scorecard_refresh.py"
+      ],
+      "coverage_status": "new"
+    },
+    {
+      "id": "R01",
+      "area": "replacement",
+      "setup": "Prior editions A and B; new complete A bundle contains fewer member/item rows.",
+      "trigger": "Merge all source tables.",
+      "expected": [
+        "All A-dependent rows are replaced consistently; vanished A children removed.",
+        "B rows and observation/snapshot identities unchanged.",
+        "Exact removed identities journaled."
+      ],
+      "target_tests": [
+        "tests/test_scorecard_refresh.py"
+      ],
+      "coverage_status": "new"
+    },
+    {
+      "id": "R02",
+      "area": "replacement",
+      "setup": "Prior A has items; complete new A explicitly has no disclosed items but retains member ratings.",
+      "trigger": "Validate and merge.",
+      "expected": [
+        "A item-dependent tables become valid zero-row scopes.",
+        "A metadata and ratings remain; no invented zero ratings."
+      ],
+      "target_tests": [
+        "tests/test_scorecard_refresh.py"
+      ],
+      "coverage_status": "new"
+    },
+    {
+      "id": "R03",
+      "area": "replacement",
+      "setup": "Prior editions A and B; A succeeds; B gets 404, 500, challenge HTML, zero bytes or changed layout.",
+      "trigger": "Run refresh (parameterized refusals).",
+      "expected": [
+        "A advances; every B table preserves prior rows.",
+        "B refusal recorded and historical edition not retired.",
+        "Generation is marked complete as a replacement result with partial source coverage."
+      ],
+      "target_tests": [
+        "tests/test_scorecard_refresh.py"
+      ],
+      "coverage_status": "new"
+    },
+    {
+      "id": "R04",
+      "area": "replacement",
+      "setup": "All requested editions fail, with and without a prior generation.",
+      "trigger": "Run refresh.",
+      "expected": [
+        "No new generation or pointer change.",
+        "Run fails with per-scope outcomes; no empty corpus publication."
+      ],
+      "target_tests": [
+        "tests/test_scorecard_refresh.py"
+      ],
+      "coverage_status": "new"
+    },
+    {
+      "id": "R05",
+      "area": "replacement",
+      "setup": "Registry has no due source; prior exists.",
+      "trigger": "Run scheduled refresh.",
+      "expected": [
+        "Explicit no-op outcome; no copied fake refresh generation.",
+        "last_successful_scope_at remains unchanged."
+      ],
+      "target_tests": [
+        "tests/test_scorecard_refresh.py"
+      ],
+      "coverage_status": "new"
+    },
+    {
+      "id": "R06",
+      "area": "replacement",
+      "setup": "Discovery no longer lists a historical edition.",
+      "trigger": "Refresh current index.",
+      "expected": [
+        "Historical rows remain and discovery omission is recorded only as an observation."
+      ],
+      "target_tests": [
+        "tests/test_scorecard_refresh.py"
+      ],
+      "coverage_status": "new"
+    },
+    {
+      "id": "R07",
+      "area": "replacement",
+      "setup": "Edition defined as both chambers; only House succeeds.",
+      "trigger": "Attempt acceptance.",
+      "expected": [
+        "Whole edition is refused unless frozen schema and adapter explicitly define independent subscopes on all dependent tables.",
+        "Prior Senate and House data remain coherent."
+      ],
+      "target_tests": [
+        "tests/test_scorecard_refresh.py"
+      ],
+      "coverage_status": "new"
+    },
+    {
+      "id": "R08",
+      "area": "replacement",
+      "setup": "Duplicate/non-null key violation, orphan relationship, scope identity drift, or declared count mismatch.",
+      "trigger": "Validate new bundle before merge.",
+      "expected": [
+        "Scope rejected before merge_table can deduplicate or filter rows.",
+        "No partial table from the rejected bundle admitted."
+      ],
+      "target_tests": [
+        "tests/test_scorecard_refresh.py"
+      ],
+      "coverage_status": "new"
+    },
+    {
+      "id": "R09",
+      "area": "replacement",
+      "setup": "Managed prior member missing or digest mismatch; a stale local file is available.",
+      "trigger": "Prime prior through captured index.",
+      "expected": [
+        "Abort rather than use local fallback or cold start."
+      ],
+      "target_tests": [
+        "tests/test_generation_publication.py",
+        "tests/test_scorecard_refresh.py"
+      ],
+      "coverage_status": "extend existing managed-input refusal tests"
+    },
+    {
+      "id": "R10",
+      "area": "replacement",
+      "setup": "Legitimate complete source correction exceeds existing byte shrink guard.",
+      "trigger": "Attempt publish without override.",
+      "expected": [
+        "Pointer unchanged; review required through existing explicit override.",
+        "Completeness witness never bypasses shrink protection automatically."
+      ],
+      "target_tests": [
+        "tests/test_generation_publication.py",
+        "tests/test_scorecard_refresh.py"
+      ],
+      "coverage_status": "new"
+    },
+    {
+      "id": "P01",
+      "area": "publication",
+      "setup": "All candidate tables valid except one absent/invalid table or failed evidence admission.",
+      "trigger": "Publish generation.",
+      "expected": [
+        "No family pointer advances.",
+        "Every declared table required, including real zero-row tables."
+      ],
+      "target_tests": [
+        "tests/test_generation_publication.py"
+      ],
+      "coverage_status": "extend existing complete-family tests"
+    },
+    {
+      "id": "P02",
+      "area": "publication",
+      "setup": "Scorecards writers X and Y read same prior; X publishes first.",
+      "trigger": "Y attempts publication.",
+      "expected": [
+        "Y refuses stale family and preserves X; rebuild from fresh index needed."
+      ],
+      "target_tests": [
+        "tests/test_generation_publication.py"
+      ],
+      "coverage_status": "extend existing stale-writer tests"
+    },
+    {
+      "id": "P03",
+      "area": "publication",
+      "setup": "Another unrelated family publishes while scorecards uploads.",
+      "trigger": "Conditional pointer loses race.",
+      "expected": [
+        "Retry preserves other family and merges unchanged scorecards base.",
+        "No silent family/table ownership change."
+      ],
+      "target_tests": [
+        "tests/test_generation_publication.py"
+      ],
+      "coverage_status": "extend existing unrelated-family race tests"
+    },
+    {
+      "id": "P04",
+      "area": "publication",
+      "setup": "Upload interrupted, remote member corrupted, or evidence input pin differs.",
+      "trigger": "Perform publication.",
+      "expected": [
+        "Prior pointer remains current; unreferenced immutable objects may remain."
+      ],
+      "target_tests": [
+        "tests/test_generation_publication.py",
+        "tests/test_evidence_blobs.py"
+      ],
+      "coverage_status": "extend existing upload/readback tests"
+    },
+    {
+      "id": "P05",
+      "area": "publication",
+      "setup": "Network fails after conditional pointer request was submitted.",
+      "trigger": "Handle reported failure.",
+      "expected": [
+        "Outcome reported unknown until public readback.",
+        "Exact intended pin determines whether publish succeeded; no blind destructive retry."
+      ],
+      "target_tests": [
+        "tests/test_generation_publication.py"
+      ],
+      "coverage_status": "new"
+    },
+    {
+      "id": "A01",
+      "area": "analysis",
+      "setup": "Captured source/member/vote/bill pins; current upstream advances during resolution.",
+      "trigger": "Finish analysis using original immutable inputs.",
+      "expected": [
+        "All declared parent digests match captured index.",
+        "No input changes mid-query; output names exact original pins and staleness relative to current data.",
+        "Source publication unaffected."
+      ],
+      "target_tests": [
+        "tests/test_scorecard_resolution.py",
+        "tests/test_generation_publication.py"
+      ],
+      "coverage_status": "new"
+    },
+    {
+      "id": "A02",
+      "area": "analysis",
+      "setup": "Local input modified or substituted after snapshot selection.",
+      "trigger": "Build analysis generation.",
+      "expected": [
+        "Parent digest validation refuses mismatched managed input."
+      ],
+      "target_tests": [
+        "tests/test_scorecard_resolution.py",
+        "tests/test_generation_publication.py"
+      ],
+      "coverage_status": "new"
+    },
+    {
+      "id": "W01",
+      "area": "packaging",
+      "setup": "Dirty provider checkout contains unrelated extraction/schema/dependency edits.",
+      "trigger": "Build isolated scorecard candidate from pinned archive and explicit reviewed patch.",
+      "expected": [
+        "Wheel tree differences contain only reviewed source/dependency changes.",
+        "Provider and receiver tests import candidate wheel from isolated environment.",
+        "Both build receipts and SHA-256 match; no shared environment or dirty-tree contamination."
+      ],
+      "target_tests": [
+        "release qualification receipt"
+      ],
+      "coverage_status": "new"
+    },
+    {
+      "id": "W02",
+      "area": "wiring",
+      "setup": "New source and analysis tables installed through reviewed wheel.",
+      "trigger": "Run hosted-rollup, dictionary and MCP tests.",
+      "expected": [
+        "Exactly one writer per table; complete source-family membership.",
+        "Registry selectors fail closed; disabled sources never acquired.",
+        "MCP source availability follows actual publication, not declarations alone."
+      ],
+      "target_tests": [
+        "tests/test_hosted_rollups.py",
+        "tests/test_data_dictionary.py",
+        "tests/test_mcp_server.py"
+      ],
+      "coverage_status": "new"
+    },
+    {
+      "id": "W03",
+      "area": "workflow",
+      "setup": "Manual current refresh and historical backfill start concurrently.",
+      "trigger": "Dispatch through configured workflow concurrency group.",
+      "expected": [
+        "Both use same scorecards family group; no active-run cancellation.",
+        "Invocation captures exact selectors, policy/config version and code revision without source secrets."
+      ],
+      "target_tests": [
+        "tests/test_hosted_rollups.py"
+      ],
+      "coverage_status": "new"
+    },
+    {
+      "id": "W04",
+      "area": "release",
+      "setup": "Build-only candidate is qualified and intended target selected.",
+      "trigger": "Perform separately authorized first publish and readback.",
+      "expected": [
+        "Anonymous audit verifies family/table/evidence pins and qualified scope counts.",
+        "Existing MCP tools read new tables with publisher attribution.",
+        "Schedule stays disabled until successful readback; rollback target recorded."
+      ],
+      "target_tests": [
+        "release qualification receipt"
+      ],
+      "coverage_status": "new"
+    }
+  ]
+}

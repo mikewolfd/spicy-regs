@@ -67,7 +67,8 @@ class HeldCitationsRollup(RollupPipeline):
         if not self.source_members:
             self._observe_remote_inputs(output_dir, os.environ.get("R2_PUBLIC_URL"))
         if self.source_evidence:
-            self.source_evidence.store.put_blob(self.selection_sha256, len(self.selection_body), [self.selection_body])
+            self.source_evidence.retain_bytes(self.selection_body, stage="held-citation-selection",
+                                               sources=self.input_pins, selected_fields=len(self.selections))
             self.source_evidence.event("held-citation-selection", sha256=self.selection_sha256,
                                        sources=self.input_pins, selected_fields=len(self.selections))
         with duckdb.connect(config={"memory_limit": "1GB", "threads": 2}) as con:

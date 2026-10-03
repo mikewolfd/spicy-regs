@@ -1,0 +1,68 @@
+{
+  "reviewed_at": "2026-10-03T22:43:39.226266+00:00",
+  "source_sha256": "sha256:804c1157e71da53a00821fdcaf15a1790448c682eb49d44613a577cfce9cb855",
+  "physical_page": 2,
+  "status": "introductory_narrative_outside_typed_scorecard_scope",
+  "model_text_status": "refused_for_exact_source_transcription",
+  "public_evidence_policy": "metadata_only_review_receipt",
+  "source_evidence_policy": "hash_only",
+  "methodology_inventory_finding": "No distinct scoring formula, item weight, grade scale, eligibility rule or vote-method instruction found in the introductory narrative. Its statements of organizational purpose do not establish an undisclosed score calculation.",
+  "fidelity_findings": [
+    {
+      "field": "source_text",
+      "issue": "Curved apostrophes changed to straight apostrophes in two narrative phrases.",
+      "source_excerpt": "Don’t Ask Don’t Tell; officials’ records",
+      "model_excerpt": "Don't Ask Don't Tell; officials' records"
+    }
+  ],
+  "method": [
+    "Directly read full original physical2 render, then zoomed original prose regions and checked diagnostic native text for punctuation.",
+    "Compared untouched retained model JSON; no model text was edited or repaired."
+  ],
+  "qualification_boundary": "Complete scorecard facts means the explicitly selected member/item/rating/result/note/legend scope. It does not mean a complete prose transcription of the report. Retain original frontmatter but exclude this inaccurate model source_text from exact source-qualified fields.",
+  "all_model_outputs_unchanged": true,
+  "production_reader_qualified": false,
+  "full_edition": false,
+  "artifacts": [
+    {
+      "private_relative_path": "118-pdf.body",
+      "sha256": "sha256:804c1157e71da53a00821fdcaf15a1790448c682eb49d44613a577cfce9cb855",
+      "byte_size": 3343760
+    },
+    {
+      "private_relative_path": "gemini-v3-items-9-frontmatter/page-2.json",
+      "sha256": "sha256:7f5360dcf7ecf82007e2e4fa6bcac4c5f626c293717423fc8d727463d4c7fc65",
+      "byte_size": 3876
+    },
+    {
+      "private_relative_path": "gemini-v3-items-9-frontmatter/page-2.pickle",
+      "sha256": "sha256:f5ecf400f974c521d115ffac5eecfeb2e8627e6b0c3ae981c3d3628ccc73d27d",
+      "byte_size": 1440341
+    },
+    {
+      "private_relative_path": "gemini-v3-items-9-frontmatter/receipt.json",
+      "sha256": "sha256:ac80172dfaa65a55552fdbfd5bd90d330c8d7369ac1fdd63d9d93ad02ef4ad1f",
+      "byte_size": 760
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-2.png",
+      "sha256": "sha256:f183b297934275ebf6dc0cc5118a526c615f8e3cd90947c3c39a9eeb9c7d835d",
+      "byte_size": 460724
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-2.native.txt",
+      "sha256": "sha256:130f7006d49a3730449282f80e9f02a19e320fa6e3d72cfabb8495280e51340e",
+      "byte_size": 6505
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-2-right-prose-detail.png",
+      "sha256": "sha256:66340f5827298a4fba38e2f2780183ad2f6a08f07535cf859ede463f7fa72fbd",
+      "byte_size": 71658
+    },
+    {
+      "private_relative_path": "independent-source-inventory/page-2-right-ending-detail.png",
+      "sha256": "sha256:29725f40488b05bb7ec8c0aa3d37b6e3a82e775a45cadf5d65731c49eda66448",
+      "byte_size": 38098
+    }
+  ]
+}

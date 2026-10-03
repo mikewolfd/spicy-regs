@@ -163,7 +163,7 @@ _PARENT_DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 
 def _check_parents(parents, snapshot: Mapping) -> None:
     """Each parent names its bytes or storage version; a managed one agrees with the captured index."""
-    from spicy_regs.sources.publication import table_owner
+    from spicy_regs.sources.publication import table_owner, table_pin
 
     if not isinstance(parents, dict):
         raise ValueError("Invalid generation parents")
@@ -175,6 +175,10 @@ def _check_parents(parents, snapshot: Mapping) -> None:
         if fields == {"sha256", "byteSize"}:
             if not _PARENT_DIGEST.fullmatch(str(parent["sha256"])):
                 raise ValueError(f"Invalid parent digest: {key}")
+        elif fields == {"tableDescriptorDigest", "byteSize"}:
+            if ("family" not in parent
+                    or not _PARENT_DIGEST.fullmatch(str(parent["tableDescriptorDigest"]))):
+                raise ValueError(f"Invalid split-table parent digest: {key}")
         elif fields != {"etag", "byteSize"} or not isinstance(parent["etag"], str) or not parent["etag"]:
             raise ValueError(f"Invalid parent version: {key}")
         if ("family" in parent) != ("artifactDigest" in parent):
@@ -183,7 +187,9 @@ def _check_parents(parents, snapshot: Mapping) -> None:
             owner = table_owner(snapshot or {"families": {}}, key)
             if (owner is None or owner[0] != parent["family"]
                     or owner[1]["artifactDigest"] != parent["artifactDigest"]
-                    or "sha256" in parent and owner[1]["tables"][key]["sha256"] != parent["sha256"]):
+                    or owner[1]["tables"][key]["byteSize"] != size
+                    or ("sha256" in parent or "tableDescriptorDigest" in parent)
+                    and table_pin(snapshot, key) != parent):
                 raise ValueError(f"Parent differs from its captured family: {key}")
 
 

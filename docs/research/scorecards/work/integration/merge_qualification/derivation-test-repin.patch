@@ -1,0 +1,22 @@
+--- a/tests/test_body_text_derivation.py
++++ b/tests/test_body_text_derivation.py
+@@ -21,6 +21,9 @@
+     assert derivation.derivation_modules() == (
+         "spicy_docs.extraction.api",
+         "spicy_docs.extraction.body_text",
++        "spicy_docs.extraction.docling",
++        "spicy_docs.extraction.docling_assets",
++        "spicy_docs.extraction.docling_markdown",
+         "spicy_docs.extraction.gpo_normalize",
+         "spicy_docs.extraction.model",
+         "spicy_docs.extraction.pages",
+@@ -73,4 +76,8 @@
+         derivation_code_digest()
+ 
+ 
+-PINNED_DIGEST = "sha256:91fa3ee590c657b9d6de7b2b15df039cc9010b2aee9a10807bf1b6a4bfbfd434"
++# Output-neutral for the default body_text path: it still explicitly uses
++# DocumentExtractor(NativeText()) at 200 DPI. The newly optional Docling default
++# broadens the static import closure; api/model add retained observations.
++# See the independent merge review and full BodyText fixture equality receipt.
++PINNED_DIGEST = "sha256:239e046697f1b6f1583b080c2f7123783370c2e1c23f96a252bdcf159a61fe21"

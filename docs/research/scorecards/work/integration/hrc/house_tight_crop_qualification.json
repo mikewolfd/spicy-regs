@@ -1,0 +1,134 @@
+{
+  "scope": "original HRC118 physical page10 member grid through Arizona, retaining original header and states",
+  "status": "bounded_direct_source_readback_passed",
+  "provider_schema_version": "hrc-118-source-facts/2",
+  "model": "gemini-3.8-flash",
+  "thinking_level": "medium",
+  "media_resolution": "MEDIA_RESOLUTION_HIGH",
+  "dpi": 300,
+  "normalized_crop_box": [
+    0.19,
+    0.08,
+    0.485,
+    0.6
+  ],
+  "source_sha256": "804c1157e71da53a00821fdcaf15a1790448c682eb49d44613a577cfce9cb855",
+  "private_receipt_directory": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-hrc-2026-10-03/gemini-page10-semantic-arizona-context",
+  "schema_and_source_key_coverage_passed": true,
+  "direct_visual_readback": {
+    "members_inspected": 17,
+    "member_identity_context_and_party_fields_match": true,
+    "ratings_inspected": 51,
+    "ratings_match": 51,
+    "item_results_inspected": 238,
+    "item_results_match": 238,
+    "item_results_differ": 0,
+    "previously_wrong_cells_in_scope": 10,
+    "previously_wrong_cells_now_correct": 10,
+    "uncertainties_reported_by_model": 0
+  },
+  "raw_artifacts": [
+    {
+      "name": "input-crop.png",
+      "sha256": "91c0b5c463d71295569c982be464d44514d00270d633b74065266b88b9a92e17",
+      "bytes": 231374
+    },
+    {
+      "name": "outcome.json",
+      "sha256": "e0282bee082cf6a948b310b5d52218ff82589798b05c9e3d67943ecbf54ecd12",
+      "bytes": 27402
+    },
+    {
+      "name": "observation.pickle",
+      "sha256": "2bbdd7957628ee7c04ddcce36e6f9c9732d08db223b5db064a9dc49978997090",
+      "bytes": 585124
+    },
+    {
+      "name": "receipt.json",
+      "sha256": "32a1931cdddd077f6039ef3e1007409f4f4f4c70a3ead6e6093fe5315ab4d3ba",
+      "bytes": 770
+    },
+    {
+      "name": "comparison.json",
+      "sha256": "43777075c53714a84c3337677d50cfbcc6fbe78fcb6682bcea8e9c30a413135a",
+      "bytes": 306
+    }
+  ],
+  "generated_output_modified": false,
+  "no_continued_results_joined": true,
+  "full_page_qualified": false,
+  "full_edition_qualified": false,
+  "source_or_raw_model_bytes_in_repository": false,
+  "interpretation": "This inspected tighter input at 300 dpi succeeded. It does not establish that cropping or rendering resolution alone caused recovery; both changed from the refused broader observation.",
+  "controlled_high_thinking_comparison": {
+    "model": "gemini-3.8-flash",
+    "thinking_level": "high",
+    "support_evidence_url": "https://ai.google.dev/gemini-api/docs/thinking/",
+    "same_schema_prompt_and_input_image_as_medium": true,
+    "status": "matched_bounded_direct_source_readback",
+    "difference_count": 0,
+    "private_receipt_directory": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-hrc-2026-10-03/gemini-page10-semantic-arizona-context-high",
+    "raw_artifacts": [
+      {
+        "name": "input-crop.png",
+        "sha256": "91c0b5c463d71295569c982be464d44514d00270d633b74065266b88b9a92e17",
+        "bytes": 231374
+      },
+      {
+        "name": "outcome.json",
+        "sha256": "e0282bee082cf6a948b310b5d52218ff82589798b05c9e3d67943ecbf54ecd12",
+        "bytes": 27402
+      },
+      {
+        "name": "observation.pickle",
+        "sha256": "bac554a0c8d2f7e5a76f511bff26c88e02a6fff24de84f7a7109aabe721596bb",
+        "bytes": 596532
+      },
+      {
+        "name": "receipt.json",
+        "sha256": "29e1438316c8ea9c1cba070ec3aef943c1852ff66ff3bfd95d6127658bb4a311",
+        "bytes": 829
+      },
+      {
+        "name": "comparison.json",
+        "sha256": "43777075c53714a84c3337677d50cfbcc6fbe78fcb6682bcea8e9c30a413135a",
+        "bytes": 306
+      }
+    ],
+    "usage_metadata": {
+      "promptTokenCount": 1488,
+      "candidatesTokenCount": 4535,
+      "totalTokenCount": 13782,
+      "promptTokensDetails": [
+        {
+          "modality": "IMAGE",
+          "tokenCount": 1080
+        },
+        {
+          "modality": "TEXT",
+          "tokenCount": 408
+        }
+      ],
+      "thoughtsTokenCount": 7759,
+      "serviceTier": "standard"
+    }
+  },
+  "medium_usage_metadata": {
+    "promptTokenCount": 1488,
+    "candidatesTokenCount": 7276,
+    "totalTokenCount": 12222,
+    "promptTokensDetails": [
+      {
+        "modality": "TEXT",
+        "tokenCount": 408
+      },
+      {
+        "modality": "IMAGE",
+        "tokenCount": 1080
+      }
+    ],
+    "thoughtsTokenCount": 3458,
+    "serviceTier": "standard"
+  },
+  "high_comparison_changes_only_thinking_level_verified": true
+}

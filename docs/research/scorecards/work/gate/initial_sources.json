@@ -1,0 +1,131 @@
+{
+  "status": "selected_for_implementation_pending_schema_gate",
+  "selection_rule": "Cover observed source formats and distinct scoring structures among captured candidates; selection does not establish adapter support. Reconsider when qualification finds a source cannot meet complete edition scope.",
+  "sources": [
+    {
+      "publisher_id": "lcv",
+      "sample_id": "lcv:2025:published_export",
+      "observed_categories": [
+        "csv",
+        "annual_and_lifetime",
+        "roll_call",
+        "member_exclusions"
+      ],
+      "qualification_requirements": [
+        "Qualify all intended item details/member-item grid; do not describe the CSV ratings scope as an entire item ledger.",
+        "Preserve selected CSV literals, former/current source membership and blank annual cells."
+      ],
+      "enabled": false,
+      "evidence_policy": "hash_only",
+      "production_supported": false
+    },
+    {
+      "publisher_id": "afl_cio",
+      "sample_id": "afl_cio:2025:workbooks",
+      "observed_categories": [
+        "xlsx",
+        "annual_and_lifetime",
+        "letter",
+        "nomination",
+        "repeated_bill_actions"
+      ],
+      "qualification_requirements": [
+        "Qualify XLSX missing-cell handling, glyph legends and distinct publisher action URLs.",
+        "Lifetime rating retention does not require reingesting historical official votes.",
+        "Prove the duplicated H.R.4 column-to-dated-item mapping; literal column order alone is not qualified identity."
+      ],
+      "enabled": false,
+      "evidence_policy": "hash_only",
+      "production_supported": false
+    },
+    {
+      "publisher_id": "heritage_action",
+      "sample_id": "heritage_action:119:observed",
+      "observed_categories": [
+        "json",
+        "cosponsorship",
+        "vote",
+        "former_members"
+      ],
+      "qualification_requirements": [
+        "Enable current 119th only after coherent catalog/item checks.",
+        "Refuse historical member list contamination; do not lose former members."
+      ],
+      "enabled": false,
+      "evidence_policy": "hash_only",
+      "production_supported": false
+    },
+    {
+      "publisher_id": "humane_world_action",
+      "sample_id": "humane:2025:senate",
+      "observed_categories": [
+        "pdf",
+        "leadership_credit",
+        "exclusions",
+        "literal_score_suffixes"
+      ],
+      "qualification_requirements": [
+        "Qualify House chart before complete edition replacement; Senate research scope is not permission to replace both chambers.",
+        "Emit checked visible source glyphs through versioned font decoding; retain raw extraction codes separately as evidence. Preserve 100+ and leadership exclusions."
+      ],
+      "enabled": false,
+      "evidence_policy": "hash_only",
+      "production_supported": false
+    },
+    {
+      "publisher_id": "nea",
+      "sample_id": "nea:119:2025",
+      "observed_categories": [
+        "html",
+        "grades",
+        "undisclosed_inputs",
+        "amendment_chain"
+      ],
+      "qualification_requirements": [
+        "Preserve NES source typo; resolve downstream only with explained exact evidence.",
+        "Retain grades and disclosed vote supplement without invented scoring ledger."
+      ],
+      "enabled": false,
+      "evidence_policy": "hash_only",
+      "production_supported": false
+    },
+    {
+      "publisher_id": "c4ip",
+      "sample_id": "c4ip:2024:grades",
+      "observed_categories": [
+        "pdf",
+        "grades",
+        "composite_methodology",
+        "multiple_periods",
+        "signed_contributions"
+      ],
+      "qualification_requirements": [
+        "Retain published House/Senate grades and source methodology.",
+        "Data Annex/component member values and reproduction remain deferred; do not assert absent data."
+      ],
+      "enabled": false,
+      "evidence_policy": "hash_only",
+      "production_supported": false
+    }
+  ],
+  "additional_schema_challenges": [
+    "NRF metric-free grid and item targets",
+    "Chamber 80/10/10 component relationships",
+    "Planned Parenthood relative rolling period",
+    "NIAC historical action within later edition",
+    "HRC historical chamber context",
+    "NTU rank/grades and participation"
+  ],
+  "deferred": [
+    "Standalone numeric member adjustment ledger: no qualified source fixture.",
+    "Historical scanned/glyph layouts without checked member cells.",
+    "Chamber member/component acquisition.",
+    "Score reproduction for every publisher until its method and inputs qualify."
+  ],
+  "backfill_order": [
+    "119th Congress",
+    "118th Congress",
+    "recent historical scorecards",
+    "complete archives"
+  ]
+}

@@ -1,0 +1,250 @@
+{
+  "status": "published_public_audits_and_hosted_mcp_passed",
+  "observed_at": "2026-10-03T23:03:33.548372+00:00",
+  "implementation_commit": "3395120c9bf2ab47fc10d2ea5410238e5f05d393",
+  "provider_version": "0.53.0+scorecards.5e973eeabe60",
+  "public_index_url": "https://data.spicygov.ai/publication.v2.json",
+  "hosted_mcp_url": "https://mcp.spicygov.ai/mcp",
+  "families": {
+    "scorecards": {
+      "generation": {
+        "artifactDigest": "sha256:8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109",
+        "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:ffb09864ad0acf015706adbae72ca7132b77c9b683ba9ee28d0f0fa39929b55d"
+      },
+      "published_at": "2026-10-03T23:01:51.870328+00:00",
+      "other_family_changes_during_publication": []
+    },
+    "scorecard-analysis": {
+      "generation": {
+        "artifactDigest": "sha256:4a99801a8a935e1dbe617ddaf219e959b32d46061fa196a36b693806121a8b46",
+        "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:68e02756c3c18b9cd76d39aafc9aeac35cac4dac2b1942e6bb4d2d40363f2ce8"
+      },
+      "published_at": "2026-10-03T23:03:33.548372+00:00",
+      "other_family_changes_during_publication": []
+    }
+  },
+  "hrc_counts": {
+    "scorecard_metric_components": 0,
+    "scorecard_member_ratings": 1620,
+    "scorecard_metric_items": 0,
+    "scorecard_metrics": 6,
+    "scorecard_member_item_results": 19540,
+    "scorecard_methodologies": 10,
+    "scorecard_members": 540,
+    "scorecard_items": 56,
+    "scorecard_snapshots": 1,
+    "scorecard_publishers": 1,
+    "scorecards": 1
+  },
+  "rating_normalization": {
+    "rating_normalization_rule": "Exact standalone NA to N/A in rating value_text only; raw asset unchanged",
+    "raw_qualified_asset_sha256": "sha256:d8ac93e130bfb17bbb8657b6d25b6419bd79ca964fe03608a889b21c9385bebb",
+    "normalization_count": 1,
+    "normalizations": [
+      {
+        "source_pointer": "/members/385/record/ratings/2",
+        "publisher_member_key": "House:NORTH%20CAROLINA:4:Foushee%2C%20Valerie",
+        "metric_id": "House:116th%20SCORE",
+        "raw_value": "NA",
+        "native_value": "N/A"
+      }
+    ],
+    "native_na_remaining": 0,
+    "na_ratings": 280
+  },
+  "source_evidence": {
+    "policy": "hash_only",
+    "generation": {
+      "artifactDigest": "sha256:a64c98b5dc0020ff9f0c523d6303c61e02996cd0a1391404f94a41ac00a913d1",
+      "logicalId": "urn:spicy:artifact:spicy-regs-source-evidence:64997992925c592a2b7f2e397c19ab9db91d1ce57ab502c162e201e4ba8eca3c"
+    },
+    "actual_http_capture_observations": 2,
+    "publisher_or_model_bodies_in_public_evidence": 0,
+    "qualified_model_asset_retained_privately": true
+  },
+  "analysis": {
+    "rule_version": "scorecard-resolution-v1.4",
+    "member_statuses": {
+      "resolved": 458,
+      "unresolved": 82
+    },
+    "item_reference_statuses": {
+      "resolved": 91,
+      "unresolved": 36
+    },
+    "scope": "Item links include the direct item and each disclosed citation occurrence; they are not a unique-item count.",
+    "member_unresolved_reason": "no_exact_member_match",
+    "item_unresolved_reason": "19 distinct 118th-Congress amendment IDs are absent from the pinned official amendments input, which contains Congress119 only.",
+    "missing_amendment_ids": [
+      "118-hamdt-203",
+      "118-hamdt-223",
+      "118-hamdt-224",
+      "118-hamdt-236",
+      "118-hamdt-237",
+      "118-hamdt-341",
+      "118-hamdt-362",
+      "118-hamdt-382",
+      "118-hamdt-625",
+      "118-hamdt-647",
+      "118-hamdt-746",
+      "118-hamdt-770",
+      "118-hamdt-980",
+      "118-hamdt-983",
+      "118-hamdt-986",
+      "118-hamdt-987",
+      "118-samdt-1781",
+      "118-samdt-874",
+      "118-samdt-935"
+    ],
+    "edition_congress_fallback_items": [
+      "House:KK",
+      "House:LL",
+      "House:MM",
+      "House:NN",
+      "House:OO",
+      "Senate:K",
+      "Senate:L",
+      "Senate:M",
+      "Senate:N",
+      "Senate:O"
+    ],
+    "input_pins": {
+      "amendments.parquet": {
+        "artifactDigest": "sha256:a1f7489c31fd5894d4b0a44d7fc6fac3063f70e210699f0b8570d9bcc1a7f622",
+        "byteSize": 135859,
+        "family": "amendments",
+        "sha256": "sha256:8d2b23ebc9bf033ed984bed993de5656303032aadc75d5c149de5be7c5adda39"
+      },
+      "congress_bills.parquet": {
+        "artifactDigest": "sha256:ff945e34ac1c7781f346a0dc14c18365df7281db236ecc7c3ab32529232cad21",
+        "byteSize": 31056707,
+        "family": "bill-family",
+        "sha256": "sha256:ba86b1e43f60707de4531d4b0e01b338834e60a8153d6834a0f2b199cc525e82"
+      },
+      "member_terms.parquet": {
+        "artifactDigest": "sha256:5d6bd2a29a3b0fa9b587ed4e787a9cf26e3534a74c96c0daebc56a8149115b0b",
+        "byteSize": 183149,
+        "family": "members",
+        "sha256": "sha256:8810be48c3ed1a5508ee15243602c02d7ff46eee023ad7eb596206f24f2262f8"
+      },
+      "members.parquet": {
+        "artifactDigest": "sha256:5d6bd2a29a3b0fa9b587ed4e787a9cf26e3534a74c96c0daebc56a8149115b0b",
+        "byteSize": 283698,
+        "family": "members",
+        "sha256": "sha256:96c11c55ce3254491aa1fec9534398bf21f3c450d885cd93b700bf32a48045bb"
+      },
+      "roll_call_votes.parquet": {
+        "artifactDigest": "sha256:4dc318be76b2ecd16db02b5174aa59146a2c9acd7d2d9b4aed3ed7f4c7c6f030",
+        "byteSize": 1519680,
+        "family": "roll-call-votes",
+        "sha256": "sha256:3ae1dbf38e1ad71eb4dd2042383c4036e1e2445c31313e41a568b42aee2f7f20"
+      },
+      "scorecard_items.parquet": {
+        "artifactDigest": "sha256:8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109",
+        "byteSize": 21013,
+        "family": "scorecards",
+        "sha256": "sha256:167d8f68eb7df7ac268fd1cac1acdbc82a4dd2b730fb65349c355056f6e78c5a"
+      },
+      "scorecard_members.parquet": {
+        "artifactDigest": "sha256:8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109",
+        "byteSize": 56680,
+        "family": "scorecards",
+        "sha256": "sha256:3938caac54c06e2ce8ea93e0fa92340f67321a6afec7637f16653691d98aa291"
+      },
+      "scorecards.parquet": {
+        "artifactDigest": "sha256:8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109",
+        "byteSize": 5378,
+        "family": "scorecards",
+        "sha256": "sha256:4296e1b033870e597673d09efc19fa5b4577db70a1d0f6082a05d8c795899412"
+      }
+    },
+    "unresolved_member_diagnosis": "Independent raw-source and pinned-roster audit classifies all82 as display-name coverage limitations; no fuzzy matches or overrides were applied."
+  },
+  "preservation": {
+    "all_prior_source_values_and_observation_identifiers_preserved": true,
+    "prior_source_rows": {
+      "scorecard_metric_components": 0,
+      "scorecard_member_ratings": 5134,
+      "scorecard_metric_items": 227,
+      "scorecard_metrics": 10,
+      "scorecard_member_item_results": 24008,
+      "scorecard_methodologies": 5,
+      "scorecard_members": 1562,
+      "scorecard_items": 169,
+      "scorecard_snapshots": 3,
+      "scorecard_publishers": 3,
+      "scorecards": 3
+    },
+    "prior_analysis_member_targets_preserved": 1562,
+    "prior_analysis_item_reference_targets_preserved": 279,
+    "prior_analysis_metadata_changes_only": [
+      "rule_version",
+      "input_pins_json",
+      "item source_context_json includes unchanged edition context"
+    ],
+    "service_configuration_mutations": 0,
+    "fec_family_mutations": 0,
+    "source_network_requests_during_replay_and_analysis": 0,
+    "observed_live_fec_release": {
+      "receipt_sha256": "sha256:be129746b4a7fc163cc1958b032faf5a3462dbe097ed5194ca3d54b7911a9683",
+      "consumer": {
+        "code_sha256": "sha256:6eb9188f790971b2e5bfe3578c5a1234e92133b5a32e4f066415b21140beb7e4",
+        "image_digest": "sha256:f1942f995be72bd65a00295c9883425fcacd312837e9a74ebb63e047a3d89a39",
+        "package_versions": {
+          "duckdb": "1.5.5",
+          "mcp": "2.2.0",
+          "spicy-regs": "0.1.6"
+        }
+      },
+      "status_counts": {
+        "compatible": 72
+      },
+      "raw_query_financial_qualification": "not_inferred",
+      "details": "Call describe_table for a selected view's release compatibility evidence and reasons."
+    }
+  },
+  "public_audits": {
+    "source": {
+      "summary": {
+        "fail": 0,
+        "review": 0,
+        "empty_tables": [
+          "scorecard_metric_components"
+        ]
+      },
+      "sha256": "bcf36b57a4d44ca5ce492c864a35d11e6c216e12b37ad08c12325fadabd99e17"
+    },
+    "analysis": {
+      "summary": {
+        "fail": 0,
+        "review": 0,
+        "empty_tables": []
+      },
+      "sha256": "5ca945eff9e14de9c51606f7ca9901bb951d0e2f07e1e364ca086489fd9c3428"
+    }
+  },
+  "receipts": {
+    "source_publication_sha256": "f6cfebf25cbbb88cd1841fd9ca5546668ba388d75b88831b7b84c6a424a17e47",
+    "analysis_publication_sha256": "2b09867337cbff34ef1148a71918b249b7c274422bab61d1c6bcd28b0274675f",
+    "source_readback": "hrc_candidate_v2_readback.json",
+    "analysis_qualification": "hrc_analysis_qualification.json",
+    "normalization_public_readback": "hrc_public_normalization_readback.json",
+    "unresolved_member_audit": "../hrc/unresolved_member_audit.json"
+  },
+  "limitations": [
+    "Unresolved identities and missing official amendment targets are retained explicitly.",
+    "Unattended publisher refresh remains disabled.",
+    "This deployment made no service-image or release-configuration changes. The recorded live FEC/image identity is an observation, not a claim that other deployments did not change it during the session.",
+    "Actual schemas and generation pins are available; scorecard-specific dictionary descriptions remain absent in the preserved live image."
+  ],
+  "verified_at": "2026-10-03T23:07:40.150216+00:00",
+  "hosted_readback": {
+    "status": "passed",
+    "calls": 9,
+    "receipt": "hrc_hosted_readback.json",
+    "sha256": "2a0b8b46326cd52072f51fb3260a64fe2a7ab4f4f0869c5ef62ea36eaaa18fc0",
+    "family_rating_total": 6754,
+    "native_na_remaining": 0,
+    "native_n_slash_a_count": 280
+  }
+}

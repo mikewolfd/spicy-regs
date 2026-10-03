@@ -1,0 +1,735 @@
+{
+  "accepted": true,
+  "accepted_at": "2026-10-03T18:19:21.139878+00:00",
+  "schema_version": "scorecards-v1",
+  "schema_semantic_sha256": "3df8b471bd8a96a31976a877d12156d208fa4a9e8a0b8661b3487d25e5cb159a",
+  "post_review_metadata_changes": [
+    "version",
+    "frozen",
+    "unresolved_design_choices"
+  ],
+  "decision": "Freeze the sampled V1 source model and enable implementation tasks. Full edition acquisition, parser support and publication require separate qualification.",
+  "allows_production_publication": false,
+  "independent_review": "work/operations/schema_closure.json",
+  "gate_result": {
+    "allows": true,
+    "allows_production_publication": false,
+    "scope": "Research schema qualification only; no acquisition completeness or parser support is inferred.",
+    "schema_version": "scorecards-v1",
+    "errors": [],
+    "pending": [],
+    "checked_fixtures": [
+      {
+        "sample_id": "profile:lcv:2025",
+        "table_rows": {
+          "scorecard_publishers": 1,
+          "scorecards": 1,
+          "scorecard_snapshots": 1,
+          "scorecard_methodologies": 1,
+          "scorecard_metrics": 0,
+          "scorecard_items": 0,
+          "scorecard_metric_items": 0,
+          "scorecard_metric_components": 0,
+          "scorecard_members": 0,
+          "scorecard_member_ratings": 0,
+          "scorecard_member_item_results": 0
+        },
+        "editions": 1
+      },
+      {
+        "sample_id": "profile:afl_cio:2025",
+        "table_rows": {
+          "scorecard_publishers": 1,
+          "scorecards": 1,
+          "scorecard_snapshots": 1,
+          "scorecard_methodologies": 0,
+          "scorecard_metrics": 1,
+          "scorecard_items": 0,
+          "scorecard_metric_items": 0,
+          "scorecard_metric_components": 0,
+          "scorecard_members": 1,
+          "scorecard_member_ratings": 1,
+          "scorecard_member_item_results": 0
+        },
+        "editions": 1
+      },
+      {
+        "sample_id": "profile:heritage_action:115_cosponsorship",
+        "table_rows": {
+          "scorecard_publishers": 1,
+          "scorecards": 1,
+          "scorecard_snapshots": 1,
+          "scorecard_methodologies": 0,
+          "scorecard_metrics": 1,
+          "scorecard_items": 1,
+          "scorecard_metric_items": 1,
+          "scorecard_metric_components": 0,
+          "scorecard_members": 1,
+          "scorecard_member_ratings": 0,
+          "scorecard_member_item_results": 1
+        },
+        "editions": 1
+      },
+      {
+        "sample_id": "profile:us_chamber:116_method",
+        "table_rows": {
+          "scorecard_publishers": 1,
+          "scorecards": 1,
+          "scorecard_snapshots": 1,
+          "scorecard_methodologies": 1,
+          "scorecard_metrics": 4,
+          "scorecard_items": 0,
+          "scorecard_metric_items": 0,
+          "scorecard_metric_components": 3,
+          "scorecard_members": 0,
+          "scorecard_member_ratings": 0,
+          "scorecard_member_item_results": 0
+        },
+        "editions": 1
+      },
+      {
+        "sample_id": "profile:hrc:118",
+        "table_rows": {
+          "scorecard_publishers": 1,
+          "scorecards": 1,
+          "scorecard_snapshots": 1,
+          "scorecard_methodologies": 0,
+          "scorecard_metrics": 1,
+          "scorecard_items": 0,
+          "scorecard_metric_items": 0,
+          "scorecard_metric_components": 0,
+          "scorecard_members": 1,
+          "scorecard_member_ratings": 1,
+          "scorecard_member_item_results": 0
+        },
+        "editions": 1
+      },
+      {
+        "sample_id": "profile:ntu:2024",
+        "table_rows": {
+          "scorecard_publishers": 1,
+          "scorecards": 1,
+          "scorecard_snapshots": 1,
+          "scorecard_methodologies": 0,
+          "scorecard_metrics": 2,
+          "scorecard_items": 0,
+          "scorecard_metric_items": 0,
+          "scorecard_metric_components": 0,
+          "scorecard_members": 1,
+          "scorecard_member_ratings": 2,
+          "scorecard_member_item_results": 0
+        },
+        "editions": 1
+      },
+      {
+        "sample_id": "profile:norml:2016_2020",
+        "table_rows": {
+          "scorecard_publishers": 1,
+          "scorecards": 1,
+          "scorecard_snapshots": 1,
+          "scorecard_methodologies": 1,
+          "scorecard_metrics": 0,
+          "scorecard_items": 0,
+          "scorecard_metric_items": 0,
+          "scorecard_metric_components": 0,
+          "scorecard_members": 0,
+          "scorecard_member_ratings": 0,
+          "scorecard_member_item_results": 0
+        },
+        "editions": 1
+      },
+      {
+        "sample_id": "profile:humane_world_action:2025",
+        "table_rows": {
+          "scorecard_publishers": 1,
+          "scorecards": 1,
+          "scorecard_snapshots": 1,
+          "scorecard_methodologies": 0,
+          "scorecard_metrics": 1,
+          "scorecard_items": 0,
+          "scorecard_metric_items": 0,
+          "scorecard_metric_components": 0,
+          "scorecard_members": 1,
+          "scorecard_member_ratings": 1,
+          "scorecard_member_item_results": 0
+        },
+        "editions": 1
+      },
+      {
+        "sample_id": "profile:nea:119",
+        "table_rows": {
+          "scorecard_publishers": 1,
+          "scorecards": 1,
+          "scorecard_snapshots": 1,
+          "scorecard_methodologies": 0,
+          "scorecard_metrics": 1,
+          "scorecard_items": 0,
+          "scorecard_metric_items": 0,
+          "scorecard_metric_components": 0,
+          "scorecard_members": 1,
+          "scorecard_member_ratings": 1,
+          "scorecard_member_item_results": 0
+        },
+        "editions": 1
+      },
+      {
+        "sample_id": "profile:ajp_action:2026",
+        "table_rows": {
+          "scorecard_publishers": 1,
+          "scorecards": 1,
+          "scorecard_snapshots": 1,
+          "scorecard_methodologies": 1,
+          "scorecard_metrics": 0,
+          "scorecard_items": 0,
+          "scorecard_metric_items": 0,
+          "scorecard_metric_components": 0,
+          "scorecard_members": 0,
+          "scorecard_member_ratings": 0,
+          "scorecard_member_item_results": 0
+        },
+        "editions": 1
+      },
+      {
+        "sample_id": "profile:c4ip:2024",
+        "table_rows": {
+          "scorecard_publishers": 1,
+          "scorecards": 1,
+          "scorecard_snapshots": 1,
+          "scorecard_methodologies": 1,
+          "scorecard_metrics": 0,
+          "scorecard_items": 0,
+          "scorecard_metric_items": 0,
+          "scorecard_metric_components": 0,
+          "scorecard_members": 0,
+          "scorecard_member_ratings": 0,
+          "scorecard_member_item_results": 0
+        },
+        "editions": 1
+      },
+      {
+        "sample_id": "profile:ffrf_action:2026_house",
+        "table_rows": {
+          "scorecard_publishers": 1,
+          "scorecards": 1,
+          "scorecard_snapshots": 1,
+          "scorecard_methodologies": 1,
+          "scorecard_metrics": 0,
+          "scorecard_items": 0,
+          "scorecard_metric_items": 0,
+          "scorecard_metric_components": 0,
+          "scorecard_members": 0,
+          "scorecard_member_ratings": 0,
+          "scorecard_member_item_results": 0
+        },
+        "editions": 1
+      },
+      {
+        "sample_id": "profile:ffrf_action:2026_senate",
+        "table_rows": {
+          "scorecard_publishers": 1,
+          "scorecards": 1,
+          "scorecard_snapshots": 1,
+          "scorecard_methodologies": 0,
+          "scorecard_metrics": 1,
+          "scorecard_items": 1,
+          "scorecard_metric_items": 1,
+          "scorecard_metric_components": 0,
+          "scorecard_members": 0,
+          "scorecard_member_ratings": 0,
+          "scorecard_member_item_results": 0
+        },
+        "editions": 1
+      },
+      {
+        "sample_id": "profile:lugar_mccourt:113_senate",
+        "table_rows": {
+          "scorecard_publishers": 1,
+          "scorecards": 1,
+          "scorecard_snapshots": 1,
+          "scorecard_methodologies": 0,
+          "scorecard_metrics": 1,
+          "scorecard_items": 0,
+          "scorecard_metric_items": 0,
+          "scorecard_metric_components": 0,
+          "scorecard_members": 2,
+          "scorecard_member_ratings": 2,
+          "scorecard_member_item_results": 0
+        },
+        "editions": 1
+      },
+      {
+        "sample_id": "profile:club_for_growth:2025_house",
+        "table_rows": {
+          "scorecard_publishers": 1,
+          "scorecards": 1,
+          "scorecard_snapshots": 1,
+          "scorecard_methodologies": 0,
+          "scorecard_metrics": 1,
+          "scorecard_items": 0,
+          "scorecard_metric_items": 0,
+          "scorecard_metric_components": 0,
+          "scorecard_members": 2,
+          "scorecard_member_ratings": 2,
+          "scorecard_member_item_results": 0
+        },
+        "editions": 1
+      },
+      {
+        "sample_id": "profile:acec:116-senate",
+        "table_rows": {
+          "scorecard_publishers": 1,
+          "scorecards": 1,
+          "scorecard_snapshots": 1,
+          "scorecard_methodologies": 0,
+          "scorecard_metrics": 1,
+          "scorecard_items": 1,
+          "scorecard_metric_items": 0,
+          "scorecard_metric_components": 0,
+          "scorecard_members": 1,
+          "scorecard_member_ratings": 1,
+          "scorecard_member_item_results": 1
+        },
+        "editions": 1
+      },
+      {
+        "sample_id": "profile:ada:2023",
+        "table_rows": {
+          "scorecard_publishers": 1,
+          "scorecards": 1,
+          "scorecard_snapshots": 1,
+          "scorecard_methodologies": 1,
+          "scorecard_metrics": 0,
+          "scorecard_items": 0,
+          "scorecard_metric_items": 0,
+          "scorecard_metric_components": 0,
+          "scorecard_members": 0,
+          "scorecard_member_ratings": 0,
+          "scorecard_member_item_results": 0
+        },
+        "editions": 1
+      },
+      {
+        "sample_id": "profile:ara:2025",
+        "table_rows": {
+          "scorecard_publishers": 1,
+          "scorecards": 1,
+          "scorecard_snapshots": 1,
+          "scorecard_methodologies": 0,
+          "scorecard_metrics": 1,
+          "scorecard_items": 0,
+          "scorecard_metric_items": 0,
+          "scorecard_metric_components": 0,
+          "scorecard_members": 1,
+          "scorecard_member_ratings": 1,
+          "scorecard_member_item_results": 0
+        },
+        "editions": 1
+      },
+      {
+        "sample_id": "profile:frc_action:2026-live",
+        "table_rows": {
+          "scorecard_publishers": 1,
+          "scorecards": 1,
+          "scorecard_snapshots": 1,
+          "scorecard_methodologies": 1,
+          "scorecard_metrics": 0,
+          "scorecard_items": 0,
+          "scorecard_metric_items": 0,
+          "scorecard_metric_components": 0,
+          "scorecard_members": 0,
+          "scorecard_member_ratings": 0,
+          "scorecard_member_item_results": 0
+        },
+        "editions": 1
+      },
+      {
+        "sample_id": "profile:ila:2026-method",
+        "table_rows": {
+          "scorecard_publishers": 1,
+          "scorecards": 1,
+          "scorecard_snapshots": 1,
+          "scorecard_methodologies": 1,
+          "scorecard_metrics": 0,
+          "scorecard_items": 0,
+          "scorecard_metric_items": 0,
+          "scorecard_metric_components": 0,
+          "scorecard_members": 0,
+          "scorecard_member_ratings": 0,
+          "scorecard_member_item_results": 0
+        },
+        "editions": 1
+      },
+      {
+        "sample_id": "profile:network:2025",
+        "table_rows": {
+          "scorecard_publishers": 1,
+          "scorecards": 1,
+          "scorecard_snapshots": 1,
+          "scorecard_methodologies": 0,
+          "scorecard_metrics": 1,
+          "scorecard_items": 1,
+          "scorecard_metric_items": 0,
+          "scorecard_metric_components": 0,
+          "scorecard_members": 1,
+          "scorecard_member_ratings": 1,
+          "scorecard_member_item_results": 0
+        },
+        "editions": 1
+      },
+      {
+        "sample_id": "profile:niac_action:117-method",
+        "table_rows": {
+          "scorecard_publishers": 1,
+          "scorecards": 1,
+          "scorecard_snapshots": 1,
+          "scorecard_methodologies": 0,
+          "scorecard_metrics": 0,
+          "scorecard_items": 1,
+          "scorecard_metric_items": 0,
+          "scorecard_metric_components": 0,
+          "scorecard_members": 0,
+          "scorecard_member_ratings": 0,
+          "scorecard_member_item_results": 0
+        },
+        "editions": 1
+      },
+      {
+        "sample_id": "profile:nrf:119-senate-grid",
+        "table_rows": {
+          "scorecard_publishers": 1,
+          "scorecards": 1,
+          "scorecard_snapshots": 1,
+          "scorecard_methodologies": 1,
+          "scorecard_metrics": 0,
+          "scorecard_items": 2,
+          "scorecard_metric_items": 0,
+          "scorecard_metric_components": 0,
+          "scorecard_members": 1,
+          "scorecard_member_ratings": 0,
+          "scorecard_member_item_results": 2
+        },
+        "editions": 1
+      },
+      {
+        "sample_id": "profile:aauw:118",
+        "table_rows": {
+          "scorecard_publishers": 1,
+          "scorecards": 1,
+          "scorecard_snapshots": 1,
+          "scorecard_methodologies": 2,
+          "scorecard_metrics": 0,
+          "scorecard_items": 0,
+          "scorecard_metric_items": 0,
+          "scorecard_metric_components": 0,
+          "scorecard_members": 0,
+          "scorecard_member_ratings": 0,
+          "scorecard_member_item_results": 0
+        },
+        "editions": 1
+      },
+      {
+        "sample_id": "profile:boilermakers:1999",
+        "table_rows": {
+          "scorecard_publishers": 1,
+          "scorecards": 1,
+          "scorecard_snapshots": 1,
+          "scorecard_methodologies": 1,
+          "scorecard_metrics": 2,
+          "scorecard_items": 0,
+          "scorecard_metric_items": 0,
+          "scorecard_metric_components": 0,
+          "scorecard_members": 0,
+          "scorecard_member_ratings": 0,
+          "scorecard_member_item_results": 0
+        },
+        "editions": 1
+      },
+      {
+        "sample_id": "profile:childrens_defense:117-announcement",
+        "table_rows": {
+          "scorecard_publishers": 1,
+          "scorecards": 1,
+          "scorecard_snapshots": 1,
+          "scorecard_methodologies": 1,
+          "scorecard_metrics": 0,
+          "scorecard_items": 0,
+          "scorecard_metric_items": 0,
+          "scorecard_metric_components": 0,
+          "scorecard_members": 0,
+          "scorecard_member_ratings": 0,
+          "scorecard_member_item_results": 0
+        },
+        "editions": 1
+      },
+      {
+        "sample_id": "profile:end_citizens_united:119",
+        "table_rows": {
+          "scorecard_publishers": 1,
+          "scorecards": 1,
+          "scorecard_snapshots": 1,
+          "scorecard_methodologies": 0,
+          "scorecard_metrics": 1,
+          "scorecard_items": 0,
+          "scorecard_metric_items": 0,
+          "scorecard_metric_components": 0,
+          "scorecard_members": 2,
+          "scorecard_member_ratings": 2,
+          "scorecard_member_item_results": 0
+        },
+        "editions": 1
+      },
+      {
+        "sample_id": "profile:leadership_conference:118",
+        "table_rows": {
+          "scorecard_publishers": 1,
+          "scorecards": 1,
+          "scorecard_snapshots": 1,
+          "scorecard_methodologies": 0,
+          "scorecard_metrics": 1,
+          "scorecard_items": 0,
+          "scorecard_metric_items": 0,
+          "scorecard_metric_components": 0,
+          "scorecard_members": 1,
+          "scorecard_member_ratings": 1,
+          "scorecard_member_item_results": 0
+        },
+        "editions": 1
+      },
+      {
+        "sample_id": "profile:planned_parenthood:current-method",
+        "table_rows": {
+          "scorecard_publishers": 1,
+          "scorecards": 1,
+          "scorecard_snapshots": 1,
+          "scorecard_methodologies": 1,
+          "scorecard_metrics": 1,
+          "scorecard_items": 0,
+          "scorecard_metric_items": 0,
+          "scorecard_metric_components": 0,
+          "scorecard_members": 0,
+          "scorecard_member_ratings": 0,
+          "scorecard_member_item_results": 0
+        },
+        "editions": 1
+      },
+      {
+        "sample_id": "profile:reproductive_freedom:2025-budd",
+        "table_rows": {
+          "scorecard_publishers": 1,
+          "scorecards": 1,
+          "scorecard_snapshots": 1,
+          "scorecard_methodologies": 2,
+          "scorecard_metrics": 1,
+          "scorecard_items": 0,
+          "scorecard_metric_items": 0,
+          "scorecard_metric_components": 0,
+          "scorecard_members": 1,
+          "scorecard_member_ratings": 1,
+          "scorecard_member_item_results": 0
+        },
+        "editions": 1
+      },
+      {
+        "sample_id": "profile:national_parks_action:118-scope",
+        "table_rows": {
+          "scorecard_publishers": 1,
+          "scorecards": 1,
+          "scorecard_snapshots": 1,
+          "scorecard_methodologies": 1,
+          "scorecard_metrics": 0,
+          "scorecard_items": 0,
+          "scorecard_metric_items": 0,
+          "scorecard_metric_components": 0,
+          "scorecard_members": 0,
+          "scorecard_member_ratings": 0,
+          "scorecard_member_item_results": 0
+        },
+        "editions": 1
+      },
+      {
+        "sample_id": "profile:foreign_policy_america:118",
+        "table_rows": {
+          "scorecard_publishers": 1,
+          "scorecards": 1,
+          "scorecard_snapshots": 1,
+          "scorecard_methodologies": 1,
+          "scorecard_metrics": 1,
+          "scorecard_items": 0,
+          "scorecard_metric_items": 0,
+          "scorecard_metric_components": 0,
+          "scorecard_members": 1,
+          "scorecard_member_ratings": 1,
+          "scorecard_member_item_results": 0
+        },
+        "editions": 1
+      },
+      {
+        "sample_id": "profile:sace_action:2012",
+        "table_rows": {
+          "scorecard_publishers": 1,
+          "scorecards": 1,
+          "scorecard_snapshots": 1,
+          "scorecard_methodologies": 0,
+          "scorecard_metrics": 1,
+          "scorecard_items": 1,
+          "scorecard_metric_items": 0,
+          "scorecard_metric_components": 0,
+          "scorecard_members": 2,
+          "scorecard_member_ratings": 1,
+          "scorecard_member_item_results": 1
+        },
+        "editions": 1
+      },
+      {
+        "sample_id": "profile:cpac:2025-report",
+        "table_rows": {
+          "scorecard_publishers": 1,
+          "scorecards": 1,
+          "scorecard_snapshots": 1,
+          "scorecard_methodologies": 0,
+          "scorecard_metrics": 1,
+          "scorecard_items": 0,
+          "scorecard_metric_items": 0,
+          "scorecard_metric_components": 0,
+          "scorecard_members": 1,
+          "scorecard_member_ratings": 1,
+          "scorecard_member_item_results": 0
+        },
+        "editions": 1
+      },
+      {
+        "sample_id": "profile:american_energy_alliance:119-live",
+        "table_rows": {
+          "scorecard_publishers": 1,
+          "scorecards": 1,
+          "scorecard_snapshots": 1,
+          "scorecard_methodologies": 0,
+          "scorecard_metrics": 1,
+          "scorecard_items": 0,
+          "scorecard_metric_items": 0,
+          "scorecard_metric_components": 0,
+          "scorecard_members": 1,
+          "scorecard_member_ratings": 1,
+          "scorecard_member_item_results": 0
+        },
+        "editions": 1
+      },
+      {
+        "sample_id": "afl_cio:2025:bounded-schema",
+        "table_rows": {
+          "scorecard_publishers": 1,
+          "scorecards": 1,
+          "scorecard_snapshots": 1,
+          "scorecard_methodologies": 1,
+          "scorecard_metrics": 2,
+          "scorecard_items": 3,
+          "scorecard_metric_items": 1,
+          "scorecard_metric_components": 0,
+          "scorecard_members": 1,
+          "scorecard_member_ratings": 2,
+          "scorecard_member_item_results": 1
+        },
+        "editions": 1
+      },
+      {
+        "sample_id": "lcv:2025:bounded-schema",
+        "table_rows": {
+          "scorecard_publishers": 1,
+          "scorecards": 1,
+          "scorecard_snapshots": 1,
+          "scorecard_methodologies": 0,
+          "scorecard_metrics": 2,
+          "scorecard_items": 0,
+          "scorecard_metric_items": 0,
+          "scorecard_metric_components": 0,
+          "scorecard_members": 2,
+          "scorecard_member_ratings": 3,
+          "scorecard_member_item_results": 0
+        },
+        "editions": 1
+      },
+      {
+        "sample_id": "nea:119:bounded-schema",
+        "table_rows": {
+          "scorecard_publishers": 1,
+          "scorecards": 1,
+          "scorecard_snapshots": 1,
+          "scorecard_methodologies": 0,
+          "scorecard_metrics": 1,
+          "scorecard_items": 1,
+          "scorecard_metric_items": 0,
+          "scorecard_metric_components": 0,
+          "scorecard_members": 1,
+          "scorecard_member_ratings": 1,
+          "scorecard_member_item_results": 0
+        },
+        "editions": 1
+      },
+      {
+        "sample_id": "humane:2025:bounded-schema",
+        "table_rows": {
+          "scorecard_publishers": 1,
+          "scorecards": 1,
+          "scorecard_snapshots": 1,
+          "scorecard_methodologies": 1,
+          "scorecard_metrics": 1,
+          "scorecard_items": 2,
+          "scorecard_metric_items": 0,
+          "scorecard_metric_components": 0,
+          "scorecard_members": 3,
+          "scorecard_member_ratings": 3,
+          "scorecard_member_item_results": 2
+        },
+        "editions": 1
+      },
+      {
+        "sample_id": "heritage_action:119:bounded-schema",
+        "table_rows": {
+          "scorecard_publishers": 1,
+          "scorecards": 1,
+          "scorecard_snapshots": 1,
+          "scorecard_methodologies": 0,
+          "scorecard_metrics": 1,
+          "scorecard_items": 1,
+          "scorecard_metric_items": 0,
+          "scorecard_metric_components": 0,
+          "scorecard_members": 1,
+          "scorecard_member_ratings": 1,
+          "scorecard_member_item_results": 1
+        },
+        "editions": 1
+      },
+      {
+        "sample_id": "c4ip:2024:grades-and-component-challenges",
+        "table_rows": {
+          "scorecard_publishers": 2,
+          "scorecards": 2,
+          "scorecard_snapshots": 2,
+          "scorecard_methodologies": 2,
+          "scorecard_metrics": 9,
+          "scorecard_items": 0,
+          "scorecard_metric_items": 0,
+          "scorecard_metric_components": 6,
+          "scorecard_members": 1,
+          "scorecard_member_ratings": 1,
+          "scorecard_member_item_results": 0
+        },
+        "editions": 2
+      }
+    ]
+  },
+  "input_sha256": {
+    "proposed_schema.json": "ac7f946fb4026a725acd89760db27bbf110e82f08152e03ebfb9199df15546d2",
+    "schema_examples.json": "08db294a3d1033f580eac8029688c212809510c4a62a1d5f5fced1f7e00d9932",
+    "shape_profiles.json": "6339c8189e69b1a9dcb0021c9c70e511e34338e14b66cc85b45102dca25c3ea9",
+    "schema_breakers.json": "1e0a8cd8e55cc25ae8a2c1465f5fa857b1d416713b24e0f8561021ee58298b06",
+    "scorecard_source_catalog.json": "727baa5d9ca48c54c53838475d4a628f233dc50c6b7fa3497d4be0c64343c6d6",
+    "capture_receipts.json": "6a70784bb69c08314631fb7f47a05144a7199dc015905e4379502fbf730ee5db",
+    "work/gate/qualification.json": "3af99eef3ea732dfcded898da0f8420eef1254ff04aabe789b0c42a74426e5c0",
+    "work/gate/validate_gate.py": "dba5e11c5a32f97818c3f717342059a198ff901678495708a0180065154c478a",
+    "work/gate/initial_sources.json": "4cea9f65324dc414b2475901840c15a03f718b2cffa56f7d7ec607465fea385b",
+    "work/operations/schema_closure.json": "303a3c91cbb45ac965e6e4554add4ee6b703fc6a6297759c667f02c66120a173",
+    "work/gate/profile_bundles.json": "8672da7f42719a0d95e4e49159a8dae629a53be2128b0981b7167d9332e63e71",
+    "work/gate/sample_bundles.json": "8e2333299c5184b7f9ed751d387e4d11ffc7c5894d953417f55af3e666f8347f"
+  }
+}

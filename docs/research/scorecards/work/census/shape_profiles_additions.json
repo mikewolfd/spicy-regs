@@ -1,0 +1,1700 @@
+{
+  "schema_version": 1,
+  "readiness_semantics": {
+    "source_model_fit": "Can the observed source facts be retained without invention?",
+    "acquisition_readiness": "Complete HTTP bytes are not complete source rows or qualified parser output.",
+    "reproduction_readiness": "Separate analytic question; undisclosed methods do not block retaining published ratings."
+  },
+  "profiles": [
+    {
+      "profile_id": "acec:116-senate",
+      "source_id": "acec:federal",
+      "publisher_id": "acec",
+      "scorecard": "Legislative Scorecards",
+      "edition_text": "116-senate",
+      "periods": [
+        {
+          "congress": 116
+        }
+      ],
+      "chamber_scope": "senate",
+      "source_formats": [
+        "pdf"
+      ],
+      "rating_forms": [
+        "percent"
+      ],
+      "metrics": [
+        "overall"
+      ],
+      "scored_item_types": [
+        "roll_call",
+        "cosponsorship",
+        "sign_on_letter"
+      ],
+      "member_identity": [
+        "name",
+        "state",
+        "district",
+        "party"
+      ],
+      "item_identity": [
+        "bill_citation",
+        "roll_number"
+      ],
+      "scoring": [
+        "unknown"
+      ],
+      "publisher_target_position": "explicit",
+      "member_level_item_results": "available",
+      "methodology": "partial",
+      "profile_depth": "edition_sample",
+      "capture_ids": [
+        "census-acec-116-pdf",
+        "census-acec-116-issues-pdf"
+      ],
+      "features": {
+        "overall_score": "yes",
+        "roll_call": "yes",
+        "cosponsorship": "yes",
+        "non_vote_action": "yes"
+      },
+      "notes": "Senate PDF mixes roll calls, bill cosponsorship and a funding letter. Empty cells remain empty; no denominator or blank-cell rule was established. Preserve distinct member tenure context rather than assuming current membership.",
+      "literal_examples": [
+        {
+          "value_text": "50%",
+          "meaning": "Harris reported percentage",
+          "capture_id": "census-acec-116-pdf",
+          "locator": "Physical page 1 / California / Harris / % with ACEC"
+        },
+        {
+          "value_text": "Not Voting",
+          "meaning": "Harris H.R.8337 action",
+          "capture_id": "census-acec-116-pdf",
+          "locator": "Physical page 1 / California / Harris / H.R.8337 VOTE197"
+        }
+      ],
+      "schema_fit": "fits_proposal",
+      "unsupported_shapes": [],
+      "source_model_fit": "fits_proposal",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_qualified",
+      "readiness_limits": [],
+      "complete_source_snapshot_established": false,
+      "profiled_at": "2026-10-03T17:48:51.414495+00:00",
+      "source_locators": [
+        {
+          "capture_id": "census-acec-116-pdf",
+          "locator": "Named sections, page numbers and row labels in notes/examples"
+        },
+        {
+          "capture_id": "census-acec-116-issues-pdf",
+          "locator": "Named sections, page numbers and row labels in notes/examples"
+        }
+      ],
+      "schema_version_assessed": "proposal-0.2"
+    },
+    {
+      "profile_id": "ada:2023",
+      "source_id": "ada:federal",
+      "publisher_id": "ada",
+      "scorecard": "Annual Voting Records / Liberal Quotient",
+      "edition_text": "2023",
+      "periods": [
+        {
+          "year": 2023,
+          "congress": 118,
+          "session": 1
+        }
+      ],
+      "chamber_scope": "both",
+      "source_formats": [
+        "pdf"
+      ],
+      "rating_forms": [
+        "percent"
+      ],
+      "metrics": [
+        "annual"
+      ],
+      "scored_item_types": [
+        "roll_call",
+        "procedural_action",
+        "nomination"
+      ],
+      "member_identity": [
+        "name",
+        "state",
+        "district",
+        "party"
+      ],
+      "item_identity": [
+        "bill_citation",
+        "roll_number"
+      ],
+      "scoring": [
+        "uniform_weights",
+        "absence_penalty"
+      ],
+      "publisher_target_position": "explicit",
+      "member_level_item_results": "available",
+      "methodology": "partial",
+      "profile_depth": "edition_sample",
+      "capture_ids": [
+        "ada-index",
+        "census-ada-2023"
+      ],
+      "features": {
+        "overall_score": "yes",
+        "roll_call": "yes",
+        "member_exclusions": "yes"
+      },
+      "notes": "Each agreement earns five points; absence loses credit. The 2023 notes distinguish strategic no votes and incomplete service; committee work and lifetime performance are expressly outside this rating.",
+      "literal_examples": [
+        {
+          "value_text": "95%",
+          "meaning": "Methodological example for agreement on nineteen votes and one absence; not a member rating",
+          "capture_id": "census-ada-2023",
+          "locator": "Physical page 2 / Notes"
+        }
+      ],
+      "schema_fit": "fits_proposal",
+      "unsupported_shapes": [],
+      "source_model_fit": "fits_proposal",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_qualified",
+      "readiness_limits": [],
+      "complete_source_snapshot_established": false,
+      "profiled_at": "2026-10-03T17:48:51.414495+00:00",
+      "source_locators": [
+        {
+          "capture_id": "ada-index",
+          "locator": "Named sections, page numbers and row labels in notes/examples"
+        },
+        {
+          "capture_id": "census-ada-2023",
+          "locator": "Named sections, page numbers and row labels in notes/examples"
+        }
+      ],
+      "schema_version_assessed": "proposal-0.2"
+    },
+    {
+      "profile_id": "ada:1947-format",
+      "source_id": "ada:federal",
+      "publisher_id": "ada",
+      "scorecard": "Annual Voting Records / Liberal Quotient",
+      "edition_text": "1947-format",
+      "periods": [
+        {
+          "year": 1947
+        }
+      ],
+      "chamber_scope": "both",
+      "source_formats": [
+        "pdf"
+      ],
+      "rating_forms": [],
+      "metrics": [],
+      "scored_item_types": [],
+      "member_identity": [],
+      "item_identity": [],
+      "scoring": [
+        "unknown"
+      ],
+      "publisher_target_position": "unknown",
+      "member_level_item_results": "unknown",
+      "methodology": "unknown",
+      "profile_depth": "historical_format_only",
+      "capture_ids": [
+        "census-ada-1947"
+      ],
+      "features": {
+        "pdf_history": "yes"
+      },
+      "notes": "Scanned PDF with no extractable text layer. Cover visually confirms historic report-card format; no member cells qualified. Current methodology must not be applied retroactively.",
+      "literal_examples": [],
+      "schema_fit": "unsupported_documented",
+      "unsupported_shapes": [
+        "C-U01"
+      ],
+      "source_model_fit": "unsupported",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_qualified",
+      "readiness_limits": [
+        {
+          "category": "source_fixture",
+          "id": "C-U01",
+          "reason": "Historical scanned grids need OCR and checked member/item cells before source-model admission."
+        }
+      ],
+      "complete_source_snapshot_established": false,
+      "profiled_at": "2026-10-03T17:48:51.414495+00:00",
+      "source_locators": [
+        {
+          "capture_id": "census-ada-1947",
+          "locator": "Named sections, page numbers and row labels in notes/examples"
+        }
+      ],
+      "schema_version_assessed": "proposal-0.2"
+    },
+    {
+      "profile_id": "ara:2025",
+      "source_id": "ara:federal",
+      "publisher_id": "ara",
+      "scorecard": "Annual Congressional Voting Record",
+      "edition_text": "2025",
+      "periods": [
+        {
+          "year": 2025,
+          "congress": 119,
+          "session": 1
+        }
+      ],
+      "chamber_scope": "both",
+      "source_formats": [
+        "pdf"
+      ],
+      "rating_forms": [
+        "number"
+      ],
+      "metrics": [
+        "annual",
+        "lifetime"
+      ],
+      "scored_item_types": [
+        "roll_call",
+        "nomination"
+      ],
+      "member_identity": [
+        "name",
+        "state",
+        "district",
+        "party"
+      ],
+      "item_identity": [
+        "bill_citation",
+        "roll_number"
+      ],
+      "scoring": [
+        "unknown"
+      ],
+      "publisher_target_position": "explicit",
+      "member_level_item_results": "available",
+      "methodology": "partial",
+      "profile_depth": "edition_sample",
+      "capture_ids": [
+        "ara-index",
+        "census-ara-2025"
+      ],
+      "features": {
+        "overall_score": "yes",
+        "lifetime_score": "yes",
+        "roll_call": "yes",
+        "multiple_metrics": "yes"
+      },
+      "notes": "Grid reports Pro-Retiree Score and Lifetime Score as numbers; glyph text extraction misreads check/cross symbols as digits, so symbol cells require rendered checks. Full yearly/lifetime reproduction not qualified.",
+      "literal_examples": [
+        {
+          "value_text": "19",
+          "meaning": "Hawley lifetime score",
+          "capture_id": "census-ara-2025",
+          "locator": "Physical page 5 / Missouri / Hawley / Lifetime Score"
+        }
+      ],
+      "schema_fit": "fits_proposal",
+      "unsupported_shapes": [],
+      "source_model_fit": "fits_proposal",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_qualified",
+      "readiness_limits": [],
+      "complete_source_snapshot_established": false,
+      "profiled_at": "2026-10-03T17:48:51.414495+00:00",
+      "source_locators": [
+        {
+          "capture_id": "ara-index",
+          "locator": "Named sections, page numbers and row labels in notes/examples"
+        },
+        {
+          "capture_id": "census-ara-2025",
+          "locator": "Named sections, page numbers and row labels in notes/examples"
+        }
+      ],
+      "schema_version_assessed": "proposal-0.2"
+    },
+    {
+      "profile_id": "frc_action:2026-live",
+      "source_id": "frc_action:federal",
+      "publisher_id": "frc_action",
+      "scorecard": "Vote Scorecard",
+      "edition_text": "2026-live",
+      "periods": [
+        {
+          "year": 2026,
+          "congress": 119,
+          "session": 2
+        }
+      ],
+      "chamber_scope": "both",
+      "source_formats": [
+        "html"
+      ],
+      "rating_forms": [],
+      "metrics": [],
+      "scored_item_types": [
+        "roll_call",
+        "procedural_action",
+        "amendment"
+      ],
+      "member_identity": [
+        "name",
+        "state",
+        "district",
+        "party"
+      ],
+      "item_identity": [
+        "bill_citation",
+        "roll_number"
+      ],
+      "scoring": [
+        "unknown"
+      ],
+      "publisher_target_position": "explicit",
+      "member_level_item_results": "available",
+      "methodology": "partial",
+      "profile_depth": "item_and_methodology_sample",
+      "capture_ids": [
+        "frc-index"
+      ],
+      "features": {
+        "roll_call": "yes",
+        "multiple_actions_one_bill": "yes",
+        "member_exclusions": "yes"
+      },
+      "notes": "Introduction names 2026 second session, but an internal Senate heading says first session. Preserve both source labels and named 2026 vote dates; do not silently repair. The sample exposes supported/opposed motions, bill and amendment references, and separate Speaker/absence/present legend states.",
+      "literal_examples": [
+        {
+          "value_text": "Not Voting",
+          "meaning": "Publisher result legend",
+          "capture_id": "frc-index",
+          "locator": "End of delivered page / legend"
+        }
+      ],
+      "schema_fit": "fits_proposal",
+      "unsupported_shapes": [],
+      "source_model_fit": "fits_proposal",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_qualified",
+      "readiness_limits": [],
+      "complete_source_snapshot_established": false,
+      "profiled_at": "2026-10-03T17:48:51.414495+00:00",
+      "source_locators": [
+        {
+          "capture_id": "frc-index",
+          "locator": "Named sections, page numbers and row labels in notes/examples"
+        }
+      ],
+      "schema_version_assessed": "proposal-0.2"
+    },
+    {
+      "profile_id": "ila:2026-method",
+      "source_id": "ila:federal",
+      "publisher_id": "ila",
+      "scorecard": "Limited Government Index",
+      "edition_text": "2026-method",
+      "periods": [
+        {
+          "year": 2026
+        }
+      ],
+      "chamber_scope": "both",
+      "source_formats": [
+        "html"
+      ],
+      "rating_forms": [
+        "grade"
+      ],
+      "metrics": [
+        "overall",
+        "policy_category",
+        "district_relative"
+      ],
+      "scored_item_types": [
+        "roll_call"
+      ],
+      "member_identity": [
+        "name",
+        "state",
+        "district",
+        "party"
+      ],
+      "item_identity": [
+        "bill_citation",
+        "roll_number"
+      ],
+      "scoring": [
+        "unknown"
+      ],
+      "publisher_target_position": "explicit",
+      "member_level_item_results": "unknown",
+      "methodology": "partial",
+      "profile_depth": "methodology_only",
+      "capture_ids": [
+        "ila-index"
+      ],
+      "features": {
+        "multiple_metrics": "yes",
+        "grades": "yes",
+        "cohort_rules": "yes"
+      },
+      "notes": "Publisher states policy-category ratings and district-relative grading using Cook PVI and proprietary algorithms. Those inputs and transformations are not disclosed in this announcement; preserve reported grade/context without universal reproduction.",
+      "literal_examples": [],
+      "schema_fit": "fits_proposal",
+      "unsupported_shapes": [],
+      "source_model_fit": "fits_proposal",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "blocked_undisclosed_formula",
+      "readiness_limits": [],
+      "complete_source_snapshot_established": false,
+      "profiled_at": "2026-10-03T17:48:51.414495+00:00",
+      "source_locators": [
+        {
+          "capture_id": "ila-index",
+          "locator": "Named sections, page numbers and row labels in notes/examples"
+        }
+      ],
+      "schema_version_assessed": "proposal-0.2"
+    },
+    {
+      "profile_id": "network:2025",
+      "source_id": "network:federal",
+      "publisher_id": "network",
+      "scorecard": "Voting Record",
+      "edition_text": "2025",
+      "periods": [
+        {
+          "year": 2025,
+          "congress": 119,
+          "session": 1
+        }
+      ],
+      "chamber_scope": "both",
+      "source_formats": [
+        "pdf"
+      ],
+      "rating_forms": [
+        "percent"
+      ],
+      "metrics": [
+        "annual"
+      ],
+      "scored_item_types": [
+        "roll_call"
+      ],
+      "member_identity": [
+        "name",
+        "state",
+        "district",
+        "party"
+      ],
+      "item_identity": [
+        "bill_citation",
+        "roll_number"
+      ],
+      "scoring": [
+        "unknown"
+      ],
+      "publisher_target_position": "explicit",
+      "member_level_item_results": "available",
+      "methodology": "partial",
+      "profile_depth": "edition_sample",
+      "capture_ids": [
+        "census-network-2025"
+      ],
+      "features": {
+        "overall_score": "yes",
+        "roll_call": "yes",
+        "chamber_methods": "yes"
+      },
+      "notes": "Separate House and Senate item sets report plus/minus actions and literal percentage scores. Exact bill/roll identifiers and publisher positions are printed with descriptions.",
+      "literal_examples": [
+        {
+          "value_text": "14%",
+          "meaning": "Wicker Senate score",
+          "capture_id": "census-network-2025",
+          "locator": "Physical page 3 / Mississippi / Wicker"
+        },
+        {
+          "value_text": "Nay",
+          "meaning": "Publisher position on S.5 House vote23",
+          "capture_id": "census-network-2025",
+          "locator": "Physical page 4 / Laken Riley Act"
+        }
+      ],
+      "schema_fit": "fits_proposal",
+      "unsupported_shapes": [],
+      "source_model_fit": "fits_proposal",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_qualified",
+      "readiness_limits": [],
+      "complete_source_snapshot_established": false,
+      "profiled_at": "2026-10-03T17:48:51.414495+00:00",
+      "source_locators": [
+        {
+          "capture_id": "census-network-2025",
+          "locator": "Named sections, page numbers and row labels in notes/examples"
+        }
+      ],
+      "schema_version_assessed": "proposal-0.2"
+    },
+    {
+      "profile_id": "niac_action:117-method",
+      "source_id": "niac_action:federal",
+      "publisher_id": "niac_action",
+      "scorecard": "Congressional Scorecard",
+      "edition_text": "117-method",
+      "periods": [
+        {
+          "congress": 117
+        },
+        {
+          "year": 2015
+        },
+        {
+          "year": 2020
+        }
+      ],
+      "chamber_scope": "both",
+      "source_formats": [
+        "html",
+        "spreadsheet_offered"
+      ],
+      "rating_forms": [
+        "grade"
+      ],
+      "metrics": [
+        "peace_diplomacy",
+        "civil_human_rights",
+        "equitable_immigration"
+      ],
+      "scored_item_types": [
+        "roll_call",
+        "committee_action",
+        "sign_on_letter",
+        "public_statement"
+      ],
+      "member_identity": [
+        "name",
+        "state",
+        "district",
+        "party"
+      ],
+      "item_identity": [
+        "bill_citation",
+        "roll_number"
+      ],
+      "scoring": [
+        "unknown"
+      ],
+      "publisher_target_position": "explicit",
+      "member_level_item_results": "unknown",
+      "methodology": "partial",
+      "profile_depth": "methodology_only",
+      "capture_ids": [
+        "niac-117"
+      ],
+      "features": {
+        "committee_action": "yes",
+        "non_vote_action": "yes",
+        "multiple_metrics": "yes",
+        "member_exclusions": "yes"
+      },
+      "notes": "Named 117th edition includes an earlier 2015 JCPOA vote and December2020 letter. House appropriations passage applies only to that committee. Public letters/statements are independent scoring items; spreadsheet member results were not captured.",
+      "literal_examples": [
+        {
+          "value_text": "JCPOA 2015 Vote",
+          "meaning": "Earlier-period action in 117th scorecard",
+          "capture_id": "niac-117",
+          "locator": "House / Peace and Diplomacy"
+        }
+      ],
+      "schema_fit": "fits_proposal",
+      "unsupported_shapes": [],
+      "source_model_fit": "fits_proposal",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_qualified",
+      "readiness_limits": [],
+      "complete_source_snapshot_established": false,
+      "profiled_at": "2026-10-03T17:48:51.414495+00:00",
+      "source_locators": [
+        {
+          "capture_id": "niac-117",
+          "locator": "Named sections, page numbers and row labels in notes/examples"
+        }
+      ],
+      "schema_version_assessed": "proposal-0.2"
+    },
+    {
+      "profile_id": "nrf:119-senate-grid",
+      "source_id": "nrf:federal",
+      "publisher_id": "nrf",
+      "scorecard": "Congressional Voting Scorecard",
+      "edition_text": "119-senate-grid",
+      "periods": [
+        {
+          "congress": 119,
+          "year": 2025
+        },
+        {
+          "congress": 119,
+          "year": 2026
+        }
+      ],
+      "chamber_scope": "senate",
+      "source_formats": [
+        "html"
+      ],
+      "rating_forms": [],
+      "metrics": [],
+      "scored_item_types": [
+        "roll_call",
+        "bill"
+      ],
+      "member_identity": [
+        "publisher_url",
+        "publisher_id",
+        "name",
+        "state",
+        "party"
+      ],
+      "item_identity": [
+        "bill_citation",
+        "roll_number"
+      ],
+      "scoring": [
+        "unknown"
+      ],
+      "publisher_target_position": "explicit",
+      "member_level_item_results": "available",
+      "methodology": "partial",
+      "profile_depth": "edition_sample",
+      "capture_ids": [
+        "census-nrf-119-senate"
+      ],
+      "features": {
+        "overall_score": "no",
+        "roll_call": "yes",
+        "cosponsorship": "unknown",
+        "member_level_results_without_rating": "yes"
+      },
+      "notes": "One HTML table has member names and item columns but no aggregate score/rank column. Image alt strings carry the result. Blank means no data; absent is distinct. Do not invent an overall metric to store this grid. Proposal-0.2 permits item results without metrics. A bill-only column does not establish cosponsorship; retain the publisher description without inferring action type.",
+      "literal_examples": [
+        {
+          "value_text": "supports nrf's position",
+          "meaning": "Alsobrooks S.1404 result image alt",
+          "capture_id": "census-nrf-119-senate",
+          "locator": "Table / Alsobrooks, Angela (D-Maryland) / S.1404"
+        },
+        {
+          "value_text": "absent",
+          "meaning": "Alsobrooks S.3623 result image alt",
+          "capture_id": "census-nrf-119-senate",
+          "locator": "Same row / S.3623"
+        },
+        {
+          "value_text": "blank = no data",
+          "meaning": "Legend text",
+          "capture_id": "census-nrf-119-senate",
+          "locator": "Legend above table"
+        }
+      ],
+      "schema_fit": "fits_proposal",
+      "unsupported_shapes": [],
+      "source_model_fit": "fits_proposal",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_qualified",
+      "readiness_limits": [],
+      "complete_source_snapshot_established": false,
+      "profiled_at": "2026-10-03T17:48:51.414495+00:00",
+      "source_locators": [
+        {
+          "capture_id": "census-nrf-119-senate",
+          "locator": "One delivered HTML table; columns Name,H.R.1,H.Con.Res.14,H.R.5371,S.1404,S.3623,S.844"
+        }
+      ],
+      "locator": "One delivered HTML table; columns Name,H.R.1,H.Con.Res.14,H.R.5371,S.1404,S.3623,S.844",
+      "schema_version_assessed": "proposal-0.2"
+    },
+    {
+      "profile_id": "aauw:118",
+      "source_id": "aauw:federal",
+      "publisher_id": "aauw",
+      "scorecard": "Congressional Voting Record",
+      "edition_text": "118",
+      "periods": [
+        {
+          "congress": 118
+        },
+        {
+          "congress": 117
+        },
+        {
+          "congress": 116
+        }
+      ],
+      "chamber_scope": "both",
+      "source_formats": [
+        "pdf"
+      ],
+      "rating_forms": [
+        "number"
+      ],
+      "metrics": [
+        "congressional",
+        "prior_congress"
+      ],
+      "scored_item_types": [
+        "roll_call",
+        "cosponsorship"
+      ],
+      "member_identity": [
+        "name",
+        "state",
+        "district",
+        "party"
+      ],
+      "item_identity": [
+        "bill_citation",
+        "roll_number"
+      ],
+      "scoring": [
+        "unknown"
+      ],
+      "publisher_target_position": "explicit",
+      "member_level_item_results": "available",
+      "methodology": "partial",
+      "profile_depth": "edition_sample",
+      "capture_ids": [
+        "census-aauw-118"
+      ],
+      "features": {
+        "overall_score": "yes",
+        "roll_call": "yes",
+        "cosponsorship": "yes",
+        "multiple_metrics": "yes",
+        "member_exclusions": "yes"
+      },
+      "notes": "AAUW Action Fund is the actual scorecard publisher. Table includes current and previous Congress scores, not one lifetime value; unrecorded/ineligible cells and Speaker caveat remain literal. Vote and cosponsorship check marks represent publisher agreement, not official action strings.",
+      "literal_examples": [
+        {
+          "value_text": "NV",
+          "meaning": "Publisher not-voting symbol",
+          "capture_id": "census-aauw-118",
+          "locator": "Member-table legend"
+        },
+        {
+          "value_text": "N/A",
+          "meaning": "Historical score absence",
+          "capture_id": "census-aauw-118",
+          "locator": "Member tables / prior Congress columns"
+        }
+      ],
+      "schema_fit": "fits_proposal",
+      "unsupported_shapes": [],
+      "source_model_fit": "fits_proposal",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_qualified",
+      "readiness_limits": [],
+      "complete_source_snapshot_established": false,
+      "profiled_at": "2026-10-03T17:48:51.414495+00:00",
+      "source_locators": [
+        {
+          "capture_id": "census-aauw-118",
+          "locator": "Named sections, page numbers and row labels in notes/examples"
+        }
+      ],
+      "schema_version_assessed": "proposal-0.2"
+    },
+    {
+      "profile_id": "boilermakers:1999",
+      "source_id": "boilermakers:federal",
+      "publisher_id": "boilermakers",
+      "scorecard": "Congressional Voting Record",
+      "edition_text": "1999",
+      "periods": [
+        {
+          "year": 1999,
+          "congress": 106,
+          "session": 1
+        }
+      ],
+      "chamber_scope": "both",
+      "source_formats": [
+        "pdf"
+      ],
+      "rating_forms": [
+        "percent"
+      ],
+      "metrics": [
+        "annual",
+        "lifetime"
+      ],
+      "scored_item_types": [
+        "roll_call",
+        "amendment"
+      ],
+      "member_identity": [
+        "name",
+        "state",
+        "district",
+        "party"
+      ],
+      "item_identity": [
+        "bill_citation",
+        "roll_number"
+      ],
+      "scoring": [
+        "unknown"
+      ],
+      "publisher_target_position": "explicit",
+      "member_level_item_results": "available",
+      "methodology": "partial",
+      "profile_depth": "edition_sample",
+      "capture_ids": [
+        "census-boilermakers-1999",
+        "census-boilermakers-compare"
+      ],
+      "features": {
+        "overall_score": "yes",
+        "lifetime_score": "yes",
+        "multiple_metrics": "yes",
+        "roll_call": "yes",
+        "pdf_history": "yes"
+      },
+      "notes": "Historic publisher-specific series must remain separate from present-day AFL-CIO redistribution. Publisher comparison article explicitly reports different Boilermaker/AFL-CIO values for 2005. Member grid is embedded inside a union newspaper.",
+      "literal_examples": [
+        {
+          "value_text": "99%",
+          "meaning": "Publisher annual column label, not a rating value",
+          "capture_id": "census-boilermakers-1999",
+          "locator": "Physical page 7 / Key to Senate Votes"
+        },
+        {
+          "value_text": "Life%",
+          "meaning": "Publisher lifetime column label",
+          "capture_id": "census-boilermakers-1999",
+          "locator": "Physical page 7 / Key to Senate Votes"
+        },
+        {
+          "value_text": "W",
+          "meaning": "Publisher Wrong symbol",
+          "capture_id": "census-boilermakers-1999",
+          "locator": "Physical page 7 / Key to Senate Votes"
+        }
+      ],
+      "schema_fit": "fits_proposal",
+      "unsupported_shapes": [],
+      "source_model_fit": "fits_proposal",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_qualified",
+      "readiness_limits": [],
+      "complete_source_snapshot_established": false,
+      "profiled_at": "2026-10-03T17:48:51.414495+00:00",
+      "source_locators": [
+        {
+          "capture_id": "census-boilermakers-1999",
+          "locator": "Named sections, page numbers and row labels in notes/examples"
+        },
+        {
+          "capture_id": "census-boilermakers-compare",
+          "locator": "Named sections, page numbers and row labels in notes/examples"
+        }
+      ],
+      "schema_version_assessed": "proposal-0.2"
+    },
+    {
+      "profile_id": "childrens_defense:117-announcement",
+      "source_id": "childrens_defense:federal",
+      "publisher_id": "childrens_defense",
+      "scorecard": "Congressional Scorecard",
+      "edition_text": "117-announcement",
+      "periods": [
+        {
+          "congress": 117,
+          "year": 2021,
+          "session": 1
+        }
+      ],
+      "chamber_scope": "both",
+      "source_formats": [
+        "html"
+      ],
+      "rating_forms": [
+        "grade"
+      ],
+      "metrics": [
+        "overall"
+      ],
+      "scored_item_types": [
+        "bill"
+      ],
+      "member_identity": [
+        "name",
+        "state",
+        "district",
+        "party"
+      ],
+      "item_identity": [
+        "bill_citation",
+        "roll_number"
+      ],
+      "scoring": [
+        "unknown"
+      ],
+      "publisher_target_position": "unknown",
+      "member_level_item_results": "unknown",
+      "methodology": "partial",
+      "profile_depth": "methodology_only",
+      "capture_ids": [
+        "census-cdf-117"
+      ],
+      "features": {
+        "grades": "yes",
+        "continuing_edition": "yes"
+      },
+      "notes": "Publisher announces quarterly updates and grade-based assessment across bills in multiple policy areas. The announcement is verification and methodology context; actual member rows and per-bill scoring rules remain unacquired.",
+      "literal_examples": [],
+      "schema_fit": "fits_proposal",
+      "unsupported_shapes": [],
+      "source_model_fit": "fits_proposal",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_qualified",
+      "readiness_limits": [],
+      "complete_source_snapshot_established": false,
+      "profiled_at": "2026-10-03T17:48:51.414495+00:00",
+      "source_locators": [
+        {
+          "capture_id": "census-cdf-117",
+          "locator": "Named sections, page numbers and row labels in notes/examples"
+        }
+      ],
+      "schema_version_assessed": "proposal-0.2"
+    },
+    {
+      "profile_id": "end_citizens_united:119",
+      "source_id": "end_citizens_united:federal",
+      "publisher_id": "end_citizens_united",
+      "scorecard": "Congressional Scorecard",
+      "edition_text": "119",
+      "periods": [
+        {
+          "congress": 119,
+          "year": 2026
+        }
+      ],
+      "chamber_scope": "both",
+      "source_formats": [
+        "html"
+      ],
+      "rating_forms": [
+        "grade"
+      ],
+      "metrics": [
+        "overall"
+      ],
+      "scored_item_types": [
+        "roll_call",
+        "cosponsorship",
+        "procedural_action",
+        "campaign_finance_practice"
+      ],
+      "member_identity": [
+        "name",
+        "state",
+        "district",
+        "party"
+      ],
+      "item_identity": [
+        "bill_citation",
+        "roll_number"
+      ],
+      "scoring": [
+        "unknown"
+      ],
+      "publisher_target_position": "explicit",
+      "member_level_item_results": "unavailable",
+      "methodology": "partial",
+      "profile_depth": "edition_sample",
+      "capture_ids": [
+        "census-ecu-119"
+      ],
+      "features": {
+        "grades": "yes",
+        "non_vote_action": "yes",
+        "roll_call": "yes",
+        "cosponsorship": "yes"
+      },
+      "notes": "Published member grades include A+ and F. Criteria include rejecting corporate PAC money as well as congressional actions. No complete formula or item-level result grid is disclosed here; source-backed ratings fit while reproduction remains unsupported.",
+      "literal_examples": [
+        {
+          "value_text": "A+",
+          "meaning": "Michael Bennet Senate grade",
+          "capture_id": "census-ecu-119",
+          "locator": "U.S. SENATE / Michael Bennet"
+        },
+        {
+          "value_text": "F",
+          "meaning": "Jim Banks Senate grade",
+          "capture_id": "census-ecu-119",
+          "locator": "U.S. SENATE / Jim Banks"
+        }
+      ],
+      "schema_fit": "fits_proposal",
+      "unsupported_shapes": [],
+      "source_model_fit": "fits_proposal",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "blocked_undisclosed_formula",
+      "readiness_limits": [],
+      "complete_source_snapshot_established": false,
+      "profiled_at": "2026-10-03T17:48:51.414495+00:00",
+      "source_locators": [
+        {
+          "capture_id": "census-ecu-119",
+          "locator": "Named sections, page numbers and row labels in notes/examples"
+        }
+      ],
+      "schema_version_assessed": "proposal-0.2"
+    },
+    {
+      "profile_id": "leadership_conference:118",
+      "source_id": "leadership_conference:federal",
+      "publisher_id": "leadership_conference",
+      "scorecard": "Congressional Voting Record",
+      "edition_text": "118",
+      "periods": [
+        {
+          "congress": 118,
+          "year": 2023
+        },
+        {
+          "congress": 118,
+          "year": 2024
+        }
+      ],
+      "chamber_scope": "both",
+      "source_formats": [
+        "pdf"
+      ],
+      "rating_forms": [
+        "percent"
+      ],
+      "metrics": [
+        "congressional"
+      ],
+      "scored_item_types": [
+        "roll_call",
+        "nomination",
+        "procedural_action"
+      ],
+      "member_identity": [
+        "name",
+        "state",
+        "district",
+        "party"
+      ],
+      "item_identity": [
+        "bill_citation",
+        "roll_number"
+      ],
+      "scoring": [
+        "unknown"
+      ],
+      "publisher_target_position": "explicit",
+      "member_level_item_results": "unavailable_in_captured_publication",
+      "methodology": "partial",
+      "profile_depth": "edition_sample",
+      "capture_ids": [
+        "census-leadership-118"
+      ],
+      "features": {
+        "overall_score": "yes",
+        "roll_call": "yes",
+        "member_exclusions": "yes"
+      },
+      "notes": "PDF contains action descriptions and member summary percentages. Introduction says supplementary per-member vote charts are available upon request; do not reconstruct undisclosed source cells from official votes. Footnotes identify former members and successors.",
+      "literal_examples": [
+        {
+          "value_text": "12%",
+          "meaning": "Massie summary score",
+          "capture_id": "census-leadership-118",
+          "locator": "House scorecard / Kentucky / Massie Thomas"
+        }
+      ],
+      "schema_fit": "fits_proposal",
+      "unsupported_shapes": [],
+      "source_model_fit": "fits_proposal",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_qualified",
+      "readiness_limits": [],
+      "complete_source_snapshot_established": false,
+      "profiled_at": "2026-10-03T17:48:51.414495+00:00",
+      "source_locators": [
+        {
+          "capture_id": "census-leadership-118",
+          "locator": "Named sections, page numbers and row labels in notes/examples"
+        }
+      ],
+      "schema_version_assessed": "proposal-0.2"
+    },
+    {
+      "profile_id": "planned_parenthood:current-method",
+      "source_id": "planned_parenthood:federal",
+      "publisher_id": "planned_parenthood",
+      "scorecard": "Congressional Scorecard",
+      "edition_text": "current-method",
+      "periods": [],
+      "chamber_scope": "both",
+      "source_formats": [
+        "html"
+      ],
+      "rating_forms": [
+        "percent"
+      ],
+      "metrics": [
+        "congressional",
+        "rolling_cumulative"
+      ],
+      "scored_item_types": [
+        "roll_call",
+        "amendment",
+        "nomination",
+        "veto_override",
+        "procedural_action"
+      ],
+      "member_identity": [
+        "name",
+        "state",
+        "district",
+        "party"
+      ],
+      "item_identity": [
+        "bill_citation",
+        "roll_number"
+      ],
+      "scoring": [
+        "unknown"
+      ],
+      "publisher_target_position": "explicit",
+      "member_level_item_results": "unknown",
+      "methodology": "partial",
+      "profile_depth": "methodology_only",
+      "capture_ids": [
+        "census-plannedparenthood-index"
+      ],
+      "features": {
+        "multiple_metrics": "yes",
+        "rolling_period": "yes",
+        "roll_call": "yes"
+      },
+      "notes": "Current cumulative score covers current and preceding six sessions, not entire career. Recorded bills, amendments, nominations, overrides and procedural votes qualify. Delivered page reports scorecard load failure; no member table completeness established.",
+      "literal_examples": [
+        {
+          "value_text": "━",
+          "meaning": "Neutral legislation result symbol",
+          "capture_id": "census-plannedparenthood-index",
+          "locator": "Scorecard Key"
+        }
+      ],
+      "schema_fit": "fits_proposal",
+      "unsupported_shapes": [],
+      "source_model_fit": "fits_proposal",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_qualified",
+      "readiness_limits": [],
+      "complete_source_snapshot_established": false,
+      "profiled_at": "2026-10-03T17:48:51.414495+00:00",
+      "source_locators": [
+        {
+          "capture_id": "census-plannedparenthood-index",
+          "locator": "Named sections, page numbers and row labels in notes/examples"
+        }
+      ],
+      "schema_version_assessed": "proposal-0.2"
+    },
+    {
+      "profile_id": "reproductive_freedom:2025-budd",
+      "source_id": "reproductive_freedom:federal",
+      "publisher_id": "reproductive_freedom",
+      "scorecard": "Congressional Record on Reproductive Freedom",
+      "edition_text": "2025-budd",
+      "periods": [
+        {
+          "year": 2025
+        }
+      ],
+      "chamber_scope": "senate_with_house_history",
+      "source_formats": [
+        "html"
+      ],
+      "rating_forms": [
+        "percent"
+      ],
+      "metrics": [
+        "annual"
+      ],
+      "scored_item_types": [
+        "roll_call",
+        "nomination",
+        "procedural_action"
+      ],
+      "member_identity": [
+        "name",
+        "state",
+        "district",
+        "party"
+      ],
+      "item_identity": [
+        "bill_citation",
+        "roll_number"
+      ],
+      "scoring": [
+        "unknown"
+      ],
+      "publisher_target_position": "explicit",
+      "member_level_item_results": "available",
+      "methodology": "partial",
+      "profile_depth": "edition_sample",
+      "capture_ids": [
+        "census-reproductive-budd"
+      ],
+      "features": {
+        "overall_score": "yes",
+        "roll_call": "yes",
+        "member_exclusions": "yes",
+        "member_chamber_change": "yes"
+      },
+      "notes": "Member page keeps House and Senate service in one publisher profile, with annual results and historical action lists. Dash combines several absent/ineligible states; L and S are publisher explanations, not literal official votes. Preserve ambiguous dash meaning.",
+      "literal_examples": [
+        {
+          "value_text": "0%",
+          "meaning": "Ted Budd 2025 score",
+          "capture_id": "census-reproductive-budd",
+          "locator": "Member header / 2025 Score"
+        },
+        {
+          "value_text": "L",
+          "meaning": "Leader switched vote for reconsideration",
+          "capture_id": "census-reproductive-budd",
+          "locator": "How They Voted legend"
+        },
+        {
+          "value_text": "S",
+          "meaning": "Speaker discretion not to vote",
+          "capture_id": "census-reproductive-budd",
+          "locator": "How They Voted legend"
+        }
+      ],
+      "schema_fit": "fits_proposal",
+      "unsupported_shapes": [],
+      "source_model_fit": "fits_proposal",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_qualified",
+      "readiness_limits": [],
+      "complete_source_snapshot_established": false,
+      "profiled_at": "2026-10-03T17:48:51.414495+00:00",
+      "source_locators": [
+        {
+          "capture_id": "census-reproductive-budd",
+          "locator": "Named sections, page numbers and row labels in notes/examples"
+        }
+      ],
+      "schema_version_assessed": "proposal-0.2"
+    },
+    {
+      "profile_id": "national_parks_action:118-scope",
+      "source_id": "national_parks_action:federal",
+      "publisher_id": "national_parks_action",
+      "scorecard": "Congressional Scorecard",
+      "edition_text": "118-scope",
+      "periods": [
+        {
+          "congress": 118,
+          "year": 2024
+        }
+      ],
+      "chamber_scope": "house",
+      "source_formats": [
+        "html",
+        "pdf_offered"
+      ],
+      "rating_forms": [],
+      "metrics": [],
+      "scored_item_types": [
+        "roll_call"
+      ],
+      "member_identity": [
+        "name",
+        "state",
+        "district",
+        "party"
+      ],
+      "item_identity": [
+        "bill_citation",
+        "roll_number"
+      ],
+      "scoring": [
+        "unknown"
+      ],
+      "publisher_target_position": "unknown",
+      "member_level_item_results": "unknown",
+      "methodology": "partial",
+      "profile_depth": "edition_scope_only",
+      "capture_ids": [
+        "census-nationalparks-index"
+      ],
+      "features": {
+        "explicit_chamber_exclusion": "yes",
+        "roll_call": "yes"
+      },
+      "notes": "Original publisher explicitly excludes Senate because no park votes were scorable in this edition. This is an intentionally House-only source scope. The live platform and linked PDF were not completely parsed.",
+      "literal_examples": [],
+      "schema_fit": "fits_proposal",
+      "unsupported_shapes": [],
+      "source_model_fit": "fits_proposal",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_qualified",
+      "readiness_limits": [],
+      "complete_source_snapshot_established": false,
+      "profiled_at": "2026-10-03T17:48:51.414495+00:00",
+      "source_locators": [
+        {
+          "capture_id": "census-nationalparks-index",
+          "locator": "Named sections, page numbers and row labels in notes/examples"
+        }
+      ],
+      "schema_version_assessed": "proposal-0.2"
+    },
+    {
+      "profile_id": "foreign_policy_america:118",
+      "source_id": "foreign_policy_america:federal",
+      "publisher_id": "foreign_policy_america",
+      "scorecard": "Congressional Scorecard",
+      "edition_text": "118",
+      "periods": [
+        {
+          "congress": 118,
+          "year": 2023
+        },
+        {
+          "congress": 118,
+          "year": 2024
+        }
+      ],
+      "chamber_scope": "both",
+      "source_formats": [
+        "pdf"
+      ],
+      "rating_forms": [
+        "number"
+      ],
+      "metrics": [
+        "congressional",
+        "lifetime"
+      ],
+      "scored_item_types": [
+        "roll_call",
+        "cosponsorship"
+      ],
+      "member_identity": [
+        "name",
+        "state",
+        "district",
+        "party"
+      ],
+      "item_identity": [
+        "bill_citation",
+        "roll_number"
+      ],
+      "scoring": [
+        "unknown"
+      ],
+      "publisher_target_position": "explicit",
+      "member_level_item_results": "available",
+      "methodology": "partial",
+      "profile_depth": "edition_sample",
+      "capture_ids": [
+        "census-fp4a-118-pdf"
+      ],
+      "features": {
+        "overall_score": "yes",
+        "lifetime_score": "yes",
+        "multiple_metrics": "yes",
+        "cosponsorship": "yes",
+        "member_exclusions": "yes"
+      },
+      "notes": "Congress/lifetime numbers have percent-labelled headers. N/A excludes missed/present/no-opportunity actions. Leadership sponsorship choices remain displayed but uncounted. HTML search-index numbers differed from captured PDF for some rows; editions/captures must stay distinct.",
+      "literal_examples": [
+        {
+          "value_text": "11",
+          "meaning": "Katie Britt 118th Congress score; header supplies percent unit",
+          "capture_id": "census-fp4a-118-pdf",
+          "locator": "Physical page11 / Alabama / Britt / 118th Congress (%)"
+        },
+        {
+          "value_text": "N/A",
+          "meaning": "Excluded item-result symbol",
+          "capture_id": "census-fp4a-118-pdf",
+          "locator": "Physical page11 / KEY"
+        }
+      ],
+      "schema_fit": "fits_proposal",
+      "unsupported_shapes": [],
+      "source_model_fit": "fits_proposal",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_qualified",
+      "readiness_limits": [],
+      "complete_source_snapshot_established": false,
+      "profiled_at": "2026-10-03T17:48:51.414495+00:00",
+      "source_locators": [
+        {
+          "capture_id": "census-fp4a-118-pdf",
+          "locator": "Named sections, page numbers and row labels in notes/examples"
+        }
+      ],
+      "schema_version_assessed": "proposal-0.2"
+    },
+    {
+      "profile_id": "sace_action:2012",
+      "source_id": "sace_action:federal",
+      "publisher_id": "sace_action",
+      "scorecard": "Congressional Scorecard",
+      "edition_text": "2012",
+      "periods": [
+        {
+          "congress": 112,
+          "year": 2012,
+          "session": 2
+        }
+      ],
+      "chamber_scope": "both",
+      "source_formats": [
+        "pdf"
+      ],
+      "rating_forms": [
+        "percent"
+      ],
+      "metrics": [
+        "annual"
+      ],
+      "scored_item_types": [
+        "roll_call",
+        "amendment"
+      ],
+      "member_identity": [
+        "name",
+        "state",
+        "district",
+        "party"
+      ],
+      "item_identity": [
+        "bill_citation",
+        "roll_number"
+      ],
+      "scoring": [
+        "unknown"
+      ],
+      "publisher_target_position": "explicit",
+      "member_level_item_results": "available",
+      "methodology": "partial",
+      "profile_depth": "edition_sample",
+      "capture_ids": [
+        "census-sace-2012"
+      ],
+      "features": {
+        "overall_score": "yes",
+        "roll_call": "yes",
+        "geographic_subset": "yes",
+        "pdf_history": "yes"
+      },
+      "notes": "Regional federal delegation scorecard, not a national member roster. Separate no-vote and out-of-tenure markers. Current resource index preserves historical editions; missing recent editions does not prove retirement.",
+      "literal_examples": [
+        {
+          "value_text": "100%",
+          "meaning": "Cohen Tennessee09 annual rating",
+          "capture_id": "census-sace-2012",
+          "locator": "Physical page11 / Tennessee / Cohen"
+        },
+        {
+          "value_text": "no vote",
+          "meaning": "Absence result marker",
+          "capture_id": "census-sace-2012",
+          "locator": "Physical page11 / Tennessee / Duncan"
+        }
+      ],
+      "schema_fit": "fits_proposal",
+      "unsupported_shapes": [],
+      "source_model_fit": "fits_proposal",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_qualified",
+      "readiness_limits": [],
+      "complete_source_snapshot_established": false,
+      "profiled_at": "2026-10-03T17:48:51.414495+00:00",
+      "source_locators": [
+        {
+          "capture_id": "census-sace-2012",
+          "locator": "Named sections, page numbers and row labels in notes/examples"
+        }
+      ],
+      "schema_version_assessed": "proposal-0.2"
+    },
+    {
+      "profile_id": "cpac:2025-report",
+      "source_id": "cpac:federal",
+      "publisher_id": "cpac",
+      "scorecard": "Congressional Ratings",
+      "edition_text": "2025-report",
+      "periods": [
+        {
+          "year": 2024
+        },
+        {
+          "year": 2025
+        }
+      ],
+      "chamber_scope": "both",
+      "source_formats": [
+        "pdf"
+      ],
+      "rating_forms": [
+        "percent",
+        "tier"
+      ],
+      "metrics": [
+        "annual",
+        "award_classification"
+      ],
+      "scored_item_types": [
+        "roll_call"
+      ],
+      "member_identity": [
+        "name"
+      ],
+      "item_identity": [
+        "bill_citation",
+        "roll_number"
+      ],
+      "scoring": [
+        "unknown"
+      ],
+      "publisher_target_position": "explicit",
+      "member_level_item_results": "unavailable_in_captured_publication",
+      "methodology": "partial",
+      "profile_depth": "edition_sample",
+      "capture_ids": [
+        "census-cpac-2025-pdf"
+      ],
+      "features": {
+        "overall_score": "yes",
+        "tier": "yes",
+        "edition_year_differs_scored_year": "yes"
+      },
+      "notes": "PDF edition label is 2025 while its narrative says it scores the 2024 legislative session. Preserve both labels; do not join on PDF year alone. Award lists provide some member scores but are not the complete scored roster.",
+      "literal_examples": [
+        {
+          "value_text": "100%",
+          "meaning": "Dan Bishop in Conservative Excellence list",
+          "capture_id": "census-cpac-2025-pdf",
+          "locator": "Physical page14 / Conservative Excellence - House"
+        }
+      ],
+      "schema_fit": "fits_proposal",
+      "unsupported_shapes": [],
+      "source_model_fit": "fits_proposal",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_qualified",
+      "readiness_limits": [],
+      "complete_source_snapshot_established": false,
+      "profiled_at": "2026-10-03T17:48:51.414495+00:00",
+      "source_locators": [
+        {
+          "capture_id": "census-cpac-2025-pdf",
+          "locator": "Named sections, page numbers and row labels in notes/examples"
+        }
+      ],
+      "schema_version_assessed": "proposal-0.2"
+    },
+    {
+      "profile_id": "american_energy_alliance:119-live",
+      "source_id": "american_energy_alliance:federal",
+      "publisher_id": "american_energy_alliance",
+      "scorecard": "American Energy Scorecard",
+      "edition_text": "119-live",
+      "periods": [
+        {
+          "congress": 119
+        }
+      ],
+      "chamber_scope": "both",
+      "source_formats": [
+        "html"
+      ],
+      "rating_forms": [
+        "percent"
+      ],
+      "metrics": [
+        "current_congress"
+      ],
+      "scored_item_types": [
+        "roll_call",
+        "procedural_action"
+      ],
+      "member_identity": [
+        "name",
+        "state",
+        "district",
+        "party"
+      ],
+      "item_identity": [
+        "bill_citation",
+        "roll_number"
+      ],
+      "scoring": [
+        "unknown"
+      ],
+      "publisher_target_position": "explicit",
+      "member_level_item_results": "unknown",
+      "methodology": "partial",
+      "profile_depth": "edition_sample",
+      "capture_ids": [
+        "census-aea-current"
+      ],
+      "features": {
+        "overall_score": "yes",
+        "roll_call": "yes"
+      },
+      "notes": "Current Congress top-performer examples and recent item IDs combine chamber/roll/year. A top-performer list is not a complete member table. No full export or scoring formula qualified.",
+      "literal_examples": [
+        {
+          "value_text": "100%",
+          "meaning": "Brian Babin current Congress score",
+          "capture_id": "census-aea-current",
+          "locator": "Top Performers / House / TX / Brian Babin"
+        }
+      ],
+      "schema_fit": "fits_proposal",
+      "unsupported_shapes": [],
+      "source_model_fit": "fits_proposal",
+      "acquisition_readiness": "source_snapshot_not_qualified",
+      "reproduction_readiness": "not_qualified",
+      "readiness_limits": [],
+      "complete_source_snapshot_established": false,
+      "profiled_at": "2026-10-03T17:48:51.414495+00:00",
+      "source_locators": [
+        {
+          "capture_id": "census-aea-current",
+          "locator": "Named sections, page numbers and row labels in notes/examples"
+        }
+      ],
+      "schema_version_assessed": "proposal-0.2"
+    }
+  ]
+}

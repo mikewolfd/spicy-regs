@@ -1,0 +1,78 @@
+{
+  "reviewed_at": "2026-10-03T23:27:44.780610+00:00",
+  "verdict": "approve_exact_wheel_preservation_and_default_derivation",
+  "wheel": "spicy_docs-0.54.0+scorecards.9ea43ea7845d-py3-none-any.whl",
+  "wheel_sha256": "670d168db3ca15609485e363f2179a3fa6ad73572b4aadd4245e01d11c421168",
+  "baseline_wheel_sha256": "4ec97919319016d128b28b4d95db0ec795a6465c468b061ff6e9b7c80bd4ef08",
+  "runtime_or_wheel_modified": false,
+  "archived_test_modified_only": "first/source/tests/test_body_text_derivation.py",
+  "derivation_version_retained": "001",
+  "derivation_digest_before": "sha256:91fa3ee590c657b9d6de7b2b15df039cc9010b2aee9a10807bf1b6a4bfbfd434",
+  "derivation_digest_after": "sha256:239e046697f1b6f1583b080c2f7123783370c2e1c23f96a252bdcf159a61fe21",
+  "derivation_rationale": "body_text default PDF path still explicitly selects NativeText at 200 DPI; default BodyText dataclasses exactly equal across eight fixtures, including 21 PDF pages and HTM/TXT/XML/USLM. The static import closure now includes three Docling modules through the newly optional DocumentExtractor strategy; api/model retain extra observation metadata. This is an output-neutral digest repin for the default rendition path, not a claim of custom NativeWithRegions/OCR equivalence.",
+  "focus_test_result": {
+    "before_test_repin": "2 failed, 3 passed: stale digest and module-list assertions only",
+    "after_test_repin": "129 passed, 3 skipped, 2 deselected",
+    "skip_reasons": "Three existing PDF/XML concordance cases lack corresponding XML fixtures; two existing live integration tests deselected by offline policy.",
+    "warnings": "Five existing PyMuPDF SWIG deprecation warnings."
+  },
+  "dependency_metadata_changes": {
+    "removed": [
+      "docling>=2,<3 ; extra == 'pdf-docling'"
+    ],
+    "added": [
+      "docling[ocrmac,rapidocr]==2.131.0 ; extra == 'pdf-docling'"
+    ]
+  },
+  "verification_commands": [
+    {
+      "cwd": "/Users/mikewolfd/Work/spicy-stack-worktrees/scorecards-hrc-merge-docs",
+      "command": "uv run --frozen --no-sync python /Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-merge-2026-10-03/wheel-final/run_focused_review.py --full"
+    },
+    {
+      "cwd": "/Users/mikewolfd/Work/spicy-stack-worktrees/scorecards-hrc-merge-docs",
+      "command": "uv run --frozen --no-sync python /Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-merge-2026-10-03/wheel-final/compare_body_text.py"
+    },
+    {
+      "cwd": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-merge-2026-10-03/wheel-final/first/source",
+      "command": "git apply /Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-merge-2026-10-03/wheel-final/derivation-test-repin.patch",
+      "scope": "Apply only to an unmodified archived test copy before rerunning; current first/source already has this patch."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "independent-retention-review.json",
+      "sha256": "sha256:08860bd98b2c00a7c2a4ff63094c6037540ac260257d185a3ac42a1dfb6b9ff4"
+    },
+    {
+      "path": "body-text-equivalence.json",
+      "sha256": "sha256:ebfe9203b984ca234619b6910afc39330190536d7ecc6b88507a40e18d5f9e3e"
+    },
+    {
+      "path": "derivation-test-repin.json",
+      "sha256": "sha256:d77450e6f5f85827ea60f009451f765430fca8cff3f99ab87113184817652bef"
+    },
+    {
+      "path": "derivation-test-repin.patch",
+      "sha256": "sha256:03a7686e889db9aa958bc599174aaefa487f9cfce8192ba0821b4cb45b3fe5df"
+    },
+    {
+      "path": "run_focused_review.py",
+      "sha256": "sha256:af57fe8b4c506266eb03eafbff6d47afeb5217d93502c7580951cd45f7c75b38"
+    },
+    {
+      "path": "compare_body_text.py",
+      "sha256": "sha256:41b28ad8c5a06ccbfdc703a09c861a2e03bf3cc7b4c4726a1842e67953562bc8"
+    },
+    {
+      "path": "derivation-before-repin.log",
+      "sha256": "sha256:57b02639188f056d0550ae380a409fbbcccc2f73e39b78622406c95cd2ae4902"
+    },
+    {
+      "path": "focused-after-repin.log",
+      "sha256": "sha256:fed504c0018c3d95c1e02543090bc5753122db99bfd8da976117f4f7de913ccf"
+    }
+  ],
+  "production_deployment_checked": false,
+  "no_source_acquisition": true
+}

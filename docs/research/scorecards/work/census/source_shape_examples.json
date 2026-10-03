@@ -1,0 +1,54 @@
+{
+  "examples": [
+    {
+      "profile_id": "nrf:119-senate-grid",
+      "capture_id": "census-nrf-119-senate",
+      "locator": "table/tbody/tr member URL MD/68368, S.1404 column",
+      "source_fields": {
+        "member_name": "Alsobrooks, Angela",
+        "publisher_member_id": "68368",
+        "party": "D",
+        "state": "Maryland",
+        "item_title": "S. 1404",
+        "publisher_position_text": "SUPPORT",
+        "position_source_path": "S.1404 issue description / NRF POSITION: SUPPORT",
+        "result_text": "supports nrf's position"
+      },
+      "required_model_behavior": "Store member-item result with null metric and participation; do not create overall score."
+    },
+    {
+      "profile_id": "planned_parenthood:current-method",
+      "capture_id": "census-plannedparenthood-index",
+      "locator": "Introductory scoring-method paragraphs",
+      "source_fields": {
+        "metric_name": "current Planned Parenthood Action Fund Score",
+        "period_text": "current and preceding six sessions of Congress"
+      },
+      "required_model_behavior": "Preserve relative rolling-window method; concrete dates need edition observation, not lifetime assumption."
+    },
+    {
+      "profile_id": "national_parks_action:118-scope",
+      "capture_id": "census-nationalparks-index",
+      "locator": "Introductory paragraph under 2024 Congressional Scorecard",
+      "source_fields": {
+        "chamber_scope_text": "House of Representatives",
+        "congress_text": "118th Congress"
+      },
+      "required_model_behavior": "Accept publisher-declared House-only scope; absence of Senate rows is intentional only for this declared edition."
+    },
+    {
+      "profile_id": "acec:116-senate",
+      "capture_id": "census-acec-116-pdf",
+      "locator": "Physical page1 / California / Harris",
+      "source_fields": {
+        "member_name": "Harris",
+        "party": "D",
+        "state": "California",
+        "value_text": "50%",
+        "item_title": "H.R. 8337 - VOTE 197 FY21 Continuing Resolution",
+        "action_text": "Not Voting"
+      },
+      "required_model_behavior": "Keep absent cell and published rating independently; do not derive blank cosponsor cells as negative votes."
+    }
+  ]
+}

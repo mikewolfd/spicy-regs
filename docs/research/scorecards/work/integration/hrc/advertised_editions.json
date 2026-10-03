@@ -1,0 +1,49 @@
+{
+  "index_sha256": "sha256:e6befb5a41840f620ca88e82379b5df151df0e32b9ae660485adcae57dff32fd",
+  "links": [
+    {
+      "link_text": "Download Scorecard",
+      "source_url": "https://hrc-prod-requests.s3-us-west-2.amazonaws.com/files/documents/118th-Congressional-Scorecard-HRC-2024-Final.pdf"
+    },
+    {
+      "link_text": "Congressional Scorecard for the 117th Congress",
+      "source_url": "https://hrc-prod-requests.s3-us-west-2.amazonaws.com/assets/117th-Congressional-Scorecard_web.cleaned.pdf"
+    },
+    {
+      "link_text": "Congressional Scorecard for the 116th Congress",
+      "source_url": "https://hrc-prod-requests.s3-us-west-2.amazonaws.com/116th-Congressional-Scorecard-060921.pdf"
+    },
+    {
+      "link_text": "Congressional Scorecard for the 115th Congress",
+      "source_url": "https://hrc-prod-requests.s3-us-west-2.amazonaws.com/files/assets/resources/115thCongressionalScorecard-Report.pdf"
+    },
+    {
+      "link_text": "Congressional Scorecard for the 114th Congress",
+      "source_url": "https://hrc-prod-requests.s3-us-west-2.amazonaws.com/files/assets/resources/114thCongressionalScorecard.pdf"
+    },
+    {
+      "link_text": "Congressional Scorecard for the 113th Congress",
+      "source_url": "https://hrc-prod-requests.s3-us-west-2.amazonaws.com/files/assets/resources/113thCongressionalScorecard_web_REV.pdf"
+    },
+    {
+      "link_text": "Congressional Scorecard for the 112th Congress",
+      "source_url": "https://hrc-prod-requests.s3-us-west-2.amazonaws.com/files/assets/resources/112thCongressionalScorecard_2012.pdf"
+    },
+    {
+      "link_text": "Congressional Scorecard for the 111th Congress",
+      "source_url": "https://hrc-prod-requests.s3-us-west-2.amazonaws.com/files/documents/111thCongressional_Scorecard.pdf"
+    },
+    {
+      "link_text": "Congressional Scorecard for the 110th Congress",
+      "source_url": "https://hrc-prod-requests.s3-us-west-2.amazonaws.com/files/documents/Congress_Scorecard-110th.pdf"
+    },
+    {
+      "link_text": "Congressional Scorecard for the 109th Congress",
+      "source_url": "https://hrc-prod-requests.s3-us-west-2.amazonaws.com/files/assets/resources/HRC_congressional_scorecard_109th.pdf"
+    },
+    {
+      "link_text": "Congressional Scorecard for the 108th Congress",
+      "source_url": "https://hrc-prod-requests.s3-us-west-2.amazonaws.com/files/documents/2004ScoreCard.pdf"
+    }
+  ]
+}

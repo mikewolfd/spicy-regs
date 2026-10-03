@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "relationships": [
+    {
+      "relationship": "publisher -> edition -> captured source",
+      "status": "exercised",
+      "examples": [
+        "afl_cio:2025:workbooks",
+        "nea:119:2025"
+      ],
+      "limits": "Accepted production snapshots require qualified adapters; research responses are not production releases."
+    },
+    {
+      "relationship": "edition -> methodologies -> chamber/cohort",
+      "status": "exercised",
+      "examples": [
+        "humane:2025:senate",
+        "c4ip:2024:grades",
+        "us_chamber:composite_method"
+      ],
+      "limits": "Repeated Congresses and differing source versions must remain explicit."
+    },
+    {
+      "relationship": "parent metric -> components",
+      "status": "methodology_only",
+      "examples": [
+        "us_chamber:composite_method",
+        "c4ip:2024:grades"
+      ],
+      "limits": "Component definitions are disclosed; complete member component values are not. Do not fabricate component ratings or score reproduction."
+    },
+    {
+      "relationship": "edition -> members -> ratings",
+      "status": "exercised",
+      "examples": [
+        "lcv-csv-armstrong",
+        "nea-ricketts",
+        "humane-exclusion"
+      ],
+      "limits": "Member row can exist with empty or ineligible rating."
+    },
+    {
+      "relationship": "edition -> items -> legislative references",
+      "status": "exercised",
+      "examples": [
+        "afl-duplicate-bill",
+        "nea-amendment-chain",
+        "heritage-cosponsor"
+      ],
+      "limits": "Multiple references do not imply one chosen bill or roll call."
+    },
+    {
+      "relationship": "metric -> item contribution definition",
+      "status": "exercised_as_source_context",
+      "examples": [
+        "afl-letter-encoding",
+        "c4ip-method-signed"
+      ],
+      "limits": "Source target positions and method-defined contribution weights are not inferred numerical member contributions."
+    },
+    {
+      "relationship": "member -> item result",
+      "status": "exercised",
+      "examples": [
+        "afl-letter-glyph",
+        "humane-leader"
+      ],
+      "limits": "A source result need not supply metric-specific contribution. Preserve row identity independent of metric; metric context may be absent."
+    },
+    {
+      "relationship": "member -> numeric adjustment",
+      "status": "deferred",
+      "examples": [],
+      "limits": "This pass proves exclusions and qualitative leadership credit but no complete standalone per-member numeric adjustment ledger. Retain explicit source explanations; do not infer numeric adjustments."
+    },
+    {
+      "relationship": "published values -> reproduced scores",
+      "status": "deferred",
+      "examples": [],
+      "limits": "No reproduction qualification performed; publisher-specific inputs and rounding need additional evidence."
+    }
+  ]
+}

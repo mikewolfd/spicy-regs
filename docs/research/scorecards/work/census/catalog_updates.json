@@ -1,0 +1,181 @@
+{
+  "updates": [
+    {
+      "source_id": "acec:federal",
+      "profile_id": "acec:116-senate",
+      "proposed_discovery_status": "profiled",
+      "verification_capture_ids": [
+        "census-acec-116-pdf",
+        "census-acec-116-issues-pdf"
+      ],
+      "notes_to_append": "Senate PDF mixes roll calls, bill cosponsorship and a funding letter. Empty cells remain empty; no denominator or blank-cell rule was established. Preserve distinct member tenure context rather than assuming current membership."
+    },
+    {
+      "source_id": "ada:federal",
+      "profile_id": "ada:2023",
+      "proposed_discovery_status": "profiled",
+      "verification_capture_ids": [
+        "census-ada-2023"
+      ],
+      "notes_to_append": "Each agreement earns five points; absence loses credit. The 2023 notes distinguish strategic no votes and incomplete service; committee work and lifetime performance are expressly outside this rating."
+    },
+    {
+      "source_id": "ada:federal",
+      "profile_id": "ada:1947-format",
+      "proposed_discovery_status": "profiled",
+      "verification_capture_ids": [
+        "census-ada-1947"
+      ],
+      "notes_to_append": "Scanned PDF with no extractable text layer. Cover visually confirms historic report-card format; no member cells qualified. Current methodology must not be applied retroactively."
+    },
+    {
+      "source_id": "ara:federal",
+      "profile_id": "ara:2025",
+      "proposed_discovery_status": "profiled",
+      "verification_capture_ids": [
+        "census-ara-2025"
+      ],
+      "notes_to_append": "Grid reports Pro-Retiree Score and Lifetime Score as numbers; glyph text extraction misreads check/cross symbols as digits, so symbol cells require rendered checks. Full yearly/lifetime reproduction not qualified."
+    },
+    {
+      "source_id": "frc_action:federal",
+      "profile_id": "frc_action:2026-live",
+      "proposed_discovery_status": "profiled",
+      "verification_capture_ids": [],
+      "notes_to_append": "Introduction names 2026 second session, but an internal Senate heading says first session. Preserve both source labels and named 2026 vote dates; do not silently repair. The sample exposes supported/opposed motions, bill and amendment references, and separate Speaker/absence/present legend states."
+    },
+    {
+      "source_id": "ila:federal",
+      "profile_id": "ila:2026-method",
+      "proposed_discovery_status": "profiled",
+      "verification_capture_ids": [],
+      "notes_to_append": "Publisher states policy-category ratings and district-relative grading using Cook PVI and proprietary algorithms. Those inputs and transformations are not disclosed in this announcement; preserve reported grade/context without universal reproduction."
+    },
+    {
+      "source_id": "network:federal",
+      "profile_id": "network:2025",
+      "proposed_discovery_status": "profiled",
+      "verification_capture_ids": [
+        "census-network-2025"
+      ],
+      "notes_to_append": "Separate House and Senate item sets report plus/minus actions and literal percentage scores. Exact bill/roll identifiers and publisher positions are printed with descriptions."
+    },
+    {
+      "source_id": "niac_action:federal",
+      "profile_id": "niac_action:117-method",
+      "proposed_discovery_status": "profiled",
+      "verification_capture_ids": [],
+      "notes_to_append": "Named 117th edition includes an earlier 2015 JCPOA vote and December2020 letter. House appropriations passage applies only to that committee. Public letters/statements are independent scoring items; spreadsheet member results were not captured."
+    },
+    {
+      "source_id": "nrf:federal",
+      "profile_id": "nrf:119-senate-grid",
+      "proposed_discovery_status": "profiled",
+      "verification_capture_ids": [
+        "census-nrf-119-senate"
+      ],
+      "notes_to_append": "One HTML table has member names and item columns but no aggregate score/rank column. Image alt strings carry the result. Blank means no data; absent is distinct. Do not invent an overall metric to store this grid. Proposal-0.2 permits item results without metrics. A bill-only column does not establish cosponsorship; retain the publisher description without inferring action type."
+    },
+    {
+      "source_id": "aauw:federal",
+      "profile_id": "aauw:118",
+      "proposed_discovery_status": "profiled",
+      "verification_capture_ids": [
+        "census-aauw-118"
+      ],
+      "notes_to_append": "AAUW Action Fund is the actual scorecard publisher. Table includes current and previous Congress scores, not one lifetime value; unrecorded/ineligible cells and Speaker caveat remain literal. Vote and cosponsorship check marks represent publisher agreement, not official action strings."
+    },
+    {
+      "source_id": "boilermakers:federal",
+      "profile_id": "boilermakers:1999",
+      "proposed_discovery_status": "profiled",
+      "verification_capture_ids": [
+        "census-boilermakers-1999",
+        "census-boilermakers-compare"
+      ],
+      "notes_to_append": "Historic publisher-specific series must remain separate from present-day AFL-CIO redistribution. Publisher comparison article explicitly reports different Boilermaker/AFL-CIO values for 2005. Member grid is embedded inside a union newspaper."
+    },
+    {
+      "source_id": "childrens_defense:federal",
+      "profile_id": "childrens_defense:117-announcement",
+      "proposed_discovery_status": "profiled",
+      "verification_capture_ids": [
+        "census-cdf-117"
+      ],
+      "notes_to_append": "Publisher announces quarterly updates and grade-based assessment across bills in multiple policy areas. The announcement is verification and methodology context; actual member rows and per-bill scoring rules remain unacquired."
+    },
+    {
+      "source_id": "end_citizens_united:federal",
+      "profile_id": "end_citizens_united:119",
+      "proposed_discovery_status": "profiled",
+      "verification_capture_ids": [
+        "census-ecu-119"
+      ],
+      "notes_to_append": "Published member grades include A+ and F. Criteria include rejecting corporate PAC money as well as congressional actions. No complete formula or item-level result grid is disclosed here; source-backed ratings fit while reproduction remains unsupported."
+    },
+    {
+      "source_id": "leadership_conference:federal",
+      "profile_id": "leadership_conference:118",
+      "proposed_discovery_status": "profiled",
+      "verification_capture_ids": [
+        "census-leadership-118"
+      ],
+      "notes_to_append": "PDF contains action descriptions and member summary percentages. Introduction says supplementary per-member vote charts are available upon request; do not reconstruct undisclosed source cells from official votes. Footnotes identify former members and successors."
+    },
+    {
+      "source_id": "planned_parenthood:federal",
+      "profile_id": "planned_parenthood:current-method",
+      "proposed_discovery_status": "profiled",
+      "verification_capture_ids": [
+        "census-plannedparenthood-index"
+      ],
+      "notes_to_append": "Current cumulative score covers current and preceding six sessions, not entire career. Recorded bills, amendments, nominations, overrides and procedural votes qualify. Delivered page reports scorecard load failure; no member table completeness established."
+    },
+    {
+      "source_id": "reproductive_freedom:federal",
+      "profile_id": "reproductive_freedom:2025-budd",
+      "proposed_discovery_status": "profiled",
+      "verification_capture_ids": [
+        "census-reproductive-budd"
+      ],
+      "notes_to_append": "Member page keeps House and Senate service in one publisher profile, with annual results and historical action lists. Dash combines several absent/ineligible states; L and S are publisher explanations, not literal official votes. Preserve ambiguous dash meaning."
+    },
+    {
+      "source_id": "national_parks_action:federal",
+      "profile_id": "national_parks_action:118-scope",
+      "proposed_discovery_status": "profiled",
+      "verification_capture_ids": [
+        "census-nationalparks-index"
+      ],
+      "notes_to_append": "Original publisher explicitly excludes Senate because no park votes were scorable in this edition. This is an intentionally House-only source scope. The live platform and linked PDF were not completely parsed."
+    },
+    {
+      "source_id": "foreign_policy_america:federal",
+      "profile_id": "foreign_policy_america:118",
+      "proposed_discovery_status": "profiled",
+      "verification_capture_ids": [
+        "census-fp4a-118-pdf"
+      ],
+      "notes_to_append": "Congress/lifetime numbers have percent-labelled headers. N/A excludes missed/present/no-opportunity actions. Leadership sponsorship choices remain displayed but uncounted. HTML search-index numbers differed from captured PDF for some rows; editions/captures must stay distinct."
+    },
+    {
+      "source_id": "sace_action:federal",
+      "profile_id": "sace_action:2012",
+      "proposed_discovery_status": "profiled",
+      "verification_capture_ids": [
+        "census-sace-2012"
+      ],
+      "notes_to_append": "Regional federal delegation scorecard, not a national member roster. Separate no-vote and out-of-tenure markers. Current resource index preserves historical editions; missing recent editions does not prove retirement."
+    },
+    {
+      "source_id": "cpac:federal",
+      "profile_id": "cpac:2025-report",
+      "proposed_discovery_status": "profiled",
+      "verification_capture_ids": [
+        "census-cpac-2025-pdf"
+      ],
+      "notes_to_append": "PDF edition label is 2025 while its narrative says it scores the 2024 legislative session. Preserve both labels; do not join on PDF year alone. Award lists provide some member scores but are not the complete scored roster."
+    }
+  ],
+  "merge_warning": "Multiple records may update the same source. Append evidence/profile references; preserve previous observations and do not replace unavailable fields with null. Source candidate versus source series distinctions need coordinator review."
+}

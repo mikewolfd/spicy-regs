@@ -35,6 +35,8 @@ from spicy_regs.pipelines.rollups.press_releases import PressReleasesRollup
 from spicy_regs.pipelines.rollups.roll_call_votes import RollCallVotesRollup
 from spicy_regs.pipelines.rollups.gao_reports import GaoReportsRollup
 from spicy_regs.pipelines.rollups.senate_expenditures import SenateExpendituresRollup
+from spicy_regs.pipelines.rollups.scorecards import ScorecardsRollup
+from spicy_regs.pipelines.rollups.scorecard_analysis import ScorecardAnalysisRollup
 
 # A8/A9 (laws and rosters)
 from spicy_regs.pipelines.rollups.committee_rosters import CommitteeRostersRollup
@@ -117,12 +119,15 @@ HOSTED_ROLLUPS = (
 #: or workflow: SpicyDocs 0.52.0's native legal-reference tables.
 MANIFEST_ROLLUPS = (NativeLegalReferencesRollup,)
 
+# Scorecards remain manual while complete source scopes are qualified.
+MANUAL_ROLLUPS = (ScorecardsRollup,)
+
 
 def _declared_keys(rollup) -> tuple[str, ...]:
     return rollup.outputs or (rollup.output,)
 
 
-@pytest.mark.parametrize("rollup", HOSTED_ROLLUPS + MANIFEST_ROLLUPS, ids=lambda r: r.name)
+@pytest.mark.parametrize("rollup", HOSTED_ROLLUPS + MANIFEST_ROLLUPS + MANUAL_ROLLUPS + (ScorecardAnalysisRollup,), ids=lambda r: r.name)
 def test_every_output_is_a_published_table(rollup):
     for key in _declared_keys(rollup):
         assert key.endswith(".parquet")
@@ -253,7 +258,7 @@ def test_every_hosted_table_has_exactly_one_writer():
     URLs with API resource URLs.
     """
     written: dict[str, list[str]] = {}
-    for rollup in HOSTED_ROLLUPS + MANIFEST_ROLLUPS:
+    for rollup in HOSTED_ROLLUPS + MANIFEST_ROLLUPS + MANUAL_ROLLUPS:
         for key in _declared_keys(rollup):
             written.setdefault(key.removesuffix(".parquet"), []).append(rollup.name)
 
@@ -369,6 +374,20 @@ def test_each_rollup_has_a_console_script_and_a_workflow(rollup):
     document = yaml.safe_load(workflow.read_text())
     assert document["jobs"]["run"]["with"]["command"] == command
     assert document["jobs"]["run"]["uses"] == "./.github/workflows/_rollup.yml"
+
+
+def test_scorecard_commands_are_registered_and_ingest_starts_manual():
+    scripts = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())["project"]["scripts"]
+    for rollup, module in ((ScorecardsRollup, "scorecards"), (ScorecardAnalysisRollup, "scorecard_analysis")):
+        assert scripts[f"run-rollup-{rollup.name}"] == f"spicy_regs.pipelines.rollups.{module}:app"
+    workflow = yaml.safe_load((WORKFLOWS / "rollup-scorecards.yml").read_text())
+    assert "workflow_dispatch" in workflow[True]
+    assert "schedule" not in workflow[True]
+    assert ScorecardsRollup.inputs == ()
+    assert set(ScorecardAnalysisRollup.inputs) == {
+        "scorecards.parquet", "scorecard_members.parquet", "scorecard_items.parquet", "members.parquet",
+        "member_terms.parquet", "congress_bills.parquet", "amendments.parquet", "roll_call_votes.parquet",
+    }
 
 
 @pytest.mark.parametrize("rollup", HOSTED_ROLLUPS, ids=lambda r: r.name)

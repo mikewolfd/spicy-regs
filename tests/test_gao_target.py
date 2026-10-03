@@ -69,7 +69,8 @@ def test_candidate_preserves_all_prior_cells_leaves_date_unknown_and_resolves(tm
         append_missing_target(out,tmp_path/'overwrite.parquet',index)
 
 
-def test_complete_generation_candidate_uses_prior_pin_without_publication(tmp_path,monkeypatch):
+@pytest.mark.parametrize("product_page", [False, True])
+def test_complete_generation_candidate_uses_prior_pin_without_publication(tmp_path,monkeypatch,product_page):
     from spicy_regs.generations import build_generation,verify_generation
     from spicy_regs.sources import publication
     from spicy_regs.transforms.build_gao_target import prepare_target_generation
@@ -85,8 +86,12 @@ def test_complete_generation_candidate_uses_prior_pin_without_publication(tmp_pa
     snapshot=publication.publish_generation(directory,client=store,bucket='test',prior_index=publication.empty_index())
     raw=(directory/'artifact.json').read_bytes()
     monkeypatch.setattr(publication,'load_family_root',lambda *_:(raw,json.loads(raw)))
-    report=prepare_target_generation(tmp_path/'target',product_id=PRODUCT,prior_file=prior,
-        prior_index=snapshot,public_url='https://test.invalid',retained_index=retained())
+    from pathlib import Path
+    page = (Path(__file__).parent/'fixtures/gao_target/product-page.zip').read_bytes() if product_page else None
+    report=prepare_target_generation(tmp_path/'target',product_id=None if product_page else PRODUCT,prior_file=prior,
+        prior_index=snapshot,public_url='https://test.invalid',
+        retained_index=None if product_page else retained(),
+        retained_product_pages={PRODUCT: page} if page is not None else None)
     artifact=verify_generation(tmp_path/'target/generation')
     assert report['status']=='verified_candidate_not_published'
     # The family's own prior is its prior-generation input, never a parent.

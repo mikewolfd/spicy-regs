@@ -1,0 +1,84 @@
+{
+  "checked_at": "2026-10-03T23:27:01.728175+00:00",
+  "base_main": "000de932f19485a99bf4a8fcae7dab71f6a4ee45",
+  "incoming": "7fc1937c4e90a330de44822d8ab3b76c84df0d99",
+  "description_changes": {
+    "removed": [],
+    "existing_changed": [
+      "members"
+    ],
+    "added": [
+      "scorecard_item_links",
+      "scorecard_items",
+      "scorecard_member_item_results",
+      "scorecard_member_links",
+      "scorecard_member_ratings",
+      "scorecard_members",
+      "scorecard_methodologies",
+      "scorecard_metric_components",
+      "scorecard_metric_items",
+      "scorecard_metrics",
+      "scorecard_publishers",
+      "scorecard_snapshots",
+      "scorecards"
+    ]
+  },
+  "metadata_changes": {
+    "removed": [],
+    "existing_changed": [
+      "members"
+    ],
+    "fec_entries_equal": true
+  },
+  "unchanged_main_files": {
+    "src/spicy_regs/fec_release.py": "58cb59ab367ee022c1082bed7a8bd2c869d346beb998b38d3c654beec46917bf",
+    "deploy/cloudflare/wrangler.template.jsonc": "b4a7d197e174e17138195a1f464f6f6d9c1ef05f57a3d5c2282fa50fd719e555",
+    "deploy/cloudflare/Dockerfile": "226670e7631f41519e41fa39ea09e7faeb2c20a49f6c2816a1a30e90f100395a"
+  },
+  "all_main_mcp_function_and_class_asts_unchanged": true,
+  "conflict_resolutions": [
+    {
+      "paths": [
+        "pyproject.toml",
+        "uv.lock",
+        "vendor/README.md"
+      ],
+      "decision": "Retain main0.54 reader baseline and adopt additive0.54scorecards overlay; preserve current dependency versions and add yaml extra."
+    },
+    {
+      "paths": [
+        "src/spicy_regs/sources/publication.py"
+      ],
+      "decision": "Retain main UTC-Z publishedAt semantics; add managed split-table pin helper without changing pointer publication."
+    },
+    {
+      "paths": [
+        "src/spicy_regs/transforms/build_gao_target.py",
+        "tests/test_gao_target.py"
+      ],
+      "decision": "Preserve main multi-product retained pages and carried-family tables; use shared retain_bytes and adapt incoming regression to main API."
+    },
+    {
+      "paths": [
+        "tests/test_held_citations.py"
+      ],
+      "decision": "Keep both newer main read/checkpoint tests and retained-byte evidence regression."
+    },
+    {
+      "paths": [
+        "tests/test_contract_tables.py"
+      ],
+      "decision": "Adopt verified combined source registry: main57 plus11scorecard schemas."
+    },
+    {
+      "paths": [
+        "data_dictionary/descriptions.yaml",
+        "docs/tables/members.md",
+        "data_dictionary/catalog.json",
+        "data_dictionary/catalog.json.sha256",
+        "src/spicy_regs/table_metadata.json"
+      ],
+      "decision": "Keep all main descriptions, update members completed qualification, add scorecard subject:congress, regenerate outputs from installed additive wheel."
+    }
+  ]
+}

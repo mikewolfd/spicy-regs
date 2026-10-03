@@ -185,6 +185,7 @@ def parse_index(raw: bytes) -> dict:
     """Validate the small mutable pointer without claiming payload verification.
 
     Version 1 lists only single-file tables. Version 2 may also list split tables, each with its members.
+    A family's optional ``publishedAt`` is preserved as a valid UTC instant ending in ``Z``.
     """
     if len(raw) > INDEX_LIMIT:
         raise PublicationError("Publication index exceeds its byte limit")
@@ -578,6 +579,28 @@ def table_descriptor(index: Mapping, key: str) -> dict | None:
     """The index's descriptor for table ``key`` (rows, bytes, columns and, when split, members), or ``None``."""
     owner = table_owner(index, key)
     return None if owner is None else owner[1]["tables"][key]
+
+
+def table_pin(index: Mapping, key: str) -> dict:
+    """Pin a managed table, including every member of a partitioned table.
+
+    Single-file tables retain their byte digest. A split table has no single
+    byte stream: ``tableDescriptorDigest`` hashes its complete UTF-8 JSON
+    descriptor with sorted keys, compact separators and unescaped Unicode.
+    The descriptor contains each member's path, byte digest, size and partition.
+    """
+    owner = table_owner(index, key)
+    if owner is None:
+        raise PublicationError(f"Cannot pin an unmanaged table: {key}")
+    descriptor = owner[1]["tables"][key]
+    if "members" in descriptor:
+        raw = json.dumps(descriptor, sort_keys=True, separators=(",", ":"),
+                         ensure_ascii=False, allow_nan=False).encode("utf-8")
+        digest = {"tableDescriptorDigest": "sha256:" + hashlib.sha256(raw).hexdigest()}
+    else:
+        digest = {"sha256": descriptor["sha256"]}
+    return {**digest, "byteSize": descriptor["byteSize"], "family": owner[0],
+            "artifactDigest": owner[1]["artifactDigest"]}
 
 
 def single_member(index: Mapping, key: str) -> Member:

@@ -1,0 +1,158 @@
+{
+  "status": "passed",
+  "url": "https://mcp.spicygov.ai/mcp",
+  "queries": {
+    "attributed_ratings": {
+      "sql": "SELECT p.name AS publisher,c.title AS scorecard,m.member_name,metrics.name AS metric,r.value_text AS published_value,r.source_url AS publisher_url FROM scorecard_member_ratings r JOIN scorecards c USING(scorecard_id) JOIN scorecard_publishers p USING(publisher_id) JOIN scorecard_metrics metrics ON metrics.scorecard_id=r.scorecard_id AND metrics.metric_id=r.metric_id JOIN scorecard_members m ON m.scorecard_id=r.scorecard_id AND m.publisher_member_key=r.publisher_member_key QUALIFY row_number() OVER(PARTITION BY c.publisher_id ORDER BY m.member_name,r.metric_id)=1 ORDER BY publisher",
+      "source": "r2",
+      "base_url": "https://data.spicygov.ai",
+      "columns": [
+        "publisher",
+        "scorecard",
+        "member_name",
+        "metric",
+        "published_value",
+        "publisher_url"
+      ],
+      "row_count_shown": 3,
+      "max_rows": 10,
+      "truncated": false,
+      "max_cell_chars": null,
+      "truncated_cells": [],
+      "rows": [
+        {
+          "publisher": "Americans for Prosperity",
+          "scorecard": "119th Congressional Scorecard",
+          "member_name": "Aaron Bean",
+          "metric": "possible_score",
+          "published_value": "12",
+          "publisher_url": "https://americansforprosperity.org/wp-json/rds-bt50-scorecard/v1/legislators"
+        },
+        {
+          "publisher": "International Justice Mission",
+          "scorecard": "119th Congress",
+          "member_name": "Aaron Bean",
+          "metric": "possible_score",
+          "published_value": "1",
+          "publisher_url": "https://scorecard.ijm.org/wp-json/rds-bt50-scorecard/v1/legislators"
+        },
+        {
+          "publisher": "League of Conservation Voters",
+          "scorecard": "2025 National Environmental Scorecard",
+          "member_name": "Aaron Bean",
+          "metric": "Year Score",
+          "published_value": "0",
+          "publisher_url": "https://www.lcv.org/congressional-scorecard/members-of-congress/?export=true&sort=state-a-z&active_tab=&chamber=senate&street_address=&zip=&session_year=2025&state=&party=All&last_name=&include_former=1&export-type=moc-listing"
+        }
+      ],
+      "publication": {
+        "scorecard_member_ratings": {
+          "status": "managed_generation",
+          "family": "scorecards",
+          "artifact_digest": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb",
+          "rows": 5134,
+          "published_at": null,
+          "coverage": null
+        },
+        "scorecard_members": {
+          "status": "managed_generation",
+          "family": "scorecards",
+          "artifact_digest": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb",
+          "rows": 1562,
+          "published_at": null,
+          "coverage": null
+        },
+        "scorecard_metrics": {
+          "status": "managed_generation",
+          "family": "scorecards",
+          "artifact_digest": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb",
+          "rows": 10,
+          "published_at": null,
+          "coverage": null
+        },
+        "scorecard_publishers": {
+          "status": "managed_generation",
+          "family": "scorecards",
+          "artifact_digest": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb",
+          "rows": 3,
+          "published_at": null,
+          "coverage": null
+        },
+        "scorecards": {
+          "status": "managed_generation",
+          "family": "scorecards",
+          "artifact_digest": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb",
+          "rows": 3,
+          "published_at": null,
+          "coverage": null
+        }
+      }
+    },
+    "attributed_items": {
+      "sql": "SELECT p.name AS publisher,i.title,i.item_date_text,i.publisher_position_text AS publisher_target,i.source_url AS publisher_url FROM scorecard_items i JOIN scorecards c USING(scorecard_id) JOIN scorecard_publishers p USING(publisher_id) QUALIFY row_number() OVER(PARTITION BY c.publisher_id ORDER BY i.item_id)=1 ORDER BY publisher",
+      "source": "r2",
+      "base_url": "https://data.spicygov.ai",
+      "columns": [
+        "publisher",
+        "title",
+        "item_date_text",
+        "publisher_target",
+        "publisher_url"
+      ],
+      "row_count_shown": 3,
+      "max_rows": 10,
+      "truncated": false,
+      "max_cell_chars": null,
+      "truncated_cells": [],
+      "rows": [
+        {
+          "publisher": "Americans for Prosperity",
+          "title": "Midnight Rules Relief Act",
+          "item_date_text": null,
+          "publisher_target": null,
+          "publisher_url": "https://americansforprosperity.org/wp-json/rds-bt50-scorecard/v1/bills"
+        },
+        {
+          "publisher": "International Justice Mission",
+          "title": "TAKE IT DOWN Act (Senate)",
+          "item_date_text": null,
+          "publisher_target": null,
+          "publisher_url": "https://scorecard.ijm.org/wp-json/rds-bt50-scorecard/v1/bills"
+        },
+        {
+          "publisher": "League of Conservation Voters",
+          "title": "Stifling Public Input and Environmental Review on National Forests",
+          "item_date_text": "2025",
+          "publisher_target": "No",
+          "publisher_url": "https://www.lcv.org/roll-call-vote/stifling-public-input-and-environmental-review-on-national-forests-2/?export=true&sort=state-a-z&voteOption=&export-post-id=36293&export-type=rcv"
+        }
+      ],
+      "publication": {
+        "scorecard_items": {
+          "status": "managed_generation",
+          "family": "scorecards",
+          "artifact_digest": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb",
+          "rows": 169,
+          "published_at": null,
+          "coverage": null
+        },
+        "scorecard_publishers": {
+          "status": "managed_generation",
+          "family": "scorecards",
+          "artifact_digest": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb",
+          "rows": 3,
+          "published_at": null,
+          "coverage": null
+        },
+        "scorecards": {
+          "status": "managed_generation",
+          "family": "scorecards",
+          "artifact_digest": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb",
+          "rows": 3,
+          "published_at": null,
+          "coverage": null
+        }
+      }
+    }
+  }
+}

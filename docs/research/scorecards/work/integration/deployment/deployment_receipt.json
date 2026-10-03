@@ -1,0 +1,323 @@
+{
+  "status": "published_public_audits_and_hosted_mcp_passed",
+  "observed_date": "2026-10-03",
+  "public_index_url": "https://data.spicygov.ai/publication.v2.json",
+  "scope": [
+    "lcv:2025",
+    "afp:3933",
+    "ijm:3995"
+  ],
+  "families": {
+    "members": {
+      "observed_at": "2026-10-03T21:08:34.726156+00:00",
+      "generation": {
+        "artifactDigest": "sha256:5d6bd2a29a3b0fa9b587ed4e787a9cf26e3534a74c96c0daebc56a8149115b0b",
+        "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:bfa54469a968a7acadb0248babdbae0f1e54833a57fc9595162943c612338cba"
+      },
+      "implementation_commit": "3f85f28c",
+      "provider_version": "0.53.0+scorecards.9916a2fc8473",
+      "other_family_changes_during_publication": [],
+      "prefix_url": "https://data.spicygov.ai/generations/members/5d6bd2a29a3b0fa9b587ed4e787a9cf26e3534a74c96c0daebc56a8149115b0b/",
+      "table_rows": {
+        "member_party_affiliations.parquet": 59,
+        "member_terms.parquet": 45535,
+        "members.parquet": 12770
+      },
+      "public_audit_summary": {
+        "fail": 0,
+        "review": 0,
+        "empty_tables": []
+      },
+      "public_audit_sha256": "e0ec307bd4f725de98b30def5b3d4635e9e8c6400ebc48cd6450d47c2f3af861",
+      "evidence_pin": {
+        "artifactDigest": "sha256:9ad43bbbe2924ebc1861e36bdb612e57330ed6f3dfed9ded229a2427f92759ea",
+        "logicalId": "urn:spicy:artifact:spicy-regs-source-evidence:759ce7d6e9ff2bcec3acb10b5039896f676269a62da8d6e844ac83a7eee73b80",
+        "role": "source-evidence"
+      },
+      "captures_by_policy": {
+        "full": 4
+      }
+    },
+    "scorecards": {
+      "observed_at": "2026-10-03T21:08:53.935424+00:00",
+      "generation": {
+        "artifactDigest": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb",
+        "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:553e225cf831e5087ebf8ba3fa1a6962a3c90d203c574ce09f8ce2c79837d61e"
+      },
+      "implementation_commit": "3f85f28c",
+      "provider_version": "0.53.0+scorecards.9916a2fc8473",
+      "other_family_changes_during_publication": [],
+      "prefix_url": "https://data.spicygov.ai/generations/scorecards/7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb/",
+      "table_rows": {
+        "scorecard_items.parquet": 169,
+        "scorecard_member_item_results.parquet": 24008,
+        "scorecard_member_ratings.parquet": 5134,
+        "scorecard_members.parquet": 1562,
+        "scorecard_methodologies.parquet": 5,
+        "scorecard_metric_components.parquet": 0,
+        "scorecard_metric_items.parquet": 227,
+        "scorecard_metrics.parquet": 10,
+        "scorecard_publishers.parquet": 3,
+        "scorecard_snapshots.parquet": 3,
+        "scorecards.parquet": 3
+      },
+      "public_audit_summary": {
+        "fail": 0,
+        "review": 0,
+        "empty_tables": [
+          "scorecard_metric_components"
+        ]
+      },
+      "public_audit_sha256": "17be4b05acc42d5c014d1bbb41a90be54439e51c7fb635d1714206dab2755434",
+      "evidence_pin": {
+        "artifactDigest": "sha256:568d8c27943d5cf4bb6ac5031a53926bd1e8b4f840dc9119a319ceeae6759555",
+        "logicalId": "urn:spicy:artifact:spicy-regs-source-evidence:f2358b40a9bf617edfffd05d6bb729b02320de92f698122ae99a4749ae695724",
+        "role": "source-evidence"
+      },
+      "captures_by_policy": {
+        "hash_only": 2188
+      }
+    },
+    "scorecard-analysis": {
+      "observed_at": "2026-10-03T21:10:51.327421+00:00",
+      "generation": {
+        "artifactDigest": "sha256:f3fffcf37e4ffc7a6015c54cbd5757379bc93701416c0281e1ef76d0f5ef7fe2",
+        "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:f754b02aecbd88f27b7496c018b077466e4c926d1d91181ebdc5c6794cedc080"
+      },
+      "implementation_commit": "3f85f28c",
+      "provider_version": "0.53.0+scorecards.9916a2fc8473",
+      "other_family_changes_during_publication": [],
+      "prefix_url": "https://data.spicygov.ai/generations/scorecard-analysis/f3fffcf37e4ffc7a6015c54cbd5757379bc93701416c0281e1ef76d0f5ef7fe2/",
+      "table_rows": {
+        "scorecard_item_links.parquet": 279,
+        "scorecard_member_links.parquet": 1562
+      },
+      "public_audit_summary": {
+        "fail": 0,
+        "review": 0,
+        "empty_tables": []
+      },
+      "public_audit_sha256": "320980a7d1749215c94eba32b924531546c2c3f967ae62bf12cee154ef9c8c32",
+      "evidence_pin": {
+        "artifactDigest": "sha256:018d91426f9d09fc35e59324b9053eb9ebd61ffb57211e27465b50fcd423396a",
+        "logicalId": "urn:spicy:artifact:spicy-regs-source-evidence:42b132ac286986795213906c3cf3f1cee4c4eef3c27fffe3415bbde0403149df",
+        "role": "source-evidence"
+      },
+      "captures_by_policy": {}
+    }
+  },
+  "source_counts": {
+    "scorecard_publishers": 3,
+    "scorecards": 3,
+    "scorecard_snapshots": 3,
+    "scorecard_methodologies": 5,
+    "scorecard_metrics": 10,
+    "scorecard_items": 169,
+    "scorecard_metric_items": 227,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 1562,
+    "scorecard_member_ratings": 5134,
+    "scorecard_member_item_results": 24008
+  },
+  "source_literal_comparison": "All replayed rows matched qualified retained outputs, excluding opaque snapshot/capture IDs only.",
+  "publisher_bytes_republished": false,
+  "source_evidence_policy": "hash_only",
+  "source_capture_observations": 2188,
+  "scorecard_source_network_requests": 0,
+  "congressional_source_network_requests": 0,
+  "member_update": {
+    "comparison": "Every existing key and value preserved except observation timestamps; three identity columns added; source capture times newer.",
+    "added_columns": [
+      "bioguide_previous_json",
+      "other_names_json",
+      "votesmart_id"
+    ],
+    "prior_generation": "sha256:27bb6d697c96e67a7f5c0813039e8cbf1d60fb7ea21152fea39db94783070e2b",
+    "source_replay_generation": "sha256:253ae5371141f436d7787608c7da3258b1a05a64b93c26822f227fe3754b251e"
+  },
+  "analysis_input_pins": {
+    "scorecards": {
+      "sha256": "sha256:af8cf1f8719c952149ec5ab8e84c8278fbc2cdd8b475f67d4021d21a01f2255a",
+      "byteSize": 5095,
+      "family": "scorecards",
+      "artifactDigest": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb"
+    },
+    "scorecard_members": {
+      "sha256": "sha256:32d6f20e1faf8bc00b1fe2d5947af8a8d18ac566344eb7d483ccf7ce8d1e37e0",
+      "byteSize": 38854,
+      "family": "scorecards",
+      "artifactDigest": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb"
+    },
+    "scorecard_items": {
+      "sha256": "sha256:055371069242dc19b2b0e9c3f4ebedb07a215bdd14e9f91ae2b3cf23aa60f3ec",
+      "byteSize": 15939,
+      "family": "scorecards",
+      "artifactDigest": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb"
+    },
+    "members": {
+      "sha256": "sha256:96c11c55ce3254491aa1fec9534398bf21f3c450d885cd93b700bf32a48045bb",
+      "byteSize": 283698,
+      "family": "members",
+      "artifactDigest": "sha256:5d6bd2a29a3b0fa9b587ed4e787a9cf26e3534a74c96c0daebc56a8149115b0b"
+    },
+    "member_terms": {
+      "sha256": "sha256:8810be48c3ed1a5508ee15243602c02d7ff46eee023ad7eb596206f24f2262f8",
+      "byteSize": 183149,
+      "family": "members",
+      "artifactDigest": "sha256:5d6bd2a29a3b0fa9b587ed4e787a9cf26e3534a74c96c0daebc56a8149115b0b"
+    },
+    "congress_bills": {
+      "sha256": "sha256:741a04eb920a2ff0880b4a522576f740ba54f3d678c4592462752b5b532a6969",
+      "byteSize": 31074410,
+      "family": "bill-family",
+      "artifactDigest": "sha256:e264e62bfcc41313d8c15d59bcb96bc7d59fb37bcd0e74b9d0cc561849a594be"
+    },
+    "amendments": {
+      "sha256": "sha256:8d2b23ebc9bf033ed984bed993de5656303032aadc75d5c149de5be7c5adda39",
+      "byteSize": 135859,
+      "family": "amendments",
+      "artifactDigest": "sha256:a1f7489c31fd5894d4b0a44d7fc6fac3063f70e210699f0b8570d9bcc1a7f622"
+    },
+    "roll_call_votes": {
+      "sha256": "sha256:3ae1dbf38e1ad71eb4dd2042383c4036e1e2445c31313e41a568b42aee2f7f20",
+      "byteSize": 1519680,
+      "family": "roll-call-votes",
+      "artifactDigest": "sha256:4dc318be76b2ecd16db02b5174aa59146a2c9acd7d2d9b4aed3ed7f4c7c6f030"
+    }
+  },
+  "resolution": {
+    "scorecard_member_links": {
+      "afp:3933": {
+        "resolved": 438,
+        "unresolved": 93
+      },
+      "ijm:3995": {
+        "resolved": 397,
+        "unresolved": 83
+      },
+      "lcv:2025": {
+        "resolved": 489,
+        "unresolved": 62
+      }
+    },
+    "scorecard_item_links": {
+      "afp:3933": {
+        "resolved": 31,
+        "unresolved": 91
+      },
+      "ijm:3995": {
+        "resolved": 48,
+        "unresolved": 43
+      },
+      "lcv:2025": {
+        "resolved": 66
+      }
+    }
+  },
+  "resolution_policy": "Exact identifiers and historical identities only; unresolved rows retained. Publisher ratings unchanged.",
+  "concurrency": {
+    "writes_used": "existing verified family compare-and-swap publisher",
+    "other_family_changes_between_initial_preflight_and_final_index": [
+      "court-docket-groups",
+      "fec-candidate-history",
+      "print-citations",
+      "unified-agenda"
+    ],
+    "explanation": "Concurrent updates were preserved; this run did not write these other families."
+  },
+  "local_mcp_over_public_files": {
+    "status": "passed",
+    "mode": "local_mcp_over_public_pinned_files",
+    "queries": [
+      "list_sources",
+      "describe_ratings",
+      "publisher_counts",
+      "attributed_ratings",
+      "resolution_counts",
+      "attributed_items"
+    ],
+    "metadata_failures": []
+  },
+  "hosted_mcp": {
+    "status": "passed",
+    "service_image_changed": false,
+    "source_family_pin": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb",
+    "source_tables_listed": 11,
+    "rating_schema_available": true,
+    "rating_counts": {
+      "afp:3933": 2120,
+      "ijm:3995": 1912,
+      "lcv:2025": 1102
+    },
+    "source_attribution_queries": {
+      "status": "passed",
+      "scope": "All three original publisher rating and target observations, with original URLs and exact published generation pins; no analysis links in this check."
+    },
+    "analysis_observation": "After the normal connection refresh, hosted attributed joins and resolution counts passed against source 7a8d9462 and analysis f3fffcf3. Earlier cached refusals remain retained as prior observations.",
+    "dictionary_description_limit": "The preserved newer hosted image returns inferred schemas and pins; scorecard-specific dictionary descriptions are not installed.",
+    "retained_fec_release_sha256": "sha256:36b1e24c0dc2d5b62397cb2f3eb63b132090560e451792e50897c3ee86c9cc72",
+    "retained_image_digest": "sha256:c998280b7607009acbaa40a01dbe9169c20ab2258e0bf20f38d35ce3cb501279",
+    "responses": {
+      "list_sources": {
+        "sha256": "e0c9f8d8edfec7f075316bc632db17827ec041f1765c56a7bc3ff8bc3d4698ab",
+        "is_error": false
+      },
+      "describe_ratings": {
+        "sha256": "d13d7caac51ea12271ccfb64054921e776eac399cb1beb82aca20b402b0c1a97",
+        "is_error": false
+      },
+      "publisher_counts": {
+        "sha256": "61a543490cb1c8e3df0a0957c8350e9563c9322cd25a57ed3ccff46b6c0000cc",
+        "is_error": false
+      },
+      "attributed_ratings": {
+        "sha256": "21cab635310ef01257212194970201b65231577535641bfabf012c61762e81d9",
+        "is_error": false
+      },
+      "resolution_counts": {
+        "sha256": "5816cd460da6b24f3203088241c99319c04ab1e0aeb3d7d99cee99a407d040c7",
+        "is_error": false
+      },
+      "attributed_items": {
+        "sha256": "1705492800ff25d9f9fe667a89ff56af8c88e4e7d7ed3da1142cd0435b89753a",
+        "is_error": false
+      }
+    },
+    "summary": {
+      "status": "passed",
+      "mode": "hosted_public_mcp",
+      "queries": [
+        "list_sources",
+        "describe_ratings",
+        "publisher_counts",
+        "attributed_ratings",
+        "resolution_counts",
+        "attributed_items"
+      ],
+      "metadata_failures": []
+    },
+    "analysis_family_pin": "sha256:f3fffcf37e4ffc7a6015c54cbd5757379bc93701416c0281e1ef76d0f5ef7fe2",
+    "source_and_analysis_tables_listed": 13
+  },
+  "limits": [
+    "HRC excluded: page probes are not whole-edition qualification.",
+    "Registry remains disabled for unattended refresh; explicitly selected bounded deployment only.",
+    "Hash-only public evidence cannot replay or inspect original publisher bodies.",
+    "No score reproduction or preferred-action comparison published."
+  ],
+  "private_receipt_directory": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-deployment-2026-10-03",
+  "independent_checks": [
+    "independent_public_source_readback.json",
+    "independent_public_analysis_readback.json",
+    "preserved_fec_service_readback.json",
+    "service_release_decision.json"
+  ],
+  "diagnostic": {
+    "status": "stopped_after_independent_hosted_success",
+    "image_digest": "sha256:c998280b7607009acbaa40a01dbe9169c20ab2258e0bf20f38d35ce3cb501279",
+    "source_script_sha256": "340b92305a5dcc86002141b5f1a9d5e0465f3dcad77289d39b48b8bdc4bc0d63",
+    "raw_log_sha256": "c00d67757d0907855f780bcfbf08996cebb52f42201fe6f9435ffe06c37befd9",
+    "scope": "Read-only local container loaded current index and HTTP extension; full connection build was stopped once the actual hosted query checks passed. Emulated amd64 execution is not hosted performance evidence.",
+    "live_mutation": false
+  }
+}

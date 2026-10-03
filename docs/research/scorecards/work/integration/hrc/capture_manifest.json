@@ -1,0 +1,29 @@
+{
+  "public_evidence_policy": "hash_only",
+  "captures": [
+    {
+      "source_id": "index",
+      "url": "https://www.hrc.org/resources/congressional-scorecard",
+      "resolved_url": "https://www.hrc.org/resources/congressional-scorecard",
+      "media_type": "text/html",
+      "observed_at": "2026-10-03T20:33:47.273009+00:00",
+      "sha256": "sha256:e6befb5a41840f620ca88e82379b5df151df0e32b9ae660485adcae57dff32fd",
+      "byte_size": 125629,
+      "via": "direct",
+      "status": "complete_http_capture",
+      "public_body_retention": false
+    },
+    {
+      "source_id": "118-pdf",
+      "url": "https://hrc-prod-requests.s3-us-west-2.amazonaws.com/files/documents/118th-Congressional-Scorecard-HRC-2024-Final.pdf",
+      "resolved_url": "https://hrc-prod-requests.s3-us-west-2.amazonaws.com/files/documents/118th-Congressional-Scorecard-HRC-2024-Final.pdf",
+      "media_type": "application/pdf",
+      "observed_at": "2026-10-03T20:33:48.042800+00:00",
+      "sha256": "sha256:804c1157e71da53a00821fdcaf15a1790448c682eb49d44613a577cfce9cb855",
+      "byte_size": 3343760,
+      "via": "direct",
+      "status": "complete_http_capture",
+      "public_body_retention": false
+    }
+  ]
+}

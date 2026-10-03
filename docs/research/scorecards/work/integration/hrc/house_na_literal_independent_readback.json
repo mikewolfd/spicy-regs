@@ -1,0 +1,21 @@
+{
+  "reviewed_at": "2026-10-03T21:47:42.866616+00:00",
+  "source_sha256": "sha256:804c1157e71da53a00821fdcaf15a1790448c682eb49d44613a577cfce9cb855",
+  "status": "original_source_literal_confirmed",
+  "public_evidence_policy": "metadata_only_review_receipt",
+  "source_evidence_policy": "hash_only",
+  "physical_page": 20,
+  "scope": "House North Carolina district4 member row; third historical rating cell",
+  "source_literal": "NA",
+  "finding": "The original third historical score cell has no slash. Keep this literal distinct from the adjacent N/A cell; schema acceptance must not normalize it.",
+  "artifacts": [
+    {
+      "private_relative_path": "page20-foushee-raw.png",
+      "sha256": "sha256:d4d6e79a7c4204683eae3d71bb657f194209412cbf0619b38f79a0bd22bd591c",
+      "byte_size": 11514
+    }
+  ],
+  "method": "Direct original rendered-cell image readback; no model output used as gold.",
+  "production_reader_qualified": false,
+  "full_edition": false
+}

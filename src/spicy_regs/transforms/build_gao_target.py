@@ -153,7 +153,8 @@ def prepare_target_generation(output_dir: Path, *, prior_file: Path, prior_index
             # publication-block date is read; every value read under /1 reads the same).
             index=product_page_metadata(page,page_product)
             digest='sha256:'+hashlib.sha256(page).hexdigest()
-            evidence.store.put_blob(digest,len(page),[page])
+            evidence.retain_bytes(page,stage="gao-retained-product-page",
+                product_id=page_product,source_url=index.product_url,origin_requests=0)
             evidence.event('retained-product-page-replay',product_id=page_product,sha256=digest,
                 byte_size=len(page),source_url=index.product_url,origin_requests=0,
                 heading=index.title,published_date=index.published_date,rule=PRODUCT_PAGE_METADATA_RULE)

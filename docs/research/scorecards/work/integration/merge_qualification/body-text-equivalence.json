@@ -1,0 +1,65 @@
+{
+  "all_full_BodyText_outputs_equal": true,
+  "explicit_native_reader_dpi": 200,
+  "baseline_wheel_sha256": "4ec97919319016d128b28b4d95db0ec795a6465c468b061ff6e9b7c80bd4ef08",
+  "candidate_wheel_sha256": "670d168db3ca15609485e363f2179a3fa6ad73572b4aadd4245e01d11c421168",
+  "cases": [
+    {
+      "fixture": "tests/fixtures/gpo_pdf_tables/CRPT-113srpt77.page11.pdf",
+      "source_sha256": "54264b3e646aaf814f99e2d768975609bcfc9fd4fb7e61ec6efab1571bb31dfc",
+      "body_text_sha256": "0e74c4e7119438a0eab5c62725f251c600cea59e91be7363b2f708a3cc50cd81",
+      "text_length": 4040,
+      "page_count": 1
+    },
+    {
+      "fixture": "tests/fixtures/document_capture_pdf_tables/GPO-CDOC-119sdoc3-1.page17.pdf",
+      "source_sha256": "20d77a2462a333f8d05bc9ef80feff8493dd5d5cb8c7146245cf76174e67798b",
+      "body_text_sha256": "20432f78d2d70321e1893eb22065ff3aa7eef69cffe4269210b83c3d74803c63",
+      "text_length": 346,
+      "page_count": 1
+    },
+    {
+      "fixture": "tests/fixtures/senate_expenditures/GPO-CDOC-119sdoc3-1.pages11-17.pdf",
+      "source_sha256": "180f1b97a60a20ba356bcfd73c81787096ad50c26567485b2b5073e4f9ed3175",
+      "body_text_sha256": "eb776e45c91524a58e9daf82561aed645325a4a2a8c1c3b32a111ff4b984c629",
+      "text_length": 9237,
+      "page_count": 7
+    },
+    {
+      "fixture": "tests/fixtures/senate_expenditures/GPO-CDOC-119sdoc6-2.pages11-22.pdf",
+      "source_sha256": "32834f1078045ef2d298cfbe664db9527d0eb39e1557fe9eb656e2ba38e1f7b6",
+      "body_text_sha256": "e967d3cad809aa2b37e7bd2b80ddcc87c83944c40d170b38a0b762fc12a36f8c",
+      "text_length": 21585,
+      "page_count": 12
+    },
+    {
+      "fixture": "tests/fixtures/govinfo_bodies/body-CRPT-119hrpt1.htm",
+      "source_sha256": "d2575146c81d989831fd08e8f424eddb048346bfe78670db994c0a107b584ad9",
+      "body_text_sha256": "e627b0a457524a67bf289f384203f06ffaa956f502cf62c818f49eaae0b95dda",
+      "text_length": 13040,
+      "page_count": 0
+    },
+    {
+      "fixture": "tests/fixtures/govinfo_bodies/body-CDIR-2026-02-20.excerpt.txt",
+      "source_sha256": "fbd6e70a40d657f214ad697b9f325d4d16eaae4a0935dbaffd9d5f440cf76b76",
+      "body_text_sha256": "d56753ed4b2b6763a2bea60ed6f86019550157cc8515944443588554e5218fe3",
+      "text_length": 5693,
+      "page_count": 0
+    },
+    {
+      "fixture": "tests/fixtures/govinfo_bills/text-119hr6028ih.xml",
+      "source_sha256": "912711983c92c3ad959b749e785688f1b197b7391ea7284c4b33cf887000c99a",
+      "body_text_sha256": "f76a095efcd4b95728ea7a0c6603d15a654e5d0b0774271e594c0323a76f0464",
+      "text_length": 179,
+      "page_count": 0
+    },
+    {
+      "fixture": "tests/fixtures/govinfo_bills/uslm-119hconres11enr.xml",
+      "source_sha256": "a0e2847ee6883b64c881053c781ce0a289e25e59be7b812fcd7fbab5f2e9f5ff",
+      "body_text_sha256": "3249f2528371185420cdf99939e2c8628973bc2ed38b2b3800081198be881ed9",
+      "text_length": 1120,
+      "page_count": 0
+    }
+  ],
+  "scope": "Default rendition_text processing; same Python/dependency environment, separate processes, imports from each exact wheel. Does not claim equivalence for custom NativeWithRegions or OCR strategies."
+}

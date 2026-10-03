@@ -1,0 +1,428 @@
+{
+  "receipt_version": "scorecard-pdf-qualification/1",
+  "recorded_at": "2026-10-03T19:59:41.796035+00:00",
+  "evidence_policy": "hash_only",
+  "raw_retention": "Private external corpus only; no publisher body, rendered source image or raw model output in this repository receipt.",
+  "processing": {
+    "backend": "docling",
+    "pipeline": "FullPage",
+    "renderer": "DefaultReader",
+    "dpi": 300,
+    "model": "mlx-community/OvisOCR2-8bit",
+    "model_revision": "703d23a97d7e6474c7b53e991d6606362d10773f",
+    "model_files_sha256": {
+      "model.safetensors": "30971210227e1f0f2af39c59f569a2defbf85c5aa112e8eb5abb6f4ef1e33cec",
+      "tokenizer_config.json": "792fa3f0cb88b111e54ef3134c873531008c4df471d108da17903426e308aa7b",
+      "config.json": "be287fbd6f3549b1ca08a61d69833e48f72d884a0957084f4cbc7b5e3eac23db",
+      "tokenizer.json": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523",
+      "processor_config.json": "222e060084f093738ca7af4c89ef09d844e415876021325fdf7d5c6821b119d4",
+      "chat_template.jinja": "273d8e0e683b885071fb17e08d71e5f2a5ddfb5309756181681de4f5a1822d80",
+      "vocab.json": "ce99b4cb2983d118806ce0a8b777a35b093e2000a503ebde25853284c9dfa003",
+      "model.safetensors.index.json": "a4aa698b7a4d68b8f40974a94b8767a069b2cf7b9e2a82c597b7c5687402a2eb",
+      "video_preprocessor_config.json": "7768af27c1fafa9cc9011c1dc20067e03f8915e03b63504550e11d5066986d13",
+      "preprocessor_config.json": "27225450ac9c6529872ee1924fcb0962ff5634834f817040f444118116f4e516"
+    },
+    "model_configuration_sha256": "293339e652c2f93f54a72546319309a501fddabcc873f0a47d88215b3e46a0a5",
+    "provider_versions": {
+      "docling": "2.131.0",
+      "docling-core": "2.99.0",
+      "pymupdf": "1.28.2",
+      "pillow": "12.3.0",
+      "mlx-vlm": "0.7.0",
+      "mlx": "0.32.2"
+    },
+    "platform": "macOS-26.6-arm64-arm-64bit",
+    "source_modules_sha256": {
+      "src/spicy_docs/extraction/api.py": "e0662c111f32eb55e1332202b955bec0161a0a3e497bd670125d07d743c59b41",
+      "src/spicy_docs/extraction/model.py": "1431555aa907814c0a454141864f4be92f89e7d466c2d5eb607e60fd5660dc88",
+      "src/spicy_docs/extraction/pages.py": "64831c5900da6b33de2e20f2387ef61578bc3b22bdd1be7275e38f1478f30f12",
+      "src/spicy_docs/extraction/docling.py": "648ed6c9ea42d5763a2cd94c3089706c336edf87cc8f83d9b5a5da99ff17cfd3",
+      "src/spicy_docs/extraction/docling_assets.py": "1b4259b84b8b5744c0ed3fd5f9fe8ed9da0cb5f9ef72551306e55279e73c0056",
+      "src/spicy_docs/extraction/docling_markdown.py": "11e988b6ab2d2c1a489b94029b33cc06fd7f51e0c65a91da84b5f693172b0784",
+      "src/spicy_docs/sources/scorecards/common.py": "5b150b6f074545eab0b531d2111c01e8ece54b8fa59c21825f8c9e2bd667f29e",
+      "src/spicy_docs/sources/scorecards/pdf_observations.py": "18728bd4f9d0636bd6a4f8d50255831d7f8e2ad440d71a3863863fea8603f5fb",
+      "src/spicy_docs/sources/scorecards/humane.py": "c10590bf82acefdd31989a3789ca0a81b89df99481a7c0e50de7ca0012ed5361",
+      "src/spicy_docs/sources/scorecards/nea.py": "a59354dd15d8d603f1c652880022032a04a4c05e4b4440a0dec1210888c697b0",
+      "src/spicy_docs/sources/scorecards/c4ip.py": "1a4a92f9826b9468470208ba09a0322bcd1cbfc6e3cee29a706405ec48382ad9"
+    },
+    "max_tokens": 16384,
+    "document_timeout_seconds": 120,
+    "automatic_fallback": false
+  },
+  "qualification_distinctions": [
+    "Smoke extraction is not complete document extraction.",
+    "Complete sequential page observations are not source transcription qualification.",
+    "Parser acceptance and table relationship validation are necessary but not sufficient.",
+    "Retained-corpus qualification does not enable publication or qualify untested historical editions."
+  ],
+  "publishers": [
+    {
+      "publisher_id": "nea",
+      "parser_version": "nea-119-2025-docling/2",
+      "source_status": "available",
+      "production_enabled": false,
+      "qualification_status": "qualified_retained_complete_scope",
+      "source_captures": [
+        {
+          "capture_id": "498a339d-f95b-4dd6-93da-c34f3a636f31",
+          "source_url": "https://www.nea.org/advocating-for-change/action-center/nea-in-congress/report-card",
+          "observed_at": "2026-10-03T17:31:04.114930+00:00",
+          "sha256": "sha256:39e1922134c95d066223ca9ce77547844792b8b2299641bee83bb61dbfae4ad2",
+          "byte_size": 477903,
+          "stage": "scorecards:nea:grades-html"
+        },
+        {
+          "capture_id": "31c06aba-7a52-477d-81b9-bf37eb4e278d",
+          "source_url": "https://www.nea.org/sites/default/files/2026-01/nea-legislative-report-card-for-the-119th-congress-2025-1.pdf",
+          "observed_at": "2026-10-03T17:31:04.367634+00:00",
+          "sha256": "sha256:bfd41b3cfddd076db464c7bef73db0c6a32c7212483694e5b2303b9917445828",
+          "byte_size": 249146,
+          "stage": "scorecards:nea:grades-pdf"
+        },
+        {
+          "capture_id": "aacbc53e-e10c-4f3f-9ffa-bbd9037fb802",
+          "source_url": "https://www.nea.org/sites/default/files/2026-01/119th-congress-session-1-scored-votes.pdf",
+          "observed_at": "2026-10-03T17:31:04.412870+00:00",
+          "sha256": "sha256:5cc4873d23f9b95ee5a39b42e027ccfa6cf2ba293652767cac60d4890d747108",
+          "byte_size": 156216,
+          "stage": "scorecards:nea:scored-votes"
+        }
+      ],
+      "page_inventory": [
+        {
+          "document": "nea-grades",
+          "required_pages": 13,
+          "retained_pages": 13,
+          "page_numbers": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13
+          ],
+          "page_count_consistent": true,
+          "all_docling_status_success": true,
+          "private_observation_sha256": [
+            "2454c6f5ee8e7db80ce76282eb02bf1e48d83128ca73232e1622845d3b9b9df7",
+            "0e34ccfc0dd3e6b0ef58792ffabe9ce00cfbcb3f2d930f6c9ba23746c208ab9b",
+            "838bbdfec6d01009aa84c8b1ffbc72b89f30cb30ae32fd2c29d17decb4cef402",
+            "5a9cbdb901a3ecac5eb68007296a154a6abb1f4e55bcc69b1e1b99552a5bb4e6",
+            "349612373b35ee7d7ee2384ac4aa62d933b2366e21ec45b2270e3a7e1f815171",
+            "7a4f487365a7b832d683a11c63432e92253f77c79663ceb46595319f0bb96aeb",
+            "4108fcc639e93ea6b7ba26dfe559184ab8eb5168a19559aea470df0c5265f3f1",
+            "a6853b23d6f3fa6a9b534d72a3105fc415d8278d4a95897cdfb3c8de28ce80c1",
+            "5a137eaa9e9a51ea64fc36c76746fa94a90f2044c921f3be83afd7735076994b",
+            "486009f021270d8a28178525414f80316a2a9801684ea20598e3b7b9a101b9eb",
+            "25e7909f71293ecc8e74aecec5340c68d5ef1f982a97c605dac7a4bb1f4080da",
+            "4a3307449530249f95cf5c7f7a3d1eca56017c6a943be795bebb6f679d4517a8",
+            "3085b36e3dc10ae344ea21c4591cf275947311c13b00d25d243d244152280f41"
+          ]
+        },
+        {
+          "document": "nea-votes",
+          "required_pages": 2,
+          "retained_pages": 2,
+          "page_numbers": [
+            1,
+            2
+          ],
+          "page_count_consistent": true,
+          "all_docling_status_success": true,
+          "private_observation_sha256": [
+            "6a391f5cf0bfaac19c37485d470484d0279e2375c2f3322e9bbe2371baae4061",
+            "9eba175d1f1e7d9612f22fd8a8bdfae79f5187706a133843f7afdf47a51ae8e5"
+          ]
+        }
+      ],
+      "provider_receipt_sha256": "594a21722c5d37a8395472f14988cc15ec7fe0aa77313ce767c6e7a849aba476",
+      "parsed_table_counts": {
+        "scorecard_publishers": 1,
+        "scorecards": 1,
+        "scorecard_snapshots": 1,
+        "scorecard_methodologies": 1,
+        "scorecard_metrics": 2,
+        "scorecard_items": 12,
+        "scorecard_metric_items": 12,
+        "scorecard_metric_components": 0,
+        "scorecard_members": 531,
+        "scorecard_member_ratings": 531,
+        "scorecard_member_item_results": 0
+      },
+      "parser_completeness_rule": "Both complete published HTML chamber tables reconcile cell-for-cell with every grade table across the official PDF; the complete two-page disclosed scored-vote list is read. The publisher discloses additional qualitative inputs without member ledgers.",
+      "fidelity_qualified": true,
+      "method": "Exact complete HTML/PDF multiset comparison of member, state, district and grade cells; entire disclosed vote-list PDF parsed.",
+      "limitations": [
+        "Qualitative leadership/access inputs have no disclosed member ledger.",
+        "Retained-corpus qualification of an explicit edition; not production enablement or historical archive support."
+      ]
+    },
+    {
+      "publisher_id": "humane_world_action",
+      "parser_version": "humane-final-2025-docling-displayed-glyphs/2",
+      "source_status": "available",
+      "production_enabled": false,
+      "qualification_status": "refused",
+      "source_captures": [
+        {
+          "capture_id": "19cda6f7-4027-475b-a478-d67e78fd8185",
+          "source_url": "https://humaneaction.org/sites/default/files/2026-02/FINAL%20humane-scorecard-2025.pdf",
+          "observed_at": "2026-10-03T17:33:08.239147+00:00",
+          "sha256": "sha256:fee179fb27e7200434c9c2c547faaa6dd666367fa8429609a3ef2d747f9e1498",
+          "byte_size": 1359248,
+          "stage": "scorecards:humane:final-pdf"
+        }
+      ],
+      "page_inventory": [
+        {
+          "document": "humane",
+          "required_pages": 20,
+          "retained_pages": 20,
+          "page_numbers": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20
+          ],
+          "page_count_consistent": true,
+          "all_docling_status_success": true,
+          "private_observation_sha256": [
+            "868e5fdf4be901debc23f4e39dd0e491aee4d13c80c90179cc84ebc892ff2d39",
+            "a28c1e784fbc321ef970052e13a6dcba94c1003b4f876b541b83e491cc803939",
+            "e9b1c5e7647903b4ca48d9ff1b1dad272930387aba6b1276fe2a343ad40da48f",
+            "cbe974c7df81a88c6fb5ae7b5539339e789a904dd427270546e71348bc3a24eb",
+            "4343d98556355abcb4b9eb73d01b30cc63869a63b53504898f126b61e6bffa40",
+            "8dd496cbe9eb7a6176a1ea32b4bd2a80b3356c2bf91375f47059b86c00d6f725",
+            "c946c56787d40e4218da188b36086436ed901bb84dba9b65f81ac83c8ea4fa48",
+            "cb8a8da238cbfa670938c6c1669a41fa04f1483ff77de0cd1ab7fe1b74d3b803",
+            "4036e78fe9f89c306c690a338dd45dc0a82e3795ea3b558ae1bbb2bb14002c36",
+            "b27008f6520ea4872103981c6c06e22ff15e79a2f8cf4ee99dbff64fec2c1746",
+            "55a0ea3b2e603c696456988878bfbe490560a1102832fb0c802a41cfbfc1cca1",
+            "1f2c4a254a85136617b09ed4b686f0d80e6fa72a1ac003b2e986cbf288235b98",
+            "439f522411422b2a6d4847e4beeae90fd99c9ee948dcf3d2e5cc969d6422b7bd",
+            "7b8b9095b050a78cbec2287001c639960d5739952ac39b1862f3237535dc6c73",
+            "df04365a51065ce3e5785b03724ad8e4daa9fe70b8fd6dc824bc8af3003d3e62",
+            "cebf31eb7e7cd2acacf670725efc49b4c06891c14dfd8b4b24b87bde9b1fc7e4",
+            "8eb49b99cd5279307fcab3a7d47d8d5bc10e6def8d6db601f98942cb9f28d7fb",
+            "eb1d9384f9050f71eb1602568b3ff0fa9157db4ee72506b86033fb694bf01e54",
+            "ef0d8d4ca72e929911e171526487d614ed0edb5a85b3dda9e8f52260ff27406c",
+            "3d6133e1c3a518bae2f6fdbe6c77c41868e7ab6eb3cdd2d979fdc5294e27283b"
+          ]
+        }
+      ],
+      "provider_receipt_sha256": "8b8eb4623fa835c9ea8c984349e16eb98b72c2a2bc3c56748dbcad572cf16c41",
+      "fidelity_qualified": false,
+      "parser_accepted": false,
+      "refusal": "Humane chart introduced an unknown result or score marker",
+      "limitations": [
+        "OvisOCR2 retains page inventory but shifts/misses House cells and changes exclusion glyphs.",
+        "Explicit existing-default Docling comparison on House page 12 produces 9 chart columns instead of 11; no automatic fallback.",
+        "Displayed source glyphs are not inferred from dot sequences or raw font tokens."
+      ],
+      "comparison_pages": [
+        12,
+        13,
+        14
+      ]
+    },
+    {
+      "publisher_id": "c4ip",
+      "parser_version": "c4ip-first-edition-published-report-docling/2",
+      "source_status": "available",
+      "production_enabled": false,
+      "qualification_status": "unsupported_extraction_fidelity",
+      "source_captures": [
+        {
+          "capture_id": "39517c00-8a50-49cd-98e3-d80ff5ae25a5",
+          "source_url": "https://c4ip.org/wp-content/uploads/2024/03/2024-Congressional-Innovation-Scorecard.pdf",
+          "observed_at": "2026-10-03T16:34:56.121455+00:00",
+          "sha256": "sha256:d5ce56a64335024df03a06b557ea096e0bb957f3360dc65ac119ea7f652bb5f0",
+          "byte_size": 2025165,
+          "stage": "scorecards:c4ip:report"
+        }
+      ],
+      "page_inventory": [
+        {
+          "document": "c4ip",
+          "required_pages": 46,
+          "retained_pages": 46,
+          "page_numbers": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31,
+            32,
+            33,
+            34,
+            35,
+            36,
+            37,
+            38,
+            39,
+            40,
+            41,
+            42,
+            43,
+            44,
+            45,
+            46
+          ],
+          "page_count_consistent": true,
+          "all_docling_status_success": true,
+          "private_observation_sha256": [
+            "77acde506a785f44f729ec597347d57114acf940e918a3d3c1bfa86c87cae70f",
+            "c372f85ba71f3aa6ea06a7ef06bd977d9ae9a3010b99d8a6237cf0369ba35bc0",
+            "53ed663d27280346adcc502e987dbbf4e1b4a968bc46734f62c36b2b1e0bcc4c",
+            "f9bc0be648be2ce446a8b3d2aa6c13a9423adda9e6e567bff9c16f9b5c55f8e6",
+            "f066bd531c253f9caa546b4cc339ee2482319d42bbcd0f851ac8339cd67cff1e",
+            "bda6b07983e00b681e097a5fafccf43c5c201aa9d6e3a394ba2785d491ae123c",
+            "c202c39e777ec63a0984a601e4689c9539f57b885b97a4a4c9ea1a94d7d930a7",
+            "a2cdfea03de34496bf6720f92f98bd78cc2e4b29839c95f39db822717300536a",
+            "bbba4832202e6eaab485b0c9ffa47bff008fb61fbdc2646fadd0b573ea76a640",
+            "0d6c9c88a2576951256eeba52585b58cb92f7a538742c2a8449c131fdaaa7657",
+            "bcfad7ea13046bf99867ab518e08756905e8fc51cd1bf1b758cec905e6d54198",
+            "8b0a5496f5f9927c40c32e29ea303913c29993804ae19015efd5b4213150454f",
+            "26b9c48714712e05cd98a4e8134421ae079d36231a2b7d80f87e74c6793994dd",
+            "8ed35b52e1ec23f3e83beac6461fe3514937f72779347dfc1b090cfa107b97e4",
+            "01687dc2eb9120ca8c6093c5ad33b25a2be7ca553224e3c1cde3b569ebe474a8",
+            "425606bd696e09859d194be3fd9f9cc270201f7eeec866f9e8bb367245a5a7a1",
+            "776c32b46ab1bbb1e14e8eb95af26391d7b52261f08cd0382990b23e86087a9f",
+            "0a1409c07e7d06412db078005545c0fb52dfeb9008b964297d8a6a3eff7bdf3e",
+            "8b9e7b66b510b57c9f80b6dd21b3ddd99d8580b015eb358f763e27f3fef41a00",
+            "82105edd5570d1d6bcefec473c9f5b41f16cd981a6bccd5a97fda804d92a7e9c",
+            "b4bc72bb658c0ada1a0db34da14f52fefac58e5f4e1a97ef0dddcdf845484367",
+            "a78844bea5b0fea444a0dad5cf5484780ced81d8c6473c1425bac72bc8246353",
+            "c743a9e21f5dfa417a7f63d59f3e8a384c58e20ed259e000c09fc251cf9dd286",
+            "f776e732c142e492dbcabd0e06842e0fc7f1f65b9db77c59888312aea0312b35",
+            "f5d7d319dce8f8887ddeca8802c700edc8f24c6c2333d1ae4d3c29cc306794bf",
+            "4ed88239148ef5b241238d2f25d1b195a7e3be0d7f517fb568f11517745bf500",
+            "8a4ba25e1b50c9e1a0fee87aa109f3c9f2a17e714cf394e7ab58c8192ac2d8f2",
+            "6e7b304ff128753e935be5b3295bd74030b29c2e27d4382c354d5f98faa9a3fe",
+            "3614a0a205475fb309ac7798e19ff7283b59588b77ce08b8c2b926e57ed9cdda",
+            "312578867f2ad62a6befa78de08ca3e21d40e710207b448160c56ed3fcff6305",
+            "774c0f761fd8d205975cc5edbd8ea8b095f9d844703d847459ca1fffd0335496",
+            "9cf95f98c8710da9a88efd1a111882aa1ddc879b5b15d050f643c2bba310178d",
+            "1b1fab2434f0b4b3bc6d21e9a7bfd698f2e79e1472c824f137d8b604c677e93c",
+            "cbe8722591aa36ea80afc411db24e7e790100a9062dafc54d81d235066c95684",
+            "1047177e00717d60aa23cf681ecf498b5124af33b8e6653877e6482d2940b095",
+            "ea65c48fe6699571dceaef276dabc671eba523ab8e24d40189421508c4ce96be",
+            "71cedc8dbf117975dc57a6de308ad0e7adeff968571d68695deb0f42a4d0835e",
+            "bab85d27953b454c1ec7e4b94d5f0da877adcbccd3dd14ef0434c1201bd45fb3",
+            "883123c91a327d918ce4addef0aec4d7bc345f8c5ca18b53016834748e79888d",
+            "0b15c0cb4003ef11b8e2f28b16190b9f7239a9852488ef2f7c97c2909021e55b",
+            "746ee74eb5fbc10f085064cc468824f8fc6370e8ebb190eed7a8d7764fba13f7",
+            "fc3f715d2106b68cbed2ff6ec8b9b8544b6bfad71630f1e8abc27a15c2ec2317",
+            "da1084e7310fb6f3e4f7299b27620b6deee6317ed8b58a5ed029476395dd49f2",
+            "d018d085ab286cde9709aa4a948065b43a9de1bd12cbe5538c40a665e121b2bf",
+            "98e71f045255e766024a9eb777cbd2b9613551d5a685111a64a74c6efd2377ef",
+            "5b14c36c57e9c784377f8b1143ff47d46ced4dd3e6b6ff83c0213a285f7998fe"
+          ]
+        }
+      ],
+      "provider_receipt_sha256": "9c27c993e8b29ae8a9aeae1162d4d582c09890332f3c6e472c5c4cd7da4fb3b8",
+      "parsed_table_counts": {
+        "scorecard_publishers": 1,
+        "scorecards": 1,
+        "scorecard_snapshots": 1,
+        "scorecard_methodologies": 1,
+        "scorecard_metrics": 4,
+        "scorecard_items": 0,
+        "scorecard_metric_items": 0,
+        "scorecard_metric_components": 3,
+        "scorecard_members": 530,
+        "scorecard_member_ratings": 530,
+        "scorecard_member_item_results": 0
+      },
+      "parser_completeness_rule": "Complete publisher-defined First Edition report PDF: all pages, published House and Senate grade tables, and disclosed component definitions acquired. The qualified fixed report table boundaries reconcile. Companion standalone Data Annex unavailable; its item/member action ledger and reproduction remain unsupported. Empty item/result tables describe this supported report scope and do not assert an empty underlying ledger.",
+      "fidelity_qualified": false,
+      "parser_accepted": true,
+      "method": "Compare every published member-name/state/district/party/grade tuple to prior independent retained source observations, then visually read both discrepant source cells.",
+      "comparison_sha256": "87665e136bb5368db40469c543ba642020da8d17d170154d6879623df09e1870",
+      "comparison_rows": 530,
+      "unresolved_ocr_name_errors": 1,
+      "discrepancies": [
+        {
+          "page": 36,
+          "column": 2,
+          "prior_native_observation": "Griftfih",
+          "ovis_observation": "Griffith",
+          "rendered_source_readback": "Griffith",
+          "disposition": "Prior native observation was wrong; retained separately, not rewritten.",
+          "source_render_sha256": "5a54fa60722e8177d1dc639c8395e219d23c7032ca93865acdcb7d19e80eb30a"
+        },
+        {
+          "page": 40,
+          "column": 2,
+          "prior_native_observation": "Reschenthaler",
+          "ovis_observation": "Reshenghaler",
+          "rendered_source_readback": "Reschenthaler",
+          "disposition": "Ovis source fidelity failed; no correction or named-person parser exception.",
+          "source_render_sha256": "e1430997ba53a8f72f941da0fb40984d760ca37101b4960529ebee1aa5bee0a0"
+        }
+      ],
+      "limitations": [
+        "Publisher-defined whole First Edition report scope; companion standalone Data Annex unavailable.",
+        "Only published grades, dimension headings/relationships and Annex disclosure are represented by the parser.",
+        "Full narrative dimension descriptions and Table 2 activity point definitions remain unsupported.",
+        "No member component values, underlying action ledger or score reproduction is claimed.",
+        "Page completion and parser acceptance do not establish transcription fidelity."
+      ]
+    }
+  ],
+  "validation": {
+    "focused_command": "uv run --frozen --no-sync pytest -q tests/test_scorecards_common.py tests/test_scorecards_adapters.py tests/test_scorecards_source_layouts.py tests/test_scorecards_pdf.py tests/test_table_contracts.py",
+    "result": "passed",
+    "passed": 1669,
+    "shared_repository_gate": "Coordinator owns final gate after all concurrent changes stabilize."
+  }
+}

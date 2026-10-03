@@ -1,0 +1,68 @@
+{
+  "validated_at": "2026-10-03T17:15:06.589457+00:00",
+  "scope": "Initial local research survey; no production ingestion, schema freeze, publication or schedule.",
+  "repository_heads": {
+    "spicy-regs": "8412b0cac0fc6285ef1315ee868013e4ab429a2c",
+    "spicy-docs": "34a8d595e3d6cf19e67b8ca0b749b3fcc6043ffa"
+  },
+  "workspace_state": "Both repositories had pre-existing unrelated changes; source filemap regeneration added only the new scorecards guide to its prior contents.",
+  "input_sha256": {
+    "scorecard_source_catalog.json": "0ce392fe9f856ee97850e951d4a946c96b77aee473225bb8cae17fb60daf0cef",
+    "shape_profiles.json": "82101a231fdc2bd26727914932f0dbe87e5d0121e5c3fafa779938606b807f81",
+    "capture_receipts.json": "5138a999309f84dac040d4e75c3645e10e4b9f553c09749beaaf4ce6c2f7a763",
+    "schema_breakers.json": "f3323cb20dedfe8ed95d5aa2555a417bd9e78000c12d5293354963ed966e275c",
+    "proposed_schema.json": "6c31ff712b397f0c9f27089c76985bc5fec792ebd3de69c40ef0ea254e07a615",
+    "schema_examples.json": "7c4f29035d00660db862099f7bec9121abf955352eb3440510276d8740833b39",
+    "discovery_log.json": "4d280ed94c55aff562b433741d39f130379bfbd2af2e5a0fc70a2a23e8231418"
+  },
+  "checks": [
+    {
+      "command": "uv run --frozen --no-sync pytest -q tests/test_scorecard_survey.py",
+      "result": "passed",
+      "tests": 11
+    },
+    {
+      "command": "uv run --frozen --no-sync ruff check scripts/build_scorecard_survey.py tests/test_scorecard_survey.py",
+      "result": "passed"
+    },
+    {
+      "command": "uv run --frozen --no-sync ruff format --check scripts/build_scorecard_survey.py tests/test_scorecard_survey.py",
+      "result": "passed"
+    },
+    {
+      "command": "uv run --frozen --no-sync python scripts/build_scorecard_survey.py --check",
+      "result": "passed"
+    },
+    {
+      "command": "SpicyDocs: uv run --frozen --no-sync python scripts/generate_filemap.py --check",
+      "result": "passed"
+    },
+    {
+      "command": "Workspace: uv run --frozen --no-sync python scripts/generate-filemap.py --check",
+      "result": "passed"
+    },
+    {
+      "command": "git diff --check in each changed repository",
+      "result": "passed"
+    },
+    {
+      "check": "Every completed response byte size and SHA-256 recomputed from temporary acquisition bytes",
+      "result": "passed"
+    },
+    {
+      "check": "All relative Markdown links in new guides and generated reports resolve locally",
+      "result": "passed"
+    },
+    {
+      "check": "Every sampled profile has a bounded logical row example or explicit unsupported cell-fixture disposition; row keys, references and literal sample bindings checked offline",
+      "result": "passed"
+    }
+  ],
+  "not_checked": [
+    "Production adapters and runtime table schemas do not exist yet.",
+    "Full repository application suites were not run for this research-only change.",
+    "Hashes do not establish complete source-defined membership.",
+    "Complete admitted-shape fixtures, physical-type decisions, repeated-reference representation and further publisher profiles remain open before freeze."
+  ],
+  "research_capture_program_sha256": "d389528a28eae936273f64789e59e8d0317c15e1b212c03d3e68c6dbc44de726"
+}

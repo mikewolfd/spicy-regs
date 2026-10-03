@@ -1,0 +1,747 @@
+{
+  "publisher_id": "hrc",
+  "source_id": "hrc:federal",
+  "ticket": "ss-s50y",
+  "checked_at": "2026-10-03",
+  "source_sha256": "804c1157e71da53a00821fdcaf15a1790448c682eb49d44613a577cfce9cb855",
+  "source_url": "https://hrc-prod-requests.s3-us-west-2.amazonaws.com/files/documents/118th-Congressional-Scorecard-HRC-2024-Final.pdf",
+  "latest_advertised_edition": "118th Congress",
+  "physical_page_count": 27,
+  "source_model_fit": "fits_scorecards_v1",
+  "acquisition_readiness": "complete_current_original_pdf",
+  "structured_extraction_readiness": "representative_crop_matches_source_full_edition_unqualified",
+  "production_reader_status": "unimplemented",
+  "production_supported": false,
+  "publication_rows_emitted": 0,
+  "qualified_scope": {
+    "physical_page": 6,
+    "printed_page": "10",
+    "crop_box": [
+      0,
+      0,
+      0.5,
+      1
+    ],
+    "checked_member_rows": 20,
+    "checked_score_cells": 60,
+    "checked_action_cells": 300,
+    "validation_method": "Direct model-output versus original rendered crop readback; not a blinded evaluation",
+    "excluded": "Right-side endnotes, other pages, complete edition and historical layouts"
+  },
+  "transport": {
+    "initial_direct_attempts": 2,
+    "initial_result": "DNS failure before HTTP; no provider response",
+    "diagnostic_recovery": "Fresh Google HTTPS DNS answer, injected same-host HTTP transport, original Host/SNI and default TLS verification; no global DNS changes",
+    "credential_sent_to_dns": false
+  },
+  "runs": [
+    {
+      "name": "gemini-page6-resolved",
+      "configuration_model": "gemini-3.8-flash",
+      "reported_model_version": "gemini-3.8-flash",
+      "usage_metadata": {
+        "promptTokenCount": 1615,
+        "candidatesTokenCount": 4481,
+        "totalTokenCount": 6096,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 555
+          },
+          {
+            "modality": "IMAGE",
+            "tokenCount": 1060
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "response_finish_reason": "STOP",
+      "generation": {
+        "maxOutputTokens": 32768,
+        "thinkingConfig": {
+          "thinkingLevel": "low"
+        },
+        "temperature": 0,
+        "responseMimeType": "application/json",
+        "responseJsonSchema": {
+          "type": "object",
+          "properties": {
+            "page_kind": {
+              "type": "string",
+              "enum": [
+                "grid"
+              ]
+            },
+            "chamber": {
+              "enum": [
+                "Senate"
+              ]
+            },
+            "printed_page_labels": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "uncertainties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "footnotes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "marker_text": {
+                    "type": "string"
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "marker_text",
+                  "text"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "legend": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "glyph_text": {
+                    "type": "string"
+                  },
+                  "meaning_text": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "glyph_text",
+                  "meaning_text"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "other_scoring_notes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "visible_score_headers": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "visible_action_headers": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "rows": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "panel": {
+                    "type": "string",
+                    "enum": [
+                      "left",
+                      "right",
+                      "across"
+                    ]
+                  },
+                  "state_text": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "district_text": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "member_name_text": {
+                    "type": "string"
+                  },
+                  "member_footnote_markers": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "party_text": {
+                    "type": "string"
+                  },
+                  "score_values": {
+                    "type": "array",
+                    "items": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "minItems": 3,
+                    "maxItems": 3
+                  },
+                  "action_values": {
+                    "type": "array",
+                    "items": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "minItems": 15,
+                    "maxItems": 15
+                  }
+                },
+                "required": [
+                  "panel",
+                  "state_text",
+                  "district_text",
+                  "member_name_text",
+                  "member_footnote_markers",
+                  "party_text",
+                  "score_values",
+                  "action_values"
+                ],
+                "additionalProperties": false
+              },
+              "minItems": 1
+            }
+          },
+          "required": [
+            "page_kind",
+            "chamber",
+            "printed_page_labels",
+            "uncertainties",
+            "footnotes",
+            "legend",
+            "other_scoring_notes",
+            "visible_score_headers",
+            "visible_action_headers",
+            "rows"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "schema_sha256": "e5596190aa56dd8b7b468a419a7233ee84e140c992e48bbc1f8b0e1fb920fbac",
+      "artifact_hashes": [
+        {
+          "filename": "dns-receipt.json",
+          "sha256": "81b5b0713ff44731a111cdb5b7a7c079ab8eabbf94d06fccc73d7a0eea982a93",
+          "byte_size": 425,
+          "public_body_retention": false
+        },
+        {
+          "filename": "dns-response.json",
+          "sha256": "dc5c2b9c5c17b9c2faaf80148d49f91ab360657c86c14ec4f42230e755a184e6",
+          "byte_size": 889,
+          "public_body_retention": false
+        },
+        {
+          "filename": "page-6.json",
+          "sha256": "79f007643d646e9d10088ce142e1a9b65367a136354297ea885669b37412fa93",
+          "byte_size": 13123,
+          "public_body_retention": false
+        },
+        {
+          "filename": "page-6.pickle",
+          "sha256": "0b8aaacc9d41d238854bbc14ab24f9386727f6a6d50e6dd533dfa8d462230099",
+          "byte_size": 906107,
+          "public_body_retention": false
+        },
+        {
+          "filename": "receipt.json",
+          "sha256": "419ca7bfb3c2cfea4d383b6024e43440d2ef76b8d29efc953d3fca47ecc55599",
+          "byte_size": 384,
+          "public_body_retention": false
+        }
+      ],
+      "fidelity_status": "refused_wrong_source_values",
+      "whole_page_qualified": false,
+      "whole_edition_qualified": false
+    },
+    {
+      "name": "gemini-page6-high",
+      "configuration_model": "gemini-3.8-flash",
+      "reported_model_version": "gemini-3.8-flash",
+      "usage_metadata": {
+        "promptTokenCount": 1615,
+        "candidatesTokenCount": 4481,
+        "totalTokenCount": 10012,
+        "promptTokensDetails": [
+          {
+            "modality": "IMAGE",
+            "tokenCount": 1060
+          },
+          {
+            "modality": "TEXT",
+            "tokenCount": 555
+          }
+        ],
+        "thoughtsTokenCount": 3916,
+        "serviceTier": "standard"
+      },
+      "response_finish_reason": "STOP",
+      "generation": {
+        "maxOutputTokens": 32768,
+        "thinkingConfig": {
+          "thinkingLevel": "medium"
+        },
+        "temperature": 0,
+        "mediaResolution": "MEDIA_RESOLUTION_HIGH",
+        "responseMimeType": "application/json",
+        "responseJsonSchema": {
+          "type": "object",
+          "properties": {
+            "page_kind": {
+              "type": "string",
+              "enum": [
+                "grid"
+              ]
+            },
+            "chamber": {
+              "enum": [
+                "Senate"
+              ]
+            },
+            "printed_page_labels": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "uncertainties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "footnotes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "marker_text": {
+                    "type": "string"
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "marker_text",
+                  "text"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "legend": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "glyph_text": {
+                    "type": "string"
+                  },
+                  "meaning_text": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "glyph_text",
+                  "meaning_text"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "other_scoring_notes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "visible_score_headers": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "visible_action_headers": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "rows": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "panel": {
+                    "type": "string",
+                    "enum": [
+                      "left",
+                      "right",
+                      "across"
+                    ]
+                  },
+                  "state_text": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "district_text": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "member_name_text": {
+                    "type": "string"
+                  },
+                  "member_footnote_markers": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "party_text": {
+                    "type": "string"
+                  },
+                  "score_values": {
+                    "type": "array",
+                    "items": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "minItems": 3,
+                    "maxItems": 3
+                  },
+                  "action_values": {
+                    "type": "array",
+                    "items": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "minItems": 15,
+                    "maxItems": 15
+                  }
+                },
+                "required": [
+                  "panel",
+                  "state_text",
+                  "district_text",
+                  "member_name_text",
+                  "member_footnote_markers",
+                  "party_text",
+                  "score_values",
+                  "action_values"
+                ],
+                "additionalProperties": false
+              },
+              "minItems": 1
+            }
+          },
+          "required": [
+            "page_kind",
+            "chamber",
+            "printed_page_labels",
+            "uncertainties",
+            "footnotes",
+            "legend",
+            "other_scoring_notes",
+            "visible_score_headers",
+            "visible_action_headers",
+            "rows"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "schema_sha256": "e5596190aa56dd8b7b468a419a7233ee84e140c992e48bbc1f8b0e1fb920fbac",
+      "artifact_hashes": [
+        {
+          "filename": "dns-receipt.json",
+          "sha256": "94fce40f5eee0a2b433335028daf80275f49d3e354fecf3a06353e20a9cc92fb",
+          "byte_size": 425,
+          "public_body_retention": false
+        },
+        {
+          "filename": "dns-response.json",
+          "sha256": "bc19ca1135cd3662acadc16936ec8212bcf691e4d89b0dcfdcebe2d72734783d",
+          "byte_size": 889,
+          "public_body_retention": false
+        },
+        {
+          "filename": "page-6-error.txt",
+          "sha256": "3d5c46a62b79562bdf7396b41ea777bffe5ac97f6ac20d0bf5e310ca82f7dcdd",
+          "byte_size": 33,
+          "public_body_retention": false
+        },
+        {
+          "filename": "page-6.json",
+          "sha256": "1944ee0bcbe6ce2c45cda7270dc7bb72cacd05e1b3613947eb61e0fcf210131b",
+          "byte_size": 13119,
+          "public_body_retention": false
+        },
+        {
+          "filename": "page-6.pickle",
+          "sha256": "31a6a39976a971e79c575661ee8a02e52499b4ec675503ec7a296301a59e13ff",
+          "byte_size": 919017,
+          "public_body_retention": false
+        },
+        {
+          "filename": "receipt.json",
+          "sha256": "55dac1aea7dae784a6620a00fb5c8d492e91f4b545175b9f84cf8fc32f423b89",
+          "byte_size": 82,
+          "public_body_retention": false
+        }
+      ],
+      "fidelity_status": "refused_wrong_source_values",
+      "whole_page_qualified": false,
+      "whole_edition_qualified": false
+    },
+    {
+      "name": "gemini-page6-left",
+      "configuration_model": "gemini-3.8-flash",
+      "reported_model_version": "gemini-3.8-flash",
+      "usage_metadata": {
+        "promptTokenCount": 1709,
+        "candidatesTokenCount": 3130,
+        "totalTokenCount": 4839,
+        "promptTokensDetails": [
+          {
+            "modality": "IMAGE",
+            "tokenCount": 1102
+          },
+          {
+            "modality": "TEXT",
+            "tokenCount": 607
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "response_finish_reason": "STOP",
+      "generation": {
+        "maxOutputTokens": 32768,
+        "thinkingConfig": {
+          "thinkingLevel": "medium"
+        },
+        "temperature": 0,
+        "mediaResolution": "MEDIA_RESOLUTION_HIGH",
+        "responseMimeType": "application/json",
+        "responseJsonSchema": {
+          "type": "object",
+          "properties": {
+            "page_kind": {
+              "type": "string",
+              "enum": [
+                "grid"
+              ]
+            },
+            "chamber": {
+              "enum": [
+                "Senate"
+              ]
+            },
+            "printed_page_labels": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "uncertainties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "legend": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "glyph_text": {
+                    "type": "string"
+                  },
+                  "meaning_text": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "glyph_text",
+                  "meaning_text"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "visible_score_headers": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "visible_action_headers": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "rows": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "panel": {
+                    "type": "string",
+                    "enum": [
+                      "left",
+                      "right",
+                      "across"
+                    ]
+                  },
+                  "state_text": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "district_text": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "member_name_text": {
+                    "type": "string"
+                  },
+                  "member_footnote_markers": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "party_text": {
+                    "type": "string"
+                  },
+                  "score_values": {
+                    "type": "array",
+                    "items": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "minItems": 3,
+                    "maxItems": 3
+                  },
+                  "action_values": {
+                    "type": "array",
+                    "items": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "minItems": 15,
+                    "maxItems": 15
+                  }
+                },
+                "required": [
+                  "panel",
+                  "state_text",
+                  "district_text",
+                  "member_name_text",
+                  "member_footnote_markers",
+                  "party_text",
+                  "score_values",
+                  "action_values"
+                ],
+                "additionalProperties": false
+              },
+              "minItems": 1
+            }
+          },
+          "required": [
+            "page_kind",
+            "chamber",
+            "printed_page_labels",
+            "uncertainties",
+            "legend",
+            "visible_score_headers",
+            "visible_action_headers",
+            "rows"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "schema_sha256": "ca72a3e2d7b108a6567371eb9a7e08080a3427bb9bb2337233ac132e4c04ce70",
+      "artifact_hashes": [
+        {
+          "filename": "dns-receipt.json",
+          "sha256": "fbe6becc89289d132d5d8dc40b7422320a18b470785feb80bbb42ba5a456a0be",
+          "byte_size": 425,
+          "public_body_retention": false
+        },
+        {
+          "filename": "dns-response.json",
+          "sha256": "bbcbb8fdbc98bc82cfff59875ec12d0226661a9c2dc37ad8ea7f7d86f7643b5b",
+          "byte_size": 889,
+          "public_body_retention": false
+        },
+        {
+          "filename": "input-crop.png",
+          "sha256": "39c934940ca3a6480e67bb6c6f5401a51dc86b0d1f6c0a672fc1c7de39288c5a",
+          "byte_size": 257325,
+          "public_body_retention": false
+        },
+        {
+          "filename": "observation.pickle",
+          "sha256": "fc2948095bff60a9c6b96c54e4fc7b6573f8a486720d28c9ff063afa673054e6",
+          "byte_size": 619305,
+          "public_body_retention": false
+        },
+        {
+          "filename": "outcome.json",
+          "sha256": "60c5fc9fe40b648afc0a7b4ef1e533be10b93252b40652cf5d17c72614816b88",
+          "byte_size": 11541,
+          "public_body_retention": false
+        },
+        {
+          "filename": "receipt.json",
+          "sha256": "80ccd1a758e9d8ce433c6986c8c679acc79b0d927c2c95f5688a7983a5c7e852",
+          "byte_size": 456,
+          "public_body_retention": false
+        }
+      ],
+      "fidelity_status": "matched_bounded_crop_direct_visual_readback",
+      "whole_page_qualified": false,
+      "whole_edition_qualified": false
+    }
+  ],
+  "installed_provider_for_crop": "0.53.0+scorecards.4c3e538e23b1",
+  "inference": "The narrower source image corrected observed errors; wide-spread image scaling may contribute. This does not establish reliability on other layouts.",
+  "next_gates": [
+    "Independently review the bounded Senate crop.",
+    "Qualify item-description pages and the House cross-spread row alignment.",
+    "Retain complete page/region inventory, source legends and endnotes without substituting official votes.",
+    "Implement source table shaping and adapter completeness only after full source fidelity qualifies."
+  ],
+  "private_corpus": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-hrc-2026-10-03"
+}

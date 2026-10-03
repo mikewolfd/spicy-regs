@@ -1,0 +1,86 @@
+{
+  "task_id": "ss-vj4g",
+  "observed_at": "2026-10-03T19:07:49.538009+00:00",
+  "status": "local implementation; installed provider integration pending",
+  "source_family": "scorecards",
+  "source_evidence_version": 2,
+  "cli": "spicy_regs.pipelines.rollups.scorecards:app",
+  "effects": {
+    "public_write": false,
+    "deployment": false,
+    "scheduling": false,
+    "commit": false,
+    "push": false
+  },
+  "checks": [
+    {
+      "command": "uv run --frozen --no-sync pytest -q tests/test_scorecard_refresh.py tests/test_scorecard_evidence.py tests/test_source_evidence.py tests/test_source_evidence_files.py tests/test_evidence_blobs.py tests/test_generation_audit.py tests/test_scorecard_resolution.py",
+      "result": "159 passed; 3 failed only because installed spicy-docs does not yet expose scorecard_publishers required by the coordinator data dictionary changes"
+    },
+    {
+      "command": "ruff check over owned F runtime and tests",
+      "result": "passed"
+    },
+    {
+      "command": "uv run --frozen --no-sync pytest -q tests/test_scorecard_evidence.py tests/test_scorecard_refresh.py tests/test_source_evidence_files.py tests/test_scorecard_resolution.py",
+      "result": "96 passed"
+    }
+  ],
+  "integration_remaining": [
+    "Adopt focused installed spicy-docs wheel with frozen scorecard tables/provider; rerun DD-dependent pipeline and audit checks.",
+    "No source enabled until source qualification and rights disposition accepted.",
+    "Registry currently names initial six candidates; expanded publisher research requested before changing it."
+  ],
+  "g_review": {
+    "status": "No blocking defect found",
+    "evidence": "Read resolution.py and its focused tests; exact identifiers with contradictions refuse fallback; historical terms and Senate district literals handled explicitly; no invented roll from bills/cosponsorship; occurrence-specific and immutable input pins retained.",
+    "limitation": "An exact amendment plus exact roll retains reason amendment_roll_relationship_not_validated; no relationship proof is claimed."
+  },
+  "files": [
+    {
+      "path": "src/spicy_regs/source_evidence.py",
+      "sha256": "7bd568a2279467587c6795dd3ba4b8cb241f1a315288b59ca52a568fba7ca3f9"
+    },
+    {
+      "path": "src/spicy_regs/generation_audit.py",
+      "sha256": "e085ef64cb6c0e47ace26ce4b73320806e429a295976ff89858926414e6d35aa"
+    },
+    {
+      "path": "src/spicy_regs/scorecards/registry.py",
+      "sha256": "0fd9bcb2b2014e8696cd946307cf2af2da75ecfb2a2161f18d0f55cc9464a9b0"
+    },
+    {
+      "path": "src/spicy_regs/scorecards/sources.yaml",
+      "sha256": "58861f153a195c24fbd9118f91cc677d698662c6f317f7dd7a023ce426126459"
+    },
+    {
+      "path": "src/spicy_regs/transforms/build_scorecards.py",
+      "sha256": "025033d4d4df1010a8475a0380cfef63ee29053cb96b211ff19e8f0aaa97a954"
+    },
+    {
+      "path": "src/spicy_regs/pipelines/rollups/scorecards.py",
+      "sha256": "a2be67272670ccd69b0d5502c73a390ac7210f560ab7383c15ca203f5a8b1913"
+    },
+    {
+      "path": ".github/workflows/rollup-scorecards.yml",
+      "sha256": "ebca42027af0f0e1bfce38f35bbd6dd71b2eee716741e04d735ce89f062a47f0"
+    },
+    {
+      "path": "tests/test_scorecard_evidence.py",
+      "sha256": "5d717abe07c15e7a355a950140fe7a0861a6573b803525956653862d20bd5b92"
+    },
+    {
+      "path": "tests/test_scorecard_refresh.py",
+      "sha256": "e808971b209c2168f78d25062c190b147d3c0a3f5d60b9357f4aeee1914a553c"
+    },
+    {
+      "path": "tests/test_source_evidence_files.py",
+      "sha256": "2d6cf73737fa9055c20a4f97d2af29eb4f1e50527c211ad9dae3bbcd80abfd19"
+    }
+  ],
+  "provider_review": {
+    "file": "../spicy-docs/tests/test_scorecards_adapters.py",
+    "result": "54 passed; malformed source shapes now raise source-specific refusal, literal Senate null district preserved",
+    "scope": "synthetic NEA and Heritage layouts; real corpus qualification belongs to samples; PDF extractor transition pending user-directed shared defaults integration"
+  }
+}

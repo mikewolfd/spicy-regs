@@ -1,0 +1,123 @@
+{
+  "status": "passed",
+  "delivery": "local_uncommitted",
+  "provider_version": "0.53.0+scorecards.f0059f78a27f",
+  "provider_build": "reader_wheel_api.json",
+  "scope": [
+    "LCV2025 source-to-analysis qualification",
+    "Existing member family rebuild",
+    "AFP current API reader and raw-literal qualification",
+    "IJM current API implementation with source-access blocker",
+    "Exact item-year resolution and publication index compatibility"
+  ],
+  "qualification_receipts": {
+    "members": "member_rebuild/qualification.json",
+    "afp": "api_adapters/afp_qualification.json",
+    "ijm": "api_adapters/ijm_qualification.json",
+    "lcv": "lcv_2025/integration_qualification.json",
+    "lcv_source": "lcv_2025/source_qualification.json"
+  },
+  "source_readback": "Inspect original retained bytes and raw records directly; compare row locators and literal values independently of parser output. Use structured file IO, not shell-transformed response bodies.",
+  "runtime_registry": "All production publishers remain disabled; source qualification is separate from enablement.",
+  "remaining_scope": "All-census adapter objective remains tracked in adapter_tasks.json; no claim that all candidates are supported.",
+  "checked_at": "2026-10-03T20:28:17.071690+00:00",
+  "checks": {
+    "provider_full_gate": {
+      "command": "./scripts/check",
+      "result": "11539 passed, 4 skipped, 50 deselected, 14 warnings in 83.61s (0:01:23)",
+      "log_path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-provider-api-final-gate.log",
+      "log_sha256": "a0d59fcdcaf893ae9a06ac3482cacc3e616fbc943ce1a79d01b48bce45457b80"
+    },
+    "consumer_full_suite": {
+      "command": "uv run --frozen --no-sync pytest -q",
+      "result": "4878 passed, 2 skipped, 14 deselected, 5 warnings in 137.73s (0:02:17)",
+      "log_path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-consumer-api-gate.log",
+      "log_sha256": "56ee85dc018a6d54983b93191e68ffcc8a80c3c5424dc012649f669d5d3f693b"
+    },
+    "candidate_archive": {
+      "command": "Explicit overlay archive: scorecards, legislators and table-contract tests",
+      "result": "1857 passed, 1 deselected in 6.13s",
+      "log_path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-api-archive-gate.log",
+      "log_sha256": "b2b9ea7d5b23292a584997014950e1d2de13a139ad75f341bd5aa55810aaf8a1"
+    },
+    "consumer_ruff": "passed",
+    "consumer_ty": "passed",
+    "dictionary": "passed; regeneration byte-identical",
+    "research_gate": "passed",
+    "workspace_filemap": "regenerated",
+    "supplemental_lcv_stable_order": {
+      "result": "24 passed",
+      "test_source": "tests/test_scorecards_source_layouts.py",
+      "test_source_sha256": "fa8fe1da6b99094208fb68d6c26811328168f5045815d79d0951a60dfe878c29",
+      "note": "A test-only CSV group-reordering correction followed package construction; runtime provider files are unchanged."
+    },
+    "installed_runtime": "Installed LCV, AFP, IJM, shared API and common helper SHA-256 values match final wheel overlay receipt.",
+    "coordinator_raw_rechecks": [
+      "Existing member generation requalified from original roster JSON",
+      "AFP independent verifier passed all emitted fields and raw-array totals",
+      "LCV MCP attributed outputs and exact source-context examples inspected directly"
+    ],
+    "final_consumer_ruff_ty_diff": "passed after final qualification scripts and documents",
+    "local_preservation": "Complete source-family replacement, stale-writer refusal, prior immutable bytes, independent analysis family, and failed-evidence admission checks passed."
+  },
+  "independent_review": "api_adapters/independent_review.md",
+  "resolver": "scorecard-resolution-v1.3",
+  "results": {
+    "lcv": {
+      "source_members": 551,
+      "ratings": 1102,
+      "items": 66,
+      "member_item_results": 17255,
+      "resolved_members": 489,
+      "unresolved_members": 62,
+      "resolved_items": 66,
+      "source_and_analysis_audits": "zero failures and zero review findings",
+      "generic_mcp": "list_sources, describe_table, query_sql passed with attribution and immutable pins"
+    },
+    "afp": {
+      "source_members": 531,
+      "rated_members": 530,
+      "ratings": 2120,
+      "items": 54,
+      "member_actions": 6120,
+      "status": "qualified observed current API scope"
+    },
+    "ijm": {
+      "status": "implemented; live qualification blocked by original HTTP403"
+    },
+    "members": {
+      "members": 12770,
+      "terms": 45535,
+      "affiliations": 59,
+      "status": "qualified local rebuild"
+    }
+  },
+  "fixes": [
+    "Preserve literal LCV CSV item year; resolve against actual official vote dates without year arithmetic.",
+    "Refuse contradictory typed vote and item years as conflicts.",
+    "Accept and validate optional publication-family publishedAt metadata without weakening immutable pins.",
+    "Reject duplicate JSON keys and preserve credential-refusal exception type.",
+    "Preserve AFP ungraded source member, signed coefficients as weights, and source reference occurrences.",
+    "Refuse source snapshots where every current score set disappears."
+  ],
+  "delivery_boundaries": [
+    "No production source enabled or remote publication.",
+    "No commit, push, registry release or scheduled refresh.",
+    "Existing bills/votes/amendments reused; roll/amendment generations explicitly older verified local selections.",
+    "PDF adapters continue using existing Docling/OvisOCR2/defaults; their previous source fidelity limitations remain."
+  ],
+  "qualification_receipt_sha256": {
+    "members": "beed44da3ea4620a8997a0069c558c5532c59225e12b3c977cd44a5c89e496fb",
+    "afp": "4db530ab2384c7bff4ef90e7b6c858316dd1072f3c9d92eb19b926a56d7baf24",
+    "ijm": "30e91ac72baf79454712dfb841ed74080ed210e6ff1a976189d1d890dfcc1329",
+    "lcv": "ce4e021acf85ff779aad89bc54874b3b8eb2861e47df90e06d35a3f11e855ea0",
+    "lcv_source": "86cb3c57d579201bdcb2ecafdb856b587d953d13e71b8c64075db74363be25ec"
+  },
+  "closed_tasks": [
+    "ss-kvli",
+    "ss-onbt",
+    "ss-dylz",
+    "ss-vj4g",
+    "ss-wshn"
+  ]
+}

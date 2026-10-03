@@ -1,0 +1,65 @@
+{
+  "status": "local_candidate_independent_readback_passed_not_published",
+  "generation": {
+    "artifactDigest": "sha256:8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109",
+    "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:ffb09864ad0acf015706adbae72ca7132b77c9b683ba9ee28d0f0fa39929b55d"
+  },
+  "candidate_receipt_sha256": "eec9eff835e867372437d68e18cbd86c12fcc74a870e7bf11ae46cc11feb8ea2",
+  "raw_qualified_asset_sha256": "sha256:d8ac93e130bfb17bbb8657b6d25b6419bd79ca964fe03608a889b21c9385bebb",
+  "rating_normalization_rule": "Exact standalone NA to N/A in rating value_text only; raw asset unchanged",
+  "checked_values": {
+    "scorecard_member_ratings": 1620,
+    "scorecard_member_item_results": 19540
+  },
+  "normalization_count": 1,
+  "normalizations": [
+    {
+      "source_pointer": "/members/385/record/ratings/2",
+      "publisher_member_key": "House:NORTH%20CAROLINA:4:Foushee%2C%20Valerie",
+      "metric_id": "House:116th%20SCORE",
+      "raw_value": "NA",
+      "native_value": "N/A"
+    }
+  ],
+  "hrc_counts": {
+    "scorecard_metric_components": 0,
+    "scorecard_member_ratings": 1620,
+    "scorecard_metric_items": 0,
+    "scorecard_metrics": 6,
+    "scorecard_member_item_results": 19540,
+    "scorecard_methodologies": 10,
+    "scorecard_members": 540,
+    "scorecard_items": 56,
+    "scorecard_snapshots": 1,
+    "scorecard_publishers": 1,
+    "scorecards": 1
+  },
+  "native_na_remaining": 0,
+  "na_ratings": 280,
+  "result_tokens": {
+    "○": 9340,
+    "⊗": 471,
+    "●": 9306,
+    "N/A": 422,
+    "P": 1
+  },
+  "prior_generation": {
+    "artifactDigest": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb",
+    "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:553e225cf831e5087ebf8ba3fa1a6962a3c90d203c574ce09f8ce2c79837d61e"
+  },
+  "independent_exact_preserved_row_counts": {
+    "scorecard_metric_components": 0,
+    "scorecard_member_ratings": 5134,
+    "scorecard_metric_items": 227,
+    "scorecard_metrics": 10,
+    "scorecard_member_item_results": 24008,
+    "scorecard_methodologies": 5,
+    "scorecard_members": 1562,
+    "scorecard_items": 169,
+    "scorecard_snapshots": 3,
+    "scorecard_publishers": 3,
+    "scorecards": 3
+  },
+  "all_prior_source_values_and_observation_identifiers_preserved": true,
+  "remote_writes": 0
+}

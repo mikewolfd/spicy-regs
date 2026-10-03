@@ -1,0 +1,114 @@
+{
+  "upstream_commit": "d5af3d2d2490f8c6532c9490b1f47a76cacca699",
+  "upstream_dictionary": "https://github.com/unitedstates/congress-legislators/blob/d5af3d2d2490f8c6532c9490b1f47a76cacca699/README.md",
+  "measurement": "Offline source parsing and member row shaping from retained pinned YAML converted to JSON.",
+  "acquisition": false,
+  "publication": false,
+  "files": [
+    {
+      "file": "legislators-current.yaml",
+      "sha256": "bd32e62b1c89e9585e4ec49df5676563510e9435d779c061ff50139833f73a49",
+      "records_parsed_and_shaped": 539,
+      "records_with_other_names": 0,
+      "records_with_previous_bioguide": 0,
+      "bounded_identity_observations": []
+    },
+    {
+      "file": "legislators-historical.yaml",
+      "sha256": "9641615f336b3113d6f89152e3441128cbdc3f61ccf87c65da3a015076c78c91",
+      "records_parsed_and_shaped": 12231,
+      "records_with_other_names": 5,
+      "records_with_previous_bioguide": 4,
+      "bounded_identity_observations": [
+        {
+          "bioguide_id": "F000247",
+          "other_names": null,
+          "bioguide_previous": [
+            "F000246"
+          ]
+        },
+        {
+          "bioguide_id": "R000184",
+          "other_names": null,
+          "bioguide_previous": [
+            "S000605"
+          ]
+        },
+        {
+          "bioguide_id": "Y000061",
+          "other_names": [
+            {
+              "end": "1846-01-12",
+              "middle": null,
+              "last": "Levy"
+            }
+          ],
+          "bioguide_previous": [
+            "L000266"
+          ]
+        },
+        {
+          "bioguide_id": "L000420",
+          "other_names": [
+            {
+              "last": "Long",
+              "end": "1995-09-03"
+            }
+          ],
+          "bioguide_previous": null
+        },
+        {
+          "bioguide_id": "G000408",
+          "other_names": null,
+          "bioguide_previous": [
+            "W000790"
+          ]
+        },
+        {
+          "bioguide_id": "L000035",
+          "other_names": [
+            {
+              "middle": null,
+              "last": "Lambert",
+              "end": "1995-01-03"
+            }
+          ],
+          "bioguide_previous": null
+        },
+        {
+          "bioguide_id": "B001228",
+          "other_names": [
+            {
+              "last": "Bono",
+              "end": "2007-12-17"
+            }
+          ],
+          "bioguide_previous": null
+        },
+        {
+          "bioguide_id": "M000639",
+          "other_names": [
+            {
+              "last": "Menendez"
+            }
+          ],
+          "bioguide_previous": null
+        }
+      ]
+    }
+  ],
+  "cross_person_current_or_previous_id_collisions": {
+    "F000246": [
+      "F000246",
+      "F000247"
+    ],
+    "W000790": [
+      "G000408",
+      "W000790"
+    ],
+    "L000266": [
+      "L000266",
+      "Y000061"
+    ]
+  }
+}

@@ -1,0 +1,83 @@
+version: 1
+sources:
+  - publisher_id: lcv
+    adapter: lcv
+    enabled: false
+    cadence: weekly
+    historical_backfill: false
+    evidence_policy: hash_only
+    rights_status: unreviewed
+    policy_decision_id: scorecards-research-hash-only-v1
+    qualification_id: null
+  - publisher_id: afl_cio
+    adapter: afl_cio
+    enabled: false
+    cadence: weekly
+    historical_backfill: false
+    evidence_policy: hash_only
+    rights_status: unreviewed
+    policy_decision_id: scorecards-research-hash-only-v1
+    qualification_id: null
+  - publisher_id: heritage_action
+    adapter: heritage_action
+    enabled: false
+    cadence: weekly
+    historical_backfill: false
+    evidence_policy: hash_only
+    rights_status: unreviewed
+    policy_decision_id: scorecards-research-hash-only-v1
+    qualification_id: null
+  - publisher_id: humane_world_action
+    adapter: humane_world_action
+    enabled: false
+    cadence: monthly
+    historical_backfill: false
+    evidence_policy: hash_only
+    rights_status: unreviewed
+    policy_decision_id: scorecards-research-hash-only-v1
+    qualification_id: null
+  - publisher_id: nea
+    adapter: nea
+    enabled: false
+    cadence: monthly
+    historical_backfill: false
+    evidence_policy: hash_only
+    rights_status: unreviewed
+    policy_decision_id: scorecards-research-hash-only-v1
+    qualification_id: null
+  - publisher_id: c4ip
+    adapter: c4ip
+    enabled: false
+    cadence: monthly
+    historical_backfill: false
+    evidence_policy: hash_only
+    rights_status: unreviewed
+    policy_decision_id: scorecards-research-hash-only-v1
+    qualification_id: null
+  - publisher_id: afp
+    adapter: afp
+    enabled: false
+    cadence: weekly
+    historical_backfill: false
+    evidence_policy: hash_only
+    rights_status: unreviewed
+    policy_decision_id: scorecards-research-hash-only-v1
+    qualification_id: null
+  - publisher_id: ijm
+    adapter: ijm
+    enabled: false
+    cadence: weekly
+    historical_backfill: false
+    evidence_policy: hash_only
+    rights_status: unreviewed
+    policy_decision_id: scorecards-research-hash-only-v1
+    qualification_id: null
+  - publisher_id: hrc
+    adapter: hrc
+    enabled: false
+    cadence: monthly
+    historical_backfill: false
+    evidence_policy: hash_only
+    rights_status: unreviewed
+    policy_decision_id: scorecards-research-hash-only-v1
+    qualification_id: null

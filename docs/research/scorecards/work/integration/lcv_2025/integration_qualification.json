@@ -1,0 +1,157 @@
+{
+  "status": "qualified_local_source_and_analysis",
+  "remote_writes": 0,
+  "network_requests": 0,
+  "source_generation": {
+    "artifactDigest": "sha256:3982b34830569bcbcbab09acaaa74e2d7972fcab774edcbbe0036eb8e8a60d2f",
+    "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:976238d601e0b877f72f61636fbee10c1af4310838ac5e26df96399fa3392735"
+  },
+  "analysis_generation": {
+    "artifactDigest": "sha256:b7c8fa12c96f2061c580eb564d4c5939f8571148e685d48619e17e7e8101db07",
+    "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:f0b4d1711f25c399a836cb0d2212fbed5abf439317ae66ff17b19bc30070ccac"
+  },
+  "resolution_statuses": {
+    "members": {
+      "resolved": 489,
+      "unresolved": 62
+    },
+    "items": {
+      "resolved": 66
+    }
+  },
+  "unresolved_count": 62,
+  "audits": {
+    "scorecards": {
+      "fail": 0,
+      "review": 0,
+      "empty_tables": [
+        "scorecard_metric_components"
+      ]
+    },
+    "scorecard-analysis": {
+      "fail": 0,
+      "review": 0,
+      "empty_tables": []
+    }
+  },
+  "scope": "Actual publisher edition and exact links over the explicitly pinned local inputs. Local object-store publication simulation only; no production registry enablement, remote upload or current-coverage assertion.",
+  "limits": [
+    "Bills match the retained 2026-10-03 index. Roll calls and amendments use explicitly selected older verified local generations.",
+    "Members and historical terms use the separately qualified local rebuild; none of these selections asserts latest remote coverage.",
+    "No congressional source was reacquired by this qualification."
+  ],
+  "input_pins": {
+    "scorecards": {
+      "sha256": "sha256:2710d64586232a21bdfdaf15d9c7f32d9bbf2f11fe2ec2a9024d0f69337f5c89",
+      "byteSize": 4890,
+      "family": "scorecards",
+      "artifactDigest": "sha256:3982b34830569bcbcbab09acaaa74e2d7972fcab774edcbbe0036eb8e8a60d2f"
+    },
+    "scorecard_members": {
+      "sha256": "sha256:8079a36fa8dc05c0b909cb053bba21ee047843ab2ee841400901682b96489144",
+      "byteSize": 22080,
+      "family": "scorecards",
+      "artifactDigest": "sha256:3982b34830569bcbcbab09acaaa74e2d7972fcab774edcbbe0036eb8e8a60d2f"
+    },
+    "scorecard_items": {
+      "sha256": "sha256:7abc8690b1562b2aa9ce05bda50dbf74bb77aaf5cbaa289670cc167e00598d9b",
+      "byteSize": 9962,
+      "family": "scorecards",
+      "artifactDigest": "sha256:3982b34830569bcbcbab09acaaa74e2d7972fcab774edcbbe0036eb8e8a60d2f"
+    },
+    "members": {
+      "sha256": "sha256:96c11c55ce3254491aa1fec9534398bf21f3c450d885cd93b700bf32a48045bb",
+      "byteSize": 283698,
+      "family": "members",
+      "artifactDigest": "sha256:253ae5371141f436d7787608c7da3258b1a05a64b93c26822f227fe3754b251e"
+    },
+    "member_terms": {
+      "sha256": "sha256:8810be48c3ed1a5508ee15243602c02d7ff46eee023ad7eb596206f24f2262f8",
+      "byteSize": 183149,
+      "family": "members",
+      "artifactDigest": "sha256:253ae5371141f436d7787608c7da3258b1a05a64b93c26822f227fe3754b251e"
+    },
+    "congress_bills": {
+      "sha256": "sha256:741a04eb920a2ff0880b4a522576f740ba54f3d678c4592462752b5b532a6969",
+      "byteSize": 31074410,
+      "family": "bill-family",
+      "artifactDigest": "sha256:e264e62bfcc41313d8c15d59bcb96bc7d59fb37bcd0e74b9d0cc561849a594be"
+    },
+    "amendments": {
+      "sha256": "sha256:f8c3943ace0281c542e7798188f8d64216081b5bc597e4084ee909aea6ce4873",
+      "byteSize": 135132,
+      "family": "amendments",
+      "artifactDigest": "sha256:c943cb37c221b52ddf52bba466abbe0eb537d81bc769b0abee78eae16282f669"
+    },
+    "roll_call_votes": {
+      "sha256": "sha256:3232dc2395ff3f788d6019eaa3187d6d3f0d8c38c550139c06dc99c16db5eedf",
+      "byteSize": 91669,
+      "family": "roll-call-votes",
+      "artifactDigest": "sha256:45b8f6b81ee02b52d0c4ca37c27d42903aebcd09ce22079d411b1cb160f33149"
+    }
+  },
+  "private_receipt": {
+    "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-lcv-2026-10-03/integration-run-1/integration-qualification.json",
+    "sha256": "sha256:4613c0269988daf2d4940246369b9845d2b6f9312ee3f912d9fb694be6987f5d"
+  },
+  "official_inputs_receipt": {
+    "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-lcv-2026-10-03/official-inputs.json",
+    "sha256": "sha256:8ba7326b785473ef4e926cf9eaa88e8fa228fabdfb42cf69d20ab4d31d7353ae"
+  },
+  "mcp_receipt": {
+    "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-lcv-2026-10-03/integration-run-1/mcp-readback.json",
+    "sha256": "sha256:75799cc51425189a528172929a6e7dfb38a867ab954ecb6a5835f97443393f36"
+  },
+  "preservation_receipt": {
+    "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-lcv-2026-10-03/preservation-qualification.json",
+    "sha256": "sha256:1829824594281354e5fe5e6654153587b48fd219302b31b8c5a8e70ab7263099"
+  },
+  "preservation": {
+    "status": "actual_local_replacement_and_stale_refusal_passed",
+    "prior_generation_bytes_unchanged": true,
+    "stale_writer_pointer_unchanged": true,
+    "independent_analysis_family_unchanged": true
+  },
+  "unresolved_notes": [
+    "All 62 unresolved rows remain source-faithful with candidates and reasons; no fuzzy matching or overrides applied.",
+    "43 rows carry an unknown prefixed-district diagnostic; this is not evidence district parsing would resolve them. Name or historical term context can also fail.",
+    "Direct raw readback: Alan Armstrong CSV row 111 and Analilia Mejia row450 appear in the requested2025 export, but pinned official terms start 2026-03-24 and2026-04-20 respectively. Both correctly remain unresolved."
+  ],
+  "mcp_examples": {
+    "Katie Britt": {
+      "publisher": "League of Conservation Voters",
+      "annual_literal": "0",
+      "lifetime_literal": "2",
+      "bioguide_id": "B001319"
+    },
+    "Zeldin Confirmation (EPA Administrator)": {
+      "publisher_target": "No",
+      "vote_id": "119-senate-1-24",
+      "source_year_literal": "2025",
+      "official_date_literal": "January 29, 2025,  03:48 PM"
+    }
+  },
+  "checks": {
+    "provider_full_gate": {
+      "command": "./scripts/check",
+      "result": "11539 passed, 4 skipped, 50 deselected, 14 warnings in 83.61s (0:01:23)",
+      "log_path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-provider-api-final-gate.log",
+      "log_sha256": "a0d59fcdcaf893ae9a06ac3482cacc3e616fbc943ce1a79d01b48bce45457b80"
+    },
+    "consumer_full_suite": {
+      "command": "uv run --frozen --no-sync pytest -q",
+      "result": "4878 passed, 2 skipped, 14 deselected, 5 warnings in 137.73s (0:02:17)",
+      "log_path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-consumer-api-gate.log",
+      "log_sha256": "56ee85dc018a6d54983b93191e68ffcc8a80c3c5424dc012649f669d5d3f693b"
+    },
+    "candidate_archive": {
+      "command": "Explicit overlay archive: scorecards, legislators and table-contract tests",
+      "result": "1857 passed, 1 deselected in 6.13s",
+      "log_path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-api-archive-gate.log",
+      "log_sha256": "b2b9ea7d5b23292a584997014950e1d2de13a139ad75f341bd5aa55810aaf8a1"
+    },
+    "consumer_focused": "182 passed: refresh, evidence, analysis, resolution, generation publication",
+    "qualification_scripts": "Ruff and ty passed"
+  },
+  "publication": "Local object-store simulation and managed local MCP selection only; remote release/scheduling remain open."
+}

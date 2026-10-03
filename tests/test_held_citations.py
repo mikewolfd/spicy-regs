@@ -267,3 +267,19 @@ def test_the_held_citations_rollup_records_its_familys_citation_table_as_no_pare
     snapshot = {"families": {"print-citations": {"artifactDigest": "sha256:" + "d" * 64, "tables": {
         "document_citations.parquet": {"sha256": "sha256:" + "e" * 64, "byteSize": 4}}}}}
     assert HeldCitationsRollup(selection=selection)._prime(tmp_path, snapshot) == {}
+
+
+def test_retained_held_field_bytes_have_claimed_evidence_members(tmp_path):
+    from spicy_regs.source_evidence import CaptureEvidence, verify_evidence
+
+    evidence = CaptureEvidence(tmp_path, "held-citations")
+    with connection() as con:
+        con.execute("INSERT INTO comments VALUES ('a', 'See 5 U.S.C. 552.')")
+        run(con, tmp_path, ["a"], evidence=evidence)
+    artifact = evidence.seal(outcome="build-complete")
+    verify_evidence(evidence.artifact_dir, expected_pin=artifact.pin)
+    journal = [json.loads(line) for line in (evidence.artifact_dir / "journal.jsonl").read_text().splitlines()]
+    retained = next(row for row in journal if row["event"] == "retained-file")
+    assert retained["stage"] == "held-citation-field"
+    assert retained["source_field"] == "comment"
+    assert any(row["event"] == "held-citation-read" for row in journal)

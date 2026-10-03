@@ -5,6 +5,17 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
+- `spicy_docs-0.54.0+scorecards.9ea43ea7845d`: additive scorecard adoption over the
+  current main reader `0.54.0+chaos.a1b91ce28a2a`, preserving its newer source readers
+  and body-text derivation exports. SHA-256
+  `670d168db3ca15609485e363f2179a3fa6ad73572b4aadd4245e01d11c421168`,
+  1,934,729 bytes. It includes the qualified scorecard readers, historical member
+  crosswalk fields, structured Gemini page extraction and HRC's exact standalone
+  rating `NA` to `N/A` rule. The raw HRC asset remains unchanged. Independent builds
+  are byte-identical; the [merge build recipe](../docs/research/scorecards/work/integration/build_merge_reader_wheel.py)
+  checks all package changes against the current main wheel. Consumer adoption is
+  separate from a package-registry release or deployment.
+
 - `spicy_docs-0.54.0+chaos.a1b91ce28a2a`: the round-6 bills-lane build (2026-10-03), from branch
   `chaos/2026-10-03-bills-lane-r6` at `a1b91ce28a2ac254d4f2301e5abb48a025dac198`: the round-5 build below plus round
   6's three spicy-docs branches. SHA-256 `4ec97919319016d128b28b4d95db0ec795a6465c468b061ff6e9b7c80bd4ef08`,
@@ -16,6 +27,32 @@ Base CLI and MCP installs do not require them.
   law's last Statutes page (`laws-uslm-v3`), the committee codes a hearing's MODS states, and one placeholder
   predicate for FEC name fields. This is a vendored branch build, not a registry release. Build receipt:
   `mcp-chaos-2026-10-02/round6/wheel-r6/` (`README.md`, `wheel.json`, `smoke.out`).
+
+
+- `spicy_docs-0.53.0+scorecards.fd38daf2d185`: local scorecard and historical identity candidate,
+  over the reviewed FEC baseline `69964fe27c6ddc437e817041a3c5cca57a02723c`.
+  SHA-256 `2caf2fc1cd4201bf57b0c772339a0b8837e2fd92702acee8ccbe3ea65e92337e`.
+  Independent builds are byte-identical with pinned uv/uv_build and recorded
+  Python versions; the explicit overlay preserves every
+  baseline package file, including FEC candidate history. It adds scorecard
+  readers, pinned GovTrack discovery, member crosswalk fields, and the requested
+  existing Docling/OvisOCR2 extraction infrastructure, plus schema-validated Gemini
+  page outcomes, retained paired input images, and explicit HRC source-fact
+  schemas that separate vacant seats from members. IJM additionally supports its
+  explicitly identified browser-rendered API JSON. Reconstruction remains at
+  the native-only baseline; the receipt lists the scoped extraction tests. The `yaml` extra is now
+  selected for discovery; PDF model configuration remains explicit at the host.
+  See [build recipe](../docs/research/scorecards/work/integration/build_reader_wheel.py)
+  and [hash/overlay receipt](../docs/research/scorecards/work/integration/reader_wheel_paired.json).
+  This is local package adoption, not a registry release or source qualification.
+
+- `spicy_docs-0.53.0+fec.69964fe27c6d`: reviewed FEC source at
+  commit `69964fe27c6ddc437e817041a3c5cca57a02723c`.
+  SHA-256 `824296eed3c333277feaa4dca03a2dc8faec437d803c374186d61c8761bf8c7b`. Repeated committed-archive
+  builds are byte-identical. Production package files are identical to
+  `0.53.0+fec.bcdde5431fac`; this repin includes the reviewed PostgreSQL
+  rejection/cleanup and API shape-refusal regression tests. Build and comparison
+  receipts: `hosted-release-20261001/reviewed-release/source/`.
 
 - The superseded `spicy_docs-0.54.0+chaos.16c2285ef63e` (the round-5 build of `chaos/2026-10-03-bills-lane-r4` at
   `16c2285`, SHA-256 `21ece738…1ac8`, receipt `mcp-chaos-2026-10-02/round5/wheel-r5b/`) was removed on October 3,

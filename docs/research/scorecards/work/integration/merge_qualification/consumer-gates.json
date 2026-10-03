@@ -1,0 +1,141 @@
+{
+  "status": "passed_ready_for_merge_commit",
+  "observed_at": "2026-10-03T23:34:21.828204+00:00",
+  "worktree": "/Users/mikewolfd/Work/spicy-stack-worktrees/scorecards-hrc-merge-regs",
+  "branch": "integrate/scorecards-hrc-20261003",
+  "base_main": "000de932f19485a99bf4a8fcae7dab71f6a4ee45",
+  "incoming_scorecards": "7fc1937c4e90a330de44822d8ab3b76c84df0d99",
+  "later_remote_main_not_yet_included": "7c4153cc354882db93d808e232acf140278dc719",
+  "execution_environment": {
+    "UV_CACHE_DIR": "/tmp/scorecards-operations-merge-uv",
+    "provider_version": "0.54.0+scorecards.9ea43ea7845d",
+    "wheel_sha256": "670d168db3ca15609485e363f2179a3fa6ad73572b4aadd4245e01d11c421168",
+    "wheel_byte_size": 1934729
+  },
+  "gates": [
+    {
+      "gate": "initial-full-pytest",
+      "command": "uv run --frozen --no-sync pytest -q",
+      "exit_code": 1,
+      "result": "5 failed, 5656 passed, 2 skipped, 38 deselected; all five reconciled in test fixtures",
+      "log": "initial-full-pytest.log",
+      "sha256": "b8618439993a8fa118b40ab69e8a89c1a9645153712f80d03cc43805454be017",
+      "byte_size": 13195
+    },
+    {
+      "gate": "final-full-pytest",
+      "command": "uv run --frozen --no-sync pytest -q",
+      "exit_code": 0,
+      "result": "5661 passed, 2 skipped, 38 deselected, 5 warnings in 177.03s",
+      "log": "final-full-pytest.log",
+      "sha256": "bc1ab876cc6b5a9ce2499290f1ee88e689508d2032bd894e8a127e3f54c0533d",
+      "byte_size": 7354
+    },
+    {
+      "gate": "focused-reconciliation",
+      "command": "uv run --frozen --no-sync pytest -q tests/test_chaos_r6_server.py tests/test_publication_index_metadata.py tests/test_generation_publication.py",
+      "exit_code": 0,
+      "result": "120 passed in 9.75s",
+      "log": "focused-reconciliation.log",
+      "sha256": "b4f65b09b354f238977b3b29be33818684cef2df8a66305101d5467a425504ef",
+      "byte_size": 180
+    },
+    {
+      "gate": "ruff",
+      "command": "uv run --frozen --no-sync ruff check .",
+      "exit_code": 0,
+      "result": "All checks passed",
+      "log": "ruff.log",
+      "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+      "byte_size": 19
+    },
+    {
+      "gate": "ty",
+      "command": "uv run --frozen --no-sync ty check",
+      "exit_code": 0,
+      "result": "All checks passed",
+      "log": "ty.log",
+      "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+      "byte_size": 19
+    },
+    {
+      "gate": "dictionary-check",
+      "command": "uv run --frozen --no-sync spicy-regs-dict check",
+      "exit_code": 0,
+      "result": "171 tables, source=schema",
+      "log": "dictionary-check.log",
+      "sha256": "d1fd6a5e8bac3f678303a4c86c3c2d904e828aefc1ab2cbb6b4b32a1420c5fd0",
+      "byte_size": 62
+    },
+    {
+      "gate": "dictionary-generate",
+      "command": "uv run --frozen --no-sync spicy-regs-dict generate",
+      "exit_code": 0,
+      "result": "Generated table pages and bundled metadata from installed package",
+      "log": "dictionary-generate.log",
+      "sha256": "6872cc9560503a375841b6811ef6e941f5f76b1be1b90e501f0ce800ca3a8e95",
+      "byte_size": 7023
+    },
+    {
+      "gate": "staged-diff-check",
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "--cached",
+        "--",
+        ".",
+        ":(exclude)docs/research/scorecards/work/integration/merge_qualification/derivation-test-repin.patch"
+      ],
+      "exit_code": 0,
+      "result": "Passed with one intentional unified-diff context whitespace exception",
+      "log": "staged-diff-check.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "initial_failure_resolution": [
+    {
+      "failure": "Catalog fixture exceeded generic 35,000-character test allowance after adding scorecard tables",
+      "resolution": "Test injects 19-digit row counts, both export count basis fields, full-width runtime identity and release status counts; complete reply 38,478 characters remains under unchanged 40,000 runtime cap. describe_table retains 5,000-character live reserve. No server runtime change.",
+      "proof": "catalog-budget.json"
+    },
+    {
+      "failure": "Four incoming publishedAt test cases expected legacy V1 output to retain timestamps",
+      "resolution": "Preserved newer main strict UTC-Z parser and its deliberate V1 timestamp omission. Tests now assert parsed timestamps survive and legacy derive_v1 omits only the timestamp."
+    }
+  ],
+  "conflict_and_preservation_evidence": {
+    "path": "preservation.json",
+    "sha256": "678fd7682da3abfa41e481180ce83aa36c44e8f2e32967abb592912c269974f7"
+  },
+  "budget_evidence": {
+    "path": "catalog-budget.json",
+    "sha256": "8bd36728923d02fa24d8dde4d8b2596c7252a7a2f81f4a3bfd88691e7aac9f1b"
+  },
+  "whitespace_exception": {
+    "path": "docs/research/scorecards/work/integration/merge_qualification/derivation-test-repin.patch",
+    "sha256": "03a7686e889db9aa958bc599174aaefa487f9cfce8192ba0821b4cb45b3fe5df",
+    "reason": "Valid raw unified-diff blank context lines require a single leading space. Preserve original patch and recorded hash. Only this file is excluded from git diff --check."
+  },
+  "tested_changed_files": {
+    "tests/test_chaos_r6_server.py": "d9bdcceba88c10e677215e05661e16ea75b29a45d9b4b4305ccd0d345d1e04cb",
+    "tests/test_publication_index_metadata.py": "c5ac922508c6772bf6662706ff770b652c1dd0f2afee9c2691ccdca7342102e4",
+    "tests/test_contract_tables.py": "619b51c62f03713aa2cc64a6c48b82277fb16ad5c6ec8d30ecf97b4240ad8db1",
+    "tests/test_gao_target.py": "ef446f7d8a3b6386ad62ee8b2f570148c0f76d89a9e751fef9d9545489a208e1",
+    "vendor/README.md": "e865ba2c91bf3896617247cd2dec7225fe51600efad5136cc1bb09146fed08fa",
+    "data_dictionary/descriptions.yaml": "2fccb85dbbbf0ed2bf0c02a36401266401a15735415a09e0965305e61ee7290c",
+    "src/spicy_regs/table_metadata.json": "fa610362af26bdf175f0e4f60bcd6491929ec3615753ce20b1f9981aee7711e5",
+    "pyproject.toml": "f6aedb9be1b056ba6e254e067e655c2bb3fa0de90d9c570da41b7c5b6838a041",
+    "uv.lock": "afaa620fa7678a583f3c3edd0e92e85d512d72add8e79c987dc91805633b845e"
+  },
+  "boundaries": {
+    "unmerged_paths": 0,
+    "unstaged_paths": 0,
+    "commit_by_this_agent": false,
+    "push_by_this_agent": false,
+    "public_data_mutations": 0,
+    "service_configuration_mutations": 0,
+    "original_dirty_checkout_modified": false,
+    "later_main_requires_separate_merge_and_targeted_validation": true
+  }
+}

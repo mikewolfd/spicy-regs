@@ -2790,6 +2790,13 @@ tables:
       absent. This qualifies the captured community files, not an
       independently complete official roster. Receipts:
       fork-execution-2026-09-21/members-qualification/.
+      The October 3, 2026 rebuild also qualifies votesmart_id,
+      bioguide_previous_json and other_names_json against the retained originals.
+      That members generation was published with the scorecard integration;
+      see docs/research/scorecards/work/integration/member_rebuild/qualification.json
+      and docs/research/scorecards/work/integration/deployment/deployment_receipt.json.
+      These crosswalk fields preserve aliases and collisions rather than asserting
+      a resolved identity.
     measured_on: "2026-09-22"
     summary: >-
       One row per legislator in one capture of the community crosswalk. Split from
@@ -9298,3 +9305,188 @@ tables:
       reported_date: Date parsed from the date stated for this historical/context observation. NULL requires the source
         value and conversion status; capture time is not substituted.
       source_row_ordinal: Native row ordinal supplied by the retained CSV context.
+
+  scorecard_publishers:
+    subject: congress
+    label: "Scorecard publishers"
+    coverage: >-
+      Sampled publisher editions selected by the scorecard source registry. Complete
+      edition reads replace that edition; failed or incomplete reads preserve prior
+      observations. Coverage varies by publisher and historical source format.
+    measured_on: "2026-10-03"
+    summary: "One stable publisher identity; historical names remain on edition observations. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy."
+    columns_from: spicy_docs
+
+  scorecards:
+    subject: congress
+    label: "Scorecards"
+    coverage: >-
+      Sampled publisher editions selected by the scorecard source registry. Complete
+      edition reads replace that edition; failed or incomplete reads preserve prior
+      observations. Coverage varies by publisher and historical source format.
+    measured_on: "2026-10-03"
+    summary: "One publisher-defined edition, with a series_id for continuity; a live series is not itself an edition. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy."
+    columns_from: spicy_docs
+
+  scorecard_snapshots:
+    subject: congress
+    label: "Scorecard snapshots"
+    coverage: >-
+      Sampled publisher editions selected by the scorecard source registry. Complete
+      edition reads replace that edition; failed or incomplete reads preserve prior
+      observations. Coverage varies by publisher and historical source format.
+    measured_on: "2026-10-03"
+    summary: "One complete accepted edition capture and parse; unsuccessful attempts remain in the run journal. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy."
+    columns_from: spicy_docs
+
+  scorecard_methodologies:
+    subject: congress
+    label: "Scorecard methodologies"
+    coverage: >-
+      Sampled publisher editions selected by the scorecard source registry. Complete
+      edition reads replace that edition; failed or incomplete reads preserve prior
+      observations. Coverage varies by publisher and historical source format.
+    measured_on: "2026-10-03"
+    summary: "One source-stated rule set in an edition, scoped to chamber and cohort as stated. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy."
+    columns_from: spicy_docs
+
+  scorecard_metrics:
+    subject: congress
+    label: "Scorecard metrics"
+    coverage: >-
+      Sampled publisher editions selected by the scorecard source registry. Complete
+      edition reads replace that edition; failed or incomplete reads preserve prior
+      observations. Coverage varies by publisher and historical source format.
+    measured_on: "2026-10-03"
+    summary: "One publisher measurement for an explicit chamber, cohort and period in an edition. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy."
+    columns_from: spicy_docs
+
+  scorecard_items:
+    subject: congress
+    label: "Scorecard items"
+    coverage: >-
+      Sampled publisher editions selected by the scorecard source registry. Complete
+      edition reads replace that edition; failed or incomplete reads preserve prior
+      observations. Coverage varies by publisher and historical source format.
+    measured_on: "2026-10-03"
+    summary: "One publisher-identified action or scoring item; multiple actions on one bill remain separate. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy."
+    columns_from: spicy_docs
+
+  scorecard_metric_items:
+    subject: congress
+    label: "Scorecard metric items"
+    coverage: >-
+      Sampled publisher editions selected by the scorecard source registry. Complete
+      edition reads replace that edition; failed or incomplete reads preserve prior
+      observations. Coverage varies by publisher and historical source format.
+    measured_on: "2026-10-03"
+    summary: "One item's participation in a metric under a particular source rule. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy."
+    columns_from: spicy_docs
+
+  scorecard_metric_components:
+    subject: congress
+    label: "Scorecard metric components"
+    coverage: >-
+      Sampled publisher editions selected by the scorecard source registry. Complete
+      edition reads replace that edition; failed or incomplete reads preserve prior
+      observations. Coverage varies by publisher and historical source format.
+    measured_on: "2026-10-03"
+    summary: "One source-stated relationship between a component metric and its parent metric. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy."
+    columns_from: spicy_docs
+
+  scorecard_members:
+    subject: congress
+    label: "Scorecard members"
+    coverage: >-
+      Sampled publisher editions selected by the scorecard source registry. Complete
+      edition reads replace that edition; failed or incomplete reads preserve prior
+      observations. Coverage varies by publisher and historical source format.
+    measured_on: "2026-10-03"
+    summary: "One source member occurrence/context in the edition, including ungraded or excluded members. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy."
+    columns_from: spicy_docs
+
+  scorecard_member_ratings:
+    subject: congress
+    label: "Scorecard member ratings"
+    coverage: >-
+      Sampled publisher editions selected by the scorecard source registry. Complete
+      edition reads replace that edition; failed or incomplete reads preserve prior
+      observations. Coverage varies by publisher and historical source format.
+    measured_on: "2026-10-03"
+    summary: "One source-reported metric value for a member; different grades, ranks and scores remain distinct measurements. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy."
+    columns_from: spicy_docs
+
+  scorecard_member_item_results:
+    subject: congress
+    label: "Scorecard member item results"
+    coverage: >-
+      Sampled publisher editions selected by the scorecard source registry. Complete
+      edition reads replace that edition; failed or incomplete reads preserve prior
+      observations. Coverage varies by publisher and historical source format.
+    measured_on: "2026-10-03"
+    summary: "One publisher-reported member result for an item, with optional source-stated metric participation. Metric-free grids require no fabricated measurement. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy."
+    columns_from: spicy_docs
+
+  scorecard_member_links:
+    subject: congress
+    label: "Scorecard member links"
+    identity_columns: ["scorecard_id", "publisher_member_key"]
+    coverage: >-
+      Derived exact identity links over pinned scorecard and congressional tables.
+      Historical context constrains member matches; unresolved and ambiguous
+      identities remain visible. No fuzzy matching or score conversion is applied.
+    measured_on: "2026-10-03"
+    summary: "One resolution disposition per publisher member."
+    columns:
+      scorecard_id: "Stable publisher edition identifier; join within the recorded source snapshot."
+      publisher_member_key: "Unchanged publisher member key within the edition."
+      bioguide_id: "Exact resolved congressional member identifier; NULL when unresolved or ambiguous."
+      term_candidates_json: "JSON array recording the historical terms considered for the member match."
+      override_version: "Version of an explicit member override, when used."
+      source_snapshot_id: "Source snapshot used for resolution; require equality when joining to refreshed source facts."
+      resolution_status: "Resolution outcome, including resolved, unresolved, ambiguous or conflicting source identifiers."
+      resolution_rule: "Exact matching rule that produced this disposition."
+      rule_version: "Version of the deterministic resolver rules."
+      candidate_count: "Number of candidates, retained as decimal text."
+      candidates_json: "JSON array of candidate identifiers retained for review."
+      reason: "Explanation of the resolution outcome or refusal."
+      source_context_json: "Source identity and period context used by the resolver, retained as JSON."
+      input_pins_json: "Immutable input family and artifact pins; sha256 binds a single file and tableDescriptorDigest binds all members of a partitioned table."
+      capture_id: "Source capture identifier carried through from the publisher fact."
+      source_url: "Original publisher URL for the source fact."
+      source_path: "Location of the source fact or reference within the captured document."
+
+  scorecard_item_links:
+    subject: congress
+    label: "Scorecard item links"
+    identity_columns: ["scorecard_id", "item_id", "reference_id"]
+    coverage: >-
+      Derived exact identity links over pinned scorecard and congressional tables.
+      Historical context constrains member matches; unresolved and ambiguous
+      identities remain visible. No fuzzy matching or score conversion is applied.
+    measured_on: "2026-10-03"
+    summary: "One resolution disposition per source item reference occurrence; a bill action does not imply a roll call."
+    columns:
+      scorecard_id: "Stable publisher edition identifier; join within the recorded source snapshot."
+      item_id: "Unchanged publisher scoring-item key within the edition."
+      reference_id: "Derived occurrence key: item:direct or reference: followed by the source occurrence identifier."
+      source_reference_id: "Literal source reference occurrence identifier; NULL for direct item fields."
+      congress: "Exactly resolved Congress number; NULL when not established."
+      chamber: "Exactly resolved chamber; NULL when not established."
+      session: "Exactly resolved congressional session; NULL when not established."
+      roll_number: "Exactly resolved roll-call number; never fabricated for sponsorship or cosponsorship."
+      vote_id: "Exact identifier in the pinned roll_call_votes input; NULL when no roll call resolves."
+      bill_id: "Exact identifier in the pinned congress_bills input; NULL when no bill resolves."
+      amendment_id: "Exact identifier in the pinned amendments input; NULL when no amendment resolves."
+      source_snapshot_id: "Source snapshot used for resolution; require equality when joining to refreshed source facts."
+      resolution_status: "Resolution outcome, including resolved, unresolved, ambiguous or conflicting source identifiers."
+      resolution_rule: "Exact matching rule that produced this disposition."
+      rule_version: "Version of the deterministic resolver rules."
+      candidate_count: "Number of candidates, retained as decimal text."
+      candidates_json: "JSON array of candidate identifiers retained for review."
+      reason: "Explanation of the resolution outcome or refusal."
+      source_context_json: "Source identity and period context used by the resolver, retained as JSON."
+      input_pins_json: "Immutable input family and artifact pins; sha256 binds a single file and tableDescriptorDigest binds all members of a partitioned table."
+      capture_id: "Source capture identifier carried through from the publisher fact."
+      source_url: "Original publisher URL for the source fact."
+      source_path: "Location of the source fact or reference within the captured document."

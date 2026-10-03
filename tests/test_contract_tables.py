@@ -38,7 +38,8 @@ CONTRACT_NAMES = sorted(TABLE_CONTRACTS)
 #: The law-text candidate adds ``law_sections``, hosted by the existing laws rollup. 0.54.0 adds
 #: ``bill_committee_activities`` and ``cbo_feed_items``, both written by the bill family, and ``gao_decisions``, which
 #: the gao-reports rollup already wrote as this repository's own table and now writes under the contract.
-ADOPTED_CONTRACT_COUNT = 57
+#: The scorecard integration adds eleven source-backed tables.
+ADOPTED_CONTRACT_COUNT = 68
 
 #: A contract here leaves the set when its owning rollup hosts it.
 UNHOSTED_CONTRACTS = frozenset()
