@@ -1289,6 +1289,11 @@ def _document_kind(requested: str) -> str:
     )
 
 
+#: The held-citations pipeline's read record: one row per read of a held field's text, published beside
+#: document_citations (implementer C, round 5). Until it is published a held field has no read record.
+HELD_FIELD_READS = "document_citation_reads"
+
+
 def _source_read(
     cursor: duckdb.DuckDBPyConnection, tables: list[str], kind: str, key: str, *, cited: bool
 ) -> tuple[dict[str, Any], str | None]:
@@ -1300,8 +1305,9 @@ def _source_read(
     the document (``not_held``) and records a read that found nothing
     (``read_none_found``) or none (``not_read``). A print kind's table records
     its read in the row: the text digest, ``pages_read``, ``rule_set_version``
-    and the ``citation_rows`` it produced. A held-field kind's table records no
-    read: a field is read only when an operator selects it.
+    and the ``citation_rows`` it produced. A held field's read is recorded in
+    :data:`HELD_FIELD_READS`, when published: the latest read of the field's
+    current text that states its rule set and rows.
     """
     from spicy_regs.citation_sources import TEXT_SOURCES, source_digests
 
@@ -1309,14 +1315,22 @@ def _source_read(
     if parent not in tables:
         return {"table": parent, "status": "unavailable"}, None
     try:
-        if kind in TEXT_SOURCES:
-            values = [(digest, False, None) for (digest,) in source_digests(cursor, kind, key)]
-        else:
+        if kind not in TEXT_SOURCES:
             values = cursor.execute(
-                "SELECT DISTINCT text_sha256, pages_read IS NOT NULL AND rule_set_version IS NOT NULL, citation_rows "
-                f'FROM "{parent}" WHERE package_id = ? LIMIT 2',
+                "SELECT DISTINCT text_sha256, pages_read IS NOT NULL AND rule_set_version IS NOT NULL, "
+                f'CAST(citation_rows AS BIGINT) FROM "{parent}" WHERE package_id = ? LIMIT 2',
                 [key],
             ).fetchall()
+        else:
+            values = [(digest, False, None) for (digest,) in source_digests(cursor, kind, key)]
+            if len(values) == 1 and values[0][0] and not cited and HELD_FIELD_READS in tables:
+                read = cursor.execute(
+                    f'SELECT CAST(citation_rows AS BIGINT) FROM "{HELD_FIELD_READS}" WHERE document_kind = ? '
+                    "AND document_key = ? AND text_sha256 = ? AND rule_set_version IS NOT NULL "
+                    "ORDER BY read_at DESC LIMIT 1",
+                    [kind, key, values[0][0]],
+                ).fetchone()
+                values = [(values[0][0], read is not None, read[0] if read is not None else None)]
     except duckdb.InterruptException:
         raise
     except duckdb.Error as error:
@@ -1327,8 +1341,9 @@ def _source_read(
     if cited:
         return {"table": parent, "status": "read" if digest else "missing_digest"}, digest or None
     read = bool(digest and recorded and rows is not None)
-    if read and rows != "0":
-        raise ValueError(f"{parent} records a read of {key!r} that states {rows} citation rows, but "
+    if read and rows != 0:
+        record = parent if kind not in TEXT_SOURCES else HELD_FIELD_READS
+        raise ValueError(f"{record} records a read of {key!r} that states {rows} citation rows, but "
                          "document_citations holds none for it: this publication disagrees with itself.")
     return {"table": parent, "status": "read_none_found" if read else "not_read"}, None
 
@@ -1690,14 +1705,15 @@ def _register_tools(mcp: MCPServer) -> None:
         """Resolve a bounded document's held citations against this connection's selected targets.
 
         Findings keep spelling, text digest and rule; lookup checks neither
-        extraction precision nor legal effect. acquisition_queue plans missing
-        targets; nothing is acquired. document_kind compares case-insensitively;
-        its schema names each kind's table, whose key document_key takes
-        (govinfo_package covers only house_activity_reports). document_key is
-        exact and case-sensitive; a composite key is a compact JSON list in key
-        order. A key neither the table nor any citation row holds is refused.
+        precision nor legal effect. acquisition_queue plans missing targets;
+        nothing is acquired. document_kind is case-insensitive; its schema
+        names each kind's table, whose key document_key takes
+        (govinfo_package covers only house_activity_reports). document_key is exact and
+        case-sensitive; a composite key is a compact JSON list in key order. A
+        key that no table or citation row holds is refused.
         source_read.status read_none_found: read, none found; not_read: no read
-        record (held-field tables keep none); not_held: no longer held.
+        record (a held field's is in document_citation_reads, if published);
+        not_held: no longer held.
         Rows run in cite_kind order, then text position; cite_kind selects a
         kind, offset pages, and coverage.cite_kind_counts counts every kind.
         Fields equal across a page or kind are stated once (occurrence_fields,
@@ -1707,6 +1723,7 @@ def _register_tools(mcp: MCPServer) -> None:
         """
         from spicy_regs.acquisition_queue import build_missing_target_queue
         from spicy_regs.citation_resolution import CITE_KINDS, resolve_citations
+        from spicy_regs.citation_sources import TEXT_SOURCES
 
         document_kind = _document_kind(document_kind)
         if max_occurrences > MAX_OCCURRENCES:
@@ -1723,7 +1740,7 @@ def _register_tools(mcp: MCPServer) -> None:
                 "SELECT cite_kind, count(*) FROM document_citations WHERE document_kind = ? AND document_key = ? "
                 "GROUP BY cite_kind ORDER BY cite_kind", document,
             ).fetchall())
-            parent = SOURCE_TABLES[document_kind]
+            parent, held_field = SOURCE_TABLES[document_kind], document_kind in TEXT_SOURCES
             source_read, digest = _source_read(cursor, status["tables"], document_kind, document_key,
                                                cited=bool(kind_counts))
             if source_read["status"] == "not_held" and not kind_counts:
@@ -1777,10 +1794,10 @@ def _register_tools(mcp: MCPServer) -> None:
                 intended_query="Resolve the cited target for this held document", max_items=max_occurrences,
             )),
             # Each resolved target carries its own target_snapshot; this names the tables the lookup read.
-            "publication": _reply_pins(
-                cursor, status["publication"],
-                [name for name in ("document_citations", parent) if name in status["publication"]],
-            ),
+            "publication": _reply_pins(cursor, status["publication"], [
+                name for name in ("document_citations", parent, *([HELD_FIELD_READS] if held_field else ()))
+                if name in status["publication"]
+            ]),
         }
 
 

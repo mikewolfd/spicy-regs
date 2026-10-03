@@ -376,12 +376,17 @@ used to arrive as one `missing_digest` with no occurrences (`_source_read`):
   `rule_set_version` and `citation_rows`. A held-field kind's table
   (`report_sections`, `bill_sections`, `comments`, ...) records none: the
   held-citations rollup reads only the fields an operator selects, at most 100
-  a run, and checkpoints a zero-result read in `document_citations`' Parquet
-  metadata, which the server does not read. So a held field with no rows is
+  a run. Its reads are recorded in `document_citation_reads` (`document_kind`,
+  `document_key`, `text_sha256`, `rule_set_version`, `read_at`,
+  `citation_rows`), which the held-citations pipeline publishes from its
+  checkpoint beside `document_citations`. When that table is published, the
+  record is the latest read (`read_at`) of the field's current text
+  (`text_sha256` = `'sha256:' || sha256(field)`) that states its rule set;
+  until then, or with no such row, a held field with no citation rows is
   `not_read`, never an answer that it cites nothing.
-- `read_none_found`: the table records a read whose `citation_rows` is 0. A
-  read stating rows that `document_citations` does not hold refuses: the
-  publication disagrees with itself.
+- `read_none_found`: the read record states `citation_rows` 0. A read stating
+  rows that `document_citations` does not hold refuses: the publication
+  disagrees with itself.
 
 With citation rows the status names the digest they are checked against:
 `read`, `missing_digest` (a held row without one) or `ambiguous`. A key that

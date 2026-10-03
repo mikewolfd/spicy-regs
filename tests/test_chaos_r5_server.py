@@ -7,6 +7,7 @@ recorded decisions: three read statuses from existing parent columns; meaning te
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 
 import pytest
@@ -204,6 +205,64 @@ def test_a_held_field_with_no_rows_is_not_read_because_its_table_records_no_read
         result = _resolve(con, monkeypatch, document_kind="comment_inline", document_key="EPA-HQ-0001")
     assert result["source_read"] == {"table": "comments", "status": "not_read"}
     assert result["coverage"]["partial"] is True
+
+
+# The held-citations pipeline's read table (implementer C): where a held field's read is recorded once it is published.
+
+BODY = "Pursuant to 5 U.S.C. 553."
+
+
+def _held_field_reads(con, *reads):
+    """A held comment, and document_citation_reads published in print-citations with ``reads`` as its rows."""
+    con.execute("CREATE TABLE comments (comment_id VARCHAR, comment VARCHAR)")
+    con.execute("INSERT INTO comments VALUES ('EPA-HQ-0001', ?)", [BODY])
+    con.execute("CREATE TABLE document_citation_reads (document_kind VARCHAR, document_key VARCHAR, "
+                "text_sha256 VARCHAR, rule_set_version VARCHAR, read_at VARCHAR, citation_rows BIGINT)")
+    for read in reads:
+        con.execute("INSERT INTO document_citation_reads VALUES ('comment_inline', 'EPA-HQ-0001', ?, ?, ?, ?)", read)
+    index = _index()
+    index["families"]["print-citations"] = {**index["families"]["laws"], "tables": {
+        "document_citation_reads.parquet": index["families"]["laws"]["tables"]["laws.parquet"]}}
+    con.execute("UPDATE _spicy_publication SET snapshot = ?", [json.dumps(index)])
+
+
+HELD = "sha256:" + hashlib.sha256(BODY.encode()).hexdigest()
+
+
+def _resolve_held(con, monkeypatch):
+    return _resolve(con, monkeypatch, document_kind="comment_inline", document_key="EPA-HQ-0001")
+
+
+def test_a_held_field_read_that_found_nothing_is_read_none_found(monkeypatch):
+    with citation_connection() as con:
+        _held_field_reads(con, (HELD, "rules", "2026-10-03T12:00:00Z", 0))
+        result = _resolve_held(con, monkeypatch)
+    assert result["source_read"] == {"table": "comments", "status": "read_none_found"}
+    assert result["coverage"]["partial"] is False and "document_citation_reads" in result["publication"]
+
+
+@pytest.mark.parametrize("reads", [
+    [],  # never read
+    [("sha256:" + "0" * 64, "rules", "2026-09-01T00:00:00Z", 0)],  # read, but an earlier text of the field
+    [(HELD, None, "2026-10-03T12:00:00Z", 0)],  # a read row stating no rule set is no read record
+])
+def test_a_held_field_with_no_read_of_its_current_text_is_not_read(monkeypatch, reads):
+    with citation_connection() as con:
+        _held_field_reads(con, *reads)
+        result = _resolve_held(con, monkeypatch)
+    assert result["source_read"]["status"] == "not_read" and result["coverage"]["partial"] is True
+
+
+def test_the_latest_read_of_the_current_text_decides(monkeypatch):
+    with citation_connection() as con:
+        _held_field_reads(con, (HELD, "old", "2026-09-01T00:00:00Z", 3), (HELD, "new", "2026-10-03T12:00:00Z", 0))
+        assert _resolve_held(con, monkeypatch)["source_read"]["status"] == "read_none_found"
+
+
+def test_a_held_field_read_stating_rows_that_are_not_held_is_refused(monkeypatch):
+    with citation_connection() as con, pytest.raises(ToolError, match="states 2 citation rows"):
+        _held_field_reads(con, (HELD, "rules", "2026-10-03T12:00:00Z", 2))
+        _resolve_held(con, monkeypatch)
 
 
 # S5-3 and S5-4: what the client is told.
