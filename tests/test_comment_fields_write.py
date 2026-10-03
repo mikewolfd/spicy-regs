@@ -74,7 +74,8 @@ def seed(connect, rows):
 
 
 def reads(tmp_path, rows, agency="EPA"):
-    part = tmp_path / "parts" / f"agency={agency}" / f"p{len(list(tmp_path.glob('parts/*/*')))}.parquet"
+    """One read part, named as ``read`` names this record shape's parts."""
+    part = tmp_path / "parts" / f"agency={agency}" / f"p-{cf.RECORD_SHAPE}-{len(list(tmp_path.glob('parts/*/*'))):05d}.parquet"
     part.parent.mkdir(parents=True, exist_ok=True)
     full = [{**dict.fromkeys(cf.PART_SCHEMA), "agency_code": agency, "modify_date": T0, **r} for r in rows]
     pl.DataFrame(full, schema=cf.PART_SCHEMA).write_parquet(part)
@@ -628,6 +629,78 @@ def test_prepare_reads_the_staged_fill_input_as_it_reads_the_parts(tmp_path, cat
     staged = tmp_path / "reads.parquet"
     pl.read_parquet(tmp_path / "parts" / "*" / "*.parquet").select(cfw.READ_COLUMNS).write_parquet(staged)
     assert cfw.prepare(tmp_path, reads=staged)["fill_sha256"] == from_parts["fill_sha256"]
+
+
+# --------------------------------------------------------------------------- #
+# Profiles and the staged read
+# --------------------------------------------------------------------------- #
+def test_the_attachments_profile_stages_four_columns_and_fills_only_attachments(tmp_path, catalog):
+    seed(catalog, [row("A", attachments_json=HELD), row("B")])
+    reads(tmp_path, [{"key": "a", "comment_id": "A", "attachments_json": LISTED, "subtype": "S"},
+                     {"key": "b", "comment_id": "B", "attachments_json": LISTED, "subtype": "S"},
+                     {"key": "b(1)", "comment_id": "B", "attachments_json": LISTED, "first_name": "Kristen"}])
+    staged = cf.stage(tmp_path, tmp_path / "staged", profile="attachments")
+    assert staged["columns"] == ["key", "comment_id", "modify_date", "attachments_json"] and all(staged["checks"].values())
+    assert pl.read_parquet(tmp_path / "staged" / "reads.parquet").columns == staged["columns"]
+    assert (staged["rows"], staged["distinct_comment_ids"], staged["non_null_by_column"]["attachments_json"]) == (3, 2, 3)
+    from_parts = cfw.prepare(tmp_path, profile="attachments")
+    prepared = cfw.prepare(tmp_path, reads=tmp_path / "staged" / "reads.parquet", profile="attachments")
+    assert prepared["fill_sha256"] == from_parts["fill_sha256"] and prepared["columns"] == ["attachments_json"]
+    assert (prepared["replaced_by_column"], prepared["cells_by_column"]) == ({"attachments_json": 1},
+                                                                            {"attachments_json": 1})
+    with catalog() as con:
+        assert cfw.write(tmp_path, con=con)["rows_changed"] == 2
+    rows = table(catalog)
+    assert (rows["A"]["attachments_json"], rows["B"]["attachments_json"]) == (LISTED, LISTED)
+    assert (rows["A"]["subtype"], rows["B"]["subtype"], rows["B"]["first_name"]) == (None, None, None)
+
+
+def test_a_staged_read_lacking_a_profile_column_is_refused(tmp_path, catalog):
+    seed(catalog, [row("A")])
+    reads(tmp_path, [{"key": "a", "comment_id": "A", "attachments_json": LISTED}])
+    cf.stage(tmp_path, tmp_path / "staged", profile="attachments")
+    with pytest.raises(RuntimeError, match="lack"):
+        cfw.prepare(tmp_path, reads=tmp_path / "staged" / "reads.parquet")  # the "all" profile
+    with pytest.raises(ValueError, match="profile"):
+        cfw.prepare(tmp_path, profile="attachment")
+
+
+def test_no_profile_stages_a_private_column_and_the_check_would_catch_one(tmp_path, monkeypatch):
+    """The private-attributes rule: a staged read holds the key and columns ``comments`` publishes, never the parts'
+    attribute JSON (email, phone, fax), ETag, size or body digest."""
+    staged = {c for profile in cfw.PROFILES for c in cfw.read_columns(profile)}
+    assert staged - {"key"} <= set(COMMENT.schema) - {"comment"}
+    assert not {c for c in staged if any(word in c for word in cf.PRIVATE_WORDS)}
+    private = set(cf.PART_SCHEMA) - set(COMMENT.schema) - {"key"}
+    assert private == {"etag", "size", "comment_sha256", "comment_length", "attributes_json"}
+    assert all(any(word in c for word in cf.PRIVATE_WORDS) for c in private)
+    reads(tmp_path, [{"key": "a", "comment_id": "A", "attributes_json": '{"email": "x@example.org"}'}])
+    monkeypatch.setitem(cfw.PROFILES, "leaky", ("attachments_json", "attributes_json"))
+    with pytest.raises(RuntimeError, match="private"):
+        cf.stage(tmp_path, tmp_path / "staged", profile="leaky")
+    assert not (tmp_path / "staged" / "reads.parquet").exists()
+
+
+def test_a_staged_read_is_built_once_and_uploaded_once_never_over_an_object(tmp_path):
+    from tests.generation_fakes import Store
+
+    reads(tmp_path, [{"key": "a", "comment_id": "A", "attachments_json": LISTED}])
+    out = tmp_path / "staged"
+    staged = cf.stage(tmp_path, out, profile="attachments")
+    with pytest.raises(RuntimeError, match="already holds"):
+        cf.stage(tmp_path, out, profile="attachments")
+    store = Store()
+    uploaded = cf.upload_staged(out, client=store)
+    sha = staged["file"]["sha256"]
+    assert uploaded["key"] == f"staging/comment-fields-fill-{sha[:12]}/reads.parquet"
+    assert store.objects[uploaded["key"]] == (out / "reads.parquet").read_bytes()
+    assert store.objects[uploaded["key"] + ".sha256"] == f"{sha}  reads.parquet\n".encode()
+    assert json.loads((out / "staging.json").read_text())["upload"] == uploaded
+    with pytest.raises(RuntimeError, match="already holds"):
+        cf.upload_staged(out, client=store)
+    (out / "reads.parquet").write_bytes(b"other bytes")
+    with pytest.raises(RuntimeError, match="not the staged read"):
+        cf.upload_staged(out, client=Store())
 
 
 def _filled(tmp_path, catalog) -> dict:
