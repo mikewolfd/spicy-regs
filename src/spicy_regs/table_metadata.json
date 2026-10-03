@@ -344,11 +344,6 @@
         "column_name": "duplicate_comments",
         "column_type": "INTEGER",
         "description": "How many received submissions the agency says this posted record stands for (regulations.gov `duplicateComments`), as stated. Agencies that count (EPA and FWS among them) state 1 for a single comment and the campaign's size on a `Mass Mail Campaign` record (15,851 on EPA-HQ-OW-2022-0114-1811, National Wildlife Federation Action Fund); agencies that do not count state 0 on every record. Rows are posted records. To estimate submissions, sum `GREATEST(duplicate_comments, 1)`, each posted record standing for at least itself, and first count the NULL rows: GREATEST reads NULL as 1. The sum is the agency's posted accounting, not its official total: EPA-HQ-OW-2022-0114's 1,629 records sum to 53,707 (52,086 on 23 campaign records), while EPA's response to comments reports about 122,200 received. The 2026-09-28 sample found it stated on every record: 0 on 5,281, 1 on 660, more than 1 on 4. NULL where the row predates reading this field; 0 is a stated zero."
-      },
-      {
-        "column_name": "comment_text",
-        "column_type": "VARCHAR",
-        "description": "`comment` read as plain text, derived from it each time the mirror is exported and never stored in the catalog. The publisher serves `comment` as an HTML fragment (`I&#39;m`, `<br/>`); this column decodes each character reference once, makes `<br>` and the end of a block element a newline and a no-break space a space, drops every other tag and trims the ends. Search and quote this column; `comment` keeps the publisher's bytes. The projection loses link targets, list bullets and table layout. One decode only: a body the publisher escaped twice keeps one level (`&amp;#39;` reads `&#39;`), and markup a commenter typed as text (`&lt;br&gt;`) reads as that text. NULL exactly where `comment` is NULL."
       }
     ],
     "grain": null,

@@ -81,8 +81,7 @@
         "text_extraction_status",
         "pdf_extraction_results_json",
         "subtype",
-        "duplicate_comments",
-        "comment_text"
+        "duplicate_comments"
       ]
     },
     {

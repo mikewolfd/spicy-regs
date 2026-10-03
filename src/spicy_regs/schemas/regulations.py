@@ -168,13 +168,6 @@ COMMENT = RecordType(
 )
 
 
-#: Columns the public comments mirror adds after the catalog's own: each derived at export from the row's own catalog
-#: columns (``sources.iceberg.export_public_comments``) and never stored in the catalog, so no catalog schema, extract
-#: or fill carries it. ``comment_text`` is ``comment``, an HTML fragment as the publisher serves it, read as plain text
-#: (``transforms.html_text``).
-COMMENT_MIRROR_COLUMNS: tuple[str, ...] = ("comment_text",)
-
-
 # Registry keyed by record-type name. Order matters: it drives the default
 # set of data types the pipeline processes.
 RECORD_TYPES: dict[str, RecordType] = {

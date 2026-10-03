@@ -17,7 +17,6 @@ import polars as pl
 import pytest
 
 from spicy_regs.schemas import COMMENT, DOCKET
-from spicy_regs.schemas.regulations import COMMENT_MIRROR_COLUMNS
 from spicy_regs.sources import iceberg
 
 
@@ -1057,10 +1056,10 @@ def test_export_migrated_comments_fills_old_snapshot_fields_with_null(tmp_path, 
     result = iceberg.export_public_comments(tmp_path / "out", COMMENT)
     rows = pl.read_parquet(result["comments"])
     assert rows.height == 1
-    # The contract order (spicy-docs COMMENT), not the snapshot's appended order, then the mirror's derived columns.
-    assert rows.columns == [*COMMENT.schema, *COMMENT_MIRROR_COLUMNS]
+    # The contract order (spicy-docs COMMENT), not the snapshot's appended order.
+    assert rows.columns == list(COMMENT.schema)
     partition = next((tmp_path / "out").rglob("agency_code=EPA/part-0.parquet"))
-    assert pl.read_parquet(partition).columns == [c for c in (*COMMENT.schema, *COMMENT_MIRROR_COLUMNS) if c != "agency_code"]
+    assert pl.read_parquet(partition).columns == [c for c in COMMENT.schema if c != "agency_code"]
     for column in iceberg._COMMENT_ADDED_COLUMNS:
         assert rows[column].to_list() == [None]
 
