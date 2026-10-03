@@ -1,17 +1,25 @@
 """Build roll-call and member-vote tables from complete source enumerations.
 
-Each chamber's own session index determines which votes to acquire: the
-Clerk's EVS pages for the House, the LIS vote menu for the Senate. Both hosts
-are keyless, so the rollup needs no credential. Two statements link a roll
-call to a bill, and ``match_rule`` names the one that did: the bill family's
-recorded references (the bill's own action records the vote) and the vote
-file's own statement of its measure (spicy-docs ``read_vote_file_statement``:
+Each chamber's own session listing determines which votes to acquire: the
+Clerk's roll files for the House, which spicy-docs probes forward from the
+session's largest held roll (the EVS index pages answer 404 since 2026-10-02),
+and the LIS vote menu for the Senate. Both hosts are keyless, so the rollup
+needs no credential. Each chamber is listed on its own: a chamber whose
+listing refuses leaves the run's scope, its held rows stay as published (as in
+a ``ROLL_CALL_CHAMBERS`` run of the other), the refusal is journaled, and the
+run builds the other chamber and then fails (:class:`ChamberListingRefused`),
+so one publisher's outage neither blocks the other's roll calls nor passes
+quietly. A refusal still never establishes a zero-vote session.
+
+Two statements link a roll call to a bill, and ``match_rule`` names the one
+that did: the bill family's recorded references (the bill's own action records
+the vote) and the vote file's own statement of its measure (spicy-docs ``read_vote_file_statement``:
 the Clerk's legis-num, the Senate's document or amended document). The bill's
 action wins; where two bills' actions record one vote, the one the file names
 wins, since positions in two different bills' action lists do not compare; with
 no recorded reference the file links alone. An unlinked procedural vote still
 has its own tally and member positions. House action references may add keys
-before an index catches up; Senate references alone never establish a complete
+before the Clerk's roll files catch up; Senate references alone never establish a complete
 Senate selection.
 
 A held row is relinked from its own columns, never refetched: ``legis_num`` for
@@ -31,7 +39,7 @@ included, so the base table carries the id its column promises and
 ``member_vote_terms`` reads it rather than resolving again. A vote
 the House vacated before recording a position publishes its row with
 ``member_vote_count`` 0 and no member rows. The Clerk's archive begins in
-1990, so the 101st Congress's first session has no House index and is not
+1990, so the 101st Congress's first session has no House roll files and is not
 asked for (:data:`CLERK_FIRST_YEAR`). ``ROLL_CALL_CHAMBERS`` narrows a dispatch
 to one chamber, and ``ROLL_CALL_MAX_VOTES`` sets its per-run cap
 (:func:`max_votes_from_env`), so the 101st-107th House backfill is a bounded,
@@ -66,6 +74,7 @@ from collections.abc import Callable, Collection, Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, cast
 
+import httpx
 from loguru import logger
 from spicy_docs.interpretation.vote_matching import (
     VOTE_CHAMBERS,
@@ -110,7 +119,7 @@ class VoteSource(Protocol):
 
     def acquire(self, locator: Any, *, crosswalk: Any = ...) -> Any: ...
 
-    def list_house_votes(self, congress: int, session: int) -> Any: ...
+    def list_house_votes(self, congress: int, session: int, *, start_roll: int = ...) -> Any: ...
 
     def list_senate_votes(self, congress: int, session: int) -> Any: ...
 
@@ -130,15 +139,37 @@ MAX_VOTES_PER_RUN = 1_500
 #: half a second, so 4,000 is about 35 minutes of fetching inside the workflow's 60-minute job.
 MAX_VOTES_CEILING = 4_000
 
-#: The first calendar year the Clerk's EVS archive serves: ``evs/1989/index.asp`` answers 404 and 1990's index
-#: lists 536 roll calls, and every session index of 1990-2002 reads through spicy-docs' index reader and lists
-#: exactly the roll files the archive serves, 7,327 in all (measured 2026-09-29, receipt
-#: ``fork-execution-2026-09-21/regs-adopt-052/votes/verify-indexes.json``). A House session before it has no index,
-#: so it is skipped rather than asked for, which would refuse the run.
+#: The first calendar year the Clerk's EVS archive serves roll files. Measured 2026-09-29 through the session
+#: index pages the archive then served (retired 2026-10-02): ``evs/1989/index.asp`` answered 404, 1990's listed
+#: 536 roll calls, and the 1990-2002 indexes listed exactly the roll files the archive serves, 7,327 in all
+#: (receipt ``fork-execution-2026-09-21/regs-adopt-052/votes/verify-indexes.json``). A House session before it has
+#: no roll files, so it is skipped rather than asked for: the roll-file lister refuses a session whose first roll
+#: is not served, which would refuse the House.
 CLERK_FIRST_YEAR = 1990
 
 #: Both chambers this rollup reads, in the order it lists them; ``ROLL_CALL_CHAMBERS`` may name either alone.
 CHAMBERS: tuple[str, ...] = ("house", "senate")
+
+#: What one chamber's listing can refuse with: the publisher's refusal, or its host still unreachable after the
+#: transport's retries. Either takes that chamber out of the run; anything else is a defect here and propagates.
+_LISTING_REFUSALS = (VoteSourceError, httpx.HTTPError, ConnectionError, TimeoutError)
+
+
+class ChamberListingRefused(RuntimeError):
+    """A chamber's listing refused, and the run built the other chamber's roll calls around it.
+
+    Raised once both outputs are written, carrying them (``outputs``) and each refused chamber's error
+    (``refused``): the rollup publishes the outputs and then fails the run, so the outage stays loud.
+    """
+
+    def __init__(self, refused: Mapping[str, BaseException], outputs: tuple[Path, Path]) -> None:
+        super().__init__(
+            "; ".join(f"{chamber} listing refused ({type(error).__name__}: {error})" for chamber, error in refused.items())
+            + "; the other chamber was built and these chambers' held rows kept as published"
+        )
+        self.refused = dict(refused)
+        self.outputs = outputs
+
 
 #: The newest roll calls of a sitting Congress are re-read every run even when
 #: already published, because the contract carries no publisher ``updateDate``
@@ -523,6 +554,51 @@ def _repair_held_votes(
     return held_links
 
 
+def _last_house_rolls(held: Collection[tuple[str, ...]]) -> dict[tuple[int, int], int]:
+    """The largest held House roll of each ``(congress, session)``: where the roll-file lister starts. O(held)."""
+    last: dict[tuple[int, int], int] = {}
+    for congress, chamber, session, roll in held:
+        if chamber == "house":
+            session_key = (int(congress), int(session))
+            last[session_key] = max(last.get(session_key, 0), int(roll))
+    return last
+
+
+def _list_chamber(
+    acquirer: VoteSource, chamber: str, congresses: Sequence[int], last_house_rolls: Mapping[tuple[int, int], int],
+) -> tuple[set[VoteKey], list[tuple[VoteKey, str]]]:
+    """One chamber's roll calls over the Congresses in scope, and the Senate menu's withheld votes.
+
+    The owner reader proves each listing's identity and refuses an empty,
+    failed or gapped one; a refusal cannot establish a zero-vote session, so
+    it refuses the whole chamber. The House lister probes the Clerk's roll
+    files forward from ``start_roll``, the session's largest held roll (read
+    again, so the listing rests on a file served now) or roll 1 when none is
+    held: from roll 1 it would re-read a whole session every run, about 682
+    requests for the 119th. It still lists rolls 1..N.
+    """
+    keys: set[VoteKey] = set()
+    withheld: list[tuple[VoteKey, str]] = []
+    for congress in congresses:
+        listed = len(keys)
+        for session in sessions_of(congress):
+            if chamber == "house":
+                if session in house_sessions(congress):
+                    start_roll = last_house_rolls.get((congress, session), 1)
+                    index = acquirer.list_house_votes(congress, session, start_roll=start_roll).index
+                    keys.update(locator_from_index_entry(index, entry).as_vote_key() for entry in index.votes)
+                continue
+            menu = acquirer.list_senate_votes(congress, session).menu
+            for entry in menu.votes:
+                key = locator_from_menu_entry(menu, entry).as_vote_key()
+                if entry.data_available:
+                    keys.add(key)
+                else:
+                    withheld.append((key, entry.title))
+        logger.info("Roll-call votes: {} {} — {:,} roll calls listed", chamber, congress, len(keys) - listed)
+    return keys, withheld
+
+
 def build_roll_call_votes(
     output_dir: Path,
     *,
@@ -536,7 +612,10 @@ def build_roll_call_votes(
 ) -> tuple[Path, Path]:
     """Build the chambers in scope; optional bill links never restrict native selection.
 
-    Index and menu failures propagate before either output is written.
+    A chamber whose listing refuses leaves the run's scope and the other is
+    built; :class:`ChamberListingRefused` is then raised with both outputs
+    written. When every chamber in scope refuses, the first refusal propagates
+    before either output is written.
     Unseen votes take priority over correction refreshes, with overlap per
     chamber for ``open_congresses`` only (default: ``default_congresses()``,
     the sitting Congress and, just after a boundary, the outgoing one).
@@ -561,27 +640,31 @@ def build_roll_call_votes(
         )
     if evidence is not None:
         evidence.event("vote-selection", congresses=list(congresses), chambers=list(chambers), max_votes=max_votes)
+    # The prior is read first: the House lister starts at each session's largest held roll.
+    prior_file = published_table(output_dir, NAME, download_prior)
+    have_prior = prior_file is not None
+    held: set[tuple[str, ...]] = set() if prior_file is None else _held_votes(prior_file)
+    last_house_rolls = _last_house_rolls(held)
     listed_keys: set[VoteKey] = set()
     withheld: list[tuple[VoteKey, str]] = []
-    for congress in congresses:
-        indexed = len(listed_keys)
-        for session in sessions_of(congress):
-            # The owner reader proves each index's identity and refuses an
-            # empty, failed or gapped one; a refusal cannot establish a
-            # zero-vote session.
-            if "house" in chambers and session in house_sessions(congress):
-                index = acquirer.list_house_votes(congress, session).index
-                listed_keys.update(locator_from_index_entry(index, entry).as_vote_key() for entry in index.votes)
-            if "senate" not in chambers:
-                continue
-            menu = acquirer.list_senate_votes(congress, session).menu
-            for entry in menu.votes:
-                key = locator_from_menu_entry(menu, entry).as_vote_key()
-                if entry.data_available:
-                    listed_keys.add(key)
-                else:
-                    withheld.append((key, entry.title))
-        logger.info("Roll-call votes: Congress {} — {:,} roll calls in the chambers' indexes", congress, len(listed_keys) - indexed)
+    refused_chambers: dict[str, BaseException] = {}
+    for chamber in chambers:
+        try:
+            keys, chamber_withheld = _list_chamber(acquirer, chamber, congresses, last_house_rolls)
+        except _LISTING_REFUSALS as error:
+            refused_chambers[chamber] = error
+            logger.error("Roll-call votes: the {} listing refused, so no {} roll call is read or changed this run: {}",
+                         chamber, chamber, error)
+            if evidence is not None:
+                evidence.refusal(error, stage="vote-listing")
+                evidence.event("vote-chamber-refused", chamber=chamber, error_type=type(error).__name__)
+            continue
+        listed_keys |= keys
+        withheld += chamber_withheld
+    if refused_chambers and len(refused_chambers) == len(chambers):
+        # No chamber was listed, so nothing this run could read establishes a row.
+        raise next(iter(refused_chambers.values()))
+    chambers = tuple(chamber for chamber in chambers if chamber not in refused_chambers)
     # A vote the Senate's own menu says it holds no data for (116-2-216, a
     # secret session) is not read: its file is served, but as 0-0 with every
     # senator "Not Voting", which the menu says is not the vote's record.
@@ -607,15 +690,11 @@ def build_roll_call_votes(
     )
 
     # 2. Counts and positions, newest first, bounded, and skipping what is held.
-    prior_file = published_table(output_dir, NAME, download_prior)
-    have_prior = prior_file is not None
-    held: set[tuple[str, ...]] = set()
     held_links: dict[str, dict] = {}
     if prior_file is not None:
-        held = _held_votes(prior_file)
         held_links = _repair_held_votes(prior_file, held, recorded_by_vote, recorded, congresses, evidence=evidence)
 
-    # House action references can precede the Clerk's index. Senate scope
+    # House action references can precede the Clerk's roll files. Senate scope
     # comes from its own menu, never from a bill-only sample.
     ordered = sorted(
         listed_keys | {key for key in recorded_by_vote if key.chamber == "house" and "house" in chambers},
@@ -702,7 +781,10 @@ def build_roll_call_votes(
     # The Senate file names its members by LIS id alone; the published ``members`` crosswalk resolves each to the
     # bioguide id the column promises, on held rows as well as this run's. Best-effort, like every merge-time join.
     fill_senate_bioguide_ids(output_dir, members, download_prior)
-    return (
+    outputs = (
         merge_contract_table(output_dir, NAME, vote_rows, prior_present=have_prior, download_prior=download_prior),
         members,
     )
+    if refused_chambers:
+        raise ChamberListingRefused(refused_chambers, outputs)
+    return outputs

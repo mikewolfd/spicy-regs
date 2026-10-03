@@ -219,8 +219,8 @@ class CountingVoteAcquirer:
         self.requested.append(locator.roll_number)
         raise _Unavailable("stub: no Clerk file in a hermetic test")
 
-    def list_house_votes(self, congress, session):
-        """The Clerk's index for the 119th's first session: rolls 1-40, newest first."""
+    def list_house_votes(self, congress, session, *, start_roll=1):
+        """The Clerk's roll files for the 119th's first session: rolls 1-40, newest first."""
         from types import SimpleNamespace
 
         from spicy_docs.sources.congress.votes import ClerkVoteIndex, ClerkVoteIndexEntry
