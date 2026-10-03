@@ -1,0 +1,86 @@
+"""Explorer navigation retains source scopes without changing producer floors."""
+
+import json
+from pathlib import Path
+
+import duckdb
+import pyarrow as pa
+import pyarrow.parquet as pq
+import pytest
+
+from scripts.check_table_joins import measure
+from spicy_regs import data_dictionary, table_joins
+
+ROOT = Path(__file__).parents[1]
+DATA = ROOT / "src" / "spicy_regs"
+ADDITIONS = json.loads((DATA / "explorer_join_additions.json").read_text())["joins"]
+AUDIT = json.loads((DATA / "join_audit.json").read_text())
+RECEIPT = json.loads((ROOT / "docs/evidence/explorer-joins-2026-10-03.json").read_text())
+
+
+def key(join):
+    return join["child"], tuple(join["child_columns"]), join["parent"], tuple(join["parent_columns"])
+
+
+def test_audit_accounts_for_every_previously_unconnected_published_table():
+    assert set(AUDIT) == set(RECEIPT["published_tables"])
+    for name in RECEIPT["previous_without_usable_published_join"]:
+        entry = AUDIT[name]
+        assert entry["status"] in {"connected", "standalone", "missing", "ambiguous", "special-handling"}
+        assert entry["reason"] and entry["evidence"]
+        if entry["status"] == "connected":
+            assert entry["relationships"]
+    # Repeating typed FEC IDs and FCC array memberships need conditions the
+    # explorer's simple scalar-equality navigation cannot express.
+    for name in ("fec_relationships", "fcc_filings", "fcc_proceedings"):
+        assert AUDIT[name]["status"] == "special-handling"
+
+
+def test_navigation_additions_have_real_columns_and_do_not_override_producer_joins():
+    schemas = data_dictionary.expected_schemas()
+    assert len({key(join) for join in ADDITIONS}) == len(ADDITIONS)
+    producer = {key(table_joins.record(join)) for join in table_joins.JOINS}
+    assert not producer.intersection(key(join) for join in ADDITIONS)
+    for join in ADDITIONS:
+        assert len(join["child_columns"]) == len(join["parent_columns"]) > 0
+        for side in ("child", "parent"):
+            assert set(join[f"{side}_columns"]) <= dict(schemas[join[side]]).keys()
+
+
+def test_measurements_name_complete_immutable_inputs_without_regression_floors():
+    for join in ADDITIONS:
+        measurement = join["measurement"]
+        assert measurement["scope"] == "full_selected_inputs"
+        assert measurement["parent_duplicate_keys"] == 0
+        assert measurement["measured_expected_cardinality"] == "one"
+        assert 0 <= measurement["missing"] <= measurement["keys"]
+        assert "floor_pct" not in join and "baseline_keys" not in join
+        for side in ("child", "parent"):
+            assert measurement[f"{side}_urls"]
+            assert all("/generations/" in url for url in measurement[f"{side}_urls"])
+        if measurement["keys"] == 0:
+            assert join["kind"] == "empty"
+        elif measurement["missing"]:
+            assert join["kind"] == "scope"
+
+
+@pytest.mark.parametrize("declaration", [j for j in ADDITIONS if len(j["child_columns"]) > 1], ids=key)
+def test_navigation_keys_do_not_cross_edition_digest_or_member_scope(tmp_path, declaration):
+    child_columns, parent_columns = declaration["child_columns"], declaration["parent_columns"]
+    # A second parent agrees on the apparent ID, but not the final scope field.
+    # A third child has no complete key and must not become an accidental match.
+    child: dict[str, list[str | None]] = {column: ["same", "same", "same"] for column in child_columns}
+    child[child_columns[-1]] = ["scope-a", "scope-missing", None]
+    parent = {column: ["same", "same"] for column in parent_columns}
+    parent[parent_columns[-1]] = ["scope-a", "scope-b"]
+    child_file, parent_file = tmp_path / "child.parquet", tmp_path / "parent.parquet"
+    pq.write_table(pa.table(child), child_file)
+    pq.write_table(pa.table(parent), parent_file)
+    join = table_joins.Join(declaration["child"], tuple(child_columns), declaration["parent"],
+                            tuple(parent_columns), 2, 1, expected_cardinality="one")
+    urls = {join.child: [str(child_file)], join.parent: [str(parent_file)]}
+    with duckdb.connect() as con:
+        result = measure(con, join, urls.__getitem__)
+    assert (result["keys"], result["missing"], result["child_nonnull_rows"]) == (2, 1, 2)
+    assert result["parent_duplicate_keys"] == 0
+    assert result["inner_join_rows"] == 1
