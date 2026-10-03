@@ -32,6 +32,10 @@
 # src/spicy_regs/data_dictionary.py). A dated measurement stays only where it
 # justifies a caveat, with its date.
 #
+# `subject` says what a table is about, for a reader who does not know its
+# name: one of SUBJECTS in src/spicy_regs/data_dictionary.py, which
+# `spicy-regs-dict check` holds it to.
+#
 # A run that only *exercises* a path is not the same as a run that measures
 # what the statement claims. Several statements below describe incremental
 # behavior — skipping a bill the publisher has not touched, a watermark window,
@@ -41,6 +45,7 @@
 tables:
   dockets:
     label: "Rulemaking dockets"
+    subject: rulemaking
     coverage: >-
       Sampled repair with retained prior rows. On 2026-09-21 the fork merged
       every selected retained docket release into the prior table, keeping newer
@@ -65,6 +70,7 @@ tables:
 
   documents:
     label: "Docket documents"
+    subject: rulemaking
     coverage: >-
       Sampled repair with retained prior rows. On 2026-09-21 the fork merged
       every selected retained document release into the prior table, resolving
@@ -157,6 +163,7 @@ tables:
 
   comments:
     label: "Public comments"
+    subject: rulemaking
     coverage: >-
       True range, floored and open-ended. Posted dates are stated from
       1990-01-01 rather than from the raw minimum of year 0000, on the same
@@ -207,6 +214,7 @@ tables:
   comments_index:
     identity_columns: [agency_code, docket_id, year, month]
     label: "Public comment counts"
+    subject: rulemaking
     coverage: >-
       Derived. Counts over `comments` by agency, docket and posting month; it
       covers exactly what that table covers and adds no rows of its own.
@@ -230,6 +238,7 @@ tables:
   feed_summary:
     identity_columns: [docket_id]
     label: "Docket summaries"
+    subject: rulemaking
     coverage: >-
       Derived. One row per docket over `dockets`, `documents` and
       `comments`; it covers exactly what those cover.
@@ -253,6 +262,7 @@ tables:
   agency_stats:
     identity_columns: [agency_code]
     label: "Agency totals"
+    subject: rulemaking
     coverage: >-
       Derived. Totals over `dockets`, `documents` and `comments`; it covers
       exactly what those cover.
@@ -270,6 +280,7 @@ tables:
   agency_monthly_volume:
     identity_columns: [agency_code, year, month, document_type]
     label: "Agency monthly volume"
+    subject: rulemaking
     coverage: >-
       Derived from `documents`: document counts by agency, month and document
       type. A document whose posted date is NULL or the publisher's year zero is
@@ -294,6 +305,7 @@ tables:
   fr_docket_links:
     grain: "One source docket-array occurrence per dated Federal Register record; docket_source_ordinal retains the original zero-based array position in rebuilt outputs. Older publications lack that column."
     label: "Federal Register to docket links"
+    subject: rulemaking
     coverage: >-
       Derived, and bounded by its inputs: one link per docket id that a dated
       Federal Register record names, over the `federal_register` table's own
@@ -332,6 +344,7 @@ tables:
   discovery_signals:
     identity_columns: [agency_code]
     label: "Agency activity spikes"
+    subject: rulemaking
     coverage: >-
       Not a range. A dated snapshot recomputed from `documents` at each build.
       Its date is the calculation instant the file's metadata records
@@ -362,6 +375,7 @@ tables:
   cfr_sections:
     identity_columns: [package_id, granule_id]
     label: "Code of Federal Regulations sections"
+    subject: reference
     coverage: >-
       Window. Annual-edition section metadata from the 2025 edition and, for
       some titles, the 2026 edition (`SELECT DISTINCT edition_year, title`
@@ -414,6 +428,7 @@ tables:
       url: "Canonical GovInfo details URL composed from the package and granule identifiers."
   congress_bills:
     label: "Congressional bills"
+    subject: congress
     coverage: >-
       True range on the archive index, mixed on enrichment. The archive index
       lists bills back to the earliest Congresses (latest actions from
@@ -502,6 +517,7 @@ tables:
 
   bill_subjects:
     label: "Bill policy areas and legislative subjects"
+    subject: congress
     grain: "One observed subject assignment per bill_id, with the latest retained answer replacing its predecessor."
     identity_columns: [bill_id]
     coverage: >-
@@ -540,6 +556,7 @@ tables:
   unified_agenda:
     identity_columns: [rin, agenda_edition]
     label: "Planned agency actions"
+    subject: rulemaking
     coverage: >-
       True range: every semiannual Unified Agenda edition reginfo.gov serves as
       readable XML, from 199510 through the latest; agenda_edition names each.
@@ -579,6 +596,7 @@ tables:
   # docs/ontology.md and each builder's docstring.
   rule_targets:
     label: "Rule identity edges (docket, CFR, RIN)"
+    subject: rulemaking
     coverage: >-
       Derived, and bounded by its inputs: `dockets`, `documents`,
       `federal_register` and `fr_docket_links` as the live snapshot's manifest
@@ -615,6 +633,7 @@ tables:
       fr_references_json: "JSON array of the literal Federal Register number references behind the edge, each with the `status` saying how it resolved (`dated`, `single_candidate_in_input`, `ambiguous`, `missing`, or a folded or unpadded match)."
   proceedings:
     label: "Rulemaking proceedings"
+    subject: rulemaking
     coverage: >-
       Derived, and bounded by its inputs (`dockets`, `documents`,
       `federal_register`, `fr_docket_links` and `rule_targets`) and the prior
@@ -656,6 +675,7 @@ tables:
       rins_json: "JSON array of every RIN it holds, from its dockets, documents and Register documents."
   regulatory_agenda_items:
     label: "Regulatory Agenda items"
+    subject: rulemaking
     coverage: >-
       Derived, and bounded by its inputs: every RIN that `unified_agenda`,
       `dockets`, `documents` or `federal_register` states.
@@ -687,6 +707,7 @@ tables:
       unresolved_fr_references_json: "JSON array of unresolved Register number references from the Register documents that state this RIN."
   agenda_item_proceedings:
     label: "Agenda item to proceeding links"
+    subject: rulemaking
     coverage: >-
       Derived, and bounded by its inputs: `dockets`, `documents` and
       `federal_register` records that state a RIN the proceeding holds.
@@ -718,6 +739,7 @@ tables:
       supersedes_id: "Id of a prior row this one continues; always NULL here."
   comment_periods:
     label: "Derived submission-date windows"
+    subject: rulemaking
     coverage: >-
       Derived, and bounded by its inputs: every `federal_register` record with
       a `comments_close_on`, every `documents` row with a comment end date, and
@@ -800,6 +822,7 @@ tables:
       regulations_gov_close_date: "Latest comment end (Eastern day) of its Regulations.gov documents, `YYYY-MM-DD`; NULL when none states one."
   rulemaking_lifecycles:
     label: "Rulemaking lifecycles"
+    subject: rulemaking
     coverage: >-
       Derived, and bounded by its inputs: every docketed proceeding, paired from
       its cleaned `lifecycle_events` and censored at the day its inputs end.
@@ -893,6 +916,7 @@ tables:
       supersedes_id: "Id of a prior row this one continues; always NULL here: lifecycles are recomputed each snapshot and continue no prior row. `proceedings.supersedes_id` differs: there a continuing proceeding names its own id."
   lifecycle_events:
     label: "Rulemaking lifecycle events"
+    subject: rulemaking
     coverage: >-
       Derived, and bounded by its inputs: the stage events of every docketed
       proceeding, one per document, less those undated or dated after the run's
@@ -933,6 +957,7 @@ tables:
       supersedes_id: "Id of a prior row this one continues; always NULL here: events are recomputed each snapshot and continue no prior row. `proceedings.supersedes_id` differs: there a continuing proceeding names its own id."
   agency_lifecycle_stats:
     label: "Time to final rule by agency"
+    subject: rulemaking
     coverage: >-
       Derived from `rulemaking_lifecycles` with a survival outcome, every
       proposal year together (no cohort window), per `agency_code` as the
@@ -985,6 +1010,7 @@ tables:
       supersedes_id: "Id of a prior row this one continues; always NULL here."
   federal_register:
     label: "Federal Register documents"
+    subject: rulemaking
     coverage: >-
       True range: dated records published from 1994-01-03 on, the whole span the
       API serves.
@@ -1015,6 +1041,7 @@ tables:
   sam_entities:
     identity_columns: [uei, entity_eft_indicator]
     label: "Federal entity registry"
+    subject: spending
     coverage: >-
       Window, complete for the years read. Every public active registration
       SAM.gov dated 1996 through 2026 and the two older ones (1949, 1968), one
@@ -1070,6 +1097,7 @@ tables:
   lobbying_filings:
     identity_columns: [filing_uuid]
     label: "Lobbying disclosure filings"
+    subject: lobbying
     coverage: >-
       True range: every filing of each filing year held, read whole from the LDA
       API, from the earliest filing year the backfill has reached to date;
@@ -1103,6 +1131,7 @@ tables:
   lobbying_activities:
     identity_columns: [filing_uuid, activity_index]
     label: "Lobbying activities"
+    subject: lobbying
     coverage: >-
       True range, the same filings as `lobbying_filings`: one row per lobbying
       activity a filing reports. A filing that lists no activity has no rows
@@ -1127,6 +1156,7 @@ tables:
   lobbying_activity_lobbyists:
     identity_columns: [filing_uuid, activity_index, lobbyist_index]
     label: "Lobbyists named on lobbying activities"
+    subject: lobbying
     coverage: >-
       True range, the same filings as `lobbying_filings`: one row per lobbyist
       named on each activity. An activity that names no lobbyist has no rows
@@ -1154,6 +1184,7 @@ tables:
       new: "`True` when the filing lists the lobbyist as new for this activity, `False` otherwise."
   fec_committees:
     label: "Political committees"
+    subject: campaign_finance
     grain: "One row per observed FEC committee identifier."
     identity_columns: [committee_id]
     coverage: >-
@@ -1195,6 +1226,7 @@ tables:
       candidate_ids_json: "JSON array of OpenFEC candidate IDs associated with the committee (e.g. `[\"P00008052\"]`). Often `[]`."
   fec_source_catalog:
     label: "Official FEC source families and access routes"
+    subject: campaign_finance
     grain: "One row per official source family in the SpicyDocs FEC registry."
     identity_columns: [source_family]
     coverage: >-
@@ -1221,6 +1253,7 @@ tables:
       coverage_note: "Explicit scope limitation: catalogue entries describe routes and do not certify underlying data acquisition or publication."
   fec_collections:
     label: "Retained FEC collection scopes and outcomes"
+    subject: campaign_finance
     grain: "One row per selected input collection or explicitly declared caller coverage disposition."
     identity_columns: [collection_id]
     coverage: >-
@@ -1252,6 +1285,7 @@ tables:
       artifact_sha256: "Digest of the verified provider source-release artifact; null for direct retained-query input that has no release artifact."
   fec_source_records:
     label: "FEC source records with native metadata and evidence"
+    subject: campaign_finance
     grain: "One row per provider source record within a selected collection."
     identity_columns: [collection_id, source_record_id]
     coverage: >-
@@ -1321,6 +1355,7 @@ tables:
   fec_relationships:
     identity_columns: [source_sha256, source_locator_json, relationship_type]
     label: "Source-reported FEC relationship observations"
+    subject: campaign_finance
     grain: "One reported relationship or explicit absence state at one source location."
     coverage: >-
       Sampled. Relationships mapped from the selected committee, candidate, bulk
@@ -1363,6 +1398,7 @@ tables:
       source_fields_json: "JSON object preserving the exact source fields used for this relationship observation."
   org_committee_links:
     label: "Commenter organizations matched to committees"
+    subject: campaign_finance
     grain: "One row per commenter organization name and FEC committee name match."
     identity_columns: [organization, committee_id]
     coverage: >-
@@ -1417,6 +1453,7 @@ tables:
   gao_reports:
     identity_columns: [report_id]
     label: "Government Accountability Office reports"
+    subject: oversight
     coverage: >-
       True range on GovInfo's archive and a window on recent products, with a
       gap between. The `govinfo` rows are every report and testimony in
@@ -1496,6 +1533,7 @@ tables:
       subject_terms_json: "JSON array of GAO's subject index terms for the product, as the R package states them (e.g. `Cost control`, `Financial management`), finer than `topics_json`. NULL where it states none, and on reports issued after its copy."
   gao_decisions:
     label: "Government Accountability Office legal decisions"
+    subject: oversight
     coverage: >-
       True range from 2009 on: every legal decision GAO's own Month in Review
       and Annual Index list for each year or month a finished walk of those
@@ -1543,6 +1581,7 @@ tables:
   crs_reports:
     identity_columns: [report_id]
     label: "Congressional Research Service reports"
+    subject: oversight
     coverage: >-
       True range: reports whose current version is dated from 1993-10-22 on
       (`published_date` is the current version's date, not first issue).
@@ -1571,6 +1610,7 @@ tables:
   court_dockets:
     identity_columns: [cl_docket_id]
     label: "Court dockets of APA suits against agencies"
+    subject: courts
     coverage: >-
       True range with a density caveat: dockets filed from 1992 on, but only the
       nature-of-suit 899 (Administrative Procedure Act) selection, not the full
@@ -1619,6 +1659,7 @@ tables:
       absolute_url: "Absolute URL of the docket page on courtlistener.com."
   court_docket_groups:
     label: "Court docket same-case groups"
+    subject: courts
     grain: "One row per grouped court_dockets row; absent rows have no group."
     identity_columns: [cl_docket_id]
     coverage: >-
@@ -1649,6 +1690,7 @@ tables:
       rule_version: "Version of the grouping rule (1: single-caption group, parent = lowest pacer_case_id)."
   court_opinion_clusters:
     label: "Court decisions and their opinion groups"
+    subject: courts
     grain: "One CourtListener decision cluster per cluster_id; multiple opinion bodies can belong to it."
     identity_columns: [cluster_id]
     coverage: >-
@@ -1731,6 +1773,7 @@ tables:
       ingest_source: "Route for the retained row: bulk or search. The table does not itself pin the original capture bytes."
   court_citations:
     label: "Court reporter citations"
+    subject: courts
     grain: "One reporter citation of one CourtListener decision (cluster); a decision can have several."
     identity_columns: [citation_id]
     coverage: >-
@@ -1770,6 +1813,7 @@ tables:
       dump_date: "The CourtListener bulk export the row was copied from (ISO date)."
   court_citation_map:
     label: "Court opinion citation map"
+    subject: courts
     grain: "One citing opinion's citation of one cited opinion, with how many times it cites it."
     identity_columns: [citing_opinion_id, cited_opinion_id]
     coverage: >-
@@ -1806,6 +1850,7 @@ tables:
       dump_date: "The CourtListener bulk export the row was copied from (ISO date)."
   court_parentheticals:
     label: "Court opinion parentheticals"
+    subject: courts
     grain: "One parenthetical summary one opinion wrote about another."
     identity_columns: [parenthetical_id]
     coverage: >-
@@ -1838,6 +1883,7 @@ tables:
       dump_date: "The CourtListener bulk export the row was copied from (ISO date)."
   court_opinions:
     label: "Court opinions (index, no text)"
+    subject: courts
     grain: "One CourtListener opinion (a majority, concurrence or dissent) of one decision."
     identity_columns: [opinion_id]
     coverage: >-
@@ -1881,6 +1927,7 @@ tables:
   usaspending_recipients:
     identity_columns: [recipient_id]
     label: "Federal award recipients"
+    subject: spending
     coverage: >-
       Not a range. Every recipient with a positive trailing-12-month award
       amount at the latest weekly walk, the top of the ranking refreshed daily
@@ -1920,6 +1967,7 @@ tables:
   fcc_proceedings:
     identity_columns: [name]
     label: "FCC proceedings"
+    subject: rulemaking
     coverage: >-
       True range: every proceeding ECFS dates, created from 1991 on, re-read
       whole each run so later closings and status changes are current. A
@@ -1964,6 +2012,7 @@ tables:
   fcc_filings:
     identity_columns: [id_submission]
     label: "FCC filings"
+    subject: rulemaking
     coverage: >-
       Window, not the ECFS archive: filings ECFS received on or after
       2026-08-24, when this table started, extended by a daily run. Earlier
@@ -2029,6 +2078,7 @@ tables:
 
   fec_committee_history:
     label: "FEC committees by cycle"
+    subject: campaign_finance
     coverage: >-
       True range. Every cycle from 1980 through the current one: each run reads
       every cycle's bulk committee master whole and publishes every row. The
@@ -2047,6 +2097,7 @@ tables:
 
   gao_recommendations:
     label: "GAO recommendations"
+    subject: oversight
     coverage: >-
       Window. The recommendations open on any day this table has read, from
       the first daily read on. Each run reads GAO's open-recommendations export whole, which
@@ -2084,6 +2135,7 @@ tables:
 
   fec_candidate_history:
     label: "FEC candidates by cycle"
+    subject: campaign_finance
     coverage: >-
       True range. Every cycle from 1980 through the current one: each run reads
       every cycle's bulk candidate master whole and publishes every row. The
@@ -2100,6 +2152,7 @@ tables:
 
   document_attributes:
     label: "Regulations.gov document attributes"
+    subject: rulemaking
     coverage: >-
       True range. Every document record in the Mirrulations mirror, read whole
       by `run-attributes-sweep` and kept current by the daily regulations ETL.
@@ -2118,6 +2171,7 @@ tables:
 
   docket_attributes:
     label: "Regulations.gov docket attributes"
+    subject: rulemaking
     coverage: >-
       True range. Every docket record in the Mirrulations mirror, read whole by
       `run-attributes-sweep` and kept current by the daily regulations ETL.
@@ -2135,6 +2189,7 @@ tables:
 
   comment_attributes:
     label: "Regulations.gov comment attributes"
+    subject: rulemaking
     coverage: >-
       True range. Every comment object the ETL manifest lists, read whole
       by the comment re-read (`fill-comment-fields read`, owner decision
@@ -2159,6 +2214,7 @@ tables:
     columns_from: spicy_docs
   bill_actions:
     label: "Bill actions"
+    subject: congress
     coverage: >-
       Sampled: bills the bill family has read from GovInfo BILLSTATUS, Congress
       by Congress from the 108th on; group by the Congress in bill_id to see
@@ -2185,6 +2241,7 @@ tables:
 
   bill_committees:
     label: "Bill committee referrals"
+    subject: congress
     coverage: >-
       Sampled: bills the bill family has read from GovInfo BILLSTATUS, Congress
       by Congress from the 108th on; group by the Congress in bill_id to see
@@ -2205,6 +2262,7 @@ tables:
 
   bill_publisher_summaries:
     label: "CRS bill summaries (publisher)"
+    subject: congress
     coverage: >-
       Sampled: bills the bill family has read from GovInfo BILLSTATUS, Congress
       by Congress from the 108th on; group by the Congress in bill_id to see
@@ -2219,6 +2277,7 @@ tables:
 
   bill_versions:
     label: "Bill printings"
+    subject: congress
     coverage: >-
       Sampled: bills the bill family has read from GovInfo BILLSTATUS, Congress
       by Congress from the 108th on; group by the Congress in bill_id to see
@@ -2253,6 +2312,7 @@ tables:
 
   bill_sections:
     label: "Bill sections"
+    subject: congress
     data_quality: >-
       A printing with no parsed section tree is a counted refusal, never a row
       with invented values. On the measured cold-start run of the 119th
@@ -2283,6 +2343,7 @@ tables:
 
   section_diffs:
     label: "Bill version comparisons"
+    subject: congress
     data_quality: >-
       A consecutive pair that cannot be diffed — because one or both sides has
       no parsed tree — is a counted refusal named by table, never a row.
@@ -2322,6 +2383,7 @@ tables:
 
   section_diff_items:
     label: "Bill comparison items"
+    subject: congress
     coverage: >-
       Sampled: the settled correspondences within each comparison in
       section_diffs, so it covers exactly what that table covers.
@@ -2334,6 +2396,7 @@ tables:
 
   financial_changes:
     label: "Dollar-figure changes"
+    subject: congress
     coverage: >-
       Empty by owner decision 34: the amount pairing that would fill it is not
       run (spicy-docs `pair_amounts=False`), so no row is produced;
@@ -2348,6 +2411,7 @@ tables:
 
   section_classifications:
     label: "Section classifications (model)"
+    subject: congress
     coverage: >-
       Empty by owner decision 34: written only by a language model during
       bill-family runs, which no scheduled run enables, so no row is produced.
@@ -2361,6 +2425,7 @@ tables:
 
   bill_summaries:
     label: "Bill summaries (model)"
+    subject: congress
     coverage: >-
       Empty by owner decision 34: written only by a language model during
       bill-family runs, which no scheduled run enables, so no row is produced.
@@ -2373,6 +2438,7 @@ tables:
 
   diff_summaries:
     label: "Change summaries (model)"
+    subject: congress
     coverage: >-
       Empty by owner decision 34: written only by a language model during
       bill-family runs, which no scheduled run enables, so no row is produced.
@@ -2384,6 +2450,7 @@ tables:
 
   public_activity_events:
     label: "Bill activity events"
+    subject: congress
     coverage: >-
       Sampled: bills the bill family has read from GovInfo BILLSTATUS, Congress
       by Congress from the 108th on; group by the Congress in bill_id to see
@@ -2407,6 +2474,7 @@ tables:
 
   amendments:
     label: "Amendments"
+    subject: congress
     data_quality: >-
       The publisher's `updateDate desc` order repeats and skips amendments
       across page boundaries when stamps tie, so one walk can serve the
@@ -2436,6 +2504,7 @@ tables:
 
   press_releases:
     label: "Appropriations press releases"
+    subject: congress
     coverage: >-
       Window. Releases from the House and Senate Appropriations committees'
       feeds as captured since September 19, 2026, including items that later
@@ -2478,6 +2547,7 @@ tables:
 
   roll_call_votes:
     label: "House and Senate roll-call votes"
+    subject: congress
     coverage: >-
       Sampled, and accumulating: both chambers' roll calls from each chamber's
       own session listing (the Senate LIS menu, and the House Clerk's roll
@@ -2562,6 +2632,7 @@ tables:
 
   member_votes:
     label: "Member vote positions"
+    subject: congress
     coverage: >-
       Sampled, and accumulating. One row per member per roll call in
       `roll_call_votes`, so it inherits that table's both-chambers scope,
@@ -2603,6 +2674,7 @@ tables:
 
   members:
     label: "Legislators"
+    subject: congress
     coverage: >-
       Sampled. The fork selection covers both complete community crosswalk files
       captured September 22, 2026 UTC: current and historical legislators. Every
@@ -2621,6 +2693,7 @@ tables:
 
   member_terms:
     label: "Legislator terms"
+    subject: congress
     coverage: >-
       Sampled. The fork selection retains every term from the same complete
       September 22, 2026 UTC captures as `members`. All mapped values, parent
@@ -2640,6 +2713,7 @@ tables:
   member_vote_terms:
     identity_columns: [vote_id, member_key]
     label: "Member vote terms"
+    subject: congress
     coverage: >-
       Derived, and bounded by its inputs: one row for every `member_votes` row,
       matched to the member's term on the vote date.
@@ -2673,6 +2747,7 @@ tables:
 
   committee_reports:
     label: "Committee reports"
+    subject: congress
     coverage: >-
       Sampled. Selected committee report packages from GovInfo, a mixed-Congress
       selection that grows as packages are added; not complete historical or
@@ -2712,6 +2787,7 @@ tables:
 
   report_sections:
     label: "Committee report heading and text blocks"
+    subject: congress
     coverage: >-
       Sampled. Heading/text blocks of the reports in committee_reports. heading
       retains the source title while agency_label and agency_key remain
@@ -2737,6 +2813,7 @@ tables:
 
   hearing_transcripts:
     label: "Hearing transcripts"
+    subject: congress
     coverage: >-
       Sampled. Selected hearing packages from GovInfo, each with its native
       event identifiers checked: package and body metadata, not speaker turns or
@@ -2775,6 +2852,7 @@ tables:
   bill_family_archives:
     identity_columns: [congress, bill_type]
     label: "Bill-family archive listings"
+    subject: congress
     coverage: >-
       Not a range. The bill family's processing state: one row per GovInfo
       BILLSTATUS folder (Congress and bill type) it has listed, which the next
@@ -2817,6 +2895,7 @@ tables:
   bill_vote_references:
     identity_columns: [bill_id, chamber, congress, session, roll_number, action_index]
     label: "Bill vote references"
+    subject: congress
     coverage: >-
       Sampled: the roll calls named in the actions of the bills the bill family
       has read, from the 108th Congress on.
@@ -2857,6 +2936,7 @@ tables:
   bill_family_backfills:
     identity_columns: [congress, bill_type, number]
     label: "Bill-family backfill state"
+    subject: congress
     coverage: >-
       Empty until a run reaches the bill family's pre-108th API backfill; then
       its processing state, one row per attempted bill.
@@ -2891,6 +2971,7 @@ tables:
   bill_family_backfill_walks:
     identity_columns: [congress, bill_type]
     label: "Bill-family backfill walks"
+    subject: congress
     coverage: >-
       Empty until a run reaches the bill family's pre-108th API backfill; then
       its processing state, one row per Congress and bill type walked, with the
@@ -2934,6 +3015,7 @@ tables:
   # --- A8/A9 (laws and rosters): the laws and committee-rosters rollups ---
   laws:
     label: "Enacted laws"
+    subject: congress
     coverage: >-
       Sampled. Every law the Congress.gov law route lists for the scoped
       Congresses (the current one by default), walked whole each run; the PLAW
@@ -2991,6 +3073,7 @@ tables:
 
   law_sections:
     label: "Published law sections"
+    subject: congress
     coverage: >-
       Derived: source-native sections from identity-validated GovInfo public and private
       law XML acquired by the laws rollup. Join law_id to laws.law_id, then
@@ -3015,6 +3098,7 @@ tables:
 
   law_code_sections:
     label: "Law classifications by Congress"
+    subject: congress
     coverage: >-
       Sampled. Every row of each public-law-order table the OLRC classification
       index links for a scoped Congress, read whole every run and replacing that
@@ -3058,6 +3142,7 @@ tables:
 
   table3_records:
     label: "Table III records"
+    subject: congress
     coverage: >-
       Window, complete for the Congresses read: every public law Table III holds
       for each Congress the laws table holds, plus the scoped ones, derived from
@@ -3126,6 +3211,7 @@ tables:
 
   committees:
     label: "Committees"
+    subject: congress
     coverage: >-
       Sampled. Since 2026-09-26 the Congress.gov committee route is walked whole
       with no Congress: every committee of every Congress the publisher records,
@@ -3160,6 +3246,7 @@ tables:
 
   committee_assignments:
     label: "Committee assignments"
+    subject: congress
     coverage: >-
       Sampled. Today's seats: the House Clerk's and the Senate's committee files
       are captured whole each run, for the current Congress only, and each
@@ -3198,6 +3285,7 @@ tables:
   # (transforms/build_congress_index.py).
   house_communications:
     label: "House executive communications"
+    subject: congress
     coverage: >-
       Window: the sitting Congress (the 119th), every communication the
       Congress.gov house-communication list declares for each type (`ec`,
@@ -3248,6 +3336,7 @@ tables:
 
   committee_meetings:
     label: "Committee meetings"
+    subject: congress
     coverage: >-
       Sampled, and accumulating. Each run walks the current Congress's whole
       `committee-meeting` list, and the previous Congress's from the day before
@@ -3303,6 +3392,7 @@ tables:
 
   record_issues:
     label: "Daily Congressional Record issues"
+    subject: congress
     coverage: >-
       Sampled, and accumulating. Each run walks the whole
       `daily-congressional-record/{volume}` list for each session volume of the
@@ -3330,6 +3420,7 @@ tables:
 
   treaties:
     label: "Treaty documents"
+    subject: congress
     coverage: >-
       Sampled. The 119th Congress's treaty documents from the retained list and
       their details. Not treaty bodies, action histories, older Congresses, suffixed
@@ -3357,6 +3448,7 @@ tables:
 
   nominations:
     label: "Nominations"
+    subject: congress
     coverage: >-
       Sampled. Distinct 119th-Congress nomination-list identities from retained
       list pages. The pages repeat some identical records, so a pagination total
@@ -3385,6 +3477,7 @@ tables:
 
   house_activity_reports:
     label: "Committee activity reports (House and Senate)"
+    subject: congress
     coverage: >-
       Sampled. House committee activity reports: CRPT packages from the
       2023-01-01 issue floor whose titles name activity under the shared title
@@ -3460,6 +3553,7 @@ tables:
 
   budget_volumes:
     label: "President's budget volumes"
+    subject: spending
     coverage: >-
       Sampled. BUDGET packages from the 2023-01-01 issue floor whose root PDF
       follows the provider's thirteen-part grammar, read under a per-run package
@@ -3508,6 +3602,7 @@ tables:
 
   bill_committee_actions:
     label: "Committee-print bill actions"
+    subject: congress
     coverage: >-
       Derived: the committee actions printed in the accepted House activity
       reports (`house_activity_reports`), not all committee actions.
@@ -3563,6 +3658,7 @@ tables:
 
   document_citations:
     label: "Document citation link table"
+    subject: congress
     coverage: >-
       Derived, and selective: not a list of the texts the service holds.
       Every House activity report (`govinfo_package`) and budget volume
@@ -3633,6 +3729,7 @@ tables:
 
   senate_expenditures:
     label: "Secretary of the Senate expenditure tables"
+    subject: spending
     coverage: >-
       Sampled: a page window inside each file. Secretary-of-the-Senate
       expenditure reports reprinted as GovInfo CDOC packages from the 2024-01-01
@@ -3705,6 +3802,7 @@ tables:
   hearing_bill_links:
     measured_on: "2026-09-28"
     label: "Hearing-to-bill links"
+    subject: congress
     coverage: >-
       Sampled. Bill references that the selected hearing packages' MODS records
       state on their cover. It does not show bills named only in constituent
@@ -3733,6 +3831,7 @@ tables:
   cbo_feed_items:
     measured_on: "2026-10-03"
     label: "CBO cost-estimate feed items"
+    subject: congress
     coverage: >-
       Sampled: every item of CBO's keyless per-Congress cost-estimate feed for
       each Congress a bill-family run has read the feed of, from the 108th on,
@@ -3762,6 +3861,7 @@ tables:
   cbo_cost_estimates:
     measured_on: "2026-10-03"
     label: "CBO cost-estimate publication index"
+    subject: congress
     coverage: >-
       Sampled: the estimates CBO lists for the bills the bill family has read,
       from the 108th Congress on, from two routes merged: each bill's
@@ -3818,6 +3918,7 @@ tables:
   bill_committee_activities:
     measured_on: "2026-10-03"
     label: "Bill committee activities"
+    subject: congress
     coverage: >-
       Sampled, and filling: what each committee and subcommittee a BILLSTATUS
       document lists did and when, for the bills the bill family has read under
@@ -3843,6 +3944,7 @@ tables:
   bill_cosponsors:
     measured_on: "2026-09-28"
     label: "Bill cosponsor source occurrences"
+    subject: congress
     coverage: >-
       Sampled: cosponsors from the BILLSTATUS archives replayed for the held
       bill edition; some Congresses are not yet replayed, and a bill outside a
@@ -3857,6 +3959,7 @@ tables:
   member_party_affiliations:
     measured_on: "2026-09-27"
     label: "Member party affiliation source intervals"
+    subject: congress
     coverage: >-
       Sampled. The complete retained September 25 community crosswalk captures,
       replayed and published on September 27; every source affiliation
@@ -3872,6 +3975,7 @@ tables:
     identity_columns: [package_id]
     measured_on: "2026-09-28"
     label: "Committee-report acquisition checkpoints"
+    subject: congress
     coverage: >-
       Not a range. One checkpoint per selected report or hearing package read,
       with its outcome. Complete includes hearings with zero cover links; it
@@ -3890,6 +3994,7 @@ tables:
     identity_columns: [document_kind, document_key, text_sha256]
     measured_on: "2026-10-03"
     label: "Held-field citation reads"
+    subject: congress
     coverage: >-
       Not a range. One row per held field (a report section, a comment, a
       lobbying activity, a communication, a court PDF extraction) whose text
@@ -3916,6 +4021,7 @@ tables:
   native_legal_references:
     measured_on: "2026-09-27"
     label: "Native legal-reference observations"
+    subject: reference
     coverage: >-
       Sampled. Observations from the complete retained eCFR Title 1, requested
       as of 2026-08-10, and USC Title 1 release 119-103. Selected public target
@@ -3940,6 +4046,7 @@ tables:
   court_opinion_pdf_extractions:
     measured_on: "2026-09-27"
     label: "Selected court opinion PDF text"
+    subject: courts
     identity_columns: [opinion_id, source_sha256]
     grain: "One retained PDF extraction per opinion and exact observed body."
     coverage: >-
@@ -3972,6 +4079,7 @@ tables:
   native_legal_reference_reads:
     measured_on: "2026-09-27"
     label: "Native legal-reference selected-input reads"
+    subject: reference
     coverage: "Sampled. Explicit retained-input manifests only; not a source-wide acquisition or completeness ledger."
     summary: >-
       Records successful bounded source reads even when they produce no observations.
@@ -3985,6 +4093,7 @@ tables:
   # Retained typed FEC observation tables. Schema support is separate from publication.
   fec_account_transfers:
     label: Reported transfers between accounts
+    subject: campaign_finance
     grain: One source-reported account-transfer or allocated-activity record version.
     identity_columns:
     - record_id
@@ -4171,6 +4280,7 @@ tables:
       exclude records.
   fec_agency_mapping_dispositions:
     label: Agency source-record mapping outcomes
+    subject: campaign_finance
     grain: One explicit mapping disposition for one native agency source record.
     identity_columns:
     - collection_id
@@ -4195,6 +4305,7 @@ tables:
         is explained by the disposition.
   fec_agency_report_documents:
     label: Agency report document references
+    subject: campaign_finance
     grain: One source link occurrence attached to one agency report observation.
     identity_columns:
     - record_id
@@ -4239,6 +4350,7 @@ tables:
         or element addresses.
   fec_agency_report_text:
     label: Retained agency report text
+    subject: campaign_finance
     grain: One supported text observation at a native agency-report location.
     identity_columns:
     - record_id
@@ -4280,6 +4392,7 @@ tables:
         or element addresses.
   fec_agency_reports:
     label: Agency report edition observations
+    subject: campaign_finance
     grain: One retained agency report edition observation with its source context.
     identity_columns:
     - record_id
@@ -4342,6 +4455,7 @@ tables:
         value and conversion status; capture time is not substituted.
   fec_allocated_disbursements:
     label: Reported allocated disbursement observations
+    subject: campaign_finance
     grain: One payment/allocation record version from its source schedule or API.
     identity_columns:
     - record_id
@@ -4556,6 +4670,7 @@ tables:
       exclude records.
   fec_allocation_bases:
     label: Reported allocation basis observations
+    subject: campaign_finance
     grain: One source-reported allocation method, ratio or supporting-basis record version.
     identity_columns:
     - record_id
@@ -4779,6 +4894,7 @@ tables:
       exclude records.
   fec_api_response_controls:
     label: Retained FEC API response controls
+    subject: campaign_finance
     grain: One native top-level API response field or result-container observation.
     identity_columns:
     - record_id
@@ -4852,6 +4968,7 @@ tables:
         election year and agency fiscal year.
   fec_audit_findings:
     label: Reported FEC audit finding observations
+    subject: campaign_finance
     grain: One native audit finding occurrence associated with a retained matter observation.
     identity_columns:
     - record_id
@@ -4912,6 +5029,7 @@ tables:
         use the corresponding status and source-specific financial policy before adding observations.
   fec_bundled_contributions:
     label: Reported bundler and recipient observations
+    subject: campaign_finance
     grain: One identified bundler/recipient amount for a source period and filing version.
     identity_columns:
     - record_id
@@ -5054,6 +5172,7 @@ tables:
       exclude records.
   fec_candidate_api_observations:
     label: Retained candidate API observations
+    subject: campaign_finance
     grain: One candidate result occurrence in a retained API response.
     identity_columns:
     - record_id
@@ -5139,6 +5258,7 @@ tables:
         election year and agency fiscal year.
   fec_collection_selection:
     label: Retained FEC representation-selection decisions
+    subject: campaign_finance
     grain: One source collection/member decision under a named snapshot-selection policy.
     identity_columns:
     - record_id
@@ -5179,6 +5299,7 @@ tables:
         monetary total.
   fec_committee_master_observations:
     label: Retained committee master observations
+    subject: campaign_finance
     grain: One physical committee-master row within its retained cycle/file capture.
     identity_columns:
     - record_id
@@ -5262,6 +5383,7 @@ tables:
         remain text beside the source-owned committee-history mapping.
   fec_committee_observations:
     label: Retained committee API observations
+    subject: campaign_finance
     grain: One committee result occurrence in a retained API response.
     identity_columns:
     - record_id
@@ -5352,6 +5474,7 @@ tables:
         election year and agency fiscal year.
   fec_communication_costs:
     label: Reported communication-cost observations
+    subject: campaign_finance
     grain: One source-reported communication-cost record observation.
     identity_columns:
     - record_id
@@ -5455,6 +5578,7 @@ tables:
       exclude records.
   fec_contribution_aggregates:
     label: Source-reported contribution aggregates
+    subject: campaign_finance
     grain: One group in a source-defined contribution population and period.
     identity_columns:
     - record_id
@@ -5540,6 +5664,7 @@ tables:
         identity.
   fec_coordinated_party_expenditures:
     label: Reported coordinated party expenditure observations
+    subject: campaign_finance
     grain: One Schedule F expenditure record version.
     identity_columns:
     - record_id
@@ -5723,6 +5848,7 @@ tables:
       exclude records.
   fec_debts:
     label: Reported debt-state observations
+    subject: campaign_finance
     grain: One obligation state as reported in a filing and period.
     identity_columns:
     - record_id
@@ -5897,6 +6023,7 @@ tables:
       exclude records.
   fec_disbursements:
     label: Reported disbursement observations
+    subject: campaign_finance
     grain: One source-reported payment or disbursement record version.
     identity_columns:
     - record_id
@@ -6081,6 +6208,7 @@ tables:
       exclude records.
   fec_electioneering_communications:
     label: Candidate-associated electioneering observations
+    subject: campaign_finance
     grain: One source candidate-associated disbursement observation.
     identity_columns:
     - record_id
@@ -6194,6 +6322,7 @@ tables:
       exclude records.
   fec_filing_definition_evidence:
     label: Retained filing layout evidence
+    subject: campaign_finance
     grain: One exact association from a normalized filing definition to a source context witness.
     identity_columns:
     - target_table
@@ -6243,6 +6372,7 @@ tables:
         or definition location.
   fec_filing_definitions:
     label: Pinned source filing layout definitions
+    subject: campaign_finance
     grain: One distinct pinned source layout with its literal family, version and form.
     identity_columns:
     - record_id
@@ -6265,6 +6395,7 @@ tables:
         defines source layout, not a consumer policy or submission-conformance result.
   fec_filing_header_associations:
     label: Original-file header to filing associations
+    subject: campaign_finance
     grain: One evidenced association decision for one retained original-file header observation.
     identity_columns:
     - record_id
@@ -6327,6 +6458,7 @@ tables:
         unresolved/conflicting candidates; expanding it changes row cardinality.
   fec_filing_links:
     label: Source-reported filing-version references
+    subject: campaign_finance
     grain: One directed native filing reference from a retained filing observation.
     identity_columns:
     - record_id
@@ -6389,6 +6521,7 @@ tables:
         election year and agency fiscal year.
   fec_filing_report_observations:
     label: Retained filing cover and summary observations
+    subject: campaign_finance
     grain: One source filing report/statement/cover record version.
     identity_columns:
     - record_id
@@ -6522,6 +6655,7 @@ tables:
         added to itemized children.'
   fec_filing_text_observations:
     label: Retained original filing narratives
+    subject: campaign_finance
     grain: One source narrative or text record version at its native file position.
     identity_columns:
     - record_id
@@ -6606,6 +6740,7 @@ tables:
         extraction.'
   fec_filings:
     label: Retained filing metadata observations
+    subject: campaign_finance
     grain: One retained metadata observation of a submitted report or statement version.
     identity_columns:
     - record_id
@@ -6749,6 +6884,7 @@ tables:
         remains in load_timestamp_raw. NULL requires the source value and conversion status; capture time is not substituted.
   fec_historical_ie_statistics:
     label: Historical independent-expenditure statistics
+    subject: campaign_finance
     grain: One native statistical worksheet row with its stated row grain.
     identity_columns:
     - record_id
@@ -6823,6 +6959,7 @@ tables:
         and conversion status; capture time is not substituted.
   fec_inaugural_donations:
     label: Reported itemized inaugural donations
+    subject: campaign_finance
     grain: One itemized Form 13 donation or refund record version.
     identity_columns:
     - record_id
@@ -6938,6 +7075,7 @@ tables:
       exclude records.
   fec_independent_expenditures:
     label: Reported independent-expenditure observations
+    subject: campaign_finance
     grain: One source-reported independent-expenditure record version.
     identity_columns:
     - record_id
@@ -7121,6 +7259,7 @@ tables:
       exclude records.
   fec_intercommittee_transactions:
     label: Reported committee-to-committee transaction observations
+    subject: campaign_finance
     grain: One reported intercommittee transaction record version.
     identity_columns:
     - record_id
@@ -7228,6 +7367,7 @@ tables:
       exclude records.
   fec_legal_documents:
     label: Retained legal document references
+    subject: campaign_finance
     grain: One source legal-document occurrence or rendition associated with a matter observation.
     identity_columns:
     - record_id
@@ -7298,6 +7438,7 @@ tables:
         conversion status; capture time is not substituted.
   fec_legal_events:
     label: Reported legal matter event observations
+    subject: campaign_finance
     grain: One dated or undated native event occurrence within a matter observation.
     identity_columns:
     - record_id
@@ -7368,6 +7509,7 @@ tables:
         and the source's disposition/agreement context; NULL is unknown, not zero.
   fec_legal_matters:
     label: Retained legal matter observations
+    subject: campaign_finance
     grain: One source observation of a namespaced legal matter.
     identity_columns:
     - record_id
@@ -7475,6 +7617,7 @@ tables:
         use the corresponding status and source-specific financial policy before adding observations.
   fec_legal_parties:
     label: Source-stated legal party roles
+    subject: campaign_finance
     grain: One party-role occurrence within a retained matter observation.
     identity_columns:
     - record_id
@@ -7529,6 +7672,7 @@ tables:
       document_record_id: Exact typed legal-document observation cited by this party or other source assertion.
   fec_loan_guarantors:
     label: Reported loan guarantor associations
+    subject: campaign_finance
     grain: One source guarantor record associated with a reported loan state.
     identity_columns:
     - record_id
@@ -7633,6 +7777,7 @@ tables:
       exclude records.
   fec_loan_terms:
     label: Reported loan terms observations
+    subject: campaign_finance
     grain: One source loan-terms or credit-line record version.
     identity_columns:
     - record_id
@@ -7825,6 +7970,7 @@ tables:
       exclude records.
   fec_loans:
     label: Reported loan-state observations
+    subject: campaign_finance
     grain: One loan state as reported in a filing and period.
     identity_columns:
     - record_id
@@ -7993,6 +8139,7 @@ tables:
       exclude records.
   fec_lobbyist_registrations:
     label: Retained lobbyist registration observations
+    subject: campaign_finance
     grain: One native committee registration/lobbyist observation.
     identity_columns:
     - record_id
@@ -8056,6 +8203,7 @@ tables:
       is_lobbyist: Boolean mapped only from a supported source lobbyist flag; NULL retains the adjacent status.
   fec_oversight_recommendations:
     label: Reported oversight recommendation states
+    subject: campaign_finance
     grain: One source recommendation or recommendation-status observation.
     identity_columns:
     - record_id
@@ -8117,6 +8265,7 @@ tables:
         Signs are preserved; use the corresponding status and source-specific financial policy before adding observations.
   fec_postgres_committee_history_observations:
     label: Retained PostgreSQL committee history observations
+    subject: campaign_finance
     grain: One native COPY row from a selected retained history derivation.
     identity_columns:
     - record_id
@@ -8186,6 +8335,7 @@ tables:
         text remain literal; no current-profile inference.
   fec_quality_notices:
     label: Source-issued FEC quality notices
+    subject: campaign_finance
     grain: One source notice observation about an explicitly stated filing/committee scope.
     identity_columns:
     - record_id
@@ -8253,6 +8403,7 @@ tables:
         source value and conversion status; capture time is not substituted.
   fec_receipts:
     label: Reported receipt observations
+    subject: campaign_finance
     grain: One reported receipt record version or physical source observation.
     identity_columns:
     - record_id
@@ -8460,6 +8611,7 @@ tables:
       exclude records.
   fec_record_evidence:
     label: Typed FEC record evidence associations
+    subject: campaign_finance
     grain: One explicit target-to-witness association with exact endpoint coordinates.
     identity_columns:
     - target_table
@@ -8510,6 +8662,7 @@ tables:
         or definition location.
   fec_registration_statements:
     label: Retained candidate and committee registration statements
+    subject: campaign_finance
     grain: One source Form 1 or Form 2 registration observation.
     identity_columns:
     - record_id
@@ -8604,6 +8757,7 @@ tables:
         and conversion status; capture time is not substituted.
   fec_report_metrics:
     label: Defined agency report metric observations
+    subject: campaign_finance
     grain: One defined measure occurrence within an agency report edition.
     identity_columns:
     - record_id
@@ -8670,6 +8824,7 @@ tables:
         and conversion status; capture time is not substituted.
   fec_reported_financial_summaries:
     label: Source-reported financial summary observations
+    subject: campaign_finance
     grain: One source entity/period/summary-layout/version observation.
     identity_columns:
     - record_id
@@ -8757,6 +8912,7 @@ tables:
         value_status and unit. Unnest with record_id; never add parent summaries to their itemized details.'
   fec_research_context_dispositions:
     label: Retained context mapping and coverage outcomes
+    subject: campaign_finance
     grain: One explicit mapping disposition for a retained collection context.
     identity_columns:
     - collection_id
@@ -8783,6 +8939,7 @@ tables:
         reason.
   fec_research_document_observations:
     label: Retained research document and case references
+    subject: campaign_finance
     grain: One source document/case-reference metadata occurrence in retained context.
     identity_columns:
     - record_id
@@ -8827,6 +8984,7 @@ tables:
         the typed mapping.
   fec_research_filing_feed_items:
     label: Retained filing feed items
+    subject: campaign_finance
     grain: One RSS item occurrence in a captured source feed.
     identity_columns:
     - record_id
@@ -8866,6 +9024,7 @@ tables:
         do not establish the current record.
   fec_research_meeting_observations:
     label: Retained meeting table observations
+    subject: campaign_finance
     grain: One native HTML table row describing a meeting listing.
     identity_columns:
     - record_id
@@ -8908,6 +9067,7 @@ tables:
       table_row: Native row address in the retained HTML table; use native_cells_json for exact cell evidence.
   fec_research_response_outcomes:
     label: Retained OpenFEC response outcomes
+    subject: campaign_finance
     grain: One retained response/context outcome observation.
     identity_columns:
     - record_id
@@ -8948,6 +9108,7 @@ tables:
         claimed complete query population.
   fec_research_source_pages:
     label: Retained FEC source documentation pages
+    subject: campaign_finance
     grain: One supported source-documentation page observation from retained context.
     identity_columns:
     - record_id
@@ -8986,6 +9147,7 @@ tables:
       headings_json: Ordered source headings with their native context, preserving document structure.
   fec_retained_csv_observations:
     label: Retained CSV context observations
+    subject: campaign_finance
     grain: One physical CSV row exposed by retained collection context.
     identity_columns:
     - record_id

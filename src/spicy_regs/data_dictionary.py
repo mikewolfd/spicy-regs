@@ -83,6 +83,17 @@ COVERAGE_KINDS: dict[str, str] = {
 }
 
 
+#: What each table is about, so a reader who does not know table names can find the rulemaking tables
+#: among the rest (owner decision 8, 2026-10-03: two personas could not, one of them a non-SQL user). One
+#: word per table, stated in descriptions.yaml and carried into table_metadata.json; a relationship view
+#: takes its base table's. GAO and CRS are oversight; SAM, USAspending, the President's budget and the
+#: Senate's expenditure reports are spending; reference holds the legal texts other subjects cite (the CFR,
+#: the U.S. Code and eCFR authority notes).
+SUBJECTS: tuple[str, ...] = (
+    "rulemaking", "congress", "campaign_finance", "lobbying", "courts", "oversight", "spending", "reference",
+)
+
+
 def coverage_kind(coverage: str) -> str | None:
     """Return the machine-readable kind for a coverage statement, or None.
 
@@ -925,6 +936,8 @@ def check_descriptions(
             errors.append(f"[{table}] missing a 'label' in descriptions.yaml")
         if not (entry.get("coverage") or "").strip():
             errors.append(f"[{table}] missing a 'coverage' statement in descriptions.yaml")
+        if entry.get("subject") not in SUBJECTS:
+            errors.append(f"[{table}] 'subject' must be one of {', '.join(SUBJECTS)}, not {entry.get('subject')!r}")
         measured_on = str(entry.get("measured_on") or "").strip()
         errors.extend(coverage_prose_errors(table, entry.get("coverage") or "", measured_on))
         errors.extend(data_quality_prose_errors(table, entry.get("data_quality") or ""))
@@ -1306,6 +1319,7 @@ def build_mcp_metadata(descriptions: dict, schemas: dict[str, list[tuple[str, st
         )
         result[table] = {
             **entry,
+            "subject": description["subject"],
             "grain": contract.grain if contract is not None else description.get("grain"),
             "identity_columns": identity,
             "columns": [

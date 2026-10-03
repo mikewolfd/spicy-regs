@@ -44,6 +44,7 @@
         "description": "Regulation Identifier Number tying the docket to the Unified Agenda. Often null."
       }
     ],
+    "subject": "rulemaking",
     "grain": null,
     "identity_columns": [
       "docket_id"
@@ -189,6 +190,7 @@
         "description": "Ordered JSON array from the latest PDF attempt: `{url, source_sha256, status, page_count, error}` per distinct selected URL. SHA-256 identifies observed bytes; no-bytes fetch failures have null digest/page count and a generic error. Null when no PDF attempt is recorded. Describes that attempt, not the provenance of older text retained after a failed overwrite."
       }
     ],
+    "subject": "rulemaking",
     "grain": null,
     "identity_columns": [
       "document_id"
@@ -351,6 +353,7 @@
         "description": "`comment` read as plain text, derived from it each time the mirror is exported and never stored in the catalog. The publisher serves `comment` as an HTML fragment (`I&#39;m`, `<br/>`); this column decodes each character reference once, makes `<br>` and the end of a block element a newline and a no-break space a space, drops every other tag and trims the ends. Search and quote this column; `comment` keeps the publisher's bytes. The projection loses link targets, list bullets and table layout. One decode only: a body the publisher escaped twice keeps one level (`&amp;#39;` reads `&#39;`), and markup a commenter typed as text (`&lt;br&gt;`) reads as that text. NULL exactly where `comment` is NULL."
       }
     ],
+    "subject": "rulemaking",
     "grain": null,
     "identity_columns": [
       "comment_id"
@@ -407,6 +410,7 @@
         "description": "Number of posted comment records in the group. These are posted comment records, not comments received: an agency posts one record for a mass-mail campaign that can stand for thousands of submissions (EPA-HQ-OW-2022-0114 has 1,629 posted records for about 122,200 comments EPA received). To estimate submissions received, sum `comments.duplicate_comments` as its description says; this table does not carry it."
       }
     ],
+    "subject": "rulemaking",
     "grain": null,
     "identity_columns": [
       "agency_code",
@@ -508,6 +512,7 @@
         "description": "Earliest document `posted_date` on the docket, used as a creation date. Null when unknown."
       }
     ],
+    "subject": "rulemaking",
     "grain": null,
     "identity_columns": [
       "docket_id"
@@ -567,6 +572,7 @@
         "description": "Posted comments on the agency's dockets, summed from `comments_index`. These are posted comment records, not comments received: an agency posts one record for a mass-mail campaign that can stand for thousands of submissions (EPA-HQ-OW-2022-0114 has 1,629 posted records for about 122,200 comments EPA received). To estimate submissions received, sum `comments.duplicate_comments` as its description says; this table does not carry it."
       }
     ],
+    "subject": "rulemaking",
     "grain": null,
     "identity_columns": [
       "agency_code"
@@ -642,6 +648,7 @@
         "description": "Number of documents the agency posted of that type in that month."
       }
     ],
+    "subject": "rulemaking",
     "grain": null,
     "identity_columns": [
       "agency_code",
@@ -771,6 +778,7 @@
         "description": "Executive order number, for presidential documents."
       }
     ],
+    "subject": "rulemaking",
     "grain": "One source docket-array occurrence per dated Federal Register record; docket_source_ordinal retains the original zero-based array position in rebuilt outputs. Older publications lack that column.",
     "identity_columns": []
   },
@@ -804,6 +812,7 @@
         "description": "`recent_30d` divided by `baseline` — the spike multiple."
       }
     ],
+    "subject": "rulemaking",
     "grain": null,
     "identity_columns": [
       "agency_code"
@@ -874,6 +883,7 @@
         "description": "Canonical GovInfo details URL composed from the package and granule identifiers."
       }
     ],
+    "subject": "reference",
     "grain": null,
     "identity_columns": [
       "package_id",
@@ -1145,6 +1155,7 @@
         "description": "Source list state: absent, empty or populated; NULL means not read."
       }
     ],
+    "subject": "congress",
     "grain": "One row per bill or resolution, as one BILLSTATUS document states it.",
     "identity_columns": [
       "bill_id"
@@ -1190,6 +1201,7 @@
         "description": "UTC timestamp when this retained answer was shaped, not the publisher's modification date."
       }
     ],
+    "subject": "congress",
     "grain": "One observed subject assignment per bill_id, with the latest retained answer replacing its predecessor.",
     "identity_columns": [
       "bill_id"
@@ -1290,6 +1302,7 @@
         "description": "URL of the entry's detail page on reginfo.gov."
       }
     ],
+    "subject": "rulemaking",
     "grain": null,
     "identity_columns": [
       "rin",
@@ -1386,6 +1399,7 @@
         "description": "JSON array of the literal Federal Register number references behind the edge, each with the `status` saying how it resolved (`dated`, `single_candidate_in_input`, `ambiguous`, `missing`, or a folded or unpadded match)."
       }
     ],
+    "subject": "rulemaking",
     "grain": "One observed docket, CFR and RIN edge per evidence source class.",
     "identity_columns": [
       "docket_id",
@@ -1504,6 +1518,7 @@
         "description": "JSON array of every RIN it holds, from its dockets, documents and Register documents."
       }
     ],
+    "subject": "rulemaking",
     "grain": "One rulemaking proceeding: the dockets and Register documents that are one action.",
     "identity_columns": [
       "proceeding_id"
@@ -1594,6 +1609,7 @@
         "description": "JSON array of unresolved Register number references from the Register documents that state this RIN."
       }
     ],
+    "subject": "rulemaking",
     "grain": "One durable Regulatory Agenda item per RIN.",
     "identity_columns": [
       "agenda_item_id"
@@ -1679,6 +1695,7 @@
         "description": "Id of a prior row this one continues; always NULL here."
       }
     ],
+    "subject": "rulemaking",
     "grain": "One evidence record linking one agenda item (RIN) to one proceeding.",
     "identity_columns": [
       "relationship_id"
@@ -1784,6 +1801,7 @@
         "description": "Latest comment end (Eastern day) of its Regulations.gov documents, `YYYY-MM-DD`; NULL when none states one."
       }
     ],
+    "subject": "rulemaking",
     "grain": "One rule-derived group of source-reported date windows for a notice and its candidate extensions; not a legally adjudicated comment period.",
     "identity_columns": [
       "comment_period_id"
@@ -1939,6 +1957,7 @@
         "description": "Id of a prior row this one continues; always NULL here: lifecycles are recomputed each snapshot and continue no prior row. `proceedings.supersedes_id` differs: there a continuing proceeding names its own id."
       }
     ],
+    "subject": "rulemaking",
     "grain": "One lifecycle per docketed proceeding.",
     "identity_columns": [
       "proceeding_id"
@@ -2044,6 +2063,7 @@
         "description": "Id of a prior row this one continues; always NULL here: events are recomputed each snapshot and continue no prior row. `proceedings.supersedes_id` differs: there a continuing proceeding names its own id."
       }
     ],
+    "subject": "rulemaking",
     "grain": "One stage event per document of one docketed proceeding.",
     "identity_columns": [
       "proceeding_id",
@@ -2170,6 +2190,7 @@
         "description": "Id of a prior row this one continues; always NULL here."
       }
     ],
+    "subject": "rulemaking",
     "grain": "One agency (or all agencies) and one stratum of rules.",
     "identity_columns": [
       "agency_code",
@@ -2296,6 +2317,7 @@
         "description": "Entity's self-reported website URL (`coreData.entityInformation.entityURL`). Often null."
       }
     ],
+    "subject": "spending",
     "grain": null,
     "identity_columns": [
       "uei",
@@ -2382,6 +2404,7 @@
         "description": "URL of the filing's printable document page on lda.gov (`filing_document_url`; lda.senate.gov redirects there)."
       }
     ],
+    "subject": "lobbying",
     "grain": null,
     "identity_columns": [
       "filing_uuid"
@@ -2432,6 +2455,7 @@
         "description": "JSON array of the government entities contacted for this activity, `{id, name}` objects (e.g. `SENATE`)."
       }
     ],
+    "subject": "lobbying",
     "grain": null,
     "identity_columns": [
       "filing_uuid",
@@ -2508,6 +2532,7 @@
         "description": "`True` when the filing lists the lobbyist as new for this activity, `False` otherwise."
       }
     ],
+    "subject": "lobbying",
     "grain": null,
     "identity_columns": [
       "filing_uuid",
@@ -2605,6 +2630,7 @@
         "description": "JSON array of OpenFEC candidate IDs associated with the committee (e.g. `[\"P00008052\"]`). Often `[]`."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One row per observed FEC committee identifier.",
     "identity_columns": [
       "committee_id"
@@ -2675,6 +2701,7 @@
         "description": "Explicit scope limitation: catalogue entries describe routes and do not certify underlying data acquisition or publication."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One row per official source family in the SpicyDocs FEC registry.",
     "identity_columns": [
       "source_family"
@@ -2750,6 +2777,7 @@
         "description": "Digest of the verified provider source-release artifact; null for direct retained-query input that has no release artifact."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One row per selected input collection or explicitly declared caller coverage disposition.",
     "identity_columns": [
       "collection_id"
@@ -2850,6 +2878,7 @@
         "description": "Complete provider source-record serialization, preserving identity, native metadata, assets, bodies and evidence."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One row per provider source record within a selected collection.",
     "identity_columns": [
       "collection_id",
@@ -2951,6 +2980,7 @@
         "description": "JSON object preserving the exact source fields used for this relationship observation."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One reported relationship or explicit absence state at one source location.",
     "identity_columns": [
       "source_sha256",
@@ -3398,6 +3428,7 @@
         "description": "Exact decimal for reported generic campaign activity. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One source-reported account-transfer or allocated-activity record version.",
     "identity_columns": [
       "record_id"
@@ -3443,6 +3474,7 @@
         "description": "JSON array of typed observation keys emitted from this native source record; empty output is explained by the disposition."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One explicit mapping disposition for one native agency source record.",
     "identity_columns": [
       "collection_id",
@@ -3549,6 +3581,7 @@
         "description": "Native XML, HTML or Word coordinates for the emitted text or link, retaining row, cell or element addresses."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One source link occurrence attached to one agency report observation.",
     "identity_columns": [
       "record_id"
@@ -3644,6 +3677,7 @@
         "description": "Native XML, HTML or Word coordinates for the emitted text or link, retaining row, cell or element addresses."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One supported text observation at a native agency-report location.",
     "identity_columns": [
       "record_id"
@@ -3804,6 +3838,7 @@
         "description": "Date parsed from the source publication date of the agency report. NULL requires the source value and conversion status; capture time is not substituted."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One retained agency report edition observation with its source context.",
     "identity_columns": [
       "record_id"
@@ -4404,6 +4439,7 @@
         "description": "Source identifier for the reported account/event used by this schedule."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One payment/allocation record version from its source schedule or API.",
     "identity_columns": [
       "record_id"
@@ -4934,6 +4970,7 @@
         "description": "Native allocation-ratio code, resolved only under the pinned layout definitions."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One source-reported allocation method, ratio or supporting-basis record version.",
     "identity_columns": [
       "record_id"
@@ -5114,6 +5151,7 @@
         "description": "Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One native top-level API response field or result-container observation.",
     "identity_columns": [
       "record_id"
@@ -5269,6 +5307,7 @@
         "description": "Exact decimal for the source-reported amount for this record and its amount_kind. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One native audit finding occurrence associated with a retained matter observation.",
     "identity_columns": [
       "record_id"
@@ -5684,6 +5723,7 @@
         "description": "Explicit statement of whether submission conformance was established; successful field mapping alone does not establish it."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One identified bundler/recipient amount for a source period and filing version.",
     "identity_columns": [
       "record_id"
@@ -5919,6 +5959,7 @@
         "description": "Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One candidate result occurrence in a retained API response.",
     "identity_columns": [
       "record_id"
@@ -6009,6 +6050,7 @@
         "description": "Exact count of native observations covered by this collection selection decision; not a monetary total."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One source collection/member decision under a named snapshot-selection policy.",
     "identity_columns": [
       "record_id"
@@ -6234,6 +6276,7 @@
         "description": "Named struct of every literal committee-master field in its verified header order. Original values remain text beside the source-owned committee-history mapping."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One physical committee-master row within its retained cycle/file capture.",
     "identity_columns": [
       "record_id"
@@ -6479,6 +6522,7 @@
         "description": "Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One committee result occurrence in a retained API response.",
     "identity_columns": [
       "record_id"
@@ -6749,6 +6793,7 @@
         "description": "Date parsed from the transaction date reported by the source. NULL requires the source value and conversion status; capture time is not substituted."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One source-reported communication-cost record observation.",
     "identity_columns": [
       "record_id"
@@ -6959,6 +7004,7 @@
         "description": "Whether the source contributor reference resolves; name text alone is not a donor identity."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One group in a source-defined contribution population and period.",
     "identity_columns": [
       "record_id"
@@ -7514,6 +7560,7 @@
         "description": "Literal transaction code from the selected filing layout; its meaning is distinct from unrelated families' codes."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One Schedule F expenditure record version.",
     "identity_columns": [
       "record_id"
@@ -7984,6 +8031,7 @@
         "description": "Literal native superseded-transaction reference; a proven replacement scope is still required from the retained filing layout."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One obligation state as reported in a filing and period.",
     "identity_columns": [
       "record_id"
@@ -8539,6 +8587,7 @@
         "description": "Declared limitation on adding this observation to other records; requires the relevant named financial policy before totals."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One source-reported payment or disbursement record version.",
     "identity_columns": [
       "record_id"
@@ -8824,6 +8873,7 @@
         "description": "Date parsed from the public disbursement date stated by the source. NULL requires the source value and conversion status; capture time is not substituted."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One source candidate-associated disbursement observation.",
     "identity_columns": [
       "record_id"
@@ -8904,6 +8954,7 @@
         "description": "Native source coordinates of the witness, including worksheet cells, source row address or definition location."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One exact association from a normalized filing definition to a source context witness.",
     "identity_columns": [
       "target_table",
@@ -8961,6 +9012,7 @@
         "description": "Ordered source field definitions with exact worksheet/cell addresses and available rules. This defines source layout, not a consumer policy or submission-conformance result."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One distinct pinned source layout with its literal family, version and form.",
     "identity_columns": [
       "record_id"
@@ -9106,6 +9158,7 @@
         "description": "List of all candidate fec_filings.record_id values retained by the association, including unresolved/conflicting candidates; expanding it changes row cardinality."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One evidenced association decision for one retained original-file header observation.",
     "identity_columns": [
       "record_id"
@@ -9251,6 +9304,7 @@
         "description": "Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One directed native filing reference from a retained filing observation.",
     "identity_columns": [
       "record_id"
@@ -9581,6 +9635,7 @@
         "description": "Ordered measure structs: native_position, native_label, definition_cell, raw_value, exact decimal value, value_status, quantity_kind, measure_role and period_basis. Parent totals/subtotals are not added to itemized children."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One source filing report/statement/cover record version.",
     "identity_columns": [
       "record_id"
@@ -9776,6 +9831,7 @@
         "description": "Ordered fragment structs: field_position, source_column, source_pointer, text, text_status and body_reference_json. Retains exact native addresses and missing/null states; no inferred money or PDF extraction."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One source narrative or text record version at its native file position.",
     "identity_columns": [
       "record_id"
@@ -10191,6 +10247,7 @@
         "description": "Date parsed from the date component of the source load timestamp; the full native timestamp remains in load_timestamp_raw. NULL requires the source value and conversion status; capture time is not substituted."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One retained metadata observation of a submitted report or statement version.",
     "identity_columns": [
       "record_id"
@@ -10386,6 +10443,7 @@
         "description": "Date parsed from the end of the source-defined reporting period. NULL requires the source value and conversion status; capture time is not substituted."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One native statistical worksheet row with its stated row grain.",
     "identity_columns": [
       "record_id"
@@ -10686,6 +10744,7 @@
         "description": "Literal FEC image reference; it is not a transaction ID or filing number."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One itemized Form 13 donation or refund record version.",
     "identity_columns": [
       "record_id"
@@ -11206,6 +11265,7 @@
         "description": "Declared limitation on adding this observation to other records; requires the relevant named financial policy before totals."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One source-reported independent-expenditure record version.",
     "identity_columns": [
       "record_id"
@@ -11471,6 +11531,7 @@
         "description": "Literal FEC candidate identifier when the source reports one. Syntax checks do not prove identity resolution or a target match."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One reported intercommittee transaction record version.",
     "identity_columns": [
       "record_id"
@@ -11666,6 +11727,7 @@
         "description": "Date parsed from the date supplied for the legal document. NULL requires the source value and conversion status; capture time is not substituted."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One source legal-document occurrence or rendition associated with a matter observation.",
     "identity_columns": [
       "record_id"
@@ -11836,6 +11898,7 @@
         "description": "Exact decimal for this event's source-reported amount and amount_kind; signs are preserved. Respondent dispositions can repeat a shared penalty (MUR 8074 reports 19000 for each of two respondents). Neither SUM(amount) nor SUM(DISTINCT amount) establishes liability, allocation or payment: equal amounts can also belong to separate obligations. Read amount_status and the source's disposition/agreement context; NULL is unknown, not zero."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One dated or undated native event occurrence within a matter observation.",
     "identity_columns": [
       "record_id"
@@ -12096,6 +12159,7 @@
         "description": "Exact decimal for the amount stated for referral to Treasury. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One source observation of a namespaced legal matter.",
     "identity_columns": [
       "record_id"
@@ -12236,6 +12300,7 @@
         "description": "Exact typed legal-document observation cited by this party or other source assertion."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One party-role occurrence within a retained matter observation.",
     "identity_columns": [
       "record_id"
@@ -12501,6 +12566,7 @@
         "description": "Explicit statement of whether submission conformance was established; successful field mapping alone does not establish it."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One source guarantor record associated with a reported loan state.",
     "identity_columns": [
       "record_id"
@@ -13011,6 +13077,7 @@
         "description": "Explicit statement of whether submission conformance was established; successful field mapping alone does not establish it."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One source loan-terms or credit-line record version.",
     "identity_columns": [
       "record_id"
@@ -13491,6 +13558,7 @@
         "description": "Literal native superseded-transaction reference; a proven replacement scope is still required from the retained filing layout."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One loan state as reported in a filing and period.",
     "identity_columns": [
       "record_id"
@@ -13651,6 +13719,7 @@
         "description": "Boolean mapped only from a supported source lobbyist flag; NULL retains the adjacent status."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One native committee registration/lobbyist observation.",
     "identity_columns": [
       "record_id"
@@ -13806,6 +13875,7 @@
         "description": "Exact decimal for the funds-for-better-use amount stated by the oversight recommendation. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One source recommendation or recommendation-status observation.",
     "identity_columns": [
       "record_id"
@@ -13971,6 +14041,7 @@
         "description": "Named source fields retained as a struct. PostgreSQL NULL, array text, date text and boolean text remain literal; no current-profile inference."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One native COPY row from a selected retained history derivation.",
     "identity_columns": [
       "record_id"
@@ -14131,6 +14202,7 @@
         "description": "Date parsed from the first receipt date supplied by the quality notice. NULL requires the source value and conversion status; capture time is not substituted."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One source notice observation about an explicitly stated filing/committee scope.",
     "identity_columns": [
       "record_id"
@@ -14761,6 +14833,7 @@
         "description": "Source-stated form associated with the reported account; not an inferred account identity."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One reported receipt record version or physical source observation.",
     "identity_columns": [
       "record_id"
@@ -14841,6 +14914,7 @@
         "description": "Native source coordinates of the witness, including worksheet cells, source row address or definition location."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One explicit target-to-witness association with exact endpoint coordinates.",
     "identity_columns": [
       "target_table",
@@ -15143,6 +15217,7 @@
         "description": "Date parsed from the filing receipt date stated by the source. NULL requires the source value and conversion status; capture time is not substituted."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One source Form 1 or Form 2 registration observation.",
     "identity_columns": [
       "record_id"
@@ -15308,6 +15383,7 @@
         "description": "Date parsed from the end of the source-defined reporting period. NULL requires the source value and conversion status; capture time is not substituted."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One defined measure occurrence within an agency report edition.",
     "identity_columns": [
       "record_id"
@@ -15503,6 +15579,7 @@
         "description": "Source-specific monetary measures as a list of structs: native_field, raw_value, exact DECIMAL value, value_status and unit. Unnest with record_id; never add parent summaries to their itemized details."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One source entity/period/summary-layout/version observation.",
     "identity_columns": [
       "record_id"
@@ -15553,6 +15630,7 @@
         "description": "JSON object recording emitted table counts for this context; an empty output has an explicit mapping reason."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One explicit mapping disposition for a retained collection context.",
     "identity_columns": [
       "collection_id"
@@ -15668,6 +15746,7 @@
         "description": "Complete native metadata object retained for this observation, including fields outside the typed mapping."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One source document/case-reference metadata occurrence in retained context.",
     "identity_columns": [
       "record_id"
@@ -15768,6 +15847,7 @@
         "description": "Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One RSS item occurrence in a captured source feed.",
     "identity_columns": [
       "record_id"
@@ -15873,6 +15953,7 @@
         "description": "Native row address in the retained HTML table; use native_cells_json for exact cell evidence."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One native HTML table row describing a meeting listing.",
     "identity_columns": [
       "record_id"
@@ -15963,6 +16044,7 @@
         "description": "Count of result entries actually visible in the retained payload, distinct from a claimed complete query population."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One retained response/context outcome observation.",
     "identity_columns": [
       "record_id"
@@ -16058,6 +16140,7 @@
         "description": "Ordered source headings with their native context, preserving document structure."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One supported source-documentation page observation from retained context.",
     "identity_columns": [
       "record_id"
@@ -16203,6 +16286,7 @@
         "description": "Native row ordinal supplied by the retained CSV context."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One physical CSV row exposed by retained collection context.",
     "identity_columns": [
       "record_id"
@@ -16313,6 +16397,7 @@
         "description": "Latest `posted_date` across this organization's comments (ISO 8601 string)."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One row per commenter organization name and FEC committee name match.",
     "identity_columns": [
       "organization",
@@ -16419,6 +16504,7 @@
         "description": "JSON array of GAO's subject index terms for the product, as the R package states them (e.g. `Cost control`, `Financial management`), finer than `topics_json`. NULL where it states none, and on reports issued after its copy."
       }
     ],
+    "subject": "oversight",
     "grain": null,
     "identity_columns": [
       "report_id"
@@ -16474,6 +16560,7 @@
         "description": "Congress.gov API URL for the report's detail resource."
       }
     ],
+    "subject": "oversight",
     "grain": null,
     "identity_columns": [
       "report_id"
@@ -16604,6 +16691,7 @@
         "description": "Case-type code parsed from a district-court `docket_number` (`1:26-cv-02460` is `cv`, civil; also `cr` criminal, `mj` magistrate, `po` petty offense, `mc` miscellaneous). NULL when the number carries none, as appellate numbers do. The publisher codes non-civil dockets 899 too; they are kept, so filter on this for civil litigation."
       }
     ],
+    "subject": "courts",
     "grain": null,
     "identity_columns": [
       "cl_docket_id"
@@ -16649,6 +16737,7 @@
         "description": "Version of the grouping rule (1: single-caption group, parent = lowest pacer_case_id)."
       }
     ],
+    "subject": "courts",
     "grain": "One row per grouped court_dockets row; absent rows have no group.",
     "identity_columns": [
       "cl_docket_id"
@@ -16859,6 +16948,7 @@
         "description": "Route for the retained row: bulk or search. The table does not itself pin the original capture bytes."
       }
     ],
+    "subject": "courts",
     "grain": "One CourtListener decision cluster per cluster_id; multiple opinion bodies can belong to it.",
     "identity_columns": [
       "cluster_id"
@@ -16919,6 +17009,7 @@
         "description": "The CourtListener bulk export the row was copied from (ISO date)."
       }
     ],
+    "subject": "courts",
     "grain": "One reporter citation of one CourtListener decision (cluster); a decision can have several.",
     "identity_columns": [
       "citation_id"
@@ -16954,6 +17045,7 @@
         "description": "The CourtListener bulk export the row was copied from (ISO date)."
       }
     ],
+    "subject": "courts",
     "grain": "One citing opinion's citation of one cited opinion, with how many times it cites it.",
     "identity_columns": [
       "citing_opinion_id",
@@ -17005,6 +17097,7 @@
         "description": "The CourtListener bulk export the row was copied from (ISO date)."
       }
     ],
+    "subject": "courts",
     "grain": "One parenthetical summary one opinion wrote about another.",
     "identity_columns": [
       "parenthetical_id"
@@ -17095,6 +17188,7 @@
         "description": "The CourtListener bulk export the row was copied from (ISO date)."
       }
     ],
+    "subject": "courts",
     "grain": "One CourtListener opinion (a majority, concurrence or dissent) of one decision.",
     "identity_columns": [
       "opinion_id"
@@ -17180,6 +17274,7 @@
         "description": "Exact selected opinion family and its member metadata."
       }
     ],
+    "subject": "courts",
     "grain": "One retained PDF extraction per opinion and exact observed body.",
     "identity_columns": [
       "opinion_id",
@@ -17241,6 +17336,7 @@
         "description": "The matched term's end date; NULL unless matched."
       }
     ],
+    "subject": "congress",
     "grain": null,
     "identity_columns": [
       "vote_id",
@@ -17297,6 +17393,7 @@
         "description": "SHA-256 of the retained ranking response page this row was read from, so its values trace to one captured response. NULL exactly when `observed_at` is NULL."
       }
     ],
+    "subject": "spending",
     "grain": null,
     "identity_columns": [
       "recipient_id"
@@ -17382,6 +17479,7 @@
         "description": "ECFS account that created the proceeding. An internal FCC username; occasionally useful for spotting bureau conventions."
       }
     ],
+    "subject": "rulemaking",
     "grain": null,
     "identity_columns": [
       "name"
@@ -17502,6 +17600,7 @@
         "description": "Outcomes for selected offered attachment URLs, retaining source SHA-256, page count and extraction status. Null when no attempt is retained. These selected attempts do not establish complete filing text coverage."
       }
     ],
+    "subject": "rulemaking",
     "grain": null,
     "identity_columns": [
       "id_submission"
@@ -17587,6 +17686,7 @@
         "description": "The matched text pattern, publisher code or vote-result reading used by the named rule."
       }
     ],
+    "subject": "congress",
     "grain": "One row per entry of the bill's own action list (actions in its BILLSTATUS document), in publisher order; actions recorded under the bill's amendments (amendments/amendment/actions) are not rows, so a roll call on an amendment can have no action here.",
     "identity_columns": [
       "bill_id",
@@ -17653,6 +17753,7 @@
         "description": "The rule applied to produce referral_signal; a system-code lookup, never a name match."
       }
     ],
+    "subject": "congress",
     "grain": "One row per committee or subcommittee a bill reached, as its BILLSTATUS document names it.",
     "identity_columns": [
       "bill_id",
@@ -17704,6 +17805,7 @@
         "description": "The parent document's updateDate, so a committee's activities are versioned with its bill."
       }
     ],
+    "subject": "congress",
     "grain": "One row per activity a BILLSTATUS document lists under one of the bill's committees or subcommittees: what the committee did and when. A clean key for a committee's work but not a complete one: 119-s-545's lists Markup By and no Reported By while its actions record the report, so a report can appear in bill_actions only.",
     "identity_columns": [
       "bill_id",
@@ -17798,6 +17900,7 @@
         "description": "The cosponsor item's markup exactly as the publisher wrote it, from <item> through </item>, cut from the input bytes input_sha256 pins; it keeps every field, including those no column reads."
       }
     ],
+    "subject": "congress",
     "grain": "One cosponsor occurrence in one retained BILLSTATUS observation.",
     "identity_columns": [
       "bill_id",
@@ -17850,6 +17953,7 @@
         "description": "Character length of summary_html, so a truncation upstream is visible without reading it."
       }
     ],
+    "subject": "congress",
     "grain": "One row per CRS summary the publisher states on a bill, at the version and action it describes.",
     "identity_columns": [
       "bill_id",
@@ -18042,6 +18146,7 @@
         "description": "The body byte length the kind heuristic was given, recorded for the same reason."
       }
     ],
+    "subject": "congress",
     "grain": "One row per printing of a bill, per source that supplied it.",
     "identity_columns": [
       "bill_id",
@@ -18154,6 +18259,7 @@
         "description": "The Congress of the bill, the prefix of bill_id (119 for 119-hr-1), so a host can store the table one file per Congress."
       }
     ],
+    "subject": "congress",
     "grain": "One row per content-bearing node of one bill version, in document order.",
     "identity_columns": [
       "bill_id",
@@ -18267,6 +18373,7 @@
         "description": "When the comparison ran, from the caller's injected clock."
       }
     ],
+    "subject": "congress",
     "grain": "One row per compared pair of consecutive printings of one bill.",
     "identity_columns": [
       "bill_id",
@@ -18431,6 +18538,7 @@
         "description": "True when the section carries amendment annotations around its figures."
       }
     ],
+    "subject": "congress",
     "grain": "One row per settled correspondence in one version-pair comparison.",
     "identity_columns": [
       "bill_id",
@@ -18511,6 +18619,7 @@
         "description": "What this row claims: that the two figures sit at the same place in a word-level alignment. It does not claim they are the same account."
       }
     ],
+    "subject": "congress",
     "grain": "One row per aligned pair of dollar figures in a section whose amounts changed.",
     "identity_columns": [
       "bill_id",
@@ -18607,6 +18716,7 @@
         "description": "Digest over the sealed label table, so a vocabulary change is visible in the data."
       }
     ],
+    "subject": "congress",
     "grain": "One row per label a model assigned to one section of one printing.",
     "identity_columns": [
       "bill_id",
@@ -18701,6 +18811,7 @@
         "description": "The sealed framing sentence the prompt carried; without it the summary is not reproducible."
       }
     ],
+    "subject": "congress",
     "grain": "One row per plain-language summary of one printing of a bill.",
     "identity_columns": [
       "bill_id",
@@ -18803,6 +18914,7 @@
         "description": "When the answer came back; the merge prefers the larger value."
       }
     ],
+    "subject": "congress",
     "grain": "One row per model-written summary of the change between two printings of a bill.",
     "identity_columns": [
       "bill_id",
@@ -18852,6 +18964,7 @@
         "description": "The few fields a reader needs to render the event without joining another table."
       }
     ],
+    "subject": "congress",
     "grain": "One row per change detected between two runs of the bill family.",
     "identity_columns": [
       "bill_id",
@@ -18960,6 +19073,7 @@
         "description": "The publisher's own URL for this amendment."
       }
     ],
+    "subject": "congress",
     "grain": "One row per amendment, as the Congress.gov amendment list route states it.",
     "identity_columns": [
       "congress",
@@ -19147,6 +19261,7 @@
         "description": "The exact text that matched, so a false positive is readable from the row."
       }
     ],
+    "subject": "congress",
     "grain": "One row per item in one appropriations committee press-release feed capture.",
     "identity_columns": [
       "release_id"
@@ -19332,6 +19447,7 @@
         "description": "The Clerk's totals by party, as a JSON array in the file's order: each object the party as the Clerk names it (Republican, Democratic, Independent; member_votes.party spells the same parties R, D and I) and its yea-total, nay-total, present-total and not-voting-total. [] when a captured Clerk file states none (a Speaker election). NULL on Senate rows, whose files state none; on linkage-only rows; and on House rows captured before this column until they are read again."
       }
     ],
+    "subject": "congress",
     "grain": "One row per roll call: the publisher's own tally, and the bill it refers to.",
     "identity_columns": [
       "congress",
@@ -19420,6 +19536,7 @@
         "description": "The chamber's literal date; sorts as text, not by time (see roll_call_votes `vote_day`)."
       }
     ],
+    "subject": "congress",
     "grain": "One row per member's position on one roll call.",
     "identity_columns": [
       "congress",
@@ -19529,6 +19646,7 @@
         "description": "When the file was captured; the merge prefers the larger value."
       }
     ],
+    "subject": "congress",
     "grain": "One row per legislator in one capture of the community crosswalk.",
     "identity_columns": [
       "bioguide_id"
@@ -19594,6 +19712,7 @@
         "description": "Nested list state: unread, absent, null, empty or populated."
       }
     ],
+    "subject": "congress",
     "grain": "One row per term a legislator served, in the crosswalk's own order.",
     "identity_columns": [
       "bioguide_id",
@@ -19675,6 +19794,7 @@
         "description": "Caller-supplied capture instant; not a source affiliation date."
       }
     ],
+    "subject": "congress",
     "grain": "One nested party affiliation in one retained community-crosswalk observation.",
     "identity_columns": [
       "bioguide_id",
@@ -19873,6 +19993,7 @@
         "description": "The derivation that produced the text text_sha256 digests (`markup-reader`, `text-rendition-cleanup` or `pdf-extraction-gpo-normalized`), from the body sha256 digests; NULL on a row not re-read since the column was added."
       }
     ],
+    "subject": "congress",
     "grain": "One row per published part of a captured GovInfo committee report package, with the CBO estimate it reprints or refuses.",
     "identity_columns": [
       "package_id",
@@ -19959,6 +20080,7 @@
         "description": "The report part this block was parsed from, spelled as `committee_reports.part_id`, so (package_id, part_id) is the parent row.  Appended last."
       }
     ],
+    "subject": "congress",
     "grain": "One row per heading block parsed out of one committee report part's text.",
     "identity_columns": [
       "package_id",
@@ -20101,6 +20223,7 @@
         "description": "The committee-meeting event id the package's GovInfo MODS states in `<eventId>` (the first, where it states several), which committee_meetings.event_id joins on with congress and chamber.  A second publisher's statement beside event_id, never overriding it: a consumer may fall back to it where event_id is NULL.  43 of 185 published transcripts state one, 22 where Congress.gov names none, 21 of them Senate; where both state one they agree 21 of 21 (2026-10-03), including a misassignment both make (CHRG-118hhrg63377 names 116369, another subcommittee's hearing that day), so agreement is not independent confirmation."
       }
     ],
+    "subject": "congress",
     "grain": "One row per captured GovInfo hearing transcript package.",
     "identity_columns": [
       "package_id"
@@ -20181,6 +20304,7 @@
         "description": "Every nonempty `heldDate` the package MODS states, as a JSON list in document order with repetitions kept; `[]` where it states none.  A compiled volume states several, and which bill was heard on which day is not stated, so no bill is paired with a date.  NULL on a row not re-read since the column was added (`mods_cover` 002)."
       }
     ],
+    "subject": "congress",
     "grain": "One row per bill one source states a hearing was held on or noticed for: the pair, the source that stated it, and the committee-and-date key the statement was checked against.",
     "identity_columns": [
       "package_id",
@@ -20293,6 +20417,7 @@
         "description": "The rule that read title_bill_id, on every row, a NULL title_bill_id included (the rule ran and named no bill): `cbo_title_citation/1`, the bill or public law the estimate's title leads with, a law through the host's laws table.  The grammar is this package's and moves; the version says which one read the row."
       }
     ],
+    "subject": "congress",
     "grain": "One row per bill and CBO publication a source names as a cost estimate of it: the bill's own BILLSTATUS document or CBO's per-Congress feed, read for every Congress and merged, the bill's own record winning where both name one bill and publication.",
     "identity_columns": [
       "bill_id",
@@ -20349,6 +20474,7 @@
         "description": "The per-Congress feed the item was read from, the one keyless request a re-read repeats."
       }
     ],
+    "subject": "congress",
     "grain": "One row per item of CBO's keyless per-Congress cost-estimate feed, as CBO lists it, whether or not the item names a bill.",
     "identity_columns": [
       "publication_id"
@@ -20424,6 +20550,7 @@
         "description": "The table that read outcome, `gao-decision-outcome/002`; NULL where outcome is NULL. A row read under an earlier table names that table."
       }
     ],
+    "subject": "oversight",
     "grain": "One row per legal decision page GAO's own Month in Review or Annual Index lists with a number: every B-numbered decision and every docket- or P-numbered other. Federal Agency Major Rule Reports, B-numbered from April 2017, are products, not rows here.",
     "identity_columns": [
       "decision_number",
@@ -20625,6 +20752,7 @@
         "description": "Actual resolved XML acquisition URL for an attempted law-text read, distinct from the bill API url. Supplied from capture evidence, never inferred; NULL when unattempted or the caller retained no URL. A refused read does not validate the target's law identity."
       }
     ],
+    "subject": "congress",
     "grain": "One row per enacted law the Congress.gov law list route states, with its PLAW USLM citation where captured.",
     "identity_columns": [
       "congress",
@@ -20722,6 +20850,7 @@
         "description": "When the caller captured the law XML, not when this section reader ran."
       }
     ],
+    "subject": "congress",
     "grain": "One native USLM section occurrence within a public or private law, including explicitly flagged quoted sections.",
     "identity_columns": [
       "law_id",
@@ -20838,6 +20967,7 @@
         "description": "usc_section as a join key: lower-cased, with every dash spelling an ASCII hyphen, as RefSpec's section oracle keys it. Fold the other side the same way (schemas.tables.usc_section_key): document_citations' usc_section rule 001 keeps the printed case and dashes. NULL where usc_section is, and on rows published before the column existed."
       }
     ],
+    "subject": "congress",
     "grain": "One row per line of one OLRC per-Congress classification table: a Code place one public law section touched.",
     "identity_columns": [
       "congress",
@@ -20930,6 +21060,7 @@
         "description": "usc_section as a join key: lower-cased, with every dash spelling an ASCII hyphen, as RefSpec's section oracle keys it. Fold the other side the same way (schemas.tables.usc_section_key): document_citations' usc_section rule 001 keeps the printed case and dashes. NULL where usc_section is, and on rows published before the column existed."
       }
     ],
+    "subject": "congress",
     "grain": "One row per classification record of one act in OLRC's Table III, read from its page or the bulk file.",
     "identity_columns": [
       "act_key",
@@ -21051,6 +21182,7 @@
         "description": "The detail record's own updateDate."
       }
     ],
+    "subject": "congress",
     "grain": "One row per committee or subcommittee the Congress.gov committee list route states, with its detail record where captured.",
     "identity_columns": [
       "system_code"
@@ -21166,6 +21298,7 @@
         "description": "When the file was captured; the merge prefers the larger value."
       }
     ],
+    "subject": "congress",
     "grain": "One row per member per committee or subcommittee seat a chamber roster file lists today.",
     "identity_columns": [
       "congress",
@@ -21303,6 +21436,7 @@
         "description": "The host's derived first RIN of `regulation_id_numbers_json`; NULL when it states none."
       }
     ],
+    "subject": "rulemaking",
     "grain": "One row per dated Federal Register document: a rule, proposed rule, notice or presidential document.",
     "identity_columns": [
       "document_number",
@@ -21399,6 +21533,7 @@
         "description": "The candidate the committee is linked to that cycle (`CAND_ID`); NULL when none."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One row per FEC committee per two-year cycle, as that cycle's bulk committee master states it.",
     "identity_columns": [
       "committee_id",
@@ -21495,6 +21630,7 @@
         "description": "The address ZIP code as filed (`CAND_ZIP`); NULL when blank."
       }
     ],
+    "subject": "campaign_finance",
     "grain": "One row per FEC candidate per two-year cycle, as that cycle's bulk candidate master states it.",
     "identity_columns": [
       "candidate_id",
@@ -21751,6 +21887,7 @@
         "description": "The submitter's postal code."
       }
     ],
+    "subject": "rulemaking",
     "grain": "One row per Regulations.gov document: the attributes the thin documents table does not carry.",
     "identity_columns": [
       "document_id"
@@ -21846,6 +21983,7 @@
         "description": "A second docket subtype level."
       }
     ],
+    "subject": "rulemaking",
     "grain": "One row per Regulations.gov docket: the attributes the thin dockets table does not carry.",
     "identity_columns": [
       "docket_id"
@@ -21991,6 +22129,7 @@
         "description": "The submitter's postal code."
       }
     ],
+    "subject": "rulemaking",
     "grain": "One row per Regulations.gov comment: the attributes the thin comments table does not carry.",
     "identity_columns": [
       "comment_id"
@@ -22176,6 +22315,7 @@
         "description": "`true` where the Congress.gov detail route was read for this row, `false` where the row holds the list route's record only (a detail not yet reached under a run's cap, or refused). The one test of whether a detail was read: a list column cannot say it, because a read detail omits a list it does not state and the column is then NULL as for an unread one. `false` on a `congressional-record-granule` row, which no detail route serves."
       }
     ],
+    "subject": "congress",
     "grain": "One row per House executive communication: the Congress.gov house-communication routes where the publisher decomposes it, the Congressional Record entry it printed where the publisher does not.",
     "identity_columns": [
       "congress",
@@ -22333,6 +22473,7 @@
         "description": "`true` where the Congress.gov detail route was read for this row, `false` where the row holds the list route's record only (a detail not yet reached under a run's cap, or refused). The one test of whether a detail was read: a list column cannot say it, because a read detail omits a list it does not state and the column is then NULL as for an unread one."
       }
     ],
+    "subject": "congress",
     "grain": "One row per scheduled committee meeting, as the Congress.gov committee-meeting routes state it.",
     "identity_columns": [
       "congress",
@@ -22440,6 +22581,7 @@
         "description": "`true` where the Congress.gov detail route was read for this row, `false` where the row holds the list route's record only (a detail not yet reached under a run's cap, or refused). The one test of whether a detail was read: a list column cannot say it, because a read detail omits a list it does not state and the column is then NULL as for an unread one."
       }
     ],
+    "subject": "congress",
     "grain": "One row per daily Congressional Record issue, which is also one legislative day per chamber named.",
     "identity_columns": [
       "volume",
@@ -22581,6 +22723,7 @@
         "description": "`true` where the Congress.gov detail route was read for this row, `false` where the row holds the list route's record only (a detail not yet reached under a run's cap, or refused). The one test of whether a detail was read: a list column cannot say it, because a read detail omits a list it does not state and the column is then NULL as for an unread one."
       }
     ],
+    "subject": "congress",
     "grain": "One row per treaty document, as the Congress.gov treaty routes state it.",
     "identity_columns": [
       "congress_received",
@@ -22663,6 +22806,7 @@
         "description": "The publisher's own URL for this nomination."
       }
     ],
+    "subject": "congress",
     "grain": "One row per nomination or part, as the Congress.gov nomination list route states it.",
     "identity_columns": [
       "congress",
@@ -22869,6 +23013,7 @@
         "description": "Which of the report's own statements `covered_congress` was read from: `title`, `cover` or `front_matter`, strongest first, the first to state any Congress deciding.  Set beside a NULL `covered_congress` where that source states several; NULL where none states one."
       }
     ],
+    "subject": "congress",
     "grain": "One row per end-of-Congress committee activity report package, House or Senate, with what its print adds; the table's name predates its Senate rows.",
     "identity_columns": [
       "package_id"
@@ -23054,6 +23199,7 @@
         "description": "Digest over every citation rule's name, version, pattern and rejects, so these counts name the rules that produced them."
       }
     ],
+    "subject": "spending",
     "grain": "One row per published volume of the President's budget, with what its print adds to its own index.",
     "identity_columns": [
       "package_id"
@@ -23204,6 +23350,7 @@
         "description": "Digest of the normalized text every offset in this row indexes into, and part of the identity.  A span means nothing without it, and keying on it is what stops two extractions of one document from colliding on one identity and silently merging.  Append-only per digest, exactly as `document_citations` is."
       }
     ],
+    "subject": "congress",
     "grain": "One row per action phrase a committee print states about one bill it names in the same sentence: the print's own phrasing, what it maps to, and how reliable the pairing is.",
     "identity_columns": [
       "document_key",
@@ -23308,6 +23455,7 @@
         "description": "Digest of the normalized text the offsets index into, and part of the identity.  A span means nothing without it -- a re-extraction that moved one character moves every offset after it -- and keying on it is what stops two extractions of the same document from colliding on one identity and silently merging.  The table is append-only per digest: a superseded extraction's rows are not retired, and a consumer filters to the digest `house_activity_reports.text_sha256` states for that document."
       }
     ],
+    "subject": "congress",
     "grain": "One row per occurrence of one cited key in one document's text: the key, the exact text that named it, and the character span it was read at.",
     "identity_columns": [
       "document_kind",
@@ -23503,6 +23651,7 @@
         "description": "This module's rule version, so a re-extraction under a corrected rule is attributable; the merge prefers the larger value.  Zero-padded decimal, because the column is compared as a string."
       }
     ],
+    "subject": "spending",
     "grain": "One row per ruled row of one ruled table on one page of a Report of the Secretary of the Senate, with the cells exactly as the print states them and the roles its own header band names.",
     "identity_columns": [
       "package_id",
@@ -23623,6 +23772,7 @@
         "description": "`native-legal-reference/003` (`NATIVE_LEGAL_REFERENCE_RULE`): the scanners' selected shapes and the reading this row was produced under, comparable for equality only."
       }
     ],
+    "subject": "reference",
     "grain": "One scanner observation in one pinned U.S. Code or eCFR XML input: a native href or source credit, or an AUTH or SOURCE note, with every target read from it nested rather than multiplied.",
     "identity_columns": [
       "scope_id",
@@ -23705,6 +23855,7 @@
         "description": "`native-legal-reference/003` (`NATIVE_LEGAL_REFERENCE_RULE`): the rule this read ran under, the same as its observation rows'; comparable for equality only."
       }
     ],
+    "subject": "reference",
     "grain": "One row per input scope: its latest complete read of the selected shapes, including a read that found none.",
     "identity_columns": [
       "scope_id"
@@ -23810,6 +23961,7 @@
         "description": "The export's own status-as-of stamp, verbatim, from the latest export that listed it; GAO labels it EST year round, though it is Eastern local time. Text in GAO's spelling (`Sep 30, 2026 at 1:18 PM EST`), not sortable: last_seen carries the same stamp's date in ISO form, so order and filter by it."
       }
     ],
+    "subject": "oversight",
     "grain": "One row per recommendation per agency that GAO's open-recommendations export has listed, with its status as last listed.",
     "identity_columns": [
       "recommendation_id"
@@ -23865,6 +24017,7 @@
         "description": "When this run captured the listing the entry was read from."
       }
     ],
+    "subject": "congress",
     "grain": null,
     "identity_columns": [
       "congress",
@@ -23931,6 +24084,7 @@
         "description": "When the bill-family run that read this entry captured the BILLSTATUS document."
       }
     ],
+    "subject": "congress",
     "grain": null,
     "identity_columns": [
       "bill_id",
@@ -23981,6 +24135,7 @@
         "description": "When the detail request that filled the bill was captured, or when the refusal was recorded."
       }
     ],
+    "subject": "congress",
     "grain": null,
     "identity_columns": [
       "congress",
@@ -24048,6 +24203,7 @@
         "description": "When this walk's last captured list page was observed."
       }
     ],
+    "subject": "congress",
     "grain": null,
     "identity_columns": [
       "congress",
@@ -24089,6 +24245,7 @@
         "description": "UTC time this rollup recorded the checkpoint."
       }
     ],
+    "subject": "congress",
     "grain": null,
     "identity_columns": [
       "package_id"
@@ -24134,6 +24291,7 @@
         "description": "How many citation rows the read wrote, as a decimal string; `0` for a read that found none."
       }
     ],
+    "subject": "congress",
     "grain": null,
     "identity_columns": [
       "document_kind",
