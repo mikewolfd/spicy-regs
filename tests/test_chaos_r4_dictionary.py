@@ -48,3 +48,11 @@ def test_the_check_refuses_an_expired_note_in_the_dictionary(monkeypatch):
     monkeypatch.setattr(dd, "installed_spicy_docs", lambda: "0.54.0")
     errors = [error for error in dd.check_descriptions(dd.expected_schemas(), broken) if error.startswith("[laws]")]
     assert len(errors) == 1 and "interim" in errors[0], errors
+
+
+@pytest.mark.parametrize("table", ["congress_bills", "laws", "law_sections", "roll_call_votes"])
+def test_each_stand_in_for_an_unreleased_spicy_docs_fix_carries_its_expiry(table):
+    """W1 (stage), W3 (latest action), B2 (margin notes) and B3 (party totals) are fixed only on a spicy-docs branch."""
+    note = dd.load_descriptions()[table].get("data_quality") or ""
+    stated = dd.INTERIM_MARKER.findall(" ".join(note.split()))
+    assert stated and all(version == dd.installed_spicy_docs() for version in stated), (table, stated)
