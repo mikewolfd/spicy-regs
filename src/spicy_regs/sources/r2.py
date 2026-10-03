@@ -18,6 +18,7 @@ from os import getenv
 from pathlib import Path
 
 import boto3
+from boto3.exceptions import S3UploadFailedError
 import httpx
 from loguru import logger
 
@@ -102,6 +103,9 @@ def download_working_copy(remote_key: str, local_path: Path) -> bool:
 
 
 # --- upload (S3 API) -------------------------------------------------------
+
+#: Whole transfers per file before an upload fails.
+UPLOAD_ATTEMPTS = 3
 
 
 def get_r2_client():
@@ -284,12 +288,23 @@ def upload_file(local_path: Path, remote_key: str | None = None, *, cache_contro
         if remote_key.endswith(".parquet")
         else "public, max-age=3600, stale-while-revalidate=86400"
     )
-    client.upload_file(
-        str(local_path),
-        bucket,
-        remote_key,
-        ExtraArgs={"ContentType": "application/octet-stream", "CacheControl": cache_control},
-    )
+    # botocore retries each part, but not a CompleteMultipartUpload that R2 answers
+    # InvalidPart (ETL 36680463442, 36908618438). The old object stays until a
+    # complete succeeds, so the whole transfer is safe to repeat.
+    for attempt in range(1, UPLOAD_ATTEMPTS + 1):
+        try:
+            client.upload_file(
+                str(local_path),
+                bucket,
+                remote_key,
+                ExtraArgs={"ContentType": "application/octet-stream", "CacheControl": cache_control},
+            )
+            break
+        except S3UploadFailedError as error:
+            if attempt == UPLOAD_ATTEMPTS:
+                raise
+            logger.warning("Upload of {} failed ({}); repeating the transfer ({}/{})",
+                           remote_key, error, attempt + 1, UPLOAD_ATTEMPTS)
 
     public_url = getenv("R2_PUBLIC_URL", "")
     logger.info("Uploaded: {}/{}", public_url, remote_key)

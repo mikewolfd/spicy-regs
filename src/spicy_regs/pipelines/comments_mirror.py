@@ -151,8 +151,9 @@ def publish_comments_mirror(output_dir: Path, *, resources: ExportResources | No
         logger.info("Verified local comments mirror in {}", output_dir)
         return True
 
-    # A concurrent catalog writer is outside the caller's lock, so refuse it.
-    if iceberg.catalog_snapshot(rt) != snapshot:
+    # The export read one pinned snapshot. Compaction may move the catalog past it
+    # without changing rows; any other writer is outside the caller's lock, so refuse it.
+    if not iceberg.rows_unchanged_since(rt, snapshot):
         raise RuntimeError("Catalog changed during export; refusing publication")
     current = r2.public_object_version(previous_url)
     if current is None or current["etag"] != predecessor.etag:

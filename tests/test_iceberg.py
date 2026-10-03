@@ -228,6 +228,30 @@ def test_unlocked_catalog_write_warns_once(local_catalog, monkeypatch) -> None:
     assert "Catalog changed during export" in messages[0] and "comments-catalog-write" in messages[0]
 
 
+def _metadata(*commits: tuple[int, int | None, str], uuid: str = "t", schema: int = 0) -> dict:
+    """Iceberg table metadata whose current snapshot is the last of ``(id, parent, operation)``."""
+    return {"table-uuid": uuid, "current-schema-id": schema, "current-snapshot-id": commits[-1][0],
+            "snapshots": [{"snapshot-id": s, "parent-snapshot-id": p, "summary": {"operation": op}}
+                          for s, p, op in commits]}
+
+
+@pytest.mark.parametrize(("commits", "unchanged"), [
+    ([(1, None, "append")], True),
+    ([(1, None, "append"), (2, 1, "replace"), (3, 2, "replace")], True),
+    ([(1, None, "append"), (2, 1, "replace"), (3, 2, "append")], False),
+    ([(1, None, "append"), (2, 1, "overwrite")], False),
+    ([(1, None, "append"), (2, None, "replace")], False),
+], ids=["unmoved", "compaction", "write-after-compaction", "overwrite", "not-a-descendant"])
+def test_only_compaction_may_move_an_exported_snapshot(commits, unchanged) -> None:
+    assert iceberg._compacted_only(_metadata(*commits), iceberg.CatalogSnapshot("t", 1, 0)) is unchanged
+
+
+@pytest.mark.parametrize("change", [{"uuid": "recreated"}, {"schema": 1}])
+def test_a_recreated_table_or_new_schema_is_a_change(change) -> None:
+    metadata = _metadata((1, None, "append"), (2, 1, "replace"), **change)
+    assert not iceberg._compacted_only(metadata, iceberg.CatalogSnapshot("t", 1, 0))
+
+
 @pytest.mark.parametrize("side", ["source", "prior"])
 def test_replacement_refuses_duplicate_identities_before_writing(local_catalog, side) -> None:
     con = local_catalog

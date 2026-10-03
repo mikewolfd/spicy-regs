@@ -126,6 +126,32 @@ def test_upload_file_survives_unreachable_edge(tmp_path: Path, monkeypatch: pyte
     r2.upload_file(tmp_path / "agency_stats.parquet")
 
 
+@pytest.mark.parametrize("failures", [r2.UPLOAD_ATTEMPTS - 1, r2.UPLOAD_ATTEMPTS])
+def test_upload_file_repeats_a_failed_transfer(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failures: int) -> None:
+    """R2 can answer a multipart complete with InvalidPart; the whole transfer repeats, bounded."""
+    from boto3.exceptions import S3UploadFailedError
+
+    _upload_env(monkeypatch)
+    (tmp_path / "comments.parquet").write_bytes(b"x" * 100)
+    calls: list[str] = []
+
+    class Client:
+        def upload_file(self, path: str, bucket: str, key: str, ExtraArgs: dict) -> None:  # noqa: N803 - boto3's name
+            calls.append(key)
+            if len(calls) <= failures:
+                raise S3UploadFailedError("An error occurred (InvalidPart) when calling the CompleteMultipartUpload operation")
+
+    monkeypatch.setattr(r2, "get_r2_client", Client)
+    monkeypatch.setattr(r2, "_get_remote_size", lambda *a, **k: None)
+    monkeypatch.setattr(r2, "purge_urls", lambda urls: None)
+    if failures < r2.UPLOAD_ATTEMPTS:
+        r2.upload_file(tmp_path / "comments.parquet")
+    else:
+        with pytest.raises(S3UploadFailedError):
+            r2.upload_file(tmp_path / "comments.parquet")
+    assert calls == ["comments.parquet"] * min(failures + 1, r2.UPLOAD_ATTEMPTS)
+
+
 def test_upload_dataset_raises_when_an_upload_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """A failing publish must surface rather than die inside the executor.
 

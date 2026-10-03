@@ -757,15 +757,22 @@ class CatalogSnapshot:
     schema_id: int
 
 
-def _read_snapshot(con, record_type: RecordType) -> CatalogSnapshot:
-    if dedupe_recovery_pending(con, record_type):
-        raise RuntimeError(f"Unfinished dedupe for {record_type.name}; recover before exporting")
+def _table_metadata(con, record_type: RecordType) -> dict:
     raw = con.execute("SELECT metadata FROM iceberg_load_table_response(?)", [
         f"{_CATALOG_ALIAS}.{_namespace()}.{record_type.name}",
     ]).fetchone()[0]
-    metadata = json.loads(raw) if isinstance(raw, str) else raw
-    snapshot = CatalogSnapshot(metadata["table-uuid"], int(metadata["current-snapshot-id"]),
-                               int(metadata["current-schema-id"]))
+    return json.loads(raw) if isinstance(raw, str) else raw
+
+
+def _current_snapshot(metadata: dict) -> CatalogSnapshot:
+    return CatalogSnapshot(metadata["table-uuid"], int(metadata["current-snapshot-id"]),
+                           int(metadata["current-schema-id"]))
+
+
+def _read_snapshot(con, record_type: RecordType) -> CatalogSnapshot:
+    if dedupe_recovery_pending(con, record_type):
+        raise RuntimeError(f"Unfinished dedupe for {record_type.name}; recover before exporting")
+    snapshot = _current_snapshot(_table_metadata(con, record_type))
     if not snapshot.table_uuid or snapshot.snapshot_id < 0:
         raise RuntimeError("Comments catalog has no usable snapshot")
     return snapshot
@@ -776,6 +783,37 @@ def catalog_snapshot(record_type: RecordType) -> CatalogSnapshot:
     con = _connect()
     try:
         return _read_snapshot(con, record_type)
+    finally:
+        con.close()
+
+
+def _compacted_only(metadata: dict, snapshot: CatalogSnapshot) -> bool:
+    """True when the current snapshot descends from ``snapshot`` through ``replace`` commits alone.
+
+    Iceberg's ``replace`` rewrites data and delete files without changing the
+    table's rows; R2's managed compaction commits one about hourly (ETL 36760140108
+    and 36827148539 refused on it). Any other operation, a recreated table, a
+    schema change or a current snapshot outside ``snapshot``'s descendants is a change.
+    """
+    current = _current_snapshot(metadata)
+    if (current.table_uuid, current.schema_id) != (snapshot.table_uuid, snapshot.schema_id):
+        return False
+    parents = {int(s["snapshot-id"]): s for s in metadata.get("snapshots", [])}
+    step = current.snapshot_id
+    while step != snapshot.snapshot_id:
+        commit = parents.get(step)
+        if commit is None or commit.get("summary", {}).get("operation") != "replace" \
+                or commit.get("parent-snapshot-id") is None:
+            return False
+        step = int(commit["parent-snapshot-id"])
+    return True
+
+
+def rows_unchanged_since(record_type: RecordType, snapshot: CatalogSnapshot) -> bool:
+    """Whether the catalog still holds ``snapshot``'s rows: unmoved, or moved by compaction only."""
+    con = _connect()
+    try:
+        return _compacted_only(_table_metadata(con, record_type), snapshot)
     finally:
         con.close()
 

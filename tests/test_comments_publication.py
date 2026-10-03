@@ -75,6 +75,7 @@ def publication(tmp_path, monkeypatch):
     monkeypatch.setattr(mirror, "resolve_r2_base_url", lambda: "https://public.example")
     monkeypatch.setattr(mirror, "MIN_EXPECTED_ROWS", 1)
     monkeypatch.setattr(iceberg, "catalog_snapshot", lambda _: state["snapshot"])
+    monkeypatch.setattr(iceberg, "rows_unchanged_since", lambda rt, pinned: iceberg.catalog_snapshot(rt) == pinned)
     monkeypatch.setattr(mirror.r2, "read_json_object", lambda _: state["receipt"])
     monkeypatch.setattr(mirror.r2, "object_version", lambda key: state["objects"].get(key))
     monkeypatch.setattr(mirror.r2, "public_object_version", lambda url: state["objects"].get(url.removeprefix("https://public.example/")))
@@ -186,6 +187,16 @@ def test_moving_catalog_refuses_before_upload(publication, monkeypatch):
     with pytest.raises(RuntimeError, match="Catalog changed"):
         mirror.publish_comments_mirror(root)
     assert state["uploads"] == []
+
+
+def test_compaction_during_export_publishes_the_pinned_snapshot(publication, monkeypatch):
+    """The catalog moved past the pinned snapshot by compaction alone (``iceberg._compacted_only``)."""
+    state, root = publication
+    checked = []
+    monkeypatch.setattr(iceberg, "rows_unchanged_since", lambda rt, s: checked.append(s) or True)
+    assert mirror.publish_comments_mirror(root)
+    assert checked == [state["snapshot"]]
+    assert state["receipt"]["source"] == asdict(state["snapshot"])
 
 
 def test_force_can_recover_from_an_unreadable_receipt(publication, monkeypatch):
