@@ -32,7 +32,7 @@ from spicy_docs.sources.govinfo.uslm import (
 from spicy_docs.sources.govinfo.uslm_acquisition import UslmSourceUnavailableError
 from spicy_docs.sources.uscode import UsCodeSourceError, parse_table3_page, read_table3_bulk_archive
 from spicy_docs.sources.uscode.classification import parse_classification_index, parse_classification_table
-from spicy_docs.transport.captured import CapturedBodyResponse
+from spicy_docs.transport.captured import CapturedBodyResponse, attach_capture
 from spicy_docs.transport.credentials import CredentialRefusedError
 
 from spicy_docs.schemas.law_tables import USLM_READER_VERSION, shape_table3_record
@@ -90,17 +90,18 @@ class StubListingReader:
         return iter((_Page(listed, LIST_PAGE["pagination"]["count"]),)) if listed else iter(())
 
 
-def _not_found(url: str) -> CapturedBodyResponse:
-    return CapturedBodyResponse(url, url, 404, "text/html", OBSERVED_AT, b"")
+def _not_found(url: str, observed_at: str = OBSERVED_AT) -> CapturedBodyResponse:
+    return CapturedBodyResponse(url, url, 404, "text/html", observed_at, b"")
 
 
 class StubUslm:
     """Holds PLAW-119publ1 only; other numbers are unavailable, refused or absent as configured."""
 
-    def __init__(self, *, unavailable=(), refused=(), error=None):
+    def __init__(self, *, unavailable=(), refused=(), error=None, observed_at=OBSERVED_AT):
         self.unavailable = set(unavailable)
         self.refused = set(refused)
         self.error = error
+        self.observed_at = observed_at
         self.selections: list[PublicLawSelection] = []
 
     def acquire_public_law(self, selection, *, max_bytes=None):
@@ -108,7 +109,7 @@ class StubUslm:
         if self.error is not None:
             raise self.error
         if selection.number in self.unavailable:
-            raise UslmSourceUnavailableError(_not_found(public_law_xml_locator(selection)))
+            raise UslmSourceUnavailableError(_not_found(public_law_xml_locator(selection), self.observed_at))
         if selection.number in self.refused:
             raise UslmSourceError("stub: the body was not the expected shape")
         if selection == PublicLawSelection(119, "public", 1):
@@ -617,6 +618,74 @@ def test_a_transport_failure_or_refused_body_is_never_published_as_absence(tmp_p
 def test_a_credential_refusal_aborts_the_run(tmp_path, scoped):
     with pytest.raises(CredentialRefusedError):
         _build(tmp_path, uslm=StubUslm(error=CredentialRefusedError("stub: 403")))
+
+
+def test_an_unavailable_read_carries_the_time_its_locator_answered_404(tmp_path, scoped):
+    """The 404 is an observation with a time; a reader judges the row's staleness by it, not by guessing."""
+    laws, _, _, _ = _build(tmp_path, uslm=StubUslm(unavailable={110, 109, 104}, observed_at="2026-10-01T01:42:35Z"))
+    rows = _by_law(laws)
+    for law_id in ("119-public-110", "119-public-109", "119-public-104"):
+        row = rows[law_id]
+        assert (row["uslm_outcome"], row["uslm_reason"]) == ("unavailable", "source_unavailable")
+        assert row["uslm_observed_at"] == "2026-10-01T01:42:35Z"
+        assert row["uslm_sha256"] is None and row["law_text_url"] is None, "a 404 validated no bytes and no text read"
+
+
+def test_a_held_unavailable_row_re_read_later_carries_the_newer_stamp(tmp_path, scoped):
+    seed(tmp_path, "laws", [{
+        "law_id": "119-public-110", "congress": "119", "law_type": "public", "number": "110",
+        "update_date": LIST_PAGE["bills"][0]["updateDate"], "uslm_outcome": "unavailable",
+        "uslm_reason": "source_unavailable", "uslm_observed_at": "2026-09-01T00:00:00Z",
+    }])
+    laws, _, _, _ = _build(tmp_path, uslm=StubUslm(unavailable={110, 109, 104}, observed_at="2026-09-20T00:00:00Z"))
+    row = _by_law(laws)["119-public-110"]
+    assert (row["uslm_outcome"], row["uslm_observed_at"]) == ("unavailable", "2026-09-20T00:00:00Z")
+
+
+def test_a_failed_read_with_a_captured_response_keeps_its_time_and_no_digest(tmp_path, scoped):
+    """A 503 established nothing about the file, so no digest; it is still an attempt at a stated time."""
+    error = UslmSourceError("stub: upstream answered 503")
+    attach_capture(error, CapturedBodyResponse("https://stub.invalid/", "https://stub.invalid/", 503, "text/html",
+                                               "2026-10-01T02:00:00Z", b"busy"))
+    laws, _, _, _ = _build(tmp_path, uslm=StubUslm(error=error))
+    for row in _by_law(laws).values():
+        assert (row["uslm_outcome"], row["uslm_reason"]) == ("request_failed", "request_failed")
+        assert row["uslm_observed_at"] == "2026-10-01T02:00:00Z" and row["uslm_sha256"] is None
+
+
+def test_an_access_refusal_on_table_iii_publishes_the_rest_and_journals_it(tmp_path, scoped):
+    """OLRC's routes are keyless, so its 401/403 is a blocked read, not a revoked credential: the laws family still
+    publishes, Table III stands, and the refusal is what ``check_source_refusals.py`` fails on the next night."""
+    before, after, journal = _rerun(tmp_path, StubOlrc(bulk=CredentialRefusedError("stub: Body source answered HTTP 403")))
+    assert after == before, "every Table III row and checkpoint stands"
+    assert _by_law(tmp_path / "laws.parquet")["119-public-1"]["uslm_outcome"] == "captured"
+    (refused,) = (e for e in journal if e["event"] == "table3-bulk-refused")
+    assert refused["reason"] == "access-refused" and refused["error_type"] == "CredentialRefusedError"
+    (refusal,) = (e for e in journal if e["event"] == "refusal" and e["stage"] == "table3:bulk")
+    assert refusal["credential_refused"] is True
+
+
+def test_the_laws_rollup_publishes_then_fails_the_run_on_a_table_iii_access_refusal(tmp_path, scoped, monkeypatch):
+    """The predicate reads the run's own journal, and the rollup raises only after ``run`` has published."""
+    from spicy_regs.pipelines.rollups import laws as rollup
+    from spicy_regs.source_evidence import CaptureEvidence
+
+    evidence = CaptureEvidence(tmp_path, "laws")
+    _build(tmp_path, olrc=StubOlrc(bulk=CredentialRefusedError("stub: 403")), evidence=evidence)
+    assert rollup.table3_access_refused(evidence) is True
+    clean = CaptureEvidence(tmp_path / "clean", "laws")
+    _build(tmp_path / "clean", evidence=clean)
+    assert rollup.table3_access_refused(clean) is False
+
+    published = []
+    monkeypatch.setattr(rollup.RollupPipeline, "run", lambda self: published.append(self.name))
+    pipeline = rollup.LawsRollup(output_dir=tmp_path, skip_upload=True)
+    pipeline.source_evidence = evidence
+    with pytest.raises(RuntimeError, match="Table III"):
+        pipeline.run()
+    assert published == ["laws"], "the family went out before the run failed"
+    pipeline.source_evidence = clean
+    pipeline.run()
 
 
 def test_the_published_shapes_are_the_contracts(tmp_path, scoped):
