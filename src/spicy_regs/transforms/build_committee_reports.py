@@ -31,6 +31,7 @@ from spicy_docs.interpretation.hearing_bill_links import cover_links
 from spicy_docs.schemas.hearing_bill_link_tables import shape_hearing_bill_link
 from spicy_docs.reading.paged_json import PagedJsonBudget
 from spicy_docs.schemas.committee_report_tables import (
+    CHAMBER_BY_DOCUMENT_TYPE,
     shape_committee_report,
     shape_hearing_transcript,
     shape_report_section,
@@ -375,10 +376,6 @@ def _bill_key(package_id: str, bill: ModsBill) -> str | None:
     return natural_key(bill.congress, bill.normalized_bill_type, int(bill.number))
 
 
-#: A CHRG package id spells its chamber in the first letter of its document
-#: type (``hhrg``, ``shrg``, ``jhrg``); the hearing detail route wants the word.
-_CHAMBER_OF_DOCUMENT_TYPE = {"h": "house", "s": "senate", "j": "joint"}
-
 #: What one hearing-detail request can refuse with, short of a credential
 #: refusal, which propagates: the reader's own refusals (``404`` included), a
 #: transport failure after its retries, and a record not shaped as expected.
@@ -394,7 +391,8 @@ def _event_id(hearings: HearingDetailSource, package: Any,
     the package id spells, or it is refused rather than read.
     """
     identity = package.identity
-    chamber = _CHAMBER_OF_DOCUMENT_TYPE.get(str(identity.document_type)[:1])
+    # The hearing detail route wants the chamber's word; spicy-docs maps each document type to it.
+    chamber = CHAMBER_BY_DOCUMENT_TYPE.get(str(identity.document_type))
     route = LIST_ROUTES["hearing-detail"]
     try:
         if chamber is None:
