@@ -285,7 +285,63 @@ SELECT and answered `complete_held_selection` with no findings, which read as
 `budget_volumes`) that no writer emits did the same with `source_read: read`.
 The enum is a schema hint, not pydantic validation, so a differently cased
 kind still reaches the server's own refusal. Raw SQL over `document_citations`
-is not checked.
+is not checked. The `document_kind` field description is built from
+`SOURCE_TABLES` (`kind: table`), so a new kind names its table without a
+docstring edit; `govinfo_package` covers only the reports
+`house_activity_reports` holds (no CHRG package has citation rows).
+
+**Order and paging (round 5).** Rows come in `cite_kind` order, then
+`CAST(span_start AS BIGINT)`, `target_key`, `rule_version` and `text_sha256`.
+`span_start` is VARCHAR, as every column of the spicy-docs contract is, so the
+old `ORDER BY span_start` was text order: on CRPT-118hrpt964 the first bill
+citation (offset 18732) came 17th, and its four public-law rows sat at
+positions 167 to 170 behind the default cap of 100. `CAST`, not `TRY_CAST`: a
+span that is not an integer refuses the call instead of sorting somewhere.
+`target_key` separates the rows a range citation writes at one span (273 groups
+in print-citations 685f2e27) and `text_sha256`, part of the row identity, a
+re-read text's rows, so the order is total and `offset` pages neither skip nor
+repeat a row; a legacy file without the digest column sorts without it.
+`cite_kind` (case-insensitive) selects one kind, `offset` skips rows, and
+`coverage.cite_kind_counts` states the document's rows per kind, so a page
+says what it leaves out. A `cite_kind` the document does not hold and the
+resolver does not route is refused naming the kinds the document holds; a
+routed kind with no rows is a complete, empty selection.
+`occurrence_selection.status` is `capped`, `last_page` (an offset page that
+reached the end) or `complete_held_selection`. MCPServer drops an argument a
+tool does not declare, so a test of a new parameter asserts its effect, not
+its acceptance. `max_occurrences` keeps its default (100) and maximum (500):
+hoisting the per-document constants out of each occurrence and lower caps
+change the public reply and are the owner's call (`phase3-review.md`, round 5).
+
+**Read statuses (round 5).** `source_read.status` separates three answers that
+used to arrive as one `missing_digest` with no occurrences (`_source_read`):
+
+- `not_held`: the kind's table has no row for the key. With citation rows (a
+  document the table dropped) the occurrences read `unread_source`; with none,
+  the call is refused (below).
+- `not_read`: the table holds the document but records no read of it. A print
+  kind's table records the read in the row: `text_sha256`, `pages_read`,
+  `rule_set_version` and `citation_rows`. A held-field kind's table
+  (`report_sections`, `bill_sections`, `comments`, ...) records none: the
+  held-citations rollup reads only the fields an operator selects, at most 100
+  a run, and checkpoints a zero-result read in `document_citations`' Parquet
+  metadata, which the server does not read. So a held field with no rows is
+  `not_read`, never an answer that it cites nothing.
+- `read_none_found`: the table records a read whose `citation_rows` is 0. A
+  read stating rows that `document_citations` does not hold refuses: the
+  publication disagrees with itself.
+
+With citation rows the status names the digest they are checked against:
+`read`, `missing_digest` (a held row without one) or `ambiguous`. A key that
+neither the table nor any citation row of the kind holds is refused; the error
+names the table, says keys are exact and case-sensitive, and names any
+spelling `document_citations` holds that differs only in case, under any kind.
+That lookup reads `document_citations` alone, never a parent such as
+`comments`. Round 5 found `crpt-118hrpt964` and `CHRG-119hhrg64503` answering
+`missing_digest` with a complete, empty selection: the third time an empty
+selection passed as an answer, after unknown kinds in round 4.
+`coverage.partial` is true when the page was capped or offset, an occurrence
+was not looked up (`coverage.reason_counts`), or the document was not read.
 
 ## Ledger qualification (`_qualification`)
 

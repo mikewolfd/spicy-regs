@@ -228,6 +228,10 @@ TABLES = (
 STATEMENT_TIMEOUT = os.environ.get("SPICY_REGS_STATEMENT_TIMEOUT", "790s")
 #: The kinds resolve_document_citations accepts and its schema enumerates: the kinds a writer emits.
 DOCUMENT_KINDS = tuple(sorted(SOURCE_TABLES))
+#: document_kind's schema description, derived from SOURCE_TABLES so a new kind cannot drift from its table.
+DOCUMENT_KIND_TABLES = "The table holding each kind's documents, whose key document_key takes: " + "; ".join(
+    f"{kind}: {table}" for kind, table in sorted(SOURCE_TABLES.items())
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1223,6 +1227,67 @@ def _document_kind(requested: str) -> str:
     )
 
 
+def _source_read(
+    cursor: duckdb.DuckDBPyConnection, tables: list[str], kind: str, key: str, *, cited: bool
+) -> tuple[dict[str, Any], str | None]:
+    """Whether ``kind``'s table holds ``key`` and records reading it, and the held text's digest.
+
+    ``cited`` says whether document_citations holds any row for the document.
+    With rows, the status names the digest they are checked against (``read``,
+    ``missing_digest``, ``ambiguous``). Without, it says whether the table holds
+    the document (``not_held``) and records a read that found nothing
+    (``read_none_found``) or none (``not_read``). A print kind's table records
+    its read in the row: the text digest, ``pages_read``, ``rule_set_version``
+    and the ``citation_rows`` it produced. A held-field kind's table records no
+    read: a field is read only when an operator selects it.
+    """
+    from spicy_regs.citation_sources import TEXT_SOURCES, source_digests
+
+    parent = SOURCE_TABLES[kind]
+    if parent not in tables:
+        return {"table": parent, "status": "unavailable"}, None
+    try:
+        if kind in TEXT_SOURCES:
+            values = [(digest, False, None) for (digest,) in source_digests(cursor, kind, key)]
+        else:
+            values = cursor.execute(
+                "SELECT DISTINCT text_sha256, pages_read IS NOT NULL AND rule_set_version IS NOT NULL, citation_rows "
+                f'FROM "{parent}" WHERE package_id = ? LIMIT 2',
+                [key],
+            ).fetchall()
+    except duckdb.InterruptException:
+        raise
+    except duckdb.Error as error:
+        return {"table": parent, "status": "read_failure", "error_type": type(error).__name__}, None
+    if len(values) != 1:
+        return {"table": parent, "status": "ambiguous" if values else "not_held"}, None
+    [(digest, recorded, rows)] = values
+    if cited:
+        return {"table": parent, "status": "read" if digest else "missing_digest"}, digest or None
+    read = bool(digest and recorded and rows is not None)
+    if read and rows != "0":
+        raise ValueError(f"{parent} records a read of {key!r} that states {rows} citation rows, but "
+                         "document_citations holds none for it: this publication disagrees with itself.")
+    return {"table": parent, "status": "read_none_found" if read else "not_read"}, None
+
+
+def _unheld_document(cursor: duckdb.DuckDBPyConnection, kind: str, key: str, parent: str) -> str:
+    """The refusal for a document_key that neither ``parent`` nor any citation row of ``kind`` holds.
+
+    It names each held spelling of the key that differs only in case, under any
+    kind, read from document_citations alone: a parent such as ``comments`` is
+    too large to scan for a case-folded key.
+    """
+    held = cursor.execute(
+        "SELECT DISTINCT document_kind, document_key FROM document_citations "
+        "WHERE lower(document_key) = lower(?) ORDER BY ALL LIMIT 3",
+        [key],
+    ).fetchall()
+    hint = "".join(f" Citation rows exist under {held_kind} {held_key!r}." for held_kind, held_key in held)
+    return (f"No {parent} row and no {kind} citation row has document_key {key!r}; document keys are exact and "
+            f"case-sensitive, and {kind} covers only the documents {parent} holds.{hint}")
+
+
 def _register_tools(mcp: MCPServer) -> None:
     limiter = anyio.CapacityLimiter(TOOL_CONCURRENCY)
 
@@ -1501,28 +1566,43 @@ def _register_tools(mcp: MCPServer) -> None:
 
     @tool
     def resolve_document_citations(
-        document_kind: Annotated[str, Field(json_schema_extra={"enum": list(DOCUMENT_KINDS)})],
+        document_kind: Annotated[
+            str, Field(description=DOCUMENT_KIND_TABLES, json_schema_extra={"enum": list(DOCUMENT_KINDS)})
+        ],
         document_key: str,
         max_occurrences: Annotated[int, Field(ge=1, le=500)] = 100,
+        cite_kind: str | None = None,
+        offset: Annotated[int, Field(ge=0)] = 0,
     ) -> dict[str, Any]:
         """Resolve a bounded document's held citations against this connection's selected targets.
 
         Findings retain their spelling, text digest and extraction rule. Target
         lookup does not validate extraction precision or legal applicability.
         Missing, ambiguous, unsupported, unread and stale results stay explicit.
-        A capped response sets truncated; it does not establish whole-document coverage.
         acquisition_queue plans qualified missing targets for retained-evidence
         inspection. It performs no acquisition or publication.
         document_kind is one of the enumerated kinds, compared case-insensitively;
-        any other kind is refused with the supported list. govinfo_package and
-        budget_volume take the GovInfo packageId. A held-field kind takes its
-        source table's key: the literal value for one key column (comment_inline:
-        comment_id), else a compact JSON list in the table's key order. These
-        scopes cover only the selected field.
+        any other kind is refused. Its schema names each kind's table:
+        govinfo_package covers only the committee activity reports
+        house_activity_reports holds, budget_volume the budget_volumes volumes;
+        both take the GovInfo packageId. A held-field kind takes its table's key:
+        the literal value for one key column (comment_inline: comment_id), else a
+        compact JSON list in the key order. These scopes cover only the selected
+        field. document_key is exact and case-sensitive; a key neither the table
+        nor any citation row holds is refused.
+        source_read.status read_none_found: the table records a read that found
+        nothing; not_read: no read record (held-field tables record none);
+        not_held: rows whose document the table no longer holds.
+        Rows come in cite_kind order, then by position in the text.
+        coverage.cite_kind_counts gives the document's rows per kind; cite_kind
+        selects one kind and offset skips that many rows, so a long document is
+        read a page at a time. A capped page sets truncated. coverage.partial is
+        true when rows were left out of this page (capped or offset), some
+        occurrence was not looked up (coverage.reason_counts says why) or the
+        document was not read; neither establishes whole-document coverage.
         """
         from spicy_regs.acquisition_queue import build_missing_target_queue
-        from spicy_regs.citation_resolution import resolve_citations
-        from spicy_regs.citation_sources import TEXT_SOURCES, source_digests as held_source_digests
+        from spicy_regs.citation_resolution import ROUTES, resolve_citations
 
         document_kind = _document_kind(document_kind)
         cursor = _get_connection().cursor()
@@ -1530,12 +1610,32 @@ def _register_tools(mcp: MCPServer) -> None:
             status = _publication_status(cursor)
             if "document_citations" not in status["tables"]:
                 raise ValueError("document_citations is not available in this connection")
+            document = [document_kind, document_key]
+            kind_counts = dict(cursor.execute(
+                "SELECT cite_kind, count(*) FROM document_citations WHERE document_kind = ? AND document_key = ? "
+                "GROUP BY cite_kind ORDER BY cite_kind", document,
+            ).fetchall())
+            parent = SOURCE_TABLES[document_kind]
+            source_read, digest = _source_read(cursor, status["tables"], document_kind, document_key,
+                                               cited=bool(kind_counts))
+            if source_read["status"] == "not_held" and not kind_counts:
+                raise ValueError(_unheld_document(cursor, document_kind, document_key, parent))
+            if cite_kind is not None:
+                requested, cite_kind = cite_kind, cite_kind.lower()
+                if cite_kind not in kind_counts and cite_kind not in ROUTES:
+                    raise ValueError(f"cite_kind {requested!r} is neither a kind this document holds nor one the "
+                                     f"resolver routes. This document holds: {', '.join(kind_counts)}.")
+            # span_start is stored as text: CAST orders it as the offset it is and refuses one that is not.
+            # target_key separates the rows one range citation writes at one span, and text_sha256 (identity,
+            # absent from a legacy file) a re-read text's rows, so the order is total and a page boundary stable.
+            columns = [column[0] for column in cursor.execute("SELECT * FROM document_citations LIMIT 0").description]
             cursor.execute(
-                "SELECT * FROM document_citations WHERE document_kind = ? AND document_key = ? "
-                "ORDER BY cite_kind, span_start, rule_version LIMIT ?",
-                [document_kind, document_key, max_occurrences + 1],
+                "SELECT * FROM document_citations WHERE document_kind = ? AND document_key = ?"
+                + (" AND cite_kind = ?" if cite_kind is not None else "")
+                + " ORDER BY cite_kind, CAST(span_start AS BIGINT), target_key, rule_version"
+                + (", text_sha256" if "text_sha256" in columns else "") + " LIMIT ? OFFSET ?",
+                [*document, *([cite_kind] if cite_kind is not None else []), max_occurrences + 1, offset],
             )
-            columns = [column[0] for column in cursor.description]
             rows = cursor.fetchall()
             # This tool reads text findings. A legacy file without the digest
             # column must not fall through the resolver's native-field API.
@@ -1543,43 +1643,24 @@ def _register_tools(mcp: MCPServer) -> None:
                 {"text_sha256": None, **dict(zip(columns, row, strict=True))}
                 for row in rows[:max_occurrences]
             ]
-            source_digests = {}
-            parent = SOURCE_TABLES.get(document_kind)
-            source_read = {"table": parent, "status": "unavailable" if parent else "unsupported"}
-            if parent in status["tables"]:
-                try:
-                    if document_kind in TEXT_SOURCES:
-                        values = held_source_digests(cursor, document_kind, document_key)
-                    else:
-                        values = cursor.execute(
-                            f'SELECT DISTINCT text_sha256 FROM "{parent}" WHERE package_id = ? LIMIT 2',
-                            [document_key],
-                        ).fetchall()
-                except duckdb.InterruptException:
-                    raise
-                except duckdb.Error as error:
-                    source_read.update(status="read_failure", error_type=type(error).__name__)
-                else:
-                    source_read["status"] = "ambiguous" if len(values) > 1 else "missing_digest"
-                    if len(values) == 1 and values[0][0]:
-                        source_digests[(document_kind, document_key)] = values[0][0]
-                        source_read["status"] = "read"
             result = resolve_citations(
-                cursor, occurrences, status["publication"], source_digests=source_digests,
+                cursor, occurrences, status["publication"],
+                source_digests={(document_kind, document_key): digest} if digest else {},
                 max_target_keys=max_occurrences,
             )
             capped = len(rows) > max_occurrences
+            result["coverage"]["cite_kind_counts"] = kind_counts
             result["coverage"]["occurrence_selection"] = {
-                "status": "capped" if capped else "complete_held_selection",
-                "max_occurrences": max_occurrences,
+                "status": "capped" if capped else "last_page" if offset else "complete_held_selection",
+                "cite_kind": cite_kind, "offset": offset, "max_occurrences": max_occurrences,
                 "meaning": "Held citation rows for this document; not extraction recall or source completeness.",
             }
-            if capped:
+            if capped or offset or source_read["status"] == "not_read":
                 result["coverage"]["partial"] = True
         return {
             **_source_details(cursor), **_jsonify(result),
             "document_kind": document_kind, "document_key": document_key,
-            "max_occurrences": max_occurrences, "truncated": len(rows) > max_occurrences,
+            "max_occurrences": max_occurrences, "truncated": capped,
             "source_read": source_read,
             "acquisition_queue": build_missing_target_queue(
                 result, input_snapshots={document_kind: status["publication"].get(parent, {})},
