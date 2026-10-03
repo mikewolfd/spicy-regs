@@ -8,7 +8,7 @@ One row per daily Congressional Record issue, keyed `(volume, issue)`, the publi
 
 **Coverage.** Sampled, and accumulating. Each run walks the whole `daily-congressional-record/{volume}` list for each session volume of the Congresses in scope and reads the detail of every issue the table does not yet hold, newest `updateDate` first, up to 1,000 a run, so at the 119th's size one run completes it. *(measured 2026-09-29)*
 
-**Data quality.** A row whose `sections_json` is NULL is list-only: its detail has not been read yet, so `chambers`, `package_id` and every other detail-only column are NULL with it. A read detail with no chamber section (a Daily Digest only) states an empty `chambers`, distinct from NULL. The rule before 2026-09-29 read the first whole-issue link listed, and an issue printed in several books lists a later book's `-bk{N}` link first on 7 of 368 held rows, which GovInfo holds no package under; a one-time rebuild re-reads every held row's own `entire_issue_json` under the new rule.
+**Data quality.** A row whose `detail_read` is `false` is list-only: its detail has not been read yet, so `chambers`, `package_id` and every other detail-only column are NULL with it. A read detail with no chamber section (a Daily Digest only) states an empty `chambers`, distinct from NULL. The rule before 2026-09-29 read the first whole-issue link listed, and an issue printed in several books lists a later book's `-bk{N}` link first on 7 of 368 held rows, which GovInfo holds no package under; a one-time rebuild re-reads every held row's own `entire_issue_json` under the new rule.
 
 - **Parquet file:** `record_issues.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.

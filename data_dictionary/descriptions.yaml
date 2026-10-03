@@ -3199,7 +3199,7 @@ tables:
       `ml`, `pm`, `pt`), the list walked whole each run and refused short of
       the publisher's declared total, with every detail read. A later run
       reads new details newest first under its per-run cap, so a row it has not
-      reached is list-only (`committees_json` NULL), not absent. The output
+      reached is list-only (`detail_read` false), not absent. The output
       ledger records the declared counts beside what is held.
     measured_on: "2026-10-03"
     summary: >-
@@ -3216,11 +3216,13 @@ tables:
       correction or effective-date notice that shares the rule's RIN, docket
       and title. All columns are stored as VARCHAR.
     data_quality: >-
-      A row whose `committees_json` is NULL is list-only: its detail has not been
+      A row whose `detail_read` is `false` is list-only: its detail has not been
       read yet (not reached under the cap, or refused), and every detail-only
       column is NULL with it, including the scalar and occurrence RIN columns, because the rule
-      was not run. A row whose detail was read states `[]` where the detail lists
-      none. The RIN is an interpretation: `rin_rule` names the rule that fired
+      was not run. A read detail's list is `[]` where the detail states an empty
+      one and NULL where it states none. Rows read before spicy-docs 0.54.0
+      spelled both `[]`; each such row is read once more (817 on 2026-10-03,
+      one run). The RIN is an interpretation: `rin_rule` names the rule that fired
       (`report_nature_rin_label/2`) or `unmatched`, and `rin_matched_text` is the
       exact text, so a false positive is readable from the row. Every run derives
       the four RIN columns of each read row again from its retained
@@ -3259,9 +3261,12 @@ tables:
       (`hearing_transcripts` joins on `event_id`), the related bills, the
       witnesses and every document URL. All columns are stored as VARCHAR.
     data_quality: >-
-      A row whose `committees_json` is NULL is list-only: its detail has not
-      been read yet, and every detail-only column is NULL with it; a read
-      detail states `[]` where it lists none. Event ids are keyed with their
+      A row whose `detail_read` is `false` is list-only: its detail has not
+      been read yet, and every detail-only column is NULL with it. A read
+      detail's list is `[]` where the detail states an empty one and NULL where
+      it states none. Rows read before spicy-docs 0.54.0 spelled both `[]`;
+      each such row is read once more, after a run's own reads and under its
+      cap of 1,000 (5,992 on 2026-10-03, about six runs). Event ids are keyed with their
       chamber because their uniqueness across chambers is unmeasured
       (spicy-docs' contract note); the 119th's House and Senate event ids come
       from different ranges, so an id alone does not say which chamber. The
@@ -3274,8 +3279,9 @@ tables:
       `witnesses` element for those chambers (retained detail
       `119/nochamber/338692`): on committee-meetings generation 31e62420…
       (2026-10-03) none of the 2,336 Senate and NoChamber rows lists a
-      witness (each reads `witnesses_json` `[]` and `witness_count` 0), while
-      2,735 of the 3,761 House rows do. Such a row without witnesses means
+      witness (each read `witnesses_json` `[]` and `witness_count` 0 then;
+      read again under spicy-docs 0.54.0, both are NULL, no list stated),
+      while 2,735 of the 3,761 House rows do. Such a row without witnesses means
       the route stated none, not that the meeting had none: GovInfo's MODS
       for a printed hearing (`hearing_transcripts.package_id`) can name them
       (CHRG-119shrg64653 names four), and this service does not read MODS for
@@ -3307,7 +3313,7 @@ tables:
       (`entire_issue_url_stem/2`). The volume is the year minus 1854 (volume
       172 is 2026). All columns are stored as VARCHAR.
     data_quality: >-
-      A row whose `sections_json` is NULL is list-only: its detail has not been
+      A row whose `detail_read` is `false` is list-only: its detail has not been
       read yet, so `chambers`, `package_id` and every other detail-only column
       are NULL with it. A read detail with no chamber section (a Daily Digest
       only) states an empty `chambers`, distinct from NULL. The rule before
@@ -3338,7 +3344,7 @@ tables:
       as VARCHAR.
     data_quality: >-
       On 2026-09-21 the list's stated total agreed with the capture. A row
-      whose `titles_json` is NULL is list-only. A partitioned treaty (a
+      whose `detail_read` is `false` is list-only. A partitioned treaty (a
       non-empty `suffix`) is always list-only: the publisher's suffixed detail
       address has no route in spicy-docs' `LIST_ROUTES`, so its detail is never
       asked for and its `package_id` is NULL by the contract's own rule.
@@ -3366,7 +3372,10 @@ tables:
       settles the query. A population change restarts pooling; incomplete
       or inconsistent walks exhaust the source reader's bounded attempts
       and fail before output is replaced. The list carries the latest
-      action only, not the action history.
+      action only, not the action history. `is_civilian` is read again
+      from every row's stored `nomination_type_json` each run, so a
+      nomination the list no longer names follows the rule as well
+      (PN1189 and PN1266, both military).
     columns_from: spicy_docs
 
   house_activity_reports:
