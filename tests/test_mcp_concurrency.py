@@ -10,6 +10,7 @@ from starlette.testclient import TestClient
 
 from spicy_regs import mcp_server
 from tests.test_mcp_query_results import call
+from tests.test_mcp_server import _records
 
 AGGREGATE = "SELECT MIN(date_received) AS min_dr, MAX(date_received) AS max_dr, COUNT(*) AS n FROM fcc_filings"
 FEC = "SELECT subject_id, subject_type FROM fec_relationships WHERE subject_id = 'C00154625' LIMIT 10"
@@ -57,7 +58,7 @@ def test_the_event_loop_answers_while_a_tool_call_waits(connection, monkeypatch)
         slow.join(10)
         page.join(10)
     assert answered == [200]  # before the tool call finished
-    assert replies[0]["structuredContent"]["rows"] == [{"one": 1}]
+    assert _records(replies[0]["structuredContent"]) == [{"one": 1}]
 
 
 def test_tool_calls_beyond_the_limit_wait_for_a_worker(connection, monkeypatch):

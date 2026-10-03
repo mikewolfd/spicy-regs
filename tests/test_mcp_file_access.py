@@ -8,7 +8,7 @@ import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 
 from spicy_regs import mcp_server
-from tests.test_mcp_server import _tool_data
+from tests.test_mcp_server import _records, _tool_data
 
 
 @pytest.fixture
@@ -31,7 +31,7 @@ def selected_dataset(tmp_path, monkeypatch):
 def test_selected_parquet_view_remains_queryable(selected_dataset):
     server, _, _ = selected_dataset
     result = _tool_data(server, "query_sql", {"sql": "SELECT agency_code,docket_count FROM agency_stats LIMIT 1"})
-    assert result["rows"] == [{"agency_code": "EPA", "docket_count": 7}]
+    assert _records(result) == [{"agency_code": "EPA", "docket_count": 7}]
 
 
 @pytest.mark.parametrize("shape", ["direct", "nested", "traversal", "symlink", "glob", "blob"])

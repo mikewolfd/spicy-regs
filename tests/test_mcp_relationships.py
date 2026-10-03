@@ -7,7 +7,7 @@ import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 
 from spicy_regs import mcp_server
-from tests.test_mcp_server import _tool_data
+from tests.test_mcp_server import _records, _tool_data
 
 
 def test_discovery_exposes_derived_dependencies_and_unsupported_old_schema(monkeypatch):
@@ -41,8 +41,9 @@ def test_discovery_exposes_derived_dependencies_and_unsupported_old_schema(monke
         ordinal = next(c for c in described["columns"] if c["column_name"] == "source_ordinal")
         assert ordinal["column_type"] == "BIGINT" and "Zero-based position" in ordinal["description"]
         result = _tool_data(server, "query_sql", {"sql": f'SELECT * FROM "{name}" ORDER BY source_ordinal'})
-        assert [r["source_ordinal"] for r in result["rows"]] == [0, 1]
-        assert all(r["target_status"] == "not_checked" for r in result["rows"])
+        rows = _records(result)
+        assert [r["source_ordinal"] for r in rows] == [0, 1]
+        assert all(r["target_status"] == "not_checked" for r in rows)
         unsupported = _tool_data(server, "describe_table", {"table": "comment_document_references"})
         assert not unsupported["available"]
         assert unsupported["relationship"]["status"] == "unsupported"

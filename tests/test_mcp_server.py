@@ -72,6 +72,11 @@ def _tool_data(server, name, arguments):
     return asyncio.run(server.call_tool(name, arguments)).structured_content
 
 
+def _records(reply):
+    """A query_sql reply's rows, which are arrays in the order of its columns, as one dict per row."""
+    return [dict(zip(reply["columns"], row, strict=True)) for row in reply["rows"]]
+
+
 def test_discovery_reports_actual_parquet_schema_and_dictionary_caveats(tmp_path, monkeypatch):
     """A readable old/changed artifact must not be described as the declared schema."""
     con = duckdb.connect()
@@ -107,7 +112,7 @@ def test_discovery_reports_actual_parquet_schema_and_dictionary_caveats(tmp_path
     assert "fec_committees.committee_id" in actual_columns["committee_id"]["description"]
     assert actual_columns["new_field"]["description"] is None
     queried = _tool_data(server, "query_sql", {"sql": "SELECT committee_id FROM org_committee_links"})
-    assert queried["rows"] == [{"committee_id": "C00000001"}]
+    assert _records(queried) == [{"committee_id": "C00000001"}]
 
     unavailable = _tool_data(server, "describe_table", {"table": "fec_committees"})
     assert unavailable["available"] is False
@@ -194,7 +199,7 @@ def test_local_directory_runs_actual_connection_without_remote_fallback(tmp_path
     }
     queried = _tool_data(server, "query_sql", {"sql": "SELECT committee_id FROM fec_committees"})
     assert queried["source"] == "local"
-    assert queried["rows"] == [{"committee_id": "C00000001"}]
+    assert _records(queried) == [{"committee_id": "C00000001"}]
     with pytest.raises(ToolError, match="read-only"):
         _tool_data(server, "query_sql", {"sql": "DROP VIEW fec_committees"})
 

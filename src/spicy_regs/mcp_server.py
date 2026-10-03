@@ -242,8 +242,8 @@ DEFAULT_OCCURRENCES, MAX_OCCURRENCES = 25, 100
 #: rule. Round 5 measured them at 64% of a 500-row CRPT-118hrpt964 reply.
 OCCURRENCE_DOCUMENT_FIELDS = ("document_kind", "document_key", "text_sha256", "body_rendition", "body_derivation",
                               "source_status", "resolution_rule")
-OCCURRENCE_KIND_FIELDS = ("rule_name", "target_table", "target_snapshot", "target_table_selected", "target_grain",
-                          "expected_cardinality")
+OCCURRENCE_KIND_FIELDS = ("rule_name", "rule_version", "target_table", "target_snapshot", "target_table_selected",
+                          "target_grain", "expected_cardinality")
 #: What each target_status says. A citation reply defines the words its occurrences use, and only those: the five
 #: definitions did not fit the tool text beside everything else it must say (round 6, phase3-review item 2).
 TARGET_STATUS_MEANINGS = {
@@ -257,11 +257,11 @@ TARGET_STATUS_MEANINGS = {
     "unsupported": "No route looks up this citation kind: it is held, never checked.",
 }
 #: An occurrence field that restates another field of the same occurrence; a reply drops it where they are equal.
-OCCURRENCE_SAME_AS = {"target_kind": "cite_kind", "normalized_key": "target_key"}
-#: The acquisition queue's fields fixed for the reply, on each item and on each requesting occurrence.
+#: target_rule names the kind on every row of 11 of the 13 held kinds (round 6, live document_citations).
+OCCURRENCE_SAME_AS = {"target_kind": "cite_kind", "normalized_key": "target_key", "target_rule": "cite_kind"}
+#: The acquisition queue's fields fixed for the reply on each item, and for a target kind's route.
 QUEUE_ITEM_FIELDS = ("intended_query", "queue_rule", "acquisition_outcome", "retained")
-QUEUE_REQUEST_FIELDS = ("document_kind", "document_key", "text_sha256", "input_snapshot", "resolution_rule",
-                        "source_status")
+QUEUE_KIND_FIELDS = ("target_snapshot", "provider_route", "status")
 #: document_kind's schema description, derived from SOURCE_TABLES so a new kind cannot drift from its table.
 DOCUMENT_KIND_TABLES = "Each kind's table: " + "; ".join(
     f"{kind}: {table}" for kind, table in sorted(SOURCE_TABLES.items())
@@ -404,9 +404,26 @@ def _resolve_tool_concurrency() -> int:
     return int(raw)
 
 
+def _resolve_reply_chars() -> int:
+    """The most characters one query or citation reply may carry, from SPICY_REGS_REPLY_CHARS (default 40,000).
+
+    Claude Code saves a tool result past 25,000 tokens (``MAX_MCP_OUTPUT_TOKENS``) to a one-line file and its reader
+    then showed 39,000 to 43,000 characters of each (round 6: replies of 76,947 to 102,942 characters). A reply that
+    would pass the budget is refused with how much fits and how to ask for it (owner decision 2026-10-03); nothing
+    partial is returned for size. Set by the environment only: an argument would spend every tool's description cap.
+    """
+    raw = os.environ.get("SPICY_REGS_REPLY_CHARS", "40000").strip()
+    if not raw.isdecimal() or int(raw) < 1:
+        raise RuntimeError(f"SPICY_REGS_REPLY_CHARS must be a positive integer: {raw!r}")
+    return int(raw)
+
+
 MEMORY_LIMIT = _resolve_memory_limit()
 TEMP_DIR = _resolve_temp_dir()
 TOOL_CONCURRENCY = _resolve_tool_concurrency()
+REPLY_CHARS = _resolve_reply_chars()
+#: Room a refusal keeps for the clause it asks the caller to add (ORDER BY, LIMIT, OFFSET), which the reply echoes.
+RE_ASK_CHARS = 100
 
 
 def _resolve_catalog_config() -> dict[str, str] | None:
@@ -1213,7 +1230,13 @@ def _lineage_meanings(lineage: Mapping[str, Sequence[str]]) -> dict[str, str]:
 DESCRIBE_DETAIL = ("joins[].measurement", "qualification.ledger_statements")
 
 
-def _bounded_cells(rows: list[dict[str, Any]], max_chars: int | None) -> list[dict[str, Any]]:
+def _reply_text(result: Any) -> tuple[Any, str]:
+    """A reply's JSON value and its compact JSON text: what the client is sent, and what the budget counts."""
+    structured = pydantic_core.to_jsonable_python(result, fallback=str)
+    return structured, pydantic_core.to_json(structured).decode()
+
+
+def _bounded_cells(rows: list[list[Any]], columns: Sequence[str], max_chars: int | None) -> list[dict[str, Any]]:
     """Cut each text, list or struct cell longer than ``max_chars`` to its first ``max_chars`` characters, in place.
 
     A list or struct cell is measured and cut as its compact JSON text. Returns
@@ -1224,13 +1247,44 @@ def _bounded_cells(rows: list[dict[str, Any]], max_chars: int | None) -> list[di
     if max_chars is None:
         return cut
     for index, row in enumerate(rows):
-        for column, value in row.items():
+        for position, value in enumerate(row):
             if isinstance(value, (str, list, dict)):
                 text = value if isinstance(value, str) else json.dumps(value, separators=(",", ":"), ensure_ascii=False)
                 if len(text) > max_chars:
-                    row[column] = text[:max_chars]
-                    cut.append({"row": index, "column": column, "chars": len(text)})
+                    row[position] = text[:max_chars]
+                    cut.append({"row": index, "column": columns[position], "chars": len(text)})
     return cut
+
+
+def _refuse_oversized_rows(reply: dict[str, Any]) -> None:
+    """Refuse a query reply past REPLY_CHARS, naming how many leading rows fit and how to ask for them again.
+
+    Rows are measured one by one only on this path; a whole reply is measured once. The rows that fit leave room
+    for the clause the caller is asked to add (RE_ASK_CHARS), since the reply echoes the statement.
+    """
+    size = len(_reply_text(reply)[1])
+    if size <= REPLY_CHARS:
+        return
+    rows, columns = reply["rows"], reply["columns"]
+    room = REPLY_CHARS - RE_ASK_CHARS - len(_reply_text({**reply, "rows": []})[1]) + 1  # the first row has no comma
+    fit = 0
+    for row in rows:
+        room -= len(_reply_text(row)[1]) + 1
+        if room < 0:
+            break
+        fit += 1
+    widths = [sum(len(_reply_text(row[position])[1]) for row in rows) for position in range(len(columns))]
+    widest = max(range(len(columns)), key=widths.__getitem__)
+    cells = (f"set max_cell_chars to cut long cells ({columns[widest]} holds "
+             f"{round(100 * widths[widest] / max(sum(widths), 1))}% of the rows' characters), or select fewer columns")
+    if not fit:
+        raise ValueError(f"This reply would be {size:,} characters, over the {REPLY_CHARS:,}-character reply limit; "
+                         f"nothing is returned. Not even the first row fits: {cells}.")
+    raise ValueError(
+        f"This reply would be {size:,} characters, over the {REPLY_CHARS:,}-character reply limit; nothing is "
+        f"returned. The first {fit} of its {len(rows)} rows fit. Ask again with ORDER BY a unique key and LIMIT "
+        f"{fit}, then LIMIT {fit} OFFSET {fit} for the next page (compare the publication pins between pages); or "
+        f"{cells}.")
 
 
 def _ledger_index(record: dict) -> tuple[dict, dict[str, list[dict]]]:
@@ -1466,13 +1520,17 @@ def _compact_occurrences(occurrences: list[dict[str, Any]]) -> tuple[list[dict[s
     :data:`OCCURRENCE_DOCUMENT_FIELDS` go to ``shared`` and
     :data:`OCCURRENCE_KIND_FIELDS` to ``by_cite_kind``, each where every
     occurrence in its scope agrees (else to ``not_hoisted``, left on each
-    occurrence); target_kind and normalized_key leave an occurrence where they
-    equal cite_kind and target_key (``same_as``). cite_kind stays on every
-    occurrence, so ``{**shared, **by_cite_kind[cite_kind], **occurrence}`` is
-    the row. The resolver's rows and the queue built from them are unchanged.
+    occurrence); a field of :data:`OCCURRENCE_SAME_AS` leaves an occurrence
+    where it equals the field it names (``same_as`` lists those the rows
+    hold). cite_kind stays on every occurrence, so ``{**shared,
+    **by_cite_kind[cite_kind], **occurrence}`` is the row. ``occurrence_key``,
+    a digest of six fields the row states (round 6: a fifth of each
+    occurrence), is left out: the queue names occurrences by their spans. The
+    resolver's rows and the queue built from them are unchanged.
     """
-    rows = [{key: value for key, value in row.items()
-             if not (key in OCCURRENCE_SAME_AS and value == row.get(OCCURRENCE_SAME_AS[key]))} for row in occurrences]
+    same_as = {field: other for field, other in OCCURRENCE_SAME_AS.items() if any(field in row for row in occurrences)}
+    rows = [{key: value for key, value in row.items() if key != "occurrence_key"
+             and not (key in same_as and value == row.get(same_as[key]))} for row in occurrences]
     shared, not_hoisted = _hoist(rows, OCCURRENCE_DOCUMENT_FIELDS)
     groups: dict[Any, list[dict[str, Any]]] = {}
     for row in rows:
@@ -1485,31 +1543,80 @@ def _compact_occurrences(occurrences: list[dict[str, Any]]) -> tuple[list[dict[s
                 if key not in shared and key not in by_kind[row.get("cite_kind")]} for row in rows]
     return compact, {
         "hoisted": {"shared": list(OCCURRENCE_DOCUMENT_FIELDS), "by_cite_kind": list(OCCURRENCE_KIND_FIELDS)},
-        "shared": shared, "by_cite_kind": by_kind, "not_hoisted": not_hoisted, "same_as": OCCURRENCE_SAME_AS,
-        "meaning": "Each occurrence is {**shared, **by_cite_kind[its cite_kind], **occurrence}; one without target_kind "
-                   "or normalized_key has its cite_kind or target_key there. A hoisted field whose values differ "
-                   "on this page is named in not_hoisted and stays on each occurrence.",
+        "shared": shared, "by_cite_kind": by_kind, "not_hoisted": not_hoisted, "same_as": same_as,
+        "meaning": "Each occurrence is {**shared, **by_cite_kind[its cite_kind], **occurrence}; a same_as field it "
+                   "lacks equals the field named there. A hoisted field whose values differ on this page is named in "
+                   "not_hoisted and stays on each occurrence. occurrence_key, a digest of fields each occurrence "
+                   "states, is left out.",
     }
 
 
-def _compact_queue(queue: dict[str, Any]) -> dict[str, Any]:
-    """The acquisition queue with its fixed fields (QUEUE_ITEM_FIELDS, QUEUE_REQUEST_FIELDS) stated once in
-    ``shared_fields`` where the whole reply agrees; the same projection as :func:`_compact_occurrences`."""
-    items = [{key: value for key, value in item.items() if key != "requesting_occurrences"} for item in queue["items"]]
-    requests = [request for item in queue["items"] for request in item["requesting_occurrences"]]
-    (item_shared, item_varying), (request_shared, request_varying) = (
-        _hoist(items, QUEUE_ITEM_FIELDS), _hoist(requests, QUEUE_REQUEST_FIELDS))
-    return {**queue, "items": [
-        {**{key: value for key, value in item.items() if key not in item_shared},
-         "requesting_occurrences": [{key: value for key, value in request.items() if key not in request_shared}
-                                    for request in full["requesting_occurrences"]]}
-        for item, full in zip(items, queue["items"], strict=True)
+def _compact_queue(queue: dict[str, Any], input_snapshot: Mapping[str, Any]) -> dict[str, Any]:
+    """The acquisition queue stated against the reply it sits in; nothing is left out that the reply does not state.
+
+    An item names its requesting occurrences by span (``requesting_spans``): each is an occurrence of the reply
+    whose cite_kind and target_key are the item's target_kind and normalized_key, which states every field a
+    request restated but ``input_snapshot``, stated once (round 6: requests were 14,903 of a 102,942-character
+    reply). :data:`QUEUE_ITEM_FIELDS` are stated once and :data:`QUEUE_KIND_FIELDS` once per target kind where
+    they agree; a route's ``native_identifier`` leaves it where it equals ``normalized_key``, and the queue's
+    ``resolution_coverage`` where it is the reply's ``coverage``. Same projection as :func:`_compact_occurrences`.
+    """
+    items = []
+    for item in queue["items"]:
+        compact = {key: value for key, value in item.items() if key != "requesting_occurrences"}
+        if item["provider_route"].get("native_identifier") == item["normalized_key"]:
+            compact["provider_route"] = {key: value for key, value in item["provider_route"].items()
+                                         if key != "native_identifier"}
+        items.append({**compact, "requesting_spans": list(dict.fromkeys(
+            request["span_start"] for request in item["requesting_occurrences"]))})
+    shared, not_hoisted = _hoist(items, QUEUE_ITEM_FIELDS)
+    groups: dict[Any, list[dict[str, Any]]] = {}
+    for item in items:
+        groups.setdefault(item["target_kind"], []).append(item)
+    by_kind = {}
+    for kind, group in groups.items():
+        by_kind[kind], varying = _hoist(group, QUEUE_KIND_FIELDS)
+        not_hoisted += [field for field in varying if field not in not_hoisted]
+    coverage = {key: value for key, value in queue["coverage"].items() if key != "resolution_coverage"}
+    return {**queue, "coverage": coverage, "items": [
+        {key: value for key, value in item.items() if key not in shared and key not in by_kind[item["target_kind"]]}
+        for item in items
     ], "shared_fields": {
-        "hoisted": {"item": list(QUEUE_ITEM_FIELDS), "requesting_occurrence": list(QUEUE_REQUEST_FIELDS)},
-        "item": item_shared, "requesting_occurrence": request_shared, "not_hoisted": item_varying + request_varying,
-        "meaning": "Each item is {**item, **its fields}, and each requesting occurrence {**requesting_occurrence, "
-                   "**its fields}. Stated once, not omitted.",
+        "hoisted": {"item": list(QUEUE_ITEM_FIELDS), "by_target_kind": list(QUEUE_KIND_FIELDS)},
+        "item": shared, "by_target_kind": by_kind, "not_hoisted": not_hoisted, "input_snapshot": dict(input_snapshot),
+        "same_as": {"provider_route.native_identifier": "normalized_key", "coverage.resolution_coverage": "coverage"},
+        "meaning": "Each item is {**item, **by_target_kind[its target_kind], **its fields}. Each requesting_spans "
+                   "entry is the span_start of an occurrence above whose cite_kind and target_key are the item's "
+                   "target_kind and normalized_key: that occurrence, with input_snapshot, is the request. A same_as "
+                   "field left out equals the field named there (coverage is this reply's).",
     }}
+
+
+def _refuse_oversized_page(reply: dict[str, Any], page: Callable[[list[dict[str, Any]]], dict[str, Any]],
+                           occurrences: list[dict[str, Any]], offset: int) -> None:
+    """Refuse a citation page past REPLY_CHARS, naming how many of its first occurrences fit and how to page them.
+
+    A page's size never falls as occurrences are added (each brings its fields and its queue entry, and can only
+    stop a field being stated once), so the largest page that fits is found by halving: about seven page builds
+    for 100 occurrences, from rows already resolved, with no further read.
+    """
+    size = len(_reply_text(reply)[1])
+    if size <= REPLY_CHARS:
+        return
+    fit, over = 0, len(occurrences)
+    while over - fit > 1:
+        middle = (fit + over) // 2
+        if len(_reply_text(page(occurrences[:middle]))[1]) <= REPLY_CHARS - RE_ASK_CHARS:
+            fit = middle
+        else:
+            over = middle
+    over_limit = f"This page would be {size:,} characters, over the {REPLY_CHARS:,}-character reply limit; nothing is " \
+                 "returned."
+    if not fit:
+        raise ValueError(f"{over_limit} Not even its first occurrence fits; cite_kind selects one kind's occurrences.")
+    raise ValueError(
+        f"{over_limit} The first {fit} of its {len(occurrences)} occurrences fit: ask again with max_occurrences={fit} "
+        f"and offset={offset}, then offset={offset + fit} for the next page (cite_kind selects one kind).")
 
 
 def _unheld_document(cursor: duckdb.DuckDBPyConnection, kind: str, key: str, parent: str) -> str:
@@ -1592,8 +1699,7 @@ def _tools() -> list[Tool]:
                 result = await anyio.to_thread.run_sync(functools.partial(fn, **arguments), limiter=limiter)
             except Exception as exc:
                 raise ToolError(str(exc)) from exc
-            structured = pydantic_core.to_jsonable_python(result, fallback=str)
-            text = pydantic_core.to_json(structured).decode()
+            structured, text = _reply_text(result)
             return CallToolResult(content=[TextContent(type="text", text=text)], structured_content=structured)
 
         tools.append(_StrictTool.strict(call, inspect.cleandoc(fn.__doc__ or "")))
@@ -1789,29 +1895,29 @@ def _tools() -> list[Tool]:
     ) -> dict[str, Any]:
         """Run read-only SQL against configured Spicy Regs tables, returning up to max_rows rows.
 
-        Only SELECT runs; DESCRIBE, SHOW, SUMMARIZE, VALUES and the FROM-first
-        shorthand count as SELECT. Writes (COPY TO, ATTACH, CREATE, INSERT, DROP,
-        EXPORT, SET, ...) and EXPLAIN (its ANALYZE form can write) are refused.
-        One view exists per table list_sources lists. Always LIMIT exploratory
-        queries. truncated says whether rows beyond max_rows were omitted from
-        what the statement returned, not rows your own LIMIT excluded: to learn
-        whether more exist, LIMIT above max_rows or COUNT. max_cell_chars, when
-        set, cuts each text, list or struct cell (a list or struct as compact
-        JSON) to that many characters and lists each cut cell in truncated_cells
+        Only SELECT runs; DESCRIBE, SHOW, SUMMARIZE, VALUES, PRAGMA's table
+        forms and FROM-first shorthand count as SELECT. Writes (COPY TO, ATTACH,
+        CREATE, INSERT, DROP, EXPORT, SET, ...) and EXPLAIN (its ANALYZE form can
+        write) are refused. One view exists per table list_sources lists. Always
+        LIMIT exploratory queries. rows are arrays in the order of columns.
+        truncated says whether rows beyond max_rows were cut from what the
+        statement returned, not rows your LIMIT excluded: to learn whether more
+        exist, COUNT. A reply past the reply limit is refused, saying how many
+        rows fit. max_cell_chars cuts each longer text, list or struct cell (a
+        list or struct as compact JSON) and lists each cut in truncated_cells
         with its full length. To page, ORDER BY a key with LIMIT n OFFSET m. SQL
         is DuckDB's dialect: `~` matches the whole string (regexp_matches for a
-        substring, lower() for case). Selected columns need unique names; alias
-        shared names in joins. sql echoes the statement this reply answers.
-        publication gives each named table its live data version, pinned row
-        count, published_at, coverage kind (a window or sample is not the full
-        history) and inputs: the parents its producer recorded
+        substring, lower() for case). Alias shared column names in joins. sql
+        echoes the statement. publication gives each named table its live data
+        version, pinned rows, published_at, coverage kind (a window or sample is
+        not the full history) and inputs: the parents its producer recorded
         (none recorded is not none; a read that bypassed the download helper
-        is not recorded), as describe_table explains. Qualified-view
-        pins keep the registered meaning and purpose limits even for SELECT
-        value only; release compatible is not financial eligibility or
-        current/net-money qualification. Call describe_table for full release
-        evidence. Compare receipt, SQL, input and evidence pins after refresh; a
-        later description may name a different release.
+        is not recorded), as describe_table explains. Qualified-view pins keep
+        the registered meaning and purpose limits even for SELECT value only;
+        release compatible is not financial eligibility or current/net-money
+        qualification. Call describe_table for full release evidence. Compare
+        receipt, SQL, input and evidence pins after refresh; a later description
+        may name a different release.
         """
         cursor = _get_connection().cursor()
         write_statement = _first_write_statement(cursor, sql)
@@ -1833,9 +1939,11 @@ def _tools() -> list[Tool]:
             publication = _publication_status(cursor)["publication"]
             named = _tables_named(cursor, sql)
             pins = _reply_pins(cursor, publication, [name for name in publication if name in named])
-        result_rows = [{col: _jsonify(val) for col, val in zip(columns, row)} for row in rows[:max_rows]]
-        truncated_cells = _bounded_cells(result_rows, max_cell_chars)
-        return {
+        # Each row is an array in the order of columns, which the reply states once: names repeated on every row
+        # were 32% of a 399-row reply (round 6, ulrike's call 12).
+        result_rows = [[_jsonify(value) for value in row] for row in rows[:max_rows]]
+        truncated_cells = _bounded_cells(result_rows, columns, max_cell_chars)
+        reply = {
             "sql": sql,
             **_source_details(cursor),
             "columns": columns,
@@ -1847,6 +1955,8 @@ def _tools() -> list[Tool]:
             "rows": result_rows,
             "publication": _query_reply_pins(pins, relationships),
         }
+        _refuse_oversized_rows(reply)
+        return reply
 
     @tool
     def resolve_document_citations(
@@ -1868,14 +1978,14 @@ def _tools() -> list[Tool]:
         names each kind's table, whose key document_key takes
         (govinfo_package covers only house_activity_reports). document_key is exact and
         case-sensitive; a composite key is a compact JSON list in key order. A
-        key that no table or citation row holds is refused.
-        source_read.status read_none_found: read, none found; not_read: no read
-        record (a held field's is in document_citation_reads, if published);
-        not_held: no longer held.
+        key nothing holds is refused. source_read.status read_none_found: read,
+        none found; not_read: no read record (a held field's is in
+        document_citation_reads); not_held: no longer held.
         Rows run in cite_kind order, then text position; cite_kind selects a
-        kind, offset pages, and coverage.cite_kind_counts counts every kind.
-        Fixed per-document and per-kind fields are stated once (listed in
-        occurrence_fields.hoisted). coverage.partial: rows left out of
+        kind, offset pages, and coverage.cite_kind_counts counts every kind. A
+        page past the reply limit is refused with how many occurrences fit.
+        occurrence_fields and acquisition_queue.shared_fields explain fields
+        stated once. coverage.partial: rows left out of
         this page, an occurrence not looked up (reason_counts) or an unread
         document; never whole-document coverage.
         """
@@ -1940,25 +2050,35 @@ def _tools() -> list[Tool]:
             }
             if capped or offset or source_read["status"] == "not_read":
                 result["coverage"]["partial"] = True
-        reply = _jsonify(result)
-        occurrences, fields = _compact_occurrences(reply.pop("occurrences"))
-        return {
-            **_source_details(cursor), "occurrences": occurrences, "occurrence_fields": fields,
-            "target_status_meaning": {status: TARGET_STATUS_MEANINGS[status]
-                                      for status in sorted(reply["coverage"]["target_status_counts"])}, **reply,
-            "document_kind": document_kind, "document_key": document_key,
-            "max_occurrences": max_occurrences, "truncated": capped,
-            "source_read": source_read,
-            "acquisition_queue": _compact_queue(build_missing_target_queue(
-                result, input_snapshots={document_kind: status["publication"].get(parent, {})},
-                intended_query="Resolve the cited target for this held document", max_items=max_occurrences,
-            )),
-            # Each resolved target carries its own target_snapshot; this names the tables the lookup read.
-            "publication": _reply_pins(cursor, status["publication"], [
-                name for name in ("document_citations", parent, *([HELD_FIELD_READS] if held_field else ()))
-                if name in status["publication"]
-            ]),
-        }
+        # Each resolved target carries its own target_snapshot; publication names the tables the lookup read.
+        pins = _reply_pins(cursor, status["publication"], [
+            name for name in ("document_citations", parent, *([HELD_FIELD_READS] if held_field else ()))
+            if name in status["publication"]
+        ])
+        source_pin = status["publication"].get(parent, {})
+
+        def page(resolved: list[dict[str, Any]]) -> dict[str, Any]:
+            """The reply for ``resolved``: this page's occurrences, or the first of them when sizing a refusal."""
+            selected = {**result, "occurrences": resolved}
+            reply = _jsonify(selected)
+            occurrences, fields = _compact_occurrences(reply.pop("occurrences"))
+            return {
+                **_source_details(cursor), "occurrences": occurrences, "occurrence_fields": fields,
+                "target_status_meaning": {status: TARGET_STATUS_MEANINGS[status]
+                                          for status in sorted(reply["coverage"]["target_status_counts"])}, **reply,
+                "document_kind": document_kind, "document_key": document_key,
+                "max_occurrences": max_occurrences, "truncated": capped,
+                "source_read": source_read,
+                "acquisition_queue": _compact_queue(build_missing_target_queue(
+                    selected, input_snapshots={document_kind: source_pin},
+                    intended_query="Resolve the cited target for this held document", max_items=max_occurrences,
+                ), source_pin),
+                "publication": pins,
+            }
+
+        reply = page(result["occurrences"])
+        _refuse_oversized_page(reply, page, result["occurrences"], offset)
+        return reply
 
     return tools
 

@@ -8,11 +8,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 
+import duckdb
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 
-from spicy_regs import mcp_server as server
+from spicy_regs import acquisition_queue, mcp_server as server
+from spicy_regs.citation_resolution import _occurrence_key
 from tests.test_chaos_r5_server import (DOCS_LIVE, HELD, _cite, _documents_parent, _held_field_reads, _index,
                                         _lineage, _resolve, _resolve_held)
 from tests.test_mcp_relationships import citation_connection, merged_occurrences
@@ -242,3 +245,170 @@ def test_the_texts_say_inputs_are_what_the_producer_recorded(name):
     text = " ".join((tool.description or "").split())  # a client reads the wrapped lines as one paragraph
     assert "the parents its producer recorded (none recorded is not none; a read that bypassed the download helper is " \
            "not recorded)" in text
+
+
+# H1 (owner decision 2026-10-03, "refuse with the remedy" and "shrink replies"): rows are arrays under one column
+# list; a reply past the budget is refused with how many rows fit and how to ask again; nothing partial for size.
+
+def _query(monkeypatch, sql, **arguments):
+    con = duckdb.connect()
+    con.execute("CREATE TABLE _spicy_publication (snapshot VARCHAR)")
+    con.execute("INSERT INTO _spicy_publication VALUES (?)", [json.dumps({"families": {}})])
+    monkeypatch.setattr(server, "_get_connection", lambda: con)
+    return _tool_data(server.build_server(), "query_sql", {"sql": sql, **arguments})
+
+
+def _size(reply) -> int:
+    return len(json.dumps(reply, separators=(",", ":"), ensure_ascii=False))
+
+
+def test_rows_are_arrays_in_the_order_columns_names_once(monkeypatch):
+    reply = _query(monkeypatch, "SELECT i, 'x' || i AS label FROM range(3) t(i) ORDER BY i")
+    assert reply["columns"] == ["i", "label"]
+    assert reply["rows"] == [[0, "x0"], [1, "x1"], [2, "x2"]]
+
+
+PADDED = "SELECT i, repeat('x', 100) AS pad FROM range(50) t(i) ORDER BY i"
+
+
+def test_a_query_reply_past_the_budget_is_refused_with_the_rows_that_fit(monkeypatch):
+    monkeypatch.setattr(server, "REPLY_CHARS", 2_000)
+    with pytest.raises(ToolError) as refused:
+        _query(monkeypatch, PADDED, max_rows=50)
+    message = str(refused.value)
+    found = re.search(r"The first (\d+) of its 50 rows fit", message)
+    assert found, message
+    fit = int(found[1])
+    assert 0 < fit < 50 and "over the 2,000-character reply limit; nothing is returned" in message
+    assert f"ORDER BY a unique key and LIMIT {fit}, then LIMIT {fit} OFFSET {fit}" in message
+    assert "max_cell_chars" in message and "pad holds" in message
+    # The remedy works: those rows, asked for again with the clause the refusal names, fit.
+    page = _query(monkeypatch, PADDED.replace("ORDER BY i", f"ORDER BY i LIMIT {fit} OFFSET {fit}"), max_rows=50)
+    assert page["row_count_shown"] == fit and page["rows"][0][0] == fit and _size(page) <= 2_000
+
+
+def test_a_query_whose_first_row_is_past_the_budget_names_the_widest_column(monkeypatch):
+    monkeypatch.setattr(server, "REPLY_CHARS", 2_000)
+    with pytest.raises(ToolError, match=r"Not even the first row fits: set max_cell_chars to cut long cells \(big "
+                                        r"holds 100% of the rows' characters\)"):
+        _query(monkeypatch, "SELECT 1 AS id, repeat('x', 5000) AS big")
+
+
+def test_a_reply_within_the_budget_is_whole_and_the_max_rows_cut_is_unchanged(monkeypatch):
+    monkeypatch.setattr(server, "REPLY_CHARS", 2_000)
+    reply = _query(monkeypatch, "SELECT i FROM range(30) t(i) ORDER BY i", max_rows=10)
+    assert reply["rows"] == [[i] for i in range(10)] and reply["truncated"] is True and _size(reply) <= 2_000
+
+
+def test_the_budget_is_set_by_the_environment_and_must_be_a_positive_count(monkeypatch):
+    assert server.REPLY_CHARS == 40_000
+    monkeypatch.setenv("SPICY_REGS_REPLY_CHARS", "25000")
+    assert server._resolve_reply_chars() == 25_000
+    monkeypatch.setenv("SPICY_REGS_REPLY_CHARS", "lots")
+    with pytest.raises(RuntimeError, match="SPICY_REGS_REPLY_CHARS"):
+        server._resolve_reply_chars()
+
+
+def _many_citations(con, count=40):
+    _cite(con, *[("public_law", f"93-public-{n}", str(100 + n)) for n in range(count)])
+
+
+def test_a_citation_page_past_the_budget_is_refused_with_the_occurrences_that_fit(monkeypatch):
+    monkeypatch.setattr(server, "REPLY_CHARS", 6_000)
+    with citation_connection() as con:
+        _many_citations(con)
+        with pytest.raises(ToolError) as refused:
+            _resolve(con, monkeypatch, max_occurrences=42)
+        message = str(refused.value)
+        found = re.search(r"The first (\d+) of its 42 occurrences fit", message)
+        assert found, message
+        fit = int(found[1])
+        assert 0 < fit < 42 and f"max_occurrences={fit} and offset=0, then offset={fit}" in message
+        page = _resolve(con, monkeypatch, max_occurrences=fit, offset=fit)
+    assert len(page["occurrences"]) == fit and _size(page) <= 6_000
+
+
+def test_the_queue_names_each_requesting_occurrence_by_its_span_without_losing_any(monkeypatch):
+    with citation_connection() as con:
+        _cite(con, ("public_law", "93-public-344", "40"), ("public_law", "93-public-344", "50"),
+              ("public_law", "94-public-1", "60"))
+        index = _index()
+        index["families"]["print-citations"] = {**index["families"]["laws"], "tables": {
+            "house_activity_reports.parquet": index["families"]["laws"]["tables"]["laws.parquet"]}}
+        con.execute("UPDATE _spicy_publication SET snapshot = ?", [json.dumps(index)])
+        captured, build = {}, acquisition_queue.build_missing_target_queue
+
+        def keep(*args, **kwargs):  # the whole queue the reply is projected from
+            captured["queue"] = build(*args, **kwargs)
+            return captured["queue"]
+
+        monkeypatch.setattr(acquisition_queue, "build_missing_target_queue", keep)
+        result = _resolve(con, monkeypatch)
+    queue, full = result["acquisition_queue"], captured["queue"]
+    shared = queue["shared_fields"]
+    occurrences = merged_occurrences(result)
+    rebuilt = []
+    for item in queue["items"]:
+        merged = {**shared["item"], **shared["by_target_kind"][item["target_kind"]], **item}
+        route = merged["provider_route"]
+        merged["provider_route"] = {**route, "native_identifier": route.get("native_identifier",
+                                                                            merged["normalized_key"])}
+        merged["requesting_occurrences"] = [
+            {"occurrence_key": _occurrence_key(row), **{field: row.get(field) for field in REQUEST_FIELDS},
+             "input_snapshot": shared["input_snapshot"]}
+            for span in merged.pop("requesting_spans") for row in occurrences
+            if (row["cite_kind"], row["target_key"], row["span_start"]) == (item["target_kind"],
+                                                                             item["normalized_key"], span)]
+        rebuilt.append(merged)
+    assert rebuilt == full["items"] and [item["requesting_spans"] for item in queue["items"]] == [["40", "50"], ["60"]]
+    assert "resolution_coverage" not in queue["coverage"] and full["coverage"]["resolution_coverage"] == result["coverage"]
+
+
+REQUEST_FIELDS = ("document_kind", "document_key", "matched_text", "text_sha256", "span_start", "span_end",
+                  "resolution_rule", "source_status")
+
+
+def test_an_occurrence_drops_its_key_digest_and_a_rule_named_for_its_kind_and_merges_back():
+    row = {"document_kind": "govinfo_package", "document_key": "D", "text_sha256": "t", "cite_kind": "rin",
+           "target_key": "0648-AC64", "span_start": "4", "target_kind": "rin", "normalized_key": "0648-AC64",
+           "target_rule": "rin", "rule_version": "002", "target_status": "found", "reason": None}
+    rows = [{**row, "occurrence_key": _occurrence_key(row)},
+            {**row, "span_start": "9", "target_rule": "rin_fallback", "occurrence_key": _occurrence_key({**row,
+                                                                                                    "span_start": "9"})}]
+    compact, fields = server._compact_occurrences(rows)
+    assert all("occurrence_key" not in item for item in compact)
+    assert "target_rule" not in compact[0] and compact[1]["target_rule"] == "rin_fallback"
+    assert fields["by_cite_kind"]["rin"]["rule_version"] == "002"
+    merged = merged_occurrences({"occurrences": compact, "occurrence_fields": fields})
+    assert [{**item, "occurrence_key": _occurrence_key(item)} for item in merged] == rows
+
+
+def test_a_file_without_a_same_as_field_is_not_given_one():
+    """A legacy document_citations file has no target_rule; merging back must not invent it from cite_kind."""
+    compact, fields = server._compact_occurrences([{"cite_kind": "rin", "target_key": "k", "span_start": "1"}])
+    assert "target_rule" not in fields["same_as"]
+
+
+#: What a live connection adds to a catalog reply that the dictionary-typed fixture lacks: pins with inputs (a
+#: snapshot table's are about 1,600 characters, round 6) and release summaries. Measured 2026-10-03 on the live
+#: bucket: list_sources 34,243 characters, the largest default description congress_bills' 27,748 (27,476 here).
+LIVE_ROOM = 5_000
+
+
+def test_the_catalog_replies_stay_under_the_budget_so_none_is_ever_refused_or_cut(monkeypatch):
+    """list_sources and describe_table are not row-shaped: nothing refuses or cuts them, so their size is held here."""
+    from tests.test_chaos_r3_server import _typed_tables
+
+    record, _ = server._ledger()
+    monkeypatch.setattr(server, "R2_BASE_URL", record["destination"])  # so descriptions carry the ledger's audits
+    with duckdb.connect() as con:
+        metadata = server._table_metadata()
+        _typed_tables(con, [table for table in server.TABLES if table in metadata])
+        server._install_relationship_views(con)
+        monkeypatch.setattr(server, "_get_connection", lambda: con)
+        mcp = server.build_server()
+        sizes = {("list_sources", None): _size(_tool_data(mcp, "list_sources", {}))}
+        for name in [*server.TABLES, *server._connection_relationships(con.cursor())]:
+            for detail in (False, True):
+                sizes[(name, detail)] = _size(_tool_data(mcp, "describe_table", {"table": name, "detail": detail}))
+    assert {key: size for key, size in sizes.items() if size > server.REPLY_CHARS - LIVE_ROOM} == {}

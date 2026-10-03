@@ -32,6 +32,9 @@ from tests.test_mcp_server import _tool_data
 # compact input schema with the description: round 5 saw query_sql's 1,728 + 322 = 2,050 cut at character 1,711
 # for three personas while describe_table's 1,832 + 190 = 2,022 was not (round5/audit-oyelaran.md, finding 5).
 CLIENT_BUDGET = 2_048
+#: Room every tool keeps under the cap (round 6 review, item 2): rounds 5 and 6 ended 4 to 16 characters under it, so
+#: one more word or a schema change in a pydantic release would cut a description mid-sentence.
+HEADROOM = 40
 
 
 # S3 and the double send: what the client is sent.
@@ -41,7 +44,7 @@ def test_every_registered_description_fits_the_client_cap_without_indentation():
     for tool in tools:
         description = tool.description or ""
         sent = len(description) + len(json.dumps(tool.input_schema, separators=(",", ":")))
-        assert sent <= CLIENT_BUDGET, (tool.name, len(description), sent)
+        assert sent <= CLIENT_BUDGET - HEADROOM, (tool.name, len(description), sent)
         assert not any(line[:1].isspace() for line in description.splitlines()), tool.name
 
 

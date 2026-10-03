@@ -20,7 +20,7 @@ from spicy_regs.relationship_views.fec_query_views import fec_query_views
 from spicy_regs.relationship_views.sql_views import SQLView, install_sql_views, view_columns
 from tests.test_fec_release import digest
 from tests.test_mcp_query_results import call
-from tests.test_mcp_server import _tool_data
+from tests.test_mcp_server import _records, _tool_data
 
 RECORD = "sha256:e96bf34c98722f2d6157a95155748c7243f9b73accf45e1d963b9ce932ea32e9"
 NAME = "fec_receipts_source_analysis_decision"
@@ -103,7 +103,7 @@ def test_retained_decision_rows_and_warnings_are_not_presentation_generated(fina
     mcp, _, _, _ = financial_server
     result = _tool_data(mcp, "query_sql", {"sql": f"""SELECT target_record_id, status, reason, value,
         measure_basis, warnings, current_financial_total_qualified FROM {NAME}"""})
-    assert result["rows"] == [{
+    assert _records(result) == [{
         "target_record_id": RECORD, "status": "eligible", "reason": "source_defined_purpose",
         "value": "50.000000000", "measure_basis": "signed_reported_observation",
         "warnings": ["source_observation_not_current_net_money"], "current_financial_total_qualified": False,
@@ -120,7 +120,7 @@ def test_value_only_keeps_registry_limits_and_exact_release_scope(financial_serv
         wire = call(client, "query_sql", {"sql": f"SELECT value FROM {NAME}", "max_rows": 1})
     assert not wire["isError"]
     reply = wire["structuredContent"]
-    assert reply["rows"] == [{"value": "50.000000000"}]
+    assert _records(reply) == [{"value": "50.000000000"}]
     assert reply["columns"] == ["value"] and not reply["truncated"]
     pin = reply["publication"][NAME]
     assert pin["meaning"] == next(s.view.meaning for s in specs if s.view.name == NAME)
@@ -180,7 +180,7 @@ def test_purpose_distinctions_follow_publisher_memo_rule(financial_server, purpo
     con.execute("UPDATE fec_receipts SET memo_indicator = ?", [memo])
     reply = _tool_data(mcp, "query_sql", {"sql": f"SELECT status, value, current_financial_total_qualified "
                                        f"FROM fec_receipts_{purpose}_decision"})
-    assert reply["rows"] == [{"status": status, "value": value, "current_financial_total_qualified": False}]
+    assert _records(reply) == [{"status": status, "value": value, "current_financial_total_qualified": False}]
 
 
 @pytest.mark.parametrize("where", ["", "WHERE FALSE"])
@@ -190,7 +190,7 @@ def test_mixed_and_empty_results_keep_each_named_scope_without_adding_row_column
           f"ON d.target_record_id = r.record_id {where}"
     reply = _tool_data(mcp, "query_sql", {"sql": sql})
     assert reply["sql"] == sql
-    assert reply["rows"] == ([] if where else [{"value": "50.000000000", "memo_indicator": ""}])
+    assert _records(reply) == ([] if where else [{"value": "50.000000000", "memo_indicator": ""}])
     assert reply["columns"] == ["value", "memo_indicator"]
     assert set(reply["publication"]) == {NAME, "fec_receipts"}
     assert "meaning" in reply["publication"][NAME]
@@ -203,5 +203,5 @@ def test_mixed_and_empty_results_keep_each_named_scope_without_adding_row_column
 def test_one_row_qualified_publication_budget(financial_server):
     mcp, _, _, _ = financial_server
     reply = _tool_data(mcp, "query_sql", {"sql": f"SELECT value FROM {NAME}"})
-    assert reply["rows"] == [{"value": "50.000000000"}]
+    assert _records(reply) == [{"value": "50.000000000"}]
     assert len(json.dumps(reply["publication"], separators=(",", ":")).encode()) < 4096

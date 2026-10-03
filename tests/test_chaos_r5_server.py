@@ -363,14 +363,13 @@ def test_the_acquisition_queue_states_its_constant_fields_once(monkeypatch):
         con.execute("UPDATE _spicy_publication SET snapshot = ?", [json.dumps(index)])
         queue = _resolve(con, monkeypatch)["acquisition_queue"]
     shared = queue["shared_fields"]
-    assert {"document_kind", "document_key", "text_sha256", "input_snapshot"} <= set(shared["requesting_occurrence"])
+    # Round 6 (owner decision: shrink replies) names each requesting occurrence by its span on the page, which states
+    # every field a request restated; test_chaos_r6_server rebuilds the whole queue from the reply.
+    assert shared["input_snapshot"]["family"] == "print-citations"
     assert {"intended_query", "queue_rule", "acquisition_outcome"} <= set(shared["item"])
-    items = [{**shared["item"], **item, "requesting_occurrences": [
-        {**shared["requesting_occurrence"], **request} for request in item["requesting_occurrences"]]}
-        for item in queue["items"]]
-    assert [(item["normalized_key"], [r["span_start"] for r in item["requesting_occurrences"]]) for item in items] == [
+    assert {"target_snapshot", "status"} <= set(shared["by_target_kind"]["public_law"])
+    assert [(item["normalized_key"], item["requesting_spans"]) for item in queue["items"]] == [
         ("93-public-344", ["40", "50"]), ("94-public-1", ["60"])]
-    assert all(r["document_key"] == "CRPT-example" for item in items for r in item["requesting_occurrences"])
 
 
 # Freshness: the publisher states when it moved a family's pointer; every reply that pins a generation says so.

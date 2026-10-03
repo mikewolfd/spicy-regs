@@ -197,7 +197,7 @@ the check honest without a blanket type-ignore.
 The two controls work together: `read_text`, `read_csv`, and `read_blob` are
 SELECTs, but native file permissions refuse any file not selected for the views.
 A result with duplicate column labels is rejected with alias guidance, because
-JSON row objects would otherwise silently overwrite values. One-row lookahead
+a client reads each row's values by the names in `columns`. One-row lookahead
 sets `truncated` only when `max_rows` actually omits a row. Validation refusals
 raise tool errors so MCP reports `isError: true` consistently.
 
@@ -369,10 +369,9 @@ page whose rows happen to agree on a per-occurrence field (all `found`) keeps
 the same shape as the next. A listed field whose values differ in its scope (a
 document holding rows of two texts) stays on each occurrence and is named in
 `not_hoisted`: a stated-once value is never a guess. The acquisition queue is
-built from the whole rows and then projected the same way (`_compact_queue`):
-the fixed `QUEUE_ITEM_FIELDS` and `QUEUE_REQUEST_FIELDS` are stated once in
-`acquisition_queue.shared_fields`. Nothing stored changes. Measured on the
-live bucket (print-citations 685f2e27), characters per reply:
+built from the whole rows and then projected the same way (`_compact_queue`,
+round 6 below). Nothing stored changes. Measured on the live bucket
+(print-citations 685f2e27), characters per reply:
 
 | Request | Deployed (d2b5f53) | Fixed lists (this tree) | Hoisting any agreeing field (794beed) |
 |---|---|---|---|
@@ -387,6 +386,30 @@ The stable shape costs a third to a half more than hoisting any field a page
 happens to agree on (`target_resolved`, `reason`, `rule_version`, ...). Without
 the queue projection the 45 pages came to 5,461,495 under the earlier rule: the
 queue repeated the document's pins on every requesting occurrence.
+
+**What a reply no longer restates (round 6, owner decision 2026-10-03).** A
+100-occurrence page of BUDGET-2027-APP's Statutes citations was 102,942
+characters, 59% of it the acquisition queue. Every projection below is lossless
+against the reply it sits in (`test_chaos_r6_server` rebuilds the whole queue):
+- a queue item names its requesting occurrences by `requesting_spans`: each is
+  the `span_start` of an occurrence whose `cite_kind` and `target_key` are the
+  item's `target_kind` and `normalized_key`, and that occurrence states every
+  field a request restated except `input_snapshot`, stated once in
+  `shared_fields`;
+- `QUEUE_KIND_FIELDS` (`target_snapshot`, `provider_route`, `status`) are
+  stated once per target kind where the kind's items agree, a route's
+  `native_identifier` leaves it where it equals `normalized_key`, and the
+  queue's `coverage.resolution_coverage`, a copy of the reply's `coverage`,
+  is left out;
+- an occurrence leaves out `occurrence_key`, a digest of six fields it states
+  (a fifth of each occurrence), and `target_rule` where it equals `cite_kind`
+  (11 of the 13 held kinds on every row); `rule_version`, one per kind in every
+  held document, joins `OCCURRENCE_KIND_FIELDS`. `same_as` lists only fields
+  the rows hold, so a legacy file without `target_rule` is not given one.
+
+The same page measured 49,291 characters on 2026-10-03, and the default
+25-occurrence pages fell from 22,141 to 19,348 (BUDGET-2027-APP) and from
+15,124 to 12,663 (CRPT-118hrpt964).
 
 **Read statuses (round 5).** `source_read.status` separates three answers that
 used to arrive as one `missing_digest` with no occurrences (`_source_read`):
@@ -544,6 +567,37 @@ file its reader cannot page, so two of five personas never read a row.
   belongs in an explicit table description": the explicit description is now
   `detail=true`. Measured on the live 72 views: a median of 15,471 to 8,301
   characters (maximum 25,187 to 11,235; all 72, 1,130,695 to 609,034).
+- **A query or citation reply past `REPLY_CHARS` is refused with its remedy
+  (round 6, owner decision 2026-10-03).** Claude Code saves a result past
+  25,000 tokens (`MAX_MCP_OUTPUT_TOKENS`) to a one-line file, and its reader
+  showed 39,000 to 43,000 characters of each: round-6 personas lost the rows
+  of 76,947- to 102,942-character replies. The budget is 40,000 characters of
+  the reply's compact JSON text (`SPICY_REGS_REPLY_CHARS`; no per-call
+  argument, which would spend every tool's description cap). A `query_sql`
+  reply past it is a tool error that states its size, how many leading rows
+  fit and how to ask again: ORDER BY a unique key with `LIMIT k`, then
+  `LIMIT k OFFSET k`, comparing the publication pins between pages (a pointer
+  can move between two calls), or `max_cell_chars`, naming the column holding
+  most characters. A citation page past it states how many occurrences fit
+  and the `max_occurrences` and `offset` to ask with; its size never falls as
+  occurrences are added, so the count is found by halving over rows already
+  resolved (about seven builds for 100, no read). The count leaves
+  `RE_ASK_CHARS` (100) for the clause the reply echoes. Nothing partial is
+  returned for size; the `max_rows` cut and `truncated` are unchanged. The
+  owner chose refusal over cutting at the budget and continuing (the scout's
+  recommendation): a caller that skips `truncated` cannot mistake a refusal
+  for the whole answer. The cost is that the statement's work is thrown away
+  and runs again; the server holds no cursor between calls.
+- **`query_sql` states `columns` once and each row as an array in their
+  order (round 6).** Column names repeated on every row were 32% of a
+  399-row persona reply: ulrike's call 12 went from 76,949 characters to
+  53,117, and its first 302 rows from 57,964 to 39,844. `truncated_cells`
+  still names each cut cell's row and column.
+- **The catalog replies are not row-shaped and are never refused or cut.**
+  `test_chaos_r6_server` holds `list_sources` and every description, either
+  detail, under the budget less room for live pins; on 2026-10-03 the live
+  `list_sources` was 34,243 characters and the largest default description
+  (`congress_bills`) 27,748.
 - **`query_sql(max_cell_chars=N)`** cuts every text, list or struct cell longer
   than N characters to its first N (a list or struct as its compact JSON text)
   and lists each cut cell in `truncated_cells` as `{row, column, chars}` with the

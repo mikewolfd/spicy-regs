@@ -10,7 +10,7 @@ from starlette.testclient import TestClient
 
 from spicy_regs import fec_release as release, mcp_server as server
 from tests.test_fec_release import capture, digest, fixture
-from tests.test_mcp_server import _tool_data
+from tests.test_mcp_server import _records, _tool_data
 from tests.test_mcp_query_results import call
 
 
@@ -53,7 +53,7 @@ def test_compatible_mcp_responses_include_exact_receipt_dependency_and_consumer_
         assert described["available"]
         result = _tool_data(mcp, "query_sql", {"sql": f"SELECT * FROM {name}"})
         attestation = result["publication"][name]["release_compatibility"]
-        assert result["rows"] == [{"id": 1}]
+        assert _records(result) == [{"id": 1}]
         assert attestation["receipt_sha256"] == discovery["fec_release"]["receipt_sha256"]
         full = described["publication"]["release_compatibility"]
         assert full["consumer"] == consumer
@@ -116,11 +116,11 @@ def test_parent_advancement_refuses_affected_query_but_keeps_old_connection_and_
         assert "exact_table_pin_mismatch" in description["relationship"]["reason"]
         with pytest.raises(Exception, match="disabled.*exact_table_pin_mismatch"):
             _tool_data(mcp, "query_sql", {"sql": f"SELECT * FROM {name}"})
-        assert _tool_data(mcp, "query_sql", {"sql": f"SELECT * FROM {specs[1].view.name}"})["rows"] == [{"id": 2}]
-        assert _tool_data(mcp, "query_sql", {"sql": "SELECT * FROM members"})["rows"] == [{"id": 2}]
+        assert _records(_tool_data(mcp, "query_sql", {"sql": f"SELECT * FROM {specs[1].view.name}"})) == [{"id": 2}]
+        assert _records(_tool_data(mcp, "query_sql", {"sql": "SELECT * FROM members"})) == [{"id": 2}]
         monkeypatch.setattr(server, "_get_connection", lambda: old)
         prior = _tool_data(mcp, "query_sql", {"sql": f"SELECT * FROM {name}"})
-        assert prior["rows"] == [{"id": 1}]
+        assert _records(prior) == [{"id": 1}]
         assert prior["publication"][name]["input_publications"]["members"]["artifact_digest"] == index["families"]["members"]["artifactDigest"]
     old.close()
 
@@ -146,7 +146,7 @@ def test_receipt_or_deployment_failure_leaves_raw_tables_queryable(tmp_path, mon
             described = _tool_data(mcp, "describe_table", {"table": spec.view.name})
             assert described["relationship"]["release_compatibility"]["status"] == "disabled"
             assert described["relationship"]["release_compatibility"]["reasons"]
-        assert _tool_data(mcp, "query_sql", {"sql": "SELECT * FROM fec_receipts"})["rows"] == [{"id": 1}]
+        assert _records(_tool_data(mcp, "query_sql", {"sql": "SELECT * FROM fec_receipts"})) == [{"id": 1}]
 
 
 def test_refresh_checks_configuration_when_index_unchanged_and_rollback_restores_matched_set(tmp_path, monkeypatch):
