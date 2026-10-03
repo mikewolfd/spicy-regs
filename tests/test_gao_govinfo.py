@@ -37,7 +37,16 @@ def test_a_package_id_maps_to_the_gao_product_id(package_id, product_id):
     assert report_id(package_id) == product_id
 
 
-@pytest.mark.parametrize("package_id", ["CRPT-118hrpt1", "GAOREPORTS-FILE-291573.7", "GAOREPORTS-GAO-IMTEC-11_1_1"])
+@pytest.mark.parametrize(
+    "package_id",
+    [
+        "CRPT-118hrpt1",
+        "GAOREPORTS-FILE-291573.7",
+        "GAOREPORTS-GAO-IMTEC-11_1_1",
+        # SpicyDocs' product-id grammar is the one in force, its 128-character bound included.
+        "GAOREPORTS-" + "A" * 129,
+    ],
+)
 def test_a_package_outside_the_collection_or_without_a_product_reading_refuses(package_id):
     with pytest.raises(GaoGovInfoError):
         report_id(package_id)
