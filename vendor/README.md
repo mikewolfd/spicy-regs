@@ -5,73 +5,22 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- `spicy_docs-0.53.0+votes.8d7f3fe3b489`: the `+laws` build plus one commit, `8d7f3fe`
-  (cherry-picked from bills-lane `c167701`), on base `f8431033f62633b1e7ffbb00a063748f582f6ab4`.
-  SHA-256 `7e8d7f99e169628cf7dc64f50f9b766b3d8968697b2e71463ca55b7f8a84f0e7`, 1,803,825 bytes;
-  two committed-archive builds produced identical bytes. It differs from the `+laws` wheel only
-  in `spicy_docs/sources/congress/votes.py` (and `METADATA`/`RECORD`): House roll calls are
-  listed from the Clerk's roll files instead of the retired `evs/{year}/index.asp`, which
-  answers 404 since 2026-10-02. A development stand-in for the bills-lane release that
-  carries the same change; vendored branch build, not a registry release. Build receipt:
-  `mcp-chaos-2026-10-02/round5/wheel/` (`README.md`, `wheel.json`, `gate.log`).
-
-- `spicy_docs-0.53.0+laws.f8431033f626`: native enacted-law sections and source URLs from
-  source commit `f8431033f62633b1e7ffbb00a063748f582f6ab4`.
-  SHA-256 `b011d6a57622cc8756b54560c484fd5c7fa3b0a4a893298d75239a7b64766686`. Two committed-archive
-  builds produced identical bytes. Reuses the acquired law XML and retains
-  section hierarchy, quotations, source paths, and text outside sections.
-  This is a vendored branch build. Build receipt:
-  `law-text-integration-20261002/source/wheel.json`.
-
-- `spicy_docs-0.53.0+printing.11189d72bd29`: bill-printing provenance correction from
-  source commit `11189d72bd29b542874c2081d8dad5e57cd24333`.
-  SHA-256 `335a7c409fbe87ff656caff5a671996d895a750a32bfc10bc52b5f88df751316`. Two committed-archive
-  builds produced identical bytes. Law listings no longer select enrolled BILLS
-  targets; supported printing resources must agree on exact package identity.
+- `spicy_docs-0.54.0+chaos.16c2285ef63e`: the bills-lane 0.54.0 candidate (owner decision 1, round 5, 2026-10-03)
+  from branch `chaos/2026-10-03-bills-lane-r4` at `16c2285ef63e0bc887cdbf0684e613daccc1bed5`, with implementer E's
+  extras merged. SHA-256 `21ece738ac1b5cf25af11822c64fe89612974e284d8e49d7ccb284b59fbe1ac8`, 1,845,559 bytes; two
+  committed-archive builds produced identical bytes, and the body-text derivation digest read from the wheel equals
+  its pin (`sha256:91fa3ee5…`). It adds the `gao_decisions`, `cbo_feed_items` and `bill_committee_activities`
+  contracts, `party_totals_json`, the tie-breaker and MODS hearing columns and `detail_read`; the passed-stage hold,
+  the `calendared` and `passed_both` rungs and the money-bill precision rules; GAO's outcome reading
+  (`gao-decision-outcome/002`), `BillIdentity.from_bill_id`, the CFR id grammar and `BODY_TEXT_DERIVATION_VERSION`.
   This is a vendored branch build, not a registry release. Build receipt:
-  `mcp-chaos-2026-10-02/round2/repair/source/wheel.json`.
+  `mcp-chaos-2026-10-02/round5/wheel-r5b/` (`README.md`, `READY.md`, `wheel.json`, `gate.log`, `smoke.out`).
 
-- `spicy_docs-0.53.0+fec.69964fe27c6d`: reviewed FEC source at
-  commit `69964fe27c6ddc437e817041a3c5cca57a02723c`.
-  SHA-256 `824296eed3c333277feaa4dca03a2dc8faec437d803c374186d61c8761bf8c7b`. Repeated committed-archive
-  builds are byte-identical. Production package files are identical to
-  `0.53.0+fec.bcdde5431fac`; this repin includes the reviewed PostgreSQL
-  rejection/cleanup and API shape-refusal regression tests. Build and comparison
-  receipts: `hosted-release-20261001/reviewed-release/source/`.
-
-- `spicy_docs-0.53.0+fec.bcdde5431fac`: research-coverage correction from
-  source commit `bcdde5431fac89799f0f3f76400dfacbc661399f`.
-  SHA-256 `364a220975c868cc6ea67809f4064c09b9efd72ec54ba02166a95f38bdd29099`.
-  Two committed-archive builds produced identical bytes. This preserves FEC
-  integer identifiers outside the artifact JSON safe range as exact strings.
-  Original response bytes retain their original numeric spelling and type.
-  See the research-closure receipt linked from the retained qualification.
-
-- `spicy_docs-0.53.0+fec.14b98e9db916`: retained FEC corpus candidate from source
-  commit `14b98e9db91644728b0fa7f924f22095dc719bf7`, September 30, 2026.
-  SHA-256 `9547ff1d4b010abe0b8af9ad62a24844a44fd27dad9feea5838bfc4f582c1e37`.
-  Two builds from the exact committed archive produced identical bytes. Only
-  archive build metadata sets this local version; the source branch version
-  remains unchanged. Includes retained PostgreSQL, agency archive/Word and API
-  observation readers, plus session-bounded ZIP verification reuse. PDF support
-  is preserved in the source but PDF processing and qualification are deferred
-  by the user for this campaign. See the [retained qualification](../docs/research/fec-retained-corpus-qualification-2026-09-30.md).
-- `spicy_docs-0.53.0+fec.3fc8388b368b`: local FEC candidate build from source commit
-  `3fc8388b368b204a57f6ea4029e26eadb132cfad`, September 30, 2026. SHA-256
-  `9b1b944f1dce879310d1bf37cbb4c9ae560dceb70d7eb9816d0862eb11b700b8`.
-  Two independent archive builds were byte-identical. Only the archive's package
-  version changes to distinguish this build from released 0.53.0; the source
-  checkout keeps its release version. It adds candidate history and retained
-  agency-report profiles with their source validation fixes. The `html` extra
-  supplies the qualified Oversight parser dependency. Receipt and build recipe:
-  `fec-publish-completion-20260930/source/wheel.json` and `build_wheel.py`.
-  This is a vendored local candidate; no registry publication is asserted.
-
-- `spicy_docs-0.53.0`: released from SpicyDocs `main` at `4bf3d04`, September 29, 2026.
-  The adopted wheel is 1,770,670 bytes, SHA-256
-  `2ec43dcec80aa65d14db0c6fb9138bd1e6c17bcfc62b0065cbab2c5aa5bfce52`.
-  It adds the `comment_attributes` and `gao_recommendations` readers and table
-  definitions. The adoption retains the existing source-reader extras.
+- The superseded SpicyDocs 0.53.0 wheels were removed on October 3, 2026, when 0.54.0+chaos was adopted:
+  `0.53.0`, `+printing.11189d72bd29`, `+fec.14b98e9db916`, `+fec.3fc8388b368b`, `+fec.69964fe27c6d`,
+  `+fec.bcdde5431fac` and `+laws.f8431033f626` (fork main `d2b5f53` holds each, with its record in this file), and
+  the development stand-in `+votes.8d7f3fe3b489` (the votes lister alone, receipt `mcp-chaos-2026-10-02/round5/wheel/`).
+  Restore one with `git show d2b5f53:vendor/<wheel> > vendor/<wheel>`.
 
 - Previously adopted `spicy_docs-0.52.0`: released from SpicyDocs `main` at `b08ac1b`, September 28, 2026:
   **1,757,380 bytes**, SHA-256 `374b8c208018d1964007b9e78c4c9ab6beedaafab2cca96fb93a4acbc2b26684`,
