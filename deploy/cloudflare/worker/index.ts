@@ -73,10 +73,13 @@ export class McpContainer extends Container<Env> {
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    const { pathname } = new URL(request.url);
+    if (pathname === "/" && (request.method === "GET" || request.method === "HEAD") && env.MCP_GUIDE_URL) {
+      return Response.redirect(env.MCP_GUIDE_URL, 302);
+    }
     if (!env.SPICY_REGS_R2_URL) {
       return new Response("Data is not available yet.", { status: 503 });
     }
-    const { pathname } = new URL(request.url);
     // /mcp is the protocol endpoint; / and /icon.png are the human-facing setup
     // page, which the Python server serves (see mcp_server._register_landing_page).
     if (

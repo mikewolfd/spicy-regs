@@ -48,6 +48,7 @@ authentication in unrelated projects stays separate.
 ```bash
 cd deploy/cloudflare
 export SPICYREGS_DOMAIN=spicygov.ai # Mike's fork; omit for upstream defaults
+export MCP_GUIDE_URL=https://spicygov.ai/mcp/ # Optional separate browser guide
 npm ci
 npm test              # bounded native-connection recovery checks
 npm run check          # Worker dry run and typecheck
@@ -130,3 +131,15 @@ threads) are the knobs. `max_instances` is not a concurrency knob: the Worker
 calls `getContainer` without a name, so every request reaches one container.
 More instances would each run their own cold build against the bucket.
 Re-measure after changes.
+
+### Separate MCP connection guide
+
+`MCP_GUIDE_URL` optionally redirects browser GET/HEAD requests for `/` to an
+absolute HTTPS guide URL. Leave it unset to keep the upstream container landing
+page. `/mcp` and `/mcp/*` still go to the MCP server without a redirect, including
+POST requests. The guide remains accessible while data is unavailable.
+
+Mike's fork uses `https://spicygov.ai/mcp/`, maintained in
+[mikewolfd/spicygov](https://github.com/mikewolfd/spicygov). Export the value above
+for every manual deployment; GitHub repository variables are not automatically
+inherited by local Wrangler commands. Deploy the guide before enabling the redirect.

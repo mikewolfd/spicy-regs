@@ -23,6 +23,8 @@
   // Set these for the selected account before deploying a fork. The Worker
   // forwards them to Python; secrets belong in Wrangler's secret store.
   "vars": {
+    // Optional browser landing guide; blank preserves the container landing page.
+    "MCP_GUIDE_URL": "{{ MCP_GUIDE_URL }}",
     "SPICYREGS_DOMAIN": "{{ SPICYREGS_DOMAIN }}",
     "SPICY_REGS_R2_URL": "{{ R2_PUBLIC_URL }}",
     // Set these to the admitted release receipt and actual deployed image pins.
