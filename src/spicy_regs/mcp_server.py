@@ -244,6 +244,18 @@ OCCURRENCE_DOCUMENT_FIELDS = ("document_kind", "document_key", "text_sha256", "b
                               "source_status", "resolution_rule")
 OCCURRENCE_KIND_FIELDS = ("rule_name", "target_table", "target_snapshot", "target_table_selected", "target_grain",
                           "expected_cardinality")
+#: What each target_status says. A citation reply defines the words its occurrences use, and only those: the five
+#: definitions did not fit the tool text beside everything else it must say (round 6, phase3-review item 2).
+TARGET_STATUS_MEANINGS = {
+    "found": "The selected target table holds the cited key: one row, or at least one where target_grain names "
+             "several rows per key.",
+    "missing": "The selected target table holds no row with this key. The table may not cover the cited range "
+               "(describe_table states its coverage), so this does not prove the target does not exist.",
+    "ambiguous": "More than one target row has this key where one was expected; candidate_keys lists them.",
+    "not_checked": "No lookup was made; reason says why (a key the citation did not settle, a source text not read, "
+                   "no pinned target table, a limit, or a failed read).",
+    "unsupported": "No route looks up this citation kind: it is held, never checked.",
+}
 #: An occurrence field that restates another field of the same occurrence; a reply drops it where they are equal.
 OCCURRENCE_SAME_AS = {"target_kind": "cite_kind", "normalized_key": "target_key"}
 #: The acquisition queue's fields fixed for the reply, on each item and on each requesting occurrence.
@@ -1338,7 +1350,7 @@ def _source_read(
     its read in the row: the text digest, ``pages_read``, ``rule_set_version``
     and the ``citation_rows`` it produced. A held field's read is recorded in
     :data:`HELD_FIELD_READS`, when published: the latest read of the field's
-    current text that states its rule set and rows.
+    current text, with or without a rule set.
     """
     from spicy_regs.citation_sources import TEXT_SOURCES, source_digests
 
@@ -1355,10 +1367,13 @@ def _source_read(
         else:
             values = [(digest, False, None) for (digest,) in source_digests(cursor, kind, key)]
             if len(values) == 1 and values[0][0] and not cited and HELD_FIELD_READS in tables:
+                # Every read published so far states no rule set and no time (round 6, 13 of 13): the dictionary
+                # calls that a read recorded before the table existed. An undated read stating rows outranks one
+                # stating none, so a disagreement refuses rather than reading as "none found".
                 read = cursor.execute(
                     f'SELECT CAST(citation_rows AS BIGINT) FROM "{HELD_FIELD_READS}" WHERE document_kind = ? '
-                    "AND document_key = ? AND text_sha256 = ? AND rule_set_version IS NOT NULL "
-                    "ORDER BY read_at DESC LIMIT 1",
+                    "AND document_key = ? AND text_sha256 = ? "
+                    "ORDER BY read_at DESC NULLS LAST, CAST(citation_rows AS BIGINT) DESC LIMIT 1",
                     [kind, key, values[0][0]],
                 ).fetchone()
                 values = [(values[0][0], read is not None, read[0] if read is not None else None)]
@@ -1794,7 +1809,8 @@ def _tools() -> list[Tool]:
         """Resolve a bounded document's held citations against this connection's selected targets.
 
         Findings keep spelling, text digest and rule; lookup checks neither
-        precision nor legal effect. acquisition_queue plans missing targets;
+        precision nor legal effect. target_status_meaning defines each
+        target_status the reply uses. acquisition_queue plans missing targets;
         nothing is acquired. document_kind is case-insensitive; its schema
         names each kind's table, whose key document_key takes
         (govinfo_package covers only house_activity_reports). document_key is exact and
@@ -1874,7 +1890,9 @@ def _tools() -> list[Tool]:
         reply = _jsonify(result)
         occurrences, fields = _compact_occurrences(reply.pop("occurrences"))
         return {
-            **_source_details(cursor), "occurrences": occurrences, "occurrence_fields": fields, **reply,
+            **_source_details(cursor), "occurrences": occurrences, "occurrence_fields": fields,
+            "target_status_meaning": {status: TARGET_STATUS_MEANINGS[status]
+                                      for status in sorted(reply["coverage"]["target_status_counts"])}, **reply,
             "document_kind": document_kind, "document_key": document_key,
             "max_occurrences": max_occurrences, "truncated": capped,
             "source_read": source_read,

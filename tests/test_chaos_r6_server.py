@@ -12,6 +12,8 @@ import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 
 from spicy_regs import mcp_server as server
+from tests.test_chaos_r5_server import HELD, _cite, _held_field_reads, _resolve, _resolve_held
+from tests.test_mcp_relationships import citation_connection, merged_occurrences
 
 #: One valid call per tool, so a test can add a single bad argument to it.
 VALID = {
@@ -76,3 +78,36 @@ def test_an_unsupported_namespace_is_refused_naming_the_supported_ones(monkeypat
     assert "namespace: Input should be 'regulations.gov:agency' or 'federal_register_agency'" in message
     [tool] = [t for t in asyncio.run(server.build_server().list_tools()) if t.name == "lookup_agency"]
     assert tool.input_schema["properties"]["namespace"]["enum"] == ["regulations.gov:agency", "federal_register_agency"]
+
+
+# M8: a held field's read recorded before rule sets were kept is a read, and status words are defined where used.
+
+def test_a_zero_row_read_recorded_without_a_rule_set_or_time_is_read_none_found(monkeypatch):
+    """Every published document_citation_reads row states no rule set and no read time (round 6: 13 of 13, the
+    dictionary calls that a read recorded before the table existed); court opinion 11264529 read 0 rows."""
+    with citation_connection() as con:
+        _held_field_reads(con, (HELD, None, None, 0))
+        result = _resolve_held(con, monkeypatch)
+    assert result["source_read"] == {"table": "comments", "status": "read_none_found"}
+    assert result["coverage"]["partial"] is False
+
+
+def test_an_undated_read_stating_rows_that_are_not_held_still_refuses(monkeypatch):
+    """Reads of one text that state no time are ordered by their rows, so one stating rows is never hidden by a 0."""
+    with citation_connection() as con, pytest.raises(ToolError, match="states 4 citation rows"):
+        _held_field_reads(con, (HELD, None, None, 0), (HELD, None, None, 4))
+        _resolve_held(con, monkeypatch)
+
+
+def test_the_reply_defines_exactly_the_target_status_words_it_uses(monkeypatch):
+    with citation_connection() as con:
+        _cite(con, ("public_law", "119-public-999", "30"), ("crs_report_id", "R12345", "40"))
+        result = _resolve(con, monkeypatch)
+        found = _resolve(con, monkeypatch, cite_kind="public_law", max_occurrences=2)
+    used = {row["target_status"] for row in merged_occurrences(result)}
+    assert used == {"found", "missing", "not_checked"} == set(result["target_status_meaning"])
+    assert "may not cover" in result["target_status_meaning"]["missing"]
+    assert "reason" in result["target_status_meaning"]["not_checked"]
+    assert set(found["target_status_meaning"]) == {"found"}
+    [tool] = [t for t in asyncio.run(server.build_server().list_tools()) if t.name == "resolve_document_citations"]
+    assert "target_status_meaning" in (tool.description or "")

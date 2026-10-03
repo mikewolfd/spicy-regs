@@ -245,7 +245,9 @@ def test_a_held_field_read_that_found_nothing_is_read_none_found(monkeypatch):
 @pytest.mark.parametrize("reads", [
     [],  # never read
     [("sha256:" + "0" * 64, "rules", "2026-09-01T00:00:00Z", 0)],  # read, but an earlier text of the field
-    [(HELD, None, "2026-10-03T12:00:00Z", 0)],  # a read row stating no rule set is no read record
+    # Round 6 dropped "a read row stating no rule set is no read record": every published read states none, which
+    # the dictionary documents as normal, so the filter turned every recorded read into not_read
+    # (test_chaos_r6_server.test_a_zero_row_read_recorded_without_a_rule_set_or_time_is_read_none_found).
 ])
 def test_a_held_field_with_no_read_of_its_current_text_is_not_read(monkeypatch, reads):
     with citation_connection() as con:

@@ -404,12 +404,24 @@ used to arrive as one `missing_digest` with no occurrences (`_source_read`):
   `citation_rows`), which the held-citations pipeline publishes from its
   checkpoint beside `document_citations`. When that table is published, the
   record is the latest read (`read_at`) of the field's current text
-  (`text_sha256` = `'sha256:' || sha256(field)`) that states its rule set;
-  until then, or with no such row, a held field with no citation rows is
-  `not_read`, never an answer that it cites nothing.
+  (`text_sha256` = `'sha256:' || sha256(field)`); until then, or with no such
+  row, a held field with no citation rows is `not_read`, never an answer that
+  it cites nothing. Round 5 also required the read to state its rule set, a
+  rule written against a fixture before the table existed: every published
+  read states no rule set and no time (13 of 13 on 2026-10-03), which the
+  dictionary documents as a read recorded before the table existed, so every
+  recorded read answered `not_read` (court opinion 11264529 read 0 rows).
+  Round 6 dropped the filter. A read with no time sorts last, and among reads
+  with none the one stating more rows first, so a disagreement refuses below
+  instead of reading as none found.
 - `read_none_found`: the read record states `citation_rows` 0. A read stating
   rows that `document_citations` does not hold refuses: the publication
   disagrees with itself.
+
+Each reply defines the `target_status` words its occurrences use, and only
+those, in `target_status_meaning` (`TARGET_STATUS_MEANINGS`); the tool text
+points at it. The five definitions did not fit the tool text beside
+everything else it must say (round 6).
 
 With citation rows the status names the digest they are checked against:
 `read`, `missing_digest` (a held row without one) or `ambiguous`. A key that
