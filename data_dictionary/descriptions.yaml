@@ -2539,7 +2539,12 @@ tables:
       `congress_bills` row yet. A held row is relinked from its own columns
       without a fetch; a House row published before `legis_num` or
       `clerk_body_element` existed is read again once to gain both, with
-      `vote_desc`. Replayed over the retained files of the 108th-118th, that
+      `vote_desc`. A Senate row published before `vote_question_text`,
+      `vote_title`, `majority_requirement` and `modify_date` existed is read
+      again once in the same way and gains them and any tie-breaker: until
+      then its NULL tie-breaker columns say nothing about whether the vote was
+      tied. The scheduled run reads the sitting Congress's such rows; an
+      earlier Congress's are read when its number is dispatched. Replayed over the retained files of the 108th-118th, that
       read fills the element on all 14,503 published House rows (3,742
       `committee`) and `vote_desc` on 9,191, and changes no other column and
       no member row; it also publishes the five votes the House vacated before
