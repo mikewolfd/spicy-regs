@@ -8,7 +8,7 @@ One row per docketed proceeding (owner decisions 54-56c): its earliest proposal,
 
 **Coverage.** Derived, and bounded by its inputs: every docketed proceeding, paired from its cleaned `lifecycle_events` and censored at the day its inputs end. *(measured 2026-09-28)*
 
-**Data quality.** A Regulations.gov document whose stated Register number resolves to no Register row is dated by its upload, which for a legacy document can be years after the rule: on snapshot_9b2c770e's inputs 262 lifecycles anchor on such a document, 74 of them upload pairs outside survival (docs/ontology.md).
+**Data quality.** A Regulations.gov document that states no Register number in `fr_doc_num`, or whose stated number resolves to no Register row, is dated by its upload, which for a legacy document can be years after the rule: on snapshot_9b2c770e's inputs 262 lifecycles anchor on such a document, 74 of them upload pairs outside survival (docs/ontology.md). A Register-dated proposal is time zero: an upload-dated Regulations.gov proposal anchors only where its proceeding holds no Register-dated proposal, so an agency's early unnumbered display copy (CMS posts one on the public-inspection day) does not date the proposal. A proposal typed only by Regulations.gov (`lifecycle_events.source` `regulations_gov`, an unnumbered upload) can be a notice the Register files under another type, such as CDC's and ATSDR's information-collection notices, whose titles carry a Register number this reader does not read; it enters as a proposal and stays `open`. A final that finalizes another docket's proposal is paired in its own proceeding only, and that proposal stays `open`: a RIN never groups dockets (decision 56a), and the Register's docket labels are often an agency's own, not Regulations.gov ids.
 
 - **Parquet file:** `rulemaking_lifecycles.parquet`, in the snapshot that `materialized/rulemaking/latest.json` names
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -19,7 +19,7 @@ One row per docketed proceeding (owner decisions 54-56c): its earliest proposal,
 | --- | --- | --- |
 | `proceeding_id` | `VARCHAR` | The docketed proceeding the lifecycle reads; joins `proceedings.proceeding_id`. |
 | `agency_code` | `VARCHAR` | The proceeding's agency code. |
-| `kind` | `VARCHAR` | What its events make: `finalized`, `companion`, `upload_pair`, `withdrawn`, `open`, `final_without_observed_proposal` or `no_anchor`. |
+| `kind` | `VARCHAR` | What its events make: `finalized` (a final strictly after the proposal), `companion` (a Register-dated final on the proposal's Register day, decision 54b; no survival outcome), `upload_pair` (an upload-dated proposal with a final the same day, 54c; no survival outcome), `withdrawn`, `open` (censored at `censor_date`), `final_without_observed_proposal` or `no_anchor`. |
 | `proposal_date` | `DATE` | Day of the earliest proposed event; NULL without a proposal. |
 | `proposal_document_id` | `VARCHAR` | The proposal's document: a dated Register record id (`number@YYYY-MM-DD`) when the Register dates it, else a Regulations.gov document id. |
 | `proposal_form` | `VARCHAR` | The proposal's form from its title: `proposed`, `advance_proposed`, `comment_period` or `correction`. |
@@ -34,7 +34,7 @@ One row per docketed proceeding (owner decisions 54-56c): its earliest proposal,
 | `duration_days` | `INTEGER` | Days from the proposal to the final, the withdrawal or `censor_date`; NULL without an outcome. |
 | `censor_date` | `DATE` | The generation's last event day, capped at the run's day, where open lifecycles are censored; one date in every row. |
 | `open_signal` | `VARCHAR` | What the latest Unified Agenda entry of its specific RINs says (`agenda_completed_final`, `agenda_completed_withdrawn`, `agenda_completed_other`, `agenda_long_term`, `agenda_active`, `agenda_dropped_off`), else `not_on_agenda` or `no_specific_rin`. |
-| `routine_family` | `VARCHAR` | The routine family its agency and titles name (`airworthiness_directive`, `airspace`, `state_air_plan`, `pesticide_tolerance`, `coast_guard_local`); NULL otherwise. |
+| `routine_family` | `VARCHAR` | The routine family its agency and its proposal's title name at time zero (`airworthiness_directive`, `airspace`, `state_air_plan`, `pesticide_tolerance`, which a pesticide petition receipt also names, `coast_guard_local`); a lifecycle with no proposal reads its proceeding's title; NULL otherwise. The final's title is not read, so the stratum does not depend on the outcome. |
 | `agenda_priority` | `VARCHAR` | That Agenda entry's `priority_category` (e.g. `Economically Significant`); NULL without one. |
 | `agenda_major` | `VARCHAR` | That Agenda entry's `major` (`Yes`, `No` or `Undetermined`); NULL without one. |
 | `specific_rins_json` | `VARCHAR` | JSON array of the RINs the proceeding's docket-side evidence alone holds. |

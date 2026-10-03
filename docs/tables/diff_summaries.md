@@ -6,7 +6,7 @@
 
 One row per model-written summary of the change between two printings of a bill. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled: written by a language model during bill-family runs; a run without model calls enabled cannot fill it. *(measured 2026-09-28)*
+**Coverage.** Empty by owner decision 34: written only by a language model during bill-family runs, which no scheduled run enables, so no row is produced. *(measured 2026-10-03)*
 
 - **Parquet file:** `diff_summaries.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.

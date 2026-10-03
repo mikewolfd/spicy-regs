@@ -6,7 +6,9 @@
 
 The Aalen-Johansen cumulative incidence of a final rule, withdrawal competing (decision 54a), per agency and for all agencies (`agency_code` NULL), overall, routine, non-routine and per routine family: the first day it reaches each quartile, NULL where it never does, with a 95% interval from the log-log band. A cell under 30 rules keeps its row, `suppressed`, with no estimates; the Parquet metadata states the estimator exactly. Keyed (`agency_code`, `stratum`). Built by `build_agency_lifecycle_stats`; counts and days are INTEGER.
 
-**Coverage.** Derived from `rulemaking_lifecycles` with a survival outcome. A cell covering fewer than 30 rules is suppressed. On 2026-09-27 every unsuppressed estimate equalled R's multi-state `survfit`. *(measured 2026-09-27)*
+**Coverage.** Derived from `rulemaking_lifecycles` with a survival outcome, every proposal year together (no cohort window), per `agency_code` as the proceeding states it (no department roll-up: HHS, CMS and FDA are separate cells). A cell covering fewer than 30 rules is suppressed. *(measured 2026-09-27)*
+
+**Data quality.** On 2026-09-27 every unsuppressed estimate equalled R's multi-state `survfit`. Routine families exist for FAA, EPA and USCG only, so every other agency's `non_routine` cell equals its `all` cell. A rule is a docketed proceeding: a Register proposal naming several dockets anchors one lifecycle per docket, and the band treats them as independent.
 
 - **Parquet file:** `agency_lifecycle_stats.parquet`, in the snapshot that `materialized/rulemaking/latest.json` names
 - **MCP `query_sql` support:** Configured; requires an available artifact.

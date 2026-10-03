@@ -6,7 +6,7 @@
 
 One row per aligned pair of dollar figures in a section whose amounts changed. `pairing_claim` names how the two figures were aligned; it is word alignment, not a semantic match. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled: dollar figures that change between consecutive printings compared in section_diffs; a pair is compared only when both bodies were acquired and parsed. *(measured 2026-09-28)*
+**Coverage.** Empty by owner decision 34: the amount pairing that would fill it is not run (spicy-docs `pair_amounts=False`), so no row is produced; `section_diff_items.financial_from_amounts_json` and `financial_to_amounts_json` carry the figures. *(measured 2026-10-03)*
 
 - **Parquet file:** `financial_changes.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.

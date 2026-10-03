@@ -6,7 +6,7 @@
 
 One row per term a legislator served, in the crosswalk's own order. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled. The fork selection retains every term from the same complete September 22, 2026 UTC captures as `members`. All mapped values, parent joins and per-member term counts agree with the originals; earlier retained term identities survive. Source order defines term_index. The single party value per term does not reproduce the finer party_affiliations histories present in 29 native terms. Receipts: fork-execution-2026-09-21/members-qualification/. *(measured 2026-09-22)*
+**Coverage.** Sampled. The fork selection retains every term from the same complete September 22, 2026 UTC captures as `members`. All mapped values, parent joins and per-member term counts agree with the originals; earlier retained term identities survive. Source order defines term_index. The single party value per term does not reproduce the finer party_affiliations histories, which the crosswalk records only for terms with a mid-term party change; a member with no affiliation interval never switched, and `member_votes.party` is the party printed on each roll call. Receipts: fork-execution-2026-09-21/members-qualification/. *(measured 2026-09-22)*
 
 - **Parquet file:** `member_terms.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.

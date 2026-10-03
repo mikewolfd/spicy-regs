@@ -56,21 +56,29 @@ DEFAULT_MCP_METADATA_PATH = Path(__file__).with_name("table_metadata.json")
 #: shape it does not know rather than guess at a missing field.
 CATALOG_FORMAT_VERSION = 3
 
-#: The five kinds a coverage statement can be, as machine-readable tokens,
+#: The six kinds a coverage statement can be, as machine-readable tokens,
 #: keyed by the prose prefix so the two cannot disagree.
 #:
-#: "Sampled" is the newest and the weakest claim: the table is filled from a
+#: "Sampled" is the weakest population claim: the table is filled from a
 #: bounded slice of the publisher's archive chosen by a per-run cap, not by a
 #: date window, so neither an end-to-end range nor a window describes it. The
 #: bill-family and roll-call tables open this way until a full run has been
 #: measured, because calling a capped first pass a "Window" would state a
-#: density it does not have.
+#: density it does not have. A capped table whose cap has caught up is
+#: re-kinded only after the output ledger records the publisher's declared
+#: count beside what is held (house_communications, 2026-10-03).
+#:
+#: "Empty" is a table that is declared and published with no rows, by owner
+#: decision or because its producer is not enabled. The 2026-10-02 blind test
+#: found six such tables reading "Sampled" or "Not a range", so a count over
+#: them read as a thin sample rather than as zero by construction.
 COVERAGE_KINDS: dict[str, str] = {
     "True range": "true_range",
     "Window": "window",
     "Sampled": "sampled",
     "Derived": "derived",
     "Not a range": "not_a_range",
+    "Empty": "empty",
 }
 
 
@@ -94,34 +102,99 @@ def coverage_kind(coverage: str) -> str | None:
 #: goes stale at the next publish and nothing notices: the 2026-09-28 blind
 #: persona test found 13 of 56 stated row counts off by 1.5x to 30x, every
 #: rulemaking note naming a replaced snapshot, and 25 notes calling live tables
-#: unpublished. The live row count is describe_table's publication field, and a
+#: unpublished. The 2026-10-02 test found the same smell one noun over: counts
+#: in units the row-count rule did not name (registrations, documents, a
+#: per-year rate), and 19 statements restating their own ``measured_on`` inside
+#: the sentence, which readers took for the live end bound of a table rebuilt
+#: daily. The live row count is describe_table's publication field, and a
 #: measurement tied to a pin belongs in the output ledger, which names its pin.
 COVERAGE_PROSE_REFUSALS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("a snapshot id", re.compile(r"snapshot_[0-9a-f]{6,}")),
     ("a digest or generation pin", re.compile(r"\b[0-9a-f]{16,}\b|\b[0-9a-f]{8,}…")),
     ("a publication-status claim", re.compile(r"not uploaded|not yet published", re.IGNORECASE)),
     ("a row count", re.compile(r"\d[\d,]*(?:\s+[A-Za-z-]+){0,2}\s+(?:rows|records)\b", re.IGNORECASE)),
+    # A thousands-separated number in any other unit. A row count is left to the
+    # rule above so it is reported once, and a partial number inside a longer one
+    # (the "1,009" of "1,009,005") is not a match.
+    ("a count", re.compile(
+        r"(?<![\d,])\b\d{1,3}(?:,\d{3})+\b(?!,\d)(?!(?:\s+[A-Za-z-]+){0,2}\s+(?:rows|records)\b)", re.IGNORECASE
+    )),
 )
+
+#: What these rules still cannot see: a number spelled with a suffix or in words
+#: ("26.6M", "~20.7K", "two-thirds"), a share ("87%", "0.08%"), a count under
+#: a thousand ("43 laws"), a dollar threshold ("over $1,000" has a comma and is
+#: refused; "over $900" is not) and a date other than the entry's own
+#: measured_on. Those are read by a person at review, not by this lint.
 
 #: Exact coverage phrases allowed past COVERAGE_PROSE_REFUSALS, by table, each
 #: with its reason. An exception whose phrase is no longer in the prose is an
-#: error, so a fixed note cannot leave a stale permission behind.
-COVERAGE_PROSE_EXCEPTIONS: dict[str, dict[str, str]] = {}
+#: error, so a fixed note cannot leave a stale permission behind. A per-run cap
+#: or a cited threshold is a code constant quoted as a rule, not a measurement,
+#: which is the one shape a count may take here.
+COVERAGE_PROSE_EXCEPTIONS: dict[str, dict[str, str]] = {
+    "bill_subjects": {"up to 2,000 a run": "the API request cap per run (build_bill_subjects), a rule"},
+    "committee_meetings": {"at most 1,000 a run": "MAX_DETAILS_PER_RUN (build_congress_index), a rule"},
+    "record_issues": {"up to 1,000 a run": "MAX_DETAILS_PER_RUN (build_congress_index), a rule"},
+    "committees": {"Since 2026-09-26": "the day the walk scope changed (committee-fixes-2026-09-26), not a measurement"},
+}
 
 
-def coverage_prose_errors(table: str, coverage: str) -> list[str]:
-    """Refuse decaying facts in one table's coverage prose, less its declared exceptions."""
+def _measurement_date_rule(measured_on: str) -> tuple[str, re.Pattern[str]]:
+    """The entry's own ``measured_on`` as a standalone date; inside a receipt name it is a citation."""
+    return (
+        "the measured_on date it was measured on",
+        re.compile(rf"(?<![\w/-]){re.escape(measured_on)}(?![\w/-])"),
+    )
+
+
+def coverage_prose_errors(table: str, coverage: str, measured_on: str = "") -> list[str]:
+    """Refuse decaying facts in one table's coverage prose, less its declared exceptions.
+
+    ``measured_on`` is the entry's own measurement date: restated in the
+    sentence it reads as the live end bound, so it is refused like a count.
+    """
     errors = []
     text = " ".join(coverage.split())
     for phrase in COVERAGE_PROSE_EXCEPTIONS.get(table, {}):
         if phrase not in text:
             errors.append(f"[{table}] coverage exception no longer matches its prose: {phrase!r}")
         text = text.replace(phrase, " ")
-    for what, pattern in COVERAGE_PROSE_REFUSALS:
+    refusals = COVERAGE_PROSE_REFUSALS + ((_measurement_date_rule(measured_on),) if measured_on else ())
+    for what, pattern in refusals:
         errors.extend(
-            f"[{table}] coverage states {what} ({match.group(0)!r}); the server states live counts and "
-            "pins, and the output ledger keeps pinned measurements"
+            f"[{table}] coverage states {what} ({match.group(0)!r}); a coverage statement names no "
+            "measurement: the server states live counts and pins, and a dated measurement belongs in the "
+            "output ledger or the data_quality note"
             for match in pattern.finditer(text)
+        )
+    return errors
+
+
+#: A data-quality note may state a measurement, but only with what it was
+#: measured at: a date, a pin, a snapshot id, a receipt or a generation. A bare
+#: count there is the same decaying fact as one in coverage ("33,373 rows carry
+#: a posted_date before 1990", on a table rebuilt daily, 2026-10-02).
+_DATA_QUALITY_ANCHOR = re.compile(
+    r"\b\d{4}-\d{2}-\d{2}\b|\b[0-9a-f]{8}…|snapshot_[0-9a-f]{6,}|\breceipt|\bgeneration", re.IGNORECASE
+)
+_DATA_QUALITY_RULES = {what: pattern for what, pattern in COVERAGE_PROSE_REFUSALS}
+
+
+def data_quality_prose_errors(table: str, data_quality: str) -> list[str]:
+    """Refuse a publication claim, and a count no date, pin, snapshot, receipt or generation anchors."""
+    text = " ".join(data_quality.split())
+    errors = [
+        f"[{table}] data_quality states a publication-status claim ({match.group(0)!r}); publication is the "
+        "server's fact"
+        for match in _DATA_QUALITY_RULES["a publication-status claim"].finditer(text)
+    ]
+    if not _DATA_QUALITY_ANCHOR.search(text):
+        errors.extend(
+            f"[{table}] data_quality states {what} ({match.group(0)!r}) with no date, pin, snapshot, receipt or "
+            "generation it was measured at"
+            for what in ("a row count", "a count")
+            for match in _DATA_QUALITY_RULES[what].finditer(text)
         )
     return errors
 
@@ -1015,8 +1088,9 @@ def check_descriptions(
             errors.append(f"[{table}] missing a 'label' in descriptions.yaml")
         if not (entry.get("coverage") or "").strip():
             errors.append(f"[{table}] missing a 'coverage' statement in descriptions.yaml")
-        errors.extend(coverage_prose_errors(table, entry.get("coverage") or ""))
         measured_on = str(entry.get("measured_on") or "").strip()
+        errors.extend(coverage_prose_errors(table, entry.get("coverage") or "", measured_on))
+        errors.extend(data_quality_prose_errors(table, entry.get("data_quality") or ""))
         if not measured_on:
             errors.append(f"[{table}] missing 'measured_on' beside its coverage statement")
         else:
@@ -1035,6 +1109,46 @@ def check_descriptions(
             text = (entry.get("columns") or {}).get(col)
             if col in desc_cols and not (text or "").strip():
                 errors.append(f"[{table}.{col}] has an empty description")
+    return errors
+
+
+def published_row_counts(base_url: str) -> dict[str, int]:
+    """Each published table's pinned row count: the index's families and the rulemaking snapshot's manifest."""
+    from spicy_regs.sources.publication import load_index, load_rulemaking_snapshot
+
+    base = base_url.rstrip("/")
+    rows = {
+        key.removesuffix(".parquet"): int(table["rows"])
+        for family in load_index(base)["families"].values()
+        for key, table in family["tables"].items()
+    }
+    snapshot = load_rulemaking_snapshot(base)
+    if snapshot is not None:
+        rows.update({key.removesuffix(".parquet"): int(table["rows"]) for key, table in snapshot["tables"].items()})
+    return rows
+
+
+def kind_index_errors(descriptions: dict, rows: dict[str, int]) -> list[str]:
+    """Hold each declared coverage kind to the pinned index: no rows means Empty, and Empty means no rows.
+
+    Where the index can be read, the kind is its fact, not the author's: six
+    0-row tables read "Sampled" or "Not a range" on 2026-10-02, so a count over
+    them read as a thin sample rather than as zero by construction. The prose
+    prefix stays the committed source so the offline build is reproducible; this
+    check is what refuses a prefix the index contradicts.
+    """
+    errors = []
+    for table, count in sorted(rows.items()):
+        entry = descriptions.get(table)
+        if not entry:
+            continue
+        declared = coverage_kind(entry.get("coverage") or "")
+        if (count == 0) != (declared == "empty"):
+            expected = "Empty" if count == 0 else "a populated kind"
+            errors.append(
+                f"[{table}] coverage kind {declared!r} contradicts the published index ({count:,} rows); "
+                f"the index says {expected}"
+            )
     return errors
 
 
@@ -1220,6 +1334,13 @@ def cmd_check(args: argparse.Namespace) -> int:
         errors += check_descriptions(live, {name: value for name, value in descriptions.items() if name in live})
         expected = {name: value for name, value in expected_schemas().items() if name in live}
         errors += check_schema_drift(expected, live)
+        if args.source == "r2":
+            # The kind is derived from the pinned index where the index can be read; offline it is the prose prefix.
+            try:
+                errors += kind_index_errors(descriptions, published_row_counts(args.base or DEFAULT_R2_BASE_URL))
+            except (httpx.HTTPError, OSError, PublicationError) as exc:
+                print(f"! Could not read the published row counts: {exc}", file=sys.stderr)
+                unreadable = True
 
     stale = qualification_errors() + joins_errors()
     if errors or stale:

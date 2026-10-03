@@ -6,7 +6,7 @@
 
 One row per legislator in one capture of the community crosswalk. Split from `member_terms` because one row cannot hold a chamber switch. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled. The fork selection covers both complete community crosswalk files captured September 22, 2026 UTC: current and historical legislators. Every declared field was checked against the retained originals, and all earlier retained identities and native values survive. The source supplies 1,738 distinct FEC candidate IDs and 328 LIS IDs across both files; absent IDs remain absent. This qualifies the captured community files, not an independently complete official roster. Receipts: fork-execution-2026-09-21/members-qualification/. *(measured 2026-09-22)*
+**Coverage.** Sampled. The fork selection covers both complete community crosswalk files captured September 22, 2026 UTC: current and historical legislators. Every declared field was checked against the retained originals, and all earlier retained identities and native values survive. The source supplies FEC candidate IDs and LIS IDs for a subset of members; absent IDs remain absent. This qualifies the captured community files, not an independently complete official roster. Receipts: fork-execution-2026-09-21/members-qualification/. *(measured 2026-09-22)*
 
 - **Parquet file:** `members.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.

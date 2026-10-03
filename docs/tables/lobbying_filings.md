@@ -16,13 +16,13 @@ One row per federal lobbying-disclosure filing, ingested from the U.S. Senate Lo
 | Column | Type | Description |
 | --- | --- | --- |
 | `filing_uuid` | `VARCHAR` | LDA filing UUID (e.g. `7866327b-c892-4430-b9f0-1f0f679c58c6`). Primary key / dedup key. |
-| `filing_type` | `VARCHAR` | Filing type code (e.g. `RR` registration, `Q1`–`Q4` quarterly reports, `1A`–`4A` amendments, terminations). An amendment is a separate filing that restates its quarter's report. |
+| `filing_type` | `VARCHAR` | The LDA filing-type code as the API states it: `RR` registration; `Q1`–`Q4` quarterly reports and `MM` the pre-2008 mid-year report; `1A`–`4A` and `MA` amendments; `1T`–`4T` and `MT` terminations; `1@`–`4@` and `M@` termination amendments; a trailing `Y` marks a no-activity report (`Q1Y`, `1@Y`). The LDA constants endpoint (`/api/v1/constants/filing/filingtypes/`) is the authority. An amendment is a separate filing that restates its quarter's report; take the latest filing per registrant, client and period. |
 | `filing_year` | `VARCHAR` | Calendar year the filing reports on. |
 | `filing_period` | `VARCHAR` | Reporting period within the year (e.g. `first_quarter`, `year_end`). |
 | `dt_posted` | `VARCHAR` | Timestamp the filing was posted to the LDA system (ISO 8601 string with timezone). Sort key. |
 | `registrant_name` | `VARCHAR` | Name of the registrant (the lobbying firm or self-filing organization). |
 | `registrant_id` | `VARCHAR` | LDA registrant id. Stable join key across a registrant's filings. |
-| `client_name` | `VARCHAR` | Name of the client the lobbying was performed for. Joins by name to `organizations`/comment filers. |
+| `client_name` | `VARCHAR` | The client's name as the registrant filed it; a name, not an identity. A self-filing organization is both registrant and client, often under a spelling other registrants do not use for it (McKesson files as `MCKESSON CORPORATION & AFFILIATES …`). `client_id` and `registrant_id` are the stable keys; a match to `comments.organization` or `sam_entities.legal_business_name` is a name match. |
 | `client_id` | `VARCHAR` | LDA client id. |
 | `income` | `VARCHAR` | Lobbying income reported by a lobbying firm for the period, in USD. Null for self-filers (who report `expenses`). An amended report (`filing_type` `1A`–`4A`) restates its quarter's amount, often unchanged, so summing over every filing counts that quarter twice; keep the latest filing per registrant, client and quarter. |
 | `expenses` | `VARCHAR` | Lobbying expenses reported by a self-filing organization for the period, in USD. Null for firms (who report `income`). An amended report (`filing_type` `1A`–`4A`) restates its quarter's amount, often unchanged, so summing over every filing counts that quarter twice; keep the latest filing per registrant, client and quarter. A self-filing organization's expenses already include what it pays outside lobbying firms, whose `income` for that client is reported separately; do not add the two. |

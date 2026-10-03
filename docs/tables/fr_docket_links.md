@@ -6,7 +6,7 @@
 
 The Federal Register ↔ docket bridge: each `federal_register` row's `docket_ids_json` array exploded to one row per (docket_id, document_number, publication_date), carrying the FR display columns. Use this instead of an `ILIKE` scan over `federal_register.docket_ids_json` — it is sorted by `docket_id`, so `WHERE docket_id = ?` prunes row groups. This is the practical join from regulations.gov to the Federal Register using the Federal Register's own stated docket links. Built by `build_fr_docket_links`.
 
-**Coverage.** Derived, and bounded by its inputs: one link per docket id that a dated Federal Register record names, over the `federal_register` table's own date range. On 2026-09-23 the table equalled a separate re-derivation from that parent row for row; that measurement predates the ordinal and normalization columns, which require rebuilding. *(measured 2026-09-23)*
+**Coverage.** Derived, and bounded by its inputs: one link per docket id that a dated Federal Register record names, over the `federal_register` table's own date range. *(measured 2026-09-23)*
 
 - **Parquet file:** `fr_docket_links.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.

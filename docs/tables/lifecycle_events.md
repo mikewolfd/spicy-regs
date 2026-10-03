@@ -4,7 +4,7 @@
 
 **Rulemaking lifecycle events**
 
-One row per staged document of a docketed proceeding: the events each `rulemaking_lifecycles` row is paired from. A Regulations.gov copy of a Register document is that document, dated by the Register, and an Agenda entry completed as withdrawn adds its dated withdrawal. Keyed (`proceeding_id`, `document_id`); `dated_by` says which kind of id `document_id` is. Joins `rulemaking_lifecycles` on `proceeding_id`. Built by `build_lifecycles`; `event_date` is DATE.
+One row per staged document of a docketed proceeding: the events each `rulemaking_lifecycles` row is paired from. A Regulations.gov document whose own `fr_doc_num` resolves to one Register document is that document, dated by the Register (decision 60; `joined_by` `fr_copy`); one that states no number in that field keeps its Regulations.gov type and posted day (`dated_by` `regulations_gov`), whatever its title says. An Agenda entry completed as withdrawn adds its dated withdrawal. Keyed (`proceeding_id`, `document_id`); `dated_by` says which kind of id `document_id` is. Joins `rulemaking_lifecycles` on `proceeding_id`. Built by `build_lifecycles`; `event_date` is DATE.
 
 **Coverage.** Derived, and bounded by its inputs: the stage events of every docketed proceeding, one per document, less those undated or dated after the run's day. *(measured 2026-09-28)*
 
