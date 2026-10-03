@@ -11,6 +11,14 @@ index, ``INDEX_V2_KEY``; the version-1 index lists every other table unchanged
 for readers that predate splitting (``docs/research/multi-file-tables-2026-09-26.md``).
 Readers resolve any table's files through :func:`table_members`.
 Source-evidence blobs are content-addressed and stored once for all artifacts.
+
+A version-2 family entry may also state ``publishedAt``: the UTC instant its
+publisher moved the pointer to that generation, never when the data was read.
+:func:`publish_generation` stamps it at the pointer write, and
+:func:`backfill_published_at` fills it in for entries written before. Neither
+may write to a live bucket until every reader admits the key: a
+``parse_index`` that predates it requires the exact family key set and
+refuses the whole index. The server image that admits it deploys first.
 """
 
 from __future__ import annotations
@@ -19,6 +27,7 @@ import base64
 import hashlib
 import json
 import re
+import time
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -1022,7 +1031,11 @@ def _publish_verified_generation(
     # the index while version 2 was absent keeps that bootstrap read, so ``_write_v1`` can fold what a writer
     # predating version 2 published meanwhile.
     for _ in range(_POINTER_ATTEMPTS):
-        updated, raw = _merge_family(index, family, entry)
+        # Stamped per attempt, so it is the instant this write moves the pointer. Replaying the generation already
+        # current moves nothing, so its entry is kept as stored, with or without an instant.
+        current = index["families"].get(family)
+        moved = current if _generation_entry(current) == entry else {**entry, "publishedAt": _instant()}
+        updated, raw = _merge_family(index, family, moved)
         if _put_pointer(client, bucket, INDEX_V2_KEY, raw, etag):
             try:
                 _write_v1(client, bucket, bootstrap)
@@ -1041,8 +1054,19 @@ def _partitions(table: Mapping | None) -> set[tuple[tuple[str, str], ...]]:
     return {tuple(member["partition"].items()) for member in (table or {}).get("members", ())}
 
 
+def _instant(seconds: float | None = None) -> str:
+    """A ``publishedAt`` value for ``seconds`` since the epoch, or for now: UTC, whole seconds, a trailing Z."""
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(seconds))
+
+
+def _generation_entry(entry: Mapping | None) -> dict | None:
+    """``entry`` without ``publishedAt``: the generation it names, not when the pointer moved to it."""
+    return None if entry is None else {key: value for key, value in entry.items() if key != "publishedAt"}
+
+
 def _assert_family_unchanged(index: Mapping, prior_index: Mapping, family: str) -> None:
-    if index["families"].get(family) != prior_index["families"].get(family):
+    """Refuse when the family now names another generation than the build read; a new ``publishedAt`` is no change."""
+    if _generation_entry(index["families"].get(family)) != _generation_entry(prior_index["families"].get(family)):
         raise PublicationError("Family changed since the build read its inputs; rebuild before publishing")
 
 
@@ -1059,3 +1083,38 @@ def _merge_family(index: dict, family: str, entry: dict) -> tuple[dict, bytes]:
     raw = canonical_json_bytes(updated)
     parse_index(raw)
     return updated, raw
+
+
+def backfill_published_at(client, bucket: str, *, apply: bool = False) -> dict:
+    """Plan, or with ``apply`` write, ``publishedAt`` for each version-2 family entry that lacks it.
+
+    The instant is the latest write under the generation's prefix. That prefix is create-only, and the pointer
+    moves only after every member is uploaded and read back, so the instant is a lower bound on the move, short by
+    the read-back. The root alone is a looser one: it is uploaded first, up to 915 s before the last member on
+    2026-10-03. The write is conditional on the version-2 ETag read here, so a pointer that moved meanwhile refuses
+    with nothing written, and a rerun plans only what is still missing. Version 1 omits the key and is left as is.
+    """
+    from rulespec_artifacts import ROOT_OBJECT_KEY, canonical_json_bytes
+
+    index, etag, bootstrap = _stored_index(client, bucket)
+    if bootstrap is not None:
+        raise PublicationError(f"{INDEX_V2_KEY} is absent, and only version 2 states publishedAt")
+    stamps = {}
+    for family, entry in sorted(index["families"].items()):
+        if "publishedAt" in entry:
+            continue
+        pages = client.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=entry["prefix"] + "/")
+        written = {item["Key"]: item["LastModified"] for page in pages for item in page.get("Contents", ())}
+        if f"{entry['prefix']}/{ROOT_OBJECT_KEY}" not in written:
+            raise PublicationError(f"{family}'s current generation has no root under {entry['prefix']}")
+        stamps[family] = _instant(max(written.values()).timestamp())
+    if not (stamps and apply):
+        return {"index": INDEX_V2_KEY, "etag": etag, "stamps": stamps, "applied": False}
+    updated = deepcopy(index)
+    for family, instant in stamps.items():
+        updated["families"][family]["publishedAt"] = instant
+    raw = canonical_json_bytes(updated)
+    parse_index(raw)
+    if not _put_pointer(client, bucket, INDEX_V2_KEY, raw, etag):
+        raise PublicationError(f"{INDEX_V2_KEY} moved since the backfill read it; nothing was written, run it again")
+    return {"index": INDEX_V2_KEY, "etag": etag, "stamps": stamps, "applied": True}
