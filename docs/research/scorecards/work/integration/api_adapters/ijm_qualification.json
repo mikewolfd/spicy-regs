@@ -1,167 +1,153 @@
 {
   "qualification_id": "ijm-3995-current-api-zyte-2026-10-03",
   "created_at": "2026-10-03T20:44:13.859823+00:00",
+  "qualified_at": "2026-10-03T21:05:44.686760+00:00",
   "publisher_id": "ijm",
   "scorecard_id": "ijm:3995",
-  "status": "incomplete_source_capture_via_zyte",
-  "production_enabled": false,
-  "published_remotely": false,
-  "installed_provider": "spicy-docs==0.53.0+scorecards.6faacdb84390",
-  "parser_version": "ijm-rds-bt50-current-api/2",
+  "status": "qualified_observed_current_api_scope",
+  "production_enabled_at_qualification": false,
+  "published_remotely_at_qualification": false,
+  "installed_provider": "spicy-docs==0.53.0+scorecards.9916a2fc8473",
+  "installed_wheel_sha256": "e0123d4e093354d8c0781fd0a5cbdef700c01c89198692d205505388d2778f51",
+  "parser_version": "ijm-rds-bt50-current-api/3",
   "schema_version": "scorecards-v1",
-  "earlier_direct_access_refusal": {
-    "capture_id": "ijm-index",
-    "requested_url": "https://scorecard.ijm.org/",
-    "resolved_url": "https://scorecard.ijm.org/",
-    "observed_at": "2026-10-03T20:13:01.379664+00:00",
-    "http_status": 403,
-    "content_type": "text/html; charset=UTF-8",
-    "byte_size": 5408,
-    "sha256": "934fa22d896fc277ca0ff4399c7c456a590d5cacbc2e35e327c8c8721c7c491f"
+  "runtime_verified": "spicy-regs/.venv site-packages; no sibling SpicyDocs import",
+  "source_scope": "Public current federal API edition3995: entire publisher roster, four current score-set literal metrics, declared bill catalog, every roster member detail, publisher methodology and grade-configuration observations. Mixed native API and explicitly retained rendered API JSON rendition.",
+  "completeness_witness": [
+    "Original logged-out publisher frontend selects the current first scorecard and loads unpaginated API member/bill arrays; displayed page size slices the already loaded member array.",
+    "Current native scorecard3995, title119th Congress, federal US, session959/niceTitle119th are checked. Declared ratedBills16 equals the unique catalog billIDs.",
+    "Every one of the480 original roster members has successful first and second typed detail responses. All480 pairs compare equal as parsed source objects with decimal lexemes retained.",
+    "Complete bill/member/style arrays repeated after all member details compare equal to the original native capture, including source range-grade configuration.",
+    "Installed reader validates every frozen table relationship and emits one accepted current-edition snapshot; all emitted literals independently reconcile with source locators."
+  ],
+  "snapshot_witness": {
+    "completeness_status": "complete",
+    "completeness_rule": "Complete observed current federal API edition: publisher app consumes unpaginated member/bill arrays; current score-set membership selected explicitly, declared ratedBills reconciled, all member detail arrays succeeded and repeated unchanged, and entire catalogs/display configuration repeated unchanged. API numeric literals are authoritative; browser-rounded scores and calculated lifetime values are not reproduced.",
+    "rendition_selection_rule": "rds-bt50-api-literals-with-ijm-rendered-pre-json/1",
+    "identity_rule_version": "ijm-rds-bt50-current-api/3:identity-1",
+    "source_declared_counts_json": "{\"ratedBills\":16}",
+    "parsed_counts_json": "{\"scorecard_items\":49,\"scorecard_member_item_results\":633,\"scorecard_member_ratings\":1912,\"scorecard_members\":480,\"scorecard_methodologies\":2,\"scorecard_metric_components\":0,\"scorecard_metric_items\":81,\"scorecard_metrics\":4,\"scorecard_publishers\":1,\"scorecard_snapshots\":1,\"scorecards\":1}"
+  },
+  "raw_readback": {
+    "row_comparison": "All emitted member/rating/coefficient/action/reference/methodology literals agree with captured native JSON or retained DOM pre JSON locators.",
+    "counts": {
+      "scorecard_publishers": 1,
+      "scorecards": 1,
+      "scorecard_snapshots": 1,
+      "scorecard_methodologies": 2,
+      "scorecard_metrics": 4,
+      "scorecard_items": 49,
+      "scorecard_metric_items": 81,
+      "scorecard_metric_components": 0,
+      "scorecard_members": 480,
+      "scorecard_member_ratings": 1912,
+      "scorecard_member_item_results": 633
+    },
+    "source_roster": 480,
+    "source_current_rated_members": 478,
+    "source_ungraded_members": 2,
+    "source_vote_occurrences": 424,
+    "source_sponsorship_occurrences": 209,
+    "selected_captures": 969,
+    "representations": {
+      "httpResponseBody": 146,
+      "browserHtml": 823
+    },
+    "observed_at_start": "2026-10-03T20:32:55.008532+00:00",
+    "observed_at_end": "2026-10-03T21:02:59.485885+00:00",
+    "method": "Read original API JSON and publisher frontend configuration directly before implementation. Independently follow every emitted JSON locator in native bodies or the sole retained DOM body/pre; compare source scalars, member identity, coefficients, actions, references and methodology with parse_float=str. Validate every selected original body hash before reading.",
+    "examples": [
+      "Amy Klobuchar native16009 has source score61, vote_index61, possible_score string0 and presence_score string0.9912; no display rounding or percent conversion.",
+      "Tammy Duckworth native17546 has only older score-set3292; Matt Van Epps native30632 has score_sets[]. Both remain source members without fabricated current ratings.",
+      "Source grade thresholds -1,1,3,5 and F,D,C,B,A labels are retained as methodology configuration at $.rangeConfigurations; no individual browser grade is computed.",
+      "Signed vote/sponsor/cosponsor coefficients remain weights. Preferred-action fields remain null, and source action glyphs/text are not interpreted as official congressional facts."
+    ]
   },
   "transport": {
     "provider": "zyte",
-    "implementation": "existing spicy_docs.sources.zyte.ZyteHttpFetcher and spicy_docs.transport.zyte.ZyteTransport",
-    "mode": "httpResponseBody",
-    "body_semantics": "Original publisher response bytes delivered to Zyte client; not a direct capture and not browserHtml",
-    "credential_use": "existing configured ZYTE_TOKEN via read_api_key; secret not recorded",
-    "bounded_concurrency_stages": [
-      2,
-      8,
-      32
+    "implementation": "Existing ZyteHttpFetcher and ZyteTransport",
+    "representations": {
+      "httpResponseBody": 146,
+      "browserHtml": 823
+    },
+    "native_body_semantics": "httpResponseBody preserves publisher response bytes delivered through Zyte; source status remains distinct from provider outcome.",
+    "rendered_body_semantics": "browserHtml is retained DOM, not original publisher bytes. Origin content type remains null. Only IJM original API routes accept a strict single body/pre JSON document.",
+    "rendered_locator_prefix": "html:body/pre[1]::json:",
+    "route_agreement": "Two recovery probes matched retained native API JSON structurally and in numeric literals before expansion; every final catalog/style/member array matches native originals, and all member-detail pairs agree.",
+    "budget_revision": "ijm_budget_revision.json",
+    "campaign_provider_call_ceiling": 2400,
+    "conservative_interrupted_call_reserve": 64,
+    "browser_concurrency_stages": [
+      4,
+      8
     ],
+    "browser_timeout_seconds": 180,
     "max_response_bytes": 20971520,
-    "initial_timeout_seconds": 60,
-    "longer_timeout_probe_seconds": 180,
-    "planned_provider_call_ceiling": 1200,
-    "terminal_probe": {
-      "capture_id": "ijm-extended-probe-20777",
-      "requested_url": "https://scorecard.ijm.org/wp-json/rds-bt50-scorecard/v1/legislators/detail/?legislatorId=20777&scorecardId=3995",
-      "observed_at": "2026-10-03T20:40:56.028794+00:00",
-      "provider": "zyte",
-      "provider_outcome": "refused_or_failed",
-      "provider_http_status": 520,
-      "source_http_status": null,
-      "representation": "httpResponseBody",
-      "reason": "ZyteTransportError: Zyte acquisition failed with HTTP 520 (/download/website-ban)"
+    "credential_use": "Existing configured ZYTE_TOKEN; secret and headers excluded",
+    "observed_browser_rate": {
+      "measurement": "Retained completed browser attempts per elapsed minute; excludes unrecorded interrupted calls and is not account capacity.",
+      "first_observed_at": "2026-10-03T20:48:52.812417+00:00",
+      "last_completed_at": "2026-10-03T21:03:04.013635+00:00",
+      "retained_attempts": 839,
+      "elapsed_minutes": 14.19,
+      "attempts_per_minute": 59.14,
+      "stated_capacity_tested": false
     }
   },
-  "recovered_source_shapes": {
-    "original_index": "source200 through Zyte; logged-out public app",
-    "edition_id": 3995,
-    "grade_configuration": [
-      {
-        "scorecardId": null,
-        "rangeSplits": [
-          -1,
-          1,
-          3,
-          5
-        ],
-        "rangeColors": [
-          "#6dcab8",
-          "#6dcab8",
-          "#6dcab8",
-          "#6dcab8",
-          "#6dcab8"
-        ],
-        "dispayRangeLettergrades": true,
-        "lettergrades": [
-          "F",
-          "D",
-          "C",
-          "B",
-          "A"
-        ]
-      }
-    ],
-    "grade_source_path": "$.rangeConfigurations",
-    "retention": "Exact source thresholds/labels retained as methodology JSON; no individual grades computed",
-    "API_numeric_rendition": [
-      "score",
-      "vote_index",
-      "presence_score",
-      "possible_score"
-    ],
-    "ungraded_roster_observations": [
-      {
-        "id": 17546,
-        "first_name": "Tammy",
-        "last_name": "Duckworth",
-        "score_set_ids": [
-          3292
-        ]
-      },
-      {
-        "id": 30632,
-        "first_name": "Matt",
-        "last_name": "Van Epps",
-        "score_set_ids": []
-      }
-    ]
-  },
-  "capture_result": {
-    "retained_attempt_receipts": 246,
-    "valid_target_200_responses": 146,
-    "valid_member_detail_urls": 140,
-    "publisher_http_status_counts": {
-      "200": 146,
+  "attempt_audit": {
+    "retained_all_attempt_receipts": 1086,
+    "retained_zyte_attempt_receipts": 1085,
+    "source_status_counts": {
+      "200": 975,
       "None": 90,
+      "500": 20,
+      "403": 1
+    },
+    "browser_source_status_counts": {
+      "200": 829,
       "500": 10
     },
-    "provider_error_http_status_counts": {
-      "None": 86,
-      "520": 3,
-      "521": 1
-    },
-    "source_roster_members": 480,
-    "source_current_rated_members": 478,
-    "source_ungraded_members": 2,
-    "declared_rated_bills": 16,
-    "catalog_bills": 16,
-    "receipt_body_hash_mismatches": [],
-    "runtime_partial_corpus_refusal": "Scorecard transport failed at scorecards:ijm:legislators/detail/?legislatorId=29643&scorecardId=3995"
+    "body_hash_validation": "Every selected successful receipt hash equals retained original capture bytes.",
+    "limitations": "Interrupted native workers may have issued calls without completed receipts; the64-call reserve is a conservative budget allowance, not an exact billed count. Browser retry receipt names are append-only UUIDs."
   },
-  "disposition": "Stopped after systemic provider no-response and520/521 website-download failures plus publisher500 responses. Isolated180s probe returned actual520 /download/website-ban. Initial access recovery does not establish a complete current edition. No accepted snapshot was emitted.",
+  "recovery_history": {
+    "prior_incomplete_qualification": "ijm_native_incomplete_qualification.json",
+    "prior_attempt_manifest": "ijm_zyte_capture_manifest.json",
+    "renewed_route": "After explicit renewed user authorization, native website-ban failures were followed by small original-URL browserHtml probes. Successful strict rendered JSON recovered the remaining first pass and complete repeated pass. Earlier source/provider failures remain in the retained attempt audit."
+  },
   "checks": {
-    "synthetic_suite": "50 AFP/IJM tests passed; AFP no-grade guard retained",
-    "ruff": "passed",
-    "installed_source_shape_validation": "catalog, members and grade configuration passed",
-    "installed_partial_corpus_acquisition": "refused without emitting a snapshot",
-    "AFP_installed_regression": "full retained AFP replay and every raw-locator verification passed unchanged"
+    "synthetic_suite": "60 AFP/IJM tests passed at frozen provider checkpoint",
+    "ruff": "passed at frozen provider checkpoint",
+    "installed_full_replay": "passed",
+    "independent_raw_literal_comparison": "passed"
   },
-  "remaining_requirements": [
-    "Successful complete current member-detail acquisition for every published roster row",
-    "A second stable full detail/catalog/style pass",
-    "Installed-package full snapshot validation and independent raw-locator comparison"
+  "limits": [
+    "An observed stable source crawl, not a transactionally frozen publisher version or a complete official congressional roster.",
+    "Source membership is publisher-defined and may omit members without its scored actions; absence does not imply a zero score.",
+    "Only API score, vote_index, presence_score and possible_score are qualified. Individual browser grade display and calculated lifetime scores are not reproduced.",
+    "General catalog comments/categories remain unmapped in frozen V1; raw captures stay private.",
+    "No historical editions, nonempty adjustment ledgers, score reproduction or changed/hidden display scopes are qualified.",
+    "No redistribution rights grant found; public evidence contains metadata and hashes only."
   ],
   "rights_status": "unknown",
   "evidence_policy": "hash_only",
   "historical_support": false,
-  "capture_manifest": "ijm_zyte_capture_manifest.json",
+  "capture_manifest": "ijm_capture_manifest.json",
+  "attempt_manifest": "ijm_zyte_attempt_manifest.json",
   "private_campaign": "scorecards-ijm-zyte-2026-10-03",
+  "source_code_sha256": {
+    "ijm.py": "22698114ed8b47a3f7419f7468ff66f0a743cd2401d03b4ab04908f5249d6cd6",
+    "rds_bt50.py": "9256c79243bb9094db0abc5420560be95c8cdce9055586339696435f1327e3f8"
+  },
   "private_script_sha256": {
-    "replay_ijm.py": "a1a592a95df704c8733b76874c9ce2ed118fb5442ea671c6655513679ba997a5",
     "capture_zyte.py": "a1f35e6a138853b67bd743581ad9023ec5a14efd90ff324953b50a3482bf3477",
-    "crawl_ijm_resume.py": "03249acdd6820d8b6466e3a85e0d5ab3d81d7302767c34b741fabcaed47a1e3c",
-    "verify_ijm.py": "7486b20062297865692a8c0f8de63af0e62fb147fb8891c4aece9be56f2ffff4",
-    "crawl_ijm.py": "6b4d46f3b88e4ab0088e906e82034b330e032c7c6bef0eed7de42ce13623ae1a"
+    "capture_browser.py": "1d836ea0cd0b2b5d2fa81c337cfb675f2feebb4e8f09a0eeffd4062809cba78d",
+    "crawl_ijm_browser.py": "ea153abc98d22c99e3071c69e3966172beb6ff6f455918608426cf6ae5f9f5b9",
+    "replay_ijm.py": "ca6ce645356b5f58d27b31aba78e7db1e338d8222bf647893b8c85a3f75d9cd6",
+    "verify_ijm.py": "734da87971dbd9e48dd0a136806ebbe57d427710f48138580ac1751930d912c4"
   },
   "commands": [
-    "uv run --frozen --no-sync python <private_campaign>/capture_zyte.py",
-    "uv run --frozen --no-sync python <private_campaign>/crawl_ijm.py"
-  ],
-  "source_code_sha256": {
-    "ijm.py": "92b60f06de5433ff14c8d179bfab220227808717b2f3513d24a340c777ebd0aa",
-    "rds_bt50.py": "cedff8bc1c0cf17932e4c959e4c9619c70f92627ce4dba672f892dc7020fd08b"
-  },
-  "observed_campaign_rate": {
-    "measurement": "retained completed attempts per elapsed minute, not account capacity or all billed/in-flight calls",
-    "first_observed_at": "2026-10-03T20:32:55.008532+00:00",
-    "last_receipt_written_at": "2026-10-03T20:42:27.737271+00:00",
-    "elapsed_minutes": 9.55,
-    "retained_completed_attempts": 246,
-    "retained_completed_attempts_per_minute": 25.77,
-    "stated_capacity_tested": false
-  }
+    "uv run --frozen --no-sync python <private_campaign>/replay_ijm.py",
+    "uv run --frozen --no-sync python <private_campaign>/verify_ijm.py"
+  ]
 }

@@ -8,17 +8,26 @@ The accepted roster includes the source's ungraded member without inventing a
 rating. Both current member-detail passes and repeated catalogs agreed; every
 emitted literal was compared independently with its raw JSON location.
 
-[IJM qualification](ijm_qualification.json) records incomplete bulk acquisition
-through Zyte. The original index, API configuration and catalog recovered after
-its direct HTTP 403 refusal. Only part of the member-detail scope succeeded;
-provider timeouts, HTTP 520/521 download failures and publisher HTTP 500 responses
-prevented full capture. An isolated longer-timeout probe returned an explicit
-website-ban failure. The [Zyte manifest](ijm_zyte_capture_manifest.json) separates
-provider outcomes from target status and records `httpResponseBody` provenance.
-The installed reader refused the partial corpus. IJM remains unqualified; this
-does not establish that the publisher or scorecard is retired.
+[IJM qualification](ijm_qualification.json) records the complete observed current
+federal API scope through Zyte. Both member-detail passes and repeated catalogs
+agree. The [selected capture manifest](ijm_capture_manifest.json) distinguishes
+original `httpResponseBody` bytes from retained `browserHtml`. The latter contains
+the original API response as JSON in one rendered `body/pre`; emitted locations
+explicitly identify that DOM rendition. Every emitted literal was independently
+compared with the selected retained source. Ungraded source members remain members
+without invented current ratings. Source grade thresholds and labels are retained
+as methodology observations; individual browser grades are not calculated.
 
-Neither result enables a registry entry or publishes data remotely. Historical
+The [earlier incomplete qualification](ijm_native_incomplete_qualification.json)
+and [original attempt manifest](ijm_zyte_capture_manifest.json) preserve the direct
+403, native-response download failures, and correct partial-corpus refusal.
+After renewed authorization, bounded rendered-response probes recovered the
+remaining scope. The [complete attempt audit](ijm_zyte_attempt_manifest.json)
+retains provider and source outcomes, and the [budget revision](ijm_budget_revision.json)
+records the expanded finite request limit. No original response bodies or headers
+are included in these public research files.
+
+Qualification itself does not enable a registry entry or publish data remotely. Historical
 editions, browser-calculated lifetime scores and general catalog rationale are
 outside the documented V1 mapping.
 
@@ -29,6 +38,8 @@ Run from `spicy-regs` to exercise the installed provider:
 ```sh
 uv run --frozen --no-sync python ~/Work/corpora/supply-2026-09-02/receipts/scorecards-api-readers-2026-10-03/replay_afp.py
 uv run --frozen --no-sync python ~/Work/corpora/supply-2026-09-02/receipts/scorecards-api-readers-2026-10-03/verify_afp.py
+uv run --frozen --no-sync python ~/Work/corpora/supply-2026-09-02/receipts/scorecards-ijm-zyte-2026-10-03/replay_ijm.py
+uv run --frozen --no-sync python ~/Work/corpora/supply-2026-09-02/receipts/scorecards-ijm-zyte-2026-10-03/verify_ijm.py
 ```
 
 The first command validates the accepted tables against the frozen schema; the
