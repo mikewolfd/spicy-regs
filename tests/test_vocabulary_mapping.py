@@ -1,5 +1,7 @@
 """Real vendored REF-038 evidence; no new source identity adjudications."""
 
+import pytest
+
 from spicy_regs.vocabulary_mapping import FEDERAL_REGISTER, REGULATIONS, lookup_agency
 
 
@@ -32,7 +34,9 @@ def test_retained_different_office_abstention_and_unqualified_history():
     historical = lookup_agency(REGULATIONS, "OPM", on_date="1990-01-01")
     assert historical["status"] == "temporal_scope_unqualified"
     assert historical["candidates"]  # Evidence retained, but not an assertion for that date.
-    assert lookup_agency("topic_label", "Transportation")["status"] == "unsupported_namespace"
+    # Round 6: another namespace is refused, not answered with a status a caller can mistake for a lookup.
+    with pytest.raises(ValueError, match="the namespaces are regulations.gov:agency and federal_register_agency"):
+        lookup_agency("topic_label", "Transportation")
 
 
 def test_registry_bridge_and_current_successor_are_distinct_from_historical_identity():

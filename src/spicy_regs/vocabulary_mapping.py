@@ -11,14 +11,17 @@ import hashlib
 import json
 from datetime import date
 from importlib.resources import files
+from typing import Literal, get_args
 
-from spicy_regs.ontology import agencies
-
-REGULATIONS = "regulations.gov:agency"
-FEDERAL_REGISTER = "federal_register_agency"  # Existing occurrence-view namespace.
+#: The namespaces an exact identifier is looked up in: a regulations.gov agency code, and a Federal Register agency
+#: id (the occurrence views' namespace). Any other is refused; the MCP tool's schema advertises this closed set.
+Namespace = Literal["regulations.gov:agency", "federal_register_agency"]
+REGULATIONS, FEDERAL_REGISTER = get_args(Namespace)
 
 
 def _registry_evidence(namespace: str, identifier: str, candidates: list[dict]) -> dict:
+    from spicy_regs.ontology import agencies  # here, not at import: the MCP server imports Namespace at start
+
     publication = agencies.registry_publication()  # refuses a manifest that is not the pinned one, first
     tables = {
         name: [dict(row) for row in agencies.registry_rows(name)] for name in ("bridges", "events", "non-emissions")
@@ -71,7 +74,11 @@ def _registry_evidence(namespace: str, identifier: str, candidates: list[dict]) 
 
 
 def lookup_agency(namespace: str, identifier: str, *, on_date: str | None = None) -> dict:
-    """Return reviewed candidates and abstentions; never match labels or parents."""
+    """Return reviewed candidates and abstentions; never match labels or parents. Another namespace is refused."""
+    from spicy_regs.ontology import agencies
+
+    if namespace not in (REGULATIONS, FEDERAL_REGISTER):
+        raise ValueError(f"Unsupported namespace {namespace!r}; the namespaces are {REGULATIONS} and {FEDERAL_REGISTER}")
     if not isinstance(identifier, str) or not identifier or len(identifier) > 256:
         raise ValueError("A bounded exact native identifier is required")
     if on_date is not None:
@@ -88,21 +95,17 @@ def lookup_agency(namespace: str, identifier: str, *, on_date: str | None = None
     if namespace == REGULATIONS:
         candidates = [dict(row) for row in rows if row["source_value"] == identifier]
         abstentions = [dict(row) for row in unresolved if row["source_value"] == identifier]
-    elif namespace == FEDERAL_REGISTER:
+    else:
         urn = agencies.FR_AGENCY_URN + identifier
         candidates = [dict(row) for row in rows if row["org"] == urn]
     status = (
-        "unsupported_namespace"
-        if namespace not in {REGULATIONS, FEDERAL_REGISTER}
-        else (
-            "contested"
-            if candidates and abstentions
-            else "ambiguous"
-            if len(candidates) > 1
-            else "reviewed_mapping"
-            if candidates
-            else "unmatched"
-        )
+        "contested"
+        if candidates and abstentions
+        else "ambiguous"
+        if len(candidates) > 1
+        else "reviewed_mapping"
+        if candidates
+        else "unmatched"
     )
     registry = _registry_evidence(namespace, identifier, candidates)
     if status == "unmatched" and registry["events"]:

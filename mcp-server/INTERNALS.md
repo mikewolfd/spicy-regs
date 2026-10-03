@@ -21,7 +21,7 @@ to the Python server in Cloudflare Containers.
 
 **The tool docstrings are not documentation — do not delete them.**
 MCPServer reflects over `fn.__doc__` to build the tool descriptions sent to every
-client during `list_tools`; the `tool` wrapper in `_register_tools` copies each
+client during `list_tools`; the `tool` wrapper in `_tools` copies each
 signature with `functools.wraps` and registers the docstring through
 `inspect.cleandoc` as the description. MCPServer sends `__doc__` as written, and
 Claude Code cuts a description at 2,048 characters (`CLAUDE_CODE_MAX_MCP_DESCRIPTION_LENGTH`)
@@ -38,6 +38,27 @@ Strip them and the server still runs, but every client goes blind. Verify with
 
 **Inline `# type: ignore` / `# noqa` are directives, not comments.** `ty` and
 `ruff` gate merges and both read them.
+
+## Arguments are refused, never dropped (`_StrictTool`, round 6)
+
+MCPServer's argument model ignores a key a tool does not declare, so zubair's
+misspelled `offest` ran page 0 of a query and said nothing (round 6), and a
+bound such as `max_rows` above 500 failed in pydantic's own text with a link to
+its documentation. Each tool is a `_StrictTool`: its `run` refuses an
+undeclared argument and states every argument error in one sentence, then the
+arguments the tool takes ("offest is not an argument. query_sql takes
+max_cell_chars, max_rows, sql."), and its schema says `additionalProperties:
+false` without pydantic's per-field titles, which repeated each name against
+the description cap. The tools are built with `Tool.from_function` and handed
+to `MCPServer(tools=...)`, a public seam. A test of a new parameter can assert
+its acceptance: a misspelled one is refused.
+
+`lookup_agency`'s `namespace` is the closed set `vocabulary_mapping.Namespace`.
+Rounds 4 and 5 answered another namespace with a success reply,
+`status: unsupported_namespace`, on the reasoning that the lookup had run and
+found nothing it could map. That was wrong: an agent took the status as an
+answer about the identifier. With the two namespaces advertised in the schema,
+another one is a malformed argument, and it is refused naming both.
 
 ## Connection setup (`_build_connection`, `_get_connection`, `_apply_security_settings`)
 
@@ -121,7 +142,7 @@ into the next one.
 FastMCP (mcp 1.x) ran a sync tool on the event loop, so the server executed one
 call at a time and a slow one, such as a 43 s build, stalled every request,
 `GET /` included. MCPServer (mcp 2.x) runs sync tools on worker threads, and
-`_register_tools` wraps each tool so that:
+`_tools` wraps each tool so that:
 
 - it runs through `anyio.to_thread.run_sync` with one `CapacityLimiter` of
   `SPICY_REGS_TOOL_CONCURRENCY` tokens (default 2). A remote scan issues range
@@ -329,9 +350,7 @@ scout's S1, the check read `ROUTES`, which carried three kinds no writer emits
 (`federal_register_document`, `federal_register_number`, `bioguide_id`; deleted)
 and lacked `case_docket_number`.
 `occurrence_selection.status` is `capped`, `last_page` (an offset page that
-reached the end) or `complete_held_selection`. MCPServer drops an argument a
-tool does not declare, so a test of a new parameter asserts its effect, not
-its acceptance.
+reached the end) or `complete_held_selection`.
 
 **Pages and compaction (round 5, owner decision 2026-10-03).** `max_occurrences`
 defaults to 25 and is at most 100; a larger request is refused with how to page

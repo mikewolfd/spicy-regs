@@ -37,9 +37,10 @@ import httpx
 import pydantic_core
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
+from mcp.server.mcpserver.tools import Tool
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import CallToolResult, Icon, TextContent
-from pydantic import Field
+from pydantic import Field, ValidationError
 from starlette.requests import Request
 from starlette.responses import Response
 
@@ -49,6 +50,7 @@ from spicy_regs.duckdb_settings import INTERACTIVE_HTTP_RETRIES, load_public_htt
 from spicy_regs.fec_release import QUERY_RELEASE_FIELDS, RELEASE_INVENTORIES, release_summary
 from spicy_regs.public_url import resolve_r2_base_url
 from spicy_regs.relationship_views.fec_query_views import fec_query_views
+from spicy_regs.vocabulary_mapping import Namespace
 
 TABLES = (
     "dockets",
@@ -1463,8 +1465,49 @@ def _unheld_document(cursor: duckdb.DuckDBPyConnection, kind: str, key: str, par
             f"case-sensitive, and {kind} covers only the documents {parent} holds.{hint}")
 
 
-def _register_tools(mcp: MCPServer) -> None:
+def _argument_problem(error: Mapping[str, Any]) -> str:
+    """One argument error in plain words: ``sql is required`` or ``max_rows: Input should be ...``."""
+    where = ".".join(map(str, error["loc"]))
+    return f"{where} is required" if error["type"] == "missing" else f"{where}: {error['msg']}"
+
+
+class _StrictTool(Tool):
+    """A tool that refuses an argument it does not declare and states every argument error in plain words.
+
+    MCPServer's argument model ignores an undeclared argument, so a misspelled ``offest`` ran page 0 with nothing
+    said (round 6), and a bound failed in pydantic's own text with a link to its documentation. The refusal names
+    each problem, then the arguments the tool takes; the schema says ``additionalProperties: false``.
+    """
+
+    async def run(self, arguments: dict[str, Any], context: Any, convert_result: bool = False) -> Any:
+        names = sorted(self.parameters["properties"])
+        problems = [f"{name} is not an argument" for name in sorted(set(arguments) - set(names))]
+        cause = None
+        try:
+            self.fn_metadata.validate_arguments({key: value for key, value in arguments.items() if key in names})
+        except ValidationError as error:
+            cause = error  # MCPServer then logs the field names only, never the caller's values
+            problems += [_argument_problem(e) for e in error.errors(include_url=False, include_input=False)]
+        if problems:
+            raise ToolError(f"Error executing tool {self.name}: {'; '.join(problems)}. "
+                            f"{self.name} takes {', '.join(names)}.") from cause
+        return await super().run(arguments, context, convert_result)
+
+    @classmethod
+    def strict(cls, fn: Callable[..., Any], description: str) -> Tool:
+        """``fn`` as a tool whose schema refuses other arguments and drops pydantic's titles, which repeat each name
+        and count against the client's description cap."""
+        tool = cls.from_function(fn, description=description)
+        schema = {key: value for key, value in tool.parameters.items() if key != "title"}
+        schema["properties"] = {name: {key: value for key, value in field.items() if key != "title"}
+                                for name, field in schema["properties"].items()}
+        return tool.model_copy(update={"parameters": {**schema, "additionalProperties": False}})
+
+
+def _tools() -> list[Tool]:
+    """The five tools, each run on a worker thread under one limiter and refusing an argument it does not declare."""
     limiter = anyio.CapacityLimiter(TOOL_CONCURRENCY)
+    tools: list[Tool] = []
 
     def tool(fn: Callable[..., dict[str, Any]]) -> Callable[..., Any]:
         """Register ``fn`` to run on a worker thread, at most TOOL_CONCURRENCY calls at once, off the event loop.
@@ -1489,11 +1532,12 @@ def _register_tools(mcp: MCPServer) -> None:
             text = pydantic_core.to_json(structured).decode()
             return CallToolResult(content=[TextContent(type="text", text=text)], structured_content=structured)
 
-        return mcp.tool(description=inspect.cleandoc(fn.__doc__ or ""))(call)
+        tools.append(_StrictTool.strict(call, inspect.cleandoc(fn.__doc__ or "")))
+        return call
 
     @tool
     def lookup_agency(
-        namespace: Annotated[str, Field(min_length=1, max_length=256)],
+        namespace: Namespace,
         identifier: Annotated[str, Field(min_length=1, max_length=256)],
         on_date: Annotated[str | None, Field(pattern=r"^\d{4}-\d{2}-\d{2}$")] = None,
     ) -> dict[str, Any]:
@@ -1845,12 +1889,12 @@ def _register_tools(mcp: MCPServer) -> None:
             ]),
         }
 
+    return tools
+
 
 def build_server() -> MCPServer:
     """Build the MCP server with discovery, read-only queries and citation lookup; stdio, or HTTP via build_app."""
-    mcp = MCPServer("spicy-regs", instructions=INSTRUCTIONS, icons=ICONS)
-    _register_tools(mcp)
-    return mcp
+    return MCPServer("spicy-regs", instructions=INSTRUCTIONS, icons=ICONS, tools=_tools())
 
 
 STATIC_DIR = Path(__file__).parent / "static"

@@ -26,7 +26,10 @@ def test_real_lookup_namespaces_and_temporal_abstention(monkeypatch):
     assert lookup("regulations.gov:agency", "Office of Personnel Management")["status"] == "unmatched"
     assert lookup("regulations.gov:agency", "ARCTICGAS")["abstentions"]
     assert lookup("regulations.gov:agency", "OPM", on_date="1990-01-01")["status"] == "temporal_scope_unqualified"
-    assert lookup("gao_topic", "OPM")["status"] == "unsupported_namespace"
+    # Round 6 reversed the round-4/5 success reply: an agent took "unsupported_namespace" as an answer. The schema
+    # advertises the two namespaces, so another one is a malformed argument, refused naming both.
+    with pytest.raises(ToolError, match="'regulations.gov:agency' or 'federal_register_agency'"):
+        lookup("gao_topic", "OPM")
     with pytest.raises(ToolError):
         lookup("regulations.gov:agency", "OPM", on_date="2026-02-30")
 
