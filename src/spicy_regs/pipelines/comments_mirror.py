@@ -77,7 +77,8 @@ def check_receipt_rows(output_dir: Path, files: dict[str, dict], exported_rows: 
 
     The server states ``rows`` from the receipt without opening a file, so each must be the sum of its own file's row
     groups; the monolith's must be the count the export validated; and the agency files must sum to it, the rule
-    :func:`_receipt_matches` holds a published receipt to, applied before one is written.
+    :func:`_receipt_matches` holds a published receipt to. It runs on the local files before any upload, so a refusal
+    leaves the public files and their receipt describing the same generation.
     """
     errors = []
     for key, item in files.items():
@@ -182,18 +183,18 @@ def publish_comments_mirror(output_dir: Path, *, resources: ExportResources | No
     if current is None or current["etag"] != predecessor.etag:
         raise RuntimeError("Prior comments mirror changed before publication; refusing overwrite")
     files = [result["comments"], *agency_files, result["index"]]
+    rows = {path.relative_to(output_dir).as_posix(): {"rows": pq.ParquetFile(path).metadata.num_rows} for path in files}
+    check_receipt_rows(output_dir, rows, n_rows)
     r2.preflight_uploads(output_dir, files)
     r2.upload_file(result["comments"], remote_key="comments.parquet")
     r2.upload_comment_partitions(output_dir, agency_files)
 
     def verify(path: Path) -> tuple[str, dict]:
         key = path.relative_to(output_dir).as_posix()
-        descriptor = r2.verify_public_file(path, key, base_url)
-        return key, {**descriptor, "rows": pq.ParquetFile(path).metadata.num_rows}
+        return key, {**r2.verify_public_file(path, key, base_url), **rows[key]}
 
     with ThreadPoolExecutor(max_workers=4) as pool:
         descriptors = dict(pool.map(verify, files))
-    check_receipt_rows(output_dir, descriptors, n_rows)
     receipt = {"format_version": FORMAT_VERSION, "source": asdict(snapshot), "files": descriptors}
     receipt_path = output_dir / RECEIPT_KEY
     receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")

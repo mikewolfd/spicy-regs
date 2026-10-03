@@ -368,6 +368,15 @@ def test_a_receipt_whose_agency_rows_do_not_sum_to_the_monolith_is_refused(tmp_p
         mirror.check_receipt_rows(tmp_path, files, 3)
 
 
+def test_a_refused_receipt_uploads_nothing(publication, monkeypatch):
+    """The row check runs on the local files before any upload, so a refusal leaves the public files untouched."""
+    state, root = publication
+    monkeypatch.setattr(mirror, "check_receipt_rows", lambda *a: (_ for _ in ()).throw(RuntimeError("Refusing the comments receipt: test")))
+    with pytest.raises(RuntimeError, match="Refusing the comments receipt"):
+        mirror.publish_comments_mirror(root)
+    assert state["uploads"] == [] and state["receipt"] is None
+
+
 def test_export_refuses_a_catalog_moved_from_the_pinned_snapshot(tmp_path, monkeypatch):
     monkeypatch.setattr(iceberg, "_connect", duckdb.connect)
     monkeypatch.setattr(iceberg, "_read_snapshot", lambda con, rt: iceberg.CatalogSnapshot("table-uuid", 42, 0))
