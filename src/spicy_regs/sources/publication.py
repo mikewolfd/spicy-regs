@@ -454,11 +454,33 @@ def family_root(raw: bytes, entry: Mapping) -> dict:
     return root
 
 
-def load_family_root(base_url: str, entry: Mapping) -> tuple[bytes, dict]:
-    """Read only the pinned prior root for lineage over HTTPS; this does not re-admit its tables."""
+def _root_bytes(base_url: str, entry: Mapping) -> bytes:
     raw = _bounded_get(f"{base_url.rstrip('/')}/{entry['prefix']}/artifact.json", allow_missing=False)
     assert raw is not None
+    return raw
+
+
+def load_family_root(base_url: str, entry: Mapping) -> tuple[bytes, dict]:
+    """Read only the pinned prior root for lineage over HTTPS; this does not re-admit its tables."""
+    raw = _root_bytes(base_url, entry)
     return raw, family_root(raw, entry)
+
+
+def read_pinned_root(base_url: str, entry: Mapping) -> dict:
+    """The root at ``entry``'s immutable prefix, read the way the MCP server reads members.
+
+    The URL is pinned and the root must name the pin, but its digest is not
+    recomputed: the server image does not install rulespec-artifacts, which
+    :func:`load_family_root` verifies with for lineage.
+    """
+    try:
+        root = json.loads(_root_bytes(base_url, entry), object_pairs_hook=_pairs)
+    except ValueError as exc:
+        raise PublicationError("Pinned root is not JSON") from exc
+    if (not isinstance(root, dict) or root.get("artifactDigest") != entry["artifactDigest"]
+            or root.get("logicalId") != entry.get("logicalId")):
+        raise PublicationError("Pinned root differs from its captured pin")
+    return root
 
 
 def load_evidence_journal(base_url: str, pin: Mapping) -> bytes:

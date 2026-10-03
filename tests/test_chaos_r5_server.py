@@ -15,6 +15,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from spicy_regs import mcp_server as server, output_ledger, table_joins
 from spicy_regs.citation_resolution import SOURCE_TABLES
 from spicy_regs.sources import publication as pub
+from spicy_regs.sources.publication import read_pinned_root  # bound before conftest keeps roots off the network
 from tests.test_mcp_relationships import citation_connection, merged_occurrences
 from tests.test_mcp_server import _tool_data
 
@@ -312,6 +313,135 @@ def test_replies_state_when_the_publisher_moved_the_pointer(monkeypatch, publish
     # The citation reply's target pins come from the same projection; derived views' embedded pins do not move.
     assert merged_occurrences(cited)[0]["target_snapshot"] == status
     assert "published_at" not in status and "published_at" not in listed["laws"]
+
+
+# Parent lag (owner decision 2026-10-03): a derived family's root records the parent generations it was built from.
+
+def _family(name, digest, tables, **extra):
+    return {"prefix": f"generations/{name}/{digest[7:]}", "logicalId": f"urn:{name}", "artifactDigest": digest,
+            "tables": {f"{table}.parquet": {"sha256": sha, "byteSize": 1, "rows": 1, "columns": [["id", "VARCHAR"]]}
+                       for table, sha in tables.items()}, **extra}
+
+
+DOCS_LIVE, DOCS_OLD, SIGNALS = ("sha256:" + c * 64 for c in "abc")
+
+
+def _lineage(monkeypatch, parents, documents=DOCS_LIVE, documents_sha="sha256:" + "d" * 64, roots=None):
+    """A connection whose index pins documents and discovery_signals, and a root reader counting its reads."""
+    import duckdb
+
+    index = {"format": "spicy-regs-publication", "version": 2, "families": {
+        "documents": _family("documents", documents, {"documents": documents_sha}),
+        "discovery-signals": _family("discovery-signals", SIGNALS, {"discovery_signals": "sha256:" + "e" * 64}),
+    }}
+    con = duckdb.connect()
+    for table in ("documents", "discovery_signals"):
+        con.execute(f"CREATE TABLE {table} (id VARCHAR)")
+    con.execute("CREATE TABLE _spicy_publication (snapshot VARCHAR)")
+    con.execute("INSERT INTO _spicy_publication VALUES (?)", [json.dumps(index)])
+    reads = []
+    stored = roots if roots is not None else {SIGNALS: {"spec": {"parents": parents}}, DOCS_LIVE: {"spec": {}},
+                                              DOCS_OLD: {"spec": {}}}
+
+    def read_root(base_url, entry):
+        reads.append(entry["artifactDigest"])
+        root = stored[entry["artifactDigest"]]
+        if isinstance(root, Exception):
+            raise root
+        return {"artifactDigest": entry["artifactDigest"], "logicalId": entry["logicalId"], **root}
+
+    monkeypatch.setattr(pub, "read_pinned_root", read_root)
+    monkeypatch.setattr(server, "_ROOT_PARENTS", {})
+    monkeypatch.setattr(server, "_get_connection", lambda: con)
+    return con, reads
+
+
+def _documents_parent(digest=DOCS_OLD, sha="sha256:" + "f" * 64):
+    return {"documents.parquet": {"family": "documents", "artifactDigest": digest, "sha256": sha, "byteSize": 1}}
+
+
+def test_a_derived_table_names_the_parent_generation_it_was_built_from(monkeypatch):
+    con, _ = _lineage(monkeypatch, _documents_parent())
+    with con:
+        mcp = server.build_server()
+        described = _tool_data(mcp, "describe_table", {"table": "discovery_signals"})["publication"]
+        queried = _tool_data(mcp, "query_sql", {"sql": "SELECT * FROM discovery_signals"})["publication"]
+    expected = [{"table": "documents", "family": "documents", "built_from": DOCS_OLD, "live": DOCS_LIVE,
+                 "current": False}]
+    assert described["inputs"] == queried["discovery_signals"]["inputs"] == expected
+    assert described["inputs_current"] is False
+
+
+def test_a_derived_table_built_from_the_live_parent_is_current(monkeypatch):
+    con, _ = _lineage(monkeypatch, _documents_parent(DOCS_LIVE, "sha256:" + "d" * 64))
+    with con:
+        described = _tool_data(server.build_server(), "describe_table", {"table": "discovery_signals"})["publication"]
+    assert described["inputs"][0]["current"] is True and described["inputs_current"] is True
+
+
+def test_a_parent_family_that_moved_for_another_table_still_counts_as_current(monkeypatch):
+    """The family digest moved, the parent table's bytes did not: the derived table read what is live."""
+    con, _ = _lineage(monkeypatch, _documents_parent(DOCS_OLD, "sha256:" + "d" * 64))
+    with con:
+        described = _tool_data(server.build_server(), "describe_table", {"table": "discovery_signals"})["publication"]
+    assert (described["inputs"][0]["built_from"], described["inputs"][0]["live"]) == (DOCS_OLD, DOCS_LIVE)
+    assert described["inputs_current"] is True
+
+
+def test_a_family_without_parents_states_no_inputs(monkeypatch):
+    con, _ = _lineage(monkeypatch, _documents_parent())
+    with con:
+        described = _tool_data(server.build_server(), "describe_table", {"table": "documents"})["publication"]
+    assert "inputs" not in described and "inputs_current" not in described and "inputs_status" not in described
+
+
+def test_a_storage_version_parent_is_reported_without_a_lag_claim(monkeypatch):
+    parents = {**_documents_parent(), "comments.parquet": {"etag": '"7a81"', "byteSize": 9}}
+    con, _ = _lineage(monkeypatch, parents)
+    with con:
+        described = _tool_data(server.build_server(), "describe_table", {"table": "discovery_signals"})["publication"]
+    assert described["inputs"][0] == {"table": "comments", "family": None, "built_from": '"7a81"', "live": None,
+                                      "current": None}
+    assert described["inputs_current"] is False  # the managed parent still lags
+    con, _ = _lineage(monkeypatch, {"comments.parquet": {"etag": '"7a81"', "byteSize": 9}})
+    with con:
+        alone = _tool_data(server.build_server(), "describe_table", {"table": "discovery_signals"})["publication"]
+    assert alone["inputs_current"] is None
+
+
+def test_an_unreadable_root_is_stated_never_guessed_and_retried(monkeypatch):
+    roots = {SIGNALS: pub.PublicationError("Pinned root differs from its captured pin"), DOCS_LIVE: {"spec": {}}}
+    con, reads = _lineage(monkeypatch, {}, roots=roots)
+    with con:
+        mcp = server.build_server()
+        for _ in range(2):
+            described = _tool_data(mcp, "describe_table", {"table": "discovery_signals"})["publication"]
+            assert described["inputs"] is None and described["inputs_status"] == "root_unavailable"
+    assert reads == [SIGNALS, SIGNALS]
+
+
+def test_roots_are_read_lazily_once_per_generation_and_never_for_discovery(monkeypatch):
+    con, reads = _lineage(monkeypatch, _documents_parent())
+    with con:
+        mcp = server.build_server()
+        server._publication_status(con)
+        _tool_data(mcp, "list_sources", {})
+        assert reads == []
+        for _ in range(3):
+            _tool_data(mcp, "describe_table", {"table": "discovery_signals"})
+        listed = {row["table"]: row for row in _tool_data(mcp, "list_sources", {})["tables"]}
+    assert reads == [SIGNALS] and "inputs" not in listed["discovery_signals"]
+
+
+def test_the_server_reads_a_pinned_root_without_rulespec_and_refuses_another_pin(monkeypatch):
+    entry = _family("documents", DOCS_LIVE, {"documents": "sha256:" + "d" * 64})
+    root = {"artifactDigest": DOCS_LIVE, "logicalId": "urn:documents", "spec": {"parents": {}}}
+    urls = []
+    monkeypatch.setattr(pub, "_bounded_get", lambda url, **_: urls.append(url) or json.dumps(root).encode())
+    assert read_pinned_root("https://pub.example/", entry) == root
+    assert urls == [f"https://pub.example/generations/documents/{'a' * 64}/artifact.json"]
+    with pytest.raises(pub.PublicationError):
+        read_pinned_root("https://pub.example", {**entry, "artifactDigest": DOCS_OLD})
 
 
 # Meaning text moved into the artifacts the server reads (pattern 9).

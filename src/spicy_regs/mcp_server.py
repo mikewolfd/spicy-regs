@@ -33,6 +33,7 @@ from uuid import UUID
 import anyio
 import anyio.to_thread
 import duckdb
+import httpx
 import pydantic_core
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
@@ -843,6 +844,64 @@ def _published_at(index: dict, name: str) -> str | None:
     return owner[1].get("publishedAt") if owner is not None else None
 
 
+#: Each family generation's ``spec.parents`` by (base URL, artifact digest): roots are immutable, so one read
+#: serves the process. A concurrent first use may read twice; a failed read is not kept.
+_ROOT_PARENTS: dict[tuple[str, str], dict[str, dict]] = {}
+
+
+def _family_parents(base_url: str, entry: Mapping) -> dict[str, dict]:
+    """``spec.parents`` of the family generation ``entry`` pins, read on first use; {} when the root records none."""
+    from spicy_regs.sources.publication import read_pinned_root
+
+    key = (base_url, entry["artifactDigest"])
+    if key not in _ROOT_PARENTS:
+        if len(_ROOT_PARENTS) >= 1024:  # generations move daily; a long-lived process forgets old ones
+            _ROOT_PARENTS.clear()
+        _ROOT_PARENTS[key] = read_pinned_root(base_url, entry).get("spec", {}).get("parents") or {}
+    return _ROOT_PARENTS[key]
+
+
+def _input_lineage(index: dict, name: str) -> dict[str, Any]:
+    """The parent generations a managed table's family was built from beside the live ones; {} when it records none.
+
+    ``built_from`` and ``live`` are family generations. ``current`` compares the
+    parent table's own bytes where both pins state them, so a parent family that
+    moved for another table does not mark this one stale; a storage-version
+    parent (an ETag, or a local copy's digest) makes no lag claim. An unreadable
+    root is stated, never guessed.
+    """
+    from spicy_regs.sources.publication import PublicationError, table_owner
+
+    owner = table_owner(index, f"{name}.parquet")
+    if owner is None:
+        return {}
+    try:
+        parents = _family_parents(R2_BASE_URL, owner[1])
+    except (PublicationError, httpx.HTTPError, OSError) as error:
+        logger.warning("%s: generation root unavailable (%s)", owner[0], type(error).__name__)
+        return {"inputs": None, "inputs_status": "root_unavailable"}
+    inputs = []
+    for key, parent in sorted(parents.items()):
+        if "family" not in parent:
+            inputs.append({"table": key.removesuffix(".parquet"), "family": None,
+                           "built_from": parent.get("etag") or parent.get("sha256"), "live": None, "current": None})
+            continue
+        live = table_owner(index, key)
+        if live is None:  # no family publishes the parent now: nothing to compare
+            live_digest, current = None, None
+        elif "sha256" in parent and "sha256" in live[1]["tables"][key]:
+            live_digest, current = live[1]["artifactDigest"], parent["sha256"] == live[1]["tables"][key]["sha256"]
+        else:
+            live_digest = live[1]["artifactDigest"]
+            current = parent["artifactDigest"] == live_digest
+        inputs.append({"table": key.removesuffix(".parquet"), "family": parent["family"],
+                       "built_from": parent["artifactDigest"], "live": live_digest, "current": current})
+    if not inputs:
+        return {}
+    claims = [item["current"] for item in inputs if item["current"] is not None]
+    return {"inputs": inputs, "inputs_current": all(claims) if claims else None}
+
+
 def _export_rows(cursor: duckdb.DuckDBPyConnection) -> dict[str, dict]:
     """``rows``, ``rows_basis`` and ``export_receipt`` for each fixed-URL comments export this connection matched.
 
@@ -870,7 +929,8 @@ def _reply_pins(cursor: duckdb.DuckDBPyConnection, publication: dict[str, dict],
     ``rows`` is the pinned index's or snapshot manifest's count, a managed
     generation adds ``published_at`` (when the publisher moved the pointer to
     it; null until the publisher records it, and never when the data was
-    read), a snapshot table adds its manifest's ``run_id`` and
+    read) and, when its root records parents, ``inputs`` and
+    ``inputs_current`` (:func:`_input_lineage`), a snapshot table adds its manifest's ``run_id`` and
     ``asserted_at``, a comments export
     adds its receipt's count with ``rows_basis`` (:func:`_export_rows`), and
     ``coverage`` is the dictionary's coverage kind. They join the pin only here:
@@ -886,6 +946,9 @@ def _reply_pins(cursor: duckdb.DuckDBPyConnection, publication: dict[str, dict],
         pin = dict(publication[name])
         if pin["status"] in ("managed_generation", "managed_download"):
             pin |= {"rows": _pinned_rows(index, rulemaking, name), "published_at": _published_at(index, name)}
+            # A local download holds no generation roots; the remote root is read on first use, never at build.
+            pin |= (_input_lineage(index, name) if pin["status"] == "managed_generation"
+                    else {"inputs": None, "inputs_status": "root_unavailable"})
         elif pin["status"] == "rulemaking_snapshot":
             manifest = rulemaking["manifest"]
             pin |= {"rows": rulemaking["tables"][f"{name}.parquet"]["rows"],
@@ -1454,18 +1517,18 @@ def _register_tools(mcp: MCPServer) -> None:
         type the view does not share with the dictionary. publication is the
         live data version with its pinned row count, published_at (when the
         publisher moved the pointer to this generation, not when its data was
-        read) and coverage kind; prefer its rows to a count stated in prose. qualification gives the live pin,
-        the output ledger's audited pin, date and disposition, whether they
-        match, and the ledger's own statement, as separate fields; it is
-        reported only for the ledger's publisher. joins lists the declared joins
-        this table makes (outgoing) and receives (incoming), each with its
-        measured baseline.
+        read) and coverage kind; prefer its rows to a count stated in prose.
+        publication.inputs names each parent generation a derived table was
+        built from beside the live one (current compares the parent's bytes);
+        inputs_current is false when any lags. qualification gives the live pin and the output ledger's
+        audited pin, date and disposition as separate fields, only for the
+        ledger's publisher. joins lists the declared joins this table makes
+        (outgoing) and receives (incoming), each with its measured baseline.
         detail=false (the default) omits each join's measurement record and
         the ledger's own statements, and names them in detail.omitted;
-        detail=true returns them. A derived view's column that projects a
-        source table's column unchanged carries that column's dictionary
-        meaning; a computed column carries its declared meaning, or null when
-        it has none.
+        detail=true returns them. A derived view's column carries its source
+        column's meaning when it projects it unchanged, else its declared
+        meaning or null.
         For a FEC view, release_compatibility appears once: in publication
         when available, or relationship when unavailable. detail=false keeps
         its pins and reasons, gives each dependency's family and generation
@@ -1575,8 +1638,9 @@ def _register_tools(mcp: MCPServer) -> None:
         match, lower() for case). Selected columns must have unique names; alias
         shared names in joins. sql echoes the statement this reply answers.
         publication gives each table the query names: its live data version,
-        pinned row count, published_at and coverage kind (a window or sample is
-        not the source's full history). Qualified-view pins keep the registered meaning and purpose
+        pinned row count, published_at, coverage kind (a window or sample is
+        not the source's full history) and, for a table built from others,
+        inputs. Qualified-view pins keep the registered meaning and purpose
         limits even for SELECT value only. Release compatible is not financial
         eligibility or current/net-money qualification. Call describe_table for
         full release evidence. Compare receipt, SQL, input and evidence pins
