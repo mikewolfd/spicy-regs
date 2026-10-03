@@ -50,8 +50,15 @@ from spicy_regs.schemas import COMMENT
 
 #: Keys per chunk: the resume unit, about 17 s of reads at the measured rate.
 CHUNK_KEYS = 20_000
-#: The part record's shape; a plan carries it, so a new shape is a new plan.
-RECORD_SHAPE = "s2"
+#: The part record's shape; a plan carries it, so a new shape is a new plan. s3 (2026-10-03): ``attachments_json`` as
+#: SpicyDocs b19b092 extracts it, every attachment the record lists, withheld ones included. The s2 parts (the
+#: 2026-09-28 read) hold the rule before it; under s2, ``plan`` on their workdir would add only the keys ingested since
+#: and keep the rest, so the owner's full re-read (2026-10-03) would replace nothing. :func:`require_record_shape`
+#: refuses to plan or read s3 under an extract that drops a withheld attachment.
+RECORD_SHAPE = "s3"
+#: A record listing one withheld attachment (no ``fileFormats``), which an s3 part keeps.
+_WITHHELD = {"data": {"id": "PROBE-0000-0001", "attributes": {}}, "included": [
+    {"type": "attachments", "attributes": {"title": "withheld", "fileFormats": None, "restrictReasonType": "Other"}}]}
 #: The ``data.attributes`` keys ``COMMENT.extract`` maps into the thin row; every other stated key is kept in
 #: ``attributes_json``. ``test_extracted_attributes_are_the_keys_the_extract_reads`` derives this set independently.
 EXTRACTED_ATTRIBUTES = frozenset({
@@ -79,6 +86,14 @@ def part_row(keyed) -> dict:
         "comment_length": None if body is None else len(body),
         "attributes_json": json.dumps(stated, separators=(",", ":"), sort_keys=True, ensure_ascii=False),
     }
+
+
+def require_record_shape(extract=None) -> None:
+    """Refuse an extract that reads another shape than :data:`RECORD_SHAPE`: one that drops a withheld attachment
+    (SpicyDocs before b19b092) would write s3 parts holding s2's ``attachments_json``."""
+    if (extract or COMMENT.extract)(_WITHHELD)["attachments_json"] is None:
+        raise RuntimeError(f"record shape {RECORD_SHAPE} keeps withheld attachments, and this environment's SpicyDocs "
+                           "drops them: run from a branch that vendors SpicyDocs with b19b092 (0.54.0 or later)")
 
 
 def _sql(value: str | Path) -> str:
@@ -146,6 +161,11 @@ def _chunks(
 
 def part_path(workdir: Path, plan_id: str, agency: str, chunk: int) -> Path:
     return workdir / "parts" / f"agency={agency}" / f"{plan_id}-{chunk:05d}.parquet"
+
+
+def shape_parts(workdir: Path) -> Path:
+    """The glob of this record shape's parts: a workdir that also holds an earlier shape's never mixes them in."""
+    return workdir / "parts" / "agency=*" / f"*-{RECORD_SHAPE}-*.parquet"
 
 
 def _peak_rss_mb() -> float:
@@ -312,6 +332,7 @@ app = App(name="fill-comment-fields", help=__doc__)
 @app.command(name="plan")
 def plan_command(*, workdir: Path, manifest: Path, chunk_keys: int = CHUNK_KEYS) -> None:
     """Add a manifest's unplanned comment keys as new chunks."""
+    require_record_shape()
     plan(workdir, manifest, chunk_keys=chunk_keys)
 
 
@@ -326,6 +347,7 @@ def read_command(
     pair = (shard, shards) if shard is not None and shards is not None else None
     if pair is not None and not 0 <= pair[0] < pair[1]:
         raise ValueError(f"shard {pair[0]} is outside 0..{pair[1] - 1}")
+    require_record_shape()
     name = f"progress-{shard}.json" if shard is not None else "progress.json"
     totals = read(workdir, workers=workers, max_rss_mb=max_rss_mb, min_free_gb=min_free_gb, shard=pair,
                   progress_name=name)
@@ -337,16 +359,19 @@ def read_command(
 @app.command(name="prepare")
 def prepare_command(
     *, workdir: Path, docket: str | None = None, agency: str | None = None, reads: Path | None = None,
+    profile: str = "all",
 ) -> None:
     """Compute the fill at the catalog's current snapshot (no write); ``--docket``/``--agency`` scope a pilot.
 
-    ``--reads`` is the staged fill input (runbook); by default the read parts under the workdir.
+    ``--reads`` is the staged fill input (runbook); by default this record shape's parts under the workdir.
+    ``--profile`` names the fill columns, ``attachments`` for the 2026-10 re-read (runbook).
     """
     from dotenv import load_dotenv
 
     load_dotenv()
     scope = {k: v for k, v in (("docket_id", docket), ("agency_code", agency)) if v}
-    print(json.dumps(prepare(workdir, scope=scope or None, reads=reads), indent=2))
+    print(json.dumps(prepare(workdir, scope=scope or None, reads=reads or shape_parts(workdir), profile=profile),
+                     indent=2))
 
 
 @app.command(name="write")

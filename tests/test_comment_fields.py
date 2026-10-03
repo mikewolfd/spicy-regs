@@ -49,6 +49,38 @@ def test_plan_chunks_comment_keys_per_agency_and_a_newer_manifest_adds_only_new_
     assert cf.status(tmp_path)["planned_keys"] == len(keys)
 
 
+def test_a_new_record_shape_reads_every_key_again_beside_an_earlier_shapes_parts(tmp_path, monkeypatch):
+    """The 2026-10 re-read on the 2026-09-28 workdir: s3 plans and reads every key, not only the keys since."""
+    store, shape = _store(), cf.RECORD_SHAPE
+    assert shape != "s2"
+    monkeypatch.setattr(cf, "RECORD_SHAPE", "s2")
+    cf.plan(tmp_path, _manifest(tmp_path, store), chunk_keys=10)
+    assert cf.read(tmp_path, workers=2, resource=_FakeS3Resource(store))["keys"] == len(store)
+    monkeypatch.setattr(cf, "RECORD_SHAPE", shape)
+    cf.plan(tmp_path, _manifest(tmp_path, store), chunk_keys=10)
+    assert cf.read(tmp_path, workers=2, resource=_FakeS3Resource(store))["keys"] == len(store)
+    assert len(list(tmp_path.glob("parts/*/*.parquet"))) == 4  # two chunks per shape
+    assert len(list(tmp_path.glob(str(cf.shape_parts(tmp_path).relative_to(tmp_path))))) == 2
+
+
+def test_planning_or_reading_the_shape_needs_an_extract_that_keeps_withheld_attachments(tmp_path, monkeypatch):
+    dropped = lambda record: {"attachments_json": None}  # noqa: E731 (SpicyDocs before b19b092)
+    kept = lambda record: {"attachments_json": '[{"title": "withheld", "formats": null}]'}  # noqa: E731
+    with pytest.raises(RuntimeError, match="b19b092"):
+        cf.require_record_shape(dropped)
+    cf.require_record_shape(kept)
+
+    def refuse(extract=None):
+        raise RuntimeError("refused")
+
+    monkeypatch.setattr(cf, "require_record_shape", refuse)
+    for command in (["plan", "--workdir", str(tmp_path), "--manifest", str(_manifest(tmp_path, _store()))],
+                    ["read", "--workdir", str(tmp_path)]):
+        with pytest.raises(RuntimeError, match="refused"):
+            cf.app(command)
+    assert not (tmp_path / "plan").exists()
+
+
 def test_read_keeps_the_thin_row_the_body_digest_and_every_other_stated_attribute(tmp_path):
     import hashlib
 
