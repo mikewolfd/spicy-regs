@@ -14,8 +14,7 @@ import pytest
 
 from scripts import docs_domain, render_cloudflare_config
 from spicy_regs import data_dictionary, mcp_server
-from spicy_regs.public_url import resolve_domain, resolve_r2_base_url, service_url
-from spicy_regs.transforms.build_org_committee_links import _resolve_comments_source
+from spicy_regs.public_url import comments_source, resolve_domain, resolve_r2_base_url, service_url
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -27,7 +26,7 @@ def test_domain_reaches_readers_pages_and_deployment(monkeypatch, tmp_path, doma
     expected = "spicygov.ai" if domain else "spicy-regs.dev"
     assert resolve_domain() == expected
     assert resolve_r2_base_url() == f"https://data.{expected}"
-    assert _resolve_comments_source(tmp_path) == f"https://data.{expected}/comments.parquet"
+    assert comments_source(tmp_path) == f"https://data.{expected}/comments.parquet"
 
     mcp_server._landing_page.cache_clear()
     try:
