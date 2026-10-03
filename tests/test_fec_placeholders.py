@@ -16,5 +16,5 @@ STATED = ["SAME", "DELTA AIRLINES", "NONEXISTENT LLC", "N.A. HOLDINGS", "0 GRAVI
 @pytest.mark.parametrize("value", PLACEHOLDERS + STATED)
 def test_python_and_sql_agree(value: str | None) -> None:
     with duckdb.connect() as con:
-        in_sql = con.execute(f"SELECT {not_stated_sql('$value')}", {"value": value}).fetchone()[0]
-    assert in_sql == not_stated(value) == (value in PLACEHOLDERS)
+        row = con.execute(f"SELECT {not_stated_sql('$value')}", {"value": value}).fetchone()
+    assert row is not None and row[0] == not_stated(value) == (value in PLACEHOLDERS)

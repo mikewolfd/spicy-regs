@@ -10,6 +10,7 @@ junk guards, fan-out-driven confidence, and the comment-side rollups.
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from pathlib import Path
 
 import duckdb
@@ -69,7 +70,7 @@ def _history(committee_id: str, cycle: str, connected_organization_name: str | N
     return {"committee_id": committee_id, "cycle": cycle, "connected_organization_name": connected_organization_name}
 
 
-def _run(tmp_path: Path, comments: list[dict], committees: list[dict], history: list[dict] = ()) -> list[dict]:
+def _run(tmp_path: Path, comments: list[dict], committees: list[dict], history: Sequence[dict] = ()) -> list[dict]:
     """Materialize the fixtures and run the real published build over them."""
     _write(tmp_path / "comments.parquet", comments)
     _write(tmp_path / "fec_committees.parquet", committees)
