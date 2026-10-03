@@ -1,10 +1,11 @@
 """Regulations.gov agency codes for Federal Register agencies, through RefSpec's projection and agency registry.
 
 REF-038 projects each code onto one roster organization. The agency registry view (REF-072,
-batch 1) adds identity bridges from Federal Register agencies to organizations codes select,
-and successions from defunct agencies to the organizations holding their functions now. The
-rule reads no date, the view's effective dates included: every document takes today's lineage
-whatever its own date, so a 1998 Health Care Finance Administration notice is CMS.
+batch 1 and the FNS -> FNA succession batch) adds identity bridges from Federal Register agencies
+to organizations codes select, and successions from defunct agencies to the organizations holding
+their functions now, with each original's current successors sealed by RefSpec. The rule reads no
+date, the view's effective dates included: every document takes today's lineage whatever its own
+date, so a 1998 Health Care Finance Administration notice is CMS.
 Both are RefSpec's bytes, vendored in ``reference/refspec/`` and never edited here; the loader
 refuses any copy whose sha256 is not the pinned one.
 """
@@ -27,12 +28,13 @@ AGENCY_PROJECTION_SHA256 = "c9ec0fde1bf5fda17402983880bc091e9caa417845178f232214
 AGENCY_PROJECTION_UNRESOLVED_SHA256 = "e32e814c3c7489d82df6dbdbc00fd6e16694628c08e7300a9473bcaa0659b065"
 VIEW_MANIFEST_SHA256 = "991acd29368b17fb66eea770f36c71385c5faee1a368008a4240281e4c8536d8"
 
-#: Pinned digests of the vendored agency registry view (RefSpec cd78e476, schema 1.1); the
+#: Pinned digests of the vendored agency registry view (RefSpec f1c23b91, schema 1.2); the
 #: manifest's is the pin RefSpec's build tool names. See ``reference/refspec/README.md``.
-AGENCY_REGISTRY_MANIFEST_SHA256 = "c7dc9310f9c11cd346245d7cf882f9eaf69b70b25f59841ae6004dca4944866e"
+AGENCY_REGISTRY_MANIFEST_SHA256 = "0b39812de31930f267dea2d7d51039d71b0a1852606387d5aba64aa75d25ec17"
 AGENCY_REGISTRY_BRIDGES_SHA256 = "2e33905b475c6a1adf27960ecf170a1b4c82df2baf20ac13df9307bb687dd898"
-AGENCY_REGISTRY_EVENTS_SHA256 = "72f35636f9b5c93d708a364352122fb724e872f619a518c5e49ebb19518322b7"
+AGENCY_REGISTRY_EVENTS_SHA256 = "fce2b80a184fd0de98e2d15ba2d3a68d47f84eb9b9ba1c2678bc8787af3e0c07"
 AGENCY_REGISTRY_NON_EMISSIONS_SHA256 = "da863e467f00f16a6b7a9ff1a3e1182fb8e7488f8b7d33f0d7f0c403a0663e24"
+AGENCY_REGISTRY_CURRENT_SUCCESSORS_SHA256 = "857abd0ca7c42a50bab7225d1036df2e498d91e1840a2007440fd10acdf97160"
 
 #: The vendored projection table, and the registry view's directory (manifest plus ``tables/``).
 AGENCY_PROJECTION_PATH = files("spicy_regs").joinpath("reference/refspec/agency-projection.parquet")
@@ -42,6 +44,7 @@ _REGISTRY_TABLE_SHA256 = {
     "bridges": AGENCY_REGISTRY_BRIDGES_SHA256,
     "events": AGENCY_REGISTRY_EVENTS_SHA256,
     "non-emissions": AGENCY_REGISTRY_NON_EMISSIONS_SHA256,
+    "current-successors": AGENCY_REGISTRY_CURRENT_SUCCESSORS_SHA256,
 }
 
 _FR_AGENCY = "urn:ref:federal-register-agency:"
@@ -73,46 +76,10 @@ def projection_rows() -> tuple[Mapping[str, Any], ...]:
 
 
 def registry_rows(table: str) -> tuple[Mapping[str, Any], ...]:
-    """The vendored registry view's ``bridges``, ``events`` or ``non-emissions`` rows, read once and cached."""
+    """The vendored registry view's ``bridges``, ``events``, ``non-emissions`` or ``current-successors`` rows, read once
+    and cached."""
     path = AGENCY_REGISTRY_VIEW_PATH.joinpath(f"tables/agency-registry-{table}.parquet")
     return _read_pinned(path, _REGISTRY_TABLE_SHA256[table])
-
-
-def _current_successors(events: Iterable[Mapping[str, Any]]) -> dict[str, frozenset[str]]:
-    """Each event's original read forward to the results no later event replaced; a cycle is refused.
-
-    RefSpec's ``current_agency_successors()`` over the view's event rows, one per (event,
-    result), and its iterative depth-first walk, so no chain depth reaches the recursion limit:
-    every chain is walked to its end, a split keeps every result, and each organization's answer
-    is settled once, after all its results, and reused along every chain through it.
-    """
-    results_of: dict[str, set[str]] = defaultdict(set)
-    for row in events:
-        for original in row["originals"]:
-            results_of[original].add(row["result"])
-    settled: dict[str, frozenset[str]] = {}
-    for root in sorted(results_of):
-        if root in settled:
-            continue
-        path = {root}
-        stack = [(root, iter(sorted(results_of[root])))]
-        while stack:
-            org, pending = stack[-1]
-            for result in pending:
-                if result in settled or result not in results_of:
-                    continue
-                if result in path:
-                    raise ValueError(f"agency change events form a cycle through {result}")
-                path.add(result)
-                stack.append((result, iter(sorted(results_of[result]))))
-                break
-            else:
-                stack.pop()
-                path.discard(org)
-                settled[org] = frozenset().union(
-                    *(settled[result] if result in results_of else {result} for result in results_of[org])
-                )
-    return settled
 
 
 class _Projection(NamedTuple):
@@ -123,18 +90,25 @@ class _Projection(NamedTuple):
 
 
 def _build_projection(
-    rows: Iterable[Mapping[str, Any]], bridges: Iterable[Mapping[str, Any]], events: Sequence[Mapping[str, Any]]
+    rows: Iterable[Mapping[str, Any]],
+    bridges: Iterable[Mapping[str, Any]],
+    events: Iterable[Mapping[str, Any]],
+    successors: Iterable[Mapping[str, Any]],
 ) -> _Projection:
     """Reverse REF-038's rows, then follow the registry's bridges and each original's current successors.
 
     A bridge adds to its FR subject every code that selects its object, with the subject's
-    roster parent. An event's original adds every code that selects any current successor,
-    bridged codes included, but only when every current successor is coded: an uncoded
-    successor is unknown, not absent, so the original then takes no code at all. An org resolves
-    only where exactly one code selects it, so a split resolves only when all its successors
-    agree on one code. An original takes the roster parent its event states in
-    ``original_parents``, None for a top-level agency, so every coded org's parent is stated;
-    a second source stating another parent for an org is refused.
+    roster parent. ``successors`` is the view's sealed current-successors table, one row per
+    (original, successor): RefSpec walks each original's events to the results no later event
+    replaced, so a chain reaches its end and a split keeps every result. An original whose current
+    successors are all coded takes the codes that select them, bridged codes included, **in place
+    of** any code that selects the original itself: the current successor wins (owner rule, round 5),
+    so the Food and Nutrition Service, which REF-038 codes FNS and which is now the Food and
+    Nutrition Administration (FNA), is FNA. An uncoded successor is unknown, not absent, so the
+    original then takes no code at all. An org resolves only where exactly one code selects it, so
+    a split resolves only when all its successors agree on one code. An original takes the roster
+    parent its event states in ``original_parents``, None for a top-level agency, so every coded
+    org's parent is stated; a second source stating another parent for an org is refused.
     """
     codes: dict[str, set[str]] = defaultdict(set)
     parents: dict[str, str | None] = {}
@@ -152,11 +126,14 @@ def _build_projection(
     for row in events:
         for original, parent in zip(row["originals"], row["original_parents"], strict=True):
             state_parent(original, parent, f"event {row['event_id']}")
+    current: dict[str, set[str]] = defaultdict(set)
+    for row in successors:
+        current[row["original"]].add(row["successor"])
     unknown: set[str] = set()
-    for original, successors in _current_successors(events).items():  # a current successor is no original
-        found = [codes.get(successor, set()) for successor in successors]
+    for original, found_successors in current.items():  # a current successor is no original, so order is free
+        found = [codes.get(successor, set()) for successor in found_successors]
         if all(found):
-            codes[original] |= set().union(*found)
+            codes[original] = set().union(*found)
         else:
             unknown.add(original)
     ancestors: dict[str, frozenset[str]] = {}
@@ -184,7 +161,9 @@ def _build_projection(
 @lru_cache(maxsize=1)
 def _projection() -> _Projection:
     """The reverse lookup over the vendored projection and registry view, built once."""
-    return _build_projection(projection_rows(), registry_rows("bridges"), registry_rows("events"))
+    return _build_projection(
+        projection_rows(), registry_rows("bridges"), registry_rows("events"), registry_rows("current-successors")
+    )
 
 
 def fr_agency_code(fr_agency_id: int) -> str | None:
@@ -192,7 +171,8 @@ def fr_agency_code(fr_agency_id: int) -> str | None:
 
     A code selects the agency directly (REF-038), through an identity bridge (Energy Department
     is DOE), or through its current successors when every one is coded and they give one code
-    between them (the Health Care Finance Administration is CMS). ``None`` when no code selects
+    between them (the Health Care Finance Administration is CMS); a current successor's code wins
+    over the agency's own (the Food and Nutrition Service is FNA). ``None`` when no code selects
     it, or several do: INS, split to three agencies with three codes, has none, and so would a
     split with any uncoded successor.
     """

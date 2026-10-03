@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
-import sys
 from collections import Counter
 from importlib.resources import files
 from pathlib import Path
@@ -53,8 +52,19 @@ REGISTRY_TABLES = {
     "bridges": agencies.AGENCY_REGISTRY_BRIDGES_SHA256,
     "events": agencies.AGENCY_REGISTRY_EVENTS_SHA256,
     "non-emissions": agencies.AGENCY_REGISTRY_NON_EMISSIONS_SHA256,
+    "current-successors": agencies.AGENCY_REGISTRY_CURRENT_SUCCESSORS_SHA256,
 }
 FR = "urn:ref:federal-register-agency:"
+
+
+def _pairs(events) -> list[tuple[int, int]]:
+    """Each synthetic event row's (original, result), as FR ids: the current successors of a view with no chain."""
+    return [(int(row["originals"][0].removeprefix(FR)), int(row["result"].removeprefix(FR))) for row in events]
+
+
+def successor(original: int, result: int) -> dict:
+    """One synthetic row of the view's sealed current-successors table: ``result`` is a current successor of ``original``."""
+    return {"original": f"{FR}{original}", "successor": f"{FR}{result}"}
 
 
 def event(original: int, result: int, parent: int | None = None) -> dict:
@@ -126,7 +136,7 @@ def test_malformed_entries_are_skipped():
 
 def test_unresolved_ancestor_of_the_chosen_agency_is_accepted(monkeypatch):
     # REF-038 alone, before the registry bridged the Energy Department: no code selected it.
-    ref038 = agencies._build_projection(agencies.projection_rows(), (), ())
+    ref038 = agencies._build_projection(agencies.projection_rows(), (), (), ())
     monkeypatch.setattr(agencies, "_projection", lambda: ref038)
     entries = [
         {"id": DOE_ID, "name": "Energy Department"},
@@ -191,8 +201,8 @@ def test_a_bridge_onto_an_already_coded_agency_adds_codes():
         "subject_parent": None,
         "object": exim["object"],
     }
-    ref038 = agencies._build_projection(agencies.projection_rows(), (), ())
-    bridged = agencies._build_projection(agencies.projection_rows(), [bridge], ())
+    ref038 = agencies._build_projection(agencies.projection_rows(), (), (), ())
+    bridged = agencies._build_projection(agencies.projection_rows(), [bridge], (), ())
     assert ref038.code_by_fr_id[EXIM_ID] == "USEIB"
     assert EXIM_ID not in bridged.code_by_fr_id
 
@@ -202,7 +212,7 @@ def test_an_entrys_parent_id_never_overrides_a_stated_chain(monkeypatch):
         {"org": f"{FR}900020", "source_value": "PARENT", "parent_org": None},
         {"org": f"{FR}900021", "source_value": "CHILD", "parent_org": f"{FR}900020"},
     ]
-    projection = agencies._build_projection(rows, (), ())
+    projection = agencies._build_projection(rows, (), (), ())
     monkeypatch.setattr(agencies, "_projection", lambda: projection)
     assert agencies.agency_code_for_fr_agencies([{"id": 900020}, {"id": 900021, "parent_id": 900099}]) == "CHILD"
 
@@ -230,7 +240,7 @@ def test_an_originals_stated_parent_reaches_its_grandparents(monkeypatch):
         {"org": f"{FR}900031", "source_value": "MIDDLE", "parent_org": f"{FR}900030"},
         {"org": f"{FR}900032", "source_value": "SUCCESSOR", "parent_org": None},
     ]
-    projection = agencies._build_projection(rows, (), [event(900033, 900032, parent=900031)])
+    projection = agencies._build_projection(rows, (), [event(900033, 900032, parent=900031)], [successor(900033, 900032)])
     monkeypatch.setattr(agencies, "_projection", lambda: projection)
     assert agencies.agency_code_for_fr_agencies([{"id": 900030}, {"id": 900033}]) == "SUCCESSOR"
 
@@ -263,12 +273,12 @@ def test_an_originals_entry_parent_id_never_moves_it():
 def test_an_event_stating_another_parent_is_refused(stated, events):
     rows = [{"org": f"{FR}900001", "source_value": "ONE", "parent_org": None if stated is None else f"{FR}{stated}"}]
     with pytest.raises(ValueError, match="another parent"):
-        agencies._build_projection(rows, (), events)
+        agencies._build_projection(rows, (), events, ())
 
 
 def test_original_parents_not_aligned_with_originals_are_refused():
     with pytest.raises(ValueError):
-        agencies._build_projection((), (), [{**event(900001, 900002), "original_parents": []}])
+        agencies._build_projection((), (), [{**event(900001, 900002), "original_parents": []}], ())
 
 
 def test_a_rename_reroutes_to_the_successors_code():
@@ -315,7 +325,7 @@ def test_a_split_resolves_only_when_every_successor_agrees():
         *(event(900002, result) for result in (900010, 900012)),  # SAME and OTHER: ambiguous
         *(event(900003, result) for result in (900010, 900013)),  # SAME and an uncoded successor
     ]
-    codes = agencies._build_projection(rows, (), events).code_by_fr_id
+    codes = agencies._build_projection(rows, (), events, [successor(*pair) for pair in _pairs(events)]).code_by_fr_id
     assert codes.get(900001) == "SAME"
     assert codes.get(900002) is None
     assert codes.get(900003) is None, "an uncoded successor is unknown, not absent"
@@ -333,7 +343,7 @@ def test_a_split_is_read_even_where_it_gives_none():
         *(event(900001, result) for result in (900010, 900011)),  # ambiguous
         *(event(900002, result) for result in (900010, 900013)),  # unknown
     ]
-    codes = agencies._build_projection(rows, (), events).code_by_fr_id
+    codes = agencies._build_projection(rows, (), events, [successor(*pair) for pair in _pairs(events)]).code_by_fr_id
     assert (codes.get(900001), codes.get(900002)) == (None, None)
 
 
@@ -351,36 +361,52 @@ def test_the_views_splits_are_read():
         if event_id != "event:fr96"  # Customs' results are two of INS's
         for org in orgs
     ]
-    codes = agencies._build_projection(rows, (), events).code_by_fr_id
+    codes = agencies._build_projection(rows, (), events, agencies.registry_rows("current-successors")).code_by_fr_id
     assert codes.get(INS_ID) == "ONE:event:fr232"
     assert codes.get(USIA_ID) == "ONE:event:fr510"
     assert codes.get(ICC_ID) == "ONE:event:fr543"
     assert codes.get(CUSTOMS_ID) == "ONE:event:fr232"
 
 
+FNS_ID = 200  # Food and Nutrition Service, renamed the Food and Nutrition Administration in 2026
+FNA_ID = 625  # Food and Nutrition Administration
+
+
+def test_a_current_successors_code_wins_over_its_originals_own():
+    """The owner's rule (round 5): REF-038 codes FNS onto FR 200 and FNA onto FR 625, and the registry renames 200 to
+    625. Taking both codes resolved FR 200 to none; the current successor's code wins, so FR 200 is FNA."""
+    assert agencies.fr_agency_code(FNA_ID) == "FNA"
+    assert agencies.fr_agency_code(FNS_ID) == "FNA"
+    usda = [{"id": USDA_ID, "name": "Agriculture Department"},
+            {"id": FNS_ID, "name": "Food and Nutrition Service", "parent_id": USDA_ID}]
+    assert agencies.agency_code_for_fr_agencies(usda) == "FNA"
+
+
+def test_the_successor_wins_only_where_every_successor_is_coded():
+    """A split's own code does not come back where a successor is uncoded: that successor is unknown, not absent."""
+    rows = [
+        {"org": f"{FR}900001", "source_value": "OWN", "parent_org": None},
+        {"org": f"{FR}900010", "source_value": "NEW", "parent_org": None},
+    ]
+    events = [event(900001, 900010), event(900001, 900011)]
+    codes = agencies._build_projection(rows, (), events, [successor(900001, 900010), successor(900001, 900011)])
+    assert codes.code_by_fr_id.get(900001) is None
+    renamed = agencies._build_projection(rows, (), events[:1], [successor(900001, 900010)]).code_by_fr_id
+    assert renamed[900001] == "NEW"
+
+
 def test_a_chain_resolves_to_its_end():
-    # 900001 was renamed 900002, which was renamed 900003; codes select 900002 and 900003.
+    # 900001 was renamed 900002, which was renamed 900003; codes select 900002 and 900003. RefSpec seals both
+    # originals' current successor as 900003, so both take END: at 900002 the current successor's code wins over
+    # MIDDLE, its own (until round 5 MIDDLE and END both selected it, which resolved to none).
     rows = [
         {"org": f"{FR}900002", "source_value": "MIDDLE", "parent_org": None},
         {"org": f"{FR}900003", "source_value": "END", "parent_org": None},
     ]
-    projection = agencies._build_projection(rows, (), [event(900001, 900002), event(900002, 900003)])
+    events = [event(900001, 900002), event(900002, 900003)]
+    projection = agencies._build_projection(rows, (), events, [successor(900001, 900003), successor(900002, 900003)])
     assert projection.code_by_fr_id[900001] == "END"
-    assert 900002 not in projection.code_by_fr_id  # MIDDLE and END both select it
-
-
-def test_a_chain_deeper_than_the_recursion_limit_resolves():
-    depth = sys.getrecursionlimit() * 5
-    rows = [{"org": f"{FR}{depth}", "source_value": "END", "parent_org": None}]
-    projection = agencies._build_projection(rows, (), [event(i, i + 1) for i in range(depth)])
-    assert projection.code_by_fr_id[0] == "END"
-
-
-def test_a_cycle_is_refused():
-    rows = [{"org": f"{FR}900003", "source_value": "END", "parent_org": None}]
-    events = [event(900001, 900002), event(900002, 900001), event(900002, 900003)]
-    with pytest.raises(ValueError, match="cycle"):
-        agencies._build_projection(rows, (), events)
+    assert projection.code_by_fr_id[900002] == "END"
 
 
 def test_a_bridge_stating_another_parent_is_refused():
@@ -392,7 +418,7 @@ def test_a_bridge_stating_another_parent_is_refused():
         "object": "urn:ref:ecfr-agency:one",
     }
     with pytest.raises(ValueError, match="another parent"):
-        agencies._build_projection(rows, [bridge], ())
+        agencies._build_projection(rows, [bridge], (), ())
 
 
 def test_non_emissions_add_nothing():

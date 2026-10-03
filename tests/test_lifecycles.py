@@ -960,7 +960,7 @@ def test_the_stage_reads_every_rule_end_to_end(tmp_path):
     )
     n = rows["EPA-HQ-OAR-2020-0011"]
     assert (n["kind"], n["open_signal"], n["pre_2008_coverage"]) == ("no_anchor", "agenda_long_term", None)
-    assert {row["actor_id"] for row in rows.values()} == {"spicy-regs:rulemaking-lifecycles:v2"}
+    assert {row["actor_id"] for row in rows.values()} == {"spicy-regs:rulemaking-lifecycles:v3"}
     assert {event["actor_id"] for event in events} == {"spicy-regs:lifecycle-events:v2"}
 
 

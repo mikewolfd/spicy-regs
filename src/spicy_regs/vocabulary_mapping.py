@@ -67,7 +67,7 @@ def _registry_evidence(namespace: str, identifier: str, candidates: list[dict]) 
         "current_lineage": {
             "code": code,
             "status": "unique_code" if code else "no_unique_code" if applicable else "not_applicable",
-            "policy": "Owner fr_agency_code follows current successors and bridges regardless of document date; splits require all successors to agree.",
+            "policy": "Owner fr_agency_code follows current successors and bridges regardless of document date; a current successor's code wins over the agency's own; splits require all successors to agree.",
             "historical_identity_qualified": False,
         },
         "publication": {
