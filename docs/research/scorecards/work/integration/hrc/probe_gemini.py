@@ -93,7 +93,7 @@ def main() -> None:
     parser.add_argument(
         "--media-resolution", choices=("MEDIA_RESOLUTION_LOW", "MEDIA_RESOLUTION_MEDIUM", "MEDIA_RESOLUTION_HIGH")
     )
-    parser.add_argument("--thinking-level", choices=("low", "medium", "high"), default="low")
+    parser.add_argument("--thinking-level", choices=("low", "medium", "high"), default="medium")
     parser.add_argument("--resolve-ip", help="Explicit diagnostic IP verified through fresh original-host HTTPS DNS")
     args = parser.parse_args()
     body = args.source.read_bytes()
