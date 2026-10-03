@@ -14,6 +14,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 from spicy_docs.reading.paged_json import (
@@ -27,6 +28,7 @@ from spicy_docs.schemas import TABLE_CONTRACTS
 from spicy_docs.transport.credentials import CredentialRefusedError
 
 from spicy_regs.transforms.build_congress_index import INDEX_SPECS, build_index_table
+from spicy_regs.transforms.table_merge import prior_scratch_path
 from tests.test_incremental_rollups import PageStubReader, no_download, seed
 
 FIXTURES = Path(__file__).parent / "fixtures" / "congress_index"
@@ -296,15 +298,26 @@ class Journal:
         return event
 
 
-class Detailed(FixtureReader):
-    """Lists only the three communications whose details are retained here, so every one can be read."""
+class Listing(FixtureReader):
+    """Lists only the records ``keep`` admits, declared as the whole population."""
+
+    def __init__(self, keep, **kwargs):
+        super().__init__(**kwargs)
+        self.keep = keep
 
     def records(self, route, url, *, max_pages=1):
         for page in super().records(route, url, max_pages=max_pages):
             if "limit=1" not in url:
-                kept = tuple(record for record in page.records if str(record["number"]) in {"4752", "4751", "136"})
+                kept = tuple(record for record in page.records if self.keep(record))
                 page = SimpleNamespace(records=kept, declared_count=len(kept))
             yield page
+
+
+class Detailed(Listing):
+    """Lists only the three communications whose details are retained here, so every one can be read."""
+
+    def __init__(self, **kwargs):
+        super().__init__(lambda record: str(record["number"]) in {"4752", "4751", "136"}, **kwargs)
 
 
 def test_held_details_no_retained_response_backs_are_read_once_after_the_runs_own_queue(tmp_path):
@@ -345,11 +358,6 @@ def test_an_unevidenced_row_whose_re_read_is_refused_stays_in_the_remainder(tmp_
 
 def test_a_prior_without_the_marker_column_reads_as_unread(tmp_path):
     """A renamed contract column is a re-read of every row, not a refusal to run."""
-    import pyarrow as pa
-    import pyarrow.parquet as pq
-
-    from spicy_regs.transforms.table_merge import prior_scratch_path
-
     narrow = pa.Table.from_pylist(
         [{"congress": "119", "communication_type": "ec", "number": "4752", "update_date": "2026-09-18"}],
         schema=pa.schema([(c, pa.string()) for c in ("congress", "communication_type", "number", "update_date")]),
@@ -457,6 +465,7 @@ def test_every_spec_marks_a_detail_only_column_and_matches_its_rollup(tmp_path):
     assert outputs == set(INDEX_SPECS)
     for table, spec in INDEX_SPECS.items():
         assert (spec.detail_route is None) == (spec.detail_marker is None) == (spec.detail_query is None)
+        assert (spec.detail_route is None) == (spec.shape_version is None), "a detail-backed table names its shape"
         if spec.detail_marker is not None:
             assert spec.detail_marker in TABLE_CONTRACTS[table].columns
             assert spec.detail_marker not in TABLE_CONTRACTS[table].identity
@@ -555,3 +564,145 @@ def test_a_row_published_before_detail_read_is_read_by_its_list_column_meanwhile
     _seed_one(tmp_path, committees_json="[]", detail_read=None)
     _rows, reader = _run(tmp_path, "house_communications", max_details=10)
     assert "house-communication/119/ec/4752" not in reader.details
+
+
+# --------------------------------------------------------------------------- #
+# Held rows as the 0.54.0 adoption left them: detail_read NULL, an unstated list [], is_civilian NULL.
+# --------------------------------------------------------------------------- #
+PUBLISHED = json.loads((FIXTURES / "published-2026-10-03.json").read_text())["tables"]
+
+#: The 16:06Z committee-meetings selection's shape: nothing left to evidence, and no detail shape named.
+BEFORE_SHAPES = {"unevidenced": []}
+
+
+def _seed_published(tmp_path, table: str, *, detail_read_column: bool = True, **replace) -> None:
+    """The rows published at 16:20Z on 2026-10-03 as the prior; without ``detail_read_column``, as written before 0.54.0."""
+    columns = [c for c in TABLE_CONTRACTS[table].columns if detail_read_column or c != "detail_read"]
+    rows = [{c: replace.get(c, row[c]) for c in columns} for row in PUBLISHED[table]]
+    schema = pa.schema([(c, pa.string()) for c in columns])
+    pq.write_table(pa.Table.from_pylist(rows, schema=schema), prior_scratch_path(tmp_path, table))
+
+
+@pytest.mark.parametrize("detail_read_column", [False, True], ids=["column-absent", "column-null"])
+@pytest.mark.parametrize("table", sorted(DETAILED))
+def test_every_row_states_detail_read_and_a_held_row_states_it_from_its_old_marker(tmp_path, table, detail_read_column):
+    """The adoption run left detail_read NULL on all 6,097 meetings, 5,044 communications, 372 issues and 2 treaties
+    it held, contradicting the column's own sentence; a held row's old list marker says its detail was read."""
+    _seed_published(tmp_path, table, detail_read_column=detail_read_column)
+    rows, reader = _run(tmp_path, table, max_details=0)
+    marker = INDEX_SPECS[table].detail_marker
+    assert reader.details == []
+    by_key = {_key(table, row): row for row in rows}
+    assert {by_key[_key(table, row)]["detail_read"] for row in PUBLISHED[table]} == {"true"}
+    assert [row["detail_read"] for row in rows] == ["true" if row[marker] is not None else "false" for row in rows]
+
+
+def test_a_held_meeting_read_under_the_old_list_convention_is_read_once_more_and_replaced(tmp_path):
+    """Senate 338774 as published: its detail states no witnesses, bills, documents, jackets or videos, which the build
+    before 0.54.0 spelled ``[]``. The prior's journal names no detail shape, so the row is read again once, and the
+    re-read row replaces the held one whole."""
+    _seed_published(tmp_path, "committee_meetings")
+    first = Journal(BEFORE_SHAPES)
+    reader = Listing(lambda record: record["eventId"] == "338774")
+    rows, reader = _run(tmp_path, "committee_meetings", reader=reader, max_details=10, evidence=first)
+    assert reader.details == ["committee-meeting/119/senate/338774"]
+    by_event = {row["event_id"]: row for row in rows}
+    read = by_event["338774"]
+    assert (read["detail_read"], read["committee_system_code"]) == ("true", "ssas00")
+    unstated = ("witnesses_json", "witness_count", "witness_documents_json", "witness_document_count",
+                "meeting_documents_json", "meeting_document_count", "document_urls_json", "videos_json",
+                "bill_ids_json", "bill_count", "hearing_jackets_json", "hearing_jacket_count")
+    assert {column: read[column] for column in unstated} == dict.fromkeys(unstated)
+    assert first.selection["shape_version"] == INDEX_SPECS["committee_meetings"].shape_version
+    assert first.selection["unevidenced"] == [["119", "nochamber", "338692"]], (
+        "the held NoChamber meeting the list no longer names stays in the remainder by name"
+    )
+    assert (by_event["338692"]["witnesses_json"], by_event["338692"]["detail_read"]) == ("[]", "true")
+
+    seed(tmp_path, "committee_meetings", rows)
+    second = Journal(first.selection)
+    _, reader = _run(tmp_path, "committee_meetings", reader=Listing(lambda record: record["eventId"] == "338774"),
+                     max_details=10, evidence=second)
+    assert reader.details == [], "the shape is journaled with the remainder, so the re-read happened once"
+
+
+def test_only_a_held_row_holding_an_empty_list_is_read_again(tmp_path):
+    """4752 states its matching requirement, so 0.54.0 reads it the same. 4751 and ML 136 hold
+    matching_requirements_json ``[]``, stated empty or unstated, which only their details can say (817 of the 5,044
+    published communications)."""
+    _seed_published(tmp_path, "house_communications")
+    journal = Journal(BEFORE_SHAPES)
+    rows, reader = _run(tmp_path, "house_communications", reader=Detailed(), max_details=10, evidence=journal)
+    assert sorted(reader.details) == ["house-communication/119/ec/4751", "house-communication/119/ml/136"]
+    by_id = {row["communication_id"]: row for row in rows}
+    for unstated in ("119-ec-4751", "119-ml-136"):
+        assert (by_id[unstated]["matching_requirements_json"], by_id[unstated]["matching_requirement_count"]) == (
+            None, None)
+    assert by_id["119-ec-4752"]["matching_requirements_json"] == "[8070]"
+    assert {row["detail_read"] for row in rows} == {"true"}
+    assert journal.selection["outcomes"] == {"held": 1, "reread": 2}
+
+
+def test_a_held_row_beyond_the_cap_states_detail_read_and_stays_in_the_remainder_until_read(tmp_path):
+    _seed_published(tmp_path, "house_communications")
+    first = Journal(BEFORE_SHAPES)
+    rows, reader = _run(tmp_path, "house_communications", reader=Detailed(), max_details=1, evidence=first)
+    (read,) = reader.details
+    left = "119-ec-4751" if read.endswith("ml/136") else "119-ml-136"
+    by_id = {row["communication_id"]: row for row in rows}
+    assert (by_id[left]["matching_requirements_json"], by_id[left]["detail_read"]) == ("[]", "true")
+    assert first.selection["unevidenced"] == [left.split("-")]
+    assert first.selection["outcomes"] == {"held": 1, "reread": 1, "unevidenced": 1}
+
+    seed(tmp_path, "house_communications", rows)
+    second = Journal(first.selection)
+    rows, reader = _run(tmp_path, "house_communications", reader=Detailed(), max_details=10, evidence=second)
+    assert reader.details == [f"house-communication/{left.replace('-', '/')}"], "the next run reads the rest"
+    assert next(row for row in rows if row["communication_id"] == left)["matching_requirements_json"] is None
+    assert second.selection["unevidenced"] == []
+
+
+def test_a_row_the_running_shape_read_keeps_its_empty_list_as_stated(tmp_path):
+    """A row that states detail_read was shaped by 0.54.0: its ``[]`` is a stated empty list, never a re-read."""
+    _seed_published(tmp_path, "house_communications", detail_read="true")
+    _, reader = _run(tmp_path, "house_communications", reader=Detailed(), max_details=10,
+                     evidence=Journal(BEFORE_SHAPES))
+    assert reader.details == []
+
+
+def test_once_a_run_journals_the_running_shape_its_remainder_alone_names_the_re_reads(tmp_path):
+    shape = INDEX_SPECS["house_communications"].shape_version
+    _seed_published(tmp_path, "house_communications")
+    _, reader = _run(tmp_path, "house_communications", reader=Detailed(), max_details=10,
+                     evidence=Journal({"unevidenced": [["119", "ec", "4751"]], "shape_version": shape}))
+    assert reader.details == ["house-communication/119/ec/4751"]
+
+
+def test_a_re_read_detail_that_states_an_empty_list_keeps_it(tmp_path):
+    """Both treaties' details state relatedDocs as [], so the re-read row holds [] where the held one did."""
+    _seed_published(tmp_path, "treaties")
+    journal = Journal(BEFORE_SHAPES)
+    rows, reader = _run(tmp_path, "treaties", max_details=10, evidence=journal)
+    assert sorted(reader.details) == ["treaty/119/1", "treaty/119/2"]
+    assert [(row["related_docs_json"], row["detail_read"]) for row in rows] == [("[]", "true")] * 2
+    assert journal.selection["outcomes"] == {"reread": 2}
+
+
+@pytest.mark.parametrize("table", sorted(DETAILED))
+def test_the_lists_an_older_shape_spelled_empty_are_the_shapers_own_unstated_lists(table):
+    """The held-row test reads the shaper, not a copied column list; the old marker is always one of them."""
+    from spicy_regs.transforms.build_congress_index import _stale_sql
+
+    spec = INDEX_SPECS[table]
+    sql = _stale_sql(set(TABLE_CONTRACTS[table].columns), spec)
+    assert f"{spec.detail_marker} = '[]'" in sql
+    assert "rin_occurrences_json" not in sql, "a column the shaper fills on every read detail is no list it omits"
+
+
+def test_a_held_military_nomination_the_list_no_longer_names_reads_is_civilian_false(tmp_path):
+    """PN1189 and PN1266 state isMilitary true; the list the run walks no longer names them, so only their stored
+    nominationType can give them 0.54.0's answer."""
+    _seed_published(tmp_path, "nominations")
+    rows, _ = _run(tmp_path, "nominations")
+    by_citation = {row["citation"]: row["is_civilian"] for row in rows}
+    assert by_citation == {"PN1189": "false", "PN1266": "false", "PN1273-8": "true", "PN937-10": "true"}

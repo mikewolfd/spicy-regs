@@ -58,6 +58,16 @@ reading any blob. The remainder only shrinks, so each detail is re-read once.
 A held row the publisher no longer lists cannot be re-read, and stays in the
 remainder by name.
 
+The same remainder carries a held row that an older detail shape read
+differently. Each selection event names its `shape_version`; since spicy-docs
+0.54.0 that is `lists=stated-001`, under which a list the detail does not
+state is NULL. When the prior was journaled under another shape, or none, the
+rows the new shape can read differently join the remainder once. Under
+`lists=stated-001` those are rows published before `detail_read` that hold
+`[]` in a list column. Columns a stored field already gives a held row are
+derived again on every row each run, with no request: `detail_read` from the
+old list marker, the RIN columns and `nominations.is_civilian`.
+
 Before publishing a table pointer, the publisher requires the exact admitted
 audit input and re-admits it from storage. Missing, altered or failed evidence
 blocks publication. Existing generations with empty inputs remain readable and

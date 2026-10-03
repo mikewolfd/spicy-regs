@@ -5,8 +5,11 @@ House communications retain the publisher route on historical rows. The
 Congressional Record reconstruction is a separate, deferred acquisition. A table
 that keeps an earlier Congress in scope lists it only from the day before its
 held rows' newest stamp, so that Congress costs its changes, not a re-walk. A
-held detail that no retained response backs is read once more, after each
-run's own queue and under the same cap, until the journal's remainder is empty.
+held detail that no retained response backs, or that an older detail shape read
+differently, is read once more, after each run's own queue and under the same
+cap, until the journal's remainder is empty. What a stored column can give a
+held row without a re-read (``detail_read``, the RIN, ``is_civilian``) is
+derived again on every row each run.
 """
 
 from __future__ import annotations
@@ -37,7 +40,7 @@ from spicy_docs.schemas.congress_index_tables import (
     shape_record_communication,
     shape_treaty,
 )
-from spicy_docs.schemas.tables import Row, TableContractError, json_column, text
+from spicy_docs.schemas.tables import Row, TableContractError, flag, json_column, text
 from spicy_docs.sources.congress.listing import (
     LIST_ROUTES,
     MAX_LIMIT,
@@ -75,6 +78,17 @@ MAX_DETAILS_PER_RUN = 1_000
 #: URL builder refusing a value the route's vocabulary does not know.
 _REFUSALS = (PagedJsonSourceError, httpx.HTTPError, ConnectionError, TableContractError, ValueError, TypeError)
 
+#: spicy-docs 0.54.0's statement on each detail-backed row that its detail was read: under the NULL-list convention a
+#: read detail that omits a list leaves that column NULL as an unread one does, so only this column can say it.
+DETAIL_READ = "detail_read"
+
+#: The detail shape a held row must have been read under, journaled beside each run's re-read remainder
+#: (:func:`_unevidenced`) as the CHRG read rule carries ``mods=hearing-mods-001``. Bump it when a spicy-docs shaper
+#: reads the same detail differently, and make :func:`_stale_sql` name the held rows that change can move.
+#: ``lists=stated-001``: 0.54.0 reads a list the detail does not state as NULL, where earlier builds spelled it ``[]``
+#: as they spelled a stated empty one.
+DETAIL_SHAPE = "lists=stated-001"
+
 
 @dataclass(frozen=True, slots=True)
 class IndexSpec:
@@ -87,7 +101,7 @@ class IndexSpec:
     units: Callable[[Sequence[int], Mapping[int, str]], Sequence[tuple[str, str]]]
     shape: Callable[[Mapping[str, Any], Mapping[str, Any] | None], Row]
     detail_route: CongressListRoute | None = None
-    #: A detail-only column, NULL exactly when no detail was read.
+    #: The detail-only list column that said a detail was read before ``detail_read`` (:func:`_read_sql`).
     detail_marker: str | None = None
     #: ``list_route_url`` keywords for the detail from the shaped list row, or
     #: ``None`` when the row has no addressable detail.
@@ -96,6 +110,11 @@ class IndexSpec:
     #: window (:func:`_windows`). A route whose records keep changing after
     #: their Congress ends needs them; its ``units`` must honor the window.
     trailing_congresses: int = 0
+    #: The detail shape held rows must have been read under (:data:`DETAIL_SHAPE`); none without a detail route.
+    shape_version: str | None = None
+    #: The merged table with its own columns derived again from the stored fields its shaper reads them from, given
+    #: each row's "detail was read" (:func:`_rederive_held`), so a held row gains a changed rule without a re-read.
+    rederive: Callable[[Any, Sequence[bool]], Any] | None = None
 
 
 def _per_congress(route: CongressListRoute) -> Callable[[Sequence[int], Mapping[int, str]], Sequence[tuple[str, str]]]:
@@ -140,35 +159,57 @@ def _shape_record_communication(entry: Any, *, congress: int, record_date: str) 
 RIN_COLUMNS = ("rin", "rin_occurrences_json", "rin_rule", "rin_matched_text")
 
 
-def _repair_rin(table: Any) -> Any:
+def _set_column(table: Any, name: str, values: Sequence[str | None]) -> Any:
+    """``table`` with ``name`` holding ``values`` as VARCHAR, in its place, or appended where the table lacks it."""
+    import pyarrow as pa
+
+    column, index = pa.array(values, type=pa.string()), table.schema.get_field_index(name)
+    return table.set_column(index, name, column) if index >= 0 else table.append_column(name, column)
+
+
+def _repair_rin(table: Any, read: Sequence[bool]) -> Any:
     """Re-derive every read row's RIN columns from its retained ``report_nature``, without origin reads.
 
     A row the run does not re-read keeps what an earlier SpicyDocs derived, so all four are derived again here, as
     the shapers spell them, from the one field: 0.50.1 renamed the rule and corrected five RINs (three NOAA RINs
     read cut short, 119-EC-1226, 1544 and 1649), and ``unmatched`` names no version, so no row can be left as read.
-    A row with no read detail (:func:`_read_sql`) keeps its NULLs.
+    A row with no read detail (``read`` false) keeps its NULLs.
     """
-    import pyarrow as pa
-
     columns = {
         name: table[name].to_pylist() if name in table.column_names else [None] * len(table) for name in RIN_COLUMNS
     }
-    import duckdb
-
-    fields = table["report_nature"].to_pylist()
-    merged = table  # noqa: F841 — read by name below (``table`` is a reserved word in DuckDB)
-    read_rows = duckdb.sql(f"SELECT {_read_sql(set(table.column_names), 'committees_json')} FROM merged").fetchall()
-    for position, (field, (read,)) in enumerate(zip(fields, read_rows, strict=True)):
-        if not read:
+    for position, (field, was_read) in enumerate(zip(table["report_nature"].to_pylist(), read, strict=True)):
+        if not was_read:
             continue
         rin, occurrences = _rin_reads(field)
         derived = (text(rin.rin), json_column(occurrences), text(rin.rule), text(rin.matched_text))
         for name, value in zip(RIN_COLUMNS, derived, strict=True):
             columns[name][position] = value
     for name, values in columns.items():
-        column, index = pa.array(values, type=pa.string()), table.schema.get_field_index(name)
-        table = table.set_column(index, name, column) if index >= 0 else table.append_column(name, column)
+        table = _set_column(table, name, values)
     return table
+
+
+def _rederive_communications(table: Any, read: Sequence[bool]) -> Any:
+    """The RIN columns again (:func:`_repair_rin`), and the publisher's route on a row published before ``source_route``."""
+    from spicy_docs.schemas.congress_index_tables import COMMUNICATION_SOURCE_ROUTES
+
+    table = _repair_rin(table, read)
+    routes = table["source_route"].to_pylist()
+    return _set_column(table, "source_route", [COMMUNICATION_SOURCE_ROUTES[0] if r is None else r for r in routes])
+
+
+def _rederive_civilian(table: Any, _read: Sequence[bool]) -> Any:
+    """``is_civilian`` again from each row's stored ``nomination_type_json``, through spicy-docs' own shaper.
+
+    The list route is the table's only source and it drops records: PN1189 and PN1266, military, had left it before
+    0.54.0 read ``isMilitary``, so a held row would keep an earlier build's answer for good. The object the shaper
+    reads is stored whole, so its rule reaches every held row each run, as ``gao_decisions``' outcome does. O(rows).
+    """
+    kinds = table["nomination_type_json"].to_pylist()
+    return _set_column(table, "is_civilian", [
+        shape_nomination({"nominationType": None if kind is None else json.loads(kind)})["is_civilian"] for kind in kinds
+    ])
 
 
 def _communication_query(row: Row) -> Mapping[str, Any]:
@@ -204,6 +245,8 @@ INDEX_SPECS: Mapping[str, IndexSpec] = {
         detail_route=LIST_ROUTES["house-communication-detail"],
         detail_marker="committees_json",
         detail_query=_communication_query,
+        shape_version=DETAIL_SHAPE,
+        rederive=_rederive_communications,
     ),
     "committee_meetings": IndexSpec(
         "committee_meetings",
@@ -219,6 +262,7 @@ INDEX_SPECS: Mapping[str, IndexSpec] = {
         # join-gaps-2026-09-26/f/). hearing_transcripts joins on event_id, and
         # every transcript it could not join was a 118th meeting.
         trailing_congresses=1,
+        shape_version=DETAIL_SHAPE,
     ),
     "record_issues": IndexSpec(
         "record_issues",
@@ -228,6 +272,7 @@ INDEX_SPECS: Mapping[str, IndexSpec] = {
         detail_route=LIST_ROUTES["daily-congressional-record-detail"],
         detail_marker="sections_json",
         detail_query=_issue_query,
+        shape_version=DETAIL_SHAPE,
     ),
     "treaties": IndexSpec(
         "treaties",
@@ -237,36 +282,49 @@ INDEX_SPECS: Mapping[str, IndexSpec] = {
         detail_route=LIST_ROUTES["treaty-detail"],
         detail_marker="titles_json",
         detail_query=_treaty_query,
+        shape_version=DETAIL_SHAPE,
     ),
     "nominations": IndexSpec(
         "nominations",
         LIST_ROUTES["nomination"],
         _per_congress(LIST_ROUTES["nomination"]),
         lambda listed, _detail: shape_nomination(listed),
+        rederive=_rederive_civilian,
     ),
 }
 
 
-#: spicy-docs 0.54.0's statement on each detail-backed row that its detail was read: under the NULL-list convention a
-#: read detail that omits a list leaves that column NULL as an unread one does, so only this column can say it.
-DETAIL_READ = "detail_read"
-
-
 def _read_sql(columns: Set[str], marker: str) -> str:
     """The SQL that says a published row's detail was read: ``detail_read``, or the old list-column marker on a row
-    published before the column (NULL there until its next detail read); ``FALSE`` where the prior states neither."""
+    published before the column (NULL there until a run states it); ``FALSE`` where the prior states neither."""
     if DETAIL_READ in columns:
         fallback = f" OR ({DETAIL_READ} IS NULL AND {marker} IS NOT NULL)" if marker in columns else ""
         return f"({DETAIL_READ} = 'true'{fallback})"
     return f"{marker} IS NOT NULL" if marker in columns else "FALSE"
 
 
+def _stale_sql(columns: Set[str], spec: IndexSpec) -> str:
+    """The SQL that says :data:`DETAIL_SHAPE` can read a published row differently from how it was read.
+
+    A row published before ``detail_read`` was read by a build that spelled an unstated list ``[]``, as it spelled a
+    stated empty one, so where such a row holds ``[]`` only its detail can say which; where it holds none, every list
+    was stated and the row reads the same. The list columns are the shaper's own answer to a read detail that states
+    no list: the JSON columns it leaves NULL.
+    """
+    unstated = spec.shape({}, {})
+    lists = [c for c, value in unstated.items() if value is None and c.endswith("_json") and c in columns]
+    empty = " OR ".join(f"{column} = '[]'" for column in lists) or "FALSE"
+    return f"({DETAIL_READ} IS NULL AND ({empty}))" if DETAIL_READ in columns else f"({empty})"
+
+
 @dataclass(frozen=True, slots=True)
 class _Held:
-    """What the published table says about one identity: its stamp, and whether a detail was read."""
+    """What the published table says about one identity: its stamp, whether a detail was read, and whether the
+    running detail shape can read it differently (:func:`_stale_sql`)."""
 
     stamp: str | None
     read: bool
+    stale: bool = False
 
 
 def _held_rows(prior: Path | None, spec: IndexSpec, identity: tuple[str, ...], version: str) -> dict[tuple, _Held]:
@@ -282,33 +340,74 @@ def _held_rows(prior: Path | None, spec: IndexSpec, identity: tuple[str, ...], v
         # re-read rather than the run refusing on the column.
         logger.warning("{}: prior table lacks {!r} and {!r}; every row reads as unread", spec.table, DETAIL_READ,
                        spec.detail_marker)
-    columns = ", ".join((*identity, version, read))
+    columns = ", ".join((*identity, version, read, _stale_sql(published, spec)))
     rows = duckdb.sql(f"SELECT {columns} FROM read_parquet('{prior}')").fetchall()
-    held = {tuple(row[: len(identity)]): _Held(row[len(identity)], bool(row[len(identity) + 1])) for row in rows}
+    n = len(identity)
+    held = {tuple(row[:n]): _Held(row[n], bool(row[n + 1]), bool(row[n + 1] and row[n + 2])) for row in rows}
     logger.info(
-        "{}: {:,} rows published, {:,} with a detail read",
+        "{}: {:,} rows published, {:,} with a detail read, {:,} of them read under an older detail shape",
         spec.table,
         len(held),
         sum(1 for state in held.values() if state.read),
+        sum(1 for state in held.values() if state.stale),
     )
     return held
 
 
-def _unevidenced(held: Mapping[tuple, _Held], table: str, evidence: CaptureEvidence | None) -> set[tuple]:
-    """Held rows whose detail no retained response backs, to be read once more under evidence.
+def _unevidenced(held: Mapping[tuple, _Held], spec: IndexSpec, evidence: CaptureEvidence | None) -> set[tuple]:
+    """Held rows whose detail no retained response backs as the running detail shape reads it, to be read once more.
 
     A prior whose evidence journal states the table's remainder hands it on;
     any other prior backs none of its held details: a legacy one
     (``inputs=[]``), or one retained before the remainder was journaled. So
     the set starts as every held detail and only shrinks as runs read it. A
-    run without evidence has nothing to back and re-reads nothing.
+    prior journaled under a detail shape other than ``spec.shape_version``
+    (or none) no longer backs the rows that shape reads differently
+    (``_Held.stale``), so they join its remainder; each run journals its
+    shape beside the remainder, so they join once. A run without evidence has
+    nothing to back and re-reads nothing.
     """
     if evidence is None:
         return set()
     read = {key for key, state in held.items() if state.read}
-    selection = evidence.inherited_event("congress-index-selection", table=table)
-    stated = None if selection is None else selection.get("unevidenced")
-    return read if stated is None else read & {tuple(key) for key in stated}
+    selection = evidence.inherited_event("congress-index-selection", table=spec.table)
+    if selection is None or selection.get("unevidenced") is None:
+        return read
+    remainder = read & {tuple(key) for key in selection["unevidenced"]}
+    if selection.get("shape_version") != spec.shape_version:
+        remainder |= {key for key in read if held[key].stale}
+    return remainder
+
+
+def _read_flags(table: Any, marker: str) -> list[bool]:
+    """Whether each row of an in-memory table had its detail read, by :func:`_read_sql`, in row order."""
+    import duckdb
+
+    merged = table  # noqa: F841 — read by name below (``table`` is a reserved word in DuckDB)
+    return [bool(read) for (read,) in duckdb.sql(f"SELECT {_read_sql(set(table.column_names), marker)} FROM merged")
+            .fetchall()]
+
+
+def _rederive_held(output: Path, spec: IndexSpec) -> None:
+    """Rewrite the merged ``output`` with what each row's stored columns give it without a re-read. O(rows).
+
+    Every row of a detail-backed table states ``detail_read`` as :func:`_read_sql` reads it, so a held row published
+    before the column states it from its old list marker; ``spec.rederive`` then derives the table's own columns again.
+    """
+    if spec.detail_marker is None and spec.rederive is None:
+        return
+    import pyarrow.parquet as pq
+
+    table = pq.read_table(output)
+    read = [False] * table.num_rows
+    if spec.detail_marker is not None:
+        read = _read_flags(table, spec.detail_marker)
+        table = _set_column(table, DETAIL_READ, [flag(was_read) for was_read in read])
+    if spec.rederive is not None:
+        table = spec.rederive(table, read)
+    temporary = output.with_suffix(".tmp.parquet")
+    pq.write_table(table, temporary, compression="zstd")
+    temporary.replace(output)
 
 
 def _windows(
@@ -447,7 +546,7 @@ def build_index_table(
 
     prior = published_table(output_dir, spec.table, download_prior)
     held = _held_rows(prior, spec, identity, version)
-    unevidenced = _unevidenced(held, spec.table, evidence)
+    unevidenced = _unevidenced(held, spec, evidence)
     windows = _windows(held, congresses, unevidenced=unevidenced) if spec.trailing_congresses else {}
     listed = _walk(reader, spec, congresses, identity, windows)
 
@@ -529,23 +628,11 @@ def build_index_table(
         evidence.event("congress-index-selection", table=spec.table, congresses=list(congresses),
                        windows={str(congress): start for congress, start in windows.items()},
                        max_details=max_details, listed=len(listed), outcomes=dict(outcomes),
-                       unevidenced=sorted(list(key) for key in unevidenced))
+                       unevidenced=sorted(list(key) for key in unevidenced), shape_version=spec.shape_version)
     output = merge_contract_table(
         output_dir, spec.table, rows, download_prior=download_prior, prior_present=prior is not None
     )
-    if spec.table == "house_communications":
-        import pyarrow.compute as pc
-        import pyarrow.parquet as pq
-        from spicy_docs.schemas.congress_index_tables import COMMUNICATION_SOURCE_ROUTES
-
-        table = _repair_rin(pq.read_table(output))
-        index = table.schema.get_field_index("source_route")
-        table = table.set_column(
-            index, "source_route", pc.fill_null(table["source_route"], COMMUNICATION_SOURCE_ROUTES[0])
-        )
-        temporary = output.with_suffix(".tmp.parquet")
-        pq.write_table(table, temporary, compression="zstd")
-        temporary.replace(output)
+    _rederive_held(output, spec)
     return output
 
 

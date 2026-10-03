@@ -8,7 +8,7 @@ One row per treaty document, as the Congress.gov treaty list and detail routes s
 
 **Coverage.** Sampled. The 119th Congress's treaty documents from the retained list and their details. Not treaty bodies, action histories, older Congresses, suffixed parts or interpreted legal/in-force effects. Receipts: fork-execution-2026-09-21/legislative-publication-summary.json, legislative-seeds/sealed-candidates.json and legislative-mcp-audit/. *(measured 2026-09-21)*
 
-**Data quality.** On 2026-09-21 the list's stated total agreed with the capture. A row whose `titles_json` is NULL is list-only. A partitioned treaty (a non-empty `suffix`) is always list-only: the publisher's suffixed detail address has no route in spicy-docs' `LIST_ROUTES`, so its detail is never asked for and its `package_id` is NULL by the contract's own rule.
+**Data quality.** On 2026-09-21 the list's stated total agreed with the capture. A row whose `detail_read` is `false` is list-only. A partitioned treaty (a non-empty `suffix`) is always list-only: the publisher's suffixed detail address has no route in spicy-docs' `LIST_ROUTES`, so its detail is never asked for and its `package_id` is NULL by the contract's own rule.
 
 - **Parquet file:** `treaties.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
