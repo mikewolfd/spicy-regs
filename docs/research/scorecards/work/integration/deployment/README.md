@@ -24,7 +24,7 @@ The publisher preserves unrelated family changes made by concurrent writers. Ini
 
 ## Boundaries
 
-The hosted service lists the source tables, describes their actual schema, and executes attributed rating and item queries for all three publishers; see [the actual query replies](hosted_source_readback.json). Its newer deployed image has no scorecard-specific dictionary descriptions. At the final bounded observation, its cached catalog had not yet exposed the analysis link tables. Direct public analysis readback and local MCP queries over those exact public files passed; the receipt keeps that distinction explicit.
+The final hosted check passed: the service lists source and analysis tables, describes their actual schema, and executes attributed rating and item joins for all three publishers against the expected source and analysis pins. It also returns the measured unresolved member counts. See [the final MCP replies and response hashes](hosted_mcp_readback.json). Its newer deployed image has no scorecard-specific dictionary descriptions. Earlier analysis-table refusals came from the prior cached connection and remain in the private observation history; the later successful hosted queries supersede that temporary gap.
 
 The already deployed MCP service is newer than this checkout's deployment configuration; replacing it with the older image would risk unrelated behavior. The existing image and FEC release remain deployed. The independent FEC readback passed every registered view schema query and representative rows; see [the preserved-service receipt](preserved_fec_service_readback.json).
 

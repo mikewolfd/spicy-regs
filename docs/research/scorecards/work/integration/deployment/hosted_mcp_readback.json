@@ -1,0 +1,663 @@
+{
+  "status": "passed",
+  "url": "https://mcp.spicygov.ai/mcp",
+  "response_sha256": {
+    "list_sources": "e0c9f8d8edfec7f075316bc632db17827ec041f1765c56a7bc3ff8bc3d4698ab",
+    "describe_ratings": "d13d7caac51ea12271ccfb64054921e776eac399cb1beb82aca20b402b0c1a97",
+    "publisher_counts": "61a543490cb1c8e3df0a0957c8350e9563c9322cd25a57ed3ccff46b6c0000cc",
+    "attributed_ratings": "21cab635310ef01257212194970201b65231577535641bfabf012c61762e81d9",
+    "resolution_counts": "5816cd460da6b24f3203088241c99319c04ab1e0aeb3d7d99cee99a407d040c7",
+    "attributed_items": "1705492800ff25d9f9fe667a89ff56af8c88e4e7d7ed3da1142cd0435b89753a"
+  },
+  "queries": {
+    "describe_ratings": {
+      "table": "scorecard_member_ratings",
+      "source": "r2",
+      "base_url": "https://data.spicygov.ai",
+      "available": true,
+      "detail": {
+        "full": false,
+        "omitted": [
+          "joins[].measurement",
+          "qualification.ledger_statements"
+        ]
+      },
+      "publication": {
+        "status": "managed_generation",
+        "family": "scorecards",
+        "artifact_digest": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb",
+        "rows": 5134,
+        "published_at": null,
+        "coverage": null
+      },
+      "qualification": {
+        "ledger": "docs/research/fork-output-ledger-2026-09-21.md",
+        "ledger_destination": "https://data.spicygov.ai",
+        "basis": "The output ledger's audits, bundled when the dictionary was generated. ledger_disposition is the ledger's word for ledger_pin only; generation compares that pin with this connection's live pin. 'newer generation, not yet audited' means the live pin differs from every pin the ledger records for the table. A disposition covers the scope its ledger statement names; it does not verify relationships that metadata.data_quality calls heuristic or unresolved. Receipts named here are the maintainer's retained evidence, not public files.",
+        "status": "not_in_ledger",
+        "live_pin": "7a8d9462"
+      },
+      "joins": {
+        "basis": "Declared cross-table joins, bundled when the dictionary was generated. baseline_keys and baseline_missing count distinct non-null child keys and those absent from the parent on the baseline date; floor_pct is the resolution rate scripts/check_table_joins.py holds the live tables to. 'complete' says every non-null child key names a parent row; it does not check that the publisher paired them correctly. A 'scope' or 'design' join resolves partly for the stated reason; it is not a defect. This is not an exhaustive relationship catalog: JSON-array joins and other undeclared relationships may be described in the column meanings. An empty join list does not establish that no relationship exists.",
+        "baseline": {
+          "date": "2026-09-26",
+          "receipts": [
+            "src/spicy_regs/join_measurements.json"
+          ]
+        },
+        "outgoing": [],
+        "incoming": []
+      },
+      "metadata": {},
+      "metadata_basis": "Dictionary declarations and dated coverage notes; not live population measurements.",
+      "schema_matches_declared": null,
+      "schema_differences": null,
+      "columns": [
+        {
+          "column_name": "scorecard_id",
+          "column_type": "VARCHAR",
+          "description": null
+        },
+        {
+          "column_name": "metric_id",
+          "column_type": "VARCHAR",
+          "description": null
+        },
+        {
+          "column_name": "publisher_member_key",
+          "column_type": "VARCHAR",
+          "description": null
+        },
+        {
+          "column_name": "value_text",
+          "column_type": "VARCHAR",
+          "description": null
+        },
+        {
+          "column_name": "value_number",
+          "column_type": "VARCHAR",
+          "description": null
+        },
+        {
+          "column_name": "value_status_text",
+          "column_type": "VARCHAR",
+          "description": null
+        },
+        {
+          "column_name": "rank_text",
+          "column_type": "VARCHAR",
+          "description": null
+        },
+        {
+          "column_name": "notes_text",
+          "column_type": "VARCHAR",
+          "description": null
+        },
+        {
+          "column_name": "source_url",
+          "column_type": "VARCHAR",
+          "description": null
+        },
+        {
+          "column_name": "source_path",
+          "column_type": "VARCHAR",
+          "description": null
+        },
+        {
+          "column_name": "snapshot_id",
+          "column_type": "VARCHAR",
+          "description": null
+        },
+        {
+          "column_name": "capture_id",
+          "column_type": "VARCHAR",
+          "description": null
+        }
+      ]
+    },
+    "publisher_counts": {
+      "sql": "SELECT p.name AS publisher, c.scorecard_id, count(*) AS ratings\nFROM scorecard_member_ratings r JOIN scorecards c USING(scorecard_id)\nJOIN scorecard_publishers p USING(publisher_id)\nGROUP BY p.name,c.scorecard_id ORDER BY c.scorecard_id",
+      "source": "r2",
+      "base_url": "https://data.spicygov.ai",
+      "columns": [
+        "publisher",
+        "scorecard_id",
+        "ratings"
+      ],
+      "row_count_shown": 3,
+      "max_rows": 10,
+      "truncated": false,
+      "max_cell_chars": null,
+      "truncated_cells": [],
+      "rows": [
+        {
+          "publisher": "Americans for Prosperity",
+          "scorecard_id": "afp:3933",
+          "ratings": 2120
+        },
+        {
+          "publisher": "International Justice Mission",
+          "scorecard_id": "ijm:3995",
+          "ratings": 1912
+        },
+        {
+          "publisher": "League of Conservation Voters",
+          "scorecard_id": "lcv:2025",
+          "ratings": 1102
+        }
+      ],
+      "publication": {
+        "scorecard_member_ratings": {
+          "status": "managed_generation",
+          "family": "scorecards",
+          "artifact_digest": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb",
+          "rows": 5134,
+          "published_at": null,
+          "coverage": null
+        },
+        "scorecard_publishers": {
+          "status": "managed_generation",
+          "family": "scorecards",
+          "artifact_digest": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb",
+          "rows": 3,
+          "published_at": null,
+          "coverage": null
+        },
+        "scorecards": {
+          "status": "managed_generation",
+          "family": "scorecards",
+          "artifact_digest": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb",
+          "rows": 3,
+          "published_at": null,
+          "coverage": null
+        }
+      }
+    },
+    "attributed_ratings": {
+      "sql": "SELECT p.name AS publisher,c.title AS scorecard,m.member_name,\nmetrics.name AS metric,r.value_text AS published_value,r.source_url AS publisher_url,\nl.bioguide_id,l.resolution_status\nFROM scorecard_member_ratings r JOIN scorecards c USING(scorecard_id)\nJOIN scorecard_publishers p USING(publisher_id)\nJOIN scorecard_metrics metrics ON metrics.scorecard_id=r.scorecard_id AND metrics.metric_id=r.metric_id\nJOIN scorecard_members m ON m.scorecard_id=r.scorecard_id AND m.publisher_member_key=r.publisher_member_key\nJOIN scorecard_member_links l ON l.scorecard_id=r.scorecard_id AND l.publisher_member_key=r.publisher_member_key\nQUALIFY row_number() OVER(PARTITION BY c.publisher_id ORDER BY m.member_name,r.metric_id)=1\nORDER BY publisher",
+      "source": "r2",
+      "base_url": "https://data.spicygov.ai",
+      "columns": [
+        "publisher",
+        "scorecard",
+        "member_name",
+        "metric",
+        "published_value",
+        "publisher_url",
+        "bioguide_id",
+        "resolution_status"
+      ],
+      "row_count_shown": 3,
+      "max_rows": 10,
+      "truncated": false,
+      "max_cell_chars": null,
+      "truncated_cells": [],
+      "rows": [
+        {
+          "publisher": "Americans for Prosperity",
+          "scorecard": "119th Congressional Scorecard",
+          "member_name": "Aaron Bean",
+          "metric": "possible_score",
+          "published_value": "12",
+          "publisher_url": "https://americansforprosperity.org/wp-json/rds-bt50-scorecard/v1/legislators",
+          "bioguide_id": "B001314",
+          "resolution_status": "resolved"
+        },
+        {
+          "publisher": "International Justice Mission",
+          "scorecard": "119th Congress",
+          "member_name": "Aaron Bean",
+          "metric": "possible_score",
+          "published_value": "1",
+          "publisher_url": "https://scorecard.ijm.org/wp-json/rds-bt50-scorecard/v1/legislators",
+          "bioguide_id": "B001314",
+          "resolution_status": "resolved"
+        },
+        {
+          "publisher": "League of Conservation Voters",
+          "scorecard": "2025 National Environmental Scorecard",
+          "member_name": "Aaron Bean",
+          "metric": "Year Score",
+          "published_value": "0",
+          "publisher_url": "https://www.lcv.org/congressional-scorecard/members-of-congress/?export=true&sort=state-a-z&active_tab=&chamber=senate&street_address=&zip=&session_year=2025&state=&party=All&last_name=&include_former=1&export-type=moc-listing",
+          "bioguide_id": "B001314",
+          "resolution_status": "resolved"
+        }
+      ],
+      "publication": {
+        "scorecard_member_links": {
+          "status": "managed_generation",
+          "family": "scorecard-analysis",
+          "artifact_digest": "sha256:f3fffcf37e4ffc7a6015c54cbd5757379bc93701416c0281e1ef76d0f5ef7fe2",
+          "rows": 1562,
+          "published_at": null,
+          "inputs": [
+            {
+              "table": "amendments",
+              "family": "amendments",
+              "built_from": "sha256:a1f7489c31fd5894d4b0a44d7fc6fac3063f70e210699f0b8570d9bcc1a7f622",
+              "live": "sha256:a1f7489c31fd5894d4b0a44d7fc6fac3063f70e210699f0b8570d9bcc1a7f622",
+              "input_table_current": true
+            },
+            {
+              "table": "congress_bills",
+              "family": "bill-family",
+              "built_from": "sha256:e264e62bfcc41313d8c15d59bcb96bc7d59fb37bcd0e74b9d0cc561849a594be",
+              "live": "sha256:e264e62bfcc41313d8c15d59bcb96bc7d59fb37bcd0e74b9d0cc561849a594be",
+              "input_table_current": true
+            },
+            {
+              "table": "member_terms",
+              "family": "members",
+              "built_from": "sha256:5d6bd2a29a3b0fa9b587ed4e787a9cf26e3534a74c96c0daebc56a8149115b0b",
+              "live": "sha256:5d6bd2a29a3b0fa9b587ed4e787a9cf26e3534a74c96c0daebc56a8149115b0b",
+              "input_table_current": true
+            },
+            {
+              "table": "members",
+              "family": "members",
+              "built_from": "sha256:5d6bd2a29a3b0fa9b587ed4e787a9cf26e3534a74c96c0daebc56a8149115b0b",
+              "live": "sha256:5d6bd2a29a3b0fa9b587ed4e787a9cf26e3534a74c96c0daebc56a8149115b0b",
+              "input_table_current": true
+            },
+            {
+              "table": "roll_call_votes",
+              "family": "roll-call-votes",
+              "built_from": "sha256:4dc318be76b2ecd16db02b5174aa59146a2c9acd7d2d9b4aed3ed7f4c7c6f030",
+              "live": "sha256:4dc318be76b2ecd16db02b5174aa59146a2c9acd7d2d9b4aed3ed7f4c7c6f030",
+              "input_table_current": true
+            },
+            {
+              "table": "scorecard_items",
+              "family": "scorecards",
+              "built_from": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb",
+              "live": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb",
+              "input_table_current": true
+            },
+            {
+              "table": "scorecard_members",
+              "family": "scorecards",
+              "built_from": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb",
+              "live": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb",
+              "input_table_current": true
+            },
+            {
+              "table": "scorecards",
+              "family": "scorecards",
+              "built_from": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb",
+              "live": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb",
+              "input_table_current": true
+            }
+          ],
+          "inputs_current": true,
+          "coverage": null
+        },
+        "scorecard_member_ratings": {
+          "status": "managed_generation",
+          "family": "scorecards",
+          "artifact_digest": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb",
+          "rows": 5134,
+          "published_at": null,
+          "coverage": null
+        },
+        "scorecard_members": {
+          "status": "managed_generation",
+          "family": "scorecards",
+          "artifact_digest": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb",
+          "rows": 1562,
+          "published_at": null,
+          "coverage": null
+        },
+        "scorecard_metrics": {
+          "status": "managed_generation",
+          "family": "scorecards",
+          "artifact_digest": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb",
+          "rows": 10,
+          "published_at": null,
+          "coverage": null
+        },
+        "scorecard_publishers": {
+          "status": "managed_generation",
+          "family": "scorecards",
+          "artifact_digest": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb",
+          "rows": 3,
+          "published_at": null,
+          "coverage": null
+        },
+        "scorecards": {
+          "status": "managed_generation",
+          "family": "scorecards",
+          "artifact_digest": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb",
+          "rows": 3,
+          "published_at": null,
+          "coverage": null
+        }
+      }
+    },
+    "resolution_counts": {
+      "sql": "SELECT scorecard_id,resolution_status,count(*) AS members\nFROM scorecard_member_links GROUP BY scorecard_id,resolution_status ORDER BY scorecard_id,resolution_status",
+      "source": "r2",
+      "base_url": "https://data.spicygov.ai",
+      "columns": [
+        "scorecard_id",
+        "resolution_status",
+        "members"
+      ],
+      "row_count_shown": 6,
+      "max_rows": 20,
+      "truncated": false,
+      "max_cell_chars": null,
+      "truncated_cells": [],
+      "rows": [
+        {
+          "scorecard_id": "afp:3933",
+          "resolution_status": "resolved",
+          "members": 438
+        },
+        {
+          "scorecard_id": "afp:3933",
+          "resolution_status": "unresolved",
+          "members": 93
+        },
+        {
+          "scorecard_id": "ijm:3995",
+          "resolution_status": "resolved",
+          "members": 397
+        },
+        {
+          "scorecard_id": "ijm:3995",
+          "resolution_status": "unresolved",
+          "members": 83
+        },
+        {
+          "scorecard_id": "lcv:2025",
+          "resolution_status": "resolved",
+          "members": 489
+        },
+        {
+          "scorecard_id": "lcv:2025",
+          "resolution_status": "unresolved",
+          "members": 62
+        }
+      ],
+      "publication": {
+        "scorecard_member_links": {
+          "status": "managed_generation",
+          "family": "scorecard-analysis",
+          "artifact_digest": "sha256:f3fffcf37e4ffc7a6015c54cbd5757379bc93701416c0281e1ef76d0f5ef7fe2",
+          "rows": 1562,
+          "published_at": null,
+          "inputs": [
+            {
+              "table": "amendments",
+              "family": "amendments",
+              "built_from": "sha256:a1f7489c31fd5894d4b0a44d7fc6fac3063f70e210699f0b8570d9bcc1a7f622",
+              "live": "sha256:a1f7489c31fd5894d4b0a44d7fc6fac3063f70e210699f0b8570d9bcc1a7f622",
+              "input_table_current": true
+            },
+            {
+              "table": "congress_bills",
+              "family": "bill-family",
+              "built_from": "sha256:e264e62bfcc41313d8c15d59bcb96bc7d59fb37bcd0e74b9d0cc561849a594be",
+              "live": "sha256:e264e62bfcc41313d8c15d59bcb96bc7d59fb37bcd0e74b9d0cc561849a594be",
+              "input_table_current": true
+            },
+            {
+              "table": "member_terms",
+              "family": "members",
+              "built_from": "sha256:5d6bd2a29a3b0fa9b587ed4e787a9cf26e3534a74c96c0daebc56a8149115b0b",
+              "live": "sha256:5d6bd2a29a3b0fa9b587ed4e787a9cf26e3534a74c96c0daebc56a8149115b0b",
+              "input_table_current": true
+            },
+            {
+              "table": "members",
+              "family": "members",
+              "built_from": "sha256:5d6bd2a29a3b0fa9b587ed4e787a9cf26e3534a74c96c0daebc56a8149115b0b",
+              "live": "sha256:5d6bd2a29a3b0fa9b587ed4e787a9cf26e3534a74c96c0daebc56a8149115b0b",
+              "input_table_current": true
+            },
+            {
+              "table": "roll_call_votes",
+              "family": "roll-call-votes",
+              "built_from": "sha256:4dc318be76b2ecd16db02b5174aa59146a2c9acd7d2d9b4aed3ed7f4c7c6f030",
+              "live": "sha256:4dc318be76b2ecd16db02b5174aa59146a2c9acd7d2d9b4aed3ed7f4c7c6f030",
+              "input_table_current": true
+            },
+            {
+              "table": "scorecard_items",
+              "family": "scorecards",
+              "built_from": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb",
+              "live": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb",
+              "input_table_current": true
+            },
+            {
+              "table": "scorecard_members",
+              "family": "scorecards",
+              "built_from": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb",
+              "live": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb",
+              "input_table_current": true
+            },
+            {
+              "table": "scorecards",
+              "family": "scorecards",
+              "built_from": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb",
+              "live": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb",
+              "input_table_current": true
+            }
+          ],
+          "inputs_current": true,
+          "coverage": null
+        }
+      }
+    },
+    "attributed_items": {
+      "sql": "SELECT i.scorecard_id,i.title,i.item_date_text,i.publisher_position_text AS publisher_target,\ni.source_url AS publisher_url,l.vote_id,l.bill_id,l.resolution_status\nFROM scorecard_items i JOIN scorecard_item_links l USING(scorecard_id,item_id)\nQUALIFY row_number() OVER(PARTITION BY i.scorecard_id ORDER BY i.item_id,l.reference_id)=1\nORDER BY i.scorecard_id",
+      "source": "r2",
+      "base_url": "https://data.spicygov.ai",
+      "columns": [
+        "scorecard_id",
+        "title",
+        "item_date_text",
+        "publisher_target",
+        "publisher_url",
+        "vote_id",
+        "bill_id",
+        "resolution_status"
+      ],
+      "row_count_shown": 3,
+      "max_rows": 10,
+      "truncated": false,
+      "max_cell_chars": null,
+      "truncated_cells": [],
+      "rows": [
+        {
+          "scorecard_id": "afp:3933",
+          "title": "Midnight Rules Relief Act",
+          "item_date_text": null,
+          "publisher_target": null,
+          "publisher_url": "https://americansforprosperity.org/wp-json/rds-bt50-scorecard/v1/bills",
+          "vote_id": null,
+          "bill_id": "119-hr-77",
+          "resolution_status": "resolved"
+        },
+        {
+          "scorecard_id": "ijm:3995",
+          "title": "TAKE IT DOWN Act (Senate)",
+          "item_date_text": null,
+          "publisher_target": null,
+          "publisher_url": "https://scorecard.ijm.org/wp-json/rds-bt50-scorecard/v1/bills",
+          "vote_id": null,
+          "bill_id": "119-s-146",
+          "resolution_status": "resolved"
+        },
+        {
+          "scorecard_id": "lcv:2025",
+          "title": "Stifling Public Input and Environmental Review on National Forests",
+          "item_date_text": "2025",
+          "publisher_target": "No",
+          "publisher_url": "https://www.lcv.org/roll-call-vote/stifling-public-input-and-environmental-review-on-national-forests-2/?export=true&sort=state-a-z&voteOption=&export-post-id=36293&export-type=rcv",
+          "vote_id": "119-house-1-25",
+          "bill_id": "119-hr-471",
+          "resolution_status": "resolved"
+        }
+      ],
+      "publication": {
+        "scorecard_item_links": {
+          "status": "managed_generation",
+          "family": "scorecard-analysis",
+          "artifact_digest": "sha256:f3fffcf37e4ffc7a6015c54cbd5757379bc93701416c0281e1ef76d0f5ef7fe2",
+          "rows": 279,
+          "published_at": null,
+          "inputs": [
+            {
+              "table": "amendments",
+              "family": "amendments",
+              "built_from": "sha256:a1f7489c31fd5894d4b0a44d7fc6fac3063f70e210699f0b8570d9bcc1a7f622",
+              "live": "sha256:a1f7489c31fd5894d4b0a44d7fc6fac3063f70e210699f0b8570d9bcc1a7f622",
+              "input_table_current": true
+            },
+            {
+              "table": "congress_bills",
+              "family": "bill-family",
+              "built_from": "sha256:e264e62bfcc41313d8c15d59bcb96bc7d59fb37bcd0e74b9d0cc561849a594be",
+              "live": "sha256:e264e62bfcc41313d8c15d59bcb96bc7d59fb37bcd0e74b9d0cc561849a594be",
+              "input_table_current": true
+            },
+            {
+              "table": "member_terms",
+              "family": "members",
+              "built_from": "sha256:5d6bd2a29a3b0fa9b587ed4e787a9cf26e3534a74c96c0daebc56a8149115b0b",
+              "live": "sha256:5d6bd2a29a3b0fa9b587ed4e787a9cf26e3534a74c96c0daebc56a8149115b0b",
+              "input_table_current": true
+            },
+            {
+              "table": "members",
+              "family": "members",
+              "built_from": "sha256:5d6bd2a29a3b0fa9b587ed4e787a9cf26e3534a74c96c0daebc56a8149115b0b",
+              "live": "sha256:5d6bd2a29a3b0fa9b587ed4e787a9cf26e3534a74c96c0daebc56a8149115b0b",
+              "input_table_current": true
+            },
+            {
+              "table": "roll_call_votes",
+              "family": "roll-call-votes",
+              "built_from": "sha256:4dc318be76b2ecd16db02b5174aa59146a2c9acd7d2d9b4aed3ed7f4c7c6f030",
+              "live": "sha256:4dc318be76b2ecd16db02b5174aa59146a2c9acd7d2d9b4aed3ed7f4c7c6f030",
+              "input_table_current": true
+            },
+            {
+              "table": "scorecard_items",
+              "family": "scorecards",
+              "built_from": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb",
+              "live": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb",
+              "input_table_current": true
+            },
+            {
+              "table": "scorecard_members",
+              "family": "scorecards",
+              "built_from": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb",
+              "live": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb",
+              "input_table_current": true
+            },
+            {
+              "table": "scorecards",
+              "family": "scorecards",
+              "built_from": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb",
+              "live": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb",
+              "input_table_current": true
+            }
+          ],
+          "inputs_current": true,
+          "coverage": null
+        },
+        "scorecard_items": {
+          "status": "managed_generation",
+          "family": "scorecards",
+          "artifact_digest": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb",
+          "rows": 169,
+          "published_at": null,
+          "coverage": null
+        }
+      }
+    }
+  },
+  "managed_tables_listed": [
+    {
+      "table": "scorecard_item_links",
+      "label": null,
+      "coverage": null,
+      "rows": 279
+    },
+    {
+      "table": "scorecard_member_links",
+      "label": null,
+      "coverage": null,
+      "rows": 1562
+    },
+    {
+      "table": "scorecard_items",
+      "label": null,
+      "coverage": null,
+      "rows": 169
+    },
+    {
+      "table": "scorecard_member_item_results",
+      "label": null,
+      "coverage": null,
+      "rows": 24008
+    },
+    {
+      "table": "scorecard_member_ratings",
+      "label": null,
+      "coverage": null,
+      "rows": 5134
+    },
+    {
+      "table": "scorecard_members",
+      "label": null,
+      "coverage": null,
+      "rows": 1562
+    },
+    {
+      "table": "scorecard_methodologies",
+      "label": null,
+      "coverage": null,
+      "rows": 5
+    },
+    {
+      "table": "scorecard_metric_components",
+      "label": null,
+      "coverage": null,
+      "rows": 0
+    },
+    {
+      "table": "scorecard_metric_items",
+      "label": null,
+      "coverage": null,
+      "rows": 227
+    },
+    {
+      "table": "scorecard_metrics",
+      "label": null,
+      "coverage": null,
+      "rows": 10
+    },
+    {
+      "table": "scorecard_publishers",
+      "label": null,
+      "coverage": null,
+      "rows": 3
+    },
+    {
+      "table": "scorecard_snapshots",
+      "label": null,
+      "coverage": null,
+      "rows": 3
+    },
+    {
+      "table": "scorecards",
+      "label": null,
+      "coverage": null,
+      "rows": 3
+    }
+  ]
+}
