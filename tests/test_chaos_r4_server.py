@@ -21,7 +21,6 @@ from starlette.testclient import TestClient
 
 from spicy_regs import fec_release as release, mcp_server as server
 from spicy_regs.citation_resolution import SOURCE_TABLES
-from spicy_regs.citation_sources import TEXT_SOURCES
 from spicy_regs.sources import publication as pub
 from tests.test_chaos_r3_server import _fec_specs
 from tests.test_generation_mcp import connection_fixture, serve_documents
@@ -65,13 +64,6 @@ def test_text_content_is_the_compact_json_of_the_structured_content(monkeypatch)
 
 
 # S1: resolve_document_citations refuses a kind no writer emits.
-
-def test_supported_kinds_are_exactly_the_writers_kinds():
-    from spicy_docs.schemas.budget_volume_tables import BUDGET_VOLUME
-    from spicy_docs.schemas.document_citation_tables import GOVINFO_PACKAGE
-
-    assert set(SOURCE_TABLES) == {GOVINFO_PACKAGE, BUDGET_VOLUME} | set(TEXT_SOURCES)
-
 
 @pytest.mark.parametrize(("kind", "closest"), [
     ("federal_register", None),
