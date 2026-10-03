@@ -9,7 +9,7 @@ import duckdb
 import pytest
 
 from spicy_regs import fec_release, mcp_server
-from tests.test_mcp_server import _tool_data
+from tests.test_mcp_server import _records, _tool_data
 
 
 def test_installed_registry_uses_retained_application_scope():
@@ -58,10 +58,10 @@ def test_missing_release_disables_actual_registry_but_keeps_raw_and_unrelated_vi
         with pytest.raises(Exception, match="disabled.*deployment_receipt_digest_missing"):
             _tool_data(server, "query_sql", {"sql": f"SELECT status, value FROM {name}"})
         raw = _tool_data(server, "query_sql", {"sql": "SELECT record_id FROM fec_receipts"})
-        assert raw["rows"] == [{"record_id": "raw-example"}]
+        assert _records(raw) == [{"record_id": "raw-example"}]
         assert "release_compatibility" not in raw["publication"]["fec_receipts"]
         unrelated = _tool_data(server, "query_sql", {"sql": "SELECT uei, entity_eft_indicator FROM sam_uei_registrations"})
-        assert unrelated["rows"] == [{"uei": "ABCDEFGHIJKL", "entity_eft_indicator": None}]
+        assert _records(unrelated) == [{"uei": "ABCDEFGHIJKL", "entity_eft_indicator": None}]
 
 
 def test_interpretation_file_digests_are_shared_only_within_each_capture(monkeypatch):

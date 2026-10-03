@@ -21,7 +21,7 @@ to the Python server in Cloudflare Containers.
 
 **The tool docstrings are not documentation — do not delete them.**
 MCPServer reflects over `fn.__doc__` to build the tool descriptions sent to every
-client during `list_tools`; the `tool` wrapper in `_register_tools` copies each
+client during `list_tools`; the `tool` wrapper in `_tools` copies each
 signature with `functools.wraps` and registers the docstring through
 `inspect.cleandoc` as the description. MCPServer sends `__doc__` as written, and
 Claude Code cuts a description at 2,048 characters (`CLAUDE_CODE_MAX_MCP_DESCRIPTION_LENGTH`)
@@ -38,6 +38,38 @@ Strip them and the server still runs, but every client goes blind. Verify with
 
 **Inline `# type: ignore` / `# noqa` are directives, not comments.** `ty` and
 `ruff` gate merges and both read them.
+
+## Arguments are refused, never dropped (`_StrictTool`, round 6)
+
+MCPServer's argument model ignores a key a tool does not declare, so zubair's
+misspelled `offest` ran page 0 of a query and said nothing (round 6), and a
+bound such as `max_rows` above 500 failed in pydantic's own text with a link to
+its documentation. Each tool is a `_StrictTool`: its `run` refuses an
+undeclared argument and states every argument error in one sentence, then the
+arguments the tool takes ("offest is not an argument. query_sql takes
+max_cell_chars, max_rows, sql."), and its schema says `additionalProperties:
+false` without pydantic's per-field titles, which repeated each name against
+the description cap. The tools are built with `Tool.from_function` and handed
+to `MCPServer(tools=...)`, a public seam. A test of a new parameter can assert
+its acceptance: a misspelled one is refused.
+
+`lookup_agency`'s `namespace` is the closed set `vocabulary_mapping.Namespace`.
+Rounds 4 and 5 answered another namespace with a success reply,
+`status: unsupported_namespace`, on the reasoning that the lookup had run and
+found nothing it could map. That was wrong: an agent took the status as an
+answer about the identifier. With the two namespaces advertised in the schema,
+another one is a malformed argument, and it is refused naming both.
+
+`lookup_agency` names no organization itself (round 6, L7). `parent_labels`
+gives each parent URN in the reply the name the vendored RefSpec rows state
+for it (`vocabulary_mapping._names`, through `ontology.agencies`' public
+readers): a preferred label first, then a publisher's name on a mapping's
+evidence record, a bridge end or an event result; null where no row names it,
+which is a registry change for the search lane. On 2026-10-03, 24 of 30
+parents were named; the three eCFR and three Federal Hierarchy parents were
+not, nor 9 of 10 event originals. The text says `current_lineage` is computed
+for Federal Register ids only and points at each evidence row's `reasoning`
+sentence for whether two names are one agency.
 
 ## Connection setup (`_build_connection`, `_get_connection`, `_apply_security_settings`)
 
@@ -121,7 +153,7 @@ into the next one.
 FastMCP (mcp 1.x) ran a sync tool on the event loop, so the server executed one
 call at a time and a slow one, such as a 43 s build, stalled every request,
 `GET /` included. MCPServer (mcp 2.x) runs sync tools on worker threads, and
-`_register_tools` wraps each tool so that:
+`_tools` wraps each tool so that:
 
 - it runs through `anyio.to_thread.run_sync` with one `CapacityLimiter` of
   `SPICY_REGS_TOOL_CONCURRENCY` tokens (default 2). A remote scan issues range
@@ -163,11 +195,17 @@ last result, so a trailing write would otherwise land with nothing in the
 response to show for it.
 
 **The SELECT allowlist includes other read forms.** DuckDB folds
-`DESCRIBE`, `SHOW`, `SUMMARIZE`, `VALUES`, `TABLE`, and the FROM-first
-shorthand (`FROM comments LIMIT 1`) into `StatementType.SELECT`, so all of them
-still run. `tests/test_mcp_server.py::test_read_forms_pass_the_guard` pins that
+`DESCRIBE`, `SHOW`, `SUMMARIZE`, `VALUES`, `TABLE`, the FROM-first
+shorthand (`FROM comments LIMIT 1`) and PRAGMA's table-returning forms
+(`PRAGMA table_info('dockets')`, `PRAGMA show_tables`) into
+`StatementType.SELECT`, so all of them still run; PRAGMA's state-changing
+forms parse as `PRAGMA` or `SET` and are refused. `tests/test_mcp_server.py::test_read_forms_pass_the_guard` pins that
 folding; if a DuckDB upgrade splits any of them into its own statement type,
 that test fails rather than clients silently losing a query form.
+`PRAGMA import_database` is expanded while DuckDB parses, reading the named
+directory's `schema.sql` before the guard sees a statement: a file of SELECTs
+passes the guard on an open connection, and only the locked connection's file
+boundary refuses it (`test_import_database_is_refused_by_the_locked_connection_where_the_guard_cannot_see_it`).
 
 Matching is on `StatementType.name`, not the enum member, because duckdb's type
 stubs do not declare the members and `ty` gates merges — comparing names keeps
@@ -176,7 +214,7 @@ the check honest without a blanket type-ignore.
 The two controls work together: `read_text`, `read_csv`, and `read_blob` are
 SELECTs, but native file permissions refuse any file not selected for the views.
 A result with duplicate column labels is rejected with alias guidance, because
-JSON row objects would otherwise silently overwrite values. One-row lookahead
+a client reads each row's values by the names in `columns`. One-row lookahead
 sets `truncated` only when `max_rows` actually omits a row. Validation refusals
 raise tool errors so MCP reports `isError: true` consistently.
 
@@ -329,9 +367,7 @@ scout's S1, the check read `ROUTES`, which carried three kinds no writer emits
 (`federal_register_document`, `federal_register_number`, `bioguide_id`; deleted)
 and lacked `case_docket_number`.
 `occurrence_selection.status` is `capped`, `last_page` (an offset page that
-reached the end) or `complete_held_selection`. MCPServer drops an argument a
-tool does not declare, so a test of a new parameter asserts its effect, not
-its acceptance.
+reached the end) or `complete_held_selection`.
 
 **CFR part citations (round 6).** `2 CFR part 200` is keyed `2-200`, which
 equals `cfr_ref` on every structural row of the part: 41 rows for 2-200
@@ -365,10 +401,9 @@ page whose rows happen to agree on a per-occurrence field (all `found`) keeps
 the same shape as the next. A listed field whose values differ in its scope (a
 document holding rows of two texts) stays on each occurrence and is named in
 `not_hoisted`: a stated-once value is never a guess. The acquisition queue is
-built from the whole rows and then projected the same way (`_compact_queue`):
-the fixed `QUEUE_ITEM_FIELDS` and `QUEUE_REQUEST_FIELDS` are stated once in
-`acquisition_queue.shared_fields`. Nothing stored changes. Measured on the
-live bucket (print-citations 685f2e27), characters per reply:
+built from the whole rows and then projected the same way (`_compact_queue`,
+round 6 below). Nothing stored changes. Measured on the live bucket
+(print-citations 685f2e27), characters per reply:
 
 | Request | Deployed (d2b5f53) | Fixed lists (this tree) | Hoisting any agreeing field (794beed) |
 |---|---|---|---|
@@ -383,6 +418,30 @@ The stable shape costs a third to a half more than hoisting any field a page
 happens to agree on (`target_resolved`, `reason`, `rule_version`, ...). Without
 the queue projection the 45 pages came to 5,461,495 under the earlier rule: the
 queue repeated the document's pins on every requesting occurrence.
+
+**What a reply no longer restates (round 6, owner decision 2026-10-03).** A
+100-occurrence page of BUDGET-2027-APP's Statutes citations was 102,942
+characters, 59% of it the acquisition queue. Every projection below is lossless
+against the reply it sits in (`test_chaos_r6_server` rebuilds the whole queue):
+- a queue item names its requesting occurrences by `requesting_spans`: each is
+  the `span_start` of an occurrence whose `cite_kind` and `target_key` are the
+  item's `target_kind` and `normalized_key`, and that occurrence states every
+  field a request restated except `input_snapshot`, stated once in
+  `shared_fields`;
+- `QUEUE_KIND_FIELDS` (`target_snapshot`, `provider_route`, `status`) are
+  stated once per target kind where the kind's items agree, a route's
+  `native_identifier` leaves it where it equals `normalized_key`, and the
+  queue's `coverage.resolution_coverage`, a copy of the reply's `coverage`,
+  is left out;
+- an occurrence leaves out `occurrence_key`, a digest of six fields it states
+  (a fifth of each occurrence), and `target_rule` where it equals `cite_kind`
+  (11 of the 13 held kinds on every row); `rule_version`, one per kind in every
+  held document, joins `OCCURRENCE_KIND_FIELDS`. `same_as` lists only fields
+  the rows hold, so a legacy file without `target_rule` is not given one.
+
+The same page measured 49,291 characters on 2026-10-03, and the default
+25-occurrence pages fell from 22,141 to 19,348 (BUDGET-2027-APP) and from
+15,124 to 12,663 (CRPT-118hrpt964).
 
 **Read statuses (round 5).** `source_read.status` separates three answers that
 used to arrive as one `missing_digest` with no occurrences (`_source_read`):
@@ -400,12 +459,24 @@ used to arrive as one `missing_digest` with no occurrences (`_source_read`):
   `citation_rows`), which the held-citations pipeline publishes from its
   checkpoint beside `document_citations`. When that table is published, the
   record is the latest read (`read_at`) of the field's current text
-  (`text_sha256` = `'sha256:' || sha256(field)`) that states its rule set;
-  until then, or with no such row, a held field with no citation rows is
-  `not_read`, never an answer that it cites nothing.
+  (`text_sha256` = `'sha256:' || sha256(field)`); until then, or with no such
+  row, a held field with no citation rows is `not_read`, never an answer that
+  it cites nothing. Round 5 also required the read to state its rule set, a
+  rule written against a fixture before the table existed: every published
+  read states no rule set and no time (13 of 13 on 2026-10-03), which the
+  dictionary documents as a read recorded before the table existed, so every
+  recorded read answered `not_read` (court opinion 11264529 read 0 rows).
+  Round 6 dropped the filter. A read with no time sorts last, and among reads
+  with none the one stating more rows first, so a disagreement refuses below
+  instead of reading as none found.
 - `read_none_found`: the read record states `citation_rows` 0. A read stating
   rows that `document_citations` does not hold refuses: the publication
   disagrees with itself.
+
+Each reply defines the `target_status` words its occurrences use, and only
+those, in `target_status_meaning` (`TARGET_STATUS_MEANINGS`); the tool text
+points at it. The five definitions did not fit the tool text beside
+everything else it must say (round 6).
 
 With citation rows the status names the digest they are checked against:
 `read`, `missing_digest` (a held row without one) or `ambiguous`. A key that
@@ -457,7 +528,13 @@ relationship-view metadata. Every `query_sql` returned about 54,000 characters,
 file its reader cannot page, so two of five personas never read a row.
 
 - **`list_sources`** lists each table's name, label and coverage kind, and
-  lists each relationship family's views once, under their shared summary. Pins,
+  lists each relationship family's views once, under their shared summary.
+  Since round 6 (owner decision 2026-10-03) the tables come in `subjects`
+  groups by the dictionary's `subject` (`table_metadata.json`, implementer
+  B's field), in the order subjects first appear in the display order, with
+  the tables the dictionary gives no subject yet in a last group whose
+  `subject` is null: two personas could not find the rulemaking tables among
+  158 in one list. A group costs about 40 characters. Pins,
   audits and view dependencies live in `describe_table`.
   FEC release discovery reports the selected receipt, consumer identity and
   counts of the captured compatibility states. It retains the warning that raw
@@ -528,6 +605,37 @@ file its reader cannot page, so two of five personas never read a row.
   belongs in an explicit table description": the explicit description is now
   `detail=true`. Measured on the live 72 views: a median of 15,471 to 8,301
   characters (maximum 25,187 to 11,235; all 72, 1,130,695 to 609,034).
+- **A query or citation reply past `REPLY_CHARS` is refused with its remedy
+  (round 6, owner decision 2026-10-03).** Claude Code saves a result past
+  25,000 tokens (`MAX_MCP_OUTPUT_TOKENS`) to a one-line file, and its reader
+  showed 39,000 to 43,000 characters of each: round-6 personas lost the rows
+  of 76,947- to 102,942-character replies. The budget is 40,000 characters of
+  the reply's compact JSON text (`SPICY_REGS_REPLY_CHARS`; no per-call
+  argument, which would spend every tool's description cap). A `query_sql`
+  reply past it is a tool error that states its size, how many leading rows
+  fit and how to ask again: ORDER BY a unique key with `LIMIT k`, then
+  `LIMIT k OFFSET k`, comparing the publication pins between pages (a pointer
+  can move between two calls), or `max_cell_chars`, naming the column holding
+  most characters. A citation page past it states how many occurrences fit
+  and the `max_occurrences` and `offset` to ask with; its size never falls as
+  occurrences are added, so the count is found by halving over rows already
+  resolved (about seven builds for 100, no read). The count leaves
+  `RE_ASK_CHARS` (100) for the clause the reply echoes. Nothing partial is
+  returned for size; the `max_rows` cut and `truncated` are unchanged. The
+  owner chose refusal over cutting at the budget and continuing (the scout's
+  recommendation): a caller that skips `truncated` cannot mistake a refusal
+  for the whole answer. The cost is that the statement's work is thrown away
+  and runs again; the server holds no cursor between calls.
+- **`query_sql` states `columns` once and each row as an array in their
+  order (round 6).** Column names repeated on every row were 32% of a
+  399-row persona reply: ulrike's call 12 went from 76,949 characters to
+  53,117, and its first 302 rows from 57,964 to 39,844. `truncated_cells`
+  still names each cut cell's row and column.
+- **The catalog replies are not row-shaped and are never refused or cut.**
+  `test_chaos_r6_server` holds `list_sources` and every description, either
+  detail, under the budget less room for live pins; on 2026-10-03 the live
+  `list_sources` was 34,243 characters and the largest default description
+  (`congress_bills`) 27,748.
 - **`query_sql(max_cell_chars=N)`** cuts every text, list or struct cell longer
   than N characters to its first N (a list or struct as its compact JSON text)
   and lists each cut cell in `truncated_cells` as `{row, column, chars}` with the
@@ -563,20 +671,56 @@ file its reader cannot page, so two of five personas never read a row.
   `list_sources`. Reading each member's Parquet key-value metadata for a time
   was measured and rejected: only `discovery_signals` records an `as_of`, and
   the reads doubled a cold build's requests to the bucket (+519, +5.2 s).
-- **A derived table's pin states the parent generations it was built from
-  (round 5, owner decision 2026-10-03).** A generation root (`artifact.json`)
+  `published_at_basis` (round 6) names what the value observed:
+  `pointer_move`, stamped at the pointer write, or `last_object_write`, the
+  newest object under the generation's prefix that
+  `publication.backfill_published_at` wrote for entries published before the
+  writer, the pointer having moved at or after it. The backfill ran once,
+  applied at 2026-10-03T16:13:56Z (`PUBLISHED_AT_BACKFILLED_THROUGH`), and the
+  writer stamps only later instants, so the basis is read from the value with
+  no index change; another backfill moves the constant. Round 5's research
+  note called a backfilled value a "lower bound", which a reader can take
+  either way round; the basis says what was observed instead.
+- **A derived table's pin states the parents its producer recorded (round 5,
+  owner decision 2026-10-03; round 6).** A generation root (`artifact.json`)
   records `spec.parents`: each parent table's family, generation and bytes, or
   a storage version (an ETag, or a local copy's digest) for a parent no family
-  pins. `_input_lineage` adds `inputs`, one `{table, family, built_from, live,
-  input_table_current}` per parent, and `inputs_current`. `built_from` and
-  `live` are family generations; `input_table_current` compares the parent
-  table's own `sha256` where both pins state one (else the generations), so a
-  parent family that moved for another table does not mark this one stale.
-  The name says so (coordinator answer 7): `built_from` can differ from `live`
-  while `input_table_current` is true. A storage-version parent makes no lag
-  claim (`input_table_current: null`, ignored by `inputs_current`, which is
-  null when no parent can be compared). A family
-  whose root records no parents gets no `inputs` key. The root is read on the
+  pins. None recorded is not none: a read that bypassed the download helper is
+  not recorded (scout C's read ledger is the pipeline half). `_input_lineage`
+  adds `inputs`, one `{table, family, built_from, live, input_table_current}`
+  per parent, and `inputs_current`; `built_from` and `live` are always pins of
+  one kind.
+  - A managed parent's are family generations; `input_table_current` compares
+    the parent table's own `sha256` where both pins state one (else the
+    generations), so a parent family that moved for another table does not
+    mark this one stale. The name says so (coordinator answer 7): `built_from`
+    can differ from `live` while `input_table_current` is true.
+  - A parent in the table's own family is its previous output, read to carry
+    rows forward (`generations._check_parents` requires the generation the
+    build captured): it is `prior_generation`, never an input that can lag.
+    Round 5 compared it with the table's live bytes, so `gao_reports` read
+    stale against itself. Roots already published are immutable, so the
+    server reads them this way whatever the writers record next.
+  - A parent no family pins (the comments export) is compared with the export
+    receipt the connection matched at build (`_export_pin`): the recorded
+    sha256 with the receipt's sha256, or the ETag with its ETag. A file that
+    moved since its receipt, or no receipt, gives `live: null`.
+  - `inputs_current` is three-valued (`_all_current`): false if any input
+    lags, else null if any is unknown, else true. Round 5 dropped unknowns
+    from the vote, so a null beside a true read as true.
+
+  A rulemaking snapshot table states its snapshot's sources
+  (`_snapshot_lineage`): the manifest records `inputs.sources` per snapshot,
+  and its stages record `depends_on` and `outputs` but not what each stage
+  read, so one table's own sources cannot be derived. They are
+  `snapshot_inputs` (`{table, built_from, live, input_table_current}`, table
+  sha256s), and the table's `inputs_current` is true when every source is
+  live, else null: never false for a source it may not have read (round 6
+  review, item 3). Its `prior_generation` is the manifest's
+  `previous_snapshot_id`. Per-stage sources would let each table state its
+  own; that is the pipeline's change.
+
+  A family whose root records no parents gets no `inputs` key. The root is read on the
   first reply that pins the generation, never at build, and kept per artifact
   digest (`_ROOT_PARENTS`; roots are immutable); a read that fails states
   `inputs: null` with `inputs_status: root_unavailable`, and the root is not
@@ -589,8 +733,7 @@ file its reader cannot page, so two of five personas never read a row.
   `list_sources`. On 2026-10-03, 10 of 52 families recorded parents, and
   bill-subjects (`congress_bills`) and member-vote-terms (`members`,
   `member_terms`) were built from parent bytes no longer live. Tests keep root
-  reads off the network (`tests/conftest.py::no_generation_roots`). The
-  describe_table description is at 1,982 of its 2,000 characters.
+  reads off the network (`tests/conftest.py::no_generation_roots`).
 - **`list_sources` states each table's pinned `rows`** (the index descriptor's or
   the snapshot manifest's count; null for a legacy table no pointer pins) so a
   declared table whose generation publishes no rows is visible at discovery

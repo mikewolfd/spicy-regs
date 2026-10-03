@@ -10,15 +10,54 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import date
+from functools import cache
 from importlib.resources import files
+from typing import Literal, get_args
 
-from spicy_regs.ontology import agencies
+#: The namespaces an exact identifier is looked up in: a regulations.gov agency code, and a Federal Register agency
+#: id (the occurrence views' namespace). Any other is refused; the MCP tool's schema advertises this closed set.
+Namespace = Literal["regulations.gov:agency", "federal_register_agency"]
+REGULATIONS, FEDERAL_REGISTER = get_args(Namespace)
 
-REGULATIONS = "regulations.gov:agency"
-FEDERAL_REGISTER = "federal_register_agency"  # Existing occurrence-view namespace.
+
+@cache
+def _names() -> dict[str, str]:
+    """Each organization the vendored rows name, with that name; none is written here.
+
+    RefSpec's preferred label for a projected organization or abstention comes first, then the publisher's name a
+    row records for a resource: a mapping's source or target record, either end of a bridge, an event's result.
+    """
+    from spicy_regs.ontology import agencies
+
+    names: dict[str, str] = {}
+    for row in agencies.projection_rows():
+        names.setdefault(row["org"], row["pref_label"])
+    for row in agencies.unresolved_rows():
+        names.setdefault(row["source_org"], row["pref_label"])
+    for row in agencies.projection_rows():
+        for record in row["evidence_records"] or ():
+            for side in (record.get("source_record") or {}, record.get("target_record") or {}):
+                if side.get("resource") and side.get("publisher_name"):
+                    names.setdefault(side["resource"], side["publisher_name"])
+    for row in agencies.registry_rows("bridges"):
+        names.setdefault(row["subject"], row["subject_publisher_name"])
+        names.setdefault(row["object"], row["object_publisher_name"])
+    for row in agencies.registry_rows("events"):
+        names.setdefault(row["result"], row["result_publisher_name"])
+    return names
+
+
+def _parent_labels(candidates: list[dict], abstentions: list[dict], registry: dict) -> dict[str, str | None]:
+    """Each parent organization the reply names, with the name the vendored rows give it; null where none does."""
+    parents = [row["parent_org"] for row in candidates] + [row["source_parent_org"] for row in abstentions]
+    parents += [row[end] for row in registry["bridges"] for end in ("subject_parent", "object_parent")]
+    parents += [parent for row in registry["events"] for parent in row["original_parents"]]
+    return {parent: _names().get(parent) for parent in sorted(set(parents) - {None})}
 
 
 def _registry_evidence(namespace: str, identifier: str, candidates: list[dict]) -> dict:
+    from spicy_regs.ontology import agencies  # here, not at import: the MCP server imports Namespace at start
+
     publication = agencies.registry_publication()  # refuses a manifest that is not the pinned one, first
     tables = {
         name: [dict(row) for row in agencies.registry_rows(name)] for name in ("bridges", "events", "non-emissions")
@@ -71,7 +110,11 @@ def _registry_evidence(namespace: str, identifier: str, candidates: list[dict]) 
 
 
 def lookup_agency(namespace: str, identifier: str, *, on_date: str | None = None) -> dict:
-    """Return reviewed candidates and abstentions; never match labels or parents."""
+    """Return reviewed candidates and abstentions; never match labels or parents. Another namespace is refused."""
+    from spicy_regs.ontology import agencies
+
+    if namespace not in (REGULATIONS, FEDERAL_REGISTER):
+        raise ValueError(f"Unsupported namespace {namespace!r}; the namespaces are {REGULATIONS} and {FEDERAL_REGISTER}")
     if not isinstance(identifier, str) or not identifier or len(identifier) > 256:
         raise ValueError("A bounded exact native identifier is required")
     if on_date is not None:
@@ -88,21 +131,17 @@ def lookup_agency(namespace: str, identifier: str, *, on_date: str | None = None
     if namespace == REGULATIONS:
         candidates = [dict(row) for row in rows if row["source_value"] == identifier]
         abstentions = [dict(row) for row in unresolved if row["source_value"] == identifier]
-    elif namespace == FEDERAL_REGISTER:
+    else:
         urn = agencies.FR_AGENCY_URN + identifier
         candidates = [dict(row) for row in rows if row["org"] == urn]
     status = (
-        "unsupported_namespace"
-        if namespace not in {REGULATIONS, FEDERAL_REGISTER}
-        else (
-            "contested"
-            if candidates and abstentions
-            else "ambiguous"
-            if len(candidates) > 1
-            else "reviewed_mapping"
-            if candidates
-            else "unmatched"
-        )
+        "contested"
+        if candidates and abstentions
+        else "ambiguous"
+        if len(candidates) > 1
+        else "reviewed_mapping"
+        if candidates
+        else "unmatched"
     )
     registry = _registry_evidence(namespace, identifier, candidates)
     if status == "unmatched" and registry["events"]:
@@ -121,6 +160,7 @@ def lookup_agency(namespace: str, identifier: str, *, on_date: str | None = None
         "mapping_scope": "undated reviewed roster identity; parent_org is a separate relationship",
         "temporal_policy": "REF-072 event dates are retained as evidence; current-lineage lookup ignores dates and does not establish requested-date identity. Adjudication dates are not validity dates.",
         "registry_evidence": registry,
+        "parent_labels": _parent_labels(candidates, abstentions, registry),
         "publication": {
             "view_id": manifest["viewId"],
             "manifest_sha256": "sha256:" + agencies.VIEW_MANIFEST_SHA256,

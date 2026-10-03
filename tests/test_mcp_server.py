@@ -72,6 +72,16 @@ def _tool_data(server, name, arguments):
     return asyncio.run(server.call_tool(name, arguments)).structured_content
 
 
+def _listed(reply):
+    """A list_sources reply's table entries, which it groups by subject, in the order it lists them."""
+    return [entry for group in reply["subjects"] for entry in group["tables"]]
+
+
+def _records(reply):
+    """A query_sql reply's rows, which are arrays in the order of its columns, as one dict per row."""
+    return [dict(zip(reply["columns"], row, strict=True)) for row in reply["rows"]]
+
+
 def test_discovery_reports_actual_parquet_schema_and_dictionary_caveats(tmp_path, monkeypatch):
     """A readable old/changed artifact must not be described as the declared schema."""
     con = duckdb.connect()
@@ -88,7 +98,7 @@ def test_discovery_reports_actual_parquet_schema_and_dictionary_caveats(tmp_path
 
     sources = _tool_data(server, "list_sources", {})
     declared = mcp_server._table_metadata()["org_committee_links"]
-    assert sources["tables"] == [
+    assert _listed(sources) == [
         {"table": "org_committee_links", "label": declared["label"], "coverage": declared["kind"], "rows": None}
     ]
     assert "fec_committees" in sources["unavailable_tables"]
@@ -107,7 +117,7 @@ def test_discovery_reports_actual_parquet_schema_and_dictionary_caveats(tmp_path
     assert "fec_committees.committee_id" in actual_columns["committee_id"]["description"]
     assert actual_columns["new_field"]["description"] is None
     queried = _tool_data(server, "query_sql", {"sql": "SELECT committee_id FROM org_committee_links"})
-    assert queried["rows"] == [{"committee_id": "C00000001"}]
+    assert _records(queried) == [{"committee_id": "C00000001"}]
 
     unavailable = _tool_data(server, "describe_table", {"table": "fec_committees"})
     assert unavailable["available"] is False
@@ -184,7 +194,7 @@ def test_local_directory_runs_actual_connection_without_remote_fallback(tmp_path
     assert sources["source"] == "local"
     assert sources["base_path"] == str(tmp_path)
     assert "base_url" not in sources
-    assert [entry["table"] for entry in sources["tables"]] == ["fec_committees"]
+    assert [entry["table"] for entry in _listed(sources)] == ["fec_committees"]
     assert loaded == []
     described = _tool_data(server, "describe_table", {"table": "fec_committees"})
     assert described["available"] is True
@@ -194,7 +204,7 @@ def test_local_directory_runs_actual_connection_without_remote_fallback(tmp_path
     }
     queried = _tool_data(server, "query_sql", {"sql": "SELECT committee_id FROM fec_committees"})
     assert queried["source"] == "local"
-    assert queried["rows"] == [{"committee_id": "C00000001"}]
+    assert _records(queried) == [{"committee_id": "C00000001"}]
     with pytest.raises(ToolError, match="read-only"):
         _tool_data(server, "query_sql", {"sql": "DROP VIEW fec_committees"})
 
@@ -366,6 +376,11 @@ READ_FORMS = [
     "/* lead */ SELECT 1",
     "SELECT 1 -- COPY (SELECT 1) TO '/tmp/x.csv'",
     "SELECT 'COPY (SELECT 1) TO /tmp/x.csv' AS s",
+    # DuckDB rewrites PRAGMA's table-returning forms to SELECT (round 6, L9: the tool text now says so).
+    "PRAGMA version",
+    "PRAGMA show_tables",
+    "PRAGMA table_info('dockets')",
+    "PRAGMA database_size",
 ]
 
 WRITE_FORMS = [
@@ -387,6 +402,10 @@ WRITE_FORMS = [
     ("CALL pragma_version()", "CALL"),
     ("PREPARE p AS SELECT 1", "PREPARE"),
     ("BEGIN TRANSACTION", "TRANSACTION"),
+    # PRAGMA's state-changing forms keep their own statement type, or parse as the SET they are.
+    ("PRAGMA enable_profiling", "PRAGMA"),
+    ("PRAGMA threads=4", "SET"),
+    ("PRAGMA memory_limit='1GB'", "SET"),
 ]
 
 
@@ -406,6 +425,21 @@ def test_read_forms_pass_the_guard(sql):
 def test_write_forms_are_named_and_rejected(sql, expected):
     con = _sandboxed_connection()
     assert mcp_server._first_write_statement(con, sql) == expected
+
+
+def test_import_database_is_refused_by_the_locked_connection_where_the_guard_cannot_see_it(tmp_path, monkeypatch):
+    """DuckDB expands PRAGMA import_database while parsing, reading the directory's schema.sql: a file of SELECTs
+    passes the statement guard on an open connection, so only the locked connection's file boundary refuses it."""
+    (tmp_path / "schema.sql").write_text("SELECT 42;")
+    (tmp_path / "load.sql").write_text("")
+    statement = f"PRAGMA import_database('{tmp_path}')"
+    assert mcp_server._first_write_statement(duckdb.connect(), statement) is None
+    con = _sandboxed_connection()
+    with pytest.raises(duckdb.PermissionException, match="schema.sql"):
+        mcp_server._first_write_statement(con, statement)
+    monkeypatch.setattr(mcp_server, "_get_connection", lambda: con)
+    with pytest.raises(ToolError, match="Permission Error"):
+        _tool_data(mcp_server.build_server(), "query_sql", {"sql": statement})
 
 
 def test_guard_catches_a_write_stacked_behind_a_select():

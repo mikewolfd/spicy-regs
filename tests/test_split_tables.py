@@ -29,7 +29,7 @@ from tests.generation_fakes import Store
 from tests.test_generation_audit import public_base
 from tests.test_generation_mcp import connection_fixture
 from tests.test_local_mcp import serve
-from tests.test_mcp_server import _tool_data
+from tests.test_mcp_server import _records, _tool_data
 
 DIGEST = "sha256:" + "b" * 64
 PREFIX = f"generations/bills/{'b' * 64}"
@@ -351,13 +351,13 @@ def test_a_split_table_downloads_verifies_and_is_read_locally_without_a_hive_col
         assert [row[0] for row in con.execute("DESCRIBE bill_sections").fetchall()] == ["bill_id", "congress", "body"]
         result = _tool_data(server, "query_sql", {"sql": "SELECT congress, count(*) AS n FROM bill_sections "
                                                          "GROUP BY 1 ORDER BY 1"})
-        assert result["rows"] == [{"congress": "118", "n": 2}, {"congress": "119", "n": 1}]
+        assert _records(result) == [{"congress": "118", "n": 2}, {"congress": "119", "n": 1}]
         # The view names the verified member files, so a file added to the directory later is never read.
         extra = batch / "bill_sections" / "congress=119" / "part-000001.parquet"
         extra.write_bytes((batch / members[1]).read_bytes())
         count = _tool_data(server, "query_sql", {"sql": "SELECT count(*) AS n FROM bill_sections"})
         extra.unlink()
-        assert count["rows"] == [{"n": 3}]
+        assert _records(count) == [{"n": 3}]
     finally:
         con.close()
 

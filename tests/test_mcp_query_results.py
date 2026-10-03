@@ -7,6 +7,7 @@ import pytest
 from starlette.testclient import TestClient
 
 from spicy_regs import mcp_server
+from tests.test_mcp_server import _listed, _records
 
 
 @pytest.fixture
@@ -62,7 +63,7 @@ def test_aliased_join_preserves_both_statuses(client):
         "FROM fcc_filings f CROSS JOIN fcc_proceedings p LIMIT 1"
     )})
     assert result["isError"] is False
-    assert result["structuredContent"]["rows"] == [
+    assert _records(result["structuredContent"]) == [
         {"submission_status": "DISSEMINATED", "proceeding_status": "OPENALL"}
     ]
 
@@ -72,7 +73,7 @@ def test_truncation_measures_an_omitted_row_not_just_reaching_the_cap(client, si
     result = call(client, "query_sql", {"sql": f"SELECT i FROM range({size}) t(i) ORDER BY i", "max_rows": 2})
     assert result["isError"] is False
     data = result["structuredContent"]
-    assert data["rows"] == [{"i": i} for i in range(min(size, 2))]
+    assert _records(data) == [{"i": i} for i in range(min(size, 2))]
     assert data["row_count_shown"] == min(size, 2)
     assert data["truncated"] is truncated
 
@@ -106,8 +107,8 @@ def test_discovery_lists_tables_without_per_table_pins_or_audits(client):
     result = call(client, "list_sources", {})
     assert result["isError"] is False
     data = result["structuredContent"]
-    assert {entry["table"] for entry in data["tables"]} == {"fcc_filings", "fcc_proceedings"}
-    assert set(data["tables"][0]) == {"table", "label", "coverage", "rows"}
+    assert {entry["table"] for entry in _listed(data)} == {"fcc_filings", "fcc_proceedings"}
+    assert set(_listed(data)[0]) == {"table", "label", "coverage", "rows"}
     assert not {"publication", "qualification", "datasets", "declared_tables"} & set(data)
     assert "views" not in data["fec_release"]
     assert data["fec_release"]["raw_query_financial_qualification"] == "not_inferred"
@@ -166,4 +167,4 @@ def test_a_timestamp_with_time_zone_is_returned(client):
     # Without pytz, DuckDB could not hand a TIMESTAMPTZ to Python and every such query failed.
     result = call(client, "query_sql", {"sql": "SELECT TIMESTAMPTZ '2026-09-28 12:00:00+00' AS t", "max_rows": 1})
     assert result["isError"] is False
-    assert result["structuredContent"]["rows"][0]["t"].startswith("2026-09-28")
+    assert _records(result["structuredContent"])[0]["t"].startswith("2026-09-28")

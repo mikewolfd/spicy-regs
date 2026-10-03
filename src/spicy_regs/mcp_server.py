@@ -37,9 +37,10 @@ import httpx
 import pydantic_core
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
+from mcp.server.mcpserver.tools import Tool
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import CallToolResult, Icon, TextContent
-from pydantic import Field
+from pydantic import Field, ValidationError
 from starlette.requests import Request
 from starlette.responses import Response
 
@@ -49,6 +50,7 @@ from spicy_regs.duckdb_settings import INTERACTIVE_HTTP_RETRIES, load_public_htt
 from spicy_regs.fec_release import QUERY_RELEASE_FIELDS, RELEASE_INVENTORIES, release_summary
 from spicy_regs.public_url import resolve_r2_base_url
 from spicy_regs.relationship_views.fec_query_views import fec_query_views
+from spicy_regs.vocabulary_mapping import Namespace
 
 TABLES = (
     "dockets",
@@ -240,14 +242,26 @@ DEFAULT_OCCURRENCES, MAX_OCCURRENCES = 25, 100
 #: rule. Round 5 measured them at 64% of a 500-row CRPT-118hrpt964 reply.
 OCCURRENCE_DOCUMENT_FIELDS = ("document_kind", "document_key", "text_sha256", "body_rendition", "body_derivation",
                               "source_status", "resolution_rule")
-OCCURRENCE_KIND_FIELDS = ("rule_name", "target_table", "target_snapshot", "target_table_selected", "target_grain",
-                          "expected_cardinality")
+OCCURRENCE_KIND_FIELDS = ("rule_name", "rule_version", "target_table", "target_snapshot", "target_table_selected",
+                          "target_grain", "expected_cardinality")
+#: What each target_status says. A citation reply defines the words its occurrences use, and only those: the five
+#: definitions did not fit the tool text beside everything else it must say (round 6, phase3-review item 2).
+TARGET_STATUS_MEANINGS = {
+    "found": "The selected target table holds the cited key: one row, or at least one where target_grain names "
+             "several rows per key.",
+    "missing": "The selected target table holds no row with this key. The table may not cover the cited range "
+               "(describe_table states its coverage), so this does not prove the target does not exist.",
+    "ambiguous": "More than one target row has this key where one was expected; candidate_keys lists them.",
+    "not_checked": "No lookup was made; reason says why (a key the citation did not settle, a source text not read, "
+                   "no pinned target table, a limit, or a failed read).",
+    "unsupported": "No route looks up this citation kind: it is held, never checked.",
+}
 #: An occurrence field that restates another field of the same occurrence; a reply drops it where they are equal.
-OCCURRENCE_SAME_AS = {"target_kind": "cite_kind", "normalized_key": "target_key"}
-#: The acquisition queue's fields fixed for the reply, on each item and on each requesting occurrence.
+#: target_rule names the kind on every row of 11 of the 13 held kinds (round 6, live document_citations).
+OCCURRENCE_SAME_AS = {"target_kind": "cite_kind", "normalized_key": "target_key", "target_rule": "cite_kind"}
+#: The acquisition queue's fields fixed for the reply on each item, and for a target kind's route.
 QUEUE_ITEM_FIELDS = ("intended_query", "queue_rule", "acquisition_outcome", "retained")
-QUEUE_REQUEST_FIELDS = ("document_kind", "document_key", "text_sha256", "input_snapshot", "resolution_rule",
-                        "source_status")
+QUEUE_KIND_FIELDS = ("target_snapshot", "provider_route", "status")
 #: document_kind's schema description, derived from SOURCE_TABLES so a new kind cannot drift from its table.
 DOCUMENT_KIND_TABLES = "Each kind's table: " + "; ".join(
     f"{kind}: {table}" for kind, table in sorted(SOURCE_TABLES.items())
@@ -390,9 +404,26 @@ def _resolve_tool_concurrency() -> int:
     return int(raw)
 
 
+def _resolve_reply_chars() -> int:
+    """The most characters one query or citation reply may carry, from SPICY_REGS_REPLY_CHARS (default 40,000).
+
+    Claude Code saves a tool result past 25,000 tokens (``MAX_MCP_OUTPUT_TOKENS``) to a one-line file and its reader
+    then showed 39,000 to 43,000 characters of each (round 6: replies of 76,947 to 102,942 characters). A reply that
+    would pass the budget is refused with how much fits and how to ask for it (owner decision 2026-10-03); nothing
+    partial is returned for size. Set by the environment only: an argument would spend every tool's description cap.
+    """
+    raw = os.environ.get("SPICY_REGS_REPLY_CHARS", "40000").strip()
+    if not raw.isdecimal() or int(raw) < 1:
+        raise RuntimeError(f"SPICY_REGS_REPLY_CHARS must be a positive integer: {raw!r}")
+    return int(raw)
+
+
 MEMORY_LIMIT = _resolve_memory_limit()
 TEMP_DIR = _resolve_temp_dir()
 TOOL_CONCURRENCY = _resolve_tool_concurrency()
+REPLY_CHARS = _resolve_reply_chars()
+#: Room a refusal keeps for the clause it asks the caller to add (ORDER BY, LIMIT, OFFSET), which the reply echoes.
+RE_ASK_CHARS = 100
 
 
 def _resolve_catalog_config() -> dict[str, str] | None:
@@ -849,13 +880,16 @@ def _pinned_rows(index: dict, rulemaking: dict, name: str) -> int | None:
     return pinned["rows"] if pinned is not None else None
 
 
-def _published_at(index: dict, name: str) -> str | None:
-    """When the publisher moved the pointer to ``name``'s generation (the index's ``publishedAt``); None for a
-    table no family pins, or a generation published before the index recorded the instant. Not a data-as-of."""
-    from spicy_regs.sources.publication import table_owner
+def _published_at(index: dict, name: str) -> dict[str, str | None]:
+    """When the publisher moved the pointer to ``name``'s generation (the index's ``publishedAt``) and what that value
+    observed: the move (``pointer_move``) or, for a value the 2026-10-03 backfill wrote, the generation's last object
+    write, at or before the move (``last_object_write``). Both null for a table no family pins or a generation
+    published before the index recorded the instant. Not a data-as-of."""
+    from spicy_regs.sources.publication import published_at_basis, table_owner
 
     owner = table_owner(index, f"{name}.parquet")
-    return owner[1].get("publishedAt") if owner is not None else None
+    instant = owner[1].get("publishedAt") if owner is not None else None
+    return {"published_at": instant, "published_at_basis": published_at_basis(instant)}
 
 
 #: Each family generation's ``spec.parents`` by (base URL, artifact digest): roots are immutable, so one read
@@ -889,14 +923,31 @@ def _family_parents(base_url: str, entry: Mapping) -> dict[str, dict]:
     return parents
 
 
-def _input_lineage(index: dict, name: str) -> dict[str, Any]:
-    """The parent generations a managed table's family was built from beside the live ones; {} when it records none.
+def _all_current(claims: Sequence[bool | None]) -> bool | None:
+    """Three-valued: false if any input lags, else null if any is unknown, else true."""
+    return False if False in claims else None if None in claims else True
 
-    ``built_from`` and ``live`` are family generations. ``input_table_current``
-    compares the parent table's own bytes where both pins state them, so a parent
-    family that moved for another table does not mark this one stale; a storage-version
-    parent (an ETag, or a local copy's digest) makes no lag claim. An unreadable
-    root is stated, never guessed.
+
+def _export_pin(exports: Mapping[str, dict], table: str, parent: Mapping) -> tuple[str | None, bool | None]:
+    """The live pin of the kind ``parent`` recorded (the file's sha256, or its ETag) from the export receipt this
+    connection matched at build, and whether the two agree; (None, None) when no receipt pins a matching file."""
+    export = exports.get(table)
+    if export is None or export["rows_basis"] != "comments_export_receipt":
+        return None, None
+    kind = "sha256" if "sha256" in parent else "etag"
+    live = export["export_receipt"][kind]
+    return live, parent[kind] == live
+
+
+def _input_lineage(index: dict, name: str, exports: Mapping[str, dict]) -> dict[str, Any]:
+    """The parents a managed table's family recorded beside the live ones; {} when it records none.
+
+    A parent in the table's own family is its previous output, read to carry rows forward: it is stated as
+    ``prior_generation``, never as an input that can lag (roots already published are immutable, so this holds
+    whatever the writers record next). ``built_from`` and ``live`` are pins of one kind: family generations for a
+    managed parent, whose ``input_table_current`` compares the parent table's own bytes, so a parent family that
+    moved for another table does not mark this one stale; the file's sha256 or ETag for an export parent, compared
+    with the export receipt this connection matched (``exports``). An unreadable root is stated, never guessed.
     """
     from spicy_regs.sources.publication import PublicationError, table_owner
 
@@ -908,12 +959,16 @@ def _input_lineage(index: dict, name: str) -> dict[str, Any]:
     except (PublicationError, httpx.HTTPError, OSError) as error:
         logger.warning("%s: generation root unavailable (%s)", owner[0], type(error).__name__)
         return {"inputs": None, "inputs_status": "root_unavailable"}
-    inputs = []
+    inputs, prior = [], sorted({parent["artifactDigest"] for parent in parents.values()
+                                if parent.get("family") == owner[0]})
     for key, parent in sorted(parents.items()):
+        table = key.removesuffix(".parquet")
+        if parent.get("family") == owner[0]:
+            continue
         if "family" not in parent:
-            inputs.append({"table": key.removesuffix(".parquet"), "family": None,
-                           "built_from": parent.get("etag") or parent.get("sha256"), "live": None,
-                           "input_table_current": None})
+            live_pin, current = _export_pin(exports, table, parent)
+            inputs.append({"table": table, "family": None, "built_from": parent.get("etag") or parent.get("sha256"),
+                           "live": live_pin, "input_table_current": current})
             continue
         live = table_owner(index, key)
         if live is None:  # no family publishes the parent now: nothing to compare
@@ -923,12 +978,37 @@ def _input_lineage(index: dict, name: str) -> dict[str, Any]:
         else:
             live_digest = live[1]["artifactDigest"]
             current = parent["artifactDigest"] == live_digest
-        inputs.append({"table": key.removesuffix(".parquet"), "family": parent["family"],
+        inputs.append({"table": table, "family": parent["family"],
                        "built_from": parent["artifactDigest"], "live": live_digest, "input_table_current": current})
-    if not inputs:
-        return {}
-    claims = [item["input_table_current"] for item in inputs if item["input_table_current"] is not None]
-    return {"inputs": inputs, "inputs_current": all(claims) if claims else None}
+    lineage: dict[str, Any] = {"prior_generation": prior[0] if len(prior) == 1 else prior} if prior else {}
+    if inputs:
+        lineage |= {"inputs": inputs, "inputs_current": _all_current([item["input_table_current"] for item in inputs])}
+    return lineage
+
+
+def _snapshot_lineage(index: dict, manifest: Mapping) -> dict[str, Any]:
+    """The rulemaking snapshot's sources beside the live tables, and its previous snapshot as ``prior_generation``.
+
+    The manifest records sources per snapshot, and its stages record what they depend on but not what they read,
+    so which sources one table read is unknown: they are ``snapshot_inputs``, and a table's ``inputs_current`` is
+    true only when every one is live, else null, never false for a source the table may not have read.
+    """
+    from spicy_regs.sources.publication import table_owner
+
+    recorded = manifest.get("inputs") or {}
+    sources = []
+    for key, source in sorted((recorded.get("sources") or {}).items()):
+        live = table_owner(index, key)
+        live_sha = live[1]["tables"][key].get("sha256") if live is not None else None
+        built_from = f"sha256:{source['sha256']}"
+        sources.append({"table": key.removesuffix(".parquet"), "built_from": built_from, "live": live_sha,
+                        "input_table_current": None if live_sha is None else live_sha == built_from})
+    lineage: dict[str, Any] = (
+        {"prior_generation": recorded["previous_snapshot_id"]} if recorded.get("previous_snapshot_id") else {})
+    if sources:
+        lineage |= {"snapshot_inputs": sources,
+                    "inputs_current": True if all(item["input_table_current"] for item in sources) else None}
+    return lineage
 
 
 def _export_rows(cursor: duckdb.DuckDBPyConnection) -> dict[str, dict]:
@@ -957,13 +1037,12 @@ def _reply_pins(cursor: duckdb.DuckDBPyConnection, publication: dict[str, dict],
     """Each named table's pin with the facts a reply states instead of prose that decays.
 
     ``rows`` is the pinned index's or snapshot manifest's count, a managed
-    generation adds ``published_at`` (when the publisher moved the pointer to
-    it; null until the publisher records it, and never when the data was
-    read) and, when its root records parents, ``inputs`` and
-    ``inputs_current`` (:func:`_input_lineage`), a snapshot table adds its manifest's ``run_id`` and
-    ``asserted_at``, a comments export
-    adds its receipt's count with ``rows_basis`` (:func:`_export_rows`), and
-    ``coverage`` is the dictionary's coverage kind. They join the pin only here:
+    generation adds ``published_at`` and its basis (when the publisher moved
+    the pointer to it; never when the data was read) and what its root
+    records (:func:`_input_lineage`), a snapshot table adds its manifest's
+    ``run_id``, ``asserted_at`` and sources (:func:`_snapshot_lineage`), a
+    comments export adds its receipt's count with ``rows_basis``
+    (:func:`_export_rows`), and ``coverage`` is the dictionary's coverage kind. They join the pin only here:
     derived views embed :func:`_publication_status` pins in provenance columns
     and candidate identities, which these facts must not move.
     """
@@ -975,14 +1054,15 @@ def _reply_pins(cursor: duckdb.DuckDBPyConnection, publication: dict[str, dict],
     for name in names:
         pin = dict(publication[name])
         if pin["status"] in ("managed_generation", "managed_download"):
-            pin |= {"rows": _pinned_rows(index, rulemaking, name), "published_at": _published_at(index, name)}
+            pin |= {"rows": _pinned_rows(index, rulemaking, name), **_published_at(index, name)}
             # A local download holds no generation roots; the remote root is read on first use, never at build.
-            pin |= (_input_lineage(index, name) if pin["status"] == "managed_generation"
+            pin |= (_input_lineage(index, name, exports) if pin["status"] == "managed_generation"
                     else {"inputs": None, "inputs_status": "root_unavailable"})
         elif pin["status"] == "rulemaking_snapshot":
             manifest = rulemaking["manifest"]
             pin |= {"rows": rulemaking["tables"][f"{name}.parquet"]["rows"],
-                    "run_id": manifest.get("run_id"), "asserted_at": manifest.get("asserted_at")}
+                    "run_id": manifest.get("run_id"), "asserted_at": manifest.get("asserted_at"),
+                    **_snapshot_lineage(index, manifest)}
         elif name in exports:
             pin |= exports[name]
         declared = _table_metadata().get(name) or relationships.get(name, {}).get("metadata", {})
@@ -1150,7 +1230,13 @@ def _lineage_meanings(lineage: Mapping[str, Sequence[str]]) -> dict[str, str]:
 DESCRIBE_DETAIL = ("joins[].measurement", "qualification.ledger_statements")
 
 
-def _bounded_cells(rows: list[dict[str, Any]], max_chars: int | None) -> list[dict[str, Any]]:
+def _reply_text(result: Any) -> tuple[Any, str]:
+    """A reply's JSON value and its compact JSON text: what the client is sent, and what the budget counts."""
+    structured = pydantic_core.to_jsonable_python(result, fallback=str)
+    return structured, pydantic_core.to_json(structured).decode()
+
+
+def _bounded_cells(rows: list[list[Any]], columns: Sequence[str], max_chars: int | None) -> list[dict[str, Any]]:
     """Cut each text, list or struct cell longer than ``max_chars`` to its first ``max_chars`` characters, in place.
 
     A list or struct cell is measured and cut as its compact JSON text. Returns
@@ -1161,13 +1247,44 @@ def _bounded_cells(rows: list[dict[str, Any]], max_chars: int | None) -> list[di
     if max_chars is None:
         return cut
     for index, row in enumerate(rows):
-        for column, value in row.items():
+        for position, value in enumerate(row):
             if isinstance(value, (str, list, dict)):
                 text = value if isinstance(value, str) else json.dumps(value, separators=(",", ":"), ensure_ascii=False)
                 if len(text) > max_chars:
-                    row[column] = text[:max_chars]
-                    cut.append({"row": index, "column": column, "chars": len(text)})
+                    row[position] = text[:max_chars]
+                    cut.append({"row": index, "column": columns[position], "chars": len(text)})
     return cut
+
+
+def _refuse_oversized_rows(reply: dict[str, Any]) -> None:
+    """Refuse a query reply past REPLY_CHARS, naming how many leading rows fit and how to ask for them again.
+
+    Rows are measured one by one only on this path; a whole reply is measured once. The rows that fit leave room
+    for the clause the caller is asked to add (RE_ASK_CHARS), since the reply echoes the statement.
+    """
+    size = len(_reply_text(reply)[1])
+    if size <= REPLY_CHARS:
+        return
+    rows, columns = reply["rows"], reply["columns"]
+    room = REPLY_CHARS - RE_ASK_CHARS - len(_reply_text({**reply, "rows": []})[1]) + 1  # the first row has no comma
+    fit = 0
+    for row in rows:
+        room -= len(_reply_text(row)[1]) + 1
+        if room < 0:
+            break
+        fit += 1
+    widths = [sum(len(_reply_text(row[position])[1]) for row in rows) for position in range(len(columns))]
+    widest = max(range(len(columns)), key=widths.__getitem__)
+    cells = (f"set max_cell_chars to cut long cells ({columns[widest]} holds "
+             f"{round(100 * widths[widest] / max(sum(widths), 1))}% of the rows' characters), or select fewer columns")
+    if not fit:
+        raise ValueError(f"This reply would be {size:,} characters, over the {REPLY_CHARS:,}-character reply limit; "
+                         f"nothing is returned. Not even the first row fits: {cells}.")
+    raise ValueError(
+        f"This reply would be {size:,} characters, over the {REPLY_CHARS:,}-character reply limit; nothing is "
+        f"returned. The first {fit} of its {len(rows)} rows fit. Ask again with ORDER BY a unique key and LIMIT "
+        f"{fit}, then LIMIT {fit} OFFSET {fit} for the next page (compare the publication pins between pages); or "
+        f"{cells}.")
 
 
 def _ledger_index(record: dict) -> tuple[dict, dict[str, list[dict]]]:
@@ -1336,7 +1453,7 @@ def _source_read(
     its read in the row: the text digest, ``pages_read``, ``rule_set_version``
     and the ``citation_rows`` it produced. A held field's read is recorded in
     :data:`HELD_FIELD_READS`, when published: the latest read of the field's
-    current text that states its rule set and rows.
+    current text, with or without a rule set.
     """
     from spicy_regs.citation_sources import TEXT_SOURCES, source_digests
 
@@ -1353,10 +1470,13 @@ def _source_read(
         else:
             values = [(digest, False, None) for (digest,) in source_digests(cursor, kind, key)]
             if len(values) == 1 and values[0][0] and not cited and HELD_FIELD_READS in tables:
+                # Every read published so far states no rule set and no time (round 6, 13 of 13): the dictionary
+                # calls that a read recorded before the table existed. An undated read stating rows outranks one
+                # stating none, so a disagreement refuses rather than reading as "none found".
                 read = cursor.execute(
                     f'SELECT CAST(citation_rows AS BIGINT) FROM "{HELD_FIELD_READS}" WHERE document_kind = ? '
-                    "AND document_key = ? AND text_sha256 = ? AND rule_set_version IS NOT NULL "
-                    "ORDER BY read_at DESC LIMIT 1",
+                    "AND document_key = ? AND text_sha256 = ? "
+                    "ORDER BY read_at DESC NULLS LAST, CAST(citation_rows AS BIGINT) DESC LIMIT 1",
                     [kind, key, values[0][0]],
                 ).fetchone()
                 values = [(values[0][0], read is not None, read[0] if read is not None else None)]
@@ -1400,13 +1520,17 @@ def _compact_occurrences(occurrences: list[dict[str, Any]]) -> tuple[list[dict[s
     :data:`OCCURRENCE_DOCUMENT_FIELDS` go to ``shared`` and
     :data:`OCCURRENCE_KIND_FIELDS` to ``by_cite_kind``, each where every
     occurrence in its scope agrees (else to ``not_hoisted``, left on each
-    occurrence); target_kind and normalized_key leave an occurrence where they
-    equal cite_kind and target_key (``same_as``). cite_kind stays on every
-    occurrence, so ``{**shared, **by_cite_kind[cite_kind], **occurrence}`` is
-    the row. The resolver's rows and the queue built from them are unchanged.
+    occurrence); a field of :data:`OCCURRENCE_SAME_AS` leaves an occurrence
+    where it equals the field it names (``same_as`` lists those the rows
+    hold). cite_kind stays on every occurrence, so ``{**shared,
+    **by_cite_kind[cite_kind], **occurrence}`` is the row. ``occurrence_key``,
+    a digest of six fields the row states (round 6: a fifth of each
+    occurrence), is left out: the queue names occurrences by their spans. The
+    resolver's rows and the queue built from them are unchanged.
     """
-    rows = [{key: value for key, value in row.items()
-             if not (key in OCCURRENCE_SAME_AS and value == row.get(OCCURRENCE_SAME_AS[key]))} for row in occurrences]
+    same_as = {field: other for field, other in OCCURRENCE_SAME_AS.items() if any(field in row for row in occurrences)}
+    rows = [{key: value for key, value in row.items() if key != "occurrence_key"
+             and not (key in same_as and value == row.get(same_as[key]))} for row in occurrences]
     shared, not_hoisted = _hoist(rows, OCCURRENCE_DOCUMENT_FIELDS)
     groups: dict[Any, list[dict[str, Any]]] = {}
     for row in rows:
@@ -1419,31 +1543,80 @@ def _compact_occurrences(occurrences: list[dict[str, Any]]) -> tuple[list[dict[s
                 if key not in shared and key not in by_kind[row.get("cite_kind")]} for row in rows]
     return compact, {
         "hoisted": {"shared": list(OCCURRENCE_DOCUMENT_FIELDS), "by_cite_kind": list(OCCURRENCE_KIND_FIELDS)},
-        "shared": shared, "by_cite_kind": by_kind, "not_hoisted": not_hoisted, "same_as": OCCURRENCE_SAME_AS,
-        "meaning": "Each occurrence is {**shared, **by_cite_kind[its cite_kind], **occurrence}; one without target_kind "
-                   "or normalized_key has its cite_kind or target_key there. A hoisted field whose values differ "
-                   "on this page is named in not_hoisted and stays on each occurrence.",
+        "shared": shared, "by_cite_kind": by_kind, "not_hoisted": not_hoisted, "same_as": same_as,
+        "meaning": "Each occurrence is {**shared, **by_cite_kind[its cite_kind], **occurrence}; a same_as field it "
+                   "lacks equals the field named there. A hoisted field whose values differ on this page is named in "
+                   "not_hoisted and stays on each occurrence. occurrence_key, a digest of fields each occurrence "
+                   "states, is left out.",
     }
 
 
-def _compact_queue(queue: dict[str, Any]) -> dict[str, Any]:
-    """The acquisition queue with its fixed fields (QUEUE_ITEM_FIELDS, QUEUE_REQUEST_FIELDS) stated once in
-    ``shared_fields`` where the whole reply agrees; the same projection as :func:`_compact_occurrences`."""
-    items = [{key: value for key, value in item.items() if key != "requesting_occurrences"} for item in queue["items"]]
-    requests = [request for item in queue["items"] for request in item["requesting_occurrences"]]
-    (item_shared, item_varying), (request_shared, request_varying) = (
-        _hoist(items, QUEUE_ITEM_FIELDS), _hoist(requests, QUEUE_REQUEST_FIELDS))
-    return {**queue, "items": [
-        {**{key: value for key, value in item.items() if key not in item_shared},
-         "requesting_occurrences": [{key: value for key, value in request.items() if key not in request_shared}
-                                    for request in full["requesting_occurrences"]]}
-        for item, full in zip(items, queue["items"], strict=True)
+def _compact_queue(queue: dict[str, Any], input_snapshot: Mapping[str, Any]) -> dict[str, Any]:
+    """The acquisition queue stated against the reply it sits in; nothing is left out that the reply does not state.
+
+    An item names its requesting occurrences by span (``requesting_spans``): each is an occurrence of the reply
+    whose cite_kind and target_key are the item's target_kind and normalized_key, which states every field a
+    request restated but ``input_snapshot``, stated once (round 6: requests were 14,903 of a 102,942-character
+    reply). :data:`QUEUE_ITEM_FIELDS` are stated once and :data:`QUEUE_KIND_FIELDS` once per target kind where
+    they agree; a route's ``native_identifier`` leaves it where it equals ``normalized_key``, and the queue's
+    ``resolution_coverage`` where it is the reply's ``coverage``. Same projection as :func:`_compact_occurrences`.
+    """
+    items = []
+    for item in queue["items"]:
+        compact = {key: value for key, value in item.items() if key != "requesting_occurrences"}
+        if item["provider_route"].get("native_identifier") == item["normalized_key"]:
+            compact["provider_route"] = {key: value for key, value in item["provider_route"].items()
+                                         if key != "native_identifier"}
+        items.append({**compact, "requesting_spans": list(dict.fromkeys(
+            request["span_start"] for request in item["requesting_occurrences"]))})
+    shared, not_hoisted = _hoist(items, QUEUE_ITEM_FIELDS)
+    groups: dict[Any, list[dict[str, Any]]] = {}
+    for item in items:
+        groups.setdefault(item["target_kind"], []).append(item)
+    by_kind = {}
+    for kind, group in groups.items():
+        by_kind[kind], varying = _hoist(group, QUEUE_KIND_FIELDS)
+        not_hoisted += [field for field in varying if field not in not_hoisted]
+    coverage = {key: value for key, value in queue["coverage"].items() if key != "resolution_coverage"}
+    return {**queue, "coverage": coverage, "items": [
+        {key: value for key, value in item.items() if key not in shared and key not in by_kind[item["target_kind"]]}
+        for item in items
     ], "shared_fields": {
-        "hoisted": {"item": list(QUEUE_ITEM_FIELDS), "requesting_occurrence": list(QUEUE_REQUEST_FIELDS)},
-        "item": item_shared, "requesting_occurrence": request_shared, "not_hoisted": item_varying + request_varying,
-        "meaning": "Each item is {**item, **its fields}, and each requesting occurrence {**requesting_occurrence, "
-                   "**its fields}. Stated once, not omitted.",
+        "hoisted": {"item": list(QUEUE_ITEM_FIELDS), "by_target_kind": list(QUEUE_KIND_FIELDS)},
+        "item": shared, "by_target_kind": by_kind, "not_hoisted": not_hoisted, "input_snapshot": dict(input_snapshot),
+        "same_as": {"provider_route.native_identifier": "normalized_key", "coverage.resolution_coverage": "coverage"},
+        "meaning": "Each item is {**item, **by_target_kind[its target_kind], **its fields}. Each requesting_spans "
+                   "entry is the span_start of an occurrence above whose cite_kind and target_key are the item's "
+                   "target_kind and normalized_key: that occurrence, with input_snapshot, is the request. A same_as "
+                   "field left out equals the field named there (coverage is this reply's).",
     }}
+
+
+def _refuse_oversized_page(reply: dict[str, Any], page: Callable[[list[dict[str, Any]]], dict[str, Any]],
+                           occurrences: list[dict[str, Any]], offset: int) -> None:
+    """Refuse a citation page past REPLY_CHARS, naming how many of its first occurrences fit and how to page them.
+
+    A page's size never falls as occurrences are added (each brings its fields and its queue entry, and can only
+    stop a field being stated once), so the largest page that fits is found by halving: about seven page builds
+    for 100 occurrences, from rows already resolved, with no further read.
+    """
+    size = len(_reply_text(reply)[1])
+    if size <= REPLY_CHARS:
+        return
+    fit, over = 0, len(occurrences)
+    while over - fit > 1:
+        middle = (fit + over) // 2
+        if len(_reply_text(page(occurrences[:middle]))[1]) <= REPLY_CHARS - RE_ASK_CHARS:
+            fit = middle
+        else:
+            over = middle
+    over_limit = f"This page would be {size:,} characters, over the {REPLY_CHARS:,}-character reply limit; nothing is " \
+                 "returned."
+    if not fit:
+        raise ValueError(f"{over_limit} Not even its first occurrence fits; cite_kind selects one kind's occurrences.")
+    raise ValueError(
+        f"{over_limit} The first {fit} of its {len(occurrences)} occurrences fit: ask again with max_occurrences={fit} "
+        f"and offset={offset}, then offset={offset + fit} for the next page (cite_kind selects one kind).")
 
 
 def _unheld_document(cursor: duckdb.DuckDBPyConnection, kind: str, key: str, parent: str) -> str:
@@ -1463,8 +1636,49 @@ def _unheld_document(cursor: duckdb.DuckDBPyConnection, kind: str, key: str, par
             f"case-sensitive, and {kind} covers only the documents {parent} holds.{hint}")
 
 
-def _register_tools(mcp: MCPServer) -> None:
+def _argument_problem(error: Mapping[str, Any]) -> str:
+    """One argument error in plain words: ``sql is required`` or ``max_rows: Input should be ...``."""
+    where = ".".join(map(str, error["loc"]))
+    return f"{where} is required" if error["type"] == "missing" else f"{where}: {error['msg']}"
+
+
+class _StrictTool(Tool):
+    """A tool that refuses an argument it does not declare and states every argument error in plain words.
+
+    MCPServer's argument model ignores an undeclared argument, so a misspelled ``offest`` ran page 0 with nothing
+    said (round 6), and a bound failed in pydantic's own text with a link to its documentation. The refusal names
+    each problem, then the arguments the tool takes; the schema says ``additionalProperties: false``.
+    """
+
+    async def run(self, arguments: dict[str, Any], context: Any, convert_result: bool = False) -> Any:
+        names = sorted(self.parameters["properties"])
+        problems = [f"{name} is not an argument" for name in sorted(set(arguments) - set(names))]
+        cause = None
+        try:
+            self.fn_metadata.validate_arguments({key: value for key, value in arguments.items() if key in names})
+        except ValidationError as error:
+            cause = error  # MCPServer then logs the field names only, never the caller's values
+            problems += [_argument_problem(e) for e in error.errors(include_url=False, include_input=False)]
+        if problems:
+            raise ToolError(f"Error executing tool {self.name}: {'; '.join(problems)}. "
+                            f"{self.name} takes {', '.join(names)}.") from cause
+        return await super().run(arguments, context, convert_result)
+
+    @classmethod
+    def strict(cls, fn: Callable[..., Any], description: str) -> Tool:
+        """``fn`` as a tool whose schema refuses other arguments and drops pydantic's titles, which repeat each name
+        and count against the client's description cap."""
+        tool = cls.from_function(fn, description=description)
+        schema = {key: value for key, value in tool.parameters.items() if key != "title"}
+        schema["properties"] = {name: {key: value for key, value in field.items() if key != "title"}
+                                for name, field in schema["properties"].items()}
+        return tool.model_copy(update={"parameters": {**schema, "additionalProperties": False}})
+
+
+def _tools() -> list[Tool]:
+    """The five tools, each run on a worker thread under one limiter and refusing an argument it does not declare."""
     limiter = anyio.CapacityLimiter(TOOL_CONCURRENCY)
+    tools: list[Tool] = []
 
     def tool(fn: Callable[..., dict[str, Any]]) -> Callable[..., Any]:
         """Register ``fn`` to run on a worker thread, at most TOOL_CONCURRENCY calls at once, off the event loop.
@@ -1485,15 +1699,15 @@ def _register_tools(mcp: MCPServer) -> None:
                 result = await anyio.to_thread.run_sync(functools.partial(fn, **arguments), limiter=limiter)
             except Exception as exc:
                 raise ToolError(str(exc)) from exc
-            structured = pydantic_core.to_jsonable_python(result, fallback=str)
-            text = pydantic_core.to_json(structured).decode()
+            structured, text = _reply_text(result)
             return CallToolResult(content=[TextContent(type="text", text=text)], structured_content=structured)
 
-        return mcp.tool(description=inspect.cleandoc(fn.__doc__ or ""))(call)
+        tools.append(_StrictTool.strict(call, inspect.cleandoc(fn.__doc__ or "")))
+        return call
 
     @tool
     def lookup_agency(
-        namespace: Annotated[str, Field(min_length=1, max_length=256)],
+        namespace: Namespace,
         identifier: Annotated[str, Field(min_length=1, max_length=256)],
         on_date: Annotated[str | None, Field(pattern=r"^\d{4}-\d{2}-\d{2}$")] = None,
     ) -> dict[str, Any]:
@@ -1502,10 +1716,15 @@ def _register_tools(mcp: MCPServer) -> None:
         Namespaces are regulations.gov:agency (e.g. OPM) and
         federal_register_agency (e.g. 406). Labels are not identifiers.
         Return mapping evidence, publication pins and documented abstentions.
-        Parent relationships and succession events are not identity. REF-072 bridge
-        and event evidence stays separate from REF-038 candidates. Current-lineage
-        lookup follows the owner policy without dates; on_date preserves evidence
-        but cannot establish historical identity.
+        Parent relationships and succession events are not identity: whether
+        two names are one agency is the registry's own judgment, stated in each
+        evidence row's reasoning sentence. parent_labels gives each parent's
+        name where the registry's rows state one (null where none does).
+        REF-072 bridge and event evidence stays separate from REF-038
+        candidates. registry_evidence.current_lineage is computed for
+        federal_register_agency ids only (a regulations.gov code reads
+        not_applicable) and follows the owner policy without dates; on_date
+        preserves evidence but cannot establish historical identity.
         No acquisition, new adjudication, or money attribution is performed.
         """
         from spicy_regs.vocabulary_mapping import lookup_agency as lookup
@@ -1514,7 +1733,7 @@ def _register_tools(mcp: MCPServer) -> None:
 
     @tool
     def list_sources() -> dict[str, Any]:
-        """List the queryable tables: each one's label, coverage kind and pinned row count, with derived views grouped.
+        """List the queryable tables by subject (null: not yet assigned): label, coverage kind and pinned rows; views grouped.
 
         coverage is the dictionary's kind: true_range, window, sampled,
         derived, not_a_range or empty; a window or a sample does not hold the
@@ -1554,13 +1773,20 @@ def _register_tools(mcp: MCPServer) -> None:
                 return {"rows": _pinned_rows(index, rulemaking, name)}
             return {"rows": export["rows"], "rows_basis": export["rows_basis"]}
 
+        # Grouped by the dictionary's subject, in the order subjects first appear in the display order; a table the
+        # dictionary gives no subject yet is in the last group. Two personas could not find the rulemaking tables
+        # among 158 listed in one run (round 6, L10).
+        subjects: dict[str | None, list[dict[str, Any]]] = {}
+        for name in available:
+            if name not in relationships:
+                subjects.setdefault(metadata.get(name, {}).get("subject"), []).append(
+                    {"table": name, "label": metadata.get(name, {}).get("label"),
+                     "coverage": metadata.get(name, {}).get("kind"), **rows(name)})
+        if None in subjects:
+            subjects[None] = subjects.pop(None)
         return {
             **_source_details(cursor),
-            "tables": [
-                {"table": name, "label": metadata.get(name, {}).get("label"), "coverage": metadata.get(name, {}).get("kind"),
-                 **rows(name)}
-                for name in available if name not in relationships
-            ],
+            "subjects": [{"subject": subject, "tables": tables} for subject, tables in subjects.items()],
             "relationship_views": [{"views": names, "summary": summary} for summary, names in views.items()],
             "unavailable_tables": [name for name in (*TABLES, *relationships) if name not in available],
             "fec_release": _fec_release_reply(cursor),
@@ -1570,32 +1796,34 @@ def _register_tools(mcp: MCPServer) -> None:
     def describe_table(table: str, detail: bool = False) -> dict[str, Any]:
         """Return a table's columns with their meanings, row identity, coverage caveats and joins.
 
-        Coverage metadata describes supported output, not this connection's
-        population or freshness. columns are the loaded view's, each with its
-        dictionary meaning (an unavailable table returns its declared columns);
-        schema_differences names any column or type the view does not share
-        with the dictionary. publication is the live data version with its
-        pinned row count, published_at (when the publisher moved the pointer to
-        this generation, not when data was read) and coverage kind; prefer its
-        rows to a count in prose. publication.inputs names each parent
-        generation a derived table was built from beside the live one;
-        input_table_current compares the parent table's bytes (its family can
-        move for another table); inputs_current is false when any lags.
-        qualification gives the live pin and the output ledger's audited pin,
-        date and disposition as separate fields, only for the ledger's
-        publisher; not_in_ledger means the table is absent from the
-        bundled output ledger, not that no other evidence exists. joins lists
-        the declared joins it makes (outgoing) and receives (incoming).
-        detail=false (default) omits each join's measurement record and the
-        ledger's statements, named in detail.omitted; detail=true returns them.
-        A derived view's column carries its source column's meaning when it
-        projects it unchanged, else its declared meaning or null.
-        For a FEC view, release_compatibility appears once: in publication when
-        available, or relationship when unavailable; detail=false keeps its pins
-        and reasons, each dependency's family and generation, and the receipts'
-        count. compatible means the captured data, interpretation and consumer
-        match the selected release, not current/net money or completeness. A
-        financial row's eligible status is only for its named purpose.
+        Coverage metadata describes supported output, not population or
+        freshness. columns are the loaded view's with dictionary meanings
+        (declared ones if unavailable); schema_differences names what the view
+        does not share with the dictionary. publication is the live data
+        version: pinned rows (prefer them to prose counts), coverage kind and
+        published_at, when the publisher moved the pointer, not when data was
+        read (basis last_object_write: the move was at or after it). inputs:
+        the parents its producer recorded (none recorded is not none; a read
+        that bypassed the download helper is not recorded), built_from beside
+        live; input_table_current compares the parent table's bytes (its
+        family can move for another table); inputs_current is false if any
+        lags, else null if any is unknown. prior_generation: the table's own
+        earlier output, not an input. snapshot_inputs: a rulemaking snapshot's
+        sources.
+        qualification: the live pin beside the output ledger's audited pin,
+        date and disposition, for the ledger's publisher only; not_in_ledger:
+        absent from the bundled output ledger, not unevidenced. joins: the
+        declared joins it makes (outgoing) and receives (incoming).
+        detail=true adds each join's measurement record and the ledger's
+        statements, which detail=false (default) names in detail.omitted.
+        A view column projecting a source column unchanged carries its
+        meaning, else its declared one or null. A FEC view's
+        release_compatibility appears once, in publication (relationship when
+        unavailable); detail=false keeps its pins, reasons, dependency
+        generations and receipt count. compatible means the captured data,
+        interpretation and consumer match the selected release, not
+        current/net money or completeness. A financial row's eligible status
+        is only for its named purpose.
         """
         cursor = _get_connection().cursor()
         with _statement_timeout(cursor):
@@ -1679,27 +1907,29 @@ def _register_tools(mcp: MCPServer) -> None:
     ) -> dict[str, Any]:
         """Run read-only SQL against configured Spicy Regs tables, returning up to max_rows rows.
 
-        Only SELECT runs; DESCRIBE, SHOW, SUMMARIZE, VALUES and the FROM-first
-        shorthand count as SELECT. Writes (COPY TO, ATTACH, CREATE, INSERT, DROP,
-        EXPORT, SET, ...) and EXPLAIN (its ANALYZE form can write) are refused.
-        One view exists per table list_sources lists. Always LIMIT exploratory
-        queries. truncated says whether rows beyond max_rows were omitted from
-        what the statement returned, not rows your own LIMIT excluded: to learn
-        whether more exist, LIMIT above max_rows or COUNT. max_cell_chars, when
-        set, cuts each text, list or struct cell (a list or struct as compact
-        JSON) to that many characters and lists each cut cell in truncated_cells
+        Only SELECT runs; DESCRIBE, SHOW, SUMMARIZE, VALUES, PRAGMA's table
+        forms and FROM-first shorthand count as SELECT. Writes (COPY TO, ATTACH,
+        CREATE, INSERT, DROP, EXPORT, SET, ...) and EXPLAIN (its ANALYZE form can
+        write) are refused. One view exists per table list_sources lists. Always
+        LIMIT exploratory queries. rows are arrays in the order of columns.
+        truncated says whether rows beyond max_rows were cut from what the
+        statement returned, not rows your LIMIT excluded: to learn whether more
+        exist, COUNT. A reply past the reply limit is refused, saying how many
+        rows fit. max_cell_chars cuts each longer text, list or struct cell (a
+        list or struct as compact JSON) and lists each cut in truncated_cells
         with its full length. To page, ORDER BY a key with LIMIT n OFFSET m. SQL
         is DuckDB's dialect: `~` matches the whole string (regexp_matches for a
-        substring, lower() for case). Selected columns need unique names; alias
-        shared names in joins. sql echoes the statement this reply answers.
-        publication gives each named table its live data version, pinned row
-        count, published_at, coverage kind (a window or sample is not the full
-        history) and, for a table built from others, inputs. Qualified-view
-        pins keep the registered meaning and purpose limits even for SELECT
-        value only; release compatible is not financial eligibility or
-        current/net-money qualification. Call describe_table for full release
-        evidence. Compare receipt, SQL, input and evidence pins after refresh; a
-        later description may name a different release.
+        substring, lower() for case). Alias shared column names in joins. sql
+        echoes the statement. publication gives each named table its live data
+        version, pinned rows, published_at, coverage kind (a window or sample is
+        not the full history) and inputs: the parents its producer recorded
+        (none recorded is not none; a read that bypassed the download helper
+        is not recorded), as describe_table explains. Qualified-view pins keep
+        the registered meaning and purpose limits even for SELECT value only;
+        release compatible is not financial eligibility or current/net-money
+        qualification. Call describe_table for full release evidence. Compare
+        receipt, SQL, input and evidence pins after refresh; a later description
+        may name a different release.
         """
         cursor = _get_connection().cursor()
         write_statement = _first_write_statement(cursor, sql)
@@ -1721,9 +1951,11 @@ def _register_tools(mcp: MCPServer) -> None:
             publication = _publication_status(cursor)["publication"]
             named = _tables_named(cursor, sql)
             pins = _reply_pins(cursor, publication, [name for name in publication if name in named])
-        result_rows = [{col: _jsonify(val) for col, val in zip(columns, row)} for row in rows[:max_rows]]
-        truncated_cells = _bounded_cells(result_rows, max_cell_chars)
-        return {
+        # Each row is an array in the order of columns, which the reply states once: names repeated on every row
+        # were 32% of a 399-row reply (round 6, ulrike's call 12).
+        result_rows = [[_jsonify(value) for value in row] for row in rows[:max_rows]]
+        truncated_cells = _bounded_cells(result_rows, columns, max_cell_chars)
+        reply = {
             "sql": sql,
             **_source_details(cursor),
             "columns": columns,
@@ -1735,6 +1967,8 @@ def _register_tools(mcp: MCPServer) -> None:
             "rows": result_rows,
             "publication": _query_reply_pins(pins, relationships),
         }
+        _refuse_oversized_rows(reply)
+        return reply
 
     @tool
     def resolve_document_citations(
@@ -1750,19 +1984,20 @@ def _register_tools(mcp: MCPServer) -> None:
         """Resolve a bounded document's held citations against this connection's selected targets.
 
         Findings keep spelling, text digest and rule; lookup checks neither
-        precision nor legal effect. acquisition_queue plans missing targets;
+        precision nor legal effect. target_status_meaning defines each
+        target_status the reply uses. acquisition_queue plans missing targets;
         nothing is acquired. document_kind is case-insensitive; its schema
         names each kind's table, whose key document_key takes
         (govinfo_package covers only house_activity_reports). document_key is exact and
         case-sensitive; a composite key is a compact JSON list in key order. A
-        key that no table or citation row holds is refused.
-        source_read.status read_none_found: read, none found; not_read: no read
-        record (a held field's is in document_citation_reads, if published);
-        not_held: no longer held.
+        key nothing holds is refused. source_read.status read_none_found: read,
+        none found; not_read: no read record (a held field's is in
+        document_citation_reads); not_held: no longer held.
         Rows run in cite_kind order, then text position; cite_kind selects a
-        kind, offset pages, and coverage.cite_kind_counts counts every kind.
-        Fixed per-document and per-kind fields are stated once (listed in
-        occurrence_fields.hoisted). coverage.partial: rows left out of
+        kind, offset pages, and coverage.cite_kind_counts counts every kind. A
+        page past the reply limit is refused with how many occurrences fit.
+        occurrence_fields and acquisition_queue.shared_fields explain fields
+        stated once. coverage.partial: rows left out of
         this page, an occurrence not looked up (reason_counts) or an unread
         document; never whole-document coverage.
         """
@@ -1827,30 +2062,42 @@ def _register_tools(mcp: MCPServer) -> None:
             }
             if capped or offset or source_read["status"] == "not_read":
                 result["coverage"]["partial"] = True
-        reply = _jsonify(result)
-        occurrences, fields = _compact_occurrences(reply.pop("occurrences"))
-        return {
-            **_source_details(cursor), "occurrences": occurrences, "occurrence_fields": fields, **reply,
-            "document_kind": document_kind, "document_key": document_key,
-            "max_occurrences": max_occurrences, "truncated": capped,
-            "source_read": source_read,
-            "acquisition_queue": _compact_queue(build_missing_target_queue(
-                result, input_snapshots={document_kind: status["publication"].get(parent, {})},
-                intended_query="Resolve the cited target for this held document", max_items=max_occurrences,
-            )),
-            # Each resolved target carries its own target_snapshot; this names the tables the lookup read.
-            "publication": _reply_pins(cursor, status["publication"], [
-                name for name in ("document_citations", parent, *([HELD_FIELD_READS] if held_field else ()))
-                if name in status["publication"]
-            ]),
-        }
+        # Each resolved target carries its own target_snapshot; publication names the tables the lookup read.
+        pins = _reply_pins(cursor, status["publication"], [
+            name for name in ("document_citations", parent, *([HELD_FIELD_READS] if held_field else ()))
+            if name in status["publication"]
+        ])
+        source_pin = status["publication"].get(parent, {})
+
+        def page(resolved: list[dict[str, Any]]) -> dict[str, Any]:
+            """The reply for ``resolved``: this page's occurrences, or the first of them when sizing a refusal."""
+            selected = {**result, "occurrences": resolved}
+            reply = _jsonify(selected)
+            occurrences, fields = _compact_occurrences(reply.pop("occurrences"))
+            return {
+                **_source_details(cursor), "occurrences": occurrences, "occurrence_fields": fields,
+                "target_status_meaning": {status: TARGET_STATUS_MEANINGS[status]
+                                          for status in sorted(reply["coverage"]["target_status_counts"])}, **reply,
+                "document_kind": document_kind, "document_key": document_key,
+                "max_occurrences": max_occurrences, "truncated": capped,
+                "source_read": source_read,
+                "acquisition_queue": _compact_queue(build_missing_target_queue(
+                    selected, input_snapshots={document_kind: source_pin},
+                    intended_query="Resolve the cited target for this held document", max_items=max_occurrences,
+                ), source_pin),
+                "publication": pins,
+            }
+
+        reply = page(result["occurrences"])
+        _refuse_oversized_page(reply, page, result["occurrences"], offset)
+        return reply
+
+    return tools
 
 
 def build_server() -> MCPServer:
     """Build the MCP server with discovery, read-only queries and citation lookup; stdio, or HTTP via build_app."""
-    mcp = MCPServer("spicy-regs", instructions=INSTRUCTIONS, icons=ICONS)
-    _register_tools(mcp)
-    return mcp
+    return MCPServer("spicy-regs", instructions=INSTRUCTIONS, icons=ICONS, tools=_tools())
 
 
 STATIC_DIR = Path(__file__).parent / "static"

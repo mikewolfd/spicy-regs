@@ -12,7 +12,7 @@ from spicy_regs import mcp_server as server
 from spicy_regs.data_dictionary import COVERAGE_KINDS
 from tests.test_fec_release import digest
 from tests.test_mcp_fec_release import configure, connection
-from tests.test_mcp_server import _tool_data
+from tests.test_mcp_server import _listed, _records, _tool_data
 
 
 def test_discovery_summarizes_mixed_release_states_and_names_each_view(tmp_path, monkeypatch):
@@ -32,7 +32,7 @@ def test_discovery_summarizes_mixed_release_states_and_names_each_view(tmp_path,
         assert specs[1].view.name in available
         assert specs[0].view.name not in available
         assert specs[0].view.name in discovery["unavailable_tables"]
-        assert "fec_receipts" in {entry["table"] for entry in discovery["tables"]}
+        assert "fec_receipts" in {entry["table"] for entry in _listed(discovery)}
         selected = _tool_data(mcp, "describe_table", {"table": specs[0].view.name})
         assert selected["relationship"]["release_compatibility"]["reasons"]
         assert selected["relationship"]["release_compatibility"]["receipt_sha256"] == summary["receipt_sha256"]
@@ -73,7 +73,7 @@ def test_selected_description_carries_evidence_once_without_changing_pinned_stat
             assert pin["input_publications"] == description["publication"]["input_publications"]
             assert "dependencies" not in pin["release_compatibility"]
             assert pin["release_compatibility"]["receipt_sha256"] == expected["release_compatibility"]["receipt_sha256"]
-            assert queried["rows"] == [{"id": 1}]
+            assert _records(queried) == [{"id": 1}]
         else:
             assert description["publication"] == {"status": "unavailable"}
             assert description["schema_matches_declared"] is None
@@ -184,7 +184,7 @@ def test_later_description_can_name_a_different_receipt_after_refresh(tmp_path, 
             monkeypatch.setattr(server, "_get_connection", lambda: new)
             full = _tool_data(mcp, "describe_table", {"table": name})
             current = _tool_data(mcp, "query_sql", {"sql": f"SELECT * FROM {name}"})
-            assert current["rows"] == prior["rows"] == [{"id": 1}]
+            assert _records(current) == _records(prior) == [{"id": 1}]
             assert current["publication"][name]["release_compatibility"]["receipt_sha256"] == (
                 full["publication"]["release_compatibility"]["receipt_sha256"]
             )

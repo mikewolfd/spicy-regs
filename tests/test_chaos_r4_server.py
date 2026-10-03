@@ -26,12 +26,15 @@ from tests.test_generation_mcp import connection_fixture, serve_documents
 from tests.test_mcp_fec_release import configure, connection
 from tests.test_mcp_query_results import call
 from tests.test_mcp_relationships import citation_connection
-from tests.test_mcp_server import _tool_data
+from tests.test_mcp_server import _listed, _tool_data
 
 # The client's cap is 2,048 characters (Claude Code's MAX_MCP_DESCRIPTION_LENGTH default), and it counts the
 # compact input schema with the description: round 5 saw query_sql's 1,728 + 322 = 2,050 cut at character 1,711
 # for three personas while describe_table's 1,832 + 190 = 2,022 was not (round5/audit-oyelaran.md, finding 5).
 CLIENT_BUDGET = 2_048
+#: Room every tool keeps under the cap (round 6 review, item 2): rounds 5 and 6 ended 4 to 16 characters under it, so
+#: one more word or a schema change in a pydantic release would cut a description mid-sentence.
+HEADROOM = 40
 
 
 # S3 and the double send: what the client is sent.
@@ -41,7 +44,7 @@ def test_every_registered_description_fits_the_client_cap_without_indentation():
     for tool in tools:
         description = tool.description or ""
         sent = len(description) + len(json.dumps(tool.input_schema, separators=(",", ":")))
-        assert sent <= CLIENT_BUDGET, (tool.name, len(description), sent)
+        assert sent <= CLIENT_BUDGET - HEADROOM, (tool.name, len(description), sent)
         assert not any(line[:1].isspace() for line in description.splitlines()), tool.name
 
 
@@ -202,7 +205,7 @@ def test_a_matching_export_receipt_states_its_rows_labelled_as_an_export(tmp_pat
     con = server._build_connection()
     monkeypatch.setattr(server, "_get_connection", lambda: con)
     mcp = server.build_server()
-    [entry] = [t for t in _tool_data(mcp, "list_sources", {})["tables"] if t["table"] == "comments_index"]
+    [entry] = [t for t in _listed(_tool_data(mcp, "list_sources", {})) if t["table"] == "comments_index"]
     assert entry["rows"] == 143_564 and entry["rows_basis"] == "comments_export_receipt"
     assert heads == [f"{server.R2_BASE_URL}/comments_index.parquet"]  # only the served export, not every listed file
     pin = _tool_data(mcp, "describe_table", {"table": "comments_index"})["publication"]
@@ -224,7 +227,7 @@ def test_an_export_object_that_moved_since_its_receipt_states_no_rows(tmp_path, 
     built, _ = _export_server(tmp_path, monkeypatch, etag='"moved"')
     con = server._build_connection()
     monkeypatch.setattr(server, "_get_connection", lambda: con)
-    [entry] = [t for t in _tool_data(server.build_server(), "list_sources", {})["tables"]
+    [entry] = [t for t in _listed(_tool_data(server.build_server(), "list_sources", {}))
                if t["table"] == "comments_index"]
     assert entry["rows"] is None and entry["rows_basis"] == "export_receipt_does_not_match_object"
     built[0].inner.close()
@@ -234,7 +237,7 @@ def test_without_a_receipt_an_export_states_no_rows_and_no_basis(tmp_path, monke
     built, heads = _export_server(tmp_path, monkeypatch, receipt=None)
     con = server._build_connection()
     monkeypatch.setattr(server, "_get_connection", lambda: con)
-    [entry] = [t for t in _tool_data(server.build_server(), "list_sources", {})["tables"]
+    [entry] = [t for t in _listed(_tool_data(server.build_server(), "list_sources", {}))
                if t["table"] == "comments_index"]
     assert entry == {"table": "comments_index", "label": entry["label"], "coverage": entry["coverage"], "rows": None}
     assert heads == []

@@ -18,7 +18,7 @@ from spicy_regs.citation_resolution import SOURCE_TABLES
 from spicy_regs.sources import publication as pub
 from spicy_regs.sources.publication import read_pinned_root  # bound before conftest keeps roots off the network
 from tests.test_mcp_relationships import citation_connection, merged_occurrences
-from tests.test_mcp_server import _tool_data
+from tests.test_mcp_server import _listed, _tool_data
 
 
 def _resolve(con, monkeypatch, **arguments):
@@ -245,7 +245,9 @@ def test_a_held_field_read_that_found_nothing_is_read_none_found(monkeypatch):
 @pytest.mark.parametrize("reads", [
     [],  # never read
     [("sha256:" + "0" * 64, "rules", "2026-09-01T00:00:00Z", 0)],  # read, but an earlier text of the field
-    [(HELD, None, "2026-10-03T12:00:00Z", 0)],  # a read row stating no rule set is no read record
+    # Round 6 dropped "a read row stating no rule set is no read record": every published read states none, which
+    # the dictionary documents as normal, so the filter turned every recorded read into not_read
+    # (test_chaos_r6_server.test_a_zero_row_read_recorded_without_a_rule_set_or_time_is_read_none_found).
 ])
 def test_a_held_field_with_no_read_of_its_current_text_is_not_read(monkeypatch, reads):
     with citation_connection() as con:
@@ -361,14 +363,13 @@ def test_the_acquisition_queue_states_its_constant_fields_once(monkeypatch):
         con.execute("UPDATE _spicy_publication SET snapshot = ?", [json.dumps(index)])
         queue = _resolve(con, monkeypatch)["acquisition_queue"]
     shared = queue["shared_fields"]
-    assert {"document_kind", "document_key", "text_sha256", "input_snapshot"} <= set(shared["requesting_occurrence"])
+    # Round 6 (owner decision: shrink replies) names each requesting occurrence by its span on the page, which states
+    # every field a request restated; test_chaos_r6_server rebuilds the whole queue from the reply.
+    assert shared["input_snapshot"]["family"] == "print-citations"
     assert {"intended_query", "queue_rule", "acquisition_outcome"} <= set(shared["item"])
-    items = [{**shared["item"], **item, "requesting_occurrences": [
-        {**shared["requesting_occurrence"], **request} for request in item["requesting_occurrences"]]}
-        for item in queue["items"]]
-    assert [(item["normalized_key"], [r["span_start"] for r in item["requesting_occurrences"]]) for item in items] == [
+    assert {"target_snapshot", "status"} <= set(shared["by_target_kind"]["public_law"])
+    assert [(item["normalized_key"], item["requesting_spans"]) for item in queue["items"]] == [
         ("93-public-344", ["40", "50"]), ("94-public-1", ["60"])]
-    assert all(r["document_key"] == "CRPT-example" for item in items for r in item["requesting_occurrences"])
 
 
 # Freshness: the publisher states when it moved a family's pointer; every reply that pins a generation says so.
@@ -404,7 +405,7 @@ def test_replies_state_when_the_publisher_moved_the_pointer(monkeypatch, publish
         queried = _tool_data(mcp, "query_sql", {"sql": "SELECT count(*) AS n FROM laws"})["publication"]["laws"]
         cited = _tool_data(mcp, "resolve_document_citations",
                            {"document_kind": "govinfo_package", "document_key": "CRPT-example"})
-        listed = {row["table"]: row for row in _tool_data(mcp, "list_sources", {})["tables"]}
+        listed = {row["table"]: row for row in _listed(_tool_data(mcp, "list_sources", {}))}
         status = server._publication_status(con)["publication"]["laws"]
     assert described["published_at"] == queried["published_at"] == published_at
     assert "published_at" in described and "published_at" in queried
@@ -536,7 +537,7 @@ def test_roots_are_read_lazily_once_per_generation_and_never_for_discovery(monke
         assert reads == []
         for _ in range(3):
             _tool_data(mcp, "describe_table", {"table": "discovery_signals"})
-        listed = {row["table"]: row for row in _tool_data(mcp, "list_sources", {})["tables"]}
+        listed = {row["table"]: row for row in _listed(_tool_data(mcp, "list_sources", {}))}
     assert reads == [SIGNALS] and "inputs" not in listed["discovery_signals"]
 
 

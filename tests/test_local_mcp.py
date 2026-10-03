@@ -14,7 +14,7 @@ from spicy_regs import mcp_server
 from spicy_regs.local_data import local_selection
 from spicy_regs.sources import publication
 from tests.test_cli_generations import _download, _remote
-from tests.test_mcp_server import _tool_data
+from tests.test_mcp_server import _listed, _records, _tool_data
 
 
 def serve(monkeypatch, directory):
@@ -41,7 +41,7 @@ def test_local_batch_exposes_selected_members_and_verified_pins(tmp_path, monkey
     con, server = serve(monkeypatch, directory)
     try:
         sources = _tool_data(server, "list_sources", {})
-        assert [entry["table"] for entry in sources["tables"]] == ["a", "dockets"]
+        assert [entry["table"] for entry in _listed(sources)] == ["a", "dockets"]
         assert sources["selected_directory"] == str(batch)
         pin = _tool_data(server, "describe_table", {"table": "a"})["publication"]
         assert pin["status"] == "managed_download"
@@ -51,7 +51,7 @@ def test_local_batch_exposes_selected_members_and_verified_pins(tmp_path, monkey
             "status": "local_unversioned", "coverage": mcp_server._table_metadata()["dockets"]["kind"]
         }
         rows = _tool_data(server, "query_sql", {"sql": "SELECT id FROM a"})
-        assert rows["rows"] == [{"id": "old-a"}]
+        assert _records(rows) == [{"id": "old-a"}]
         # A query reports the version of each table it names, and only those.
         assert rows["publication"] == {"a": pin}
     finally:
@@ -94,12 +94,12 @@ def test_current_switch_keeps_existing_connection_and_refreshes_next_one(tmp_pat
     new = _download(tmp_path, "a", "b")
     try:
         old_result = _tool_data(server, "query_sql", {"sql": "SELECT a.id AS a, b.id AS b FROM a, b"})
-        assert old_result["rows"] == [{"a": "old-a", "b": "old-b"}]
+        assert _records(old_result) == [{"a": "old-a", "b": "old-b"}]
         assert old_result["selected_directory"] == str(old)
         new_con, new_server = serve(monkeypatch, configured)
         try:
             result = _tool_data(new_server, "query_sql", {"sql": "SELECT a.id AS a, b.id AS b FROM a, b"})
-            assert result["rows"] == [{"a": "new-a", "b": "new-b"}]
+            assert _records(result) == [{"a": "new-a", "b": "new-b"}]
             assert result["selected_directory"] == str(new)
         finally:
             new_con.close()
@@ -172,6 +172,6 @@ def test_managed_local_mcp_needs_no_optional_provider(tmp_path, monkeypatch):
     monkeypatch.setattr(builtins, "__import__", base_only)
     con, server = serve(monkeypatch, tmp_path)
     try:
-        assert _tool_data(server, "query_sql", {"sql": "SELECT id FROM a"})["rows"] == [{"id": "old-a"}]
+        assert _records(_tool_data(server, "query_sql", {"sql": "SELECT id FROM a"})) == [{"id": "old-a"}]
     finally:
         con.close()
