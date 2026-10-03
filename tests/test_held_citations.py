@@ -209,6 +209,20 @@ def test_a_held_read_that_finds_nothing_is_a_document_citation_reads_row(tmp_pat
     assert {row["document_kind"] for row in rows.values()} == {"comment_inline"}
 
 
+def test_each_read_states_the_input_generation_it_read(tmp_path):
+    """The checkpoint pins the source table each read came from; the reads table keeps that pin, not only the
+    citation table's Parquet metadata, which the server never reads (round 6, H2)."""
+    pin = {"family": "comments-text", "artifactDigest": "sha256:" + "b" * 64, "sha256": "sha256:" + "a" * 64,
+           "byteSize": 1234}
+    with connection() as con:
+        con.execute("INSERT INTO comments VALUES ('empty', 'No references here.')")
+        citations = held.build_held_citations(tmp_path, cursor=con, selections=[held.Selection("comment_inline", ("empty",))],
+                                              input_pins={"comments": pin}, download_prior=lambda *_: False)
+    [row] = pq.read_table(held.write_citation_reads(tmp_path, citations)).to_pylist()
+    assert (row["source_table"], row["input_family"], row["input_generation"], row["input_sha256"]) == (
+        "comments", "comments-text", "sha256:" + "b" * 64, "sha256:" + "a" * 64)
+
+
 def test_a_read_from_before_the_reads_table_states_no_time_or_rule_set(tmp_path):
     """A checkpoint written before read_at and rule_set_version existed is still a read, with those two NULL."""
     with connection() as con:
@@ -237,3 +251,19 @@ def test_the_print_citations_family_rebuilds_the_reads_from_its_merged_citation_
     assert [row["document_key"] for row in pq.read_table(reads).to_pylist()] == ["empty"]
     assert rollup.PrintCitationsRollup.outputs[-1] == "document_citation_reads.parquet"
     assert rollup.PrintCitationsRollup.added_tables == ("document_citation_reads.parquet",)
+
+
+def test_the_held_citations_rollup_records_its_familys_citation_table_as_no_parent(tmp_path):
+    """document_citations belongs to print-citations, the family this partial writer updates: its prior is the
+    generation's prior-generation input (c8e49dbb recorded it as a parent before this rule)."""
+    import json
+
+    from spicy_regs.pipelines.rollups.held_citations import HeldCitationsRollup
+
+    selection = tmp_path / "selection.json"
+    selection.write_text(json.dumps({"selections": [{"kind": "comment_inline", "keys": ["a"]}],
+                                     "input_generations": {"comments": "sha256:" + "c" * 64}}))
+    (tmp_path / "document_citations.parquet").write_bytes(b"held")
+    snapshot = {"families": {"print-citations": {"artifactDigest": "sha256:" + "d" * 64, "tables": {
+        "document_citations.parquet": {"sha256": "sha256:" + "e" * 64, "byteSize": 4}}}}}
+    assert HeldCitationsRollup(selection=selection)._prime(tmp_path, snapshot) == {}

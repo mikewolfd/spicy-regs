@@ -247,10 +247,10 @@ def test_communication_rins_retain_scoped_keys_spans_and_source_digest():
     occurrence = {'rin':'1218-AC97','ordinal':0,'matched_text':'RIN 1218-AC97','span_start':20,'span_end':33,
                   'field_sha256':'field-sha','rule':'labeled-rin','rule_version':'v1'}
     table(con,'house_communications',['congress','communication_type','number','rin_occurrences_json',
-                                     'source_route','record_package_id','record_granule_id','update_date'],[
+                                     'source_route','record_package_id','record_granule_id','update_date','detail_read'],[
         ('114','ec','4329',json.dumps([occurrence,occurrence]),'congressional-record-granule',
-         'CREC-2016-02-12','CREC-2016-02-12-pt1-PgH815-4','2016-02-12'),
-        ('115','ec','4329','[]','house-communication',None,None,'2017-01-01'),
+         'CREC-2016-02-12','CREC-2016-02-12-pt1-PgH815-4','2016-02-12','true'),
+        ('115','ec','4329','[]','house-communication',None,None,'2017-01-01','true'),
     ])
     install_relationship_views(con,['house_communications'])
     result = con.execute('SELECT congress,communication_type,number,source_ordinal,target_key,field_sha256,span_start '

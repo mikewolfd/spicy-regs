@@ -89,7 +89,10 @@ _COLUMN_DESCRIPTIONS = {
     'source_field': 'The held column or native field name this row was derived from.',
     'target_kind': 'Namespace of target_key: the table or identifier kind it names.',
     'field_state': 'Literal state of the held field: sql_null, malformed_json, json_null, unsupported_shape, '
-                   'empty_array or populated_array.',
+                   'empty_array or populated_array. A view that carries detail_read says instead whether an absent '
+                   'or empty list was read: unread (its detail was not read), not_stated (read, no list stated), '
+                   'stated_empty (read, an empty list) or stated (a populated list). A detail read under an '
+                   'earlier reader spelled an unstated list as empty; the source table says which rows.',
     'array_length': 'Element count of the held array; NULL when the field is not an array.',
 }
 

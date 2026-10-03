@@ -23,7 +23,11 @@ class ArrayRelationship:
     Expressions refer to `s` (source row) and `e` (json_each element). They are
     application constants, never SQL supplied by a client. ``details`` adds
     (column, expression, meaning) triples to the occurrence view; the meaning is
-    what ``describe_table`` states for that column.
+    what ``describe_table`` states for that column. ``detail_read_column`` names
+    the source column that says a detail record was read (``'true'``), on a
+    table whose array is only read with that detail: the field-state view then
+    carries it and says whether an absent or empty array was ever read
+    (:data:`DETAIL_STATES`).
     """
 
     name: str
@@ -38,6 +42,7 @@ class ArrayRelationship:
     details: tuple[tuple[str, str, str], ...] = ()
     rule_version: str = "held-array-v1"
     target_kind_expression: str | None = None
+    detail_read_column: str | None = None
 
     @property
     def names(self) -> tuple[str, str, str]:
@@ -45,7 +50,14 @@ class ArrayRelationship:
 
     @property
     def required_columns(self) -> tuple[str, ...]:
-        return (*self.source_keys, self.source_field, *self.context_columns)
+        detail = (self.detail_read_column,) if self.detail_read_column else ()
+        return (*self.source_keys, self.source_field, *self.context_columns, *detail)
+
+
+#: A detail-backed field's states, where an absent array no longer reads as one state: ``unread`` (no detail read: the
+#: field is NULL or an empty array), ``not_stated`` (read, field NULL), ``stated_empty`` (read, empty array),
+#: ``stated`` (a populated array, read or not). Malformed and non-array values keep their literal state.
+DETAIL_STATES = ("unread", "not_stated", "stated_empty", "stated")
 
 
 def _selects(spec: ArrayRelationship, pin: object) -> tuple[str, str, str]:
@@ -81,13 +93,21 @@ def _selects(spec: ArrayRelationship, pin: object) -> tuple[str, str, str]:
     pair_sql = f"""SELECT DISTINCT {identity}, target_kind, target_key, target_status,
             source_table, source_field, source_publication_json, rule_version
         FROM {occurrences} WHERE parsing_status = 'valid' AND target_key IS NOT NULL"""
-    state_sql = f"""SELECT {source_columns}, {field} AS raw_field_value,
-            CASE WHEN {field} IS NULL THEN 'sql_null'
+    states = ("'sql_null'", "'empty_array'", "'populated_array'")
+    detail = ""
+    if spec.detail_read_column:
+        read = f"s.{quoted(spec.detail_read_column)}"
+        detail = f", {read}"
+        unread, not_stated, stated_empty, stated = (literal(state) for state in DETAIL_STATES)
+        states = (f"CASE WHEN {read} = 'true' THEN {not_stated} ELSE {unread} END",
+                  f"CASE WHEN {read} = 'true' THEN {stated_empty} ELSE {unread} END", stated)
+    state_sql = f"""SELECT {source_columns}{detail}, {field} AS raw_field_value,
+            CASE WHEN {field} IS NULL THEN {states[0]}
                  WHEN {parsed} IS NULL THEN 'malformed_json'
                  WHEN json_type({parsed}) = 'NULL' THEN 'json_null'
                  WHEN json_type({parsed}) <> 'ARRAY' THEN 'unsupported_shape'
-                 WHEN json_array_length({parsed}) = 0 THEN 'empty_array'
-                 ELSE 'populated_array' END AS field_state,
+                 WHEN json_array_length({parsed}) = 0 THEN {states[1]}
+                 ELSE {states[2]} END AS field_state,
             CASE WHEN json_type({parsed}) = 'ARRAY'
                  THEN json_array_length({parsed}) ELSE NULL END AS array_length,
             {provenance}
@@ -149,8 +169,11 @@ def install_arrays(
                     "rule_version": spec.rule_version,
                     "input_publications": {spec.source_table: publication.get(spec.source_table)},
                     "coverage": "Bounded by the loaded source selection. Target existence is not checked. "
-                    "SQL NULL describes the held field, not the absent/null state of the original publisher field. "
-                    "Pairs deduplicate navigation keys; occurrences preserve repeated source elements.",
+                    + ("A NULL or empty list is told apart by the source's "
+                       f"{spec.detail_read_column}: never read, read with no list, or read with an empty one. "
+                       if spec.detail_read_column else
+                       "SQL NULL describes the held field, not the absent/null state of the original publisher field. ")
+                    + "Pairs deduplicate navigation keys; occurrences preserve repeated source elements.",
                     **({"column_descriptions": {name: meaning for name, _, meaning in spec.details}}
                        if kind == "occurrences" and spec.details else {}),
                     **({"column_lineage": lineages[name]} if name in lineages else {}),

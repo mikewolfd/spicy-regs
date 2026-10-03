@@ -17,6 +17,7 @@ REGULATORY_RELATIONSHIPS = (
         'Every qualified RIN finding retained on the communication, with original field digest and text spans. '
         'The communication source route and Record locators remain explicit; this view does not rerun extraction.',
         context_columns=('source_route','record_package_id','record_granule_id','update_date'),
+        detail_read_column='detail_read',
         details=(('matched_text',value('matched_text'),'The exact text the RIN rule matched in report_nature.'),
                  ('span_start',value('span_start'),'Zero-based start offset of matched_text in the field, as text.'),
                  ('span_end',value('span_end'),'End offset (exclusive) of matched_text in the field, as text.'),

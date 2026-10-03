@@ -131,7 +131,8 @@ def import_package_rows(
 class GaoRPackageImport(GaoReportsRollup):
     """One ``gao-reports`` generation: the live table plus the R package's reports it lacks."""
 
-    #: The live table, primed from its pinned generation and recorded as this generation's parent.
+    #: The live table, primed from its pinned generation. It is this family's own prior, so the root names it as the
+    #: prior-generation input, not as a parent.
     inputs: ClassVar[tuple[str, ...]] = (reports.OUTPUT,)
     package_dir: ClassVar[Path] = Path(os.environ.get("GAO_R_PACKAGE_DIR", DEFAULT_DIR))
 

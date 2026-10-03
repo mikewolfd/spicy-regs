@@ -102,15 +102,14 @@ def append_missing_target(prior: Path, output: Path, *indexes: Any) -> dict:
             'table_body_storage':'unsupported'}
 
 
-def _verified_member(prior_index: Mapping, key: str, path: Path) -> dict:
-    """``path``'s identity, refusing bytes other than the ones ``prior_index`` publishes as ``key``."""
+def _verified_member(prior_index: Mapping, key: str, path: Path) -> None:
+    """Refuse ``path`` unless it holds the bytes ``prior_index`` publishes as ``key``."""
     from spicy_regs.sources import publication
 
     identity=publication.file_identity(path)
     declared=publication.table_descriptor(prior_index,key)
     if declared is None or (identity['sha256']!=declared['sha256'] or identity['bytes']!=declared['byteSize']):
         raise ValueError(f'Retained GAO {key} differs from the captured publication')
-    return identity
 
 
 def prepare_target_generation(output_dir: Path, *, prior_file: Path, prior_index: dict, public_url: str,
@@ -142,8 +141,9 @@ def prepare_target_generation(output_dir: Path, *, prior_file: Path, prior_index
         raise ValueError('Select one product id or a set of retained product pages')
     if retained_product_pages is not None and (retained_index is not None or retained_pdf is not None):
         raise ValueError('Select one retained metadata source')
-    identity=_verified_member(prior_index,key,prior_file)
-    carried_identities={name:_verified_member(prior_index,name,path) for name,path in carried.items()}
+    # Refuse bytes other than the ones the prior pins; the prior itself is named by the inputs, not as a parent.
+    for name,path in {key:prior_file,**carried}.items():
+        _verified_member(prior_index,name,path)
     evidence=CaptureEvidence(output_dir,'gao-reports')
     try:
         evidence.inherit(prior_index,public_url=public_url)
@@ -175,10 +175,7 @@ def prepare_target_generation(output_dir: Path, *, prior_file: Path, prior_index
         generation=output_dir/'generation'
         artifact=build_generation(generation,family='gao-reports',files=[output,*carried.values()],
             expected_keys=[key,*carried],read_snapshot=prior_index,inputs=evidence.inputs(),
-            carried_forward={name:owner[1]['artifactDigest'] for name in carried},
-            parents={name:{'sha256':member['sha256'],'byteSize':member['bytes'],
-                           'family':'gao-reports','artifactDigest':owner[1]['artifactDigest']}
-                     for name,member in {key:identity,**carried_identities}.items()})
+            carried_forward={name:owner[1]['artifactDigest'] for name in carried})
         verify_generation(generation,expected_pin=artifact.pin)
         report.update(status='verified_candidate_not_published',candidate_pin=artifact.pin.as_dict(),
                       generation_directory=str(generation),evidence_directory=str(evidence.artifact_dir))

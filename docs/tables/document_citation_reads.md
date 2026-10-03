@@ -21,3 +21,7 @@ One row per complete held-field read, rebuilt each run from the checkpoints `doc
 | `rule_set_version` | `VARCHAR` | The citation rule set the read ran under (`CITATION_RULE_SET_VERSION`); NULL on a read recorded before this table existed. |
 | `read_at` | `VARCHAR` | UTC time the read ran; NULL on a read recorded before this table existed. |
 | `citation_rows` | `VARCHAR` | How many citation rows the read wrote, as a decimal string; `0` for a read that found none. |
+| `source_table` | `VARCHAR` | The published table the read took the field from (`comments`, `report_sections`, ...). |
+| `input_family` | `VARCHAR` | The publication family of `source_table` the read was pinned to; NULL when its pin named none (a table no family publishes). |
+| `input_generation` | `VARCHAR` | The `source_table` generation the read was pinned to (`sha256:` artifact digest); NULL when its pin named none. A later generation of that table need not change the field: `text_sha256` is what was read. |
+| `input_sha256` | `VARCHAR` | SHA-256 of the `source_table` file the read was pinned to; NULL when its pin named none. |

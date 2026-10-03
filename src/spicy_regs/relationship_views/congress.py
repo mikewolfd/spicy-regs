@@ -25,7 +25,7 @@ MEETING_KEYS = ("congress", "chamber", "event_id")
 def meeting(name: str, field: str, kind: str, expr: str, valid: str, meaning: str) -> ArrayRelationship:
     return ArrayRelationship(
         name, "committee_meetings", MEETING_KEYS, field, kind, expr, valid, meaning,
-        context_columns=("meeting_status",),
+        context_columns=("meeting_status",), detail_read_column="detail_read",
     )
 
 

@@ -108,3 +108,103 @@ def test_the_verifier_refuses_a_parent_it_cannot_bind(tmp_path, parent):
         build_generation(tmp_path / "artifact", family="derived", files=[_table(tmp_path / "derived.parquet", "d")],
                          expected_keys=["derived.parquet"], read_snapshot=pub.empty_index(),
                          parents={"base.parquet": parent})
+
+
+# --- one rule: parents are the tables of other families the build read --------
+
+
+class _Self(RollupPipeline):
+    """A rollup that reads its own published prior, as an incremental one does."""
+
+    name: ClassVar[str] = "base"
+    inputs: ClassVar[tuple[str, ...]] = ("base.parquet",)
+    output: ClassVar[str] = "base.parquet"
+
+    def build(self, output_dir: Path) -> Path:
+        assert (output_dir / self.output).exists(), "the prior is primed"
+        (output_dir / "next").mkdir()
+        return _table(output_dir / "next" / self.output, "base-2")
+
+
+class _SoftReader(RollupPipeline):
+    """A rollup whose build reads another family's table best-effort, outside its declared inputs."""
+
+    name: ClassVar[str] = "reader"
+    output: ClassVar[str] = "reader.parquet"
+    soft: ClassVar[str] = "base"
+
+    def build(self, output_dir: Path) -> Path:
+        from spicy_regs.transforms.table_merge import published_table
+
+        published_table(output_dir, self.soft, r2.download)
+        return _table(output_dir / self.output, "reader")
+
+
+def _fetch_from(store: Store, monkeypatch) -> None:
+    """Serve pinned members from ``store`` through the real download helper (only the HTTP transfer is faked)."""
+    def fetch_member(base_url, member, local_path, label=None, **_):
+        if member.path not in store.objects:
+            return False
+        local_path.write_bytes(store.objects[member.path])
+        return True
+
+    monkeypatch.setattr(pub, "fetch_member", fetch_member)
+
+
+def test_a_generation_refuses_its_own_family_as_a_parent(tmp_path, remote):
+    _Base(output_dir=tmp_path / "base", skip_upload=False).run()
+    index = pub.parse_index(remote.objects[pub.INDEX_KEY])
+    entry = index["families"]["base"]
+    own = {"sha256": entry["tables"]["base.parquet"]["sha256"], "byteSize": entry["tables"]["base.parquet"]["byteSize"],
+           "family": "base", "artifactDigest": entry["artifactDigest"]}
+    with pytest.raises(ValueError, match="own prior"):
+        build_generation(tmp_path / "artifact", family="base", files=[_table(tmp_path / "base.parquet", "b")],
+                         expected_keys=["base.parquet"], read_snapshot=index, parents={"base.parquet": own})
+
+
+def test_the_audit_still_admits_a_published_root_whose_parent_is_its_own_family(tmp_path, remote):
+    """gao-reports a7e7c05e, d5e6f3ac and print-citations c8e49dbb were published so; roots are immutable."""
+    from rulespec_artifacts import LocalMemberSource, describe_member
+
+    from spicy_regs.generations import _table_info, _write_generation_metadata, verify_generation
+
+    _Base(output_dir=tmp_path / "base", skip_upload=False).run()
+    index = pub.parse_index(remote.objects[pub.INDEX_KEY])
+    entry = index["families"]["base"]
+    directory = tmp_path / "historical"
+    directory.mkdir()
+    _table(directory / "base.parquet", "b")
+    info = _table_info(directory / "base.parquet")
+    _write_generation_metadata(
+        directory, family="base", tables={"base.parquet": info}, read_snapshot=index,
+        members=[describe_member(LocalMemberSource(directory), object_key="base.parquet", role="table",
+                                 media_type="application/vnd.apache.parquet", record_count=info["rows"])],
+        parents={"base.parquet": {"sha256": entry["tables"]["base.parquet"]["sha256"],
+                                  "byteSize": entry["tables"]["base.parquet"]["byteSize"],
+                                  "family": "base", "artifactDigest": entry["artifactDigest"]}})
+    assert verify_generation(directory).root["spec"]["parents"]["base.parquet"]["family"] == "base"
+
+
+def test_a_rollup_reading_its_own_prior_records_no_parent(tmp_path, monkeypatch, remote):
+    _Base(output_dir=tmp_path / "first", skip_upload=False).run()
+    _fetch_from(remote, monkeypatch)
+    _Self(output_dir=tmp_path / "second", skip_upload=False).run()
+    entry = pub.parse_index(remote.objects[pub.INDEX_KEY])["families"]["base"]
+    assert "parents" not in json.loads(remote.objects[f"{entry['prefix']}/artifact.json"])["spec"]
+
+
+def test_a_soft_read_of_another_family_is_recorded_at_the_bytes_read(tmp_path, monkeypatch, remote):
+    _Base(output_dir=tmp_path / "base", skip_upload=False).run()
+    base = pub.parse_index(remote.objects[pub.INDEX_KEY])["families"]["base"]
+    _fetch_from(remote, monkeypatch)
+    _SoftReader(output_dir=tmp_path / "reader", skip_upload=False).run()
+    assert _parents(remote, "reader") == {"base.parquet": {
+        "sha256": base["tables"]["base.parquet"]["sha256"], "byteSize": base["tables"]["base.parquet"]["byteSize"],
+        "family": "base", "artifactDigest": base["artifactDigest"]}}
+
+
+def test_an_absent_soft_input_records_nothing(tmp_path, monkeypatch, remote):
+    _fetch_from(remote, monkeypatch)
+    _SoftReader(output_dir=tmp_path / "reader", skip_upload=False).run()
+    entry = pub.parse_index(remote.objects[pub.INDEX_KEY])["families"]["reader"]
+    assert "parents" not in json.loads(remote.objects[f"{entry['prefix']}/artifact.json"])["spec"]

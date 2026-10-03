@@ -1446,9 +1446,9 @@
         "committee_id"
       ],
       "kind": "complete",
-      "reason": "",
+      "reason": "The committee's status is here, not copied into the links: filing_frequency T or A means terminated, and last_file_date is its latest filing. Measured 2026-10-03 on the rebuild of org-committee-links 8487b62e's inputs (fec-committees ce80d98e, fec-committee-history 4ed93047) after links to candidate committees and leadership PACs left: every committee resolves. Receipt mcp-chaos-2026-10-02/round6/impl-C2/m6/measure.out.",
       "measured_via": null,
-      "baseline_keys": 3633,
+      "baseline_keys": 6693,
       "baseline_missing": 0,
       "floor_pct": 100.0,
       "expected_cardinality": "unspecified",

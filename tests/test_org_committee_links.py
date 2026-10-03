@@ -10,6 +10,7 @@ junk guards, fan-out-driven confidence, and the comment-side rollups.
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from pathlib import Path
 
 import duckdb
@@ -23,11 +24,9 @@ from spicy_regs.transforms.build_org_committee_links import (
     MIN_CORE_LENGTH,
     MIN_CORE_TOKENS,
     NAME_SOURCE_ORGANIZATION_FIELD,
-    OUTPUT,
     PREFIX_FANOUT_MEDIUM_MAX,
     _resolve_comments_source,
     build_org_committee_links,
-    build_query,
 )
 
 _COMMENT_FIELDS = ("comment_id", "docket_id", "agency_code", "organization", "posted_date", "modify_date")
@@ -50,7 +49,9 @@ def _committee(committee_id: str, name: str, **overrides: str | None) -> dict:
     row = {
         "committee_id": committee_id,
         "name": name,
+        "committee_type": "Q",
         "committee_type_full": "PAC - Qualified",
+        "designation": "U",
         "designation_full": "Unauthorized",
         "party_full": None,
         "organization_type_full": "Trade Association",
@@ -64,13 +65,20 @@ def _write(path: Path, rows: list[dict]) -> None:
     pq.write_table(pa.Table.from_pylist(rows), path)
 
 
-def _run(tmp_path: Path, comments: list[dict], committees: list[dict]) -> list[dict]:
-    """Materialize the fixtures and run the real published query over them."""
+def _history(committee_id: str, cycle: str, connected_organization_name: str | None) -> dict:
+    """One committee-cycle of ``fec_committee_history`` with the connected organization as FEC states it."""
+    return {"committee_id": committee_id, "cycle": cycle, "connected_organization_name": connected_organization_name}
+
+
+def _run(tmp_path: Path, comments: list[dict], committees: list[dict], history: Sequence[dict] = ()) -> list[dict]:
+    """Materialize the fixtures and run the real published build over them."""
     _write(tmp_path / "comments.parquet", comments)
     _write(tmp_path / "fec_committees.parquet", committees)
-    out = tmp_path / OUTPUT
+    pq.write_table(pa.Table.from_pylist(list(history), schema=pa.schema(
+        [("committee_id", pa.string()), ("cycle", pa.string()), ("connected_organization_name", pa.string())])),
+        tmp_path / "fec_committee_history.parquet")
+    out = build_org_committee_links(tmp_path)
     con = duckdb.connect()
-    con.execute(build_query(str(tmp_path / "comments.parquet"), str(tmp_path / "fec_committees.parquet"), str(out)))
     rows = con.execute(f"SELECT * FROM read_parquet('{out}') ORDER BY organization, committee_id").fetchall()
     names = [d[0] for d in con.description]
     con.close()
@@ -81,15 +89,16 @@ def _run(tmp_path: Path, comments: list[dict], committees: list[dict]) -> list[d
 
 
 def test_published_schema_matches_the_declared_columns(tmp_path: Path) -> None:
-    """The parquet the query writes has exactly COLUMNS, in order, with the declared types."""
+    """The parquet the build writes has exactly COLUMNS, in order, with the declared types, ending with the sponsor."""
+    assert [name for name, _ in COLUMNS[-2:]] == ["connected_organization_name", "sponsor_name_match"]
     _write(tmp_path / "comments.parquet", [_comment("C-1", "National Association of Realtors")])
     _write(
         tmp_path / "fec_committees.parquet",
         [_committee("C00030718", "NATIONAL ASSOCIATION OF REALTORS POLITICAL ACTION COMMITTEE")],
     )
-    out = tmp_path / OUTPUT
+    _write(tmp_path / "fec_committee_history.parquet", [_history("C00030718", "2026", "NATIONAL ASSOCIATION OF REALTORS")])
+    out = build_org_committee_links(tmp_path)
     con = duckdb.connect()
-    con.execute(build_query(str(tmp_path / "comments.parquet"), str(tmp_path / "fec_committees.parquet"), str(out)))
     described = con.execute(f"DESCRIBE SELECT * FROM read_parquet('{out}')").fetchall()
     con.close()
     assert tuple((name, dtype) for name, dtype, *_ in described) == COLUMNS
@@ -239,6 +248,151 @@ def test_high_confidence_tiers_ignore_fanout(tmp_path: Path) -> None:
     assert {r["committee_match_count"] for r in rows} == {7}
 
 
+# --- committees that are never an organization's own ----------------------
+
+
+def test_a_candidate_committee_is_never_an_organizations_own(tmp_path: Path) -> None:
+    """FRIENDS OF MARIA (C00349506) is a Senate candidate's committee; a commenter named like it is not its sponsor."""
+    rows = _run(
+        tmp_path,
+        [_comment("C-1", "Friends of Maria")],
+        [_committee("C00349506", "FRIENDS OF MARIA", committee_type="S", committee_type_full="Senate",
+                    designation="P", designation_full="Principal campaign committee",
+                    party_full="DEMOCRATIC PARTY", organization_type_full=None, state="WA")],
+    )
+    assert rows == []
+
+
+def test_a_leadership_pac_is_never_an_organizations_own(tmp_path: Path) -> None:
+    """TEXAS FIRST PAC (C00439398) is a member of Congress's leadership PAC, not the commenter "Texas First"'s."""
+    rows = _run(
+        tmp_path,
+        [_comment("C-1", "Texas First")],
+        [_committee("C00439398", "TEXAS FIRST PAC", designation="D", designation_full="Leadership PAC",
+                    organization_type_full=None, state="TX")],
+    )
+    assert rows == []
+
+
+def test_impossible_links_leave_and_the_grade_of_the_rest_stays(tmp_path: Path) -> None:
+    """A name that prefixes candidate committees is still a generic name: the fan-out counts every committee it
+    matched, so removing the impossible links never promotes the rest (BILL BRADLEY: five candidate committees and a
+    draft committee, all prefix matches)."""
+    rows = _run(
+        tmp_path,
+        [_comment("C-1", "BILL BRADLEY")],
+        [
+            _committee("C00082487", "BILL BRADLEY FOR U.S. SENATE", committee_type="S", designation="A"),
+            _committee("C00123679", "BILL BRADLEY MARCH 16TH DINNER COMMITTEE", committee_type="S", designation="A"),
+            _committee("C00138347", "BILL BRADLEY FOR U.S. SENATE '84", committee_type="S", designation="A"),
+            _committee("C00197053", "BILL BRADLEY FOR U S SENATE '90", committee_type="S", designation="A"),
+            _committee("C00341818", "BILL BRADLEY FOR PRESIDENT INC", committee_type="P", designation="P"),
+            _committee("C00211276", "BILL BRADLEY FOR PRESIDENT DRAFT COMMITTEE", committee_type="U", designation="U"),
+        ],
+    )
+    assert [(r["committee_id"], r["confidence"], r["committee_match_count"]) for r in rows] == [("C00211276", "low", 6)]
+
+
+def test_a_party_committee_named_like_the_organization_stays(tmp_path: Path) -> None:
+    """Only candidate committees and leadership PACs leave; a party committee can be the commenter itself."""
+    rows = _run(
+        tmp_path,
+        [_comment("C-1", "Republican National Committee")],
+        [_committee("C00003418", "REPUBLICAN NATIONAL COMMITTEE", committee_type="Y", designation="U")],
+    )
+    assert [(r["match_method"], r["confidence"]) for r in rows] == [("exact", "high")]
+
+
+def test_a_committee_with_no_stated_kind_stays(tmp_path: Path) -> None:
+    """FEC states no type or designation on a few committees; nothing then says the link is impossible."""
+    rows = _run(
+        tmp_path,
+        [_comment("C-1", "Pipeline Safety Trust")],
+        [_committee("C00000009", "PIPELINE SAFETY TRUST PAC", committee_type=None, designation=None)],
+    )
+    assert [r["confidence"] for r in rows] == ["high"]
+
+
+# --- the committee's stated sponsor ---------------------------------------
+
+_DELTA = _committee("C00104802", "DELTA AIR LINES PAC", designation="B", designation_full="Lobbyist/Registrant PAC",
+                    organization_type_full="Corporation")
+
+
+def test_the_sponsor_fec_states_is_shown_and_compared(tmp_path: Path) -> None:
+    """C00104802's latest stated sponsor is DELTA AIRLINES; the commenter wrote "Delta Air Lines" (spaces differ)."""
+    rows = _run(
+        tmp_path,
+        [_comment("C-1", "Delta Air Lines, Inc.")],
+        [_DELTA],
+        [_history("C00104802", "2018", "DELTA AIR LINES"),
+         _history("C00104802", "2022", "MONROE ENERGY LLC FUELING THE CLIMB POLITICAL ACTION COMMITTEE"),
+         _history("C00104802", "2024", "DELTA AIRLINES"), _history("C00104802", "2026", "DELTA AIRLINES")],
+    )
+    assert [(r["connected_organization_name"], r["sponsor_name_match"]) for r in rows] == [("DELTA AIRLINES", "agrees")]
+
+
+def test_a_sponsor_stated_only_in_an_older_cycle_is_the_one_shown(tmp_path: Path) -> None:
+    """C00483677 states AMERICAN PETROLEUM INSTITUTE through 2022 and leaves 2024 and 2026 blank."""
+    rows = _run(
+        tmp_path,
+        [_comment("C-1", "American Petroleum Institute")],
+        [_committee("C00483677", "AMERICAN PETROLEUM INSTITUTE POLITICAL ACTION COMMITTEE")],
+        [_history("C00483677", "2022", "AMERICAN PETROLEUM INSTITUTE"), _history("C00483677", "2024", None),
+         _history("C00483677", "2026", "NONE")],
+    )
+    assert [(r["connected_organization_name"], r["sponsor_name_match"]) for r in rows] == [
+        ("AMERICAN PETROLEUM INSTITUTE", "agrees")]
+
+
+def test_a_different_stated_sponsor_differs(tmp_path: Path) -> None:
+    """BLET's PAC (C00099234) names the Teamsters' DRIVE as its connected organization since 2024."""
+    rows = _run(
+        tmp_path,
+        [_comment("C-1", "Brotherhood of Locomotive Engineers and Trainmen")],
+        [_committee("C00099234", "BROTHERHOOD OF LOCOMOTIVE ENGINEERS & TRAINMEN PAC FUND")],
+        [_history("C00099234", "2002", "ENGINEERS; BROTH'D OF LOCOMOTIVE"),
+         _history("C00099234", "2026", "INTERNATIONAL BROTHERHOOD OF TEAMSTERS - DRIVE")],
+    )
+    assert [(r["connected_organization_name"], r["sponsor_name_match"]) for r in rows] == [
+        ("INTERNATIONAL BROTHERHOOD OF TEAMSTERS - DRIVE", "differs")]
+
+
+def test_a_sponsor_written_as_the_pacs_own_name_agrees(tmp_path: Path) -> None:
+    """C00102517's filer wrote the PAC's name in the sponsor field in 2018 (and nothing in 2020)."""
+    rows = _run(
+        tmp_path,
+        [_comment("C-1", "Ash Grove Cement Company")],
+        [_committee("C00102517", "ASH GROVE CEMENT POLITICAL ACTION COMMITTEE")],
+        [_history("C00102517", "2018", "ASH GROVE CEMENT POLITICAL ACTION COMMITTEE"), _history("C00102517", "2020", None)],
+    )
+    assert [(r["connected_organization_name"], r["sponsor_name_match"]) for r in rows] == [
+        ("ASH GROVE CEMENT POLITICAL ACTION COMMITTEE", "agrees")]
+
+
+@pytest.mark.parametrize("placeholder", ["NONE", "None.", '"NONE"', "N/A", "N A", "NA", "-", ".", "BLANK", "(BLANK)",
+                                         "0", "  "])
+def test_fecs_placeholders_are_not_a_stated_sponsor(tmp_path: Path, placeholder: str) -> None:
+    rows = _run(
+        tmp_path,
+        [_comment("C-1", "Delta Air Lines")],
+        [_DELTA],
+        [_history("C00104802", "2026", placeholder)],
+    )
+    assert [(r["connected_organization_name"], r["sponsor_name_match"]) for r in rows] == [(None, "not_stated")]
+
+
+def test_a_committee_without_history_states_no_sponsor(tmp_path: Path) -> None:
+    rows = _run(tmp_path, [_comment("C-1", "Delta Air Lines")], [_DELTA])
+    assert [(r["connected_organization_name"], r["sponsor_name_match"]) for r in rows] == [(None, "not_stated")]
+
+
+def test_same_is_a_statement_not_a_placeholder(tmp_path: Path) -> None:
+    """FEC's history holds SAME 41 times; it names no organization this table can compare, so it differs."""
+    rows = _run(tmp_path, [_comment("C-1", "Delta Air Lines")], [_DELTA], [_history("C00104802", "2026", "SAME")])
+    assert [(r["connected_organization_name"], r["sponsor_name_match"]) for r in rows] == [("SAME", "differs")]
+
+
 # --- comment-side rollups -------------------------------------------------
 
 
@@ -300,6 +454,13 @@ def test_comments_source_rejects_an_unsafe_public_url(
 
 def test_build_requires_the_committees_input(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError, match="fec_committees.parquet"):
+        build_org_committee_links(tmp_path)
+
+
+def test_build_requires_the_committee_history_input(tmp_path: Path) -> None:
+    _write(tmp_path / "comments.parquet", [_comment("C-1", "Delta Air Lines")])
+    _write(tmp_path / "fec_committees.parquet", [_DELTA])
+    with pytest.raises(FileNotFoundError, match="fec_committee_history.parquet"):
         build_org_committee_links(tmp_path)
 
 
