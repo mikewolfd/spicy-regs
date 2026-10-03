@@ -146,17 +146,20 @@ def _repair_rin(table: Any) -> Any:
     A row the run does not re-read keeps what an earlier SpicyDocs derived, so all four are derived again here, as
     the shapers spell them, from the one field: 0.50.1 renamed the rule and corrected five RINs (three NOAA RINs
     read cut short, 119-EC-1226, 1544 and 1649), and ``unmatched`` names no version, so no row can be left as read.
-    A row with no read detail (``committees_json`` NULL) keeps its NULLs.
+    A row with no read detail (:func:`_read_sql`) keeps its NULLs.
     """
     import pyarrow as pa
 
     columns = {
         name: table[name].to_pylist() if name in table.column_names else [None] * len(table) for name in RIN_COLUMNS
     }
+    import duckdb
+
     fields = table["report_nature"].to_pylist()
-    markers = table["committees_json"].to_pylist()
-    for position, (field, marker) in enumerate(zip(fields, markers, strict=True)):
-        if marker is None:
+    merged = table  # noqa: F841 — read by name below (``table`` is a reserved word in DuckDB)
+    read_rows = duckdb.sql(f"SELECT {_read_sql(set(table.column_names), 'committees_json')} FROM merged").fetchall()
+    for position, (field, (read,)) in enumerate(zip(fields, read_rows, strict=True)):
+        if not read:
             continue
         rin, occurrences = _rin_reads(field)
         derived = (text(rin.rin), json_column(occurrences), text(rin.rule), text(rin.matched_text))
@@ -244,6 +247,20 @@ INDEX_SPECS: Mapping[str, IndexSpec] = {
 }
 
 
+#: spicy-docs 0.54.0's statement on each detail-backed row that its detail was read: under the NULL-list convention a
+#: read detail that omits a list leaves that column NULL as an unread one does, so only this column can say it.
+DETAIL_READ = "detail_read"
+
+
+def _read_sql(columns: Set[str], marker: str) -> str:
+    """The SQL that says a published row's detail was read: ``detail_read``, or the old list-column marker on a row
+    published before the column (NULL there until its next detail read); ``FALSE`` where the prior states neither."""
+    if DETAIL_READ in columns:
+        fallback = f" OR ({DETAIL_READ} IS NULL AND {marker} IS NOT NULL)" if marker in columns else ""
+        return f"({DETAIL_READ} = 'true'{fallback})"
+    return f"{marker} IS NOT NULL" if marker in columns else "FALSE"
+
+
 @dataclass(frozen=True, slots=True)
 class _Held:
     """What the published table says about one identity: its stamp, and whether a detail was read."""
@@ -258,14 +275,13 @@ def _held_rows(prior: Path | None, spec: IndexSpec, identity: tuple[str, ...], v
     import duckdb
 
     published = {str(row[0]) for row in duckdb.sql(f"DESCRIBE SELECT * FROM read_parquet('{prior}')").fetchall()}
-    if spec.detail_marker in published:
-        read = f"{spec.detail_marker} IS NOT NULL"
-    else:
-        # A prior without the marker column (a renamed contract column, or a
-        # table published before it) cannot say a detail was read, so none was:
-        # every row is re-read rather than the run refusing on the column.
-        read = "FALSE"
-        logger.warning("{}: prior table lacks {!r}; every row reads as unread", spec.table, spec.detail_marker)
+    read = _read_sql(published, spec.detail_marker)
+    if read == "FALSE":
+        # A prior stating neither (a renamed contract column, or a table published
+        # before both) cannot say a detail was read, so none was: every row is
+        # re-read rather than the run refusing on the column.
+        logger.warning("{}: prior table lacks {!r} and {!r}; every row reads as unread", spec.table, DETAIL_READ,
+                       spec.detail_marker)
     columns = ", ".join((*identity, version, read))
     rows = duckdb.sql(f"SELECT {columns} FROM read_parquet('{prior}')").fetchall()
     held = {tuple(row[: len(identity)]): _Held(row[len(identity)], bool(row[len(identity) + 1])) for row in rows}

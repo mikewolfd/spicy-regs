@@ -522,3 +522,36 @@ def test_the_previous_congress_list_is_windowed_and_the_current_one_is_not(tmp_p
     assert ("118", held["chamber"], held["event_id"]) in {
         _key("committee_meetings", row) for row in pq.read_table(out).to_pylist()
     }
+
+
+# --------------------------------------------------------------------------- #
+# spicy-docs 0.54.0: a list the detail does not state is NULL, so detail_read says whether a detail was read.
+# --------------------------------------------------------------------------- #
+def _seed_one(tmp_path, *, committees_json, detail_read) -> None:
+    seed(tmp_path, "house_communications", [{
+        "communication_id": "119-ec-4752", "congress": "119", "communication_type": "ec", "number": "4752",
+        "update_date": "2026-09-18", "committees_json": committees_json, "detail_read": detail_read,
+        "abstract": "prior held",
+    }])
+
+
+def test_a_read_detail_that_states_no_committees_is_held_by_detail_read(tmp_path):
+    """Under the NULL-list convention a detail that omits committees leaves committees_json NULL, as an unread one
+    does; keyed on that column, such a row (3 meetings and 3 communications in the live data) was fetched every run."""
+    _seed_one(tmp_path, committees_json=None, detail_read="true")
+    rows, reader = _run(tmp_path, "house_communications", max_details=10)
+    assert "house-communication/119/ec/4752" not in reader.details
+    assert next(row for row in rows if row["communication_id"] == "119-ec-4752")["abstract"] == "prior held"
+
+
+def test_detail_read_false_is_unread_whatever_a_list_column_holds(tmp_path):
+    _seed_one(tmp_path, committees_json="[]", detail_read="false")
+    _rows, reader = _run(tmp_path, "house_communications", max_details=10)
+    assert "house-communication/119/ec/4752" in reader.details
+
+
+def test_a_row_published_before_detail_read_is_read_by_its_list_column_meanwhile(tmp_path):
+    """NULL detail_read is a row from before the column: the old marker stands until its next detail read."""
+    _seed_one(tmp_path, committees_json="[]", detail_read=None)
+    _rows, reader = _run(tmp_path, "house_communications", max_details=10)
+    assert "house-communication/119/ec/4752" not in reader.details
