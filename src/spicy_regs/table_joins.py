@@ -265,10 +265,20 @@ JOINS: tuple[Join, ...] = (
     _join("proceedings", "rin", "unified_agenda", "rin", 30_536, 3_833, "scope", _unlisted_rins(802, 3_030, 1)),
     _join("regulatory_agenda_items", "rin", "unified_agenda", "rin", 52_092, 5_845, "scope",
           _unlisted_rins(2_410, 3_434, 1, " (an item exists for every RIN any source states)")),
-    _join("rule_targets", "cfr_ref", "cfr_sections", "cfr_ref", 6_144, 810, "scope",
-          "cfr_ref names a CFR part (title-part). cfr_sections holds the 2025–2026 edition of all 49 titles; 796 of "
-          "the missing parts no longer exist in it (removed or redesignated since the citing document) and 14 exist "
-          "only as sections without a part row. Receipt join-map-2026-09-26/rulemaking-exposure-independent-2.json."),
+    # Declared, not measured into join_measurements.json: its overlay reads a measured join as complete with one
+    # parent per key, and this one is a scope join over many section rows per part. The baseline counts the 13
+    # Title 41 chapter keys missing although they still resolve on 2026-10-03, so the compound-part fix in
+    # build_cfr_sections, released with this declaration, does not drop the join below its floor.
+    _join("rule_targets", ("cfr_title", "cfr_part"), "cfr_sections", ("title", "part"), 6_146, 812, "scope",
+          "rule_targets holds part-level keys, so the join is on title and part, which a part held only as section "
+          "rows also has; the printed cfr_ref missed 12 such parts (50 CFR 622 among them). cfr_sections holds the "
+          "2025 and 2026 editions of every title, so most missing parts were removed or redesignated after the "
+          "citing document. Title 41 matches at chapter level only: the Federal Register cuts a compound part at "
+          "the hyphen (41 CFR 60-1.4 is part 60), so its 13 Title 41 keys (chapters 50, 51, 60, 61, 101, 102, 105, "
+          "128, 201 and 300-303) name chapters, which no cfr_sections part matches once its Title 41 structural "
+          "rows carry their compound parts; they are counted missing. Measured 2026-10-03 on rule_targets "
+          "snapshot_448e6d9a… and cfr_sections eab08a3f…: 6,146 keys, 799 missing, plus those 13. Receipt "
+          "mcp-chaos-2026-10-02/round4/joins-measured-2026-10-03.json."),
     # FEC.
     _join("org_committee_links", "committee_id", "fec_committees", "committee_id", 3_633, 0),
     # The Regulations.gov attribute tables (decisions 65-67): every row is a record the thin tables also hold.
@@ -321,7 +331,9 @@ JOINS: tuple[Join, ...] = (
           "the entity API held no public record for 38. Receipts join-map-2026-09-26/sam-entities-after-backfill.json "
           "and usaspending-unresolved-uei-sample-2026-09-26.txt."),
     # Lobbying disclosure: the activity tables joined the family at run 36264742453 (added_tables). Receipt
-    # join-map-2026-09-26/lobbying-activities-after-migration.json.
+    # join-map-2026-09-26/lobbying-activities-after-migration.json. Those first-migration populations (247, 522)
+    # were served as baselines until join_measurements.json measured both in full (2026-10-03). A static count is a
+    # population at its date: check_table_joins compares rates, so it never sees one go stale (recorded debt).
     _join("lobbying_activities", "filing_uuid", "lobbying_filings", "filing_uuid", 247, 0),
     _join("lobbying_activity_lobbyists", ("filing_uuid", "activity_index"),
           "lobbying_activities", ("filing_uuid", "activity_index"), 522, 0),

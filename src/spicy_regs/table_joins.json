@@ -1358,18 +1358,20 @@
     {
       "child": "rule_targets",
       "child_columns": [
-        "cfr_ref"
+        "cfr_title",
+        "cfr_part"
       ],
       "parent": "cfr_sections",
       "parent_columns": [
-        "cfr_ref"
+        "title",
+        "part"
       ],
       "kind": "scope",
-      "reason": "cfr_ref names a CFR part (title-part). cfr_sections holds the 2025–2026 edition of all 49 titles; 796 of the missing parts no longer exist in it (removed or redesignated since the citing document) and 14 exist only as sections without a part row. Receipt join-map-2026-09-26/rulemaking-exposure-independent-2.json.",
+      "reason": "rule_targets holds part-level keys, so the join is on title and part, which a part held only as section rows also has; the printed cfr_ref missed 12 such parts (50 CFR 622 among them). cfr_sections holds the 2025 and 2026 editions of every title, so most missing parts were removed or redesignated after the citing document. Title 41 matches at chapter level only: the Federal Register cuts a compound part at the hyphen (41 CFR 60-1.4 is part 60), so its 13 Title 41 keys (chapters 50, 51, 60, 61, 101, 102, 105, 128, 201 and 300-303) name chapters, which no cfr_sections part matches once its Title 41 structural rows carry their compound parts; they are counted missing. Measured 2026-10-03 on rule_targets snapshot_448e6d9a… and cfr_sections eab08a3f…: 6,146 keys, 799 missing, plus those 13. Receipt mcp-chaos-2026-10-02/round4/joins-measured-2026-10-03.json.",
       "measured_via": null,
-      "baseline_keys": 6144,
-      "baseline_missing": 810,
-      "floor_pct": 86.8164,
+      "baseline_keys": 6146,
+      "baseline_missing": 812,
+      "floor_pct": 86.7881,
       "expected_cardinality": "unspecified",
       "measurement": null
     },
@@ -1804,13 +1806,45 @@
         "filing_uuid"
       ],
       "kind": "complete",
-      "reason": "",
+      "reason": "Full selected-input measurement on 2026-10-03; immutable URLs, SQL and cardinality in join_measurements.json. Every activity names a filing of the same lobbying-filings generation. Until 2026-10-03 the declaration served 247 keys, the activity tables' first-migration population (run 36264742453, 2026-09-26), as the baseline.",
       "measured_via": null,
-      "baseline_keys": 247,
+      "baseline_keys": 1699011,
       "baseline_missing": 0,
       "floor_pct": 100.0,
-      "expected_cardinality": "unspecified",
-      "measurement": null
+      "expected_cardinality": "one",
+      "measurement": {
+        "join": "lobbying_activities.filing_uuid -> lobbying_filings.filing_uuid",
+        "kind": "complete",
+        "status": "OK",
+        "keys": 1699011,
+        "missing": 0,
+        "resolved_pct": 100.0,
+        "floor_pct": 100.0,
+        "baseline_keys": 1699011,
+        "baseline_missing": 0,
+        "examples": [],
+        "child_input_rows": 3627886,
+        "child_nonnull_rows": 3627886,
+        "parent_input_rows": 1964854,
+        "parent_distinct_keys": 1964854,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 3627886,
+        "left_join_nonnull_rows": 3627886,
+        "scope": "full_selected_inputs",
+        "child_urls": [
+          "https://data.spicygov.ai/generations/lobbying-filings/6ac8813aa36683c9fe742bc5afe930cd5192a4ea2324a88070f7d5f6339c4e5a/lobbying_activities.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/lobbying-filings/6ac8813aa36683c9fe742bc5afe930cd5192a4ea2324a88070f7d5f6339c4e5a/lobbying_filings.parquet"
+        ],
+        "sql": "\n        WITH child_input AS (SELECT \"filing_uuid\" FROM read_parquet(['https://data.spicygov.ai/generations/lobbying-filings/6ac8813aa36683c9fe742bc5afe930cd5192a4ea2324a88070f7d5f6339c4e5a/lobbying_activities.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"filing_uuid\" FROM read_parquet(['https://data.spicygov.ai/generations/lobbying-filings/6ac8813aa36683c9fe742bc5afe930cd5192a4ea2324a88070f7d5f6339c4e5a/lobbying_filings.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"filing_uuid\" AS c0, count(*) AS child_rows\n                   FROM child_input WHERE \"filing_uuid\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"filing_uuid\" AS p0, count(*) AS parent_rows\n                   FROM parent_input WHERE \"filing_uuid\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0) ORDER BY c0) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+        "expected_cardinality": "one",
+        "measured_on": "2026-10-03",
+        "source_generation": "sha256:6ac8813aa36683c9fe742bc5afe930cd5192a4ea2324a88070f7d5f6339c4e5a",
+        "reason": "Every activity names a filing of the same lobbying-filings generation. Until 2026-10-03 the declaration served 247 keys, the activity tables' first-migration population (run 36264742453, 2026-09-26), as the baseline."
+      }
     },
     {
       "child": "lobbying_activity_lobbyists",
@@ -1824,13 +1858,45 @@
         "activity_index"
       ],
       "kind": "complete",
-      "reason": "",
+      "reason": "Full selected-input measurement on 2026-10-03; immutable URLs, SQL and cardinality in join_measurements.json. Every lobbyist row names an activity of the same lobbying-filings generation. Until 2026-10-03 the declaration served 522 keys, the first-migration population (run 36264742453, 2026-09-26), as the baseline.",
       "measured_via": null,
-      "baseline_keys": 522,
+      "baseline_keys": 3622422,
       "baseline_missing": 0,
       "floor_pct": 100.0,
-      "expected_cardinality": "unspecified",
-      "measurement": null
+      "expected_cardinality": "one",
+      "measurement": {
+        "join": "lobbying_activity_lobbyists.filing_uuid+activity_index -> lobbying_activities.filing_uuid+activity_index",
+        "kind": "complete",
+        "status": "OK",
+        "keys": 3622422,
+        "missing": 0,
+        "resolved_pct": 100.0,
+        "floor_pct": 100.0,
+        "baseline_keys": 3622422,
+        "baseline_missing": 0,
+        "examples": [],
+        "child_input_rows": 10288894,
+        "child_nonnull_rows": 10288894,
+        "parent_input_rows": 3627886,
+        "parent_distinct_keys": 3627886,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 10288894,
+        "left_join_nonnull_rows": 10288894,
+        "scope": "full_selected_inputs",
+        "child_urls": [
+          "https://data.spicygov.ai/generations/lobbying-filings/6ac8813aa36683c9fe742bc5afe930cd5192a4ea2324a88070f7d5f6339c4e5a/lobbying_activity_lobbyists.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/lobbying-filings/6ac8813aa36683c9fe742bc5afe930cd5192a4ea2324a88070f7d5f6339c4e5a/lobbying_activities.parquet"
+        ],
+        "sql": "\n        WITH child_input AS (SELECT \"filing_uuid\", \"activity_index\" FROM read_parquet(['https://data.spicygov.ai/generations/lobbying-filings/6ac8813aa36683c9fe742bc5afe930cd5192a4ea2324a88070f7d5f6339c4e5a/lobbying_activity_lobbyists.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"filing_uuid\", \"activity_index\" FROM read_parquet(['https://data.spicygov.ai/generations/lobbying-filings/6ac8813aa36683c9fe742bc5afe930cd5192a4ea2324a88070f7d5f6339c4e5a/lobbying_activities.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"filing_uuid\" AS c0, \"activity_index\" AS c1, count(*) AS child_rows\n                   FROM child_input WHERE \"filing_uuid\" IS NOT NULL AND \"activity_index\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"filing_uuid\" AS p0, \"activity_index\" AS p1, count(*) AS parent_rows\n                   FROM parent_input WHERE \"filing_uuid\" IS NOT NULL AND \"activity_index\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, c1, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0 AND c.c1 = p.p1)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0, c1) ORDER BY c0, c1) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+        "expected_cardinality": "one",
+        "measured_on": "2026-10-03",
+        "source_generation": "sha256:6ac8813aa36683c9fe742bc5afe930cd5192a4ea2324a88070f7d5f6339c4e5a",
+        "reason": "Every lobbyist row names an activity of the same lobbying-filings generation. Until 2026-10-03 the declaration served 522 keys, the first-migration population (run 36264742453, 2026-09-26), as the baseline."
+      }
     },
     {
       "child": "native_legal_references",
@@ -2399,11 +2465,13 @@
       },
       {
         "child_columns": [
-          "cfr_ref"
+          "cfr_title",
+          "cfr_part"
         ],
         "parent_table": "cfr_sections",
         "parent_columns": [
-          "cfr_ref"
+          "title",
+          "part"
         ]
       }
     ],
