@@ -85,7 +85,13 @@ OUTPUT = "proceedings.parquet"
 # snapshot b22d81c4's 97,472 docket-less proceedings, 1,186 gain a code and 729 change it
 # (HHS to CMS 467, DOC to BIS 163, DOC to EAB 84, TREAS to IIO 11, HHS to ACL 2, HHS to HHSIG 2),
 # none lose one: 90,848 carry a code. No other column, and no docketed proceeding, moves.
-ACTOR_ID = "spicy-regs:proceedings:v11"
+# v12 (one bump over published v11): the registry view moves to schema 1.2 (RefSpec f1c23b91: FNS renamed FNA,
+# the current successors sealed), and a current successor's code wins over the original's own (owner rule, round
+# 5), so FR 200, which REF-038 codes FNS, is FNA. Of the 472 FR agency ids only 200 moves (FNS to FNA). On
+# federal-register 09f4f4b7, 1,504 of the 1,511 documents naming it move; over rulemaking snapshot 55d396ee the
+# 138 docket-less proceedings joining them by fr_document move from FNS to FNA, and the 159 docketed ones that
+# hold one keep their dockets' code (receipt round5/impl-C/refspec/successor_rule_rows.out).
+ACTOR_ID = "spicy-regs:proceedings:v12"
 
 COLUMNS = (
     "proceeding_id",

@@ -44,7 +44,9 @@ EVENTS_OUTPUT = "lifecycle_events.parquet"
 # v2 (one bump over published v1), owner decisions 2026-10-03: a Register-dated proposal is time zero, and
 # an upload-dated one anchors only where the proceeding holds none (54d); routine_family reads the anchor's
 # own title at time zero (55a).
-LIFECYCLES_ACTOR_ID = "spicy-regs:rulemaking-lifecycles:v2"
+# v3 (one bump over published v2): code unchanged; a lifecycle copies its proceeding's agency_code, which moves
+# with proceedings v12 (FNS to FNA). The events carry no code, so their actor stays.
+LIFECYCLES_ACTOR_ID = "spicy-regs:rulemaking-lifecycles:v3"
 EVENTS_ACTOR_ID = "spicy-regs:lifecycle-events:v2"
 
 #: Regulations.gov's coverage is thin before this day (decision 54's coverage flag).
