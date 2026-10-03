@@ -272,6 +272,17 @@ carries its kind (`complete`, `scope`, `design`, `empty`), the reason for a
 partial one, and its measured baseline. `scripts/check_table_joins.py` holds the
 live tables to each floor nightly in `check-rollup-freshness.yml`.
 
+**The meaning text lives in the record (round 5).** `joins.basis` and
+`qualification.basis` are the records' own top-level `basis`, which
+`table_joins.joins_record()` and `output_ledger.qualification_record()` write
+(`table_joins.BASIS`, `output_ledger.BASIS`); the server holds no copy. Round 5
+found a persona reading a `complete` join as proof that the publisher paired
+each key correctly (CHRG-118hhrg63377 with meeting 116369, the wrong hearing on
+the same day), so the joins basis says `complete` checks only that each
+non-null child key names a parent row; the qualification basis says a receipt
+it names is the maintainer's retained evidence, not a public file. Editing
+either text is a `spicy-regs-dict generate`, and `check` refuses a stale copy.
+
 ## Citation lookup kinds (`resolve_document_citations`)
 
 The tool accepts exactly the keys of `citation_resolution.SOURCE_TABLES`: the

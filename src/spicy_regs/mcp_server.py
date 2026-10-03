@@ -1072,15 +1072,6 @@ def _bounded_cells(rows: list[dict[str, Any]], max_chars: int | None) -> list[di
     return cut
 
 
-QUALIFICATION_BASIS = (
-    "The output ledger's audits, bundled when the dictionary was generated. ledger_disposition is the "
-    "ledger's word for ledger_pin only; generation compares that pin with this connection's live pin. "
-    "'newer generation, not yet audited' means the live pin differs from every pin the ledger records "
-    "for the table. A disposition covers the scope its ledger statement names; it does not verify "
-    "relationships that metadata.data_quality calls heuristic or unresolved."
-)
-
-
 def _ledger_index(record: dict) -> tuple[dict, dict[str, list[dict]]]:
     """A qualification record and its ledger rows by table."""
     rows: dict[str, list[dict]] = {}
@@ -1094,16 +1085,6 @@ def _ledger_index(record: dict) -> tuple[dict, dict[str, list[dict]]]:
 def _ledger() -> tuple[dict, dict[str, list[dict]]]:
     """The bundled qualification record (``output_ledger``), read and indexed once per process."""
     return _ledger_index(json.loads(files("spicy_regs").joinpath("table_qualification.json").read_text("utf-8")))
-
-
-JOINS_BASIS = (
-    "Declared cross-table joins, bundled when the dictionary was generated. baseline_keys and "
-    "baseline_missing count distinct non-null child keys and those absent from the parent on the baseline "
-    "date; floor_pct is the resolution rate scripts/check_table_joins.py holds the live tables to. A "
-    "'scope' or 'design' join resolves partly for the stated reason; it is not a defect. "
-    "This is not an exhaustive relationship catalog: JSON-array joins and other undeclared relationships "
-    "may be described in the column meanings. An empty join list does not establish that no relationship exists."
-)
 
 
 @lru_cache(maxsize=1)
@@ -1125,7 +1106,7 @@ def _table_joins(table: str, *, measurements: bool) -> dict:
         return join if measurements else {key: value for key, value in join.items() if key != "measurement"}
 
     return {
-        "basis": JOINS_BASIS,
+        "basis": record["basis"],
         "baseline": record["baseline"],
         "outgoing": [shaped(join) for join in record["joins"] if join["child"] == table],
         "incoming": [shaped(join) for join in record["joins"] if join["parent"] == table],
@@ -1143,7 +1124,7 @@ def _qualification(
     neither pointer names has no live pin to compare.
     """
     record, rows = _ledger()
-    scope = {"ledger": record["ledger"], "ledger_destination": record["destination"], "basis": QUALIFICATION_BASIS}
+    scope = {"ledger": record["ledger"], "ledger_destination": record["destination"], "basis": record["basis"]}
     if DATA_DIR is not None or R2_BASE_URL != record["destination"]:
         reads = str(DATA_DIR) if DATA_DIR is not None else R2_BASE_URL
         reason = f"This server reads {reads}; the ledger records audits only for {record['destination']}."

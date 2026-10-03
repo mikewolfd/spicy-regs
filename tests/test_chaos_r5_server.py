@@ -12,7 +12,7 @@ import json
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 
-from spicy_regs import mcp_server as server
+from spicy_regs import mcp_server as server, output_ledger, table_joins
 from spicy_regs.citation_resolution import SOURCE_TABLES
 from spicy_regs.sources import publication as pub
 from tests.test_mcp_relationships import citation_connection
@@ -243,3 +243,19 @@ def test_replies_state_when_the_publisher_moved_the_pointer(monkeypatch, publish
     # The citation reply's target pins come from the same projection; derived views' embedded pins do not move.
     assert cited["occurrences"][0]["target_snapshot"] == status
     assert "published_at" not in status and "published_at" not in listed["laws"]
+
+
+# Meaning text moved into the artifacts the server reads (pattern 9).
+
+def test_the_basis_texts_live_in_the_bundled_records(monkeypatch):
+    assert not hasattr(server, "JOINS_BASIS") and not hasattr(server, "QUALIFICATION_BASIS")
+    joins = table_joins.joins_record()["basis"]
+    qualification = output_ledger.qualification_record(output_ledger.LEDGER.read_text(encoding="utf-8"))["basis"]
+    assert "it does not check that the publisher paired them correctly" in joins
+    assert "the maintainer's retained evidence, not public files" in qualification
+    assert server._joins()["basis"] == joins and server._ledger()[0]["basis"] == qualification
+    with citation_connection() as con:
+        con.execute("UPDATE _spicy_publication SET snapshot = ?", [json.dumps(_index())])
+        monkeypatch.setattr(server, "_get_connection", lambda: con)
+        described = _tool_data(server.build_server(), "describe_table", {"table": "laws"})
+    assert described["joins"]["basis"] == joins and described["qualification"]["basis"] == qualification

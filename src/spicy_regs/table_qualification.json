@@ -1,6 +1,7 @@
 {
   "format": "spicy-regs-table-qualification",
   "version": 1,
+  "basis": "The output ledger's audits, bundled when the dictionary was generated. ledger_disposition is the ledger's word for ledger_pin only; generation compares that pin with this connection's live pin. 'newer generation, not yet audited' means the live pin differs from every pin the ledger records for the table. A disposition covers the scope its ledger statement names; it does not verify relationships that metadata.data_quality calls heuristic or unresolved. Receipts named here are the maintainer's retained evidence, not public files.",
   "ledger": "docs/research/fork-output-ledger-2026-09-21.md",
   "destination": "https://data.spicygov.ai",
   "rows": [
