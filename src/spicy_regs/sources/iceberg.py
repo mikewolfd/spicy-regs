@@ -833,6 +833,8 @@ def export_public_comments(
     work reads local files. Anonymous readers retain their existing paths/schema.
     """
     import duckdb
+    from spicy_regs.schemas.regulations import COMMENT_MIRROR_COLUMNS
+    from spicy_regs.transforms.html_text import SQL_NAME as HTML_TEXT, register_html_text
     from spicy_regs.transforms.partition_comments import assemble_comments, sort_comment_agencies, stage_comment_agencies
 
     resources = resources or ExportResources(memory=memory_limit, threads=threads)
@@ -856,8 +858,13 @@ def export_public_comments(
             # The record type's order is the mirror's column contract (spicy-docs
             # 0.50.0 COMMENT: reference fields after docket_id), not the catalog's
             # physical order, where ALTER ADD COLUMN appends them.
-            columns = list(record_type.schema)
-            source = f"SELECT {_published_projection(record_type, frozenset(missing))} FROM ({source})"
+            # ``COMMENT_MIRROR_COLUMNS`` follow, derived here from the row's own columns in the one catalog scan.
+            derived = {"comment_text": f"{HTML_TEXT}(comment)"}
+            columns = [*record_type.schema, *COMMENT_MIRROR_COLUMNS]
+            register_html_text(con)
+            projection = ", ".join([_published_projection(record_type, frozenset(missing)),
+                                    *(f'{derived[name]} AS "{name}"' for name in COMMENT_MIRROR_COLUMNS)])
+            source = f"SELECT {projection} FROM ({source})"
             stage_comment_agencies(con, source, work_dir / "staging", resources=resources)
         finally:
             con.close()
