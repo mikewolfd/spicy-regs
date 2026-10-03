@@ -267,6 +267,21 @@ carries its kind (`complete`, `scope`, `design`, `empty`), the reason for a
 partial one, and its measured baseline. `scripts/check_table_joins.py` holds the
 live tables to each floor nightly in `check-rollup-freshness.yml`.
 
+## Citation lookup kinds (`resolve_document_citations`)
+
+The tool accepts exactly the keys of `citation_resolution.SOURCE_TABLES`: the
+kinds a writer puts in `document_citations.document_kind` (the print-citations
+rollup's `govinfo_package` and `budget_volume`, and every held-field kind in
+`citation_sources.TEXT_SOURCES`). The schema enumerates them, the server
+compares case-insensitively, and any other kind is a tool error naming the
+supported kinds and the closest one. Before round 4 an unknown kind ran its
+SELECT and answered `complete_held_selection` with no findings, which read as
+"this document cites nothing"; three aliases (`house_activity_report(s)`,
+`budget_volumes`) that no writer emits did the same with `source_read: read`.
+The enum is a schema hint, not pydantic validation, so a differently cased
+kind still reaches the server's own refusal. Raw SQL over `document_citations`
+is not checked.
+
 ## Ledger qualification (`_qualification`)
 
 `describe_table` reports the output ledger's audit for its table beside the

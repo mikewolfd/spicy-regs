@@ -43,6 +43,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from spicy_regs._icon import ICON_DATA_URI
+from spicy_regs.citation_resolution import SOURCE_TABLES
 from spicy_regs.duckdb_settings import INTERACTIVE_HTTP_RETRIES, load_public_http, memory_limit
 from spicy_regs.public_url import resolve_r2_base_url
 from spicy_regs.relationship_views.fec_query_views import fec_query_views
@@ -224,6 +225,8 @@ TABLES = (
     "court_opinion_pdf_extractions",
 )
 STATEMENT_TIMEOUT = os.environ.get("SPICY_REGS_STATEMENT_TIMEOUT", "790s")
+#: The kinds resolve_document_citations accepts and its schema enumerates: the kinds a writer emits.
+DOCUMENT_KINDS = tuple(sorted(SOURCE_TABLES))
 
 logger = logging.getLogger(__name__)
 
@@ -1130,6 +1133,28 @@ def _available_tables(cursor: duckdb.DuckDBPyConnection) -> list[str]:
     ]
 
 
+def _document_kind(requested: str) -> str:
+    """The supported kind ``requested`` names, compared case-insensitively; any other kind is refused.
+
+    The refusal names every supported kind and the closest one: the kinds whose
+    documents a named table holds (``house_activity_reports`` holds
+    ``govinfo_package``), else the nearest spelling.
+    """
+    kind = requested.lower()
+    if kind in SOURCE_TABLES:
+        return kind
+    closest = [name for name, table in SOURCE_TABLES.items() if table in (kind, kind + "s")]
+    closest = closest or difflib.get_close_matches(kind, DOCUMENT_KINDS, n=1)
+    hint = (
+        f" The closest supported kind is {closest[0]!r}." if len(closest) == 1
+        else f" The closest supported kinds are {', '.join(map(repr, closest))}." if closest else ""
+    )
+    raise ValueError(
+        f"Unsupported document_kind {requested!r}.{hint} Supported kinds: {', '.join(DOCUMENT_KINDS)}; "
+        "no other kind has held citation rows."
+    )
+
+
 def _register_tools(mcp: MCPServer) -> None:
     limiter = anyio.CapacityLimiter(TOOL_CONCURRENCY)
 
@@ -1385,7 +1410,7 @@ def _register_tools(mcp: MCPServer) -> None:
 
     @tool
     def resolve_document_citations(
-        document_kind: str,
+        document_kind: Annotated[str, Field(json_schema_extra={"enum": list(DOCUMENT_KINDS)})],
         document_key: str,
         max_occurrences: Annotated[int, Field(ge=1, le=500)] = 100,
     ) -> dict[str, Any]:
@@ -1397,14 +1422,18 @@ def _register_tools(mcp: MCPServer) -> None:
         A capped response sets truncated; it does not establish whole-document coverage.
         acquisition_queue plans qualified missing targets for retained-evidence
         inspection. It performs no acquisition or publication.
-        Held-field kinds bill_section, report_section and lobbying_activity use
-        compact JSON-list keys in their source table's full key order; comment_inline
-        uses the literal comment_id. These scopes cover only the selected field.
+        document_kind is one of the enumerated kinds, compared case-insensitively;
+        any other kind is refused with the supported list. govinfo_package and
+        budget_volume take the GovInfo packageId. A held-field kind takes its
+        source table's key: the literal value for one key column (comment_inline:
+        comment_id), else a compact JSON list in the table's key order. These
+        scopes cover only the selected field.
         """
         from spicy_regs.acquisition_queue import build_missing_target_queue
-        from spicy_regs.citation_resolution import SOURCE_TABLES, resolve_citations
+        from spicy_regs.citation_resolution import resolve_citations
         from spicy_regs.citation_sources import TEXT_SOURCES, source_digests as held_source_digests
 
+        document_kind = _document_kind(document_kind)
         cursor = _get_connection().cursor()
         with _statement_timeout(cursor):
             status = _publication_status(cursor)
