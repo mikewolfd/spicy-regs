@@ -375,7 +375,8 @@ tables:
       Register side. Other granules keep the part their identifier spells,
       except in Title 41, whose identifiers cut a compound part at the hyphen
       (`…-part60` is Part 60-1): there a structural row takes the compound part
-      its part granule's heading states (`60-2`), as the section rows do. The
+      its part granule's heading states (`60-2`), as the section rows do, and a
+      Reserved part granule whose heading states no number takes NULL. The
       Parquet footer key `spicy_regs.cfr_sections.placement` records that every
       row was placed by this rule; generations without it keep
       identifier-derived parts. A package is re-placed only when it is new or
