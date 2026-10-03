@@ -3521,10 +3521,15 @@ tables:
   document_citations:
     label: "Document citation link table"
     coverage: >-
-      Derived: citations read from the bodies of the accepted House activity
-      reports and budget volumes; a budget root the reader refuses yields no
-      citations. Both source families have one writer, the print-citations
-      rollup.
+      Derived: citations read from the bodies of the held source texts. Each
+      row's document_kind is one of the kinds the resolve_document_citations
+      tool accepts (govinfo_package, budget_volume, bill_section,
+      report_section, lobbying_activity, comment_inline,
+      communication_authority, communication_report_nature,
+      communication_record_entry, court_opinion_derived_pdf); the tool refuses
+      any other kind, and a kind with no held rows yet resolves to no
+      occurrences. A budget root the reader refuses yields no citations. Every
+      kind has one writer, the print-citations rollup.
     measured_on: "2026-09-28"
     summary: >-
       One row per occurrence of one cited key in one document's text: the key,
