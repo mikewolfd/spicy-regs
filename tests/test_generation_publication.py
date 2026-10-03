@@ -634,7 +634,7 @@ def test_version_1_omits_split_tables_and_a_family_left_without_tables():
     split = {"byteSize": 1, "rows": 1, "columns": [["id", "VARCHAR"]], "partitionColumns": ["id"], "members": []}
     family = {"prefix": "p", "logicalId": "urn:x", "artifactDigest": "sha256:" + "d" * 64}
     index = {"format": "spicy-regs-publication", "version": 2, "families": {
-        "mixed": {**family, "tables": {"one.parquet": single, "many.parquet": split}},
+        "mixed": {**family, "publishedAt": "2026-10-01T03:12:26Z", "tables": {"one.parquet": single, "many.parquet": split}},
         "split": {**family, "tables": {"all.parquet": split}}}}
     assert pub.derive_v1(index) == {"format": "spicy-regs-publication", "version": 1, "families": {
         "mixed": {**family, "tables": {"one.parquet": single}}}}
@@ -756,3 +756,33 @@ def test_backfill_refuses_when_the_pointer_moved_since_it_read_it(tmp_path):
     with pytest.raises(pub.PublicationError, match="moved since"):
         pub.backfill_published_at(store, "test", apply=True)
     assert pub.parse_index(store.objects[pub.INDEX_V2_KEY]) == moved[0]
+
+
+def test_backfill_refuses_a_generation_without_its_root_or_an_index_without_version_2(tmp_path):
+    directory, _ = build(tmp_path)
+    store = Store()
+    index = _unstamped(store, *publish(store, directory)["families"])
+    del store.objects[index["families"]["test"]["prefix"] + "/artifact.json"]
+    writes = list(store.writes)
+    with pytest.raises(pub.PublicationError, match="no root"):
+        pub.backfill_published_at(store, "test", apply=True)
+    _v1_only(store, index)
+    with pytest.raises(pub.PublicationError, match="absent"):
+        pub.backfill_published_at(store, "test", apply=True)
+    assert store.writes == writes
+
+
+def test_the_backfill_command_writes_only_with_apply(tmp_path, monkeypatch, capsys):
+    from scripts.backfill_published_at import main
+
+    directory, _ = build(tmp_path)
+    store = Store()
+    _unstamped(store, *publish(store, directory)["families"])
+    monkeypatch.setattr(r2, "get_r2_client", lambda: store)
+    monkeypatch.setenv("R2_BUCKET_NAME", "test")
+    writes = list(store.writes)
+    assert main([]) == 0
+    assert json.loads(capsys.readouterr().out)["applied"] is False and store.writes == writes
+    assert main(["--apply"]) == 0
+    assert json.loads(capsys.readouterr().out)["applied"] is True and store.writes == [*writes, pub.INDEX_V2_KEY]
+    assert "publishedAt" in pub.parse_index(store.objects[pub.INDEX_V2_KEY])["families"]["test"]
