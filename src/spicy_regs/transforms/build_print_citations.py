@@ -23,7 +23,6 @@ Senate expenditure granules use a separate acquisition pass
 from __future__ import annotations
 
 import hashlib
-import inspect
 import json
 import os
 from collections import Counter
@@ -35,6 +34,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple, Protocol
 
 import httpx
 from loguru import logger
+from spicy_docs.extraction import BODY_TEXT_DERIVATION_VERSION
 from spicy_docs.extraction.body_text import BodyText, body_text
 from spicy_docs.interpretation.bill_actions import (
     PRINT_ACTION_RULE_SET_VERSION,
@@ -86,7 +86,6 @@ from spicy_docs.sources.govinfo.body_acquisition import (
 from spicy_docs.sources.govinfo.discovery import GovInfoDiscoveryReader, published_url
 from spicy_docs.transport.credentials import CredentialRefusedError, scrub_credential
 
-from spicy_regs.generations import source_digest
 from spicy_regs.sources import r2
 from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key
 from spicy_regs.transforms.congress_scope import current_congress
@@ -269,46 +268,14 @@ def _held_packages(prior_file: Path | None) -> dict[str, _Held]:
     }
 
 
-#: What digesting a directory that holds no code gives: the SHA-256 of nothing.
-_NOTHING_DIGESTED = hashlib.sha256().hexdigest()
-
-
-def _code_digest(package: Path) -> str:
-    """``package``'s code and data digest (``.py``/``.json``/``.xsd``, as ``spicy_docs_code`` reads), refusing an empty one.
-
-    A moved or renamed package digests to the hash of nothing without a word,
-    and a key built on it would stop seeing derivation changes; this refuses
-    instead.
-    """
-    digest = source_digest(package, (".py", ".json", ".xsd"))
-    if digest == _NOTHING_DIGESTED:
-        raise RuntimeError(f"{package} holds no SpicyDocs code, so the print re-read key cannot digest the derivation")
-    return digest
-
-
-def _derivation_code() -> dict[str, str]:
-    """Digest of each SpicyDocs package a print's text is derived in, found from the modules that derive it.
-
-    The package holding ``body_text`` (``extraction``: the PDF reader and
-    ``gpo_normalize``) and the one holding the markup reader it reads other
-    renditions through (``reading``). Whole packages, so no module inside them
-    is missed; their only imports from elsewhere in SpicyDocs are transport
-    byte bounds and credential checks, which never change a text. To be
-    replaced by a derivation version SpicyDocs states itself (DRY scout X4).
-    """
-    from spicy_docs.reading import markup
-
-    packages = (Path(inspect.getfile(body_text)).parent, Path(inspect.getfile(markup)).parent)
-    return {package.name: _code_digest(package) for package in packages}
-
-
 def _processing_versions(vocabularies: Mapping[str, Mapping[str, tuple[tuple[str, str], ...]]]) -> dict[str, str]:
     """Identify every input that decides a print's published rows, even when no finding exists.
 
     **Named inputs, not the installed SpicyDocs' whole-code digest.** Over the
     eight builds vendored through round 5 (0.53.0, printing, four FEC, laws,
     votes), all with one citation rule set, that digest took seven values and
-    this key three (``round5/impl-C/w52_key_across_wheels.out``). Each move of
+    this key three, then digesting the derivation packages itself
+    (``round5/impl-C/w52_key_across_wheels.out``). Each move of
     the digest left every held print outstanding, and with a capped queue the
     same first packages were re-read every day while 20 activity reports stayed
     at bill rule 004 (round 5, W5-2). What the digest stood for is named
@@ -317,8 +284,9 @@ def _processing_versions(vocabularies: Mapping[str, Mapping[str, tuple[tuple[str
     * the citation rule set, and the table each rule names -- ``target_table``
       is written into every citation row but is not in the rule-set digest,
       so a relabel would otherwise never reach a held row;
-    * the body-text derivation: :func:`_derivation_code`, PyMuPDF's release
-      and the rendition order;
+    * the body-text derivation: spicy-docs' ``BODY_TEXT_DERIVATION_VERSION``
+      (it moves when a rendition's text can change, its digest pinned beside
+      it there), PyMuPDF's release and the rendition order;
     * each output's contract columns and types, so a column a contract adds is
       filled on held prints;
     * for reports, the covered-Congress and action rules, the chamber map and
@@ -337,7 +305,7 @@ def _processing_versions(vocabularies: Mapping[str, Mapping[str, tuple[tuple[str
                 for name in _OUTPUTS[collection]}
 
     common = {
-        "derivation_code": _derivation_code(),
+        "body_text_derivation": BODY_TEXT_DERIVATION_VERSION,
         "pdf_reader_release": version("PyMuPDF"),
         "citation_rules": CITATION_RULE_SET_VERSION,
         "citation_rule_tables": sorted((rule.name, rule.target_table) for rule in CITATION_RULES),
