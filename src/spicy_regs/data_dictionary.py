@@ -204,7 +204,10 @@ def data_quality_prose_errors(table: str, data_quality: str) -> list[str]:
 #: corrects it from the table level, and without an expiry it outlives the release that fixes the sentence
 #: (round 4, 2026-10-03: three contract sentences the data contradicted, and the margin-note reader, were
 #: fixed only on an unreleased spicy-docs branch). Once the installed wheel is past the stated version the
-#: check refuses the note: delete it if the wheel fixed what it covers, or restate the marker if not.
+#: check refuses the note: delete it if the wheel fixed what it covers, or restate the marker if not. A
+#: build that fixes none of them (another local build of the same release counts as later) restates every
+#: marker at once: ``sed -i '' 's/(interim until spicy-docs > <old>)/(interim until spicy-docs > <new>)/g'
+#: data_dictionary/descriptions.yaml``, then ``spicy-regs-dict generate``.
 INTERIM_MARKER = re.compile(r"\(interim until spicy-docs > ([^\s()]+)\)")
 _INTERIM_WORDS = re.compile(r"\binterim until\b", re.IGNORECASE)
 

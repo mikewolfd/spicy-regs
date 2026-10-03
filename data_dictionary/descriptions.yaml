@@ -502,6 +502,17 @@ tables:
       re-staged only by a bill-family dispatch scoped to them, so the note
       then narrows to the Congresses not yet dispatched.
       (interim until spicy-docs > 0.53.0+laws.f8431033f626)
+
+      `fiscal_year` is read from the official title only, never
+      `short_title`, by two patterns, `fiscal year NNNN` and `appropriations
+      act[,] NNNN`, so a title naming "the fiscal year ending September 30,
+      2027" or "Appropriations and Extensions Act, 2027" reads NULL. On
+      bill-family generation fd1bb730… (2026-10-03) 7 of the 119th's 42
+      `regular_appropriations` bills and 9 of its 15 `continuing_resolution`
+      bills have none, H.R. 9010 (Legislative Branch, FY2027) among them, and
+      `appropriations_subcommittee` is NULL on H.R. 8469 and 8595. Match the
+      title as well when counting a fiscal year's bills.
+      (interim until spicy-docs > 0.53.0+laws.f8431033f626)
     columns_from: spicy_docs
 
   bill_subjects:
@@ -2457,6 +2468,12 @@ tables:
       so the gap normally lasts one cycle — but a release that rotates off the feed
       during that cycle keeps the NULL permanently. The other publisher columns are
       unaffected; only these four degrade.
+
+      The Senate feed stamps every item `EST`, summer included (`Wed, 30 Sep
+      2026 19:22:00 EST`), and `pub_date_instant` takes the label at its word
+      (`-05:00`); if the feed writes Eastern wall-clock time, an item from
+      March to November reads an hour later than it was posted.
+      (interim until spicy-docs > 0.53.0+laws.f8431033f626)
     columns_from: spicy_docs
 
   roll_call_votes:
@@ -2485,8 +2502,12 @@ tables:
     measured_on: "2026-09-29"
     summary: >-
       One row per roll call: the publisher's own tally, and the bill it refers to.
-      The four tally columns are the publisher's own counts or they are NULL; they
-      are never zero-filled. All columns are stored as VARCHAR.
+      The four tally columns are the publisher's own counts, NULL on a candidate
+      election (a Speaker vote), whose choices `tallies_json` keeps under their
+      own labels. A Senate count element the file leaves empty or omits
+      (`<present/>`, `<absent/>`) is read as 0, which is what the Senate means
+      by it (119-senate-1-15: 50 yea, 50 nay, 0 present, 0 absent). All columns
+      are stored as VARCHAR.
     data_quality: >-
       Two statements link a roll call to a bill, and `match_rule` names the one
       that did. `bill_action_recorded_vote`: a `recordedVotes` entry on the
@@ -2725,15 +2746,34 @@ tables:
       All columns are stored as VARCHAR.
     data_quality: >-
       Cover bills come from the package's MODS and cost no extra requests.
-      BODY mentions do not become hearing links. event_id comes from a verified
-      Congress.gov hearing detail; NULL can mean no meeting or a refused detail.
-      committee_report_reads distinguishes a completed read from a refused one.
+      BODY mentions do not become hearing links. event_id is the meeting the
+      Congress.gov hearing record names (its associatedMeeting), carried as the
+      publisher pairs them. NULL means that record names no meeting, or was
+      refused, and committee_report_reads says which: on committee-reports
+      generation 9aa9d10d… (2026-10-03) all 164 NULL rows were completed reads
+      naming none. It does not mean no meeting exists: a meeting can list the
+      transcript's jacket in `committee_meetings.hearing_jackets_json` without
+      the hearing record naming it. That jacket route is the publisher's
+      many-to-many listing, not a declared join: on committee-meetings
+      generation 31e62420… (2026-10-03) 1,021 meetings list two or more
+      distinct jackets and 1,075 (congress, jacket) values sit on two or more
+      meetings. The declared event_id join reads `complete` because every
+      event_id names a meeting row; that does not check the pairing:
+      CHRG-118hhrg63377 names meeting 116369, an Oversight and Investigations
+      hearing the same day, while its MODS and docs.house.gov place it at
+      116330.
       body_completeness says what the read text states about itself: a
       publisher_placeholder body is the publisher's notice that the document is
       only in the PDF. When the package offers that PDF it is read instead
       (pdf_extracted, with text_derivation naming the extraction); when it
       offers none, the notice is published as it stands. NULL on rows not
       re-read since the column was added.
+
+      `date_issued` is GovInfo's dateIssued, which for a hearing (CHRG)
+      package is the day the hearing was held (a compiled volume's first
+      day), not when the transcript was printed or posted: it equals the
+      meeting's date on all 21 event_id pairs on 2026-10-03.
+      (interim until spicy-docs > 0.53.0+laws.f8431033f626)
     columns_from: spicy_docs
 
   bill_family_archives:
@@ -3259,6 +3299,18 @@ tables:
       people by name, not entries, and a bill named only in meeting documents
       is not in `bill_ids_json`.
 
+      **Senate and NoChamber meetings list no witnesses here.** Congress.gov's
+      committee-meeting detail, the route this table reads, has no
+      `witnesses` element for those chambers (retained detail
+      `119/nochamber/338692`), and a missing list is shaped as empty: on
+      committee-meetings generation 31e62420… (2026-10-03) none of the 2,336
+      Senate and NoChamber rows lists a witness (`witnesses_json` `[]`,
+      `witness_count` 0, `witness_documents_json` `[]`), while 2,735 of the
+      3,761 House rows do. There `[]` means the route stated no list, not
+      that the meeting had no witnesses: GovInfo's MODS for a printed hearing
+      (`hearing_transcripts.package_id`) can name them (CHRG-119shrg64653
+      names four), and this service does not read MODS for witnesses.
+
       The publisher's `NoChamber` value is stored as `nochamber`, matching
       its detail address and preserving the existing row identity. It is
       neither NULL nor an inferred `joint` chamber. The source reader accepts
@@ -3308,7 +3360,12 @@ tables:
       One row per treaty document, as the Congress.gov treaty list and detail
       routes state it, keyed `(congress_received, number, suffix)`. `package_id`
       is the GovInfo CDOC id by the `CDOC-{congress}tdoc{number}` rule on an
-      unpartitioned treaty. All columns are stored as VARCHAR.
+      unpartitioned treaty. That package's MODS
+      (`https://www.govinfo.gov/metadata/pkg/{package_id}/mods.xml`) states
+      the committee the treaty was referred to, which this table does not
+      carry (CDOC-119tdoc1 and -tdoc2: Foreign Relations); the id is derived by
+      rule, so GovInfo may not have published it yet. All columns are stored
+      as VARCHAR.
     data_quality: >-
       On 2026-09-21 the list's stated total agreed with the capture. A row
       whose `titles_json` is NULL is list-only. A partitioned treaty (a
@@ -3340,6 +3397,13 @@ tables:
       or inconsistent walks exhaust the source reader's bounded attempts
       and fail before output is replaced. The list carries the latest
       action only, not the action history.
+
+      `is_civilian` is never `'false'`: the publisher marks a military
+      nomination `{"isMilitary":true}` and states no isCivilian, so military
+      rows are NULL (1,349 NULL and 938 `'true'` on nominations generation
+      3d013ca2…, 2026-10-03). Select military nominations with
+      `nomination_type_json` or `is_civilian IS NULL`.
+      (interim until spicy-docs > 0.53.0+laws.f8431033f626)
     columns_from: spicy_docs
 
   house_activity_reports:
@@ -3523,21 +3587,30 @@ tables:
   document_citations:
     label: "Document citation link table"
     coverage: >-
-      Derived: citations read from the bodies of the held source texts. Each
-      row's document_kind is one of the kinds the resolve_document_citations
-      tool accepts (govinfo_package, budget_volume, bill_section,
-      report_section, lobbying_activity, comment_inline,
-      communication_authority, communication_report_nature,
-      communication_record_entry, court_opinion_derived_pdf); the tool refuses
-      any other kind, and a kind with no held rows yet resolves to no
-      occurrences. A budget root the reader refuses yields no citations. Every
-      kind has one writer, the print-citations rollup.
-    measured_on: "2026-09-28"
+      Derived, and selective: not a list of the texts the service holds.
+      Every House activity report (`govinfo_package`) and budget volume
+      (`budget_volume`) the print-citations family holds is read, and
+      `house_activity_reports` and `budget_volumes` state each read
+      (`pages_read`, `citation_rows`; `citation_rows` 0 is a read that found
+      none). The held-field kinds (bill_section, report_section,
+      lobbying_activity, comment_inline, communication_authority,
+      communication_report_nature, communication_record_entry,
+      court_opinion_derived_pdf) are read only for the fields an operator
+      selects, at most 100 a run, so a held text of those kinds has rows here
+      only once it has been selected. A document with no rows may be held and
+      unread: look a committee report up in `committee_reports` and
+      `report_sections`, a bill's text in `bill_sections`. Each row's
+      document_kind is one the resolve_document_citations tool accepts; the
+      tool refuses any other kind, and a kind with no held rows yet resolves
+      to no occurrences. A budget root the reader refuses yields no
+      citations. Every kind is written by the print-citations family.
+    measured_on: "2026-10-03"
     summary: >-
       One row per occurrence of one cited key in one document's text: the key,
       the exact characters that named it, and the character span it was read
-      at. Thirteen citation kinds, from bill numbers and public laws to RINs,
-      agency dockets and GAO product ids. One shared link table over every
+      at. Citation kinds run from bill numbers and public laws to RINs,
+      agency dockets and GAO product ids (`SELECT DISTINCT cite_kind` lists
+      them). One shared link table over every
       document family, written by exactly one rollup. All columns are stored
       as VARCHAR.
     data_quality: >-
@@ -3570,6 +3643,27 @@ tables:
       text that a consumer may decline. `evidence_page` is NULL where the
       rendition states no page boundary, and a match straddling a page break
       is attributed to the page it began on.
+
+      **A document with no rows here is not shown to be unheld.** On
+      print-citations generation 685f2e27… (2026-10-03) the report_section
+      rows cover 1 of the 158 report packages `report_sections` holds, and
+      each other held-field kind with rows covers two documents. GAO product
+      ids join `gao_reports` on `report_number = target_key`, GAO's own spelling
+      (`report_id` is the same id in lower case): 241 of the 248 distinct
+      ids resolve; the other 7 are six `…SU` products and the misprint
+      `GAO-21-105520` (GAO-23-105520 is held).
+
+      Three vendored column sentences say less than the rows do: `cite_kind`
+      lists nine kinds while the table holds every kind the citation rules
+      define, thirteen on 2026-10-03; `target_resolved` true means the key
+      has the target's spelling, not that the target exists
+      (BUDGET-2027-PER prints "Public Law 119-169", a misprint of 117-169,
+      and the row is resolved while `laws` holds no 119-169); and
+      `evidence_page` is the page's position in the PDF, not the folio
+      printed on it (BUDGET-2027-PER's PDF page 83 prints folio 75). The
+      `gao_product_id` rows' `target_table` still reads "gao products (not
+      hosted; …)", stale rule text: `gao_reports` hosts them.
+      (interim until spicy-docs > 0.53.0+laws.f8431033f626)
     columns_from: spicy_docs
 
   senate_expenditures:
@@ -3622,6 +3716,32 @@ tables:
       that makes the extraction falsifiable is the print's own `Totals` row,
       which agreed to the cent with the sum of its account rows over seven
       money columns on both measured sections.
+
+      **What each package's read window holds.** Part I's pages reach the
+      `A-` summary and the leadership and officers' `B-` pages; Part II's
+      reach a short alphabetical run of senators' offices (in
+      GPO-CDOC-119sdoc6: Justice, Kaine, Kelly and Kennedy), so a
+      Senate-wide or other senator's figure is not here; `SELECT DISTINCT
+      office` for the package says which offices are. The `A-` summary is by
+      appropriation account only, with no object-class (travel and the like)
+      rollup: object classes are in each office's `ORGANIZATION TOTALS`
+      block. One report period's spending is spread over one block per
+      funding year (FY2024, FY2025 and FY2026 in the October 2025 to March
+      2026 report), so sum the blocks' period amounts. A zero prints as
+      `$.00`.
+
+      Two print defects survive extraction. A label the print wraps onto two
+      lines keeps only its last line in `office`: 181 rows read `(D)`, `(R)`,
+      `COMMITTEE (D)` or `COMMITTEE (R)` (45 or 46 per package on
+      senate-expenditures generation 6ce66a59…, 2026-10-03), all in the
+      account for the conference and policy committee chairs' expense
+      allowances that `appropriation_title` names; read the label from the
+      page. And a payroll cell can interleave two printed lines letter by
+      letter ("D SEIR NE AC TT OO RR" for DIRECTOR and SENATOR, on GPO-CDOC-
+      119sdoc5-2 page B-1470 and 119sdoc6-2 page B-1262), so the cells hold
+      the print exactly for the amounts, which stayed intact, and not always
+      for the text.
+      (interim until spicy-docs > 0.53.0+laws.f8431033f626)
     columns_from: spicy_docs
 
   hearing_bill_links:
@@ -3653,7 +3773,7 @@ tables:
     columns_from: spicy_docs
 
   cbo_cost_estimates:
-    measured_on: "2026-09-29"
+    measured_on: "2026-10-03"
     label: "CBO cost-estimate publication index"
     coverage: >-
       Sampled: the estimates CBO lists for the bills the bill family has read,
@@ -3664,8 +3784,13 @@ tables:
       so theirs come from the feed alone; elsewhere the feed adds only what no
       BILLSTATUS record lists, such as the Recovery Act, H.R. 3200 and the ACA.
       A Congress no scoped run has read the feed of yet holds its BILLSTATUS
-      estimates only. An absent estimate does not mean CBO never scored a bill.
-      No CBO.gov body is requested.
+      estimates only. A feed item that names no bill has no row: CBO's weekly
+      estimates of the bills the House takes up under suspension of the
+      rules, a committee's reconciliation recommendations, and an estimate
+      CBO files under no bill number. A bill passed under suspension can be
+      scored in such a weekly estimate first or only, so its first row here
+      does not date CBO's first estimate of it. An absent estimate does not
+      mean CBO never scored a bill. No CBO.gov body is requested.
     summary: >-
       One row per bill and CBO publication, using build_bill_family's own
       cbo_cost_estimates output and spicy-docs' feed builder, merged by
@@ -3694,7 +3819,12 @@ tables:
       `laws` table, which held the 119th Congress alone on 2026-09-29, so such
       a title of an earlier Congress leaves `title_bill_id` NULL and a blank
       feed item titled by an earlier law has no row (110th P.L. 110-50 and
-      112th P.L. 112-8).
+      112th P.L. 112-8). CBO's 119th-Congress feed, read 2026-10-03, holds 53
+      items that name no bill and have no row, 48 of them weekly suspension
+      estimates. 23 of them are among the feed's 674 items dated 2026: 21
+      suspension estimates, 62413 (reconciliation recommendations of the
+      Senate Homeland Security and Governmental Affairs committee) and 62643
+      (the Continuing Appropriations and Extensions Act, 2027).
     columns_from: spicy_docs
 
   bill_cosponsors:

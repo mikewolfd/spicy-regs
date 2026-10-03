@@ -9,6 +9,7 @@ One row per nomination or part, as the Congress.gov nomination list route states
 **Coverage.** Sampled. Distinct 119th-Congress nomination-list identities from retained list pages. The pages repeat some identical records, so a pagination total does not prove a stable or complete population. Latest-action fields only: not nominee details, action histories, person entities or inferred confirmation outcomes. Receipts: fork-execution-2026-09-21/legislative-publication-summary.json, legislative-seeds/sealed-candidates.json and legislative-mcp-audit/. *(measured 2026-09-21)*
 
 **Data quality.** The shared Congress index reader pools complete walks with varied page sizes, keyed by `(congress, citation)`, keeping each identity's newest `updateDate`. A clean walk or a pool matching the declared total settles the query. A population change restarts pooling; incomplete or inconsistent walks exhaust the source reader's bounded attempts and fail before output is replaced. The list carries the latest action only, not the action history.
+`is_civilian` is never `'false'`: the publisher marks a military nomination `{"isMilitary":true}` and states no isCivilian, so military rows are NULL (1,349 NULL and 938 `'true'` on nominations generation 3d013ca2…, 2026-10-03). Select military nominations with `nomination_type_json` or `is_civilian IS NULL`. (interim until spicy-docs > 0.53.0+laws.f8431033f626)
 
 - **Parquet file:** `nominations.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
