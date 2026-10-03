@@ -1,6 +1,8 @@
 site_name: Spicy Regs Data Dictionary
 site_description: Schema reference for the Spicy Regs regulations.gov dataset.
-site_url: https://docs.spicy-regs.dev/
+# The hook derives site_url, service links and CNAME from SPICYREGS_DOMAIN.
+hooks:
+  - scripts/docs_domain.py
 repo_url: https://github.com/civictechdc/spicy-regs
 repo_name: civictechdc/spicy-regs
 edit_uri: edit/main/data_dictionary/descriptions.yaml

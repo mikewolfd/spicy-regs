@@ -4,10 +4,11 @@
   "description": "Cloudflare Containers deploy for the Spicy Regs MCP server",
   "scripts": {
     "test": "node --experimental-test-module-mocks --test tests/*.test.mjs",
-    "types": "wrangler types",
-    "check": "wrangler types && tsc --noEmit && wrangler deploy --dry-run",
-    "deploy": "wrangler deploy --tag \"$(git rev-parse --short HEAD)\" --message \"spicy-regs $(git rev-parse --short HEAD)$(git diff --quiet HEAD || echo ' +uncommitted')\"",
-    "dev": "wrangler dev"
+    "types": "npm run configure && wrangler types",
+    "check": "npm run configure && wrangler types && tsc --noEmit && wrangler deploy --dry-run",
+    "deploy": "npm run configure && wrangler deploy --tag \"$(git rev-parse --short HEAD)\" --message \"spicy-regs $(git rev-parse --short HEAD)$(git diff --quiet HEAD || echo ' +uncommitted')\"",
+    "dev": "npm run configure && wrangler dev",
+    "configure": "python3 ../../scripts/render_cloudflare_config.py"
   },
   "dependencies": {
     "@cloudflare/containers": "^0.3.7"

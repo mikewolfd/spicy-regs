@@ -46,6 +46,15 @@ This repo is the pipeline, the rollups, and the read-only MCP server. It's a
 [Civic Tech DC](https://www.civictechdc.org/) project and new contributors are
 welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
+## Public domain configuration
+
+Set the GitHub Actions **repository variable** `SPICYREGS_DOMAIN` to your bare
+base domain (for example, `spicygov.ai`). Unset or empty uses the upstream
+`spicy-regs.dev` domain. Builds and deployments derive `data.`, `docs.` and
+`mcp.` service addresses from it; the public links below show upstream defaults.
+See [domain setup and override precedence](deploy/public-domain.md), including
+local runs and the separate DNS and GitHub Pages settings.
+
 ## Contents
 
 - [Try it without installing anything](#try-it-without-installing-anything)

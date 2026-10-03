@@ -48,7 +48,7 @@ from spicy_regs._icon import ICON_DATA_URI
 from spicy_regs.citation_resolution import SOURCE_TABLES
 from spicy_regs.duckdb_settings import INTERACTIVE_HTTP_RETRIES, load_public_http, memory_limit
 from spicy_regs.fec_release import QUERY_RELEASE_FIELDS, RELEASE_INVENTORIES, release_summary
-from spicy_regs.public_url import resolve_r2_base_url
+from spicy_regs.public_url import resolve_r2_base_url, service_url
 from spicy_regs.relationship_views.fec_query_views import fec_query_views
 from spicy_regs.vocabulary_mapping import Namespace
 
@@ -2113,7 +2113,12 @@ def _landing_page() -> bytes:
     """
     views = " ·\n        ".join(f'<code class="inline">{table}</code>' for table in TABLES)
     html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
-    return html.replace("<!--VIEWS-->", views).encode("utf-8")
+    return (
+        html.replace("<!--VIEWS-->", views)
+        .replace("{{ MCP_URL }}", service_url("mcp") + "/mcp")
+        .replace("{{ DOCS_URL }}", service_url("docs") + "/")
+        .encode("utf-8")
+    )
 
 
 @lru_cache(maxsize=1)

@@ -123,8 +123,8 @@
 
     <div class="endpoint">
       <span class="label">Endpoint</span>
-      <code>https://mcp.spicy-regs.dev/mcp</code>
-      <button class="copy" type="button" data-copy="https://mcp.spicy-regs.dev/mcp">Copy</button>
+      <code>{{ MCP_URL }}</code>
+      <button class="copy" type="button" data-copy="{{ MCP_URL }}">Copy</button>
     </div>
 
     <div class="tabs" role="tablist" aria-label="Setup instructions by tool">
@@ -153,7 +153,7 @@
       <p class="hint">Remote HTTP:</p>
       <div class="codeblock">
         <button class="copy" type="button">Copy</button>
-        <pre><code>claude mcp add --transport http spicy-regs https://mcp.spicy-regs.dev/mcp</code></pre>
+        <pre><code>claude mcp add --transport http spicy-regs {{ MCP_URL }}</code></pre>
       </div>
       <p class="hint">Local stdio via <code class="inline">uvx</code> (no remote dependency):</p>
       <div class="codeblock">
@@ -170,7 +170,7 @@
         <button class="copy" type="button">Copy</button>
         <pre><code>{
   "mcpServers": {
-    "spicy-regs": { "url": "https://mcp.spicy-regs.dev/mcp" }
+    "spicy-regs": { "url": "{{ MCP_URL }}" }
   }
 }</code></pre>
       </div>
@@ -184,7 +184,7 @@
         <button class="copy" type="button">Copy</button>
         <pre><code>{
   "servers": {
-    "spicy-regs": { "type": "http", "url": "https://mcp.spicy-regs.dev/mcp" }
+    "spicy-regs": { "type": "http", "url": "{{ MCP_URL }}" }
   }
 }</code></pre>
       </div>
@@ -198,7 +198,7 @@
         <button class="copy" type="button">Copy</button>
         <pre><code>{
   "mcpServers": {
-    "spicy-regs": { "serverUrl": "https://mcp.spicy-regs.dev/mcp" }
+    "spicy-regs": { "serverUrl": "{{ MCP_URL }}" }
   }
 }</code></pre>
       </div>
@@ -209,7 +209,7 @@
       <p class="hint">Most clients accept a remote streamable-HTTP URL:</p>
       <div class="codeblock">
         <button class="copy" type="button">Copy</button>
-        <pre><code>https://mcp.spicy-regs.dev/mcp</code></pre>
+        <pre><code>{{ MCP_URL }}</code></pre>
       </div>
       <p class="hint">Or run it locally over stdio with <code class="inline">uvx</code>:</p>
       <div class="codeblock">
@@ -237,7 +237,7 @@
     </div>
 
     <p class="meta">
-      <a href="https://docs.spicy-regs.dev/">Data dictionary</a>
+      <a href="{{ DOCS_URL }}">Data dictionary</a>
       <span class="dot">·</span>
       <a href="https://github.com/civictechdc/spicy-regs">GitHub</a>
       <span class="dot">·</span>

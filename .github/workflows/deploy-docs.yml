@@ -15,6 +15,8 @@ on:
       - 'docs/**'
       - 'mkdocs.yml'
       - 'src/spicy_regs/data_dictionary.py'
+      - 'src/spicy_regs/public_url.py'
+      - 'scripts/docs_domain.py'
       - 'src/spicy_regs/schemas/**'
       - '.github/workflows/deploy-docs.yml'
   # Refresh after the ETL publishes new data.
@@ -47,7 +49,7 @@ jobs:
       - run: uv sync --frozen
       - name: Verify every active published schema
         env:
-          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
+          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL || format('https://data.{0}', vars.SPICYREGS_DOMAIN || 'spicy-regs.dev') }}
         run: |
           : "${R2_PUBLIC_URL:?Set the fork public data URL}"
           uv run --frozen spicy-regs-dict check --source r2 --base "$R2_PUBLIC_URL"
@@ -55,6 +57,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      SPICYREGS_DOMAIN: ${{ vars.SPICYREGS_DOMAIN || 'spicy-regs.dev' }}
+      R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL || format('https://data.{0}', vars.SPICYREGS_DOMAIN || 'spicy-regs.dev') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

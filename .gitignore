@@ -44,3 +44,6 @@ deploy/cloudflare/node_modules/
 
 # Cloudflare Workers generated types
 deploy/cloudflare/worker-configuration.d.ts
+
+# Rendered public-domain deployment configuration
+deploy/cloudflare/wrangler.jsonc

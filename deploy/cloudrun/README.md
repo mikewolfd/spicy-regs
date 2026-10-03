@@ -21,6 +21,11 @@ gcloud auth login
 PROJECT=spicy-regs-mcp ./deploy/cloudrun/deploy.sh
 ```
 
+`SPICYREGS_DOMAIN` selects the MCP smoke-test hostname and the runtime domain.
+It defaults to `spicy-regs.dev`; set it to `spicygov.ai` for Mike's fork.
+`SPICY_REGS_R2_URL`, then `R2_PUBLIC_URL`, override the derived data URL;
+`SMOKE_BASE` still overrides the smoke-test target. See [domain setup](../public-domain.md).
+
 The script enables APIs, ensures the Artifact Registry repo, builds+pushes the
 image (amd64), and deploys. It prints the service URL.
 

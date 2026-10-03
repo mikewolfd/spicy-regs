@@ -19,10 +19,16 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
-R2_BASE_URL = "https://data.spicy-regs.dev"
+# Standalone uv scripts also work without the spicy-regs package installed.
+R2_BASE_URL = (
+    os.environ.get("SPICY_REGS_R2_URL")
+    or os.environ.get("R2_PUBLIC_URL")
+    or f"https://data.{os.environ.get('SPICYREGS_DOMAIN') or 'spicy-regs.dev'}"
+).rstrip("/")
 
 
 def _escape_sql_string(value: str) -> str:

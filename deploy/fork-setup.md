@@ -22,6 +22,12 @@ Verify the login email and account ID above before provisioning. Wrangler
 4.136.1 or later supports the named login used here. These bindings leave other
 projects' logins unchanged. Account IDs are identifiers, not API credentials.
 
+## Public domain
+
+The fork uses the GitHub Actions repository variable `SPICYREGS_DOMAIN=spicygov.ai`.
+See [public domain configuration](public-domain.md) for local deployment commands,
+URL override precedence and the separate DNS/Pages settings.
+
 ## Storage and GitHub Actions
 
 The `spicy-regs` data bucket is provisioned in this account. Its initial public
@@ -40,7 +46,7 @@ The existing workflows read the following **repository secrets** from
 | --- | --- |
 | `R2_ENDPOINT` | `https://174055408ff1560e60601c4d12c561c4.r2.cloudflarestorage.com` |
 | `R2_BUCKET_NAME` | `spicy-regs` |
-| `R2_PUBLIC_URL` | `https://data.spicygov.ai` |
+| `R2_PUBLIC_URL` | Optional explicit override: `https://data.spicygov.ai` |
 | `R2_ACCESS_KEY_ID` | S3 access key scoped to the data bucket |
 | `R2_SECRET_ACCESS_KEY` | Matching S3 secret, supplied through a secure prompt |
 
@@ -59,8 +65,8 @@ Do not put credential values in command arguments, tracked files, or chat.
 Local runs use the same settings in the ignored repository `.env` file.
 
 CLI, analytics, MCP and freshness checks choose `SPICY_REGS_R2_URL`, then
-`R2_PUBLIC_URL`. Ordinary clients with neither configured retain the upstream
-public default. Fork freshness workflows require an explicit data URL. A
+`R2_PUBLIC_URL`, then `https://data.${SPICYREGS_DOMAIN}` (upstream domain when
+unset). Actions derive the data URL unless the existing secret overrides it. A
 read-only override does not change where a pipeline uploads data.
 
 ## Catalog and optional cache purge
@@ -81,9 +87,10 @@ hostnames do not use a zone owned by this fork.
 
 ## MCP hosting
 
-In `deploy/cloudflare/wrangler.jsonc`, `vars.SPICY_REGS_R2_URL` points to the
-bucket above. The Worker returns 503 if that setting is cleared.
-For Iceberg, fill the three catalog variables there and install the Worker secret
+Export `SPICYREGS_DOMAIN=spicygov.ai` before running the Cloudflare npm commands.
+They render `wrangler.jsonc` from `wrangler.template.jsonc`, deriving the MCP route
+and `vars.SPICY_REGS_R2_URL` from the domain. The Worker returns 503 if that setting is cleared.
+For Iceberg, fill the three catalog variables in the template and install the Worker secret
 with `npx wrangler secret put R2_CATALOG_TOKEN`. The Worker explicitly forwards
 these settings and the optional secret to its Python container.
 
