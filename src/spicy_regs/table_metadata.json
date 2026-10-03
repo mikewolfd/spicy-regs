@@ -8771,7 +8771,7 @@
       {
         "column_name": "disbursement_date_status",
         "column_type": "VARCHAR",
-        "description": "Source-presence or conversion state for disbursement_date, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility."
+        "description": "How `disbursement_date` was read. `exact_with_year_bounds`: a two-digit year read in the range described on `disbursement_date`. `outside_selected_year_bounds`: no year in that range ends in those digits (a typed `34` in a file captured in 2026), so `disbursement_date` is NULL. `source_empty`: the source left it blank. `unresolved_century`: every two-digit year in the fec-query generation `81453ac6…` (published 2026-10-02) and earlier, mapped before that range was applied. Not a financial eligibility test."
       },
       {
         "column_name": "communication_date_raw",
@@ -8781,7 +8781,7 @@
       {
         "column_name": "communication_date_status",
         "column_type": "VARCHAR",
-        "description": "Source-presence or conversion state for communication_date, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility."
+        "description": "How `communication_date` was read. `exact_with_year_bounds`: a two-digit year read in the range described on `communication_date`. `outside_selected_year_bounds`: no year in that range ends in those digits (a typed `34` in a file captured in 2026), so `communication_date` is NULL. `source_empty`: the source left it blank. `unresolved_century`: every two-digit year in the fec-query generation `81453ac6…` (published 2026-10-02) and earlier, mapped before that range was applied. Not a financial eligibility test."
       },
       {
         "column_name": "public_disbursement_date_raw",
@@ -8791,7 +8791,7 @@
       {
         "column_name": "public_disbursement_date_status",
         "column_type": "VARCHAR",
-        "description": "Source-presence or conversion state for public_disbursement_date, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility."
+        "description": "How `public_disbursement_date` was read. `exact_with_year_bounds`: a two-digit year read in the range described on `public_disbursement_date`. `outside_selected_year_bounds`: no year in that range ends in those digits (a typed `34` in a file captured in 2026), so `public_disbursement_date` is NULL. `source_empty`: the source left it blank. `unresolved_century`: every two-digit year in the fec-query generation `81453ac6…` (published 2026-10-02) and earlier, mapped before that range was applied. Not a financial eligibility test."
       },
       {
         "column_name": "source_cycle",
@@ -8811,17 +8811,17 @@
       {
         "column_name": "disbursement_date",
         "column_type": "DATE",
-        "description": "Date parsed from the disbursement date stated by the electioneering source. NULL requires the source value and conversion status; capture time is not substituted."
+        "description": "The disbursement date the electioneering source states. A two-digit year (FEC's electioneering file writes `21-FEB-24`) is read as the one year ending in those digits between 1975, when FEC began, and the year the file was captured (`10` is 2010; the range is `date_year_bounds` in `mapping_reason_json`). A typo that stays in the range (`26` for `24`) is typed as written and cannot be detected; `disbursement_date_raw` keeps the date as filed. NULL has its reason in `disbursement_date_status`; capture time is never substituted."
       },
       {
         "column_name": "communication_date",
         "column_type": "DATE",
-        "description": "Date parsed from the source communication date. NULL requires the source value and conversion status; capture time is not substituted."
+        "description": "The communication date the source states. A two-digit year (FEC's electioneering file writes `21-FEB-24`) is read as the one year ending in those digits between 1975, when FEC began, and the year the file was captured (`10` is 2010; the range is `date_year_bounds` in `mapping_reason_json`). A typo that stays in the range (`26` for `24`) is typed as written and cannot be detected; `communication_date_raw` keeps the date as filed. NULL has its reason in `communication_date_status`; capture time is never substituted."
       },
       {
         "column_name": "public_disbursement_date",
         "column_type": "DATE",
-        "description": "Date parsed from the public disbursement date stated by the source. NULL requires the source value and conversion status; capture time is not substituted."
+        "description": "The public disbursement date the source states. A two-digit year (FEC's electioneering file writes `21-FEB-24`) is read as the one year ending in those digits between 1975, when FEC began, and the year the file was captured (`10` is 2010; the range is `date_year_bounds` in `mapping_reason_json`). A typo that stays in the range (`26` for `24`) is typed as written and cannot be detected; `public_disbursement_date_raw` keeps the date as filed. NULL has its reason in `public_disbursement_date_status`; capture time is never substituted."
       }
     ],
     "grain": "One source candidate-associated disbursement observation.",
@@ -10928,7 +10928,7 @@
       {
         "column_name": "expenditure_date_status",
         "column_type": "VARCHAR",
-        "description": "Source-presence or conversion state for expenditure_date, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility."
+        "description": "How `expenditure_date` was read. `exact_with_year_bounds`: a two-digit year read in the range described on `expenditure_date`. `outside_selected_year_bounds`: no year in that range ends in those digits (a typed `34` in a file captured in 2026), so `expenditure_date` is NULL. `source_empty`: the source left it blank. `unresolved_century`: every two-digit year in the fec-query generation `81453ac6…` (published 2026-10-02) and earlier, mapped before that range was applied. Not a financial eligibility test."
       },
       {
         "column_name": "dissemination_date_raw",
@@ -10938,7 +10938,7 @@
       {
         "column_name": "dissemination_date_status",
         "column_type": "VARCHAR",
-        "description": "Source-presence or conversion state for dissemination_date, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility."
+        "description": "How `dissemination_date` was read. `exact`: a four-digit year, as an original filing states it. `exact_with_year_bounds`: a two-digit year read in the range described on `dissemination_date`. `outside_selected_year_bounds`: no year in that range ends in those digits (a typed `34` in a file captured in 2026), so `dissemination_date` is NULL. `source_empty`: the source left it blank. `unresolved_century`: every two-digit year in the fec-query generation `81453ac6…` (published 2026-10-02) and earlier, mapped before that range was applied. Not a financial eligibility test."
       },
       {
         "column_name": "receipt_date_raw",
@@ -10948,7 +10948,7 @@
       {
         "column_name": "receipt_date_status",
         "column_type": "VARCHAR",
-        "description": "Source-presence or conversion state for receipt_date, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility."
+        "description": "How `receipt_date` was read. `exact_with_year_bounds`: a two-digit year read in the range described on `receipt_date`. `outside_selected_year_bounds`: no year in that range ends in those digits (a typed `34` in a file captured in 2026), so `receipt_date` is NULL. `source_empty`: the source left it blank. `unresolved_century`: every two-digit year in the fec-query generation `81453ac6…` (published 2026-10-02) and earlier, mapped before that range was applied. Not a financial eligibility test."
       },
       {
         "column_name": "source_cycle",
@@ -10968,17 +10968,17 @@
       {
         "column_name": "expenditure_date",
         "column_type": "DATE",
-        "description": "Date parsed from the source expenditure date, distinct from dissemination date. NULL requires the source value and conversion status; capture time is not substituted."
+        "description": "The expenditure date the source states, distinct from dissemination date. A two-digit year (FEC's bulk file writes `25-OCT-24`) is read as the one year ending in those digits between 1975, when FEC began, and the year the file was captured (`24` is 2024; the range is `date_year_bounds` in `mapping_reason_json`). A typo that stays in the range (`26` for `24`) is typed as written and cannot be detected; `expenditure_date_raw` keeps the date as filed. NULL has its reason in `expenditure_date_status`; capture time is never substituted."
       },
       {
         "column_name": "dissemination_date",
         "column_type": "DATE",
-        "description": "Date parsed from the source dissemination date, distinct from expenditure date. NULL requires the source value and conversion status; capture time is not substituted."
+        "description": "The dissemination date the source states, distinct from expenditure date. A two-digit year (FEC's bulk file writes `25-OCT-24`) is read as the one year ending in those digits between 1975, when FEC began, and the year the file was captured (`24` is 2024; the range is `date_year_bounds` in `mapping_reason_json`). An original filing states four digits. A typo that stays in the range (`26` for `24`) is typed as written and cannot be detected; `dissemination_date_raw` keeps the date as filed. NULL has its reason in `dissemination_date_status`; capture time is never substituted."
       },
       {
         "column_name": "receipt_date",
         "column_type": "DATE",
-        "description": "Date parsed from the filing receipt date stated by the source. NULL requires the source value and conversion status; capture time is not substituted."
+        "description": "The day FEC received the filing, as the source states it. A two-digit year (FEC's bulk file writes `25-OCT-24`) is read as the one year ending in those digits between 1975, when FEC began, and the year the file was captured (`25` is 2025: a 2024-cycle file holds late filings; the range is `date_year_bounds` in `mapping_reason_json`). A typo that stays in the range (`26` for `24`) is typed as written and cannot be detected; `receipt_date_raw` keeps the date as filed. NULL has its reason in `receipt_date_status`; capture time is never substituted."
       },
       {
         "column_name": "form_type",
@@ -13633,7 +13633,7 @@
       {
         "column_name": "filed_date_status",
         "column_type": "VARCHAR",
-        "description": "Source-presence or conversion state for filed_date, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility."
+        "description": "How `filed_date` was read. `exact_with_year_bounds`: a two-digit year read in the range described on `filed_date`. `outside_selected_year_bounds`: no year in that range ends in those digits (a typed `34` in a file captured in 2026), so `filed_date` is NULL. `source_empty`: the source left it blank. `unresolved_century`: every two-digit year in the fec-query generation `81453ac6…` (published 2026-10-02) and earlier, mapped before that range was applied. Not a financial eligibility test."
       },
       {
         "column_name": "source_cycle",
@@ -13643,7 +13643,7 @@
       {
         "column_name": "filed_date",
         "column_type": "DATE",
-        "description": "Date parsed from the source-stated filing date. NULL requires the source value and conversion status; capture time is not substituted."
+        "description": "The filing date the source states. A two-digit year (FEC's lobbyist file writes `11-SEP-26`) is read as the one year ending in those digits between 1975, when FEC began, and the year the file was captured (`26` is 2026; the capture instant is in `fec_collections`, by `collection_id`). A typo that stays in the range (`26` for `24`) is typed as written and cannot be detected; `filed_date_raw` keeps the date as filed. NULL has its reason in `filed_date_status`; capture time is never substituted."
       },
       {
         "column_name": "is_lobbyist",
@@ -14118,7 +14118,7 @@
       {
         "column_name": "first_receipt_date_status",
         "column_type": "VARCHAR",
-        "description": "Source-presence or conversion state for first_receipt_date, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility."
+        "description": "How `first_receipt_date` was read. `exact_with_year_bounds`: a two-digit year read in the range described on `first_receipt_date`. `outside_selected_year_bounds`: no year in that range ends in those digits (a typed `34` in a file captured in 2026), so `first_receipt_date` is NULL. `source_empty`: the source left it blank. `unresolved_century`: every two-digit year in the fec-query generation `81453ac6…` (published 2026-10-02) and earlier, mapped before that range was applied. Not a financial eligibility test."
       },
       {
         "column_name": "source_cycle",
@@ -14128,7 +14128,7 @@
       {
         "column_name": "first_receipt_date",
         "column_type": "DATE",
-        "description": "Date parsed from the first receipt date supplied by the quality notice. NULL requires the source value and conversion status; capture time is not substituted."
+        "description": "The first receipt date the quality notice states. A two-digit year (FEC's false and fictitious filings list writes `31-DEC-76`) is read as the one year ending in those digits between 1975, when FEC began, and the year the file was captured (`76` is 1976, not 2076; the capture instant is in `fec_collections`, by `collection_id`). A typo that stays in the range (`26` for `24`) is typed as written and cannot be detected; `first_receipt_date_raw` keeps the date as filed. NULL has its reason in `first_receipt_date_status`; capture time is never substituted."
       }
     ],
     "grain": "One source notice observation about an explicitly stated filing/committee scope.",
@@ -15130,7 +15130,7 @@
       {
         "column_name": "receipt_date_status",
         "column_type": "VARCHAR",
-        "description": "Source-presence or conversion state for receipt_date, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility."
+        "description": "How `receipt_date` was read. `exact_with_year_bounds`: a two-digit year read in the range described on `receipt_date`, or on a Form 2 row its `report_year`; a Form 2 date in another year reads `outside_selected_year_bounds`. `outside_selected_year_bounds`: no year in that range ends in those digits (a typed `34` in a file captured in 2026), so `receipt_date` is NULL. `source_empty`: the source left it blank. `unresolved_century`: every Form 1 receipt date in the fec-query generation `81453ac6…` (published 2026-10-02) and earlier, mapped before that range was applied. Not a financial eligibility test."
       },
       {
         "column_name": "source_cycle",
@@ -15140,7 +15140,7 @@
       {
         "column_name": "receipt_date",
         "column_type": "DATE",
-        "description": "Date parsed from the filing receipt date stated by the source. NULL requires the source value and conversion status; capture time is not substituted."
+        "description": "The day FEC received the statement, as the source states it. On a Form 2 (candidate) row the year must be the row's own `report_year`; on a Form 1 (committee) row, a two-digit year (FEC's file writes `31-DEC-24`) is read as the one year ending in those digits between 1975, when FEC began, and the year the file was captured (`24` is 2024; the capture instant is in `fec_collections`, by `collection_id`). A typo that stays in the range (`26` for `24`) is typed as written and cannot be detected; `receipt_date_raw` keeps the date as filed. NULL has its reason in `receipt_date_status`; capture time is never substituted."
       }
     ],
     "grain": "One source Form 1 or Form 2 registration observation.",
@@ -15460,7 +15460,7 @@
       {
         "column_name": "period_start_status",
         "column_type": "VARCHAR",
-        "description": "Source-presence or conversion state for period_start, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility."
+        "description": "How `period_start` was read. `exact`: a four-digit year, as most summary files state it. `not_supplied`: the layout states no start. `exact_with_year_bounds`: a two-digit year read in the range described on `period_start`. `outside_selected_year_bounds`: no year in that range ends in those digits (a typed `34` in a file captured in 2026), so `period_start` is NULL. `source_empty`: the source left it blank. `unresolved_century`: every two-digit year in the fec-query generation `81453ac6…` (published 2026-10-02) and earlier, mapped before that range was applied. Not a financial eligibility test."
       },
       {
         "column_name": "period_end_raw",
@@ -15470,7 +15470,7 @@
       {
         "column_name": "period_end_status",
         "column_type": "VARCHAR",
-        "description": "Source-presence or conversion state for period_end, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility."
+        "description": "How `period_end` was read. `exact`: a four-digit year, as most summary files state it. `exact_with_year_bounds`: a two-digit year read in the range described on `period_end`. `outside_selected_year_bounds`: no year in that range ends in those digits (a typed `34` in a file captured in 2026), so `period_end` is NULL. `source_empty`: the source left it blank. `unresolved_century`: every two-digit year in the fec-query generation `81453ac6…` (published 2026-10-02) and earlier, mapped before that range was applied. Not a financial eligibility test."
       },
       {
         "column_name": "attributes_json",
@@ -15490,12 +15490,12 @@
       {
         "column_name": "period_start",
         "column_type": "DATE",
-        "description": "Date parsed from the start of the source-defined reporting period. NULL requires the source value and conversion status; capture time is not substituted."
+        "description": "Start of the reporting period the source defines; NULL with `not_supplied` for a layout that states none. A two-digit year (the leadership-PAC and bundling files write `31-JUL-26`) is read as the one year ending in those digits between 1975, when FEC began, and the year the file was captured (`09` is 2009; the range is `date_year_bounds` in `mapping_reason_json`). Other layouts state four digits. A typo that stays in the range (`26` for `24`) is typed as written and cannot be detected; `period_start_raw` keeps the date as filed. NULL has its reason in `period_start_status`; capture time is never substituted."
       },
       {
         "column_name": "period_end",
         "column_type": "DATE",
-        "description": "Date parsed from the end of the source-defined reporting period. NULL requires the source value and conversion status; capture time is not substituted."
+        "description": "End of the reporting period the source defines. A two-digit year (the leadership-PAC and bundling files write `31-JUL-26`) is read as the one year ending in those digits between 1975, when FEC began, and the year the file was captured (`26` is 2026; the range is `date_year_bounds` in `mapping_reason_json`). Other layouts state four digits. A typo that stays in the range (`26` for `24`) is typed as written and cannot be detected; `period_end_raw` keeps the date as filed. NULL has its reason in `period_end_status`; capture time is never substituted."
       },
       {
         "column_name": "measures",

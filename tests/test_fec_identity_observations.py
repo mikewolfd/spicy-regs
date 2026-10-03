@@ -20,6 +20,7 @@ def source(native, path, profile="document"):
         source_record_id="row/1",
         source_sha256=PIN,
         source_locator_json=json.dumps(dict(collection_id="collection", source_record_id="row/1", ordinal=1)),
+        observed_at="2026-09-12T13:43:15.058319+00:00",  # when FEC's Form1Filer_2024.csv was captured
         source_url="https://api.open.fec.gov" + path if "/v1/" in path else "https://www.fec.gov" + path,
         metadata_json=json.dumps(native),
         profile=profile,
@@ -55,6 +56,7 @@ def test_statement_image_and_source_row_id_are_not_filing_identifiers():
             COMMITTEE_NAME="A",
             AFFILIATED_COMMITTEE_NAME="NONE",
             BEGIN_IMAGE_NUMBER="202412319740048774",
+            RECEIPT_DATE="31-DEC-24",
         ),
         SELECTION,
         identity.FORM1,
@@ -62,8 +64,9 @@ def test_statement_image_and_source_row_id_are_not_filing_identifiers():
     assert row["committee_id"] == "C00000001" and row["committee_id_status"] == "source_id_shape"
     assert row["filing_key"] is None and row["filing_link_status"] == "unresolved_no_report_number"
     assert row["beginning_image_number"] == "202412319740048774" and row["affiliation_status"] == "source_reported_none"
-    assert row["receipt_date"] is None and row["receipt_date_status"] == "unresolved_century"
-    assert row["current_record_status"] == "unqualified"
+    # The image number's leading digits are the day FEC received the filing (2024-12-31).
+    assert row["receipt_date"] == date(2024, 12, 31) and row["receipt_date_status"] == "exact_with_year_bounds"
+    assert row["current_record_status"] == "unqualified" and row["mapping_status"] == "mapped"
 
 
 def test_form2_uses_report_year_not_election_cycle_for_receipt_date():
@@ -102,13 +105,29 @@ def test_lobbyist_blank_is_not_false_and_names_do_not_create_links():
 
 def test_quality_notice_never_excludes_and_does_not_force_recent_century():
     row, _ = identity.map_registry(
-        registry(identity.QUALITY_NOTICE, committee_id="C00000001", first_receipt_dt="01-JAN-76"),
+        registry(identity.QUALITY_NOTICE, committee_id="P20000055", first_receipt_dt="31-DEC-76"),
         SELECTION,
         identity.QUALITY_NOTICE,
     )
     assert row["notice_scope"] == "source_listed_committee" and row["exclusion_status"] == "no_automatic_exclusion"
-    assert row["first_receipt_date"] is None and row["first_receipt_date_raw"] == "01-JAN-76"
-    assert row["first_receipt_date_status"] == "unresolved_century"
+    # `76` is 1976, FEC's first cycle, not 2076: the bounds end at the year the list was captured.
+    assert row["first_receipt_date"] == date(1976, 12, 31) and row["first_receipt_date_raw"] == "31-DEC-76"
+    assert row["first_receipt_date_status"] == "exact_with_year_bounds"
+
+
+def test_lobbyist_filed_date_is_typed_within_the_capture_year():
+    row, _ = identity.map_registry(
+        registry(
+            identity.LOBBYIST,
+            Committee_Id="C00141218",
+            Is_Lobbyist="Y",
+            Date_Filed="11-SEP-26",
+            Link_Image="http://docquery.fec.gov/cgi-bin/fecimg/?_202609119904193523+0",
+        ),
+        SELECTION,
+        identity.LOBBYIST,
+    )
+    assert row["filed_date"] == date(2026, 9, 11) and row["filed_date_status"] == "exact_with_year_bounds"
 
 
 def test_registry_header_controls_are_not_statements_and_wrong_layout_refuses():

@@ -10,7 +10,7 @@ import json
 
 import pyarrow as pa
 
-from .fec_bulk_financial import financial_date, pairs
+from .fec_bulk_financial import capture_year_bounds, financial_date, pairs
 from .fec_query import AMOUNT_TYPE, CollectionSelection, exact_amount, observation_fields, record_evidence
 
 COMMON = (
@@ -184,8 +184,14 @@ def _json(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
 
 
-def map_summary(row, selection: CollectionSelection, mapping: SummaryMapping, *, year_bounds=None):
-    """Keep one summary observation and its distinct named monetary measures."""
+def map_summary(row, selection: CollectionSelection, mapping: SummaryMapping):
+    """Keep one summary observation and its distinct named monetary measures.
+
+    Two-digit years read within :func:`capture_year_bounds` of the row's ``observed_at``.
+    """
+    dated = mapping.period_start_field or mapping.period_end_field
+    two_digit = dated and mapping.date_format == "DD-MON-YY"
+    year_bounds = capture_year_bounds(row.get("observed_at")) if two_digit else None
     table = "fec_reported_financial_summaries"
     result = observation_fields(table, row, selection, "fec-" + mapping.key)
     native = json.loads(row["metadata_json"])

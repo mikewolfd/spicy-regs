@@ -13,7 +13,7 @@ from urllib.parse import quote, urlsplit
 
 import pyarrow as pa
 
-from .fec_bulk_financial import financial_date, pairs
+from .fec_bulk_financial import capture_year_bounds, financial_date, pairs
 from .fec_query import CollectionSelection, IDENTITY_VERSION, observation_id, record_evidence
 from .fec_relationships import _id_status
 
@@ -238,11 +238,11 @@ def registry_mapping_for(row):
     return choices[0]
 
 
-def map_registry(row, selection: CollectionSelection, mapping: RegistryMapping, *, date_year_bounds=None):
+def map_registry(row, selection: CollectionSelection, mapping: RegistryMapping):
     """Map an already named native CSV row; return None for the exact header.
 
     A Form2 REPORT_YEAR provides a receipt-year witness. Other two-digit dates
-    stay unresolved unless the caller supplies separately evidenced year bounds.
+    read within :func:`capture_year_bounds` of the row's ``observed_at``.
     Source cycle alone is never such evidence.
     """
     if registry_mapping_for(row) != mapping:
@@ -264,7 +264,7 @@ def map_registry(row, selection: CollectionSelection, mapping: RegistryMapping, 
         raise ValueError("Native registry values must remain source text or null")
     result.update({k: native[v] for k, v in mapping.text_fields})
     result["native_field_states_json"] = _json({k: _state(native, k) for k in sorted(required)})
-    bounds = date_year_bounds
+    bounds = capture_year_bounds(row.get("observed_at"))
     if mapping == FORM2:
         raw_year = native["REPORT_YEAR"]
         if raw_year is not None and re.fullmatch(r"[0-9]{4}", raw_year):
