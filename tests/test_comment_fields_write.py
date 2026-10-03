@@ -20,6 +20,16 @@ from spicy_regs.sources import iceberg
 
 T0 = "2020-01-01T00:00:00Z"
 
+# One comment's attachments in both shapes. HELD is the rule before SpicyDocs b19b092 (2026-03-15 to 0.53.0): only
+# downloadable renditions, an entry with none dropped. LISTED is b19b092's: every attachment the record lists, a
+# withheld one with ``formats`` null and its restriction, a rendition with no file with ``url`` null.
+_PDF = {"url": "https://downloads.regulations.gov/EPA-X-0001-0002/attachment_1.pdf", "format": "pdf", "size": 1000}
+HELD = json.dumps([{"title": "Letter", "formats": [_PDF]}])
+LISTED = json.dumps([
+    {"title": "Letter", "formats": [_PDF, {"url": None, "format": "docx", "size": 900}]},
+    {"title": "Study", "formats": None, "restrictReasonType": "Copyrighted", "restrictReason": "Copyrighted material"},
+])
+
 
 @pytest.fixture
 def catalog(tmp_path, monkeypatch):
@@ -150,7 +160,7 @@ def test_prepare_leaves_only_its_outputs_where_the_artifact_collects_them(tmp_pa
     prepared = cfw.prepare(tmp_path)
     assert (prepared["rows_to_fill"], prepared["conflicted_versions_by_column"]["subtype"]) == (1, 1)
     assert sorted(path.name for path in (tmp_path / "fill").glob("*.parquet")) == [
-        "conflicts.parquet", "files.parquet", "fill.parquet"]
+        "conflicts.parquet", "files.parquet", "fill.parquet", "refusals.parquet"]
     assert not (tmp_path / "fill" / "work").exists()
 
 
@@ -174,6 +184,17 @@ def test_copies_that_disagree_on_one_column_block_only_that_column(tmp_path, cat
     assert [(c["comment_id"], c["column"], list(c["keys"])) for c in conflicts] == [("A", "attachments_json",
                                                                                      ["a", "a(1)"])]
     assert prepared["conflicted_versions_by_column"]["attachments_json"] == 1
+
+
+def test_a_read_that_only_adds_withheld_attachments_replaces_the_held_list(tmp_path, catalog):
+    """The 2026-10 re-read: the held list is the read's with its withheld entries and file-less renditions removed."""
+    seed(catalog, [row("A", attachments_json=HELD)])
+    reads(tmp_path, [{"key": "a", "comment_id": "A", "attachments_json": LISTED}])
+    prepared, written = fill(tmp_path, catalog)
+    assert table(catalog)["A"]["attachments_json"] == LISTED
+    assert (prepared["rows_to_fill"], written["rows_changed"]) == (1, 1)
+    assert (prepared["replaced_by_column"], prepared["cells_by_column"]["attachments_json"]) == ({"attachments_json": 1}, 0)
+    assert prepared["refused_not_additive_by_column"] == {"attachments_json": 0}
 
 
 def test_a_stated_null_disagreeing_with_a_value_is_a_conflict(tmp_path, catalog):
