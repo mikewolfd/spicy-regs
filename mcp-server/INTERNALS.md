@@ -22,7 +22,12 @@ to the Python server in Cloudflare Containers.
 **The tool docstrings are not documentation — do not delete them.**
 MCPServer reflects over `fn.__doc__` to build the tool descriptions sent to every
 client during `list_tools`; the `tool` wrapper in `_register_tools` copies each
-docstring and signature with `functools.wraps`. `describe_table`'s docstring is how a client learns
+signature with `functools.wraps` and registers the docstring through
+`inspect.cleandoc` as the description. MCPServer sends `__doc__` as written, and
+Claude Code cuts a description at 2,048 characters (`CLAUDE_CODE_MAX_MCP_DESCRIPTION_LENGTH`)
+with "… [truncated]": round 4 found `query_sql`'s 2,132 characters, 225 of them
+indentation, cut mid-word for three personas. `tests/test_chaos_r4_server.py`
+holds every registered description to 2,000 characters with no indented line. `describe_table`'s docstring is how a client learns
 which tables are valid; `query_sql`'s is how it learns the available views.
 Strip them and the server still runs, but every client goes blind. Verify with
 `asyncio.run(build_server().list_tools())`.
@@ -32,6 +37,9 @@ Strip them and the server still runs, but every client goes blind. Verify with
 
 ## Connection setup (`_build_connection`, `_get_connection`, `_apply_security_settings`)
 
+- A local directory (`SPICY_REGS_DATA_DIR`) replaces R2 for the whole
+  connection and never falls back to remote files; every reply's `source` names
+  which one it read.
 - `SET home_directory` **must precede** `INSTALL`/`LOAD`. DuckDB writes
   extensions under `<home_directory>/.duckdb`, and the default home is read-only
   or undefined on serverless hosts — hence `_resolve_home_directory` defaulting
@@ -366,6 +374,14 @@ file its reader cannot page, so two of five personas never read a row.
   `SELECT *` on `committee_meetings` at 204,218 bytes, 99.6% of it rows, and a
   43-row GAO result at 81,801 bytes that the client spilled to a file it could
   not page.
+- **Each reply is sent once as data and once as its compact JSON text.** MCPServer's
+  default text block is the structured result indented (`indent=2`), so the wire
+  carried each reply twice, the second copy 1.1 to 1.7 times the first. Claude
+  Code reads `structuredContent` (its spill files are compact JSON), and the MCP
+  specification asks only for the serialized JSON in a text block, so `tool`
+  returns a `CallToolResult` whose text is the compact JSON: `list_sources` went
+  from 86,603 to 75,403 bytes and a FEC view's description from 59,148 to
+  17,168 with the release summary above.
 - **`list_sources` states each table's pinned `rows`** (the index descriptor's or
   the snapshot manifest's count; null for a legacy table no pointer pins) so a
   declared table whose generation publishes no rows is visible at discovery

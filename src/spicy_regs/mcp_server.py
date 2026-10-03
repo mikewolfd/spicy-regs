@@ -11,6 +11,7 @@ from __future__ import annotations
 import base64
 import difflib
 import functools
+import inspect
 import json
 import logging
 import os
@@ -32,10 +33,11 @@ from uuid import UUID
 import anyio
 import anyio.to_thread
 import duckdb
+import pydantic_core
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
-from mcp.types import Icon
+from mcp.types import CallToolResult, Icon, TextContent
 from pydantic import Field
 from starlette.requests import Request
 from starlette.responses import Response
@@ -1137,16 +1139,24 @@ def _register_tools(mcp: MCPServer) -> None:
         A failure reaches the caller with its text. MCPServer shows only a
         ToolError's message, and DuckDB's errors and the read-only refusals are
         what a caller needs to correct a query.
+
+        The description is the docstring without its indentation: MCPServer sends
+        ``__doc__`` as written, and clients cap descriptions (Claude Code at 2,048
+        characters). The reply's text block is the compact JSON of its structured
+        content; the SDK's default text is the same object indented, sent twice.
         """
 
         @functools.wraps(fn)
-        async def call(**arguments: Any) -> dict[str, Any]:
+        async def call(**arguments: Any) -> CallToolResult:
             try:
-                return await anyio.to_thread.run_sync(functools.partial(fn, **arguments), limiter=limiter)
+                result = await anyio.to_thread.run_sync(functools.partial(fn, **arguments), limiter=limiter)
             except Exception as exc:
                 raise ToolError(str(exc)) from exc
+            structured = pydantic_core.to_jsonable_python(result, fallback=str)
+            text = pydantic_core.to_json(structured).decode()
+            return CallToolResult(content=[TextContent(type="text", text=text)], structured_content=structured)
 
-        return mcp.tool()(call)
+        return mcp.tool(description=inspect.cleandoc(fn.__doc__ or ""))(call)
 
     @tool
     def lookup_agency(
@@ -1314,33 +1324,29 @@ def _register_tools(mcp: MCPServer) -> None:
     ) -> dict[str, Any]:
         """Run read-only SQL against configured Spicy Regs tables, returning up to max_rows rows.
 
-        Only SELECT runs; DESCRIBE, SHOW, SUMMARIZE, VALUES and the
-        FROM-first shorthand are accepted as SELECT. Statements that write
-        (COPY TO, ATTACH, CREATE, INSERT, DROP, EXPORT, SET, ...) are refused.
-        EXPLAIN is refused because its ANALYZE form can execute writes.
-        The connection reads either R2 or an explicitly configured local directory.
-        Local mode never falls back to remote files. One view exists per
-        table listed by list_sources. Always include a LIMIT in exploratory
-        queries. truncated reports whether rows beyond max_rows were omitted
-        from what the statement returned; rows your own LIMIT excluded are not
-        counted, so to learn whether more exist, set LIMIT above max_rows or
-        run a COUNT. max_cell_chars, when set, cuts every text, list or struct
-        cell longer than that many characters to its first max_cell_chars
-        characters (a list or struct as compact JSON text) and lists each cut
-        cell in truncated_cells with its full length; nothing is cut when
-        unset. To page a long result, ORDER BY a key and use LIMIT n OFFSET m
-        in the SQL. SQL is DuckDB's dialect: `~` matches the whole string
-        (use regexp_matches for a substring match, lower() for case).
-        Selected columns must have unique names; alias shared names in joins.
-        sql echoes the statement this reply answers.
+        Only SELECT runs; DESCRIBE, SHOW, SUMMARIZE, VALUES and the FROM-first
+        shorthand are accepted as SELECT. Statements that write (COPY TO, ATTACH,
+        CREATE, INSERT, DROP, EXPORT, SET, ...) are refused. EXPLAIN is refused
+        because its ANALYZE form can execute writes. One view exists per table
+        listed by list_sources. Always include a LIMIT in exploratory queries.
+        truncated reports whether rows beyond max_rows were omitted from what the
+        statement returned; rows your own LIMIT excluded are not counted, so to
+        learn whether more exist, set LIMIT above max_rows or run a COUNT.
+        max_cell_chars, when set, cuts every text, list or struct cell longer than
+        that many characters to its first max_cell_chars characters (a list or
+        struct as compact JSON text) and lists each cut cell in truncated_cells
+        with its full length; nothing is cut when unset. To page a long result,
+        ORDER BY a key and use LIMIT n OFFSET m in the SQL. SQL is DuckDB's
+        dialect: `~` matches the whole string (use regexp_matches for a substring
+        match, lower() for case). Selected columns must have unique names; alias
+        shared names in joins. sql echoes the statement this reply answers.
         publication gives each table the query names: its live data version,
-        pinned row count and coverage kind (a window or sample is not the
-        source's full history). Qualified-view pins keep the registered meaning
-        and purpose limits even for SELECT value only. Release compatible is not
-        financial eligibility or current/net-money qualification.
-        Call describe_table for full release evidence. Compare receipt, SQL,
-        input and evidence pins after refresh; a later description may name a
-        different release. Query replies do not repeat storage/consumer inventories.
+        pinned row count and coverage kind (a window or sample is not the source's
+        full history). Qualified-view pins keep the registered meaning and purpose
+        limits even for SELECT value only. Release compatible is not financial
+        eligibility or current/net-money qualification. Call describe_table for
+        full release evidence. Compare receipt, SQL, input and evidence pins
+        after refresh; a later description may name a different release.
         """
         cursor = _get_connection().cursor()
         write_statement = _first_write_statement(cursor, sql)
