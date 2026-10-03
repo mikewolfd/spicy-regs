@@ -41,6 +41,7 @@ from __future__ import annotations
 import hashlib
 import json
 import secrets
+import shutil
 import time
 from os import getenv
 from pathlib import Path
@@ -268,67 +269,92 @@ def prepare(workdir: Path, *, scope: dict[str, str] | None = None, reads: Path |
                                "(docs/comment-fields-fill.md)")
         table_rows = con.execute(f"SELECT count(*) FROM ({source})").fetchone()[0]
         where = " AND ".join(f'"{column}" = {_sql(value)}' for column, value in (scope or {}).items()) or "TRUE"
-        cols = ", ".join(f'"{c}"' for c in FILL_COLUMNS)
         with_file = source.replace("SELECT *", f"SELECT *, {FILE_COLUMN} AS _file", 1)
-        con.execute(f"""CREATE OR REPLACE TEMP TABLE _cat AS SELECT comment_id, agency_code, docket_id, modify_date,
-                        {cols}, _file FROM ({with_file}) WHERE {where}""")
-        duplicated = con.execute("SELECT count(*) FROM (SELECT comment_id FROM _cat GROUP BY 1 HAVING count(*) > 1)"
+        # Every intermediate is a Parquet file the next step streams, never an in-memory table: three whole-table
+        # temp tables (the catalog's 15 fill values, the read copies with their object keys, and every version with
+        # its key list) ran the runner out of 6 GB at the fill's COPY (run 37105894011, 2026-10-03). They sit in
+        # ``fill/work``, outside the artifact's ``fill/*.parquet``, and go once the receipt is written.
+        work = out / "work"
+        work.mkdir(exist_ok=True)
+        cat_file, read_file, versions_file = work / "catalog.parquet", work / "reads.parquet", work / "versions.parquet"
+        catalog, read_rows, versions = (f"read_parquet({_sql(path)})" for path in (cat_file, read_file, versions_file))
+        # Of a catalog cell the fill reads only whether it is NULL, so the catalog side is the key, the data file and
+        # one flag per fill column: the one scan of the remote table, streamed to disk.
+        nulls = ", ".join(f'"{c}" IS NULL AS "null_{c}"' for c in FILL_COLUMNS)
+        con.execute(f"""COPY (SELECT comment_id, modify_date, {nulls}, _file FROM ({with_file}) WHERE {where})
+                        TO {_sql(cat_file)} (FORMAT PARQUET, COMPRESSION ZSTD)""")
+        duplicated = con.execute(f"SELECT count(*) FROM (SELECT comment_id FROM {catalog} GROUP BY 1 HAVING count(*) > 1)"
                                  ).fetchone()[0]
         if duplicated:
             raise RuntimeError(f"{duplicated} comment ids appear more than once in the catalog; run the dedupe first")
         read_from = reads or workdir / "parts" / "*" / "*.parquet"
         parts = f"read_parquet({_sql(read_from)}, hive_partitioning=false)"
         values = ", ".join(f'CAST(s."{c}" AS VARCHAR) AS "{c}"' for c in FILL_COLUMNS)
-        con.execute(f"""CREATE OR REPLACE TEMP TABLE _read AS SELECT s.key, s.comment_id, s.modify_date, {values}
-                        FROM {parts} s SEMI JOIN _cat USING (comment_id)""")
+        # The copies of the comments in scope, less their object keys: only a version read more than once can
+        # conflict, so only those keys are read again, below.
+        con.execute(f"""COPY (SELECT s.comment_id, s.modify_date, {values} FROM {parts} s
+                              SEMI JOIN {catalog} c USING (comment_id))
+                        TO {_sql(read_file)} (FORMAT PARQUET, COMPRESSION ZSTD)""")
         # Per column: how many spellings the copies of one version state (NULL counted as one), and the value. All
         # but 842 of the re-read's 26.6M versions were read once and state one spelling each, so only versions read
         # more than once are aggregated: a DISTINCT count over every version ran out of 6 GB (2026-09-29).
         same = "m.comment_id = r.comment_id AND m.modify_date IS NOT DISTINCT FROM r.modify_date"
-        con.execute("""CREATE OR REPLACE TEMP TABLE _multi AS SELECT comment_id, modify_date FROM _read
-                       GROUP BY comment_id, modify_date HAVING count(*) > 1""")
-        once = ", ".join(f'1 AS "n_{c}", "{c}" AS "v_{c}"' for c in FILL_COLUMNS)
+        con.execute(f"""CREATE OR REPLACE TEMP TABLE _multi AS SELECT comment_id, modify_date FROM {read_rows}
+                        GROUP BY comment_id, modify_date HAVING count(*) > 1""")
         spell = ", ".join(
             f"""count(DISTINCT CASE WHEN "{c}" IS NULL THEN 'n' ELSE 'v' || "{c}" END) AS "n_{c}", """
             f"""any_value("{c}") AS "v_{c}\""""
             for c in FILL_COLUMNS)
-        con.execute(f"""CREATE OR REPLACE TEMP TABLE _versions AS
-            SELECT comment_id, modify_date, [key] AS keys, {once} FROM _read r
+        con.execute(f"""CREATE OR REPLACE TEMP TABLE _spellings AS SELECT comment_id, modify_date, {spell}
+                        FROM {read_rows} r WHERE EXISTS (SELECT 1 FROM _multi m WHERE {same})
+                        GROUP BY comment_id, modify_date""")
+        # Each version's value per column: a version read once states it; one read more often states it only where
+        # its copies agree, so a conflicted column holds NULL and fills nothing.
+        agreed = ", ".join(f'CASE WHEN "n_{c}" = 1 THEN "v_{c}" END AS "{c}"' for c in FILL_COLUMNS)
+        stated = ", ".join(f'"{c}"' for c in FILL_COLUMNS)
+        con.execute(f"""COPY (
+            SELECT comment_id, modify_date, {stated} FROM {read_rows} r
             WHERE NOT EXISTS (SELECT 1 FROM _multi m WHERE {same})
             UNION ALL
-            SELECT comment_id, modify_date, list(key ORDER BY key) AS keys, {spell} FROM _read r
-            WHERE EXISTS (SELECT 1 FROM _multi m WHERE {same}) GROUP BY comment_id, modify_date""")
+            SELECT comment_id, modify_date, {agreed} FROM _spellings
+        ) TO {_sql(versions_file)} (FORMAT PARQUET, COMPRESSION ZSTD)""")
+        con.execute(f"""CREATE OR REPLACE TEMP TABLE _keys AS SELECT comment_id, modify_date, list(key ORDER BY key) AS keys
+                        FROM {parts} r WHERE EXISTS (SELECT 1 FROM _multi m WHERE {same}) GROUP BY ALL""")
         conflicts = " UNION ALL ".join(
-            f"""SELECT comment_id, modify_date, '{c}' AS "column", keys FROM _versions WHERE "n_{c}" > 1"""
+            f"""SELECT comment_id, modify_date, '{c}' AS "column" FROM _spellings WHERE "n_{c}" > 1"""
             for c in FILL_COLUMNS)
-        con.execute(f"COPY (SELECT * FROM ({conflicts}) ORDER BY 1, 3) TO {_sql(out / 'conflicts.parquet')} "
-                    "(FORMAT PARQUET)")
-        fills = {c: f"""(c."{c}" IS NULL AND v."n_{c}" = 1 AND v."v_{c}" IS NOT NULL)""" for c in FILL_COLUMNS}
+        con.execute(f"""COPY (SELECT x.comment_id, x.modify_date, x."column", k.keys FROM ({conflicts}) x
+                              JOIN _keys k ON k.comment_id = x.comment_id
+                              AND k.modify_date IS NOT DISTINCT FROM x.modify_date ORDER BY 1, 3)
+                        TO {_sql(out / 'conflicts.parquet')} (FORMAT PARQUET)""")
+        fills = {c: f"""(c."null_{c}" AND v."{c}" IS NOT NULL)""" for c in FILL_COLUMNS}
         # Only the value to fill, NULL elsewhere: a write that overwrote instead of filling would blank a cell.
-        filled = ", ".join(f'CASE WHEN {fills[c]} THEN v."v_{c}" END AS "{c}"' for c in FILL_COLUMNS)
+        filled = ", ".join(f'CASE WHEN {fills[c]} THEN v."{c}" END AS "{c}"' for c in FILL_COLUMNS)
+        # Unsorted: a sort of the 17.3M rows to fill (2026-10-03) spilled past 14 GB under a 3 GB budget, and a
+        # batch reads this file filtered on ``_file`` whatever its order.
         con.execute(f"""COPY (
             SELECT c.comment_id, c.modify_date, c._file, {filled}
-            FROM _cat c JOIN _versions v ON v.comment_id = c.comment_id AND v.modify_date IS NOT DISTINCT FROM c.modify_date
+            FROM {catalog} c JOIN {versions} v ON v.comment_id = c.comment_id
+            AND v.modify_date IS NOT DISTINCT FROM c.modify_date
             WHERE {' OR '.join(fills.values())}
-            ORDER BY c._file, c.comment_id
         ) TO {_sql(out / 'fill.parquet')} (FORMAT PARQUET, COMPRESSION ZSTD)""")
-        counts = con.execute("""
+        counts = con.execute(f"""
             SELECT count(*),
-                   count(*) FILTER (WHERE NOT EXISTS (SELECT 1 FROM _read r WHERE r.comment_id = c.comment_id)),
-                   count(*) FILTER (WHERE EXISTS (SELECT 1 FROM _read r WHERE r.comment_id = c.comment_id)
-                                    AND NOT EXISTS (SELECT 1 FROM _versions v WHERE v.comment_id = c.comment_id
+                   count(*) FILTER (WHERE NOT EXISTS (SELECT 1 FROM {read_rows} r WHERE r.comment_id = c.comment_id)),
+                   count(*) FILTER (WHERE EXISTS (SELECT 1 FROM {read_rows} r WHERE r.comment_id = c.comment_id)
+                                    AND NOT EXISTS (SELECT 1 FROM {versions} v WHERE v.comment_id = c.comment_id
                                                     AND v.modify_date IS NOT DISTINCT FROM c.modify_date))
-            FROM _cat c""").fetchall()[0]
-        cells = dict(zip(FILL_COLUMNS, con.execute(
-            f"SELECT {', '.join(f'count(*) FILTER (WHERE {fills[c]})' for c in FILL_COLUMNS)} "
-            "FROM _cat c JOIN _versions v ON v.comment_id = c.comment_id "
-            "AND v.modify_date IS NOT DISTINCT FROM c.modify_date").fetchall()[0]))
+            FROM {catalog} c""").fetchall()[0]
+        fill_rows = f"read_parquet({_sql(out / 'fill.parquet')})"
+        # A fill cell is non-NULL exactly where its rule held, so the fill file counts its own cells.
+        counted = ", ".join(f'count("{c}")' for c in FILL_COLUMNS)
+        to_fill, *by_column = con.execute(f"SELECT count(*), {counted} FROM {fill_rows}").fetchall()[0]
+        cells = dict(zip(FILL_COLUMNS, by_column))
         conflicted = dict(zip(FILL_COLUMNS, con.execute(
-            f"SELECT {', '.join(f'count(*) FILTER (WHERE n_{c} > 1)' for c in FILL_COLUMNS)} FROM _versions"
+            f"SELECT {', '.join(f'count(*) FILTER (WHERE n_{c} > 1)' for c in FILL_COLUMNS)} FROM _spellings"
         ).fetchall()[0]))
-        to_fill = con.execute(f"SELECT count(*) FROM read_parquet({_sql(out / 'fill.parquet')})").fetchone()[0]
         sizes = data_files(con)
-        con.execute(f"""COPY (SELECT _file AS file, count(*) AS rows FROM read_parquet({_sql(out / 'fill.parquet')})
+        con.execute(f"""COPY (SELECT _file AS file, count(*) AS rows FROM {fill_rows}
                         GROUP BY 1 ORDER BY 1) TO {_sql(out / 'files.parquet')} (FORMAT PARQUET)""")
         files = con.execute(f"SELECT file, rows FROM read_parquet({_sql(out / 'files.parquet')})").fetchall()
     finally:
@@ -348,6 +374,7 @@ def prepare(workdir: Path, *, scope: dict[str, str] | None = None, reads: Path |
         "prepared_at": _now(),
     }
     (out / "prepare.json").write_text(json.dumps(receipt, indent=2) + "\n")
+    shutil.rmtree(out / "work")
     return receipt
 
 
