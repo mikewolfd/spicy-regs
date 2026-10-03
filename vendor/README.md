@@ -5,6 +5,14 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
+- `spicy_docs-0.53.0+laws.f8431033f626`: native enacted-law sections and source URLs from
+  source commit `f8431033f62633b1e7ffbb00a063748f582f6ab4`.
+  SHA-256 `b011d6a57622cc8756b54560c484fd5c7fa3b0a4a893298d75239a7b64766686`. Two committed-archive
+  builds produced identical bytes. Reuses the acquired law XML and retains
+  section hierarchy, quotations, source paths, and text outside sections.
+  This is a vendored branch build. Build receipt:
+  `law-text-integration-20261002/source/wheel.json`.
+
 - `spicy_docs-0.53.0+printing.11189d72bd29`: bill-printing provenance correction from
   source commit `11189d72bd29b542874c2081d8dad5e57cd24333`.
   SHA-256 `335a7c409fbe87ff656caff5a671996d895a750a32bfc10bc52b5f88df751316`. Two committed-archive

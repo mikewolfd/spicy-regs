@@ -113,7 +113,8 @@ class StubUslm:
             raise UslmSourceError("stub: the body was not the expected shape")
         if selection == PublicLawSelection(119, "public", 1):
             meta = validate_public_law_xml(USLM_BYTES, selection=selection, final_url=public_law_xml_locator(selection))
-            return SimpleNamespace(metadata=meta, capture=_Capture(USLM_BYTES))
+            url = public_law_xml_locator(selection)
+            return SimpleNamespace(metadata=meta, capture=replace(_Capture(USLM_BYTES), requested_url=url, resolved_url=url))
         raise AssertionError(f"the stub holds no PLAW for {selection}")
 
 
@@ -188,7 +189,7 @@ def _build(tmp_path, *, reader=None, uslm=None, olrc=None, **kw):
 
 def test_a_cold_start_publishes_every_listed_law_with_its_uslm_outcome(tmp_path, scoped):
     uslm = StubUslm(unavailable={110, 109, 104})
-    laws, _, _ = _build(tmp_path, uslm=uslm)
+    laws, _, _, _ = _build(tmp_path, uslm=uslm)
 
     # Newest first, every listed law asked about, none twice.
     assert [s.number for s in uslm.selections] == [110, 109, 104, 1]
@@ -207,7 +208,7 @@ def test_a_cold_start_publishes_every_listed_law_with_its_uslm_outcome(tmp_path,
 
 def test_the_classification_leg_reads_the_public_law_order_the_index_links(tmp_path, scoped):
     olrc = StubOlrc()
-    _, sections, _ = _build(tmp_path, olrc=olrc)
+    _, sections, _, _ = _build(tmp_path, olrc=olrc)
 
     # The index links both sessions of the 119th in both orders; only the
     # public-law order is asked for, and the 1st session's refusal is that
@@ -227,7 +228,7 @@ def test_a_session_page_replaces_its_prior_rows_and_leaves_other_sessions(tmp_pa
         [{"congress": "119", "session": "2", "seq": str(i), "observed_at": "2026-09-01"} for i in range(20)]
         + [{"congress": "119", "session": "1", "seq": "0", "observed_at": "2026-09-01"}],
     )
-    _, sections, _ = _build(tmp_path)
+    _, sections, _, _ = _build(tmp_path)
     rows = _rows(sections)
     assert sum(1 for r in rows if r["session"] == "2") == 9, "the twenty stale positions are gone"
     assert sum(1 for r in rows if r["session"] == "1") == 1, "the session not read this run keeps its rows"
@@ -235,7 +236,7 @@ def test_a_session_page_replaces_its_prior_rows_and_leaves_other_sessions(tmp_pa
 
 def test_an_index_failure_reads_no_session_table_and_is_not_a_record(tmp_path, scoped):
     olrc = StubOlrc(index_error=ConnectionError("stub: timed out"))
-    _, sections, _ = _build(tmp_path, olrc=olrc)
+    _, sections, _, _ = _build(tmp_path, olrc=olrc)
     assert olrc.tables == [] and _rows(sections) == []
 
 
@@ -264,7 +265,7 @@ def _laws(tmp_path, *keys):
 def test_table_iii_is_one_bulk_read_for_every_congress_the_laws_table_holds(tmp_path, scoped):
     _laws(tmp_path, "118-2")
     olrc = StubOlrc()
-    _, _, table3 = _build(tmp_path, olrc=olrc)
+    _, _, table3, _ = _build(tmp_path, olrc=olrc)
 
     assert olrc.bulk_reads == 1
     rows = _rows(table3)
@@ -311,7 +312,7 @@ def test_a_fragment_s_own_volume_goes_with_its_records_and_seq_runs_through_the_
 
 
 def test_an_unchanged_bulk_derives_nothing(tmp_path, scoped):
-    _, _, first = _build(tmp_path)
+    _, _, first, _ = _build(tmp_path)
     published, checkpoints = _rows(first), read_checkpoints(first, "laws-table3")
     _again(tmp_path)
     olrc = StubOlrc(observed_at="2026-09-20T00:00:00Z")
@@ -349,11 +350,11 @@ def _rerun(tmp_path, olrc):
     """Publish the first run, then run ``olrc`` over it with evidence; the second run's journal and rows."""
     from spicy_regs.source_evidence import CaptureEvidence
 
-    _, _, first = _build(tmp_path)
+    _, _, first, _ = _build(tmp_path)
     before = (_rows(first), read_checkpoints(first, "laws-table3"))
     _again(tmp_path)
     evidence = CaptureEvidence(tmp_path, "laws")
-    _, _, table3 = _build(tmp_path, olrc=olrc, evidence=evidence)
+    _, _, table3, _ = _build(tmp_path, olrc=olrc, evidence=evidence)
     return before, (_rows(table3), read_checkpoints(table3, "laws-table3")), _journal(evidence)
 
 
@@ -415,7 +416,7 @@ def test_a_page_era_act_with_no_bulk_checkpoint_is_held_all_the_same(tmp_path, s
     seed(tmp_path, "table3_records", [{"act_key": "119-2", "seq": "0", "release_point": "119-73",
                                        "observed_at": "2026-09-01"}])
     evidence = CaptureEvidence(tmp_path, "laws")
-    _, _, table3 = _build(tmp_path, olrc=StubOlrc(release_point=release_point), evidence=evidence)
+    _, _, table3, _ = _build(tmp_path, olrc=StubOlrc(release_point=release_point), evidence=evidence)
     journal = _journal(evidence)
     held = "119-2" in {r["act_key"] for r in _rows(table3)}
     if retired is None:
@@ -432,7 +433,7 @@ def test_a_spicy_docs_release_string_derives_nothing_and_its_code_derives_again(
 
     from spicy_regs.transforms import build_laws as module
 
-    _, _, first = _build(tmp_path)
+    _, _, first, _ = _build(tmp_path)
     published = _rows(first)
     _again(tmp_path)
     if change == "release":
@@ -462,7 +463,7 @@ def test_a_congress_that_left_the_laws_scope_keeps_its_table_iii_rows_current(tm
 
 
 def test_a_failed_bulk_read_leaves_every_row_and_checkpoint_standing(tmp_path, scoped):
-    _, _, first = _build(tmp_path)
+    _, _, first, _ = _build(tmp_path)
     published, checkpoints = _rows(first), read_checkpoints(first, "laws-table3")
     _again(tmp_path)
     _build(tmp_path, olrc=StubOlrc(bulk=ConnectionError("stub: incomplete chunked read")))
@@ -508,7 +509,7 @@ def test_the_citation_reaches_congress_bills_from_a_law_the_run_captured(tmp_pat
 
     from spicy_regs.transforms.table_merge import merge_contract_table, prior_scratch_path
 
-    laws, _, _ = _build(tmp_path)
+    laws, _, _, _ = _build(tmp_path)
     assert _by_law(laws)["119-public-1"]["statutes_at_large_cite"] == "139 Stat. 3"
     # The published laws table is what the next congress_bills writer downloads.
     laws.rename(prior_scratch_path(tmp_path, "laws"))
@@ -523,12 +524,12 @@ def test_the_citation_reaches_congress_bills_from_a_law_the_run_captured(tmp_pat
     assert rows["119-s-307"]["statutes_at_large_cite"] is None, "119-110's PLAW lagged; nothing is guessed"
 
 
-def test_a_captured_law_is_not_re_read_unless_its_list_row_moved(tmp_path, scoped):
+def test_captured_metadata_without_text_is_read_and_failed_reads_keep_prior_metadata(tmp_path, scoped):
     seed(
         tmp_path,
         "laws",
         [
-            # Same update_date as the list row: left standing, not asked about.
+            # Same date, but sections have not been read: acquire once to populate them.
             {
                 "law_id": "119-public-1",
                 "congress": "119",
@@ -563,10 +564,10 @@ def test_a_captured_law_is_not_re_read_unless_its_list_row_moved(tmp_path, scope
         ],
     )
     uslm = StubUslm(unavailable={110, 109, 104})
-    laws, _, _ = _build(tmp_path, uslm=uslm)
-    assert [s.number for s in uslm.selections] == [110, 109, 104]
+    laws, _, _, _ = _build(tmp_path, uslm=uslm)
+    assert [s.number for s in uslm.selections] == [110, 109, 104, 1]
     rows = _by_law(laws)
-    assert rows["119-public-1"]["title"] == "the prior row", "no fresh row was written over the held one"
+    assert rows["119-public-1"]["law_text_outcome"] == "parsed"
     assert rows["119-public-1"]["statutes_at_large_cite"] == "139 Stat. 3"
     # The failed reread does not erase its previously validated native body.
     assert rows["119-public-109"]["uslm_outcome"] == "captured"
@@ -591,7 +592,7 @@ def test_the_cap_leaves_held_rows_standing_and_lists_the_rest_as_not_requested(t
         ],
     )
     uslm = StubUslm()
-    laws, _, _ = _build(tmp_path, uslm=uslm, max_uslm=0)
+    laws, _, _, _ = _build(tmp_path, uslm=uslm, max_uslm=0)
     assert uslm.selections == []
     rows = _by_law(laws)
     assert (
@@ -603,7 +604,7 @@ def test_the_cap_leaves_held_rows_standing_and_lists_the_rest_as_not_requested(t
 
 def test_a_transport_failure_or_refused_body_is_never_published_as_absence(tmp_path, scoped):
     uslm = StubUslm(unavailable={110, 109}, refused={104, 1})
-    laws, _, _ = _build(tmp_path, uslm=uslm)
+    laws, _, _, _ = _build(tmp_path, uslm=uslm)
     rows = _by_law(laws)
     assert rows["119-public-110"]["uslm_outcome"] == "unavailable"
     assert rows["119-public-104"]["uslm_outcome"] == "request_failed"
@@ -621,7 +622,7 @@ def test_a_credential_refusal_aborts_the_run(tmp_path, scoped):
 def test_the_published_shapes_are_the_contracts(tmp_path, scoped):
     from spicy_docs.schemas import TABLE_CONTRACTS
 
-    for name, path in zip(("laws", "law_code_sections", "table3_records"), _build(tmp_path), strict=True):
+    for name, path in zip(("laws", "law_code_sections", "table3_records", "law_sections"), _build(tmp_path), strict=True):
         assert path.name == f"{name}.parquet"
         assert pq.read_table(path).schema.names == list(TABLE_CONTRACTS[name].columns)
 
@@ -640,7 +641,8 @@ def test_private_law_read_is_partial_and_stands_under_the_current_rule(tmp_path,
     class Source:
         def acquire_public_law(self, selection, *, max_bytes=None):
             asked.append(selection)
-            return SimpleNamespace(metadata=meta, capture=_Capture(body))
+            url = public_law_xml_locator(selection)
+            return SimpleNamespace(metadata=meta, capture=replace(_Capture(body), requested_url=url, resolved_url=url))
 
     law = {"number": f"119-{number}", "type": "Private Law"}
     plain = shape_law(LAW_119_1, law)
@@ -652,7 +654,8 @@ def test_private_law_read_is_partial_and_stands_under_the_current_rule(tmp_path,
     assert rows[0]["uslm_sha256"] == _Capture(body).sha256
     assert json.loads(rows[0]["uslm_citable_as_json"]) == [f"Private Law 119–{number}"]
 
-    current = {str(plain["law_id"]): HeldLaw(plain["update_date"], "captured_partial", USLM_READER_VERSION)}
+    current = {str(plain["law_id"]): HeldLaw(plain["update_date"], "captured_partial", USLM_READER_VERSION,
+                                          "parsed", rows[0]["law_text_reader_version"])}
     assert _law_rows([(LAW_119_1, law, plain)], current, Source(), PerRunCap(1, "test")) == []
     assert len(asked) == 1, "an unchanged partial read under the current rule is not asked again"
 

@@ -194,6 +194,8 @@ JOINS: tuple[Join, ...] = (
                  "baseline were 118th-Congress meetings it had not listed (join-gaps-2026-09-26/f/). Receipt "
                  "join-map-2026-09-26/live-check-after-fixes.json."),
     _join("report_sections", ("package_id", "part_id"), "committee_reports", ("package_id", "part_id"), 142, 0),
+    _join("law_sections", "law_id", "laws", "law_id", 0, 0, "empty",
+          "Sections from the law's own XML; public population not yet baselined."),
     _join("law_code_sections", "law_id", "laws", "law_id", 70, 0),
     # Regulations.gov and the Federal Register.
     _join("documents", "docket_id", "dockets", "docket_id", 278_651, 114,

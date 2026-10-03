@@ -136,6 +136,7 @@ nav:
       - nominations: tables/nominations.md
       # A8/A9 (laws and rosters)
       - laws: tables/laws.md
+      - law_sections: tables/law_sections.md
       - law_code_sections: tables/law_code_sections.md
       - table3_records: tables/table3_records.md
       - committees: tables/committees.md

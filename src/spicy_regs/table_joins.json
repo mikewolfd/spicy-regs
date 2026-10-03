@@ -918,6 +918,24 @@
       }
     },
     {
+      "child": "law_sections",
+      "child_columns": [
+        "law_id"
+      ],
+      "parent": "laws",
+      "parent_columns": [
+        "law_id"
+      ],
+      "kind": "empty",
+      "reason": "Sections from the law's own XML; public population not yet baselined.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
       "child": "law_code_sections",
       "child_columns": [
         "law_id"
@@ -2250,6 +2268,17 @@
         "parent_columns": [
           "package_id",
           "part_id"
+        ]
+      }
+    ],
+    "law_sections": [
+      {
+        "child_columns": [
+          "law_id"
+        ],
+        "parent_table": "laws",
+        "parent_columns": [
+          "law_id"
         ]
       }
     ],

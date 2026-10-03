@@ -29,7 +29,7 @@ from spicy_regs.source_evidence import INPUT_ROLE
 from spicy_regs.sources import publication
 
 #: Family -> the journal events that mean its build refused a source read and published the rest.
-REFUSAL_EVENTS: dict[str, tuple[str, ...]] = {"laws": ("table3-bulk-refused",)}
+REFUSAL_EVENTS: dict[str, tuple[str, ...]] = {"laws": ("table3-bulk-refused", "law-text-refused")}
 
 
 def refusals(base_url: str, index: Mapping, declared: Mapping[str, tuple[str, ...]] = REFUSAL_EVENTS) -> list[str]:

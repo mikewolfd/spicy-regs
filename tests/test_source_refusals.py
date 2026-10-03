@@ -82,7 +82,7 @@ def test_a_refused_bulk_read_fails_the_nightly_check_and_blocks_nothing_else(tmp
                                                                                reason, table3_rows):
     """Each refusal leaves the prior Table III rows standing, publishes laws, and fails the check; a clean read passes."""
     rows = _published(tmp_path, monkeypatch, olrc, after=StubOlrc())
-    assert rows == {"laws.parquet": 4, "law_code_sections.parquet": 9, "table3_records.parquet": table3_rows}
+    assert rows == {"laws.parquet": 4, "law_code_sections.parquet": 9, "table3_records.parquet": table3_rows, "law_sections.parquet": 3}
     assert check.main(["--base-url", BASE]) == (1 if reason else 0)
     out = capsys.readouterr().out
     if reason:
@@ -96,6 +96,22 @@ def test_a_refused_bulk_read_fails_the_nightly_check_and_blocks_nothing_else(tmp
 def test_a_transport_failure_is_retried_next_run_not_alerted(tmp_path, monkeypatch, capsys):
     _published(tmp_path, monkeypatch, StubOlrc(bulk=ConnectionError("stub: incomplete chunked read")))
     assert check.main(["--base-url", BASE]) == 0
+
+
+def test_law_text_refusal_is_visible_to_the_nightly_check(tmp_path, monkeypatch, capsys):
+    import importlib
+    from spicy_docs.sources.govinfo.uslm import UslmSourceError
+
+    module = importlib.import_module("spicy_regs.transforms.build_laws")
+
+    def refuse(*args, **kwargs):
+        raise UslmSourceError("fixture: section layout refused")
+
+    monkeypatch.setattr(module, "read_law_sections", refuse)
+    rows = _published(tmp_path, monkeypatch, StubOlrc())
+    assert rows["law_sections.parquet"] == 0
+    assert check.main(["--base-url", BASE]) == 1
+    assert "law-text-refused" in capsys.readouterr().out
 
 
 def test_a_family_that_cannot_show_its_refusals_fails(tmp_path, monkeypatch):
