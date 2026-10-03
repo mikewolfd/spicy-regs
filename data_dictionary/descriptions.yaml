@@ -2463,6 +2463,9 @@ tables:
       identifies the row within its roll call, not a person, since at least 21
       labels of those years name two different members. `member_vote_terms`
       leaves such a row `unresolved_member`; no name is matched to a member.
+      Senate rows carry the bioguide id resolved from their LIS id through
+      `members` at the votes merge; a Senate row still NULL has a LIS id that
+      `members` does not hold, or holds twice (`unresolved_member`).
     columns_from: spicy_docs
 
   members:
@@ -2824,7 +2827,11 @@ tables:
       retains main-body text outside those sections, including appropriation
       blocks; it is NULL unless parsed and may be an empty string on success.
       The section rows and remainder are printed law text, not consolidated
-      current law. All columns are stored as VARCHAR.
+      current law. `uslm_observed_at` on an `unavailable` or `request_failed`
+      row is when its PLAW locator was last read. A publisher-refused Table III
+      read is journaled `table3-bulk-refused` with reason `access-refused`, and
+      the laws family publishes without the Table III rows that read would have
+      added. All columns are stored as VARCHAR.
     summary: >-
       One row per enacted law the Congress.gov law list route states, with the
       Statutes at Large citation from the law's own PLAW USLM file where
