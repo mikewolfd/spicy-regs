@@ -3310,14 +3310,14 @@ tables:
       **Senate and NoChamber meetings list no witnesses here.** Congress.gov's
       committee-meeting detail, the route this table reads, has no
       `witnesses` element for those chambers (retained detail
-      `119/nochamber/338692`), and a missing list is shaped as empty: on
-      committee-meetings generation 31e62420… (2026-10-03) none of the 2,336
-      Senate and NoChamber rows lists a witness (`witnesses_json` `[]`,
-      `witness_count` 0, `witness_documents_json` `[]`), while 2,735 of the
-      3,761 House rows do. There `[]` means the route stated no list, not
-      that the meeting had no witnesses: GovInfo's MODS for a printed hearing
-      (`hearing_transcripts.package_id`) can name them (CHRG-119shrg64653
-      names four), and this service does not read MODS for witnesses.
+      `119/nochamber/338692`): on committee-meetings generation 31e62420…
+      (2026-10-03) none of the 2,336 Senate and NoChamber rows lists a
+      witness (each reads `witnesses_json` `[]` and `witness_count` 0), while
+      2,735 of the 3,761 House rows do. Such a row without witnesses means
+      the route stated none, not that the meeting had none: GovInfo's MODS
+      for a printed hearing (`hearing_transcripts.package_id`) can name them
+      (CHRG-119shrg64653 names four), and this service does not read MODS for
+      witnesses.
 
       The publisher's `NoChamber` value is stored as `nochamber`, matching
       its detail address and preserving the existing row identity. It is
