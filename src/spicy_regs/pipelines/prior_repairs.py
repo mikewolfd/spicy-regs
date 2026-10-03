@@ -329,9 +329,9 @@ def add_missing_bills(prior: Path, out: Path, bill_ids: Sequence[str], source: A
     from spicy_docs.schemas import TABLE_CONTRACTS
 
     from spicy_regs.transforms import build_bill_family as family
-    from spicy_regs.transforms.congress_scope import bill_identity
+    from spicy_docs.sources.congress.bill_status import BillIdentity
 
-    identities = [bill_identity(key) for key in dict.fromkeys(bill_ids)]
+    identities = [BillIdentity.from_bill_id(key) for key in dict.fromkeys(bill_ids)]
     if not identities:
         raise ValueError("Name at least one bill to repair")
     columns = TABLE_CONTRACTS["congress_bills"].columns

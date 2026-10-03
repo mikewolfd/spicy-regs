@@ -108,7 +108,6 @@ from spicy_regs.transforms.bill_family_bodies import (
 )
 from spicy_regs.transforms.congress_scope import (
     BULK_STATUS_FLOOR,
-    bill_identity,
     bill_types_from_env,
     bulk_status_budget,
     congresses_from_env,
@@ -718,7 +717,7 @@ def _prior_index(
                 version = version_from_row(row)
                 # Consult the same source policy as new acquisition. Keep the offered
                 # law facts; regenerate every body-derived field through its shaper.
-                if bill_text_package_id(bill_identity(row["bill_id"]), version) is not None:
+                if bill_text_package_id(BillIdentity.from_bill_id(row["bill_id"]), version) is not None:
                     raise ValueError("law listing unexpectedly selects a BILLS acquisition target")
                 invalid_targets[(row["bill_id"], row["version_code"], row["source"])] = BillVersionCapture(
                     version=version, version_code=row["version_code"], source=LISTED_SOURCE,
@@ -840,7 +839,7 @@ def _target_repair_rows(index: PriorIndex, fresh: Sequence[Mapping[str, Any]], e
         if (bill, code) not in refreshed and ((bill, code) not in captures or source == LISTED_SOURCE):
             captures[(bill, code)] = capture
     return BillFamilyTables.concat([
-        build_bill_printings(bill_identity(bill), (capture,), engine=engine, diff=False)
+        build_bill_printings(BillIdentity.from_bill_id(bill), (capture,), engine=engine, diff=False)
         for (bill, _code), capture in captures.items()
     ])
 
@@ -1210,10 +1209,12 @@ def _retained_entry(acquirer: BulkStatusSource, acquisition: Any, congress: int,
 def rederived_stages(actions: Path | None, bill_ids: Collection[str] | None = None) -> dict[str, str]:
     """Each bill's stage as the running rule reads its published ``bill_actions``, for ``bill_ids`` (all when None).
 
-    The rows are passed as ``bill_family`` passes a BILLSTATUS list: in publisher order (``action_index``), newest
-    first, so an unchanged bill re-derives the stage this run publishes. Folded over the live generation, this
-    reproduced every published stage under the rule that wrote it (spicy-docs' 0.51.0 stage replay). A bill with
-    no published action is absent: no rule read it.
+    The rows are passed as they are published, in publisher order (``action_index``), newest first, as
+    ``bill_family`` passes a BILLSTATUS list, with the bill's own type: ``infer_stage`` reads published rows, and
+    their ``source_system_name`` and the type are what a chamber-aware rule reads (a Senate bill "Held at the
+    desk." by the House is in the other chamber). So an unchanged bill re-derives the stage this run publishes,
+    and no rule change surfaces as a ``stage_changed`` event. A bill with no published action is absent: no rule
+    read it. A key the bill grammar refuses (16 of the 6th-42nd Congresses) is read without its type.
     """
     import duckdb
 
@@ -1221,19 +1222,32 @@ def rederived_stages(actions: Path | None, bill_ids: Collection[str] | None = No
         return {}
     wanted = duckdb.sql("SELECT UNNEST(?::VARCHAR[]) AS bill_id", params=[sorted(bill_ids or ())])  # noqa: F841 — read by name below
     only = "" if bill_ids is None else "SEMI JOIN wanted w ON t.bill_id = w.bill_id"
-    rows = duckdb.sql(
-        "SELECT t.bill_id, t.action_text, t.action_code, t.action_type, t.action_date, t.action_time "
+    held_columns = [column for column in _STAGE_READ_COLUMNS if _has_columns(actions, (column,))]
+    relation = duckdb.sql(
+        f"SELECT t.bill_id, {', '.join(f't.{column}' for column in held_columns)} "
         f"FROM read_parquet('{actions}') t {only} ORDER BY t.bill_id, TRY_CAST(t.action_index AS INTEGER)"
-    ).fetchall()
+    )
     stages: dict[str, str] = {}
     current, held = None, []
-    for bill, text_, code, kind, date, time in (*rows, (None, None, None, None, None, None)):
+    for bill, *values in (*relation.fetchall(), (None, *([None] * len(held_columns)))):
         if bill != current:
             if current is not None:
-                stages[current] = infer_stage(held, newest_first=True).stage
+                stages[current] = infer_stage(held, newest_first=True, bill_type=_bill_type(current)).stage
             current, held = bill, []
-        held.append({"text": text_, "actionCode": code, "type": kind, "actionDate": date, "actionTime": time})
+        held.append(dict(zip(held_columns, values)))
     return stages
+
+
+#: The published ``bill_actions`` columns the stage rule reads, by their published names.
+_STAGE_READ_COLUMNS = ("action_text", "action_code", "action_type", "action_date", "action_time", "source_system_name")
+
+
+def _bill_type(bill_id: str) -> str | None:
+    """The type a ``bill_id`` names, through its owner's grammar; None for a key it refuses."""
+    try:
+        return BillIdentity.from_bill_id(bill_id).bill_type
+    except BillSourceError:
+        return None
 
 
 def _prior_snapshot(paths: Mapping[str, Path | None], bill_ids: Collection[str]) -> Any:
@@ -2459,7 +2473,7 @@ def _require_spelled_digests(paths: Mapping[str, Path | None]) -> None:
 
 
 def _in_scope(bill_id: str, congresses: Collection[int], bill_types: Collection[str]) -> bool:
-    identity = bill_identity(bill_id)
+    identity = BillIdentity.from_bill_id(bill_id)
     return identity.congress in congresses and identity.bill_type in bill_types
 
 

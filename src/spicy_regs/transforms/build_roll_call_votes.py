@@ -86,7 +86,7 @@ from spicy_docs.interpretation.vote_matching import (
     read_vote_file_statement,
 )
 from spicy_docs.schemas.congress_activity_tables import shape_member_vote, shape_roll_call_vote
-from spicy_docs.sources.congress.bill_status import BillSourceError
+from spicy_docs.sources.congress.bill_status import BillIdentity, BillSourceError
 from spicy_docs.sources.congress.votes import (
     VoteAcquirer,
     VoteBudget,
@@ -101,7 +101,6 @@ from spicy_regs.sources import r2
 from spicy_regs.transforms.build_bill_family import VOTE_REFERENCES_TABLE
 from spicy_regs.transforms.congress_scope import (
     FIRST_CONGRESS_YEAR,
-    bill_identity,
     congresses_from_env,
     default_congresses,
     sessions_of,
@@ -290,7 +289,7 @@ def _recorded_vote_references(
                     vote=VoteKey(
                         congress=int(congress), chamber=str(chamber), session=int(session), roll_number=int(roll_number)
                     ),
-                    bill=bill_identity(str(bill_id)),
+                    bill=BillIdentity.from_bill_id(str(bill_id)),
                     rule=RECORDED_RULE,
                     url=None if url is None else str(url),
                     date=None if date is None else str(date),

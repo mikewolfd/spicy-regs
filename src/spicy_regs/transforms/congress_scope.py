@@ -20,7 +20,6 @@ from functools import cache
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from spicy_docs.sources.congress.bill_status import BillIdentity
     from spicy_docs.sources.congress.bulk_status import BulkStatusBudget
 
 #: Congress 1 convened in 1789 and each runs two calendar years, session 1 in
@@ -162,30 +161,3 @@ def record_volumes(congress: int, today: date | None = None) -> tuple[int, ...]:
     """The Record volumes of ``congress``'s sessions that have begun by ``today``, oldest first."""
     first_year = FIRST_CONGRESS_YEAR + 2 * (congress - 1)
     return tuple(first_year + session - 1 - RECORD_VOLUME_OFFSET for session in sessions_of(congress, today))
-
-
-def bill_identity(bill_id: str) -> BillIdentity:
-    """A published ``bill_id`` (``119-hr-1``) back to the identity it was built from: the one parse of it here.
-
-    The key must split into Congress, type and number and rebuild itself
-    exactly through spicy-docs' ``schemas.tables.bill_id``, so a zero-padded or
-    otherwise noncanonical key refuses (``BillSourceError``) rather than naming
-    another bill. Of the 421,773 ``congress_bills`` ids of bill-family
-    fd1bb730 (2026-10-03) all rebuild but 16 of the 6th-42nd Congresses whose
-    numbers are not decimal (``41-hr-742½``), which refuse; no caller reads
-    that far back. To become spicy-docs' ``BillIdentity.from_bill_id`` once it ships.
-    """
-    from spicy_docs.schemas.tables import bill_id as bill_key
-    from spicy_docs.sources.congress.bill_status import BillIdentity, BillSourceError
-
-    parts = bill_id.split("-")
-    if len(parts) != 3:
-        raise BillSourceError(f"bill_id {bill_id!r} is not congress-type-number")
-    congress, bill_type, number = parts
-    try:
-        identity = BillIdentity(int(congress), bill_type, int(number))
-    except ValueError as error:
-        raise BillSourceError(f"bill_id {bill_id!r} is not congress-type-number: {error}") from error
-    if (rebuilt := bill_key(identity)) != bill_id:
-        raise BillSourceError(f"bill_id {bill_id!r} is not canonical: its identity spells {rebuilt!r}")
-    return identity

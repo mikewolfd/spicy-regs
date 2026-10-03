@@ -233,6 +233,36 @@ def test_rederived_stages_fold_published_actions_in_publisher_order(tmp_path):
     assert build.rederived_stages(None) == {}
 
 
+def test_rederived_stages_read_published_rows_as_the_build_reads_bills(tmp_path):
+    """A published row passes as it is: its chamber's system and the bill's own type reach the stage rule (DRY A1).
+
+    A Senate bill the House holds at the desk is in the other chamber only when the rule knows the bill is a
+    Senate bill and that the House's system entered "Held at the desk." (it names neither chamber). Renaming the
+    rows into BILLSTATUS keys and dropping both read it ``passed_chamber``, so every such bill raised a false
+    ``stage_changed`` event against the stage the build publishes.
+    """
+    from spicy_docs.interpretation.bill_stage import infer_stage
+
+    rows = [
+        {"bill_id": "119-s-12", "action_index": "0", "action_text": "Held at the desk.", "action_code": None,
+         "action_type": "Floor", "action_date": "2026-03-05", "action_time": None,
+         "source_system_name": "House floor actions"},
+        {"bill_id": "119-s-12", "action_index": "1",
+         "action_text": "Passed Senate without amendment by Unanimous Consent.", "action_code": "17000",
+         "action_type": "Floor", "action_date": "2026-03-04", "action_time": None,
+         "source_system_name": "Library of Congress"},
+        {"bill_id": "119-s-12", "action_index": "2", "action_text": "Introduced in Senate", "action_code": "10000",
+         "action_type": "IntroReferral", "action_date": "2026-03-01", "action_time": None,
+         "source_system_name": "Library of Congress"},
+    ]
+    path = tmp_path / "bill_actions.parquet"
+    pq.write_table(pa.Table.from_pylist(rows), path)
+    published = infer_stage([{k: v for k, v in row.items() if k != "bill_id"} for row in rows], newest_first=True,
+                            bill_type="s").stage
+    assert published == "other_chamber"
+    assert build.rederived_stages(path) == {"119-s-12": published}
+
+
 def test_a_bare_summary_digest_refuses_the_run_before_any_compare(tmp_path, scoped_119):
     first = run(tmp_path / "first", prior=None, feed=None, bulk=StubBulkAcquirer())
     schema = pq.read_schema(first["bill_summaries"])

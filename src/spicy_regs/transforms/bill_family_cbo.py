@@ -44,7 +44,6 @@ from spicy_docs.sources.cbo import CboAcquirer, CboBudget, CboSourceError
 from spicy_docs.sources.congress.bill_status import BillIdentity
 from spicy_docs.transport.credentials import scrub_credential
 
-from spicy_regs.transforms.congress_scope import bill_identity
 
 if TYPE_CHECKING:
     from spicy_regs.source_evidence import CaptureEvidence
@@ -93,7 +92,7 @@ def prior_citations(path: Path | None, congresses: Collection[int]) -> dict[Bill
         f"SELECT bill_id, any_value(report_citations_json) FROM read_parquet('{path}') "
         f"WHERE congress IN ({wanted}) AND report_citations_json IS NOT NULL GROUP BY bill_id"
     ).fetchall():
-        found[bill_identity(bill)] = tuple(entry["citation"] for entry in json.loads(cited))
+        found[BillIdentity.from_bill_id(bill)] = tuple(entry["citation"] for entry in json.loads(cited))
     return found
 
 

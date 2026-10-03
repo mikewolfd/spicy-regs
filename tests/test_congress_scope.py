@@ -110,39 +110,3 @@ def test_a_non_numeric_congress_is_refused(monkeypatch):
     monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "119,next")
     with pytest.raises(ValueError, match="Congress numbers"):
         congresses_from_env()
-
-
-# --------------------------------------------------------------------------- #
-# One reading of a published bill_id back into its identity.
-# --------------------------------------------------------------------------- #
-@pytest.mark.parametrize(
-    "key",
-    [
-        "119-hr-01",  # zero-padded: int() would read it as H.R. 1, another key
-        "119-hr- 1",
-        "119-hr",
-        "119-hr-1-2",
-        "119-HR-1",
-        # The 16 congress_bills ids that fail the grammar are all 6th-42nd Congress spellings.
-        "41-hr-742½",
-        "14-hr-LXXXV",
-        "17-cen_doc_h-3",
-    ],
-)
-def test_a_bill_id_that_does_not_rebuild_itself_refuses(key):
-    from spicy_docs.sources.congress.bill_status import BillSourceError
-
-    from spicy_regs.transforms.congress_scope import bill_identity
-
-    with pytest.raises(BillSourceError):
-        bill_identity(key)
-
-
-def test_a_bill_id_reads_back_to_the_identity_it_was_built_from():
-    from spicy_docs.schemas.tables import bill_id
-    from spicy_docs.sources.congress.bill_status import BillIdentity
-
-    from spicy_regs.transforms.congress_scope import bill_identity
-
-    for identity in (BillIdentity(119, "hr", 1), BillIdentity(108, "sconres", 23), BillIdentity(93, "s", 4021)):
-        assert bill_identity(bill_id(identity)) == identity

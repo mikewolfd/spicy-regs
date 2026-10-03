@@ -85,7 +85,6 @@ from spicy_docs.sources.govinfo.body_acquisition import GovInfoBodyBudget, GovIn
 from spicy_docs.transport.credentials import CredentialRefusedError, scrub_credential
 
 from spicy_regs.source_evidence import SourceEvidenceError
-from spicy_regs.transforms.congress_scope import bill_identity
 
 #: Three requests per printing (summary, MODS, body), paced at ~3/s.
 BODY_BUDGET = GovInfoBodyBudget(
@@ -346,7 +345,7 @@ def plan_work(
             Printing(
                 code=code,
                 version=version_from_row(row),
-                package_id=supported_package(bill_identity(bill), version_from_row(row)),
+                package_id=supported_package(BillIdentity.from_bill_id(bill), version_from_row(row)),
                 held=code in held_codes,
                 xml=code in xml_codes,
                 sha256=digests.get((bill, code)),
@@ -375,7 +374,7 @@ def plan_work(
             and (bill, older, newer) not in complete_pairs
         ]
         if pending or open_pairs:
-            work.append(BillWork(bill, bill_identity(bill), printings, pending, open_pairs))
+            work.append(BillWork(bill, BillIdentity.from_bill_id(bill), printings, pending, open_pairs))
     return work, retired, redundant
 
 
