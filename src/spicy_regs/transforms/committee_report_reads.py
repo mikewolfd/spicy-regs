@@ -43,12 +43,14 @@ READ_COLUMNS = ("package_id", "last_modified", "outcome", "rule_version", "obser
 #: and only discovery can select them. ``mods=hearing-mods-001``: spicy-docs
 #: 0.54.0 reads a hearing's MODS event ids, witnesses and held date into three
 #: appended columns, so each of the 185 held hearings is read once more.
+#: ``mods=hearing-mods-002``: the round-6 build also reads the committee codes
+#: the MODS states (``committee_system_codes_json``), so each is read again.
 RULE_VERSIONS = {
     "CRPT": (
         f"code={spicy_docs_code()[:12]};cbo={CBO_ESTIMATE_RULE_VERSION};sections={REPORT_SECTION_READER_VERSION}"
         ";parts=per-part-001;body=placeholder-pdf-002"
     ),
-    "CHRG": f"{HEARING_BILL_LINK_RULE_VERSION};body=placeholder-pdf-002;mods=hearing-mods-001",
+    "CHRG": f"{HEARING_BILL_LINK_RULE_VERSION};body=placeholder-pdf-002;mods=hearing-mods-002",
 }
 
 

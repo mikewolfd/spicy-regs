@@ -557,3 +557,16 @@ def test_a_hearing_read_before_the_mods_columns_is_read_once_more():
     before = f"{HEARING_BILL_LINK_RULE_VERSION};body=placeholder-pdf-002"
     assert not complete({"outcome": "complete", "rule_version": before}, "CHRG")
     assert complete({"outcome": "complete", "rule_version": RULE_VERSIONS["CHRG"]}, "CHRG")
+
+
+def test_a_hearing_read_before_the_committee_codes_column_is_read_once_more():
+    """The round-6 spicy-docs build reads the committee codes a hearing's MODS states into
+    hearing_transcripts.committee_system_codes_json (GovInfo names the committee there; Congress.gov's hearing
+    record often names none). A hearing read under the rule before that column is not complete, so each held
+    hearing is read once more and gains it; a report's rule is untouched."""
+    from spicy_regs.transforms.committee_report_reads import HEARING_BILL_LINK_RULE_VERSION, RULE_VERSIONS, complete
+
+    before = f"{HEARING_BILL_LINK_RULE_VERSION};body=placeholder-pdf-002;mods=hearing-mods-001"
+    assert not complete({"outcome": "complete", "rule_version": before}, "CHRG")
+    assert complete({"outcome": "complete", "rule_version": RULE_VERSIONS["CHRG"]}, "CHRG")
+    assert "mods" not in RULE_VERSIONS["CRPT"]

@@ -83,7 +83,7 @@ _REFUSALS = (PagedJsonSourceError, httpx.HTTPError, ConnectionError, TableContra
 DETAIL_READ = "detail_read"
 
 #: The detail shape a held row must have been read under, journaled beside each run's re-read remainder
-#: (:func:`_unevidenced`) as the CHRG read rule carries ``mods=hearing-mods-001``. Bump it when a spicy-docs shaper
+#: (:func:`_unevidenced`) as the CHRG read rule carries its ``mods=hearing-mods-…`` token. Bump it when a spicy-docs shaper
 #: reads the same detail differently, and make :func:`_stale_sql` name the held rows that change can move.
 #: ``lists=stated-001``: 0.54.0 reads a list the detail does not state as NULL, where earlier builds spelled it ``[]``
 #: as they spelled a stated empty one.
