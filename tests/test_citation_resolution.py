@@ -71,13 +71,12 @@ def test_fr_dates_alternate_system_and_set_valued_rin():
         con.execute("CREATE TABLE unified_agenda(rin VARCHAR, agenda_edition VARCHAR)")
         con.execute("INSERT INTO unified_agenda VALUES ('1234-AB12','202410'),('1234-AB12','202504')")
         pins = {name: {"artifact_digest": name} for name in ["federal_register", "unified_agenda"]}
-        items = [occurrence("federal_register_number","2026-1"),occurrence("federal_register_document","2026-1@2026-01-01"),
-                 occurrence("federal_register_cite","91-20"),occurrence("rin","1234-AB12")]
+        items = [occurrence("federal_register_cite","91-20"),occurrence("rin","1234-AB12")]
         rows = resolve(con,items,pins)["occurrences"]
-        assert [r["target_status"] for r in rows] == ["ambiguous","found","found","found"]
-        assert rows[2]["candidate_keys"] == [{"document_number":"2026-1","publication_date":"2026-02-01"}]
-        assert rows[3]["expected_cardinality"] == "many" and len(rows[3]["candidate_keys"]) == 2
-        limited = resolve(con,[items[3]],pins,max_candidates=1)["occurrences"][0]
+        assert [r["target_status"] for r in rows] == ["found","found"]
+        assert rows[0]["candidate_keys"] == [{"document_number":"2026-1","publication_date":"2026-02-01"}]
+        assert rows[1]["expected_cardinality"] == "many" and len(rows[1]["candidate_keys"]) == 2
+        limited = resolve(con,[items[1]],pins,max_candidates=1)["occurrences"][0]
         assert limited["target_status"] == "not_checked" and limited["reason"] == "candidate_limit"
 
 

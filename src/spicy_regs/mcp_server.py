@@ -1723,7 +1723,7 @@ def _register_tools(mcp: MCPServer) -> None:
         document was not read; neither establishes whole-document coverage.
         """
         from spicy_regs.acquisition_queue import build_missing_target_queue
-        from spicy_regs.citation_resolution import ROUTES, resolve_citations
+        from spicy_regs.citation_resolution import CITE_KINDS, resolve_citations
 
         document_kind = _document_kind(document_kind)
         if max_occurrences > MAX_OCCURRENCES:
@@ -1747,9 +1747,9 @@ def _register_tools(mcp: MCPServer) -> None:
                 raise ValueError(_unheld_document(cursor, document_kind, document_key, parent))
             if cite_kind is not None:
                 requested, cite_kind = cite_kind, cite_kind.lower()
-                if cite_kind not in kind_counts and cite_kind not in ROUTES:
-                    raise ValueError(f"cite_kind {requested!r} is neither a kind this document holds nor one the "
-                                     f"resolver routes. This document holds: {', '.join(kind_counts)}.")
+                if cite_kind not in CITE_KINDS:
+                    raise ValueError(f"cite_kind {requested!r} is not a citation kind; the kinds are "
+                                     f"{', '.join(CITE_KINDS)}. This document holds: {', '.join(kind_counts)}.")
             # span_start is stored as text: CAST orders it as the offset it is and refuses one that is not.
             # target_key separates the rows one range citation writes at one span, and text_sha256 (identity,
             # absent from a legacy file) a re-read text's rows, so the order is total and a page boundary stable.

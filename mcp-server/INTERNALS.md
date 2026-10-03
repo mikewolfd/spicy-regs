@@ -314,9 +314,14 @@ re-read text's rows, so the order is total and `offset` pages neither skip nor
 repeat a row; a legacy file without the digest column sorts without it.
 `cite_kind` (case-insensitive) selects one kind, `offset` skips rows, and
 `coverage.cite_kind_counts` states the document's rows per kind, so a page
-says what it leaves out. A `cite_kind` the document does not hold and the
-resolver does not route is refused naming the kinds the document holds; a
-routed kind with no rows is a complete, empty selection.
+says what it leaves out. A `cite_kind` outside `citation_resolution.CITE_KINDS`
+(spicy-docs' `DOCUMENT_CITATION_KINDS`, held equal by
+`tests/test_citation_parity.py`) is refused naming the kinds and the ones the
+document holds; any of those kinds with no rows is a complete, empty
+selection, `case_docket_number` (held, never routed) included. Until the DRY
+scout's S1, the check read `ROUTES`, which carried three kinds no writer emits
+(`federal_register_document`, `federal_register_number`, `bioguide_id`; deleted)
+and lacked `case_docket_number`.
 `occurrence_selection.status` is `capped`, `last_page` (an offset page that
 reached the end) or `complete_held_selection`. MCPServer drops an argument a
 tool does not declare, so a test of a new parameter asserts its effect, not

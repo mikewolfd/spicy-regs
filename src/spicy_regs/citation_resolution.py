@@ -23,6 +23,12 @@ RESOLUTION_RULE = "selected-target-lookup/1"
 #: does not require spicy-docs) and every held-field kind. Its keys are the kinds the citation tool accepts.
 SOURCE_TABLES = {"govinfo_package": "house_activity_reports", "budget_volume": "budget_volumes",
                  **{kind: source.table for kind, source in TEXT_SOURCES.items()}}
+#: Each ``document_citations.cite_kind`` a writer emits: spicy-docs ``DOCUMENT_CITATION_KINDS``, literal for the same
+#: reason, and held equal to it by ``tests/test_citation_parity.py``. A kind without a route (case_docket_number)
+#: is held but never looked up.
+CITE_KINDS = ("bill_number", "public_law", "statutes_at_large", "usc_section", "cfr_section", "federal_register_cite",
+              "rin", "gao_product_id", "crs_report_id", "docket_number", "case_docket_number", "us_reports_cite",
+              "committee_name")
 
 
 @dataclass(frozen=True)
@@ -45,13 +51,9 @@ ROUTES = {
     "cfr_section": Route("cfr_sections", "cfr_ref", ("package_id", "granule_id")),
     "federal_register_cite": Route("federal_register", "volume || '-' || start_page",
                                    ("document_number", "publication_date")),
-    "federal_register_document": Route("federal_register", "document_number || '@' || publication_date",
-                                       ("document_number", "publication_date")),
-    "federal_register_number": Route("federal_register", "document_number", ("document_number", "publication_date")),
     "rin": Route("unified_agenda", "rin", ("rin", "agenda_edition"), "many", grain="agenda editions for a RIN"),
     "gao_product_id": Route("gao_reports", "upper(report_id)", ("report_id",)),
     "crs_report_id": Route("crs_reports", "upper(report_id)", ("report_id",)),
-    "bioguide_id": Route("members", "bioguide_id", ("bioguide_id",)),
     "docket_number": Route("dockets", "docket_id", ("docket_id",)),
     "committee_name": Route("committees", "system_code", ("system_code",)),
     "us_reports_cite": Route("court_citations", "volume || '-' || page", ("cluster_id",),

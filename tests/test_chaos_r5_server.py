@@ -76,10 +76,31 @@ def test_a_routed_kind_the_document_does_not_hold_is_a_complete_empty_selection(
     assert result["coverage"]["partial"] is False
 
 
-def test_a_kind_neither_routed_nor_held_is_refused_naming_the_held_kinds(monkeypatch):
+def test_a_kind_no_writer_emits_is_refused_naming_the_held_kinds(monkeypatch):
     with citation_connection() as con, pytest.raises(ToolError) as refused:
         _resolve(con, monkeypatch, cite_kind="public_laws")
     assert "'public_laws'" in str(refused.value) and "holds: public_law" in str(refused.value)
+
+
+@pytest.mark.parametrize("kind", ["bioguide_id", "federal_register_number", "federal_register_document"])
+def test_a_route_no_writer_emits_is_refused_not_answered_empty(monkeypatch, kind):
+    """DRY scout S1: three routes no writer emits answered an empty, complete selection."""
+    with citation_connection() as con, pytest.raises(ToolError, match="not a citation kind"):
+        _resolve(con, monkeypatch, cite_kind=kind)
+
+
+def test_a_held_kind_without_a_route_is_a_complete_empty_selection(monkeypatch):
+    """case_docket_number is a kind writers emit (11 held rows) with no route; this document holds none."""
+    with citation_connection() as con:
+        result = _resolve(con, monkeypatch, cite_kind="Case_Docket_Number")
+    assert result["occurrences"] == [] and result["coverage"]["occurrence_selection"]["cite_kind"] == "case_docket_number"
+    assert result["coverage"]["occurrence_selection"]["status"] == "complete_held_selection"
+
+
+def test_every_route_is_a_kind_a_writer_emits():
+    from spicy_regs.citation_resolution import CITE_KINDS, ROUTES
+
+    assert set(ROUTES) <= set(CITE_KINDS)
 
 
 # S5-1 EXPAND: the page boundary is stable, the end is stated, and nothing is guessed.
@@ -109,7 +130,7 @@ def test_a_span_that_is_not_an_integer_is_refused_rather_than_ordered_as_text(mo
 
 
 def test_cite_kind_is_a_parameter_not_sql(monkeypatch):
-    with citation_connection() as con, pytest.raises(ToolError, match="neither a kind this document holds"):
+    with citation_connection() as con, pytest.raises(ToolError, match="not a citation kind"):
         _resolve(con, monkeypatch, cite_kind="public_law' OR 1=1 --")
 
 
