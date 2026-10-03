@@ -39,6 +39,8 @@ class Route:
     expected_cardinality: str = "one"
     predicate: str = "true"
     grain: str = "one target record"
+    #: Columns ``predicate`` reads that an older generation of ``table`` may lack; lacking one, every keyed row counts.
+    predicate_columns: tuple[str, ...] = ()
 
 
 ROUTES = {
@@ -48,7 +50,12 @@ ROUTES = {
                                ("congress", "law_type", "number")),
     "usc_section": Route("law_code_sections", "usc_title || '-' || usc_section_key", ("congress", "session", "seq"),
                          "many", grain="OLRC classification rows naming this section; not hosted Code text"),
-    "cfr_section": Route("cfr_sections", "cfr_ref", ("package_id", "granule_id")),
+    # A part citation (2-200) keys every structural row of the part; its own granule is the target.
+    "cfr_section": Route("cfr_sections", "cfr_ref", ("package_id", "granule_id"),
+                         predicate="section IS NOT NULL OR part_granule = 'true'",
+                         grain="a section's granule, or a part's own granule, per held annual edition: a target "
+                               "held in two editions or split across volumes reads ambiguous; package_id names each",
+                         predicate_columns=("part_granule",)),
     "federal_register_cite": Route("federal_register", "volume || '-' || start_page",
                                    ("document_number", "publication_date")),
     "rin": Route("unified_agenda", "rin", ("rin", "agenda_edition"), "many", grain="agenda editions for a RIN"),
@@ -71,14 +78,23 @@ def _occurrence_key(item: Mapping[str, Any]) -> str:
     return hashlib.sha256(json.dumps([item.get(k) for k in fields], ensure_ascii=False).encode()).hexdigest()
 
 
+def _predicate(cursor: Any, route: Route) -> str:
+    """The route's predicate, or every keyed row when the selected table predates a column the predicate reads."""
+    if not route.predicate_columns:
+        return route.predicate
+    held = {column[0] for column in cursor.execute(f'SELECT * FROM "{route.table}" LIMIT 0').description}
+    return route.predicate if set(route.predicate_columns) <= held else "true"
+
+
 def _lookup(cursor: Any, route: Route, keys: list[str], max_candidates: int) -> dict[str, dict]:
     """One parameterized read per distinct-key batch; retain bounded candidates and actual match counts."""
+    predicate = _predicate(cursor, route)
     columns = ', '.join(f'CAST(t."{c}" AS VARCHAR) AS "{c}"' for c in route.identity)
     order = ', '.join(f'"{c}"' for c in route.identity)
     sql = f"""WITH requested AS (SELECT unnest(?::VARCHAR[]) AS lookup_key),
         matches AS (SELECT r.lookup_key, {columns}
                     FROM requested r JOIN "{route.table}" t ON CAST(({route.key_sql}) AS VARCHAR)=r.lookup_key
-                    WHERE {route.predicate}),
+                    WHERE {predicate}),
         ranked AS (SELECT *, count(*) OVER (PARTITION BY lookup_key) AS match_count,
                    row_number() OVER (PARTITION BY lookup_key ORDER BY {order}) AS candidate_index FROM matches)
         SELECT * EXCLUDE(candidate_index) FROM ranked WHERE candidate_index <= ? ORDER BY lookup_key, {order}"""
