@@ -110,7 +110,8 @@ def test_rows_tied_on_kind_span_and_key_page_apart_by_their_text(monkeypatch):
     """Rows of two held texts of one document share kind, span and key; the identity's digest orders them."""
     with citation_connection() as con:
         _cite(con, ("public_law", "114-public-254", "1"), digest="digest-0")
-        pages = [_resolve(con, monkeypatch, max_occurrences=1, offset=offset)["occurrences"] for offset in (0, 1, 2)]
+        pages = [merged_occurrences(_resolve(con, monkeypatch, max_occurrences=1, offset=offset))
+                 for offset in (0, 1, 2)]
     assert [(row["span_start"], row["text_sha256"]) for [row] in pages] == [
         ("1", "digest"), ("1", "digest-0"), ("2", "digest")]
 
@@ -304,9 +305,8 @@ def test_fields_that_cannot_vary_are_stated_once_and_merge_back(monkeypatch):
         laws = server._publication_status(con)["publication"]["laws"]
     fields = result["occurrence_fields"]
     assert {"document_kind", "document_key", "text_sha256", "resolution_rule", "source_status"} <= set(fields["shared"])
-    # Route fields are equal within a kind; one equal across both kinds here (target_grain) is shared instead.
-    assert {"target_snapshot", "target_table_selected"} <= set(fields["by_cite_kind"]["public_law"])
-    assert "target_grain" in fields["shared"]
+    # Route fields are stated per kind, even where two kinds share a value (target_grain here).
+    assert {"target_snapshot", "target_table_selected", "target_grain"} <= set(fields["by_cite_kind"]["public_law"])
     hoisted = set(fields["shared"]) | {"target_kind", "normalized_key", "target_snapshot", "target_grain"}
     assert all(not hoisted & set(row) and "cite_kind" in row for row in result["occurrences"])
     merged = merged_occurrences(result)
@@ -315,23 +315,39 @@ def test_fields_that_cannot_vary_are_stated_once_and_merge_back(monkeypatch):
     assert [row["target_snapshot"] for row in merged if row["cite_kind"] == "public_law"] == [laws] * 2
 
 
+def test_the_occurrence_shape_is_the_same_on_every_page(monkeypatch):
+    """Coordinator answer 6: a fixed list is hoisted, so a page whose rows happen to agree (all found) keeps its shape."""
+    with citation_connection() as con:
+        _cite(con, ("public_law", "119-public-999", "30"), ("public_law", "119-public-998", "40"))
+        pages = [_resolve(con, monkeypatch, max_occurrences=2, offset=offset) for offset in (0, 2)]
+    assert [[row["target_status"] for row in merged_occurrences(page)] for page in pages] == [
+        ["found", "found"], ["missing", "missing"]]
+    assert {tuple(sorted(row)) for page in pages for row in page["occurrences"]} == {
+        tuple(sorted(pages[0]["occurrences"][0]))}
+    assert pages[0]["occurrence_fields"]["hoisted"] == pages[1]["occurrence_fields"]["hoisted"] == {
+        "shared": list(server.OCCURRENCE_DOCUMENT_FIELDS), "by_cite_kind": list(server.OCCURRENCE_KIND_FIELDS)}
+
+
 def test_the_occurrence_projection_is_lossless():
     snapshot = {"status": "managed_generation", "family": "laws"}
-    rows = [
-        {"cite_kind": "public_law", "target_key": "1-public-2", "target_kind": "public_law",
-         "normalized_key": "1-public-2", "target_snapshot": snapshot, "span_start": "4", "reason": None},
-        {"cite_kind": "public_law", "target_key": "1-public-3", "target_kind": "public_law",
-         "normalized_key": "1-public-3", "target_snapshot": snapshot, "span_start": "9", "reason": None},
-        {"cite_kind": "bill_number", "target_key": None, "target_kind": "bill_number", "normalized_key": "",
-         "target_snapshot": None, "span_start": "12", "reason": "unsettled_key", "error_type": "x"},
-    ]
+    row = {"document_key": "D", "text_sha256": "t1", "cite_kind": "public_law", "target_kind": "public_law",
+           "target_key": "1-public-2", "normalized_key": "1-public-2", "target_snapshot": snapshot,
+           "target_grain": "one target record", "span_start": "4", "target_status": "found", "reason": None}
+    rows = [row,
+            {**row, "text_sha256": "t2", "target_key": "1-public-3", "normalized_key": "1-public-3", "span_start": "9"},
+            {**row, "cite_kind": "bill_number", "target_kind": "bill_number", "target_key": None, "normalized_key": "",
+             "target_snapshot": None, "target_grain": "one target record", "span_start": "12",
+             "target_status": "not_checked", "reason": "unsettled_key", "error_type": "x"}]
     compact, fields = server._compact_occurrences(rows)
     assert merged_occurrences({"occurrences": compact, "occurrence_fields": fields}) == rows
-    assert fields["by_cite_kind"] == {"public_law": {"target_snapshot": snapshot, "reason": None}}
+    # Two texts on one page: text_sha256 is stated on each occurrence and named, never merged into one value.
+    assert fields["shared"] == {"document_key": "D"} and fields["not_hoisted"] == ["text_sha256"]
+    assert fields["by_cite_kind"]["public_law"] == {"target_snapshot": snapshot, "target_grain": "one target record"}
+    assert "target_status" in compact[0] and "reason" in compact[0]  # per-occurrence fields are never hoisted
     assert compact[2]["normalized_key"] == ""  # kept where it does not repeat target_key
-    assert server._compact_occurrences(rows[:1]) == ([{key: value for key, value in rows[0].items()
-                                                       if key not in ("target_kind", "normalized_key")}],
-                                                     {**fields, "shared": {}, "by_cite_kind": {}})
+    single, single_fields = server._compact_occurrences(rows[:1])
+    assert set(single[0]) == {"cite_kind", "target_key", "span_start", "target_status", "reason"}
+    assert single_fields["shared"] == {"document_key": "D", "text_sha256": "t1"}
 
 
 def test_the_acquisition_queue_states_its_constant_fields_once(monkeypatch):

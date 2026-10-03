@@ -335,35 +335,39 @@ its acceptance.
 
 **Pages and compaction (round 5, owner decision 2026-10-03).** `max_occurrences`
 defaults to 25 and is at most 100; a larger request is refused with how to page
-(the schema's `maximum` is a hint, as the kind enum is, so the refusal is the
+(the schema's `maximum` is only a hint to the client, so the refusal is the
 server's own). The cap and the paging land together: before `cite_kind`,
 `offset` and the counts, a smaller cap would have hidden more kinds. A reply
-states each occurrence field once where the page cannot vary it
-(`_compact_occurrences`, a reply projection like `_query_reply_pins`): a field
-equal on every occurrence goes to `occurrence_fields.shared`, one equal on
-every occurrence of a kind to `occurrence_fields.by_cite_kind`, and
-`target_kind` or `normalized_key` leaves an occurrence where it equals
-`cite_kind` or `target_key` (`same_as`). An occurrence is
-`{**shared, **by_cite_kind[cite_kind], **occurrence}`; `cite_kind` stays on
-every one. The rule is generic, so a field constant on one page by chance (all
-`found`) is hoisted too: lossless, but a client merges rather than expects a
-fixed occurrence shape. The acquisition queue is built from the whole rows and
-then projected the same way (`_compact_queue`): an item field, or a requesting
-occurrence's field, equal across the reply is stated once in
-`acquisition_queue.shared_fields`. Nothing stored changes. Measured on the live
-bucket (print-citations 685f2e27), characters per reply:
+states a fixed list of occurrence fields once (`_compact_occurrences`, a reply
+projection like `_query_reply_pins`): `OCCURRENCE_DOCUMENT_FIELDS`, fixed for a
+document's text, in `occurrence_fields.shared`, and `OCCURRENCE_KIND_FIELDS`,
+fixed for a kind's route and rule, in `occurrence_fields.by_cite_kind`; both
+lists are in `occurrence_fields.hoisted`. `target_kind` or `normalized_key`
+leaves an occurrence where it equals `cite_kind` or `target_key` (`same_as`).
+An occurrence is `{**shared, **by_cite_kind[cite_kind], **occurrence}`;
+`cite_kind` stays on every one. The list is fixed (coordinator answer 6), so a
+page whose rows happen to agree on a per-occurrence field (all `found`) keeps
+the same shape as the next. A listed field whose values differ in its scope (a
+document holding rows of two texts) stays on each occurrence and is named in
+`not_hoisted`: a stated-once value is never a guess. The acquisition queue is
+built from the whole rows and then projected the same way (`_compact_queue`):
+the fixed `QUEUE_ITEM_FIELDS` and `QUEUE_REQUEST_FIELDS` are stated once in
+`acquisition_queue.shared_fields`. Nothing stored changes. Measured on the
+live bucket (print-citations 685f2e27), characters per reply:
 
-| Request | Before (deployed server code at d2b5f53 / round-5 paging without compaction) | After |
-|---|---|---|
-| CRPT-118hrpt964, 100 rows | 113,534 / 114,020 | 31,644 |
-| CRPT-118hrpt964, default page | 113,534 (100 rows) | 10,375 (25 rows) |
-| CRPT-118hrpt964, all 222 rows | 283,615 (one 500-row call) | 97,989 (3 pages of 100) |
-| BUDGET-2025-APP, 100 rows | 148,361 / 148,593 | 65,838 |
-| BUDGET-2025-APP, default page | 148,361 (100 rows) | 21,427 (25 rows) |
-| BUDGET-2025-APP, all 4,456 rows | 893,849 for the first 500 | 2,998,213 (45 pages of 100) |
+| Request | Deployed (d2b5f53) | Fixed lists (this tree) | Hoisting any agreeing field (794beed) |
+|---|---|---|---|
+| CRPT-118hrpt964, 100 rows | 113,534 | 47,041 | 31,644 |
+| CRPT-118hrpt964, default page | 113,534 (100 rows) | 14,640 (25 rows) | 10,375 |
+| CRPT-118hrpt964, all 222 rows | 283,615 (one 500-row call) | 127,422 (3 pages) | 97,989 |
+| BUDGET-2025-APP, 100 rows | 148,361 | 80,933 | 65,838 |
+| BUDGET-2025-APP, default page | 148,361 (100 rows) | 24,941 (25 rows) | 21,427 |
+| BUDGET-2025-APP, all 4,456 rows | 893,849 for the first 500 | 4,151,031 (45 pages) | 2,998,213 |
 
-Without the queue projection the 45 pages came to 5,461,495: the queue repeated
-the document's pins on every requesting occurrence.
+The stable shape costs a third to a half more than hoisting any field a page
+happens to agree on (`target_resolved`, `reason`, `rule_version`, ...). Without
+the queue projection the 45 pages came to 5,461,495 under the earlier rule: the
+queue repeated the document's pins on every requesting occurrence.
 
 **Read statuses (round 5).** `source_read.status` separates three answers that
 used to arrive as one `missing_digest` with no occurrences (`_source_read`):

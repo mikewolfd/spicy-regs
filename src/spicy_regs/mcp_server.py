@@ -232,8 +232,19 @@ DOCUMENT_KINDS = tuple(sorted(SOURCE_TABLES))
 #: resolve_document_citations' page size: offset and cite_kind page a long document (round 5 measured a 500-row
 #: hrpt964 reply at 283,615 characters, 64% of it fields that cannot vary within the document or the kind).
 DEFAULT_OCCURRENCES, MAX_OCCURRENCES = 25, 100
+#: The occurrence fields a citation reply states once (coordinator answer 6: a fixed list, so an occurrence has
+#: the same fields on every page): those fixed for a document's text, and those fixed for a cite_kind's route and
+#: rule. Round 5 measured them at 64% of a 500-row CRPT-118hrpt964 reply.
+OCCURRENCE_DOCUMENT_FIELDS = ("document_kind", "document_key", "text_sha256", "body_rendition", "body_derivation",
+                              "source_status", "resolution_rule")
+OCCURRENCE_KIND_FIELDS = ("rule_name", "target_table", "target_snapshot", "target_table_selected", "target_grain",
+                          "expected_cardinality")
 #: An occurrence field that restates another field of the same occurrence; a reply drops it where they are equal.
 OCCURRENCE_SAME_AS = {"target_kind": "cite_kind", "normalized_key": "target_key"}
+#: The acquisition queue's fields fixed for the reply, on each item and on each requesting occurrence.
+QUEUE_ITEM_FIELDS = ("intended_query", "queue_rule", "acquisition_outcome", "retained")
+QUEUE_REQUEST_FIELDS = ("document_kind", "document_key", "text_sha256", "input_snapshot", "resolution_rule",
+                        "source_status")
 #: document_kind's schema description, derived from SOURCE_TABLES so a new kind cannot drift from its table.
 DOCUMENT_KIND_TABLES = "Each kind's table: " + "; ".join(
     f"{kind}: {table}" for kind, table in sorted(SOURCE_TABLES.items())
@@ -1362,55 +1373,70 @@ def _source_read(
     return {"table": parent, "status": "read_none_found" if read else "not_read"}, None
 
 
-def _shared_fields(rows: list[dict[str, Any]], keep: str | None = None) -> dict[str, Any]:
-    """The fields that every one of two or more ``rows`` holds with one value, except ``keep``."""
-    if len(rows) < 2:
-        return {}
-    return {key: value for key, value in rows[0].items()
-            if key != keep and all(key in row and row[key] == value for row in rows[1:])}
+def _hoist(rows: list[dict[str, Any]], fields: Sequence[str]) -> tuple[dict[str, Any], list[str]]:
+    """Of ``fields``, those every row holds with one value, and those the rows hold with different values.
+
+    A listed field that differs (a document holding two texts, say) stays on
+    each row: a stated-once value is never a guess.
+    """
+    shared: dict[str, Any] = {}
+    varying: list[str] = []
+    for field in fields:
+        values = [row[field] for row in rows if field in row]
+        if values and len(values) == len(rows) and all(value == values[0] for value in values[1:]):
+            shared[field] = values[0]
+        elif values:
+            varying.append(field)
+    return shared, varying
 
 
 def _compact_occurrences(occurrences: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """State each occurrence field once where this reply cannot vary it: a reply projection, like _query_reply_pins.
+    """State the fixed per-document and per-kind fields once: a reply projection, like _query_reply_pins.
 
-    A field equal on every occurrence goes to ``shared``, one equal on every
-    occurrence of a cite_kind to ``by_cite_kind``, and target_kind or
-    normalized_key leaves an occurrence where it equals cite_kind or target_key
-    (``same_as``). cite_kind stays on every occurrence so a client can merge
-    ``{**shared, **by_cite_kind[cite_kind], **occurrence}``. The resolver's rows
-    and the acquisition queue built from them are unchanged.
+    :data:`OCCURRENCE_DOCUMENT_FIELDS` go to ``shared`` and
+    :data:`OCCURRENCE_KIND_FIELDS` to ``by_cite_kind``, each where every
+    occurrence in its scope agrees (else to ``not_hoisted``, left on each
+    occurrence); target_kind and normalized_key leave an occurrence where they
+    equal cite_kind and target_key (``same_as``). cite_kind stays on every
+    occurrence, so ``{**shared, **by_cite_kind[cite_kind], **occurrence}`` is
+    the row. The resolver's rows and the queue built from them are unchanged.
     """
     rows = [{key: value for key, value in row.items()
              if not (key in OCCURRENCE_SAME_AS and value == row.get(OCCURRENCE_SAME_AS[key]))} for row in occurrences]
-    shared = _shared_fields(rows, keep="cite_kind")
+    shared, not_hoisted = _hoist(rows, OCCURRENCE_DOCUMENT_FIELDS)
     groups: dict[Any, list[dict[str, Any]]] = {}
     for row in rows:
         groups.setdefault(row.get("cite_kind"), []).append(row)
-    by_kind = {kind: fields for kind, group in groups.items()
-               if (fields := {key: value for key, value in _shared_fields(group, keep="cite_kind").items()
-                              if key not in shared})}
+    by_kind = {}
+    for kind, group in groups.items():
+        by_kind[kind], varying = _hoist(group, OCCURRENCE_KIND_FIELDS)
+        not_hoisted += [field for field in varying if field not in not_hoisted]
     compact = [{key: value for key, value in row.items()
-                if key not in shared and key not in by_kind.get(row.get("cite_kind"), {})} for row in rows]
+                if key not in shared and key not in by_kind[row.get("cite_kind")]} for row in rows]
     return compact, {
-        "shared": shared, "by_cite_kind": by_kind, "same_as": OCCURRENCE_SAME_AS,
+        "hoisted": {"shared": list(OCCURRENCE_DOCUMENT_FIELDS), "by_cite_kind": list(OCCURRENCE_KIND_FIELDS)},
+        "shared": shared, "by_cite_kind": by_kind, "not_hoisted": not_hoisted, "same_as": OCCURRENCE_SAME_AS,
         "meaning": "Each occurrence is {**shared, **by_cite_kind[its cite_kind], **occurrence}; one without target_kind "
-                   "or normalized_key has its cite_kind or target_key there. Stated once, not omitted.",
+                   "or normalized_key has its cite_kind or target_key there. A hoisted field whose values differ "
+                   "on this page is named in not_hoisted and stays on each occurrence.",
     }
 
 
 def _compact_queue(queue: dict[str, Any]) -> dict[str, Any]:
-    """The acquisition queue with each item field, and each requesting-occurrence field, equal across the reply
-    stated once in ``shared_fields``; the same projection as :func:`_compact_occurrences`."""
+    """The acquisition queue with its fixed fields (QUEUE_ITEM_FIELDS, QUEUE_REQUEST_FIELDS) stated once in
+    ``shared_fields`` where the whole reply agrees; the same projection as :func:`_compact_occurrences`."""
     items = [{key: value for key, value in item.items() if key != "requesting_occurrences"} for item in queue["items"]]
     requests = [request for item in queue["items"] for request in item["requesting_occurrences"]]
-    item_shared, request_shared = _shared_fields(items), _shared_fields(requests)
+    (item_shared, item_varying), (request_shared, request_varying) = (
+        _hoist(items, QUEUE_ITEM_FIELDS), _hoist(requests, QUEUE_REQUEST_FIELDS))
     return {**queue, "items": [
         {**{key: value for key, value in item.items() if key not in item_shared},
          "requesting_occurrences": [{key: value for key, value in request.items() if key not in request_shared}
                                     for request in full["requesting_occurrences"]]}
         for item, full in zip(items, queue["items"], strict=True)
     ], "shared_fields": {
-        "item": item_shared, "requesting_occurrence": request_shared,
+        "hoisted": {"item": list(QUEUE_ITEM_FIELDS), "requesting_occurrence": list(QUEUE_REQUEST_FIELDS)},
+        "item": item_shared, "requesting_occurrence": request_shared, "not_hoisted": item_varying + request_varying,
         "meaning": "Each item is {**item, **its fields}, and each requesting occurrence {**requesting_occurrence, "
                    "**its fields}. Stated once, not omitted.",
     }}
@@ -1730,8 +1756,8 @@ def _register_tools(mcp: MCPServer) -> None:
         not_held: no longer held.
         Rows run in cite_kind order, then text position; cite_kind selects a
         kind, offset pages, and coverage.cite_kind_counts counts every kind.
-        Fields equal across a page or kind are stated once (occurrence_fields,
-        acquisition_queue.shared_fields). coverage.partial: rows left out of
+        Fixed per-document and per-kind fields are stated once (listed in
+        occurrence_fields.hoisted). coverage.partial: rows left out of
         this page, an occurrence not looked up (reason_counts) or an unread
         document; never whole-document coverage.
         """
