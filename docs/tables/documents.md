@@ -80,8 +80,8 @@ derived date-window candidates, not a complete legal extension history.
 | `attachments_json` | `VARCHAR` | JSON array of the main document's fileFormats renditions: `[{url, format, size}]`. This compatibility field does not contain separately listed attachment resources. Null when no main renditions were retained. |
 | `attachment_records_json` | `VARCHAR` | Literal records from an explicitly read document attachment relationship, preserving attachment IDs, restrictions and alternative file formats. Null means the relationship was not read; an empty array means a validated complete read returned no attachments. A main document response alone cannot establish attachment absence. |
 | `fr_doc_num` | `VARCHAR` | Federal Register document number, when the document was published in the FR. Often null. |
-| `withdrawn` | `VARCHAR` | Whether the document was withdrawn, as the string `"true"`/`"false"`. Often null. |
-| `reason_withdrawn` | `VARCHAR` | Agency-supplied reason for withdrawal, when withdrawn. Often null. |
+| `withdrawn` | `VARCHAR` | Whether regulations.gov flags the posting withdrawn, as the string `"true"`/`"false"`. Often null. A withdrawn posting is still held here; the rulemaking tables read it as no evidence (see `proceedings`). |
+| `reason_withdrawn` | `VARCHAR` | Agency-supplied reason for withdrawal, when withdrawn: usually that it was posted to the wrong docket, a duplicate, moved or replaced. Often null. |
 | `additional_rins` | `VARCHAR` | JSON array of additional Regulation Identifier Numbers beyond the docket's primary RIN. Often null. |
 | `text_content` | `VARCHAR` | Plain text extracted from the document's PDF attachment(s) by the PDF text-extraction step. Null until that step has run; see `text_extraction_status`. |
 | `text_extraction_status` | `VARCHAR` | Aggregate PDF outcome: `ok` means at least one PDF supplied text, even if another failed; otherwise `error`, `encrypted`, or `empty` (no extractable text) in that order. Null before an attempt. See `pdf_extraction_results_json` for each file. |

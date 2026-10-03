@@ -960,8 +960,8 @@ def test_the_stage_reads_every_rule_end_to_end(tmp_path):
     )
     n = rows["EPA-HQ-OAR-2020-0011"]
     assert (n["kind"], n["open_signal"], n["pre_2008_coverage"]) == ("no_anchor", "agenda_long_term", None)
-    assert {row["actor_id"] for row in rows.values()} == {"spicy-regs:rulemaking-lifecycles:v3"}
-    assert {event["actor_id"] for event in events} == {"spicy-regs:lifecycle-events:v2"}
+    assert {row["actor_id"] for row in rows.values()} == {"spicy-regs:rulemaking-lifecycles:v4"}
+    assert {event["actor_id"] for event in events} == {"spicy-regs:lifecycle-events:v3"}
 
 
 def test_a_companion_needs_the_register_to_date_both_sides_and_an_upload_pair_leaves_survival(tmp_path):
@@ -1253,6 +1253,104 @@ def test_the_stages_follow_proceedings_and_the_agenda_and_publish_in_its_generat
     assert order.index("lifecycles") > max(order.index("proceedings"), order.index("regulatory-agenda"))
     assert {"rulemaking_lifecycles.parquet", "lifecycle_events.parquet", "agency_lifecycle_stats.parquet"} <= set(
         pipeline.published_outputs
+    )
+
+
+# --- withdrawn postings (round 6) -------------------------------------------------------------
+
+LOGBOOK = "Electronic Logbook Reporting in Commercial Fisheries of the Gulf of America and Atlantic"
+STAPLE_FOODS = "Updated Staple Food Stocking Standards for Retailers in the Supplemental Nutrition Assistance Program"
+WITHDRAWN_POSTINGS = ("FNS-2025-0401-0001", "NOAA-NMFS-2025-0570-0022", "NOAA-NMFS-2025-0570-0023")
+
+
+def _withdrawn_postings(root: Path, withdrawn: str | None) -> tuple[dict[str, dict], list[dict]]:
+    """Two dockets as held on 2026-10-03 (documents generation 066964e8), their postings' ``withdrawn`` set to ``withdrawn``.
+
+    FNS-2025-0401's one posting is a copy of the final rule regulations.gov flags withdrawn ("Duplicate docket");
+    NOAA-NMFS-2025-0570 holds the Register's two logbook proposals and two finals of other rules, both flagged
+    "Accidentally added to wrong docket.".
+    """
+    fns, noaa = "FNS-2025-0401", "NOAA-NMFS-2025-0570"
+    wrong_docket = {"withdrawn": withdrawn, "reason_withdrawn": "Accidentally added to wrong docket."}
+    _write(
+        root,
+        "dockets",
+        [
+            _docket(fns, "0584-AF12", agency="FNS", title=STAPLE_FOODS, modified="2026-05-08T16:52:05Z"),
+            _docket(noaa, "0648-BN11", agency="NOAA", title=LOGBOOK, modified="2026-06-26T16:51:10Z"),
+        ],
+    )
+    _write(
+        root,
+        "documents",
+        [
+            _document(
+                f"{fns}-0001", fns, "Rule", "2026-05-08T04:00:00Z", STAPLE_FOODS, agency_code="FNS",
+                withdrawn=withdrawn, reason_withdrawn="Duplicate docket",
+            ),
+            _document(
+                f"{noaa}-0001", noaa, "Proposed Rule", "2025-11-20T05:00:00Z", LOGBOOK, agency_code="NOAA",
+                fr_doc_num="2025-20491", withdrawn="false",
+            ),
+            _document(
+                f"{noaa}-0022", noaa, "Rule", "2025-09-29T04:00:00Z",
+                "Fisheries of the Northeastern United States: Coastal Migratory Pelagic Resources of the Gulf and "
+                "Atlantic Region", agency_code="NOAA", **wrong_docket,
+            ),
+            _document(
+                f"{noaa}-0023", noaa, "Rule", "2026-05-26T04:00:00Z",
+                "Atlantic Highly Migratory Species: 2025 North Atlantic Albacore Tuna, North and South Atlantic "
+                "Swordfish, and Atlantic Bluefin Tuna Category Quotas", agency_code="NOAA", **wrong_docket,
+            ),
+            _document(
+                f"{noaa}-0024", noaa, "Proposed Rule", "2026-05-26T04:00:00Z", LOGBOOK, agency_code="NOAA",
+                fr_doc_num="2026-10389", withdrawn="false",
+            ),
+        ],
+    )
+    _write(
+        root,
+        "federal_register",
+        [
+            _register("2025-20491", "2025-11-20", "Proposed Rule", LOGBOOK, ["0648-BN11"]),
+            _register("2026-10389", "2026-05-26", "Proposed Rule", LOGBOOK, ["0648-BN11"]),
+        ],
+    )
+    _write(root, "fr_docket_links", [])
+    _write(root, "unified_agenda", [])
+    build_rule_targets(root)
+    build_proceedings(root)
+    build_regulatory_agenda(root)
+    return _lifecycles_of(root)
+
+
+def test_a_posting_regulations_gov_withdrew_is_no_stage_evidence(tmp_path):
+    """A withdrawn posting was misfiled, duplicated or moved (round 6, M4-A); the live snapshot paired both."""
+    rows, events = _withdrawn_postings(tmp_path, "true")
+    assert (rows["FNS-2025-0401"]["kind"], rows["FNS-2025-0401"]["final_document_id"]) == ("no_anchor", None)
+    noaa = rows["NOAA-NMFS-2025-0570"]
+    assert (noaa["kind"], noaa["proposal_document_id"], noaa["final_document_id"]) == (
+        "open",
+        "2025-20491@2025-11-20",
+        None,
+    )
+    proceedings = pq.read_table(tmp_path / "proceedings.parquet").to_pylist()
+    stage_evidence = {event["evidence_id"] for row in proceedings for event in json.loads(row["stage_events_json"])}
+    assert stage_evidence.isdisjoint(WITHDRAWN_POSTINGS)
+    assert {event["evidence_id"] for event in events}.isdisjoint(WITHDRAWN_POSTINGS)
+
+
+@pytest.mark.parametrize("withdrawn", ["false", None])
+def test_a_posting_not_flagged_withdrawn_still_counts(tmp_path, withdrawn):
+    """``'false'`` and NULL are the flag unset: both postings anchor as the live snapshot published them."""
+    rows, _ = _withdrawn_postings(tmp_path, withdrawn)
+    assert (rows["FNS-2025-0401"]["kind"], rows["FNS-2025-0401"]["final_document_id"]) == (
+        "final_without_observed_proposal",
+        "FNS-2025-0401-0001",
+    )
+    assert (rows["NOAA-NMFS-2025-0570"]["kind"], rows["NOAA-NMFS-2025-0570"]["final_document_id"]) == (
+        "finalized",
+        "NOAA-NMFS-2025-0570-0023",
     )
 
 

@@ -83,6 +83,7 @@ class RulemakingDatasetPipeline(MaterializedDatasetPipeline):
                 "modify_date",
                 "comment_start_date",
                 "comment_end_date",
+                "withdrawn",
             ),
             "federal_register.parquet": (
                 "document_number",

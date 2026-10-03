@@ -38,6 +38,7 @@ from spicy_regs.ontology.federal_register import (
     register_rule_stage,
     register_states_type,
     resolved_id,
+    withdrawn_posting,
 )
 from spicy_regs.ontology.rins import docket_side_holder, specific_rin_holders
 
@@ -91,7 +92,11 @@ OUTPUT = "proceedings.parquet"
 # federal-register 09f4f4b7, 1,504 of the 1,511 documents naming it move; over rulemaking snapshot 55d396ee the
 # 138 docket-less proceedings joining them by fr_document move from FNS to FNA, and the 159 docketed ones that
 # hold one keep their dockets' code (receipt round5/impl-C/refspec/successor_rule_rows.out).
-ACTOR_ID = "spicy-regs:proceedings:v12"
+# v13 (one bump over published v12): a posting Regulations.gov flags withdrawn (withdrawn_posting) is no evidence:
+# no stage event, title, agency or RIN, and it makes no docket a rulemaking. Rebuilt from snapshot_75e70455's own
+# inputs, 783 stage events in 684 proceedings go; 121 proceedings whose docket was a rulemaking only through such a
+# posting go with them, and 126 others change current_stage (receipt round6/impl-C1/m4a_delta.out).
+ACTOR_ID = "spicy-regs:proceedings:v13"
 
 COLUMNS = (
     "proceeding_id",
@@ -313,16 +318,17 @@ def build_proceedings(
 
     for row in iter_parquet_rows(
         paths["documents"],
-        columns=("document_id", "docket_id", "additional_rins", "document_type", "title", "fr_doc_num"),
+        columns=("document_id", "docket_id", "additional_rins", "document_type", "title", "fr_doc_num", "withdrawn"),
     ):
         docket = normalize_regsgov_identifier(row.get("docket_id"))
         if docket is None:
             continue
         trusted_dockets.add(docket)
-        # A feed docket's documents post other rulemakings' FR documents: none is its evidence.
+        # A feed docket's documents post other rulemakings' FR documents: none is its evidence. Nor is a
+        # posting Regulations.gov flags withdrawn, though its docket still exists.
         if docket not in docket_metadata and catch_all_docket(docket):
             catch_alls.add(docket)
-        if docket in catch_alls:
+        if docket in catch_alls or withdrawn_posting(row):
             continue
         raw_rins = parse_json_list(
             row.get("additional_rins"),
@@ -500,11 +506,13 @@ def build_proceedings(
             "agency_code",
             "posted_date",
             "fr_doc_num",
+            "withdrawn",
         ),
     ):
         docket = normalize_regsgov_identifier(row.get("docket_id"))
         key = group_key_by_docket.get(docket or "")
-        if key is None or docket in catch_alls:
+        # A withdrawn posting gives its docket's proceeding no stage, title, agency or RIN.
+        if key is None or docket in catch_alls or withdrawn_posting(row):
             continue
         group = groups[key]
         register_copy = copy_of(row, fr_index)

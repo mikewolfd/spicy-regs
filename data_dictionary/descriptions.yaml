@@ -148,8 +148,8 @@ tables:
       attachments_json: "JSON array of the main document's fileFormats renditions: `[{url, format, size}]`. This compatibility field does not contain separately listed attachment resources. Null when no main renditions were retained."
       attachment_records_json: "Literal records from an explicitly read document attachment relationship, preserving attachment IDs, restrictions and alternative file formats. Null means the relationship was not read; an empty array means a validated complete read returned no attachments. A main document response alone cannot establish attachment absence."
       fr_doc_num: "Federal Register document number, when the document was published in the FR. Often null."
-      withdrawn: 'Whether the document was withdrawn, as the string `"true"`/`"false"`. Often null.'
-      reason_withdrawn: "Agency-supplied reason for withdrawal, when withdrawn. Often null."
+      withdrawn: 'Whether regulations.gov flags the posting withdrawn, as the string `"true"`/`"false"`. Often null. A withdrawn posting is still held here; the rulemaking tables read it as no evidence (see `proceedings`).'
+      reason_withdrawn: "Agency-supplied reason for withdrawal, when withdrawn: usually that it was posted to the wrong docket, a duplicate, moved or replaced. Often null."
       additional_rins: "JSON array of additional Regulation Identifier Numbers beyond the docket's primary RIN. Often null."
       text_content: "Plain text extracted from the document's PDF attachment(s) by the PDF text-extraction step. Null until that step has run; see `text_extraction_status`."
       text_extraction_status: "Aggregate PDF outcome: `ok` means at least one PDF supplied text, even if another failed; otherwise `error`, `encrypted`, or `empty` (no extractable text) in that order. Null before an attempt. See `pdf_extraction_results_json` for each file."
@@ -625,7 +625,11 @@ tables:
       One row per rulemaking proceeding: the dockets that are one action, the
       Register documents that joined it, their stage events, RINs and CFR
       targets. A RIN names a Unified Agenda item, never a proceeding: it is
-      carried as evidence and never groups dockets. A docket-less proceeding
+      carried as evidence and never groups dockets. A posting Regulations.gov
+      flags withdrawn (`documents.withdrawn = 'true'`) is no evidence: agencies
+      withdraw a posting filed to the wrong docket, duplicated, moved or
+      replaced, so it gives no stage event, title, agency or RIN, and makes no
+      docket a rulemaking. A docket-less proceeding
       is one Register document. Keyed `proceeding_id`, which continues across
       generations when its dockets or Register documents overlap a prior one.
       Joined by `agenda_item_proceedings`, `comment_periods` and
@@ -829,6 +833,9 @@ tables:
       'CMS-1849-F and CMS-0062-F' and no RIN). A Register proposal naming
       several dockets anchors one lifecycle per docket (502 proposals behind
       2,358 of 35,327 survival rows on snapshot_62318069's inputs; EPA 20%).
+      A posting Regulations.gov flags withdrawn (`documents.withdrawn`) anchors
+      nothing: it was misfiled, duplicated, moved or replaced, and the Register
+      publishes an agency's withdrawal of a rule as a document of its own.
 
       For `routine_family` `pesticide_tolerance` the proposal is usually EPA's
       notice that it received a pesticide petition (FFDCA 408(d)(3)), typed
@@ -908,7 +915,8 @@ tables:
       Register document typed Notice is never an event: a petition withdrawal or
       receipt the Register types Notice (EPA's withdrawals 2010-8292, 2010-13540,
       2011-8549 and 2011-16199; the receipts 2021-08335 and 2023-14192) neither
-      closes nor opens a lifecycle. An Agenda entry
+      closes nor opens a lifecycle. A posting Regulations.gov flags withdrawn is
+      never an event (see `proceedings`). An Agenda entry
       completed as withdrawn adds its dated withdrawal. Keyed
       (`proceeding_id`, `document_id`); `dated_by` says which kind of id
       `document_id` is. Joins `rulemaking_lifecycles` on `proceeding_id`.
