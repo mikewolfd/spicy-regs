@@ -89,7 +89,8 @@ into the next one.
 
 - **Polled, not rebuilt.** Past `SPICY_REGS_CONNECTION_TTL` (300 s), the first
   caller re-reads the publication index and the rulemaking pointer and manifest
-  (3 GETs, 0.45 s) and compares them with the pins the connection holds
+  (3 GETs, 0.45 s), plus the comments export receipt (one GET of about 45 KB),
+  and compares them with the pins the connection holds
   (`_pinned_publication`). The views name immutable URLs, so unchanged pointers
   keep the connection; an idle TTL went from 464 requests to 3.
 - **Moved pointers rebuild** through `_build_connection(publication)`, which
@@ -105,8 +106,11 @@ into the next one.
   signatures are re-read at build.
 - **Legacy comments files stay mutable.** Their views read the object current at
   each statement (the HEAD revalidates DuckDB's file cache), but the bound
-  schema lasts until the pointers move. Pinning a comments generation, or adding
-  `comments-publication.json` to the poll, would close that gap.
+  schema lasts until the pointers move. The build reads `comments-publication.json`
+  and HEADs the two files that back views (`COMMENTS_EXPORT_TABLES`), not the 182
+  the receipt lists; a moved receipt rebuilds the connection at the next poll.
+  An invalid receipt reads as none (logged): it only labels two files' rows, so
+  it does not refuse the connection. A failed read refuses it, as the index does.
 
 ## Concurrency: worker threads and a limiter
 
@@ -213,8 +217,9 @@ were removed rather than retaining an unreachable, unrestricted fallback.
 The 2026-09-27 comparison matched the catalog table UUID, snapshot and schema to
 the mirror receipt, then matched the public object ETags and sizes to that
 receipt. This supports current publication agreement, not a new source-content
-audit. Legacy comments files still have mutable URLs; the MCP does not yet
-expose their publication receipt or pin an immutable comments generation.
+audit. Legacy comments files still have mutable URLs and no immutable comments
+generation is pinned; replies state the export receipt's identity and rows
+beside the `legacy_unversioned` status (see Response size).
 
 A table in `TABLES` whose Parquet is not published yet is skipped with a warning.
 A missing managed generation member still refuses the connection.
@@ -415,6 +420,20 @@ file its reader cannot page, so two of five personas never read a row.
   declared table whose generation publishes no rows is visible at discovery
   without a describe call. It is the pinned generation's count, not a freshness
   claim: a later data run lands after the pin.
+- **A comments export states its receipt's rows, labelled (round 4).** `comments`
+  and `comments_index` are served from fixed URLs no pointer pins, so their
+  `rows` were null while `comments-publication.json` stated them. A file whose
+  ETag and size matched the receipt at build carries the receipt's `rows` with
+  `rows_basis: comments_export_receipt`; a moved file carries `rows: null` with
+  `rows_basis: export_receipt_does_not_match_object`. `describe_table` and
+  `query_sql` pins add `export_receipt` (receipt digest, file digest, ETag,
+  bytes, catalog snapshot). The status stays `legacy_unversioned`: the facts
+  join the reply in `_reply_pins` only, never `_publication_status`, whose pins
+  the comment views embed in `source_publication_json`. A matching ETag proves
+  the object is the one the receipt names, not that the receipt's count is
+  right; that check belongs to the mirror export, before it writes the receipt.
+  The match is measured at build: until the next poll sees a new receipt, a
+  statement can read a newer file than the labelled count describes.
 
 ## Relationship-view column meanings (`view_columns`, `relationship_views.lineage`)
 

@@ -181,7 +181,7 @@ def test_moving_comment_object_cannot_leave_a_successful_measurement(monkeypatch
             t + ".parquet": {"sha256": "a" * 64, "rows": 1, "bytes": 12, "etag": '"before"'}
             for t in ("comments", "comments_index")}}})
     matching = iter((True, False))
-    monkeypatch.setattr(checks, "_mutable_versions_match", lambda _: next(matching))
+    monkeypatch.setattr(checks.publication, "mutable_versions_match", lambda _: next(matching))
     monkeypatch.setattr(checks, "measure", lambda *a, **k: {"status": "OK", "expected_total": 1, "observed_total": 1})
     receipt = checks.check_public(None, "https://example.test", ["comments-index"])
     result = receipt["results"][0]

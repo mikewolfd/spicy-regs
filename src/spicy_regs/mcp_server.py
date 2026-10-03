@@ -497,23 +497,53 @@ def _apply_security_settings(con: duckdb.DuckDBPyConnection, allowed_paths: list
 
 
 class _Publication(NamedTuple):
-    """The published pointers a remote connection pins: the publication index and the rulemaking snapshot."""
+    """The published pointers a remote connection pins: the publication index, the rulemaking snapshot and the
+    comments export receipt, which states the rows of two fixed-URL files without making them immutable."""
 
     index: dict
     rulemaking: dict | None
+    comments: dict | None = None
 
 
 def _read_publication() -> _Publication:
-    """The live pointers, read once each; the rulemaking snapshot is ``None`` while none is published."""
-    from spicy_regs.sources.publication import load_index, load_rulemaking_snapshot
+    """The live pointers, read once each; the rulemaking snapshot and comments receipt are ``None`` while unpublished.
 
-    return _Publication(load_index(R2_BASE_URL), load_rulemaking_snapshot(R2_BASE_URL))
+    An invalid comments receipt reads as none: it only labels two legacy files' rows, and refusing the
+    connection over it would take every table down. A failed read propagates, as the other pointers' do.
+    """
+    from spicy_regs.sources.publication import (
+        PublicationError,
+        load_comments_publication,
+        load_index,
+        load_rulemaking_snapshot,
+    )
+
+    try:
+        comments = load_comments_publication(R2_BASE_URL)
+    except PublicationError:
+        logger.warning("comments export receipt is invalid; its tables state no rows", exc_info=True)
+        comments = None
+    return _Publication(load_index(R2_BASE_URL), load_rulemaking_snapshot(R2_BASE_URL), comments)
 
 
 def _pinned_publication(con: duckdb.DuckDBPyConnection) -> _Publication:
     """The pointers ``con`` pinned when it was built, as :func:`_read_publication` returned them."""
     cursor = con.cursor()
-    return _Publication(_connection_index(cursor), _pinned_record(cursor, "_spicy_rulemaking"))
+    export = _pinned_record(cursor, "_spicy_comments_export")
+    return _Publication(
+        _connection_index(cursor), _pinned_record(cursor, "_spicy_rulemaking"), export["receipt"] if export else None
+    )
+
+
+def _comments_exports(comments: dict, served: list[str]) -> dict[str, dict]:
+    """The receipt's pin for each served export table, with whether its object still matches the receipt.
+
+    One HEAD per served file (``COMMENTS_EXPORT_TABLES``), not per file the receipt lists: only these back views.
+    """
+    from spicy_regs.sources.publication import comments_export_pins, mutable_versions_match
+
+    pins = comments_export_pins(R2_BASE_URL, comments, served)
+    return {name: {**pin, "matches_object": mutable_versions_match({name: pin})} for name, pin in pins.items()}
 
 
 def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBPyConnection:
@@ -526,7 +556,7 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
     cannot be read, or a legacy table that fails other than as absent (HTTP
     404), raises RuntimeError.
     """
-    from spicy_regs.sources.publication import parquet_scan, table_descriptor, table_members
+    from spicy_regs.sources.publication import COMMENTS_EXPORT_TABLES, parquet_scan, table_descriptor, table_members
 
     if DATA_DIR is None and _resolve_catalog_config() is not None:
         raise RuntimeError(
@@ -535,6 +565,7 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
         )
     local = None
     signatures = {}
+    comments = None
     if DATA_DIR is not None:
         from spicy_regs.local_data import local_selection, verify_local_members
 
@@ -542,7 +573,7 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
         signatures = verify_local_members(local)
         publication_index, rulemaking = local.publication, None
     else:
-        publication_index, rulemaking = publication or _read_publication()
+        publication_index, rulemaking, comments = publication or _read_publication()
     con = duckdb.connect()
     con.execute("SET allow_persistent_secrets=false")
     con.execute(f"SET home_directory='{HOME_DIRECTORY.replace(chr(39), chr(39) * 2)}'")
@@ -576,6 +607,7 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
     ]
     snapshot_names = [key.removesuffix(".parquet") for key in (rulemaking or {"tables": {}})["tables"]]
     selected_names = list(local.files) if local is not None and local.is_download else []
+    exports: list[str] = []
     for name in dict.fromkeys((*TABLES, *managed_names, *snapshot_names, *selected_names)):
         published = table_descriptor(publication_index, f"{name}.parquet")
         paths = [member.path for member in table_members(publication_index, f"{name}.parquet")]
@@ -596,6 +628,8 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
                     con.close()
                     raise RuntimeError(f"Published schema differs from admitted generation: {name}")
             allowed_paths.extend(urls)
+            if local is None and published is None and pinned is None and name in COMMENTS_EXPORT_TABLES:
+                exports.append(name)
         except duckdb.Error as exc:
             required = published is not None or pinned is not None or (local is not None and local.is_download)
             # A remote legacy table is skipped only when it is absent; a throttled or failing read refuses the
@@ -606,6 +640,14 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
                 kind = "Published generation member" if required else "Legacy table"
                 raise RuntimeError(f"{kind} unavailable: {name}") from exc
             logger.warning("table %s not available at %s; skipping view: %s", name, urls, exc)
+    if comments is not None:
+        try:
+            matched = _comments_exports(comments, exports)
+        except Exception:
+            con.close()
+            raise
+        con.execute("CREATE TABLE _spicy_comments_export (snapshot VARCHAR)")
+        con.execute("INSERT INTO _spicy_comments_export VALUES (?)", [json.dumps({"receipt": comments, "tables": matched})])
     _install_relationship_views(con)
     _apply_security_settings(con, allowed_paths)
     return con
@@ -783,18 +825,41 @@ def _pinned_rows(index: dict, rulemaking: dict, name: str) -> int | None:
     return pinned["rows"] if pinned is not None else None
 
 
+def _export_rows(cursor: duckdb.DuckDBPyConnection) -> dict[str, dict]:
+    """``rows``, ``rows_basis`` and ``export_receipt`` for each fixed-URL comments export this connection matched.
+
+    The receipt's count stands only while the object matched it at build, and is labelled as the receipt's: the
+    URL is mutable, so a later statement can read a newer export. A moved object states no rows.
+    """
+    record = _pinned_record(cursor, "_spicy_comments_export")
+    exports = {}
+    for name, pin in (record["tables"] if record is not None else {}).items():
+        matches = pin["matches_object"]
+        exports[name] = {
+            "rows": pin["rows"] if matches else None,
+            "rows_basis": "comments_export_receipt" if matches else "export_receipt_does_not_match_object",
+            "export_receipt": {
+                "receipt_sha256": pin["receipt_sha256"], "sha256": pin["sha256"], "etag": pin["etag"],
+                "bytes": pin["bytes"], "catalog_snapshot_id": pin["source"]["snapshot_id"],
+            },
+        }
+    return exports
+
+
 def _reply_pins(cursor: duckdb.DuckDBPyConnection, publication: dict[str, dict], names: list[str]) -> dict[str, dict]:
     """Each named table's pin with the facts a reply states instead of prose that decays.
 
     ``rows`` is the pinned index's or snapshot manifest's count, a snapshot
-    table adds its manifest's ``run_id`` and ``asserted_at``, and ``coverage`` is
-    the dictionary's coverage kind. They join the pin only here: derived views
-    embed :func:`_publication_status` pins in provenance columns and candidate
-    identities, which these facts must not move.
+    table adds its manifest's ``run_id`` and ``asserted_at``, a comments export
+    adds its receipt's count with ``rows_basis`` (:func:`_export_rows`), and
+    ``coverage`` is the dictionary's coverage kind. They join the pin only here:
+    derived views embed :func:`_publication_status` pins in provenance columns
+    and candidate identities, which these facts must not move.
     """
     index, rulemaking, relationships = (
         _connection_index(cursor), _connection_rulemaking(cursor), _connection_relationships(cursor)
     )
+    exports = _export_rows(cursor)
     pins = {}
     for name in names:
         pin = dict(publication[name])
@@ -804,6 +869,8 @@ def _reply_pins(cursor: duckdb.DuckDBPyConnection, publication: dict[str, dict],
             manifest = rulemaking["manifest"]
             pin |= {"rows": rulemaking["tables"][f"{name}.parquet"]["rows"],
                     "run_id": manifest.get("run_id"), "asserted_at": manifest.get("asserted_at")}
+        elif name in exports:
+            pin |= exports[name]
         declared = _table_metadata().get(name) or relationships.get(name, {}).get("metadata", {})
         pins[name] = {**pin, "coverage": declared.get("kind")}
     return pins
@@ -1215,6 +1282,11 @@ def _register_tools(mcp: MCPServer) -> None:
         managed or snapshot table (describe_table gives the pin): 0 means this
         generation publishes no rows; null means no pointer pins the table. A
         later data run lands after the pin, so rows is not a freshness claim.
+        A comments export at a fixed URL is not pinned: rows_basis
+        comments_export_receipt marks its export receipt's count, stated while
+        the file matched the receipt when this connection was built (a later
+        statement can read a newer export); export_receipt_does_not_match_object
+        means the file had moved, and rows is null.
         A listed table loaded in this connection; that is not a data or
         freshness audit. Call describe_table before querying a table: it gives
         columns, coverage caveats, joins, the live data version and the output
@@ -1229,17 +1301,24 @@ def _register_tools(mcp: MCPServer) -> None:
             available = _available_tables(cursor)
         metadata = _table_metadata()
         relationships = _connection_relationships(cursor)
-        index, rulemaking = _connection_index(cursor), _connection_rulemaking(cursor)
+        index, rulemaking, exports = _connection_index(cursor), _connection_rulemaking(cursor), _export_rows(cursor)
         # A relationship family's occurrence, pair and field-state views share one summary; list it once.
         views: dict[str, list[str]] = {}
         for name, entry in relationships.items():
             if name in available:
                 views.setdefault(entry["metadata"]["summary"], []).append(name)
+
+        def rows(name: str) -> dict[str, Any]:
+            export = exports.get(name)
+            if export is None:
+                return {"rows": _pinned_rows(index, rulemaking, name)}
+            return {"rows": export["rows"], "rows_basis": export["rows_basis"]}
+
         return {
             **_source_details(cursor),
             "tables": [
                 {"table": name, "label": metadata.get(name, {}).get("label"), "coverage": metadata.get(name, {}).get("kind"),
-                 "rows": _pinned_rows(index, rulemaking, name)}
+                 **rows(name)}
                 for name in available if name not in relationships
             ],
             "relationship_views": [{"views": names, "summary": summary} for summary, names in views.items()],

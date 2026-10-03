@@ -9,8 +9,12 @@ import asyncio
 import inspect
 import json
 from copy import deepcopy
+from typing import Any
 
 import duckdb
+import httpx
+import pyarrow as pa
+import pyarrow.parquet as pq
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 from starlette.testclient import TestClient
@@ -18,6 +22,8 @@ from starlette.testclient import TestClient
 from spicy_regs import fec_release as release, mcp_server as server
 from spicy_regs.citation_resolution import SOURCE_TABLES
 from spicy_regs.citation_sources import TEXT_SOURCES
+from spicy_regs.sources import publication as pub
+from tests.test_generation_mcp import connection_fixture, serve_documents
 from tests.test_mcp_fec_release import configure, connection
 from tests.test_mcp_query_results import call
 from tests.test_mcp_relationships import citation_connection
@@ -156,3 +162,89 @@ def test_release_summary_does_not_mutate_the_record():
     summary = release.release_summary(record)
     assert summary["dependencies"] == {"t": {"family": "f", "generation": "g"}, "u": None}
     assert summary["acceptance_receipt_count"] == 1 and record == saved
+
+
+# S2: the comments exports state the receipt's rows, labelled as an export, never as a pin.
+
+RECEIPT: dict[str, Any] = {
+    "format_version": 1,
+    "source": {"schema_id": 6, "snapshot_id": 2757430127503624538, "table_uuid": "01a0d3fc-be18-70b0-abeb-e0f6e58d6cff"},
+    "files": {
+        "comments_index.parquet": {"bytes": 422071, "etag": '"7ca7cab42e209a8d0e859e534dec6766"', "rows": 143564,
+                                   "sha256": "98d174b23c0c0ccd3df8d8d5575f9e108aaba532e20ee2ef927d028cca40cab0"},
+        "comments.parquet": {"bytes": 4365019780, "etag": '"de9026c8aa6da8319674df98321ab35d-521"', "rows": 26408987,
+                             "sha256": "8c3caee14ab43f9ef2acc5c8e49331a0d25cb6df3918ee860430a12bcd7159da"},
+        "comments/agency/agency_code=ACF/part-0.parquet": {"bytes": 1, "etag": '"x"', "rows": 1, "sha256": "c" * 64},
+    },
+}
+
+
+def _export_server(tmp_path, monkeypatch, *, receipt=RECEIPT, etag=None):
+    """A remote build over one legacy comments_index file, its export receipt and a HEAD answering ``etag``."""
+    legacy = tmp_path / "comments_index.parquet"
+    pq.write_table(pa.table({"agency_code": ["FDA"], "row_count": [1]}), legacy)
+    documents = {f"{server.R2_BASE_URL}/comments-publication.json": receipt} if receipt is not None else {}
+    built = connection_fixture(monkeypatch, {"families": {}}, {"comments_index.parquet": legacy},
+                               tables=("comments_index",), documents=documents)
+    heads = []
+
+    def head(url, **_):
+        heads.append(url)
+        record = RECEIPT["files"][url.rsplit("/", 1)[1]]
+        headers = {"etag": etag or record["etag"], "content-length": str(record["bytes"])}
+        return httpx.Response(200, headers=headers, request=httpx.Request("HEAD", url))
+
+    monkeypatch.setattr(pub.httpx, "head", head)
+    return built, heads
+
+
+def test_a_matching_export_receipt_states_its_rows_labelled_as_an_export(tmp_path, monkeypatch):
+    built, heads = _export_server(tmp_path, monkeypatch)
+    con = server._build_connection()
+    monkeypatch.setattr(server, "_get_connection", lambda: con)
+    mcp = server.build_server()
+    [entry] = [t for t in _tool_data(mcp, "list_sources", {})["tables"] if t["table"] == "comments_index"]
+    assert entry["rows"] == 143_564 and entry["rows_basis"] == "comments_export_receipt"
+    assert heads == [f"{server.R2_BASE_URL}/comments_index.parquet"]  # only the served export, not every listed file
+    pin = _tool_data(mcp, "describe_table", {"table": "comments_index"})["publication"]
+    assert pin["status"] == "legacy_unversioned" and pin["rows_basis"] == "comments_export_receipt"
+    assert pin["export_receipt"] == {
+        "receipt_sha256": "sha256:" + pub.hashlib.sha256(json.dumps(RECEIPT).encode()).hexdigest(),
+        "sha256": "sha256:" + RECEIPT["files"]["comments_index.parquet"]["sha256"],
+        "etag": RECEIPT["files"]["comments_index.parquet"]["etag"], "bytes": 422071,
+        "catalog_snapshot_id": 2757430127503624538,
+    }
+    # Derived views embed the status pin; the receipt joins replies only.
+    assert server._publication_status(con.cursor())["publication"]["comments_index"] == {"status": "legacy_unversioned"}
+    built[0].inner.close()
+
+
+def test_an_export_object_that_moved_since_its_receipt_states_no_rows(tmp_path, monkeypatch):
+    built, _ = _export_server(tmp_path, monkeypatch, etag='"moved"')
+    con = server._build_connection()
+    monkeypatch.setattr(server, "_get_connection", lambda: con)
+    [entry] = [t for t in _tool_data(server.build_server(), "list_sources", {})["tables"]
+               if t["table"] == "comments_index"]
+    assert entry["rows"] is None and entry["rows_basis"] == "export_receipt_does_not_match_object"
+    built[0].inner.close()
+
+
+def test_without_a_receipt_an_export_states_no_rows_and_no_basis(tmp_path, monkeypatch):
+    built, heads = _export_server(tmp_path, monkeypatch, receipt=None)
+    con = server._build_connection()
+    monkeypatch.setattr(server, "_get_connection", lambda: con)
+    [entry] = [t for t in _tool_data(server.build_server(), "list_sources", {})["tables"]
+               if t["table"] == "comments_index"]
+    assert entry == {"table": "comments_index", "label": entry["label"], "coverage": entry["coverage"], "rows": None}
+    assert heads == []
+    built[0].inner.close()
+
+
+def test_a_moved_receipt_rebuilds_the_connection(tmp_path, monkeypatch):
+    _export_server(tmp_path, monkeypatch)
+    first = server._build_connection()
+    assert server._refreshed(first) is first
+    moved: dict[str, Any] = deepcopy(RECEIPT)
+    moved["source"]["snapshot_id"] += 1
+    serve_documents(monkeypatch, {f"{server.R2_BASE_URL}/comments-publication.json": moved})
+    assert server._refreshed(first) is not first
