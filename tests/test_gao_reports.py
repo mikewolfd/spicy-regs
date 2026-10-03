@@ -191,6 +191,27 @@ def test_the_listing_writes_gao_decisions_and_a_run_without_it_carries_them(tmp_
     assert carried == first
 
 
+def test_a_prior_published_as_decision_date_carries_its_dates_into_released_date(tmp_path, monkeypatch):
+    """The owner's rename (2026-10-03): the column is the date GAO released the decision, so it says so.
+
+    The published prior still spells it ``decision_date``. A run without a walk,
+    the daily case, must carry every row's date across the rename from the
+    prior's own values, never re-walk the listing for it and never leave it NULL.
+    """
+    from tests.test_gao_listing import _decision
+
+    decided = [_decision("/products/b-424129.2", "B-424129.2"), _decision("/products/b-331093-0", "B-331093")]
+    _, first = _run(tmp_path, monkeypatch, listed=[_product("gao-26-1")], decided=decided, with_decisions=True)
+    assert {row["released_date"] for row in first} == {"2026-08-18"}
+    (tmp_path / "gao_reports.parquet").rename(tmp_path / "_gao_prior.parquet")
+    published = pq.read_table(tmp_path / "gao_decisions.parquet")
+    published = published.rename_columns(["decision_date" if c == "released_date" else c for c in published.column_names])
+    pq.write_table(published, tmp_path / "_gao_decisions_prior.parquet")
+    (tmp_path / "gao_decisions.parquet").unlink()
+    _, carried = _run(tmp_path, monkeypatch, feed=["gao-26-2"], with_decisions=True)
+    assert carried == first
+
+
 def test_a_later_listing_read_adds_new_products_and_leaves_held_rows_alone(tmp_path, monkeypatch):
     first = _run(tmp_path, monkeypatch, listed=[_product("gao-12-100")])
     (tmp_path / "gao_reports.parquet").rename(tmp_path / "_gao_prior.parquet")

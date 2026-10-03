@@ -106,11 +106,11 @@ def test_decisions_become_rows_keyed_on_their_number_and_page_with_the_page_that
     rows, counts = decision_rows(run)
     assert rows == [
         {"decision_number": "B-423916.2,B-423916.3", "b_numbers_json": '["B-423916.2", "B-423916.3"]',
-         "decision_type": "Bid Protest Decision", "title": "Acme Corp.", "decision_date": "2026-08-18",
+         "decision_type": "Bid Protest Decision", "title": "Acme Corp.", "released_date": "2026-08-18",
          "topics_json": '["Bid Protest Decision"]', "url": "https://www.gao.gov/products/b-423916.2%2Cb-423916.3",
          "listing_page": page, "source": SOURCE},
         {"decision_number": "2020-02", "b_numbers_json": "[]", "decision_type": "Legal Other Decision",
-         "title": "Acme Corp.", "decision_date": "2026-08-18", "topics_json": '["Other Decision"]',
+         "title": "Acme Corp.", "released_date": "2026-08-18", "topics_json": '["Other Decision"]',
          "url": "https://www.gao.gov/products/2020-02-0", "listing_page": page, "source": SOURCE},
     ]
     assert counts["decision_rows"] == 2 and counts["unnumbered_left_out"] == 1

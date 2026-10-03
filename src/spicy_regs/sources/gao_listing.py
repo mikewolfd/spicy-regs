@@ -132,7 +132,7 @@ def decision_rows(run: ListingRun) -> tuple[list[dict], Counter[str]]:
             "b_numbers_json": json.dumps(b_numbers, ensure_ascii=False),
             "decision_type": item.label,
             "title": item.heading,
-            "decision_date": item.released or item.published,
+            "released_date": item.released or item.published,
             "topics_json": json.dumps(list(item.topics), ensure_ascii=False),
             "url": SITE + item.link,
             "listing_page": first_page.get(unquote(item.link)),

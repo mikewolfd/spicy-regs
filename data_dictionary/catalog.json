@@ -3935,7 +3935,7 @@
         "b_numbers_json",
         "decision_type",
         "title",
-        "decision_date",
+        "released_date",
         "topics_json",
         "url",
         "listing_page",

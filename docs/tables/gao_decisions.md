@@ -19,7 +19,7 @@ One row per GAO legal decision page, read from GAO's own listing of what it issu
 | `b_numbers_json` | `VARCHAR` | JSON array of the B-numbers in `decision_number`, split on commas and semicolons; a fragment GAO cut mid-number is left out. `[]` for a docket- or P-numbered decision. |
 | `decision_type` | `VARCHAR` | GAO's label for the decision (e.g. `Bid Protest Decision`, `Appropriations Decision`, `Legal Other Decision`). |
 | `title` | `VARCHAR` | The decision's heading as GAO's listing states it: the protester or the question decided. GAO double-escapes some headings, so a few keep `&mdash;`, `&#151;` or `&amp;` literally; apply `html.unescape` when matching. |
-| `decision_date` | `VARCHAR` | The listing's "Publicly Released" date (its "Published" date where it states no release) as an ISO date string. Sort key. |
+| `released_date` | `VARCHAR` | The listing's "Publicly Released" date (its "Published" date where it states no release) as an ISO date string. Sort key. |
 | `topics_json` | `VARCHAR` | JSON array of GAO's headings the decision was listed under, in listed order. |
 | `url` | `VARCHAR` | The decision's gao.gov page, as the listing links it (percent-encoded where GAO encodes it). With `decision_number`, the key. |
 | `listing_page` | `VARCHAR` | The first retained Month in Review or Annual Index page that listed the decision, the evidence a reader can open. |

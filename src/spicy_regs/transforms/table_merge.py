@@ -43,6 +43,7 @@ def merge_local_prior(
     kv_metadata: Mapping[str, str] | None = None,
     retire: str | None = None,
     derived: Mapping[str, str] | None = None,
+    renamed: Mapping[str, str] | None = None,
 ) -> None:
     """Merge the fresh ``new_file`` over a local prior on one identity column.
 
@@ -66,7 +67,10 @@ def merge_local_prior(
 
     A column the prior lacks is selected as NULL, as :func:`merge_table` does,
     so appending a column is a NULL backfill on the published rows, not a
-    migration.
+    migration. ``renamed`` maps an output column to the name a published prior
+    spells it with: a prior holding that name and not the new one reads it as
+    the new column, so a rename carries the prior's own values and never needs
+    the source read again.
     """
     keys = (identity,) if isinstance(identity, str) else tuple(identity)
     cols = ", ".join(f'"{c}"' for c in columns)
@@ -74,9 +78,15 @@ def merge_local_prior(
     if prior_file is not None and prior_file.exists():
         prior_path = str(prior_file).replace("'", "''")
         held = set(pq.read_schema(prior_file).names)
-        if absent := [c for c in columns if c not in held]:
+        former = {c: old for c, old in (renamed or {}).items() if c not in held and old in held}
+        if former:
+            logger.info("Prior {} spells {}; reading them renamed", prior_file.name,
+                        ", ".join(f"{c} as {old}" for c, old in former.items()))
+        if absent := [c for c in columns if c not in held and c not in former]:
             logger.info("Prior {} lacks {}; NULL-filling", prior_file.name, ", ".join(absent))
-        prior_cols = ", ".join(f'"{c}"' if c in held else f'NULL AS "{c}"' for c in columns)
+        prior_cols = ", ".join(
+            f'"{c}"' if c in held else f'"{former[c]}" AS "{c}"' if c in former else f'NULL AS "{c}"' for c in columns
+        )
         union = (
             f"SELECT {prior_cols}, 0 AS _src FROM read_parquet('{prior_path}') "
             + (f"WHERE ({retire}) IS NOT TRUE " if retire else "")

@@ -16454,7 +16454,7 @@
         "description": "The decision's heading as GAO's listing states it: the protester or the question decided. GAO double-escapes some headings, so a few keep `&mdash;`, `&#151;` or `&amp;` literally; apply `html.unescape` when matching."
       },
       {
-        "column_name": "decision_date",
+        "column_name": "released_date",
         "column_type": "VARCHAR",
         "description": "The listing's \"Publicly Released\" date (its \"Published\" date where it states no release) as an ISO date string. Sort key."
       },

@@ -102,12 +102,16 @@ _SCHEMA = pa.schema([(c, pa.int64() if c in COUNT_COLUMNS else pa.string()) for 
 
 #: GAO's legal decisions from its own listing: all VARCHAR, keyed on the number as GAO spells it and the page.
 DECISIONS_OUTPUT = "gao_decisions.parquet"
+#: Columns renamed in place, to the name a published prior still spells them with. ``released_date`` was
+#: ``decision_date`` until 2026-10-03 (owner decision): it is the date GAO released the decision, not the date
+#: GAO decided it (B-424477, decided 2026-08-07, released 2026-08-28).
+DECISION_RENAMES = {"released_date": "decision_date"}
 DECISION_COLUMNS = (
     "decision_number",
     "b_numbers_json",
     "decision_type",
     "title",
-    "decision_date",
+    "released_date",
     "topics_json",
     "url",
     "listing_page",
@@ -413,7 +417,8 @@ def _build_decisions(output_dir: Path, decisions: list[dict]) -> Path:
         con,
         columns=DECISION_COLUMNS,
         identity=("decision_number", "url"),
-        order_by="decision_date DESC, decision_number, url",
+        order_by="released_date DESC, decision_number, url",
+        renamed=DECISION_RENAMES,
         prior_file=prior_file if have_prior else None,
         new_file=new_file,
         out_file=out_file,

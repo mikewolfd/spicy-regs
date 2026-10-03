@@ -699,7 +699,7 @@ DERIVED_SCHEMAS: dict[str, list[tuple[str, str]]] = {
         ("b_numbers_json", "VARCHAR"),
         ("decision_type", "VARCHAR"),
         ("title", "VARCHAR"),
-        ("decision_date", "VARCHAR"),
+        ("released_date", "VARCHAR"),
         ("topics_json", "VARCHAR"),
         ("url", "VARCHAR"),
         ("listing_page", "VARCHAR"),
