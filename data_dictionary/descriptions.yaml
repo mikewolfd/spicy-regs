@@ -142,7 +142,7 @@ tables:
       posted_date: "Date the document was posted publicly (ISO 8601 string)."
       modify_date: "Timestamp the document was last modified (ISO 8601 string)."
       comment_start_date: "Literal Regulations.gov commentStartDate. See data_quality for the source-specific calendar conversion; this field does not establish submission purpose. NULL means no value was retained."
-      comment_end_date: "Literal Regulations.gov commentEndDate. Convert offset-bearing instants to America/New_York for calendar searches; date-only values and the source's bare T00:00:00Z convention keep their printed day (see data_quality). Neither purpose nor the controlling/current deadline follows from this field; inspect filing instructions and later notices. NULL does not mean no deadline."
+      comment_end_date: "Literal Regulations.gov commentEndDate as Regulations.gov states it now, which can reflect a later extension rather than the notice's own date: when a later notice extends the period, Regulations.gov can rewrite the original notice's date too (FS-2025-0001-223869, FR 2026-16965, reads 2026-10-07T03:59:59Z, the extension FR 2026-18648 set, while the Register's comments_close_on for 2026-16965 is 2026-09-21). For the date a notice printed, read federal_register.comments_close_on by fr_doc_num. Convert offset-bearing instants to America/New_York for calendar searches; date-only values and the source's bare T00:00:00Z convention keep their printed day (see data_quality). Purpose does not follow from this field. NULL does not mean no deadline."
       file_url: "URL of the document's primary downloadable rendition. Retained for backward compatibility; see `attachments_json` for the full list. Often null."
       attachments_json: "JSON array of the main document's fileFormats renditions: `[{url, format, size}]`. This compatibility field does not contain separately listed attachment resources. Null when no main renditions were retained."
       attachment_records_json: "Literal records from an explicitly read document attachment relationship, preserving attachment IDs, restrictions and alternative file formats. Null means the relationship was not read; an empty array means a validated complete read returned no attachments. A main document response alone cannot establish attachment absence."
@@ -215,7 +215,10 @@ tables:
       one agency, docket and posting month, so consumers can compute comment
       totals without scanning the full table. It is rebuilt from the same
       catalog snapshot as each comments publication. Its rows are groups, not
-      files: no Parquet file exists per row.
+      files: no Parquet file exists per row. Months are posting months: an
+      agency posts in batches, so a spike here dates postings, and
+      `comments.receive_date`, the agency's stated receipt date, dates
+      receipt.
     columns:
       agency_code: "Agency code of the counted comments."
       docket_id: "Source docket identifier, or NULL when the source gives none."
@@ -329,9 +332,12 @@ tables:
     identity_columns: [agency_code]
     label: "Agency activity spikes"
     coverage: >-
-      Not a range. A dated snapshot recomputed from `documents` at each build;
-      the Parquet metadata records its calculation time in UTC, its date policy
-      and its parent digest. Future dates are excluded from recent activity.
+      Not a range. A dated snapshot recomputed from `documents` at each build.
+      Its date is the calculation instant the file's metadata records
+      (`spicy_regs.discovery_signals.as_of`, beside the date policy and the
+      `documents` digest it read; `parquet_kv_metadata` on the generation's
+      file returns them), not `measured_on`, which dates the audit of this
+      note. Future dates are excluded from recent activity.
       This is not a historical series or a complete measure of agency activity.
       Receipt: fork-execution-2026-09-21/discovery-utc/MANUAL-AUDIT.md.
     measured_on: "2026-09-21"
@@ -356,13 +362,15 @@ tables:
     identity_columns: [package_id, granule_id]
     label: "Code of Federal Regulations sections"
     coverage: >-
-      Window. Annual-edition section metadata from the 2025 and 2026 editions,
-      not full publication history or body text. Each section's part comes from
-      its volume's PART heading; on 2026-09-23 every compared Title 41, 43 and
-      14 section agreed with eCFR's 2025-01-01 structure. Receipts:
+      Window. Annual-edition section metadata from the 2025 edition and, for
+      some titles, the 2026 edition (`SELECT DISTINCT edition_year, title`
+      lists which), not full publication history or body text. Each section's
+      part comes from its volume's PART heading; on 2026-09-23 every compared
+      Title 41, 43 and 14 section agreed with eCFR's 2025-01-01 structure.
+      Receipts:
       fork-execution-2026-09-21/cfr-ancestry-fix-2026-09-23/ (candidate.json,
       validation.json).
-    measured_on: "2026-09-28"
+    measured_on: "2026-10-03"
     summary: >-
       One row per GovInfo annual CFR granule, including sections, appendices,
       tables of contents and other structural units; metadata only, no
@@ -378,9 +386,15 @@ tables:
       its part granule's heading states (`60-2`), as the section rows do, and a
       Reserved part granule whose heading states no number takes NULL. The
       Parquet footer key `spicy_regs.cfr_sections.placement` records that every
-      row was placed by this rule; generations without it keep
-      identifier-derived parts. A package is re-placed only when it is new or
-      its GovInfo lastModified changed; an unchanged package, or one whose
+      section row was placed by this rule; generations without it keep
+      identifier-derived parts. The key says nothing of Title 41's structural
+      rows, which no volume scan places: they take their compound part from
+      their part granule's heading on every run from 2026-10-03, under the same
+      key. A generation built before keeps the identifier's chapter there
+      (`part` `60`, `cfr_ref` `41-60` on `…-part60-id334`), and `count(*) WHERE
+      title = '41' AND section IS NULL AND part LIKE '%-%'` is 0 on it and
+      above 0 once the compound parts are in. A package is re-placed only when
+      it is new or its GovInfo lastModified changed; an unchanged package, or one whose
       volume cannot be read, keeps its prior rows. Missing credentials and
       incomplete source traversals refuse before output replacement. GovInfo's
       annual index package (`GPO-CFR-INDEX-2025`) is not a title volume and is
@@ -388,7 +402,7 @@ tables:
     columns:
       granule_id: "GovInfo granule identifier. Primary key / dedup key, including non-section structural units."
       package_id: "GovInfo package identifier for the enclosing annual CFR title and volume."
-      cfr_ref: "Join key to Federal Register `cfr_references_json`. For a section, the title and its printed citation (e.g. `43-1601.0-1`, `41-50-201.1`); Title 43 keeps its subpart-numbered spelling while `part` names the enclosing part. The Federal Register side cuts every Title 41 compound part at the hyphen (`41 CFR 60-1.4` reads `41-60`), so a Title 41 reference there names a chapter, not a part, and matches no row here: match it at chapter level (`title = '41' AND part LIKE '60-%'`). NULL for ranges, publisher typos, unprefixed numbers (`Sec. 1-1`), parenthesized citations (`1.401(k)-1`), sections outside a numbered PART and section tokens the volume does not hold; 12 single sections printed with `§§` (`§§ 2.188`) are read as ranges until spicy-docs 0.31.0. For other granules, composed from the part and the identifier's tokens (e.g. `48-700`, `15-746.10-app1`); NULL without a part. A part-level reference (`40-60`) equals `cfr_ref` only on a part's structural rows, and a part held only as sections has none (50 CFR 622 among 12 on 2026-10-03): match a part on `title` and `part`, which section rows carry."
+      cfr_ref: "Join key to Federal Register `cfr_references_json`. For a section, the title and its printed citation (e.g. `43-1601.0-1`, `41-50-201.1`); Title 43 keeps its subpart-numbered spelling while `part` names the enclosing part. The Federal Register side cuts every Title 41 compound part at the hyphen (`41 CFR 60-1.4` reads `41-60`), so a Title 41 reference there names a chapter, not a part, and matches no structural row here once the generation carries Title 41's compound parts (see the summary): match it at chapter level (`title = '41' AND part LIKE '60-%'`). NULL for ranges, publisher typos, unprefixed numbers (`Sec. 1-1`), parenthesized citations (`1.401(k)-1`), sections outside a numbered PART and section tokens the volume does not hold; 12 single sections printed with `§§` (`§§ 2.188`) are read as ranges until spicy-docs 0.31.0. For other granules, composed from the part and the identifier's tokens (e.g. `48-700`, `15-746.10-app1`); NULL without a part. A part-level reference (`40-60`) equals `cfr_ref` only on a part's structural rows, and a part held only as sections has none (50 CFR 622 among 12 on 2026-10-03): match a part on `title` and `part`, which section rows carry."
       title: "CFR title number from the package or granule identifier (e.g. `40`)."
       part: "For a section, the number in the enclosing PART heading of the package's annual volume XML (e.g. `1600`, `50-201`, `241`); NULL outside a numbered PART or when the volume does not hold the section. For a section's appendix or TOC (`sec746-10-app1`), its host section's part when the volume holds the host, else its token's leading number. For other granules, the identifier's part token including letter suffixes (e.g. `1203a`); in Title 41, whose identifiers cut a compound part at the hyphen, the compound part its part granule's heading states (`60-2`)."
       section: "For a section, the printed number less its `{part}.` prefix (e.g. `1` for § 50-201.1, `19-8.1` in Part 241, `1601.0-1` in Part 1600, `401(k)-1`). For a section's appendix or TOC, the rest of its token after the leading number (`10-app1`); for a section token the volume does not hold, the whole token. NULL for other granules."
@@ -580,7 +594,7 @@ tables:
       rin_status: "Status of the RIN in this edition (e.g. `Active`, `Completed`, `Long-Term`)."
       rule_stage: "Stage of the rulemaking in this edition (e.g. `Prerule`, `Proposed Rule`, `Final Rule`)."
       priority_category: "OIRA priority classification (e.g. `Economically Significant`, `Other Significant`, `Substantive, Nonsignificant`)."
-      agenda_edition: "Semiannual agenda edition the row was published in, as `YYYYMM` (MM 04=Spring, 10=Fall). Half of the primary/dedup key. Every readable edition since 199510 is held, so filter to one edition, or count distinct `rin`, before counting rules."
+      agenda_edition: "Semiannual agenda edition the row was published in, as reginfo.gov's `pubId` `YYYYMM`: MM 04 and 10 are its spring and fall editions, except that reginfo.gov titles 202510 the \"2026\" agenda (202504 is Spring 2025). The month is not a release date: an edition appears months later (USDA printed 202510 in the Register on 2026-08-14), and no release date is held. Half of the primary/dedup key. Every readable edition since 199510 is held, so filter to one edition, or count distinct `rin`, before counting rules."
       major: "Whether the action is a major rule, as reported by the agenda (e.g. `Yes`/`No`). Often null."
       publication_id: "reginfo.gov publication identifier for this agenda entry, when present."
       timetable_json: "JSON array of planned and actual milestone actions with literal source dates and Federal Register citations. A date with day 00 has month precision; labels such as To Be Determined remain unchanged."
@@ -851,6 +865,19 @@ tables:
       lifecycles proposed since 2020 on snapshot_448e6d9a's inputs. Time to
       final then runs from the receipt notice, and `proposal_form` does not
       tell the two apart.
+
+      FDA's notices that it filed a food or color additive petition ("Filing
+      of Food Additive Petition", "… Color Additive Petition") are the same
+      case with no stratum: the Register types them Proposed Rule (its
+      `action`, "Notification of petition.", is not carried by
+      `federal_register`), `routine_family` is NULL, and on
+      snapshot_55d396ee's inputs 64 of the 199 FDA lifecycles proposed since
+      2018, and 130 of the 831 in the published FDA cell, anchor on one. Match
+      the proposal's Register title (`filing of … petition`) to set them
+      apart. A count of lifecycles counts docketed proceedings, not
+      rulemakings: FNA's three open lifecycles on that snapshot are one RIN,
+      0584-AF22, in dockets FNA-2026-0034, -0166 and -0201; count distinct
+      `proceedings.rin` for rulemakings.
     summary: >-
       One row per docketed proceeding (owner decisions 54-56c): its earliest
       proposal, the earliest the Register dates, else its upload-dated one
@@ -1509,12 +1536,16 @@ tables:
       B-numbered from April 2017, are in `gao_reports`, not here. Entries GAO
       gives no number are left out. A year or month the walk has not finished
       adds nothing, and a month with no listed decision adds nothing either;
-      this table does not record which case a missing month is. The months
-      read are the distinct `listing_page` values: a month after the newest
-      one is unread, a month before it with no rows is a publisher zero
-      (October 2025, when GAO was closed by the lapse in appropriations, is
-      one).
-    measured_on: "2026-09-28"
+      this table does not record which case a missing month is. A walk reads
+      a year's listing (`month-in-review/2025?page=N`) or a month's
+      (`month-in-review/2026/August`), as its scopes name, and the held rows
+      came from year scopes for 2009-2025 and month scopes for 2026, so one
+      listing page can span several months and `listing_page` names a scope,
+      not a month. A month inside a year scope read, or before the newest
+      month scope read, with no rows is a publisher zero (October 2025, when
+      GAO was closed by the lapse in appropriations, is one); a month after
+      the newest month scope is unread.
+    measured_on: "2026-10-03"
     summary: >-
       One row per GAO legal decision page, read from GAO's own listing of what
       it issued by month and year. A decision is keyed on its number as GAO
@@ -1529,7 +1560,7 @@ tables:
       b_numbers_json: "JSON array of the B-numbers in `decision_number`, split on commas and semicolons; a fragment GAO cut mid-number is left out. `[]` for a docket- or P-numbered decision."
       decision_type: "GAO's label for the decision (e.g. `Bid Protest Decision`, `Appropriations Decision`, `Legal Other Decision`)."
       title: "The decision's heading as GAO's listing states it: the protester or the question decided. GAO double-escapes some headings, so a few keep `&mdash;`, `&#151;` or `&amp;` literally; apply `html.unescape` when matching."
-      decision_date: "The listing's \"Publicly Released\" date (its \"Published\" date where it states no release) as an ISO date string. Sort key."
+      decision_date: "Not the date GAO decided the case, which this table does not hold: the date GAO publicly released the decision, from the listing's \"Publicly Released\" line (its \"Published\" date where it states none), as an ISO date string. A bid protest is released days or weeks after it is decided (B-424477: decided 2026-08-07, released 2026-08-28), so a count by fiscal year counts releases; the decision page and `gao.gov/docket/<B-number>.1` state the decision date. Sort key."
       topics_json: "JSON array of GAO's headings the decision was listed under, in listed order."
       url: "The decision's gao.gov page, as the listing links it (percent-encoded where GAO encodes it). With `decision_number`, the key."
       listing_page: "The first retained Month in Review or Annual Index page that listed the decision, the evidence a reader can open."
