@@ -1,8 +1,8 @@
 """Transform: build ``rulemaking_lifecycles.parquet`` and ``lifecycle_events.parquet`` from docketed proceedings.
 
 One lifecycle per docketed proceeding, paired from its cleaned events (owner decisions
-54-56c). A docket-less proceeding is one Register document that cannot pair; it is counted
-and left out.
+54-56c, and 54d and 55a of 2026-10-03). A docket-less proceeding is one Register document
+that cannot pair; it is counted and left out.
 """
 
 from __future__ import annotations
@@ -41,8 +41,11 @@ from spicy_regs.transforms.build_unified_agenda import timetable_date
 
 LIFECYCLES_OUTPUT = "rulemaking_lifecycles.parquet"
 EVENTS_OUTPUT = "lifecycle_events.parquet"
-LIFECYCLES_ACTOR_ID = "spicy-regs:rulemaking-lifecycles:v1"
-EVENTS_ACTOR_ID = "spicy-regs:lifecycle-events:v1"
+# v2 (one bump over published v1), owner decisions 2026-10-03: a Register-dated proposal is time zero, and
+# an upload-dated one anchors only where the proceeding holds none (54d); routine_family reads the anchor's
+# own title at time zero (55a).
+LIFECYCLES_ACTOR_ID = "spicy-regs:rulemaking-lifecycles:v2"
+EVENTS_ACTOR_ID = "spicy-regs:lifecycle-events:v2"
 
 #: Regulations.gov's coverage is thin before this day (decision 54's coverage flag).
 COVERAGE_FROM = date(2008, 1, 1)
@@ -59,6 +62,9 @@ WITHDRAWAL_SOURCES = frozenset({"federal_register", "unified_agenda"})
 #: "damage tolerance" out. A Federal Implementation Plan is EPA's own plan, not a state's (87
 #: lifecycles on snapshot_9b2c770e, 7 of them Agenda-significant), and FAA flight prohibitions and
 #: special federal aviation regulations are not airspace designations (owner review of decision 55).
+#: A pesticide-petition receipt is the tolerance pathway by its own title (decision 55a): its final is
+#: "...; Pesticide Tolerances", which is how 1,066 of snapshot_62318069's 14,805 routine survival rows
+#: took their family from the final's title before the phrase was stated here.
 ROUTINE_FAMILIES: tuple[tuple[str, frozenset[str], tuple[str, ...], tuple[str, ...]], ...] = (
     ("airworthiness_directive", frozenset({"FAA"}), ("airworthiness directive",), ()),
     (
@@ -86,7 +92,7 @@ ROUTINE_FAMILIES: tuple[tuple[str, frozenset[str], tuple[str, ...], tuple[str, .
         ),
         ("federal implementation plan", "federal plan"),
     ),
-    ("pesticide_tolerance", frozenset({"EPA"}), ("tolerance",), ()),
+    ("pesticide_tolerance", frozenset({"EPA"}), ("tolerance", "pesticide petition"), ()),
     (
         "coast_guard_local",
         frozenset({"USCG"}),
@@ -214,10 +220,43 @@ class Lifecycle:
         return {event.document_id: role for role, event in roles if event is not None}
 
 
+#: The forms of a proposed event that are a proposal's own publication; a comment-period extension
+#: or a correction presupposes a proposal already published.
+_PROPOSAL_FORMS = frozenset({"proposed", "advance_proposed"})
+
+
+def _anchoring_proposal(proposals: list[Event], finals: list[Event]) -> Event:
+    """The proposal a lifecycle anchors on, of its proceeding's proposals and finals in order (decision 54d).
+
+    The earliest the Register dates. A proposal dated only by its Regulations.gov upload anchors
+    only when the Register dates none that could be its publication: an upload day is when a
+    document was posted, not when a rule was proposed, and agencies post unnumbered "display"
+    copies on the public-inspection day, days before the Register's copy (CMS-2026-2377-0001 on
+    2026-07-14, 2026-14327 on 07-16). No window: the Register's proposal is time zero however far
+    it follows. Two readings of the proceeding's own events say the Register's is a later
+    proposal of its own, and the upload keeps its anchor: a final between the two (the upload's
+    proposal was finalized first; 32 of 376 such proceedings on snapshot_62318069's inputs, 25
+    of them with the Register's proposal more than a year later), and a Register proposal that
+    is itself a comment-period extension or a correction (11), which presupposes a published
+    proposal.
+    """
+    first = proposals[0]
+    if first.dated_by == "federal_register":
+        return first
+    register = next((event for event in proposals if event.dated_by == "federal_register"), None)
+    if register is None or register.document_form not in _PROPOSAL_FORMS:
+        return first
+    if any(first.event_date < final.event_date <= register.event_date for final in finals):
+        return first
+    return register
+
+
 def lifecycle(events: Iterable[Event], censor_date: date) -> Lifecycle:
     """Pair a proceeding's events (decision 54).
 
-    The proposal is the earliest proposed event, and it pairs with the earliest final strictly
+    The proposal is the earliest proposed event the Register dates, else the earliest, unless
+    the proceeding's own events say the Register's is a later proposal
+    (:func:`_anchoring_proposal`, decision 54d), and it pairs with the earliest final strictly
     after it (``finalized``). With no such final, a final on the proposal's day makes a
     ``companion`` and pairs nothing, but only when the Register dates both (decision 54b): a
     same-day final dated only by its Regulations.gov upload is no companion. A proposal itself
@@ -235,7 +274,7 @@ def lifecycle(events: Iterable[Event], censor_date: date) -> Lifecycle:
     finals = [event for event in ordered if event.stage == "final"]
     if not proposals:
         return Lifecycle("final_without_observed_proposal", final=finals[0]) if finals else Lifecycle("no_anchor")
-    proposal = proposals[0]
+    proposal = _anchoring_proposal(proposals, finals)
     day = proposal.event_date
     before = sum(final.event_date < day for final in finals)
     if later := [final for final in finals if final.event_date > day]:
@@ -275,22 +314,24 @@ def pre_2008_coverage(result: Lifecycle) -> bool | None:
     return anchor.event_date < COVERAGE_FROM
 
 
-def routine_family(agency_code: object, *titles: object) -> str | None:
-    """The first :data:`ROUTINE_FAMILIES` family of the agency that a title names, trying the titles in order.
+def routine_family(agency_code: object, title: object) -> str | None:
+    """The first :data:`ROUTINE_FAMILIES` family of the agency that a title names and no keep-out phrase of which it says.
 
-    A family none of whose keep-out phrases any of the titles says: one title naming a Federal
-    Implementation Plan keeps the whole rule out of the state air plans.
+    Read at time zero, from the anchor's own title (decision 55a): a stratum is a survival
+    covariate, so a final's or a proceeding's later title must not decide it. On snapshot_62318069
+    1,221 of 14,805 routine survival rows took their family from the final's title (1,066) or the
+    proceeding's (155), and 2025-12404's 23 petition lifecycles split 19 tolerance to 4 none by
+    whether a "Tolerances" final had arrived.
     """
     agency = str(agency_code or "")
-    texts = [" ".join(str(title or "").split()).casefold() for title in titles]
-    for text in texts:
-        for family, agencies, phrases, excluded in ROUTINE_FAMILIES:
-            if (
-                agency in agencies
-                and any(phrase in text for phrase in phrases)
-                and not any(phrase in other for phrase in excluded for other in texts)
-            ):
-                return family
+    text = " ".join(str(title or "").split()).casefold()
+    for family, agencies, phrases, excluded in ROUTINE_FAMILIES:
+        if (
+            agency in agencies
+            and any(phrase in text for phrase in phrases)
+            and not any(phrase in text for phrase in excluded)
+        ):
+            return family
     return None
 
 
@@ -619,6 +660,9 @@ def build_lifecycles(
                 ]
         result = lifecycle(events, censor_date)
         anchors = [event for event in (result.proposal, result.final) if event is not None]
+        # The stratum is read at time zero from the anchor's own title (decision 55a); only a proceeding
+        # with no anchor has no title of its rule's own, and takes the proceeding's.
+        stratum_title = anchors[0].title if anchors else proceeding.get("title")
         lifecycle_rows.append(
             {
                 "proceeding_id": proceeding_id,
@@ -638,9 +682,7 @@ def build_lifecycles(
                 "duration_days": result.duration_days,
                 "censor_date": censor_date,
                 "open_signal": open_signal,
-                "routine_family": routine_family(
-                    proceeding.get("agency_code"), *(event.title for event in anchors), proceeding.get("title")
-                ),
+                "routine_family": routine_family(proceeding.get("agency_code"), stratum_title),
                 "agenda_priority": entry.priority if entry else None,
                 "agenda_major": entry.major if entry else None,
                 "specific_rins_json": canonical_json(rins),

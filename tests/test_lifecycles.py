@@ -32,6 +32,7 @@ from spicy_regs.transforms.build_lifecycles import (
     ROUTINE_FAMILIES,
     AgendaEntry,
     Event,
+    Lifecycle,
     agenda_signal,
     build_lifecycles,
     lifecycle,
@@ -53,9 +54,18 @@ def _event(
     source: str = REGISTER,
     joined_by: str = "docket",
     dated_by: str = REGISTER,
+    title: str | None = None,
 ) -> Event:
     return Event(
-        date.fromisoformat(day), document, stage, source, document, joined_by, document_form(stage, None), dated_by
+        date.fromisoformat(day),
+        document,
+        stage,
+        source,
+        document,
+        joined_by,
+        document_form(stage, title),
+        dated_by,
+        title,
     )
 
 
@@ -121,6 +131,135 @@ def test_a_same_day_final_and_a_later_final_pair_with_the_later_one():
         CENSOR,
     )
     assert (result.kind, result.anchors(), result.duration_days) == ("finalized", {"P": "proposal", "F": "final"}, 244)
+
+
+#: Decision 54d's cohort, by example: CMS-2026-2377-0001, an unnumbered "display" upload posted on the
+#: public-inspection day, and 2026-14327, the Register's proposal published two days later.
+UPLOAD, REGISTER_PROPOSAL, FINAL = "CMS-2026-0001-0001", "2026-14327@2026-01-16", "2026-20000@2026-05-04"
+
+
+def _upload_proposal(day: str = "2026-01-14", document: str = UPLOAD) -> Event:
+    return _event(day, "proposed", document, REGULATIONS_GOV, dated_by=REGULATIONS_GOV)
+
+
+def _proposal_of(result: Lifecycle) -> str:
+    assert result.proposal is not None
+    return result.proposal.document_id
+
+
+def test_a_register_dated_proposal_is_time_zero_and_the_earlier_upload_anchors_nothing():
+    """Decision 54d: the display upload is dated by its posting, the Register's copy by its publication."""
+    result = lifecycle(
+        [
+            _upload_proposal(),
+            _event("2026-01-16", "proposed", REGISTER_PROPOSAL, joined_by="fr_copy"),
+            _event("2026-05-04", "final", FINAL),
+        ],
+        CENSOR,
+    )
+    assert result.anchors() == {REGISTER_PROPOSAL: "proposal", FINAL: "final"}
+    assert (result.kind, result.duration_days) == ("finalized", 108)
+
+
+def test_the_register_dates_time_zero_however_long_after_the_upload():
+    # No window: an upload day says when a document was posted, not when the rule was proposed.
+    result = lifecycle(
+        [
+            _upload_proposal("2024-01-14"),
+            _event("2026-01-16", "proposed", REGISTER_PROPOSAL),
+            _event("2026-05-04", "final", FINAL),
+        ],
+        CENSOR,
+    )
+    assert (_proposal_of(result), result.duration_days) == (REGISTER_PROPOSAL, 108)
+
+
+def test_an_upload_dated_proposal_anchors_only_where_the_register_dates_none():
+    result = lifecycle([_upload_proposal(), _event("2026-05-04", "final", FINAL)], CENSOR)
+    assert (_proposal_of(result), result.kind, result.duration_days) == (UPLOAD, "finalized", 110)
+
+
+def test_a_same_day_register_proposal_wins_by_rule_not_by_id_order():
+    # A legacy-numbered Register id sorts after the upload's; the rule, not the sort, picks the Register's.
+    register = "R1-2026-10679@2026-01-14"
+    result = lifecycle([_upload_proposal(), _event("2026-01-14", "proposed", register)], CENSOR)
+    assert _proposal_of(result) == register
+
+
+def test_the_earlier_of_two_register_proposals_in_the_window_anchors():
+    result = lifecycle(
+        [
+            _upload_proposal(),
+            _event("2026-01-20", "proposed", "2026-15000@2026-01-20"),
+            _event("2026-01-16", "proposed", REGISTER_PROPOSAL),
+        ],
+        CENSOR,
+    )
+    assert _proposal_of(result) == REGISTER_PROPOSAL
+
+
+@pytest.mark.parametrize("final_day", ["2026-01-15", "2026-01-16"])
+def test_a_final_between_the_upload_and_the_registers_proposal_keeps_the_upload_anchored(final_day):
+    """The upload's proposal was finalized first (on the Register proposal's own day included): the Register's is a later one."""
+    result = lifecycle(
+        [
+            _upload_proposal(),
+            _event(final_day, "final", "F0"),
+            _event("2026-01-16", "proposed", REGISTER_PROPOSAL),
+            _event("2026-05-04", "final", FINAL),
+        ],
+        CENSOR,
+    )
+    assert result.anchors() == {UPLOAD: "proposal", "F0": "final"}
+    assert (result.kind, result.finals_before_proposal, result.duration_days) == (
+        "finalized",
+        0,
+        date.fromisoformat(final_day).day - 14,
+    )
+
+
+def test_a_final_on_the_uploads_own_day_is_not_between_and_an_upload_pair_still_yields():
+    # A same-day final is the upload-pair shape (54c), not a final of the upload's proposal; the Register's proposal anchors.
+    result = lifecycle(
+        [
+            _upload_proposal(),
+            _event("2026-01-14", "final", "F0", REGULATIONS_GOV, dated_by=REGULATIONS_GOV),
+            _event("2026-01-16", "proposed", REGISTER_PROPOSAL),
+            _event("2026-05-04", "final", FINAL),
+        ],
+        CENSOR,
+    )
+    assert (_proposal_of(result), result.kind, result.finals_before_proposal) == (REGISTER_PROPOSAL, "finalized", 1)
+
+
+@pytest.mark.parametrize(
+    "title",
+    [
+        "Payment Policies; Extension of Comment Period",
+        "Payment Policies; Reopening of Comment Period",
+        "Payment Policies; Correction",
+    ],
+)
+def test_a_register_extension_or_correction_presupposes_the_published_proposal_and_leaves_the_upload_anchored(title):
+    result = lifecycle(
+        [
+            _upload_proposal(),
+            _event("2026-02-20", "proposed", REGISTER_PROPOSAL, title=title),
+            _event("2026-05-04", "final", FINAL),
+        ],
+        CENSOR,
+    )
+    assert (_proposal_of(result), result.duration_days) == (UPLOAD, 110)
+    # The same document titled as a proposal is the publication, and anchors.
+    plain = lifecycle(
+        [
+            _upload_proposal(),
+            _event("2026-02-20", "proposed", REGISTER_PROPOSAL, title="Payment Policies"),
+            _event("2026-05-04", "final", FINAL),
+        ],
+        CENSOR,
+    )
+    assert (_proposal_of(plain), plain.duration_days) == (REGISTER_PROPOSAL, 73)
 
 
 def test_a_final_before_the_proposal_is_counted_not_paired():
@@ -238,6 +377,17 @@ def test_the_latest_edition_decides_then_the_strongest_signal():
         ("EPA", "Approval and Promulgation of Implementation Plans; Ohio; Regional Haze", "state_air_plan"),
         ("EPA", "Air Plan Approval; Texas; Infrastructure for the 2015 Ozone NAAQS", "state_air_plan"),
         ("EPA", "Fluopyram; Pesticide Tolerances", "pesticide_tolerance"),
+        # A petition receipt is the tolerance pathway at time zero (decision 55a): its final is "...; Pesticide Tolerances".
+        (
+            "EPA",
+            "Receipt of Several Pesticide Petitions Filed for Residues of Pesticide Chemicals in or on Various Commodities",
+            "pesticide_tolerance",
+        ),
+        (
+            "EPA",
+            "Notice of Filing of Several Pesticide Petitions Filed for Residues of Pesticide Chemicals",
+            "pesticide_tolerance",
+        ),
         ("USCG", "Safety Zone; Fireworks Display, Lake Michigan, Chicago, IL", "coast_guard_local"),
         ("USCG", "Drawbridge Operation Regulation; Hackensack River, NJ", "coast_guard_local"),
         ("USCG", "Anchorage Regulations; Port of New York", "coast_guard_local"),
@@ -268,20 +418,9 @@ def test_a_phrase_under_another_agency_or_with_a_keep_out_phrase_is_no_family(ag
     assert routine_family(agency, title) is None
 
 
-def test_the_titles_are_tried_in_order_and_a_keep_out_phrase_in_any_of_them_vetoes():
-    # A generic proposal title falls through to the next one.
-    assert routine_family("FAA", "U.S. DOT/FAA - Final Rule", "Airworthiness Directives; Airbus") == (
-        "airworthiness_directive"
-    )
-    # The first title that names a family decides.
-    assert routine_family("FAA", "Airworthiness Directives; Airbus", "Establishment of Class E Airspace") == (
-        "airworthiness_directive"
-    )
-    assert routine_family("FAA", "Establishment of Class E Airspace", "Airworthiness Directives; Airbus") == "airspace"
+def test_a_keep_out_phrase_in_the_title_vetoes_and_the_families_are_stated_once():
     assert (
-        routine_family(
-            "EPA", "Approval and Promulgation of Implementation Plans; Arizona", "Arizona; Federal Implementation Plan"
-        )
+        routine_family("EPA", "Approval and Promulgation of Implementation Plans; Arizona; Federal Implementation Plan")
         is None
     )
     assert {family for family, *_ in ROUTINE_FAMILIES} == {
@@ -518,18 +657,25 @@ def _agenda(rin: str, edition: str, stage: str, timetable: list[tuple[str, str]]
     }
 
 
-def _docket(docket: str, rin: str | None = None, agency: str = AGENCY, title: str = "", modified: str = "") -> dict:
+def _docket(
+    docket: str,
+    rin: str | None = None,
+    agency: str = AGENCY,
+    title: str = "",
+    modified: str = "",
+    docket_type: str = "Rulemaking",
+) -> dict:
     return {
         "docket_id": docket,
         "rin": rin,
-        "docket_type": "Rulemaking",
+        "docket_type": docket_type,
         "title": title or f"Docket {docket}",
         "agency_code": agency,
         "modify_date": modified or None,
     }
 
 
-def _build(root: Path) -> tuple[dict[str, dict], list[dict]]:
+def _build_inputs(root: Path) -> None:
     """Every docket a separate rulemaking, each exercising one rule; built through the real upstream stages."""
     _write(
         root,
@@ -555,8 +701,8 @@ def _build(root: Path) -> tuple[dict[str, dict], list[dict]]:
             _docket("EPA-HQ-OAR-2020-0009", "2060-AA09"),
             # X: an X-pattern code is never specific.
             _docket("NOAA-NMFS-2020-0010", "0648-XA01"),
-            # N: a docket with no rule document at all.
-            _docket("EPA-HQ-OAR-2020-0011", "2060-AA11"),
+            # N: a docket with no rule document at all; with no anchor, its own title names the family.
+            _docket("EPA-HQ-OAR-2020-0011", "2060-AA11", title="Air Plan Approval; Iowa; No Rule Document Yet"),
             # S: a Register final attached by the docket's specific RIN, which the Agenda never lists.
             _docket("EPA-HQ-OAR-2020-0013", "2060-AA13"),
             # B2: a proposal and a "final" both dated by their Regulations.gov upload the same day.
@@ -578,6 +724,12 @@ def _build(root: Path) -> tuple[dict[str, dict], list[dict]]:
             _docket(
                 "FAA-2020-0021", agency="FAA", title="Establishment of Class E Airspace; Mesa", modified="2025-01-01"
             ),
+            # D1: an unnumbered "display" upload of a proposal, the Register's numbered copy two days later (54d).
+            _docket("CMS-2021-0001", agency="CMS"),
+            # Q1: an open pesticide-petition receipt whose docket title names no tolerance (decision 55a).
+            _docket("EPA-HQ-OPP-2021-0002", title="Petition docket"),
+            # Q2: a generically titled proposal whose final is a state air plan: no family at time zero (55a).
+            _docket("EPA-HQ-OAR-2021-0003"),
         ],
     )
     documents = [
@@ -619,6 +771,22 @@ def _build(root: Path) -> tuple[dict[str, dict], list[dict]]:
             "Airworthiness Directives; Boeing Airplanes",
             agency_code="FAA",
         ),
+        _document(
+            "CMS-2021-0001-0001",
+            "CMS-2021-0001",
+            "Proposed Rule",
+            "2021-07-14",
+            "Payment Policies (CMS-1848-P Display)",
+            agency_code="CMS",
+        ),
+        _document(
+            "CMS-2021-0001-0002",
+            "CMS-2021-0001",
+            "Proposed Rule",
+            "2021-07-16",
+            agency_code="CMS",
+            fr_doc_num="2021-14327",
+        ),
     ]
     _write(root, "documents", documents)
     _write(
@@ -634,6 +802,16 @@ def _build(root: Path) -> tuple[dict[str, dict], list[dict]]:
             _register("2020-06000", "2020-06-01", "Proposed Rule", "Emission Standards"),
             _register("94-12345", "1994-06-01", "Uncategorized Document", "Emission Standards Program Changes"),
             _register("2020-07000", "2020-07-01", "Rule", "Emission Standards"),
+            _register("2021-14327", "2021-07-16", "Proposed Rule", "Medicare Program; Payment Policies"),
+            _register("2021-20000", "2021-11-01", "Rule", "Medicare Program; Payment Policies; Final Rule"),
+            _register(
+                "2021-30000",
+                "2021-03-01",
+                "Proposed Rule",
+                "Receipt of Several Pesticide Petitions Filed for Residues of Pesticide Chemicals in or on Various Commodities",
+            ),
+            _register("2021-40000", "2021-04-01", "Proposed Rule", "Notice of Proposed Rulemaking"),
+            _register("2021-40001", "2021-10-01", "Rule", "Air Plan Approval; Ohio; Regional Haze"),
         ],
     )
     _write(
@@ -648,6 +826,10 @@ def _build(root: Path) -> tuple[dict[str, dict], list[dict]]:
                 ("EPA-HQ-OAR-2020-0002", "2020-04001", "2020-05-01"),
                 ("EPA-HQ-OAR-2020-0015", "2020-06000", "2020-06-01"),
                 ("EPA-HQ-OAR-2020-0023", "2020-07000", "2020-07-01"),
+                ("CMS-2021-0001", "2021-20000", "2021-11-01"),
+                ("EPA-HQ-OPP-2021-0002", "2021-30000", "2021-03-01"),
+                ("EPA-HQ-OAR-2021-0003", "2021-40000", "2021-04-01"),
+                ("EPA-HQ-OAR-2021-0003", "2021-40001", "2021-10-01"),
             )
         ],
     )
@@ -678,6 +860,10 @@ def _build(root: Path) -> tuple[dict[str, dict], list[dict]]:
     build_rule_targets(root)
     build_proceedings(root)
     build_regulatory_agenda(root)
+
+
+def _lifecycles_of(root: Path) -> tuple[dict[str, dict], list[dict]]:
+    """The lifecycle stage over ``root``'s built upstream tables: rows by their first docket, and the events."""
     lifecycles, events = build_lifecycles(root, run_id="test-run", asserted_at="2026-09-27T00:00:00Z")
     by_docket = {}
     proceedings = {row["proceeding_id"]: row for row in pq.read_table(root / "proceedings.parquet").to_pylist()}
@@ -686,13 +872,29 @@ def _build(root: Path) -> tuple[dict[str, dict], list[dict]]:
     return by_docket, pq.read_table(events).to_pylist()
 
 
+def _build(root: Path) -> tuple[dict[str, dict], list[dict]]:
+    _build_inputs(root)
+    return _lifecycles_of(root)
+
+
 def _events_of(events: list[dict], row: dict) -> list[dict]:
     return [event for event in events if event["proceeding_id"] == row["proceeding_id"]]
 
 
+def _titles(root: Path) -> dict[str, str]:
+    """Each fixture document's title by the id a lifecycle anchors on: a Register record id or a Regulations.gov id."""
+    register = pq.read_table(
+        root / "federal_register.parquet", columns=["document_number", "publication_date", "title"]
+    )
+    documents = pq.read_table(root / "documents.parquet", columns=["document_id", "title"])
+    return {f"{r['document_number']}@{r['publication_date']}": r["title"] for r in register.to_pylist()} | {
+        r["document_id"]: r["title"] for r in documents.to_pylist()
+    }
+
+
 def test_the_stage_reads_every_rule_end_to_end(tmp_path):
     rows, events = _build(tmp_path)
-    assert len(rows) == 23  # every docketed proceeding; each Register document joined a docket
+    assert len(rows) == 26  # every docketed proceeding; each Register document joined a docket
     a = rows["EPA-HQ-OAR-2020-0001"]
     # The copy is the Register's proposal: the Register's id and day win over the posting's.
     assert (a["kind"], a["proposal_document_id"], a["proposal_date"]) == (
@@ -758,8 +960,8 @@ def test_the_stage_reads_every_rule_end_to_end(tmp_path):
     )
     n = rows["EPA-HQ-OAR-2020-0011"]
     assert (n["kind"], n["open_signal"], n["pre_2008_coverage"]) == ("no_anchor", "agenda_long_term", None)
-    assert {row["actor_id"] for row in rows.values()} == {"spicy-regs:rulemaking-lifecycles:v1"}
-    assert {event["actor_id"] for event in events} == {"spicy-regs:lifecycle-events:v1"}
+    assert {row["actor_id"] for row in rows.values()} == {"spicy-regs:rulemaking-lifecycles:v2"}
+    assert {event["actor_id"] for event in events} == {"spicy-regs:lifecycle-events:v2"}
 
 
 def test_a_companion_needs_the_register_to_date_both_sides_and_an_upload_pair_leaves_survival(tmp_path):
@@ -852,18 +1054,103 @@ def test_a_copy_of_an_untyped_register_row_keeps_its_own_type_and_takes_the_regi
     )
 
 
-def test_the_anchor_titles_name_the_family_before_the_proceeding_title(tmp_path):
+def test_a_display_upload_is_not_the_anchor_when_the_registers_proposal_follows_within_the_window(tmp_path):
+    """Decision 54d, end to end: the upload stays an event of the proceeding, anchoring nothing."""
+    rows, events = _build(tmp_path)
+    d1 = rows["CMS-2021-0001"]
+    assert (d1["kind"], d1["proposal_document_id"], d1["proposal_date"], d1["duration_days"]) == (
+        "finalized",
+        "2021-14327@2021-07-16",
+        date(2021, 7, 16),
+        108,
+    )
+    (upload,) = [e for e in _events_of(events, d1) if e["document_id"] == "CMS-2021-0001-0001"]
+    assert (upload["stage"], upload["dated_by"], upload["anchor_role"]) == ("proposed", "regulations_gov", None)
+
+
+def test_the_routine_family_is_read_at_time_zero_from_the_anchors_own_title(tmp_path):
+    """Decision 55a: a stratum is a survival covariate, so the proposal's title decides, the final's without one."""
     rows, _ = _build(tmp_path)
+    q1 = rows["EPA-HQ-OPP-2021-0002"]
+    assert (q1["kind"], q1["routine_family"]) == ("open", "pesticide_tolerance")
+    q2 = rows["EPA-HQ-OAR-2021-0003"]
+    assert (q2["kind"], q2["final_document_id"], q2["routine_family"]) == ("finalized", "2021-40001@2021-10-01", None)
+    # The AD proposal in an airspace-titled docket (R) reads its own title.
     assert rows["FAA-2020-0021"]["routine_family"] == "airworthiness_directive"
+    # With no anchor there is no title of the rule's own, and the proceeding's stands in.
+    n = rows["EPA-HQ-OAR-2020-0011"]
+    assert (n["kind"], n["routine_family"]) == ("no_anchor", "state_air_plan")
+
+
+def test_every_survival_stratum_is_the_proposals_own_family(tmp_path):
+    rows, _ = _build(tmp_path)
+    titles = _titles(tmp_path)
+    for docket, row in rows.items():
+        if row["outcome"] is not None:
+            assert row["routine_family"] == routine_family(row["agency_code"], titles[row["proposal_document_id"]]), (
+                docket
+            )
+
+
+def _rewrite(path: Path, rows: list[dict]) -> None:
+    write_parquet_rows(path, columns=list(rows[0]), rows=rows)
+
+
+@pytest.mark.parametrize("change", ["deleted", "retitled"])
+def test_the_routine_family_does_not_move_when_the_final_rule_goes_or_is_retitled(tmp_path, change):
+    """Decision 55a's invariant: a stratum is fixed at the proposal, and nothing observed later may move it."""
+    _build_inputs(tmp_path)
+    before, _ = _lifecycles_of(tmp_path)
+    if change == "deleted":
+        proceedings = pq.read_table(tmp_path / "proceedings.parquet").to_pylist()
+        for row in proceedings:
+            events = json.loads(row["stage_events_json"])
+            row["stage_events_json"] = json.dumps([event for event in events if event["stage"] != "final"])
+        _rewrite(tmp_path / "proceedings.parquet", proceedings)
+    else:
+        register = pq.read_table(tmp_path / "federal_register.parquet").to_pylist()
+        for row in register:
+            if row["document_type"] == "Rule":
+                row["title"] = "Fluopyram; Pesticide Tolerances"
+        _rewrite(tmp_path / "federal_register.parquet", register)
+    after, _ = _lifecycles_of(tmp_path)
+    proposed = {docket for docket, row in before.items() if row["proposal_document_id"] is not None}
+    assert {d: after[d]["routine_family"] for d in proposed} == {d: before[d]["routine_family"] for d in proposed}
+    # The change was real: a finalized EPA rule lost its final, or its final now says "Tolerances".
+    q2 = "EPA-HQ-OAR-2021-0003"
+    assert before[q2]["kind"] == "finalized" and before[q2]["routine_family"] is None
+    if change == "deleted":
+        assert after[q2]["kind"] == "open"
+    else:
+        assert after[q2]["final_document_id"] == before[q2]["final_document_id"]
+        assert routine_family("EPA", "Fluopyram; Pesticide Tolerances") == "pesticide_tolerance"
 
 
 #: An independent re-derivation of every lifecycle from its events, in SQL rather than the builder's Python.
 REDERIVE_SQL = """
 WITH e AS (SELECT * FROM events),
-p AS (
+p0 AS (
   SELECT proceeding_id, min(event_date) AS d, arg_min(document_id, (event_date, document_id)) AS doc,
          arg_min(joined_by, (event_date, document_id)) AS jb, arg_min(dated_by, (event_date, document_id)) AS dated
   FROM e WHERE stage = 'proposed' GROUP BY 1),
+-- Decision 54d: the earliest Register-dated proposal is time zero; an upload-dated one anchors only where the
+-- Register dates none that could be its publication (a proposal in form, with no final between the two).
+pr AS (
+  SELECT proceeding_id, min(event_date) AS d, arg_min(document_id, (event_date, document_id)) AS doc,
+         arg_min(joined_by, (event_date, document_id)) AS jb, arg_min(document_form, (event_date, document_id)) AS form
+  FROM e WHERE stage = 'proposed' AND dated_by = 'federal_register' GROUP BY 1),
+fb AS (
+  SELECT e.proceeding_id, count(*) AS n FROM e JOIN p0 USING (proceeding_id) JOIN pr USING (proceeding_id)
+  WHERE e.stage = 'final' AND e.event_date > p0.d AND e.event_date <= pr.d GROUP BY 1),
+p AS (
+  SELECT p0.proceeding_id,
+    CASE WHEN r THEN pr.d ELSE p0.d END AS d, CASE WHEN r THEN pr.doc ELSE p0.doc END AS doc,
+    CASE WHEN r THEN pr.jb ELSE p0.jb END AS jb, CASE WHEN r THEN 'federal_register' ELSE p0.dated END AS dated
+  FROM (SELECT p0.*, pr.d AS prd, pr.doc AS prdoc, pr.jb AS prjb,
+          p0.dated = 'regulations_gov' AND pr.d IS NOT NULL AND pr.form IN ('proposed', 'advance_proposed')
+            AND coalesce(fb.n, 0) = 0 AS r
+        FROM p0 LEFT JOIN pr USING (proceeding_id) LEFT JOIN fb USING (proceeding_id)) p0
+  LEFT JOIN pr USING (proceeding_id)),
 f AS (
   SELECT e.proceeding_id,
     min(e.event_date) FILTER (WHERE e.event_date > p.d) AS later_d,

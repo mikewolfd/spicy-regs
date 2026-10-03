@@ -26,7 +26,8 @@ from spicy_regs.ontology.common import ATTESTATION_COLUMNS, RunContext, iter_par
 from spicy_regs.transforms.build_lifecycles import LIFECYCLES_OUTPUT, ROUTINE_FAMILIES
 
 OUTPUT = "agency_lifecycle_stats.parquet"
-ACTOR_ID = "spicy-regs:agency-lifecycle-stats:v1"
+# v2 (one bump over published v1): code unchanged; its cells move with lifecycles v2 (decisions 54d and 55a).
+ACTOR_ID = "spicy-regs:agency-lifecycle-stats:v2"
 
 #: A cell with fewer rules than this keeps its row, flagged, with no estimates (decision 55).
 MIN_RULES = 30

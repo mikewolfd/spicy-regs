@@ -107,11 +107,13 @@ runtime conformance.
 ## Rulemaking lifecycles
 
 `transforms/build_lifecycles.py` and `build_agency_lifecycle_stats.py` are the
-rulemaking dataset's last stages (owner decisions 54–56c, with 54a–54c; each
-table versioned by its builder's actor constant). `lifecycle_events` holds each
-docketed proceeding's stage events collapsed to one per document: a
-Regulations.gov copy of a Register document is that document, dated by the
-Register and staged as proceedings staged it. Its `source` says who typed the
+rulemaking dataset's last stages (owner decisions 54–56c, with 54a–54d and 55a;
+each table versioned by its builder's actor constant). `lifecycle_events` holds
+each docketed proceeding's stage events collapsed to one per document: a
+Regulations.gov copy of a Register document (its own `fr_doc_num` resolves to
+that one document, decision 60) is that document, dated by the Register and
+staged as proceedings staged it. A document that states no number keeps
+Regulations.gov's type and its upload day. Its `source` says who typed the
 stage (`federal_register`, which types its copies wherever it states a type;
 `regulations_gov`; or `unified_agenda` for a withdrawal the Agenda completed),
 `dated_by` whose day it carries, and `anchor_role` the documents the lifecycle
@@ -119,8 +121,16 @@ anchors on. An event dated after the run's own Eastern day is left out.
 
 `rulemaking_lifecycles` has one row per docketed proceeding; a docket-less one
 is a single Register document that cannot pair. The proposal is the earliest
-proposed event and pairs with the earliest final strictly after it
-(`finalized`). Without one, a final on the proposal's day makes a `companion`
+proposed event the Register dates; one dated only by its Regulations.gov upload
+anchors only when the Register dates none that could be its publication (54d:
+an upload day is when a document was posted, and agencies post unnumbered
+"display" copies of a proposal on the public-inspection day, before the
+Register's copy; the upload stays an event, anchoring nothing). No window: the
+Register's proposal is time zero however far it follows, except where the
+proceeding's own events say it is a later proposal, so the upload keeps its
+anchor: a final between the two, or a Register proposal that is itself a
+comment-period extension or a correction. It pairs with the earliest final
+strictly after it (`finalized`). Without one, a final on the proposal's day makes a `companion`
 only when the Register dates both (54b); a same-day final dated by its
 Regulations.gov upload beside a Register proposal pairs nothing and makes
 nothing. A proposal dated only by its upload with a final that day is an
@@ -138,7 +148,10 @@ the run's day and also stated in the Parquet metadata. A proceeding's
 `open_signal`, `agenda_priority` and `agenda_major` read those RINs' latest
 Unified Agenda entry that `agenda_item_proceedings` links to it.
 `routine_family` states its five families, their agencies and their keep-out
-phrases once, in `ROUTINE_FAMILIES`. `anchored_by_specific_rin` flags a proposal
+phrases once, in `ROUTINE_FAMILIES`, and reads them at time zero from the
+anchor's own title: the proposal's, the final's without a proposal, and only
+with no anchor the proceeding's (55a); a pesticide-petition receipt is the
+tolerance family by its own title. `anchored_by_specific_rin` flags a proposal
 or final anchor that joined by specific RIN (decision 56c), and
 `pre_2008_coverage` a lifecycle anchored before Regulations.gov's coverage; an
 upload pair's day bounds the rule only from above, so it is true before 2008 and
@@ -149,7 +162,16 @@ to no Register row is dated by its upload, which for a legacy document can be
 years after the rule. On snapshot_9b2c770e's inputs 262 lifecycles anchor on
 such a document whose stated number is more than a year older than its posting,
 74 of them upload pairs that 54c keeps out of survival (the review counted 265
-before 54b); no rule re-dates them.
+before 54b); no rule re-dates them. A second limit: a Regulations.gov document
+that states no Register number is typed by Regulations.gov and dated by its
+upload (decision 60: a copy is stated by its own `fr_doc_num` alone). On
+snapshot_62318069's inputs 22,334 of 25,710 upload-dated events were such
+unnumbered documents and 515 of them since-2015 survival anchors (352 open,
+among them notices the Register files under another type); a title that names
+a Register number is not read as the document's identity (a 30-day paperwork
+notice cites the 60-day one; a correction cites its original), so they keep
+Regulations.gov's type. 54d re-anchors only the 334 whose proceeding also holds
+a Register-dated proposal that could be their publication.
 
 `agency_lifecycle_stats` gives the Aalen-Johansen cumulative incidence of a
 final, withdrawal competing (54a), over the lifecycles with an outcome, per
