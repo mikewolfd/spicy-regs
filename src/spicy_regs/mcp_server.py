@@ -917,7 +917,8 @@ def _export_rows(cursor: duckdb.DuckDBPyConnection) -> dict[str, dict]:
             "rows_basis": "comments_export_receipt" if matches else "export_receipt_does_not_match_object",
             "export_receipt": {
                 "receipt_sha256": pin["receipt_sha256"], "sha256": pin["sha256"], "etag": pin["etag"],
-                "bytes": pin["bytes"], "catalog_snapshot_id": pin["source"]["snapshot_id"],
+                # An Iceberg snapshot id passes 2**53, which a JavaScript client's JSON number rounds: stated as text.
+                "bytes": pin["bytes"], "catalog_snapshot_id": str(pin["source"]["snapshot_id"]),
             },
         }
     return exports

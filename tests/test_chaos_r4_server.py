@@ -188,6 +188,15 @@ def _export_server(tmp_path, monkeypatch, *, receipt=RECEIPT, etag=None):
     return built, heads
 
 
+def _largest_integer(value: Any) -> int:
+    """The largest integer magnitude anywhere in a JSON-shaped value."""
+    if isinstance(value, dict):
+        return max(map(_largest_integer, value.values()), default=0)
+    if isinstance(value, list):
+        return max(map(_largest_integer, value), default=0)
+    return abs(value) if isinstance(value, int) and not isinstance(value, bool) else 0
+
+
 def test_a_matching_export_receipt_states_its_rows_labelled_as_an_export(tmp_path, monkeypatch):
     built, heads = _export_server(tmp_path, monkeypatch)
     con = server._build_connection()
@@ -202,8 +211,10 @@ def test_a_matching_export_receipt_states_its_rows_labelled_as_an_export(tmp_pat
         "receipt_sha256": "sha256:" + pub.hashlib.sha256(json.dumps(RECEIPT).encode()).hexdigest(),
         "sha256": "sha256:" + RECEIPT["files"]["comments_index.parquet"]["sha256"],
         "etag": RECEIPT["files"]["comments_index.parquet"]["etag"], "bytes": 422071,
-        "catalog_snapshot_id": 2757430127503624538,
+        "catalog_snapshot_id": "2757430127503624538",
     }
+    # Round 5 (oyelaran, finding 6): a JavaScript client rounds an integer past 2**53, so the reply states none.
+    assert _largest_integer(pin) < 2**53
     # Derived views embed the status pin; the receipt joins replies only.
     assert server._publication_status(con.cursor())["publication"]["comments_index"] == {"status": "legacy_unversioned"}
     built[0].inner.close()

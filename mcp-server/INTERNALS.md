@@ -576,7 +576,10 @@ file its reader cannot page, so two of five personas never read a row.
   `rows_basis: comments_export_receipt`; a moved file carries `rows: null` with
   `rows_basis: export_receipt_does_not_match_object`. `describe_table` and
   `query_sql` pins add `export_receipt` (receipt digest, file digest, ETag,
-  bytes, catalog snapshot). The status stays `legacy_unversioned`: the facts
+  bytes, catalog snapshot). `catalog_snapshot_id` is a string: an Iceberg
+  snapshot id passes 2^53, and a JavaScript client read 3797331542152182418 as
+  a JSON number and cited 3797331542152182300 (round 5, oyelaran). The status
+  stays `legacy_unversioned`: the facts
   join the reply in `_reply_pins` only, never `_publication_status`, whose pins
   the comment views embed in `source_publication_json`. A matching ETag proves
   the object is the one the receipt names, not that the receipt's count is
