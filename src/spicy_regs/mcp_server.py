@@ -228,6 +228,11 @@ TABLES = (
 STATEMENT_TIMEOUT = os.environ.get("SPICY_REGS_STATEMENT_TIMEOUT", "790s")
 #: The kinds resolve_document_citations accepts and its schema enumerates: the kinds a writer emits.
 DOCUMENT_KINDS = tuple(sorted(SOURCE_TABLES))
+#: resolve_document_citations' page size: offset and cite_kind page a long document (round 5 measured a 500-row
+#: hrpt964 reply at 283,615 characters, 64% of it fields that cannot vary within the document or the kind).
+DEFAULT_OCCURRENCES, MAX_OCCURRENCES = 25, 100
+#: An occurrence field that restates another field of the same occurrence; a reply drops it where they are equal.
+OCCURRENCE_SAME_AS = {"target_kind": "cite_kind", "normalized_key": "target_key"}
 #: document_kind's schema description, derived from SOURCE_TABLES so a new kind cannot drift from its table.
 DOCUMENT_KIND_TABLES = "The table holding each kind's documents, whose key document_key takes: " + "; ".join(
     f"{kind}: {table}" for kind, table in sorted(SOURCE_TABLES.items())
@@ -1264,6 +1269,60 @@ def _source_read(
     return {"table": parent, "status": "read_none_found" if read else "not_read"}, None
 
 
+def _shared_fields(rows: list[dict[str, Any]], keep: str | None = None) -> dict[str, Any]:
+    """The fields that every one of two or more ``rows`` holds with one value, except ``keep``."""
+    if len(rows) < 2:
+        return {}
+    return {key: value for key, value in rows[0].items()
+            if key != keep and all(key in row and row[key] == value for row in rows[1:])}
+
+
+def _compact_occurrences(occurrences: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """State each occurrence field once where this reply cannot vary it: a reply projection, like _query_reply_pins.
+
+    A field equal on every occurrence goes to ``shared``, one equal on every
+    occurrence of a cite_kind to ``by_cite_kind``, and target_kind or
+    normalized_key leaves an occurrence where it equals cite_kind or target_key
+    (``same_as``). cite_kind stays on every occurrence so a client can merge
+    ``{**shared, **by_cite_kind[cite_kind], **occurrence}``. The resolver's rows
+    and the acquisition queue built from them are unchanged.
+    """
+    rows = [{key: value for key, value in row.items()
+             if not (key in OCCURRENCE_SAME_AS and value == row.get(OCCURRENCE_SAME_AS[key]))} for row in occurrences]
+    shared = _shared_fields(rows, keep="cite_kind")
+    groups: dict[Any, list[dict[str, Any]]] = {}
+    for row in rows:
+        groups.setdefault(row.get("cite_kind"), []).append(row)
+    by_kind = {kind: fields for kind, group in groups.items()
+               if (fields := {key: value for key, value in _shared_fields(group, keep="cite_kind").items()
+                              if key not in shared})}
+    compact = [{key: value for key, value in row.items()
+                if key not in shared and key not in by_kind.get(row.get("cite_kind"), {})} for row in rows]
+    return compact, {
+        "shared": shared, "by_cite_kind": by_kind, "same_as": OCCURRENCE_SAME_AS,
+        "meaning": "Each occurrence is {**shared, **by_cite_kind[its cite_kind], **occurrence}; one without target_kind "
+                   "or normalized_key has its cite_kind or target_key there. Stated once, not omitted.",
+    }
+
+
+def _compact_queue(queue: dict[str, Any]) -> dict[str, Any]:
+    """The acquisition queue with each item field, and each requesting-occurrence field, equal across the reply
+    stated once in ``shared_fields``; the same projection as :func:`_compact_occurrences`."""
+    items = [{key: value for key, value in item.items() if key != "requesting_occurrences"} for item in queue["items"]]
+    requests = [request for item in queue["items"] for request in item["requesting_occurrences"]]
+    item_shared, request_shared = _shared_fields(items), _shared_fields(requests)
+    return {**queue, "items": [
+        {**{key: value for key, value in item.items() if key not in item_shared},
+         "requesting_occurrences": [{key: value for key, value in request.items() if key not in request_shared}
+                                    for request in full["requesting_occurrences"]]}
+        for item, full in zip(items, queue["items"], strict=True)
+    ], "shared_fields": {
+        "item": item_shared, "requesting_occurrence": request_shared,
+        "meaning": "Each item is {**item, **its fields}, and each requesting occurrence {**requesting_occurrence, "
+                   "**its fields}. Stated once, not omitted.",
+    }}
+
+
 def _unheld_document(cursor: duckdb.DuckDBPyConnection, kind: str, key: str, parent: str) -> str:
     """The refusal for a document_key that neither ``parent`` nor any citation row of ``kind`` holds.
 
@@ -1564,7 +1623,8 @@ def _register_tools(mcp: MCPServer) -> None:
             str, Field(description=DOCUMENT_KIND_TABLES, json_schema_extra={"enum": list(DOCUMENT_KINDS)})
         ],
         document_key: str,
-        max_occurrences: Annotated[int, Field(ge=1, le=500)] = 100,
+        # The maximum is a schema hint, as document_kind's enum is: a larger page is refused below with how to page.
+        max_occurrences: Annotated[int, Field(ge=1, json_schema_extra={"maximum": MAX_OCCURRENCES})] = DEFAULT_OCCURRENCES,
         cite_kind: str | None = None,
         offset: Annotated[int, Field(ge=0)] = 0,
     ) -> dict[str, Any]:
@@ -1590,7 +1650,10 @@ def _register_tools(mcp: MCPServer) -> None:
         Rows come in cite_kind order, then by position in the text.
         coverage.cite_kind_counts gives the document's rows per kind; cite_kind
         selects one kind and offset skips that many rows, so a long document is
-        read a page at a time. A capped page sets truncated. coverage.partial is
+        read a page at a time (max_occurrences at most 100). A capped page sets
+        truncated. A field equal across the page's occurrences, or within a
+        kind, is stated once: occurrence_fields and acquisition_queue.shared_fields
+        say how to merge it back. coverage.partial is
         true when rows were left out of this page (capped or offset), some
         occurrence was not looked up (coverage.reason_counts says why) or the
         document was not read; neither establishes whole-document coverage.
@@ -1599,6 +1662,10 @@ def _register_tools(mcp: MCPServer) -> None:
         from spicy_regs.citation_resolution import ROUTES, resolve_citations
 
         document_kind = _document_kind(document_kind)
+        if max_occurrences > MAX_OCCURRENCES:
+            raise ValueError(f"max_occurrences is at most {MAX_OCCURRENCES}; read a long document a page at a time "
+                             "with offset (and cite_kind for one kind). coverage.cite_kind_counts states every "
+                             "kind's rows.")
         cursor = _get_connection().cursor()
         with _statement_timeout(cursor):
             status = _publication_status(cursor)
@@ -1651,15 +1718,17 @@ def _register_tools(mcp: MCPServer) -> None:
             }
             if capped or offset or source_read["status"] == "not_read":
                 result["coverage"]["partial"] = True
+        reply = _jsonify(result)
+        occurrences, fields = _compact_occurrences(reply.pop("occurrences"))
         return {
-            **_source_details(cursor), **_jsonify(result),
+            **_source_details(cursor), "occurrences": occurrences, "occurrence_fields": fields, **reply,
             "document_kind": document_kind, "document_key": document_key,
             "max_occurrences": max_occurrences, "truncated": capped,
             "source_read": source_read,
-            "acquisition_queue": build_missing_target_queue(
+            "acquisition_queue": _compact_queue(build_missing_target_queue(
                 result, input_snapshots={document_kind: status["publication"].get(parent, {})},
                 intended_query="Resolve the cited target for this held document", max_items=max_occurrences,
-            ),
+            )),
             # Each resolved target carries its own target_snapshot; this names the tables the lookup read.
             "publication": _reply_pins(
                 cursor, status["publication"],

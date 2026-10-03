@@ -320,9 +320,39 @@ routed kind with no rows is a complete, empty selection.
 `occurrence_selection.status` is `capped`, `last_page` (an offset page that
 reached the end) or `complete_held_selection`. MCPServer drops an argument a
 tool does not declare, so a test of a new parameter asserts its effect, not
-its acceptance. `max_occurrences` keeps its default (100) and maximum (500):
-hoisting the per-document constants out of each occurrence and lower caps
-change the public reply and are the owner's call (`phase3-review.md`, round 5).
+its acceptance.
+
+**Pages and compaction (round 5, owner decision 2026-10-03).** `max_occurrences`
+defaults to 25 and is at most 100; a larger request is refused with how to page
+(the schema's `maximum` is a hint, as the kind enum is, so the refusal is the
+server's own). The cap and the paging land together: before `cite_kind`,
+`offset` and the counts, a smaller cap would have hidden more kinds. A reply
+states each occurrence field once where the page cannot vary it
+(`_compact_occurrences`, a reply projection like `_query_reply_pins`): a field
+equal on every occurrence goes to `occurrence_fields.shared`, one equal on
+every occurrence of a kind to `occurrence_fields.by_cite_kind`, and
+`target_kind` or `normalized_key` leaves an occurrence where it equals
+`cite_kind` or `target_key` (`same_as`). An occurrence is
+`{**shared, **by_cite_kind[cite_kind], **occurrence}`; `cite_kind` stays on
+every one. The rule is generic, so a field constant on one page by chance (all
+`found`) is hoisted too: lossless, but a client merges rather than expects a
+fixed occurrence shape. The acquisition queue is built from the whole rows and
+then projected the same way (`_compact_queue`): an item field, or a requesting
+occurrence's field, equal across the reply is stated once in
+`acquisition_queue.shared_fields`. Nothing stored changes. Measured on the live
+bucket (print-citations 685f2e27), characters per reply:
+
+| Request | Before (deployed server code at d2b5f53 / round-5 paging without compaction) | After |
+|---|---|---|
+| CRPT-118hrpt964, 100 rows | 113,534 / 114,020 | 31,644 |
+| CRPT-118hrpt964, default page | 113,534 (100 rows) | 10,375 (25 rows) |
+| CRPT-118hrpt964, all 222 rows | 283,615 (one 500-row call) | 97,989 (3 pages of 100) |
+| BUDGET-2025-APP, 100 rows | 148,361 / 148,593 | 65,838 |
+| BUDGET-2025-APP, default page | 148,361 (100 rows) | 21,427 (25 rows) |
+| BUDGET-2025-APP, all 4,456 rows | 893,849 for the first 500 | 2,998,213 (45 pages of 100) |
+
+Without the queue projection the 45 pages came to 5,461,495: the queue repeated
+the document's pins on every requesting occurrence.
 
 **Read statuses (round 5).** `source_read.status` separates three answers that
 used to arrive as one `missing_digest` with no occurrences (`_source_read`):

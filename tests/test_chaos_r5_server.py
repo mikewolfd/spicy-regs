@@ -15,7 +15,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from spicy_regs import mcp_server as server, output_ledger, table_joins
 from spicy_regs.citation_resolution import SOURCE_TABLES
 from spicy_regs.sources import publication as pub
-from tests.test_mcp_relationships import citation_connection
+from tests.test_mcp_relationships import citation_connection, merged_occurrences
 from tests.test_mcp_server import _tool_data
 
 
@@ -97,7 +97,7 @@ def test_an_offset_past_the_end_is_an_empty_last_page_that_is_partial(monkeypatc
         result = _resolve(con, monkeypatch, offset=50)
     assert result["occurrences"] == [] and result["truncated"] is False
     assert result["coverage"]["occurrence_selection"] | {"meaning": None} == {
-        "status": "last_page", "cite_kind": None, "offset": 50, "max_occurrences": 100, "meaning": None}
+        "status": "last_page", "cite_kind": None, "offset": 50, "max_occurrences": 25, "meaning": None}
     assert result["coverage"]["partial"] is True
 
 
@@ -140,7 +140,7 @@ def test_citations_of_a_document_no_longer_held_read_not_held(monkeypatch):
         con.execute("DELETE FROM house_activity_reports")
         result = _resolve(con, monkeypatch)
     assert result["source_read"]["status"] == "not_held"
-    assert {row["source_status"] for row in result["occurrences"]} == {"unread_source"}
+    assert {row["source_status"] for row in merged_occurrences(result)} == {"unread_source"}
 
 
 def test_a_held_document_without_a_digest_stays_missing_digest(monkeypatch):
@@ -203,6 +203,75 @@ def test_the_description_defines_partial_the_key_rule_and_the_read_statuses():
     assert "govinfo_package covers only" in description
 
 
+# Reply compaction (owner decision 2026-10-03): fields that cannot vary are stated once; pages are 25 to 100 rows.
+
+def test_the_default_page_is_25_and_a_page_above_100_is_refused_with_how_to_page(monkeypatch):
+    schema = _citation_tool().input_schema["properties"]["max_occurrences"]
+    assert (schema["default"], schema["maximum"]) == (25, 100)
+    with citation_connection() as con:
+        assert _resolve(con, monkeypatch, max_occurrences=100)["max_occurrences"] == 100
+        with pytest.raises(ToolError, match="at most 100.*offset"):
+            _resolve(con, monkeypatch, max_occurrences=101)
+
+
+def test_fields_that_cannot_vary_are_stated_once_and_merge_back(monkeypatch):
+    with citation_connection() as con:
+        _cite(con, ("bill_number", "114-hr-1", "5"), ("bill_number", "114-hr-2", "7"))
+        result = _resolve(con, monkeypatch)
+        laws = server._publication_status(con)["publication"]["laws"]
+    fields = result["occurrence_fields"]
+    assert {"document_kind", "document_key", "text_sha256", "resolution_rule", "source_status"} <= set(fields["shared"])
+    # Route fields are equal within a kind; one equal across both kinds here (target_grain) is shared instead.
+    assert {"target_snapshot", "target_table_selected"} <= set(fields["by_cite_kind"]["public_law"])
+    assert "target_grain" in fields["shared"]
+    hoisted = set(fields["shared"]) | {"target_kind", "normalized_key", "target_snapshot", "target_grain"}
+    assert all(not hoisted & set(row) and "cite_kind" in row for row in result["occurrences"])
+    merged = merged_occurrences(result)
+    assert [(row["target_kind"], row["normalized_key"]) for row in merged] == [
+        (row["cite_kind"], row["target_key"]) for row in merged]
+    assert [row["target_snapshot"] for row in merged if row["cite_kind"] == "public_law"] == [laws] * 2
+
+
+def test_the_occurrence_projection_is_lossless():
+    snapshot = {"status": "managed_generation", "family": "laws"}
+    rows = [
+        {"cite_kind": "public_law", "target_key": "1-public-2", "target_kind": "public_law",
+         "normalized_key": "1-public-2", "target_snapshot": snapshot, "span_start": "4", "reason": None},
+        {"cite_kind": "public_law", "target_key": "1-public-3", "target_kind": "public_law",
+         "normalized_key": "1-public-3", "target_snapshot": snapshot, "span_start": "9", "reason": None},
+        {"cite_kind": "bill_number", "target_key": None, "target_kind": "bill_number", "normalized_key": "",
+         "target_snapshot": None, "span_start": "12", "reason": "unsettled_key", "error_type": "x"},
+    ]
+    compact, fields = server._compact_occurrences(rows)
+    assert merged_occurrences({"occurrences": compact, "occurrence_fields": fields}) == rows
+    assert fields["by_cite_kind"] == {"public_law": {"target_snapshot": snapshot, "reason": None}}
+    assert compact[2]["normalized_key"] == ""  # kept where it does not repeat target_key
+    assert server._compact_occurrences(rows[:1]) == ([{key: value for key, value in rows[0].items()
+                                                       if key not in ("target_kind", "normalized_key")}],
+                                                     {**fields, "shared": {}, "by_cite_kind": {}})
+
+
+def test_the_acquisition_queue_states_its_constant_fields_once(monkeypatch):
+    with citation_connection() as con:
+        _cite(con, ("public_law", "93-public-344", "40"), ("public_law", "93-public-344", "50"),
+              ("public_law", "94-public-1", "60"))
+        # The queue plans only from a pinned source, so the report's table joins a published family.
+        index = _index()
+        index["families"]["print-citations"] = {**index["families"]["laws"], "tables": {
+            "house_activity_reports.parquet": index["families"]["laws"]["tables"]["laws.parquet"]}}
+        con.execute("UPDATE _spicy_publication SET snapshot = ?", [json.dumps(index)])
+        queue = _resolve(con, monkeypatch)["acquisition_queue"]
+    shared = queue["shared_fields"]
+    assert {"document_kind", "document_key", "text_sha256", "input_snapshot"} <= set(shared["requesting_occurrence"])
+    assert {"intended_query", "queue_rule", "acquisition_outcome"} <= set(shared["item"])
+    items = [{**shared["item"], **item, "requesting_occurrences": [
+        {**shared["requesting_occurrence"], **request} for request in item["requesting_occurrences"]]}
+        for item in queue["items"]]
+    assert [(item["normalized_key"], [r["span_start"] for r in item["requesting_occurrences"]]) for item in items] == [
+        ("93-public-344", ["40", "50"]), ("94-public-1", ["60"])]
+    assert all(r["document_key"] == "CRPT-example" for item in items for r in item["requesting_occurrences"])
+
+
 # Freshness: the publisher states when it moved a family's pointer; every reply that pins a generation says so.
 
 def _index(**family):
@@ -241,7 +310,7 @@ def test_replies_state_when_the_publisher_moved_the_pointer(monkeypatch, publish
     assert described["published_at"] == queried["published_at"] == published_at
     assert "published_at" in described and "published_at" in queried
     # The citation reply's target pins come from the same projection; derived views' embedded pins do not move.
-    assert cited["occurrences"][0]["target_snapshot"] == status
+    assert merged_occurrences(cited)[0]["target_snapshot"] == status
     assert "published_at" not in status and "published_at" not in listed["laws"]
 
 

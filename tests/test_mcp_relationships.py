@@ -48,6 +48,14 @@ def test_discovery_exposes_derived_dependencies_and_unsupported_old_schema(monke
         assert unsupported["relationship"]["status"] == "unsupported"
 
 
+def merged_occurrences(result: dict) -> list[dict]:
+    """A citation reply's occurrences with the fields it states once merged back, as its occurrence_fields say."""
+    fields = result["occurrence_fields"]
+    rows = [{**fields["shared"], **fields["by_cite_kind"].get(row["cite_kind"], {}), **row}
+            for row in result["occurrences"]]
+    return [{**{field: row[other] for field, other in fields["same_as"].items() if other in row}, **row} for row in rows]
+
+
 def citation_connection():
     con = duckdb.connect()
     con.execute("CREATE TABLE document_citations (document_kind VARCHAR, document_key VARCHAR, text_sha256 VARCHAR, "
@@ -122,7 +130,7 @@ def test_source_problems_never_become_successful_target_checks(monkeypatch, dama
         result = _tool_data(mcp_server.build_server(), "resolve_document_citations", {
             "document_kind": "govinfo_package", "document_key": "CRPT-example",
         })
-        assert all(row["target_status"] == "not_checked" for row in result["occurrences"])
+        assert all(row["target_status"] == "not_checked" for row in merged_occurrences(result))
         assert result["source_read"]["status"] == {
             "ambiguous": "ambiguous", "stale": "read", "missing_column": "read_failure", "missing_finding_digest": "read",
         }[damage]
