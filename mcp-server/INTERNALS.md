@@ -333,6 +333,21 @@ reached the end) or `complete_held_selection`. MCPServer drops an argument a
 tool does not declare, so a test of a new parameter asserts its effect, not
 its acceptance.
 
+**CFR part citations (round 6).** `2 CFR part 200` is keyed `2-200`, which
+equals `cfr_ref` on every structural row of the part: 41 rows for 2-200
+(subparts, subject groups, appendices, its table of contents), so every held
+part citation read `ambiguous`. The `cfr_section` route's predicate keeps a
+section row or the part's own granule (`cfr_sections.part_granule`, read from
+the granule id by spicy-docs' grammar when the table is built), so the server
+learns no CFR id grammar. A part held in two annual editions, or printed across
+volumes (40 CFR part 60), still reads `ambiguous` with one candidate per
+edition or volume, and the route's grain says so. `Route.predicate_columns`
+names what a predicate reads: a selected table without one (a cfr-sections
+generation built before the column, or a reverted pointer) is read as before,
+every keyed row, instead of failing with `target_read_failure`. The probe is
+the `SELECT * … LIMIT 0` this tool already uses for `text_sha256`, once per
+batch.
+
 **Pages and compaction (round 5, owner decision 2026-10-03).** `max_occurrences`
 defaults to 25 and is at most 100; a larger request is refused with how to page
 (the schema's `maximum` is only a hint to the client, so the refusal is the

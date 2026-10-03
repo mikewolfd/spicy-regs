@@ -216,7 +216,8 @@
         "structure_level",
         "edition_year",
         "last_modified",
-        "url"
+        "url",
+        "part_granule"
       ]
     },
     {

@@ -13,10 +13,11 @@ import re
 
 import pyarrow as pa
 
+from spicy_regs.fec_financial_rules import IDENTITY_VERSION, VALUE_MAPPING_VERSION
 from spicy_regs.fec_versions import INDIVIDUAL_RECEIPT_MAPPING_VERSION as RECEIPT_MAPPING_VERSION
 
-IDENTITY_VERSION = "fec-typed-observation/1"
-VALUE_MAPPING_VERSION = "fec-exact-financial-values/2"
+#: The year FEC's first two-year election cycle ended (1975-1976); FEC began administering the law in 1975.
+FIRST_FEC_CYCLE = 1976
 AMOUNT_TYPE = pa.decimal128(38, 9)
 RECEIPT_SCHEMA = pa.schema(
     [
@@ -219,7 +220,9 @@ class CollectionSelection:
         _text(self.collection_id)
         _text(self.source_authority)
         if self.source_cycle is not None and (
-            type(self.source_cycle) is not int or not 1976 <= self.source_cycle <= 9998 or self.source_cycle % 2
+            type(self.source_cycle) is not int
+            or not FIRST_FEC_CYCLE <= self.source_cycle <= 9998
+            or self.source_cycle % 2
         ):
             raise ValueError("Financial selection requires an explicit FEC cycle-ending year")
         if self.representation_role not in {"snapshot", "insertion", "deletion", "other_correction", "unknown"}:

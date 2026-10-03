@@ -24,6 +24,7 @@ def source(native):
         source_record_id="row/0",
         source_sha256=PIN,
         source_locator_json=json.dumps(dict(collection_id="summary", source_record_id="row/0", ordinal=0)),
+        observed_at="2026-09-13T17:17:05.325646+00:00",  # when FEC's lobbyist_bundle.csv was captured
         metadata_json=json.dumps(native),
     )
 
@@ -64,21 +65,38 @@ def test_summary_keeps_null_blank_zero_and_stock_separate():
 def test_bundling_totals_never_invent_bundlers_or_add_overlapping_periods():
     native = fields(s.BUNDLING_RECIPIENT)
     native.update(
-        Committee_Id="C00903690",
-        Quarterly_Contribution="100",
-        Semi_Annual_Contribution="250",
+        Committee_Id="C00000935",
+        Committee_Name="DCCC",
+        Quarterly_Contribution="632280",
+        Semi_Annual_Contribution="0",
         Coverage_Start_Date="01-JUL-26",
-        Coverage_End_Date="22-JUL-26",
+        Coverage_End_Date="31-JUL-26",
+        Receipt_Date="20-AUG-26",
+        Report_Type="AUGUST MONTHLY",
     )
     row, _ = s.map_summary(source(native), replace(SELECTED, source_cycle=None), s.BUNDLING_RECIPIENT)
     assert row["source_cycle"] is None
     assert row["period_basis"] == "quarterly-and-semiannual-measures-overlap"
     assert {m["native_field"]: m["value"] for m in row["measures"]} == {
-        "Quarterly_Contribution": Decimal("100"),
-        "Semi_Annual_Contribution": Decimal("250"),
+        "Quarterly_Contribution": Decimal("632280"),
+        "Semi_Annual_Contribution": Decimal("0"),
     }
-    assert row["period_end"] is None and row["period_end_status"] == "unresolved_century"
+    assert row["period_start"] == date(2026, 7, 1) and row["period_end"] == date(2026, 7, 31)
+    assert row["period_end_status"] == "exact_with_year_bounds" and row["mapping_status"] == "mapped"
+    assert json.loads(row["mapping_reason_json"])["date_year_bounds"] == [1975, 2026]
     assert "bundler_id" not in row
+
+
+def test_leadership_coverage_end_is_typed_and_a_layout_without_two_digit_years_records_no_bounds():
+    native = fields(s.LEADERSHIP)
+    native.update(Committee_Id="C00762328", Committee_Name="FIGHT ON PAC", Coverage_End_Date="31-DEC-24")
+    row, _ = s.map_summary(source(native), SELECTED, s.LEADERSHIP)
+    assert row["period_start_status"] == "not_supplied"
+    assert row["period_end"] == date(2024, 12, 31) and row["period_end_status"] == "exact_with_year_bounds"
+    committee = fields(s.COMMITTEE_CSV)
+    committee.update(CVG_START_DT="20230101", CVG_END_DT="20241231")
+    row, _ = s.map_summary({**source(committee), "observed_at": None}, SELECTED, s.COMMITTEE_CSV)
+    assert json.loads(row["mapping_reason_json"])["date_year_bounds"] is None
 
 
 def test_aggregate_names_do_not_become_resolved_candidate_identities():

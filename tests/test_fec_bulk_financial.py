@@ -19,6 +19,7 @@ from spicy_regs.transforms.fec_bulk_financial import (
     INTERCOMMITTEE,
     OPERATING_EXPENSES,
     OPPEXP_FIELDS,
+    capture_year_bounds,
     financial_date,
     map_bulk_financial,
     operating_expense,
@@ -27,14 +28,17 @@ from spicy_regs.transforms.fec_query import CollectionSelection, observation_id
 
 PIN = "sha256:" + "a" * 64
 SELECTION = CollectionSelection("financial", PIN, "sha256:" + "b" * 64, "official-fec", 2026, "snapshot", PIN)
+#: When FEC's 2024 bulk independent-expenditure file was captured (``fec_collections``, bulk-independent-expenditure-2024).
+CAPTURED = "2026-09-14T22:03:20.174709+00:00"
 
 
-def source(native):
+def source(native, observed_at=CAPTURED):
     return dict(
         collection_id="financial",
         source_record_id="original/0",
         source_sha256=PIN,
         source_locator_json=json.dumps(dict(collection_id="financial", source_record_id="original/0", ordinal=0)),
+        observed_at=observed_at,
         metadata_json=json.dumps(native),
     )
 
@@ -58,6 +62,24 @@ def test_date_formats_do_not_depend_on_locale_or_implicit_year_pivots():
     assert financial_date("31-FEB-24", "DD-MON-YY", year_bounds=(2000, 2099)) == (None, "invalid_date")
     assert financial_date("30-XYZ-24", "DD-MON-YY", year_bounds=(2000, 2099)) == (None, "invalid_date")
     assert financial_date("3/28/2025", "MM/DD/YYYY") == (None, "unsupported_spelling")
+
+
+def test_capture_year_bounds_run_from_fecs_first_cycle_to_the_capture_year():
+    assert capture_year_bounds(CAPTURED) == (1975, 2026)
+    assert capture_year_bounds("2074-12-31T23:59:59+00:00") == (1975, 2074)  # 99 years on: `75` is still only 1975
+    for refused in ["2075-01-01T00:00:00+00:00", "1974-12-31T00:00:00+00:00", None, "", "2026-13-01T00:00:00"]:
+        with pytest.raises(ValueError):
+            capture_year_bounds(refused)
+    assert financial_date("29-FEB-25", "DD-MON-YY", year_bounds=capture_year_bounds(CAPTURED)) == (None, "invalid_date")
+
+
+def test_a_two_digit_year_layout_refuses_a_row_without_its_capture_instant():
+    fields = empty_fields(INDEPENDENT_EXPENDITURES)
+    with pytest.raises(ValueError, match="capture instant"):
+        map_bulk_financial(source(fields, observed_at=None), SELECTION, INDEPENDENT_EXPENDITURES)
+    fields = empty_fields(CANDIDATE_TRANSACTIONS)
+    row, _ = map_bulk_financial(source(fields, observed_at=None), SELECTION, CANDIDATE_TRANSACTIONS)
+    assert json.loads(row["mapping_reason_json"])["date_year_bounds"] is None
 
 
 def test_committee_transactions_keep_unknown_direction_and_native_ids():
@@ -102,9 +124,48 @@ def test_independent_spending_keeps_aggregate_separate_and_missing_date():
     row, _ = map_bulk_financial(source(fields), SELECTION, INDEPENDENT_EXPENDITURES)
     assert row["amount"] == Decimal("-150.05") and row["reported_aggregate_amount"] == Decimal("9000")
     assert row["expenditure_date"] is None and row["expenditure_date_status"] == "source_empty"
-    assert row["dissemination_date"] is None and row["dissemination_date_status"] == "unresolved_century"
-    assert row["dissemination_date_raw"] == "30-OCT-24" and row["mapping_status"] == "partial"
+    assert (
+        row["dissemination_date"] == date(2024, 10, 30) and row["dissemination_date_status"] == "exact_with_year_bounds"
+    )
+    assert row["dissemination_date_raw"] == "30-OCT-24" and row["mapping_status"] == "mapped"
     assert row["spender_native_id"] == "C90012121" and "reporting_committee_id" not in row
+
+
+def test_two_digit_years_are_typed_between_the_first_fec_cycle_and_the_capture_year():
+    """A real row of FEC's 2024 bulk file (image 202410259719618739, captured 2026-09-14): its filer typed `34`."""
+    fields = empty_fields(INDEPENDENT_EXPENDITURES)
+    fields.update(
+        spe_id="C00620021",
+        exp_date="24-OCT-24",
+        dissem_dt="31-OCT-34",
+        receipt_dat="25-OCT-24",
+        image_num="202410259719618739",
+    )
+    row, _ = map_bulk_financial(source(fields), SELECTION, INDEPENDENT_EXPENDITURES)
+    assert row["expenditure_date"] == date(2024, 10, 24) and row["expenditure_date_status"] == "exact_with_year_bounds"
+    assert row["receipt_date"] == date(2024, 10, 25) and row["receipt_date_status"] == "exact_with_year_bounds"
+    # 2034 is after the capture year and 1934 before FEC's first cycle: no year in the bounds ends in 34.
+    assert row["dissemination_date"] is None and row["dissemination_date_status"] == "outside_selected_year_bounds"
+    assert row["dissemination_date_raw"] == "31-OCT-34" and row["mapping_status"] == "partial"
+    reasons = json.loads(row["mapping_reason_json"])
+    assert reasons["date_year_bounds"] == [1975, 2026]
+    assert reasons["field_refusals"] == {"dissemination_date": "outside_selected_year_bounds"}
+
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        ("23-MAY-25", date(2025, 5, 23)),  # image 202505239761680084: a late receipt a 2023-2024 cycle bound refuses
+        ("30-SEP-26", date(2026, 9, 30)),  # image 202410019684775309: a typo inside the bounds is typed as filed
+        ("01-NOV-42", None),  # image 202411029719918318: outside the bounds
+    ],
+)
+def test_real_two_digit_years_of_the_2024_file(raw, expected):
+    fields = empty_fields(INDEPENDENT_EXPENDITURES)
+    fields["receipt_dat"] = raw
+    row, _ = map_bulk_financial(source(fields), SELECTION, INDEPENDENT_EXPENDITURES)
+    assert row["receipt_date"] == expected and row["receipt_date_raw"] == raw
+    assert row["receipt_date_status"] == ("exact_with_year_bounds" if expected else "outside_selected_year_bounds")
 
 
 def test_electioneering_never_invents_a_shared_payment_id_or_divides_an_amount():
@@ -115,13 +176,20 @@ def test_electioneering_never_invents_a_shared_payment_id_or_divides_an_amount()
         NUMBER_OF_CANDIDATES="2",
         CANDIDATE_ID="S4IA00087",
         SB_IMAGE_NUM="000123",
+        DISBURSEMENT_DATE="06-AUG-24",
+        COMMUNICATION_DATE="09-AUG-24",
+        PUBLIC_DISBURSEMENT_DATE="09-AUG-24",
     )
-    row, _ = map_bulk_financial(source(fields), SELECTION, ELECTIONEERING)
+    row, _ = map_bulk_financial(
+        source(fields, observed_at="2026-09-13T17:17:04.506212+00:00"), SELECTION, ELECTIONEERING
+    )
     assert row["amount"] == Decimal("15000") and row["allocated_candidate_amount"] == Decimal("7400.01")
     assert row["reported_candidate_count"] == "2"
     assert row["observation_grain"] == "candidate-associated-disbursement"
     assert row["event_equivalence_status"] == "unresolved"
     assert row["amount_aggregation_status"] == "requires-event-deduplication"
+    assert row["disbursement_date"] == date(2024, 8, 6) and row["communication_date"] == date(2024, 8, 9)
+    assert row["public_disbursement_date"] == date(2024, 8, 9) and row["mapping_status"] == "mapped"
 
 
 def oppexp_inputs(tail):

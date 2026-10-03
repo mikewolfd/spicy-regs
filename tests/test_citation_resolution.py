@@ -131,3 +131,48 @@ def test_gao_and_crs_keys_are_looked_up_as_spicy_docs_prints_them():
     assert [(r["target_key"], r["target_status"]) for r in rows] == [
         ("GAO-23-105520", "found"), ("GAO-17-317", "found"), ("R47101", "found"), ("r47101", "missing")]
     assert rows[0]["candidate_keys"] == [{"report_id": "d23105520"}]
+
+
+# Real granules of the 2025 and 2026 editions: 2 CFR part 200 is held once, 10 CFR part 830 in both editions.
+CFR_ROWS = [
+    ("CFR-2025-title2-vol1-part200", "CFR-2025-title2-vol1", "2-200", None, "true"),
+    ("CFR-2025-title2-vol1-part200-subpartA", "CFR-2025-title2-vol1", "2-200", None, "false"),
+    ("CFR-2025-title2-vol1-part200-appI", "CFR-2025-title2-vol1", "2-200", None, "false"),
+    ("CFR-2025-title2-vol1-part200-toc-id312", "CFR-2025-title2-vol1", "2-200", None, "false"),
+    ("CFR-2025-title2-vol1-sec200-1", "CFR-2025-title2-vol1", "2-200.1", "1", "false"),
+    ("CFR-2025-title10-vol5-part830", "CFR-2025-title10-vol5", "10-830", None, "true"),
+    ("CFR-2025-title10-vol5-part830-subpartA", "CFR-2025-title10-vol5", "10-830", None, "false"),
+    ("CFR-2026-title10-vol5-part830", "CFR-2026-title10-vol5", "10-830", None, "true"),
+    ("CFR-2026-title10-vol5-part830-subpartA", "CFR-2026-title10-vol5", "10-830", None, "false"),
+]
+
+
+def cfr_sections(part_granule=True):
+    con = duckdb.connect()
+    con.execute("CREATE TABLE cfr_sections(granule_id VARCHAR, package_id VARCHAR, cfr_ref VARCHAR, section VARCHAR"
+                + (", part_granule VARCHAR)" if part_granule else ")"))
+    con.executemany(f"INSERT INTO cfr_sections VALUES ({', '.join('?' * (5 if part_granule else 4))})",
+                    [row if part_granule else row[:4] for row in CFR_ROWS])
+    return con
+
+
+CFR_PINS = {"cfr_sections": {"artifact_digest": "sha256:cfr"}}
+
+
+def test_a_part_citation_finds_the_part_granule_once_per_held_edition():
+    with cfr_sections() as con:
+        items = [occurrence("cfr_section", key) for key in ("2-200", "10-830", "2-200.1")]
+        part, editions, section = resolve(con, items, CFR_PINS)["occurrences"]
+        assert part["target_status"] == "found" and part["match_count"] == 1
+        assert part["candidate_keys"] == [{"package_id": "CFR-2025-title2-vol1",
+                                           "granule_id": "CFR-2025-title2-vol1-part200"}]
+        assert editions["target_status"] == "ambiguous"
+        assert [c["package_id"] for c in editions["candidate_keys"]] == ["CFR-2025-title10-vol5", "CFR-2026-title10-vol5"]
+        assert section["target_status"] == "found"
+        assert section["candidate_keys"][0]["granule_id"] == "CFR-2025-title2-vol1-sec200-1"
+
+
+def test_a_cfr_generation_without_part_granule_reads_every_keyed_row():
+    with cfr_sections(part_granule=False) as con:
+        part = resolve(con, [occurrence("cfr_section", "2-200")], CFR_PINS)["occurrences"][0]
+        assert part["target_status"] == "ambiguous" and part["match_count"] == 4 and part["reason"] is None

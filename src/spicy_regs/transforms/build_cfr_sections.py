@@ -37,6 +37,12 @@ structural rows take the compound part their part granule's heading states
 (:func:`compound_parts`: "2-AFFIRMATIVE ACTION PROGRAMS" is ``60-2``), on
 fresh rows and on the prior alike, with no volume read.
 
+``part_granule`` is ``'true'`` on the granule that is a part itself (``…-part200``, ``…-part60-id334``) and
+``'false'`` on every other row, read from the granule id by SpicyDocs' grammar, so a part citation (``2-200``) can
+pick the part out of its subparts, appendices and tables of contents. It depends on the id alone: held rows take
+it from their ids on every run (:func:`_read_prior`), so a prior published before the column gains it without a
+re-read.
+
 A package is re-placed only when it is new to the prior table or any of its
 granules is new or carries a different ``last_modified``. GovInfo's granule
 listing carries no ``lastModified``, so every row's stamp is its package's and
@@ -104,6 +110,7 @@ COLUMNS = (
     "edition_year",
     "last_modified",
     "url",
+    "part_granule",
 )
 _SCHEMA = pa.schema([(c, pa.string()) for c in COLUMNS])
 
@@ -122,6 +129,11 @@ def _ids(granule_id: str, package_id: str | None = None) -> AnnualCfrGranuleId:
     from spicy_docs.sources.cfr import split_annual_cfr_granule_id
 
     return split_annual_cfr_granule_id(granule_id, package_id=package_id)
+
+
+def _part_granule(ids: AnnualCfrGranuleId) -> str:
+    """``'true'`` when the id names a part's own granule (not a subpart, appendix, TOC or section of it)."""
+    return "true" if ids.part_granule is not None else "false"
 
 
 def compound_parts(rows: Iterable[dict]) -> list[dict]:
@@ -194,6 +206,7 @@ def _shape(granule: dict) -> dict:
         "edition_year": edition_year,
         "last_modified": str_or_none(granule.get("lastModified") or granule.get("_package_last_modified")),
         "url": f"https://www.govinfo.gov/app/details/{package_id}/{granule_id}" if package_id and granule_id else None,
+        "part_granule": _part_granule(ids),
     }
 
 
@@ -262,9 +275,11 @@ class _Prior:
 
 
 def _read_prior(prior_file: Path) -> _Prior:
-    """Read the prior table, first rewriting it without the index package's rows and with Title 41's compound parts.
+    """Read the prior table, first rewriting it without the index package's rows, with Title 41's compound parts
+    and with every row's ``part_granule`` read from its id.
 
-    An unchanged package keeps its prior rows unread by this run, so the prior carries :func:`compound_parts` itself.
+    An unchanged package keeps its prior rows unread by this run, so the prior carries :func:`compound_parts` and
+    ``part_granule`` itself: one id parse per held row, no volume read.
     """
     [(key, value)] = PLACEMENT_MARKER.items()
     placed = (pq.read_schema(prior_file).metadata or {}).get(key.encode()) == value.encode()
@@ -288,6 +303,13 @@ def _read_prior(prior_file: Path) -> _Prior:
         rewrite = True
         logger.info("CFR: {} prior Title {} row(s) took their compound part", sum(a != b for a, b in zip(fixed, held)),
                     COMPOUND_PART_TITLE)
+    flags = pa.array([_part_granule(_ids(granule_id)) for granule_id in table["granule_id"].to_pylist()], pa.string())
+    if "part_granule" not in table.column_names:
+        table = table.append_column("part_granule", flags)
+        rewrite = True
+    elif not table["part_granule"].combine_chunks().equals(flags):
+        table = table.set_column(table.column_names.index("part_granule"), "part_granule", flags)
+        rewrite = True
     if rewrite:
         pq.write_table(table, prior_file, compression="zstd")
     return _Prior(

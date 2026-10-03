@@ -12,19 +12,45 @@ import re
 
 import pyarrow as pa
 
-from .fec_query import AMOUNT_TYPE, CollectionSelection, exact_amount, observation_fields, record_evidence
+from .fec_query import (
+    AMOUNT_TYPE,
+    FIRST_FEC_CYCLE,
+    CollectionSelection,
+    exact_amount,
+    observation_fields,
+    record_evidence,
+)
 
 
 def _json(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
 
 
+def capture_year_bounds(observed_at):
+    """The years a two-digit year can mean in a file captured at ``observed_at``: 1975 to the capture year.
+
+    FEC began in 1975 (its first cycle ended in 1976) and a file holds nothing filed after it was captured. While
+    that span is under 100 years each two-digit year names exactly one year in it, so no century is guessed and
+    neither the file's cycle nor an election code is consulted (a cycle bound refuses valid late filings). A typo
+    that lands inside the span is typed as filed; one outside it is refused. A missing or unreadable instant, or a
+    capture 100 or more years after 1975, refuses.
+    """
+    try:
+        captured = datetime.fromisoformat(observed_at)
+    except (TypeError, ValueError):
+        raise ValueError("A two-digit FEC year needs its record's capture instant") from None
+    low, high = FIRST_FEC_CYCLE - 1, captured.year
+    if not 0 <= high - low < 100:
+        raise ValueError("A capture year 100 or more years after FEC began no longer fixes a two-digit year's century")
+    return low, high
+
+
 def financial_date(raw, spelling, *, year_bounds=None):
     """Parse an explicitly selected format, with no implicit two-digit-year pivot.
 
-    A two-digit year remains unresolved unless the selection supplies evidenced
-    year bounds admitting exactly one century. Raw dates also remain queryable.
-    Bounds are not inferred from the transaction's election code or source cycle.
+    A two-digit year remains unresolved unless the caller supplies evidenced
+    year bounds admitting exactly one century (the mappers pass
+    :func:`capture_year_bounds`). Raw dates also remain queryable.
     """
     if raw is None:
         return None, "source_null"
@@ -214,8 +240,13 @@ OPERATING_EXPENSES = BulkMapping(
 )
 
 
-def map_bulk_financial(row, selection: CollectionSelection, mapping: BulkMapping, *, year_bounds=None):
-    """Map an explicitly selected native layout and retain all conversion states."""
+def map_bulk_financial(row, selection: CollectionSelection, mapping: BulkMapping):
+    """Map an explicitly selected native layout and retain all conversion states.
+
+    A layout with two-digit years reads them within :func:`capture_year_bounds` of the row's ``observed_at``.
+    """
+    two_digit = any(fmt == "DD-MON-YY" for _, _, fmt in mapping.dates)
+    year_bounds = capture_year_bounds(row.get("observed_at")) if two_digit else None
     common = observation_fields(mapping.table, row, selection, "fec-bulk-" + mapping.key)
     native = json.loads(row["metadata_json"])
     required = {v for _, v in mapping.text} | {v for _, v in mapping.amounts} | {v for _, v, _ in mapping.dates}

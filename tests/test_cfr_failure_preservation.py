@@ -369,6 +369,24 @@ def placed_prior(stamp=PACKAGE["lastModified"], heading="Prior heading."):
     return {**shaped, "part": "1", "section": "1", "cfr_ref": "1-1.1", "heading": heading}
 
 
+def test_held_rows_gain_part_granule_from_their_ids_without_a_volume_read(monkeypatch, tmp_path):
+    """A prior published before ``part_granule`` existed gains it on an unchanged package: no volume is read."""
+    part = {"granuleId": f"{PACKAGE_ID}-part1", "title": "GENERAL PROVISIONS", "granuleClass": "NODE"}
+    held = [placed_prior(), build._shape({**part, "_package_id": PACKAGE_ID,
+                                          "_package_last_modified": PACKAGE["lastModified"]})]
+    before = [column for column in build.COLUMNS if column != "part_granule"]
+    table = pa.Table.from_pylist([{c: row[c] for c in before} for row in held])
+    pq.write_table(table.replace_schema_metadata(build.PLACEMENT_MARKER), tmp_path / "_cfr_prior.parquet")
+    acquirer, calls = volumes()
+    rows = build_with(monkeypatch, tmp_path, Transport(page("packages", [PACKAGE]), page("granules", [GRANULE, part])),
+                      acquirer)
+    assert calls == []
+    assert rows[part["granuleId"]]["part_granule"] == "true"
+    assert rows[GRANULE["granuleId"]]["part_granule"] == "false"
+    assert rows[GRANULE["granuleId"]]["heading"] == "Prior heading."  # the held row, not a re-read
+    assert is_marked(tmp_path)
+
+
 def test_build_places_section_granules_from_one_volume_download(monkeypatch, tmp_path):
     second = {**GRANULE, "granuleId": f"{PACKAGE_ID}-sec1-2"}
     acquirer, calls = volumes((200, "application/xml", VOLUME))

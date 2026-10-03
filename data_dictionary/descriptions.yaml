@@ -403,7 +403,7 @@ tables:
     columns:
       granule_id: "GovInfo granule identifier. Primary key / dedup key, including non-section structural units."
       package_id: "GovInfo package identifier for the enclosing annual CFR title and volume."
-      cfr_ref: "Join key to Federal Register `cfr_references_json`. For a section, the title and its printed citation (e.g. `43-1601.0-1`, `41-50-201.1`); Title 43 keeps its subpart-numbered spelling while `part` names the enclosing part. The Federal Register side cuts every Title 41 compound part at the hyphen (`41 CFR 60-1.4` reads `41-60`), so a Title 41 reference there names a chapter, not a part, and matches no structural row here once the generation carries Title 41's compound parts (see the summary): match it at chapter level (`title = '41' AND part LIKE '60-%'`). NULL for ranges, publisher typos, unprefixed numbers (`Sec. 1-1`), parenthesized citations (`1.401(k)-1`), sections outside a numbered PART and section tokens the volume does not hold; 12 single sections printed with `§§` (`§§ 2.188`) are read as ranges until spicy-docs 0.31.0. For other granules, composed from the part and the identifier's tokens (e.g. `48-700`, `15-746.10-app1`); NULL without a part. A part-level reference (`40-60`) equals `cfr_ref` only on a part's structural rows, and a part held only as sections has none (50 CFR 622 among 12 on 2026-10-03): match a part on `title` and `part`, which section rows carry."
+      cfr_ref: "Join key to Federal Register `cfr_references_json`. For a section, the title and its printed citation (e.g. `43-1601.0-1`, `41-50-201.1`); Title 43 keeps its subpart-numbered spelling while `part` names the enclosing part. The Federal Register side cuts every Title 41 compound part at the hyphen (`41 CFR 60-1.4` reads `41-60`), so a Title 41 reference there names a chapter, not a part, and matches no structural row here once the generation carries Title 41's compound parts (see the summary): match it at chapter level (`title = '41' AND part LIKE '60-%'`). NULL for ranges, publisher typos, unprefixed numbers (`Sec. 1-1`), parenthesized citations (`1.401(k)-1`), sections outside a numbered PART and section tokens the volume does not hold; 12 single sections printed with `§§` (`§§ 2.188`) are read as ranges until spicy-docs 0.31.0. For other granules, composed from the part and the identifier's tokens (e.g. `48-700`, `15-746.10-app1`); NULL without a part. A part-level reference (`40-60`) equals `cfr_ref` only on a part's structural rows, of which the part's own granule has `part_granule` `'true'`, and a part held only as sections has none (50 CFR 622 among 12 on 2026-10-03): match a part on `title` and `part`, which section rows carry."
       title: "CFR title number from the package or granule identifier (e.g. `40`)."
       part: "For a section, the number in the enclosing PART heading of the package's annual volume XML (e.g. `1600`, `50-201`, `241`); NULL outside a numbered PART or when the volume does not hold the section. For a section's appendix or TOC (`sec746-10-app1`), its host section's part when the volume holds the host, else its token's leading number. For other granules, the identifier's part token including letter suffixes (e.g. `1203a`); in Title 41, whose identifiers cut a compound part at the hyphen, the compound part its part granule's heading states (`60-2`)."
       section: "For a section, the printed number less its `{part}.` prefix (e.g. `1` for § 50-201.1, `19-8.1` in Part 241, `1601.0-1` in Part 1600, `401(k)-1`). For a section's appendix or TOC, the rest of its token after the leading number (`10-app1`); for a section token the volume does not hold, the whole token. NULL for other granules."
@@ -412,6 +412,7 @@ tables:
       edition_year: "Annual edition year from the package or granule identifier, falling back to the year in `dateIssued`. This is not necessarily the printed body revision year or proof of a substantive edition."
       last_modified: "Granule `lastModified` when supplied, otherwise the enclosing package's `lastModified`. GovInfo's granule listing supplies none, so in practice every row carries its package's stamp."
       url: "Canonical GovInfo details URL composed from the package and granule identifiers."
+      part_granule: "`'true'` on the granule that is a part itself (an id ending `-part200`, or `-part60-id334` in Title 41), `'false'` on every other row. A part's subparts, subject groups, appendices and table of contents share its `cfr_ref` and read `'false'`, so `part_granule = 'true'` picks the part out of them; a part citation's lookup does exactly that. Read from the granule id alone by SpicyDocs' grammar, never from the heading. A part held in two annual editions has one such row per edition, and a part printed across volumes one per volume (40 CFR part 60 spans volumes 7 to 9 of the 2025 edition)."
   congress_bills:
     label: "Congressional bills"
     coverage: >-
@@ -6165,16 +6166,13 @@ tables:
         supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility.
       disbursement_date_raw: Literal source value before conversion for disbursement_date. Preserves spelling, signs
         and empty values; the typed value and its status are separate.
-      disbursement_date_status: Source-presence or conversion state for disbursement_date, distinguishing supported
-        values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility.
+      disbursement_date_status: "How `disbursement_date` was read. `exact_with_year_bounds`: a two-digit year read in the range described on `disbursement_date`. `outside_selected_year_bounds`: no year in that range ends in those digits (a typed `34` in a file captured in 2026), so `disbursement_date` is NULL. `source_empty`: the source left it blank. `unresolved_century`: every two-digit year in the fec-query generation `81453ac6…` (published 2026-10-02) and earlier, mapped before that range was applied. Not a financial eligibility test."
       communication_date_raw: Literal source value before conversion for communication_date. Preserves spelling, signs
         and empty values; the typed value and its status are separate.
-      communication_date_status: Source-presence or conversion state for communication_date, distinguishing supported
-        values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility.
+      communication_date_status: "How `communication_date` was read. `exact_with_year_bounds`: a two-digit year read in the range described on `communication_date`. `outside_selected_year_bounds`: no year in that range ends in those digits (a typed `34` in a file captured in 2026), so `communication_date` is NULL. `source_empty`: the source left it blank. `unresolved_century`: every two-digit year in the fec-query generation `81453ac6…` (published 2026-10-02) and earlier, mapped before that range was applied. Not a financial eligibility test."
       public_disbursement_date_raw: Literal source value before conversion for public_disbursement_date. Preserves
         spelling, signs and empty values; the typed value and its status are separate.
-      public_disbursement_date_status: Source-presence or conversion state for public_disbursement_date, distinguishing
-        supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility.
+      public_disbursement_date_status: "How `public_disbursement_date` was read. `exact_with_year_bounds`: a two-digit year read in the range described on `public_disbursement_date`. `outside_selected_year_bounds`: no year in that range ends in those digits (a typed `34` in a file captured in 2026), so `public_disbursement_date` is NULL. `source_empty`: the source left it blank. `unresolved_century`: every two-digit year in the fec-query generation `81453ac6…` (published 2026-10-02) and earlier, mapped before that range was applied. Not a financial eligibility test."
       source_cycle: Election cycle established by the selected source evidence. Distinct from transaction year, candidate
         election year and agency fiscal year.
       amount: Exact decimal for the source-reported amount for this record and its amount_kind. Signs are preserved;
@@ -6182,12 +6180,9 @@ tables:
       allocated_candidate_amount: Exact decimal for the publisher's calculated candidate share of the disbursement;
         this is not a filer-reported allocation. Signs are preserved; use the corresponding status and source-specific
         financial policy before adding observations.
-      disbursement_date: Date parsed from the disbursement date stated by the electioneering source. NULL requires
-        the source value and conversion status; capture time is not substituted.
-      communication_date: Date parsed from the source communication date. NULL requires the source value and conversion
-        status; capture time is not substituted.
-      public_disbursement_date: Date parsed from the public disbursement date stated by the source. NULL requires
-        the source value and conversion status; capture time is not substituted.
+      disbursement_date: "The disbursement date the electioneering source states. A two-digit year (FEC's electioneering file writes `21-FEB-24`) is read as the one year ending in those digits between 1975, when FEC began, and the year the file was captured (`10` is 2010; the range is `date_year_bounds` in `mapping_reason_json`). A typo that stays in the range (`26` for `24`) is typed as written and cannot be detected; `disbursement_date_raw` keeps the date as filed. NULL has its reason in `disbursement_date_status`; capture time is never substituted."
+      communication_date: "The communication date the source states. A two-digit year (FEC's electioneering file writes `21-FEB-24`) is read as the one year ending in those digits between 1975, when FEC began, and the year the file was captured (`10` is 2010; the range is `date_year_bounds` in `mapping_reason_json`). A typo that stays in the range (`26` for `24`) is typed as written and cannot be detected; `communication_date_raw` keeps the date as filed. NULL has its reason in `communication_date_status`; capture time is never substituted."
+      public_disbursement_date: "The public disbursement date the source states. A two-digit year (FEC's electioneering file writes `21-FEB-24`) is read as the one year ending in those digits between 1975, when FEC began, and the year the file was captured (`10` is 2010; the range is `date_year_bounds` in `mapping_reason_json`). A typo that stays in the range (`26` for `24`) is typed as written and cannot be detected; `public_disbursement_date_raw` keeps the date as filed. NULL has its reason in `public_disbursement_date_status`; capture time is never substituted."
     data_quality: Exact decimals preserve signs. Memo, subtotal and attribution flags require source-specific interpretation;
       successful mapping does not qualify current, gross or net totals. Keep reported balances, allocation totals/components,
       overlapping summaries and two-sided transfers at their declared grains. Quality notices do not automatically
@@ -7052,8 +7047,7 @@ tables:
         supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility.
       dissemination_date_raw: Literal source value before conversion for dissemination_date. Preserves spelling, signs
         and empty values; the typed value and its status are separate.
-      dissemination_date_status: Source-presence or conversion state for dissemination_date, distinguishing supported
-        values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility.
+      dissemination_date_status: "How `dissemination_date` was read. `exact`: a four-digit year, as an original filing states it. `exact_with_year_bounds`: a two-digit year read in the range described on `dissemination_date`. `outside_selected_year_bounds`: no year in that range ends in those digits (a typed `34` in a file captured in 2026), so `dissemination_date` is NULL. `source_empty`: the source left it blank. `unresolved_century`: every two-digit year in the fec-query generation `81453ac6…` (published 2026-10-02) and earlier, mapped before that range was applied. Not a financial eligibility test."
       disbursement_date_raw: Literal source value before conversion for disbursement_date. Preserves spelling, signs
         and empty values; the typed value and its status are separate.
       disbursement_date_status: Source-presence or conversion state for disbursement_date, distinguishing supported
@@ -7068,8 +7062,7 @@ tables:
         use the corresponding status and source-specific financial policy before adding observations.
       reported_aggregate_amount: Exact decimal for the source-stated aggregate accompanying this expenditure. Signs
         are preserved; use the corresponding status and source-specific financial policy before adding observations.
-      dissemination_date: Date parsed from the source dissemination date, distinct from expenditure date. NULL requires
-        the source value and conversion status; capture time is not substituted.
+      dissemination_date: "The dissemination date the source states, distinct from expenditure date. A two-digit year (FEC's bulk file writes `25-OCT-24`) is read as the one year ending in those digits between 1975, when FEC began, and the year the file was captured (`24` is 2024; the range is `date_year_bounds` in `mapping_reason_json`). An original filing states four digits. A typo that stays in the range (`26` for `24`) is typed as written and cannot be detected; `dissemination_date_raw` keeps the date as filed. NULL has its reason in `dissemination_date_status`; capture time is never substituted."
       disbursement_date: Date parsed from the source-reported disbursement date, including Schedule E for original-filing
         rows. NULL requires the source value and conversion status; capture time is not substituted.
       signed_date: Date parsed from the signature date on the reported form. NULL requires the source value and conversion
@@ -7105,16 +7098,12 @@ tables:
       spender_identity_status: State of the spender reference and whether a supported identity resolution exists.
       expenditure_date_raw: Literal source value before conversion for expenditure_date. Preserves spelling, signs
         and empty values; the typed value and its status are separate.
-      expenditure_date_status: Source-presence or conversion state for expenditure_date, distinguishing supported
-        values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility.
+      expenditure_date_status: "How `expenditure_date` was read. `exact_with_year_bounds`: a two-digit year read in the range described on `expenditure_date`. `outside_selected_year_bounds`: no year in that range ends in those digits (a typed `34` in a file captured in 2026), so `expenditure_date` is NULL. `source_empty`: the source left it blank. `unresolved_century`: every two-digit year in the fec-query generation `81453ac6…` (published 2026-10-02) and earlier, mapped before that range was applied. Not a financial eligibility test."
       receipt_date_raw: Literal source value before conversion for receipt_date. Preserves spelling, signs and empty
         values; the typed value and its status are separate.
-      receipt_date_status: Source-presence or conversion state for receipt_date, distinguishing supported values from
-        NULL, empty, missing or refused interpretation; it does not establish financial eligibility.
-      expenditure_date: Date parsed from the source expenditure date, distinct from dissemination date. NULL requires
-        the source value and conversion status; capture time is not substituted.
-      receipt_date: Date parsed from the filing receipt date stated by the source. NULL requires the source value
-        and conversion status; capture time is not substituted.
+      receipt_date_status: "How `receipt_date` was read. `exact_with_year_bounds`: a two-digit year read in the range described on `receipt_date`. `outside_selected_year_bounds`: no year in that range ends in those digits (a typed `34` in a file captured in 2026), so `receipt_date` is NULL. `source_empty`: the source left it blank. `unresolved_century`: every two-digit year in the fec-query generation `81453ac6…` (published 2026-10-02) and earlier, mapped before that range was applied. Not a financial eligibility test."
+      expenditure_date: "The expenditure date the source states, distinct from dissemination date. A two-digit year (FEC's bulk file writes `25-OCT-24`) is read as the one year ending in those digits between 1975, when FEC began, and the year the file was captured (`24` is 2024; the range is `date_year_bounds` in `mapping_reason_json`). A typo that stays in the range (`26` for `24`) is typed as written and cannot be detected; `expenditure_date_raw` keeps the date as filed. NULL has its reason in `expenditure_date_status`; capture time is never substituted."
+      receipt_date: "The day FEC received the filing, as the source states it. A two-digit year (FEC's bulk file writes `25-OCT-24`) is read as the one year ending in those digits between 1975, when FEC began, and the year the file was captured (`25` is 2025: a 2024-cycle file holds late filings; the range is `date_year_bounds` in `mapping_reason_json`). A typo that stays in the range (`26` for `24`) is typed as written and cannot be detected; `receipt_date_raw` keeps the date as filed. NULL has its reason in `receipt_date_status`; capture time is never substituted."
     data_quality: Exact decimals preserve signs. Memo, subtotal and attribution flags require source-specific interpretation;
       successful mapping does not qualify current, gross or net totals. Keep reported balances, allocation totals/components,
       overlapping summaries and two-sided transfers at their declared grains. Quality notices do not automatically
@@ -8047,12 +8036,10 @@ tables:
       image_body_status: Explicit processing/availability state of the linked registration image body.
       filed_date_raw: Literal source value before conversion for filed_date. Preserves spelling, signs and empty values;
         the typed value and its status are separate.
-      filed_date_status: Source-presence or conversion state for filed_date, distinguishing supported values from
-        NULL, empty, missing or refused interpretation; it does not establish financial eligibility.
+      filed_date_status: "How `filed_date` was read. `exact_with_year_bounds`: a two-digit year read in the range described on `filed_date`. `outside_selected_year_bounds`: no year in that range ends in those digits (a typed `34` in a file captured in 2026), so `filed_date` is NULL. `source_empty`: the source left it blank. `unresolved_century`: every two-digit year in the fec-query generation `81453ac6…` (published 2026-10-02) and earlier, mapped before that range was applied. Not a financial eligibility test."
       source_cycle: Election cycle established by the selected source evidence. Distinct from transaction year, candidate
         election year and agency fiscal year.
-      filed_date: Date parsed from the source-stated filing date. NULL requires the source value and conversion status;
-        capture time is not substituted.
+      filed_date: "The filing date the source states. A two-digit year (FEC's lobbyist file writes `11-SEP-26`) is read as the one year ending in those digits between 1975, when FEC began, and the year the file was captured (`26` is 2026; the capture instant is in `fec_collections`, by `collection_id`). A typo that stays in the range (`26` for `24`) is typed as written and cannot be detected; `filed_date_raw` keeps the date as filed. NULL has its reason in `filed_date_status`; capture time is never substituted."
       is_lobbyist: Boolean mapped only from a supported source lobbyist flag; NULL retains the adjacent status.
   fec_oversight_recommendations:
     label: Reported oversight recommendation states
@@ -8245,12 +8232,10 @@ tables:
         a supported inclusion policy.
       first_receipt_date_raw: Literal source value before conversion for first_receipt_date. Preserves spelling, signs
         and empty values; the typed value and its status are separate.
-      first_receipt_date_status: Source-presence or conversion state for first_receipt_date, distinguishing supported
-        values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility.
+      first_receipt_date_status: "How `first_receipt_date` was read. `exact_with_year_bounds`: a two-digit year read in the range described on `first_receipt_date`. `outside_selected_year_bounds`: no year in that range ends in those digits (a typed `34` in a file captured in 2026), so `first_receipt_date` is NULL. `source_empty`: the source left it blank. `unresolved_century`: every two-digit year in the fec-query generation `81453ac6…` (published 2026-10-02) and earlier, mapped before that range was applied. Not a financial eligibility test."
       source_cycle: Election cycle established by the selected source evidence. Distinct from transaction year, candidate
         election year and agency fiscal year.
-      first_receipt_date: Date parsed from the first receipt date supplied by the quality notice. NULL requires the
-        source value and conversion status; capture time is not substituted.
+      first_receipt_date: "The first receipt date the quality notice states. A two-digit year (FEC's false and fictitious filings list writes `31-DEC-76`) is read as the one year ending in those digits between 1975, when FEC began, and the year the file was captured (`76` is 1976, not 2076; the capture instant is in `fec_collections`, by `collection_id`). A typo that stays in the range (`26` for `24`) is typed as written and cannot be detected; `first_receipt_date_raw` keeps the date as filed. NULL has its reason in `first_receipt_date_status`; capture time is never substituted."
   fec_receipts:
     label: Reported receipt observations
     grain: One reported receipt record version or physical source observation.
@@ -8596,12 +8581,10 @@ tables:
         name.
       receipt_date_raw: Literal source value before conversion for receipt_date. Preserves spelling, signs and empty
         values; the typed value and its status are separate.
-      receipt_date_status: Source-presence or conversion state for receipt_date, distinguishing supported values from
-        NULL, empty, missing or refused interpretation; it does not establish financial eligibility.
+      receipt_date_status: "How `receipt_date` was read. `exact_with_year_bounds`: a two-digit year read in the range described on `receipt_date`, or on a Form 2 row its `report_year`; a Form 2 date in another year reads `outside_selected_year_bounds`. `outside_selected_year_bounds`: no year in that range ends in those digits (a typed `34` in a file captured in 2026), so `receipt_date` is NULL. `source_empty`: the source left it blank. `unresolved_century`: every Form 1 receipt date in the fec-query generation `81453ac6…` (published 2026-10-02) and earlier, mapped before that range was applied. Not a financial eligibility test."
       source_cycle: Election cycle established by the selected source evidence. Distinct from transaction year, candidate
         election year and agency fiscal year.
-      receipt_date: Date parsed from the filing receipt date stated by the source. NULL requires the source value
-        and conversion status; capture time is not substituted.
+      receipt_date: "The day FEC received the statement, as the source states it. On a Form 2 (candidate) row the year must be the row's own `report_year`; on a Form 1 (committee) row, a two-digit year (FEC's file writes `31-DEC-24`) is read as the one year ending in those digits between 1975, when FEC began, and the year the file was captured (`24` is 2024; the capture instant is in `fec_collections`, by `collection_id`). A typo that stays in the range (`26` for `24`) is typed as written and cannot be detected; `receipt_date_raw` keeps the date as filed. NULL has its reason in `receipt_date_status`; capture time is never substituted."
   fec_report_metrics:
     label: Defined agency report metric observations
     grain: One defined measure occurrence within an agency report edition.
@@ -8737,22 +8720,18 @@ tables:
       committee_name: The committee's name as reported, without a name-based identity merge.
       period_start_raw: Literal source value before conversion for period_start. Preserves spelling, signs and empty
         values; the typed value and its status are separate.
-      period_start_status: Source-presence or conversion state for period_start, distinguishing supported values from
-        NULL, empty, missing or refused interpretation; it does not establish financial eligibility.
+      period_start_status: "How `period_start` was read. `exact`: a four-digit year, as most summary files state it. `not_supplied`: the layout states no start. `exact_with_year_bounds`: a two-digit year read in the range described on `period_start`. `outside_selected_year_bounds`: no year in that range ends in those digits (a typed `34` in a file captured in 2026), so `period_start` is NULL. `source_empty`: the source left it blank. `unresolved_century`: every two-digit year in the fec-query generation `81453ac6…` (published 2026-10-02) and earlier, mapped before that range was applied. Not a financial eligibility test."
       period_end_raw: Literal source value before conversion for period_end. Preserves spelling, signs and empty values;
         the typed value and its status are separate.
-      period_end_status: Source-presence or conversion state for period_end, distinguishing supported values from
-        NULL, empty, missing or refused interpretation; it does not establish financial eligibility.
+      period_end_status: "How `period_end` was read. `exact`: a four-digit year, as most summary files state it. `exact_with_year_bounds`: a two-digit year read in the range described on `period_end`. `outside_selected_year_bounds`: no year in that range ends in those digits (a typed `34` in a file captured in 2026), so `period_end` is NULL. `source_empty`: the source left it blank. `unresolved_century`: every two-digit year in the fec-query generation `81453ac6…` (published 2026-10-02) and earlier, mapped before that range was applied. Not a financial eligibility test."
       attributes_json: Additional source-specific attributes retained without converting similarly named fields into
         shared meanings.
       period_basis: Evidence and source definition establishing the covered period; unknown or overlapping periods
         remain explicit.
       source_cycle: Election cycle established by the selected source evidence. Distinct from transaction year, candidate
         election year and agency fiscal year.
-      period_start: Date parsed from the start of the source-defined reporting period. NULL requires the source value
-        and conversion status; capture time is not substituted.
-      period_end: Date parsed from the end of the source-defined reporting period. NULL requires the source value
-        and conversion status; capture time is not substituted.
+      period_start: "Start of the reporting period the source defines; NULL with `not_supplied` for a layout that states none. A two-digit year (the leadership-PAC and bundling files write `31-JUL-26`) is read as the one year ending in those digits between 1975, when FEC began, and the year the file was captured (`09` is 2009; the range is `date_year_bounds` in `mapping_reason_json`). Other layouts state four digits. A typo that stays in the range (`26` for `24`) is typed as written and cannot be detected; `period_start_raw` keeps the date as filed. NULL has its reason in `period_start_status`; capture time is never substituted."
+      period_end: "End of the reporting period the source defines. A two-digit year (the leadership-PAC and bundling files write `31-JUL-26`) is read as the one year ending in those digits between 1975, when FEC began, and the year the file was captured (`26` is 2026; the range is `date_year_bounds` in `mapping_reason_json`). Other layouts state four digits. A typo that stays in the range (`26` for `24`) is typed as written and cannot be detected; `period_end_raw` keeps the date as filed. NULL has its reason in `period_end_status`; capture time is never substituted."
       measures: 'Source-specific monetary measures as a list of structs: native_field, raw_value, exact DECIMAL value,
         value_status and unit. Unnest with record_id; never add parent summaries to their itemized details.'
   fec_research_context_dispositions:

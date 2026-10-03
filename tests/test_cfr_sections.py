@@ -176,6 +176,24 @@ def test_shape_preserves_lettered_part_tokens(granule_id, part, cfr_ref):
     assert row["section"] is None
 
 
+@pytest.mark.parametrize(
+    ("granule_id", "flag"),
+    [
+        # Real ids of the 2025 edition: 2 CFR part 200 and its own structural rows, and Title 41's part granules.
+        ("CFR-2025-title2-vol1-part200", "true"),
+        ("CFR-2025-title2-vol1-part200-subpartA", "false"),
+        ("CFR-2025-title2-vol1-part200-subpartD-subjectgroup-id362", "false"),
+        ("CFR-2025-title2-vol1-part200-appI", "false"),
+        ("CFR-2025-title2-vol1-part200-toc-id312", "false"),
+        ("CFR-2025-title2-vol1-sec200-1", "false"),
+        ("CFR-2025-title41-vol1-part60-id334", "true"),
+        ("CFR-2024-title48-vol5-chap7", "false"),
+    ],
+)
+def test_part_granule_marks_only_the_granule_that_is_the_part_itself(granule_id, flag):
+    assert _shape({"granuleId": granule_id})["part_granule"] == flag
+
+
 def test_shape_parses_appendix_granule():
     row = _shape(_APPENDIX_GRANULE)
     assert row["title"] == "48"
