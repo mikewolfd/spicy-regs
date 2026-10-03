@@ -412,23 +412,26 @@ def prepare(
                         TO {_sql(out / 'conflicts.parquet')} (FORMAT PARQUET)""")
         on_version = "v.comment_id = c.comment_id AND v.modify_date IS NOT DISTINCT FROM c.modify_date"
         # Where a replaceable cell holds a value the version's agreed read differs from: whether the read only adds
-        # to it. Few rows, so the rule runs in Python on these alone.
+        # to it, and the value it would replace. Few rows, so the rule runs in Python on these alone, and the held
+        # value travels from here: carried through the whole-table join below it doubled that join's time (a
+        # stand-in of the 26.3M-row catalog, 2026-10-03: 6.0 s against 13.2 s).
         for c in additive:
             con.create_function(f"_additive_{c}", ADDITIVE[c], ["VARCHAR"], "VARCHAR", null_handling="special")
         differing = [f"""SELECT c.comment_id, c.modify_date, '{c}' AS "column",
-                                _additive_{c}(v."{c}") IS NOT DISTINCT FROM c."held_{c}" AS additive
+                                _additive_{c}(v."{c}") IS NOT DISTINCT FROM c."held_{c}" AS additive,
+                                c."held_{c}" AS held
                          FROM {catalog} c JOIN {versions} v ON {on_version}
                          WHERE c."held_{c}" IS NOT NULL AND v."{c}" IS NOT NULL AND v."{c}" <> c."held_{c}\""""
                      for c in additive]
         none = ('SELECT NULL::VARCHAR AS comment_id, NULL::VARCHAR AS modify_date, NULL::VARCHAR AS "column", '
-                "NULL::BOOLEAN AS additive WHERE false")
+                "NULL::BOOLEAN AS additive, NULL::VARCHAR AS held WHERE false")
         con.execute(f"COPY ({' UNION ALL '.join(differing) or none}) TO {_sql(differs_file)} "
                     "(FORMAT PARQUET, COMPRESSION ZSTD)")
         con.execute(f"""COPY (SELECT comment_id, modify_date, "column" FROM {differs} WHERE NOT additive ORDER BY 1, 3)
                         TO {_sql(out / 'refusals.parquet')} (FORMAT PARQUET)""")
         replaces = {c: f"r_{c}.comment_id IS NOT NULL" for c in additive}
         replaced = "".join(
-            f""" LEFT JOIN (SELECT comment_id, modify_date FROM {differs} WHERE "column" = '{c}' AND additive) r_{c}
+            f""" LEFT JOIN (SELECT comment_id, modify_date, held FROM {differs} WHERE "column" = '{c}' AND additive) r_{c}
                  ON r_{c}.comment_id = c.comment_id AND r_{c}.modify_date IS NOT DISTINCT FROM c.modify_date"""
             for c in additive)
         fills = {c: f"""(c."null_{c}" AND v."{c}" IS NOT NULL)""" for c in columns}
@@ -436,7 +439,7 @@ def prepare(
         # Only the value to write, NULL elsewhere: a write that overwrote instead of filling would blank a cell. A
         # replacement also carries the value it replaces, which the write requires the row still to hold.
         filled = ", ".join(f'CASE WHEN {changes[c]} THEN v."{c}" END AS "{c}"' for c in columns)
-        expected = "".join(f', CASE WHEN {replaces[c]} THEN c."held_{c}" END AS "_held_{c}"' for c in additive)
+        expected = "".join(f', r_{c}.held AS "_held_{c}"' for c in additive)
         # Unsorted: a sort of the 17.3M rows to fill (2026-10-03) spilled past 14 GB under a 3 GB budget, and a
         # batch reads this file filtered on ``_file`` whatever its order.
         con.execute(f"""COPY (
