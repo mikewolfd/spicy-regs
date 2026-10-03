@@ -1,0 +1,6 @@
+{
+  "description": "A bounded copy of the round-6 GAO decision-page capture (Zyte, the publisher's bytes): its own targets, receipt lines and content-addressed blobs, verbatim, for four decisions. b-403174 et al. is a list GAO's listing cut at 64 characters that its page's caption completes; b-412940 et al. is a 252-character cut list whose page carries no decision text; b-420269 et al. prints its File line as '420269.2', which the reader refuses (unreadable-file-line); b-419305.3 answered Zyte HTTP 520 on every attempt (the first of its three runs' receipts kept) and has no page.",
+  "source": "/Users/mikewolfd/Work/corpora/gao-decision-pages-2026-10-03",
+  "receipts_sha256": "5c24860092fdd7489569b1aa646aff80145709e677989f11b6f41c9ea6545c2c",
+  "targets_sha256": "fb1f8b42d2acbd9722f96c76f15a4858905f1d4f42faedd1749517830c3ae6a8"
+}

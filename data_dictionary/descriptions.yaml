@@ -1643,14 +1643,29 @@ tables:
       months apart (`b-331093` and `b-331093-0`). `listing_page` names the
       retained listing page that listed it, which the run keeps as evidence. A
       later walk refreshes the rows it lists; a run without one carries the
-      table forward. `outcome` is read again from `decision_status` on every
+      table forward. A walk run given the local capture of the decision pages
+      also reads each decision's page caption, which completes a number list
+      the listing cut and states the decided day; a later walk without the
+      capture keeps what a page stated. `outcome` is read again from `decision_status` on every
       row each run, by spicy-docs' closed table of GAO's sentences, so a new
       table version reaches held rows without a re-read of the walk. All
       columns are stored as VARCHAR.
     data_quality: >-
       `released_date` is when GAO released the decision, not when it decided
-      it; the decision page and `gao.gov/docket/<B-number>.1` state the
-      decision date. Apply `html.unescape` when matching a `title`. `outcome`
+      it; `decided_date` is that day, from the Date line of the decision page's
+      caption, so a count by one differs from a count by the other: over the 6,361 pages
+      captured on 2026-10-03 whose caption read, the release came a median 7
+      days after the decision (1,294 the same day, 219 more than 90 days
+      after; appropriations decisions a median 0), and 24 pages state a
+      release before the decision, as GAO published them. `decided_date` is
+      NULL, and `b_numbers_json` and `b_numbers_truncated` are the listing's,
+      where no page was read: on 2026-10-03, 2 pages could not be captured,
+      247 print no caption (a letter, a report, a decision posted without its
+      text) and 6 refuse for a number GAO mistyped on the page or in the
+      listing; that run's journal names each refused page with its reason.
+      `b_numbers_truncated` `true` is a list still cut, as B-412940's 22
+      listed numbers are (its page carries no decision text).
+      Apply `html.unescape` when matching a `title`. `outcome`
       is NULL where GAO's listing states no status sentence for a decision, and
       where it states one spicy-docs' table leaves unmapped (a cost
       recommendation, an advisory or appropriations opinion and the like); each
