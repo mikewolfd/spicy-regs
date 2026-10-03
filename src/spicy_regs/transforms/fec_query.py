@@ -13,10 +13,9 @@ import re
 
 import pyarrow as pa
 
+from spicy_regs.fec_financial_rules import IDENTITY_VERSION, VALUE_MAPPING_VERSION
 from spicy_regs.fec_versions import INDIVIDUAL_RECEIPT_MAPPING_VERSION as RECEIPT_MAPPING_VERSION
 
-IDENTITY_VERSION = "fec-typed-observation/1"
-VALUE_MAPPING_VERSION = "fec-exact-financial-values/2"
 #: The year FEC's first two-year election cycle ended (1975-1976); FEC began administering the law in 1975.
 FIRST_FEC_CYCLE = 1976
 AMOUNT_TYPE = pa.decimal128(38, 9)
