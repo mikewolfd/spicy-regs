@@ -516,17 +516,6 @@ tables:
       re-staged only by a bill-family dispatch scoped to them, so the note
       then narrows to the Congresses not yet dispatched.
       (interim until spicy-docs > 0.53.0+laws.f8431033f626)
-
-      `fiscal_year` is read from the official title only, never
-      `short_title`, by two patterns, `fiscal year NNNN` and `appropriations
-      act[,] NNNN`, so a title naming "the fiscal year ending September 30,
-      2027" or "Appropriations and Extensions Act, 2027" reads NULL. On
-      bill-family generation fd1bb730… (2026-10-03) 7 of the 119th's 42
-      `regular_appropriations` bills and 9 of its 15 `continuing_resolution`
-      bills have none, H.R. 9010 (Legislative Branch, FY2027) among them, and
-      `appropriations_subcommittee` is NULL on H.R. 8469 and 8595. Match the
-      title as well when counting a fiscal year's bills.
-      (interim until spicy-docs > 0.53.0+laws.f8431033f626)
     columns_from: spicy_docs
 
   bill_subjects:
@@ -2499,12 +2488,6 @@ tables:
       so the gap normally lasts one cycle — but a release that rotates off the feed
       during that cycle keeps the NULL permanently. The other publisher columns are
       unaffected; only these four degrade.
-
-      The Senate feed stamps every item `EST`, summer included (`Wed, 30 Sep
-      2026 19:22:00 EST`), and `pub_date_instant` takes the label at its word
-      (`-05:00`); if the feed writes Eastern wall-clock time, an item from
-      March to November reads an hour later than it was posted.
-      (interim until spicy-docs > 0.53.0+laws.f8431033f626)
     columns_from: spicy_docs
 
   roll_call_votes:
@@ -2799,12 +2782,6 @@ tables:
       (pdf_extracted, with text_derivation naming the extraction); when it
       offers none, the notice is published as it stands. NULL on rows not
       re-read since the column was added.
-
-      `date_issued` is GovInfo's dateIssued, which for a hearing (CHRG)
-      package is the day the hearing was held (a compiled volume's first
-      day), not when the transcript was printed or posted: it equals the
-      meeting's date on all 21 event_id pairs on 2026-10-03.
-      (interim until spicy-docs > 0.53.0+laws.f8431033f626)
     columns_from: spicy_docs
 
   bill_family_archives:
@@ -3428,13 +3405,6 @@ tables:
       or inconsistent walks exhaust the source reader's bounded attempts
       and fail before output is replaced. The list carries the latest
       action only, not the action history.
-
-      `is_civilian` is never `'false'`: the publisher marks a military
-      nomination `{"isMilitary":true}` and states no isCivilian, so military
-      rows are NULL (1,349 NULL and 938 `'true'` on nominations generation
-      3d013ca2…, 2026-10-03). Select military nominations with
-      `nomination_type_json` or `is_civilian IS NULL`.
-      (interim until spicy-docs > 0.53.0+laws.f8431033f626)
     columns_from: spicy_docs
 
   house_activity_reports:
@@ -3683,18 +3653,6 @@ tables:
       (`report_id` is the same id in lower case): 241 of the 248 distinct
       ids resolve; the other 7 are six `…SU` products and the misprint
       `GAO-21-105520` (GAO-23-105520 is held).
-
-      Three vendored column sentences say less than the rows do: `cite_kind`
-      lists nine kinds while the table holds every kind the citation rules
-      define, thirteen on 2026-10-03; `target_resolved` true means the key
-      has the target's spelling, not that the target exists
-      (BUDGET-2027-PER prints "Public Law 119-169", a misprint of 117-169,
-      and the row is resolved while `laws` holds no 119-169); and
-      `evidence_page` is the page's position in the PDF, not the folio
-      printed on it (BUDGET-2027-PER's PDF page 83 prints folio 75). The
-      `gao_product_id` rows' `target_table` still reads "gao products (not
-      hosted; …)", stale rule text: `gao_reports` hosts them.
-      (interim until spicy-docs > 0.53.0+laws.f8431033f626)
     columns_from: spicy_docs
 
   senate_expenditures:
@@ -3761,18 +3719,11 @@ tables:
       2026 report), so sum the blocks' period amounts. A zero prints as
       `$.00`.
 
-      Two print defects survive extraction. A label the print wraps onto two
-      lines keeps only its last line in `office`: 181 rows read `(D)`, `(R)`,
-      `COMMITTEE (D)` or `COMMITTEE (R)` (45 or 46 per package on
-      senate-expenditures generation 6ce66a59…, 2026-10-03), all in the
-      account for the conference and policy committee chairs' expense
-      allowances that `appropriation_title` names; read the label from the
-      page. And a payroll cell can interleave two printed lines letter by
-      letter ("D SEIR NE AC TT OO RR" for DIRECTOR and SENATOR, on GPO-CDOC-
-      119sdoc5-2 page B-1470 and 119sdoc6-2 page B-1262), so the cells hold
-      the print exactly for the amounts, which stayed intact, and not always
-      for the text.
-      (interim until spicy-docs > 0.53.0+laws.f8431033f626)
+      A payroll cell can interleave two printed lines letter by letter ("D
+      SEIR NE AC TT OO RR" for DIRECTOR and SENATOR, on GPO-CDOC-119sdoc5-2
+      page B-1470 and 119sdoc6-2 page B-1262), so the cells hold the print
+      exactly for the amounts, which stayed intact, and not always for the
+      text.
     columns_from: spicy_docs
 
   hearing_bill_links:
