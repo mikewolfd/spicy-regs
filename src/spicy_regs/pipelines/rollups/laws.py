@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import ClassVar
 
 from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
-from spicy_regs.transforms.build_laws import build_laws, table3_access_refused
+from spicy_regs.transforms.build_laws import build_laws, olrc_access_refused
 
 
 class LawsRollup(RollupPipeline):
@@ -26,17 +26,18 @@ class LawsRollup(RollupPipeline):
         return build_laws(output_dir, evidence=self.source_evidence)
 
     def run(self) -> None:
-        """Publish the family, then fail the run if OLRC refused this run's Table III read.
+        """Publish the family, then fail the run if OLRC refused this run's Table III or classification read.
 
-        The route is keyless, so a 401/403 is the publisher blocking the read; the build journals it and publishes
-        the rest (every Table III row stands), and the failure here keeps the block visible on the run itself rather
-        than only in the next night's ``check_source_refusals``.
+        The routes are keyless, so a 401/403 is the publisher blocking the read; the build journals it and publishes
+        the rest (every row of the blocked table stands), and the failure here keeps the block visible on the run
+        itself rather than only in the next night's ``check_source_refusals``.
         """
         super().run()
-        if self.source_evidence is not None and table3_access_refused(self.source_evidence):
+        blocked = olrc_access_refused(self.source_evidence) if self.source_evidence is not None else []
+        if blocked:
             raise RuntimeError(
-                "OLRC answered 401/403 for Table III: the laws family was published without a Table III read; "
-                "see the journaled table3-bulk-refused event"
+                f"OLRC answered 401/403 for {' and '.join(blocked)}: the laws family was published without that read; "
+                "see the journaled table3-bulk-refused or classification-refused event"
             )
 
 

@@ -9,6 +9,7 @@ import duckdb
 import pytest
 
 from spicy_regs import mcp_server as server
+from spicy_regs.data_dictionary import COVERAGE_KINDS
 from tests.test_fec_release import digest
 from tests.test_mcp_fec_release import configure, connection
 from tests.test_mcp_server import _tool_data
@@ -98,6 +99,7 @@ def test_reflected_descriptions_explain_summary_and_selected_evidence():
     descriptions = {tool.name: tool.description or "" for tool in asyncio.run(server.build_server().list_tools())}
     assert "status_counts" in descriptions["list_sources"]
     assert "describe_table" in descriptions["list_sources"]
+    assert [kind for kind in COVERAGE_KINDS.values() if kind not in descriptions["list_sources"]] == []
     assert "release_compatibility" in descriptions["describe_table"]
     assert "unavailable" in descriptions["describe_table"]
     assert "not_in_ledger" in descriptions["describe_table"]

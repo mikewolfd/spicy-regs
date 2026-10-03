@@ -352,9 +352,9 @@ In newly shaped rows, NULL means unread; `[]` means a validated complete empty
 response. Restricted attachment records remain visible even without a file URL.
 
 `list_sources` returns each queryable table in `tables` with its label and
-coverage kind (`true_range`, `window`, `sampled` or `derived`), the relationship
-views grouped under their shared summary, and declared names without a loaded
-view in `unavailable_tables`. Availability reflects the current cached
+coverage kind (`true_range`, `window`, `sampled`, `derived`, `not_a_range` or
+`empty`), the relationship views grouped under their shared summary, and
+declared names without a loaded view in `unavailable_tables`. Availability reflects the current cached
 connection, which normally refreshes after five minutes; it does not certify
 population completeness or data freshness. `describe_table` returns the loaded
 columns, each with its dictionary meaning, plus declared row identifiers,
