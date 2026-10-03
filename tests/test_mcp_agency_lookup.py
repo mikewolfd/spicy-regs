@@ -7,6 +7,7 @@ import shutil
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 from spicy_regs import mcp_server, vocabulary_mapping
+from spicy_regs.ontology import agencies
 from tests.test_mcp_server import _tool_data
 
 
@@ -43,6 +44,7 @@ def test_lookup_refuses_tampered_vendored_evidence(tmp_path, monkeypatch, filena
     data[len(data) // 2] ^= 1
     file.write_bytes(data)
     monkeypatch.setattr(vocabulary_mapping, "files", lambda _: tmp_path)
+    monkeypatch.setattr(agencies, "AGENCY_PROJECTION_UNRESOLVED_PATH", root / "agency-projection-unresolved.parquet")
     with pytest.raises(ValueError, match="differs|not RefSpec"):
         vocabulary_mapping.lookup_agency("regulations.gov:agency", "ARCTICGAS")
 

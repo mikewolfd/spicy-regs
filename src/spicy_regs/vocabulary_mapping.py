@@ -19,17 +19,13 @@ FEDERAL_REGISTER = "federal_register_agency"  # Existing occurrence-view namespa
 
 
 def _registry_evidence(namespace: str, identifier: str, candidates: list[dict]) -> dict:
-    root = agencies.AGENCY_REGISTRY_VIEW_PATH
-    raw = root.joinpath("view-manifest.json").read_bytes()
-    if hashlib.sha256(raw).hexdigest() != agencies.AGENCY_REGISTRY_MANIFEST_SHA256:
-        raise ValueError("RefSpec registry manifest differs from its pinned bytes")
-    manifest = json.loads(raw)
+    publication = agencies.registry_publication()  # refuses a manifest that is not the pinned one, first
     tables = {
         name: [dict(row) for row in agencies.registry_rows(name)] for name in ("bridges", "events", "non-emissions")
     }
     anchors = {row["org"] for row in candidates}
     if namespace == FEDERAL_REGISTER:
-        anchors.add("urn:ref:federal-register-agency:" + identifier)
+        anchors.add(agencies.FR_AGENCY_URN + identifier)
     # Retain the connected source evidence, without turning succession into identity.
     while True:
         previous = set(anchors)
@@ -70,13 +66,7 @@ def _registry_evidence(namespace: str, identifier: str, candidates: list[dict]) 
             "policy": "Owner fr_agency_code follows current successors and bridges regardless of document date; splits require all successors to agree.",
             "historical_identity_qualified": False,
         },
-        "publication": {
-            "view_id": manifest["viewId"],
-            "manifest_sha256": "sha256:" + agencies.AGENCY_REGISTRY_MANIFEST_SHA256,
-            "release": manifest["release"],
-            "digest": manifest["digest"],
-            "table_sha256": {name: "sha256:" + digest for name, digest in agencies._REGISTRY_TABLE_SHA256.items()},
-        },
+        "publication": publication,
     }
 
 
@@ -92,16 +82,14 @@ def lookup_agency(namespace: str, identifier: str, *, on_date: str | None = None
         raise ValueError("RefSpec manifest differs from its pinned bytes")
     manifest = json.loads(raw)
     rows = agencies.projection_rows()
-    unresolved = agencies._read_pinned(
-        root.joinpath("agency-projection-unresolved.parquet"), agencies.AGENCY_PROJECTION_UNRESOLVED_SHA256
-    )
+    unresolved = agencies.unresolved_rows()
     candidates = []
     abstentions = []
     if namespace == REGULATIONS:
         candidates = [dict(row) for row in rows if row["source_value"] == identifier]
         abstentions = [dict(row) for row in unresolved if row["source_value"] == identifier]
     elif namespace == FEDERAL_REGISTER:
-        urn = "urn:ref:federal-register-agency:" + identifier
+        urn = agencies.FR_AGENCY_URN + identifier
         candidates = [dict(row) for row in rows if row["org"] == urn]
     status = (
         "unsupported_namespace"
