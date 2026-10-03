@@ -344,7 +344,7 @@ OWN_TABLES = {
 def test_every_family_table_is_published(family):
     expected = {contract for contract, _ in FAMILY_TABLES} | {"public_activity_events", *OWN_TABLES}
     assert set(family) == expected
-    assert len(family) == 19
+    assert len(family) == 20
 
 
 def test_each_published_table_matches_its_contract_schema_or_its_own(family):
@@ -359,6 +359,60 @@ def test_each_published_table_matches_its_contract_schema(family):
             continue
         contract = TABLE_CONTRACTS[name]
         assert read_output(path).schema.names == list(contract.columns), name
+
+
+#: S. 3062's top-level committee list, verbatim from spicy-docs' ``tests/fixtures/bill_stage/BILLSTATUS-119s3062.xml``
+#: (the round-4 B4 fixture): four activities, the referral listed twice.
+S3062_COMMITTEES = b"""<committees>
+      <item>
+        <systemCode>ssju00</systemCode>
+        <name>Judiciary Committee</name>
+        <chamber>Senate</chamber>
+        <type>Standing</type>
+        <activities>
+          <item>
+            <name>Reported By</name>
+            <date>2026-05-11T20:30:49Z</date>
+          </item>
+          <item>
+            <name>Markup By</name>
+            <date>2026-04-30T14:15:02Z</date>
+          </item>
+          <item>
+            <name>Referred To</name>
+            <date>2025-10-28T19:35:34Z</date>
+          </item>
+          <item>
+            <name>Referred To</name>
+            <date>2025-10-28T19:35:34Z</date>
+          </item>
+        </activities>
+      </item>
+    </committees>
+    """
+
+
+def test_a_bills_committee_activities_are_published_with_repeats_kept_apart(tmp_path, monkeypatch):
+    """spicy-docs 0.54.0's bill_committee_activities is a family output, filled from the same committee walk.
+
+    The committee list is spliced into the fixture bill: what this repository owns is that the reader's rows reach
+    the published table under its contract, an exact repeat kept as occurrence 2 rather than merged away.
+    """
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "119")
+    monkeypatch.setenv("BILL_FAMILY_BILL_TYPES", "hr")
+    body = (FIXTURES / "status-119hr6028.xml").read_bytes().replace(b"<sponsors>", S3062_COMMITTEES + b"<sponsors>", 1)
+    paths = build_bill_family(tmp_path, bulk_acquirer=StubBulkAcquirer(status=body),
+                              body_acquirer=StubBodyAcquirer(), download_prior=_no_prior)
+    published = {path.stem: path for path in paths}["bill_committee_activities"]
+    rows = pq.read_table(published).to_pylist()
+    assert pq.read_schema(published).names == list(TABLE_CONTRACTS["bill_committee_activities"].columns)
+    assert sorted((row["activity_name"], row["activity_date"], row["occurrence"]) for row in rows) == [
+        ("Markup By", "2026-04-30T14:15:02Z", "1"),
+        ("Referred To", "2025-10-28T19:35:34Z", "1"),
+        ("Referred To", "2025-10-28T19:35:34Z", "2"),
+        ("Reported By", "2026-05-11T20:30:49Z", "1"),
+    ]
+    assert {(row["bill_id"], row["system_code"]) for row in rows} == {("119-hr-6028", "ssju00")}
 
 
 def test_a_bill_with_no_recorded_votes_publishes_no_references(family):

@@ -66,10 +66,10 @@ class BillFamilyRollup(RollupPipeline):
     )
 
     retain_source_evidence: ClassVar[bool] = True
-    #: The explicit migration onto a prior without ``bill_cosponsors`` (the 18-table generation
-    #: ``72899ab3``, should the pointer be rolled back to it). Inert once the table is published,
-    #: since publication checks a union; remove it after the first publish from main.
-    added_tables: ClassVar[tuple[str, ...]] = ("bill_cosponsors.parquet",)
+    #: The explicit migration onto a prior without these tables: ``bill_cosponsors`` (the 18-table generation
+    #: ``72899ab3``, should the pointer be rolled back to it) and spicy-docs 0.54.0's ``bill_committee_activities``.
+    #: Inert once a table is published, since publication checks a union; remove each after its first publish.
+    added_tables: ClassVar[tuple[str, ...]] = ("bill_cosponsors.parquet", "bill_committee_activities.parquet")
     partitioned: ClassVar[Mapping[str, tuple[str, ...]]] = {
         f"{name}.parquet": (partitioning.column,) for name, partitioning in PARTITIONED.items()
     }

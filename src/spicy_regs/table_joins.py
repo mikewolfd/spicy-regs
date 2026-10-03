@@ -147,6 +147,10 @@ JOINS: tuple[Join, ...] = (
                  "print re-keys moved Senate reports to their covered Congress and subheaded bills to theirs. "
                  "Receipts join-gaps-2026-09-26/d/, congress-bills-backfill-2026-09-26/."),
     _join("bill_committees", "bill_id", _BILL, "bill_id", 37_473, 0),
+    _join("bill_committee_activities", "bill_id", _BILL, "bill_id", 0, 0, "empty",
+          "New in spicy-docs 0.54.0: filled as each Congress's BILLSTATUS is re-read; not yet baselined."),
+    _join("bill_committee_activities", ("bill_id", "system_code"), "bill_committees", ("bill_id", "system_code"),
+          0, 0, "empty", "Read from the same committee walk as bill_committees; not yet baselined."),
     _join("bill_publisher_summaries", "bill_id", _BILL, "bill_id", 17_839, 0),
     _join("bill_sections", "bill_id", _BILL, "bill_id", 1_849, 0),
     _join("bill_subjects", "bill_id", _BILL, "bill_id", 149_261, 0),

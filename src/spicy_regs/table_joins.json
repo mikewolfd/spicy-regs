@@ -105,6 +105,44 @@
       "measurement": null
     },
     {
+      "child": "bill_committee_activities",
+      "child_columns": [
+        "bill_id"
+      ],
+      "parent": "congress_bills",
+      "parent_columns": [
+        "bill_id"
+      ],
+      "kind": "empty",
+      "reason": "New in spicy-docs 0.54.0: filled as each Congress's BILLSTATUS is re-read; not yet baselined.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
+      "child": "bill_committee_activities",
+      "child_columns": [
+        "bill_id",
+        "system_code"
+      ],
+      "parent": "bill_committees",
+      "parent_columns": [
+        "bill_id",
+        "system_code"
+      ],
+      "kind": "empty",
+      "reason": "Read from the same committee walk as bill_committees; not yet baselined.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
       "child": "bill_publisher_summaries",
       "child_columns": [
         "bill_id"
@@ -1976,6 +2014,28 @@
         ],
         "parent_table": "committees",
         "parent_columns": [
+          "system_code"
+        ]
+      }
+    ],
+    "bill_committee_activities": [
+      {
+        "child_columns": [
+          "bill_id"
+        ],
+        "parent_table": "congress_bills",
+        "parent_columns": [
+          "bill_id"
+        ]
+      },
+      {
+        "child_columns": [
+          "bill_id",
+          "system_code"
+        ],
+        "parent_table": "bill_committees",
+        "parent_columns": [
+          "bill_id",
           "system_code"
         ]
       }

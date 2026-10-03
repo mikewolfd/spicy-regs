@@ -189,6 +189,8 @@ REFERENCE_COLUMNS = ("bill_id", "chamber", "congress", "session", "roll_number",
 LINK_RULE_VERSION = "recorded-vote-then-vote-file-v4"
 LINK_COLUMNS = ("bill_id", "match_rule", "match_action_index", "match_url", "conflict_count")
 IDENTITY_COLUMNS = ("congress", "chamber", "session", "roll_number")
+#: Columns every captured Clerk file fills, so a held House row lacking any of them predates it and is read again.
+_HOUSE_READ_COLUMNS = ("legis_num", "clerk_body_element", "party_totals_json")
 #: The row's own statement of its measure, read by spicy-docs ``read_vote_file_statement``.
 STATEMENT_COLUMNS = ("source_url", "legis_num", "documents_json", "amendments_json")
 #: The bill family's reference: the bill's own action names the roll call.
@@ -311,11 +313,15 @@ def _held_votes(prior_file: Path) -> set[tuple[str, ...]]:
     Legacy rows have no tally kind and keep the existing non-NULL yea rule.
     Candidate elections have no yea/nay total; their explicit kind, native
     count map and reconciled member count distinguish capture from linkage.
-    A House row without ``legis_num`` or ``clerk_body_element`` (published
-    before either column) is not held: its file is read once more so its own
-    statement can link it and its voting body element and ``vote_desc`` fill.
-    Every captured Clerk file states one body element (spicy-docs refuses a
-    file naming neither), so a re-read row is held from then on.
+    A House row without ``legis_num``, ``clerk_body_element`` or
+    ``party_totals_json`` (published before the column) is not held: its file
+    is read once more so its own statement can link it and its voting body
+    element, ``vote_desc`` and totals by party fill. Every captured Clerk file
+    states one body element (spicy-docs refuses a file naming neither) and its
+    party totals (``[]`` where it states none), so a re-read row is held from
+    then on. A Senate row has no such rule: a NULL tie-breaker also means the
+    vote was not tied, so a row captured before those columns keeps NULL, as
+    the contract says, until it is read again.
     """
     if not prior_file.exists():
         return set()
@@ -364,8 +370,8 @@ def _held_votes(prior_file: Path) -> set[tuple[str, ...]]:
             and sum(tallies.values()) == member_count
         ):
             held.add(tuple(str(part) for part in parts))
-    missing = [f"{column} IS NULL" for column in ("legis_num", "clerk_body_element") if column in columns]
-    stated = len(missing) == 2  # a prior predating either column holds no House row
+    missing = [f"{column} IS NULL" for column in _HOUSE_READ_COLUMNS if column in columns]
+    stated = len(missing) == len(_HOUSE_READ_COLUMNS)  # a prior predating any of them holds no House row
     unstated = relation.filter("chamber = 'house'" + (f" AND ({' OR '.join(missing)})" if stated else ""))
     held -= {tuple(str(part) for part in row) for row in unstated.project(", ".join(IDENTITY_COLUMNS)).fetchall()}
     return held

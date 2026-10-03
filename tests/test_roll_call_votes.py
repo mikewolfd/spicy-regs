@@ -1012,6 +1012,7 @@ def test_a_prior_that_has_vote_day_fills_only_its_nulls_and_is_not_rewritten_whe
             "vote_day": day,
             "legis_num": "QUORUM" if yea else None,
             "clerk_body_element": "chamber" if yea else None,
+            "party_totals_json": "[]" if yea else None,
         }
 
     prior = tmp_path / "prior.parquet"
@@ -1298,6 +1299,28 @@ def test_a_house_row_published_before_clerk_body_element_is_read_once_more_then_
     assert acquirer.requested == [("house", 240)]
     assert rows["119-house-1-240"]["clerk_body_element"] == "chamber"
     assert rows["119-house-1-240"]["vote_desc"] is not None
+
+    second = tmp_path / "second"
+    second.mkdir()
+    resumed = RealBodyAcquirer(house_rolls=(240,))
+    assert _real_run(second, _carried(first), acquirer=resumed, overlap=0) == rows
+    assert resumed.requested == []
+
+
+def test_a_house_row_published_before_party_totals_is_read_once_more_then_held(tmp_path, scoped):
+    """spicy-docs 0.54.0 appends party_totals_json; a captured Clerk file always states it ([] at the least).
+
+    So a held House row with NULL there was captured before the column, and its file is read once more, as for
+    legis_num; the re-read row is held from then on.
+    """
+    legacy = {**_held_row(240), "party_totals_json": None}
+    first = tmp_path / "first"
+    first.mkdir()
+    acquirer = RealBodyAcquirer(house_rolls=(240,))
+    rows = _real_run(first, _published({"roll_call_votes": [legacy], "member_votes": []}), acquirer=acquirer, overlap=0)
+    assert acquirer.requested == [("house", 240)]
+    assert {total["party"] for total in json.loads(rows["119-house-1-240"]["party_totals_json"])} >= {
+        "Republican", "Democratic"}
 
     second = tmp_path / "second"
     second.mkdir()

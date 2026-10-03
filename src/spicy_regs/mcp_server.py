@@ -164,6 +164,7 @@ TABLES = (
     # test_mcp_server_tables_match_dictionary keeps the two lists equal.
     "bill_actions",
     "bill_committees",
+    "bill_committee_activities",
     "bill_cosponsors",
     "bill_publisher_summaries",
     "bill_versions",

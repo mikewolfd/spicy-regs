@@ -265,6 +265,7 @@ CONTRACT_TABLES: tuple[str, ...] = (
     "congress_bills",
     "bill_actions",
     "bill_committees",
+    "bill_committee_activities",
     "bill_cosponsors",
     "bill_publisher_summaries",
     "bill_versions",

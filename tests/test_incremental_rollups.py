@@ -265,6 +265,7 @@ def test_roll_call_votes_skips_what_it_already_published(tmp_path, monkeypatch):
                 "yea": "220",
                 "legis_num": "H R 3424",
                 "clerk_body_element": "chamber",
+                "party_totals_json": "[]",
             }
             for n in range(1, 41)
         ],

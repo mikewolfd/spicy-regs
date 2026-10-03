@@ -17720,6 +17720,60 @@
       "system_code"
     ]
   },
+  "bill_committee_activities": {
+    "table": "bill_committee_activities",
+    "label": "Bill committee activities",
+    "summary": "One committee or subcommittee activity a bill's BILLSTATUS document lists: the committee, the activity's name and timestamp as written, and an occurrence number for exact repeats. Not a complete record of what committees did: a report can appear in `bill_actions` only (119-s-545 lists Markup By and no Reported By). A re-read merges on the key and keeps the newer document's row, so an activity the publisher later drops is not removed.",
+    "coverage": "Sampled, and filling: what each committee and subcommittee a BILLSTATUS document lists did and when, for the bills the bill family has read under spicy-docs 0.54.0. A bill read before that has no rows here until its Congress is read again, so an absent bill is unread, not inactive. The scheduled run reads the sitting Congress; earlier Congresses fill only by a bill-family dispatch scoped to them.",
+    "kind": "sampled",
+    "measured_on": "2026-10-03",
+    "data_quality": "Measured with the spicy-docs reader over the 119th's 19,531 BILLSTATUS documents (round 4, 2026-10-03): 32,102 rows on 18,998 bills, no reader refusal; 1,468 Reported By rows, 820 exact repeats (occurrence 2 and above) and 49 undated items, whose `activity_date` is empty.",
+    "columns": [
+      {
+        "column_name": "bill_id",
+        "column_type": "VARCHAR",
+        "description": "The bill whose committee this activity belongs to."
+      },
+      {
+        "column_name": "system_code",
+        "column_type": "VARCHAR",
+        "description": "The publisher's identifier of the committee or subcommittee that did it (ssju00)."
+      },
+      {
+        "column_name": "activity_name",
+        "column_type": "VARCHAR",
+        "description": "The publisher's activity name exactly as written, in either capitalisation it uses (Reported By and Reported by, Referred To and Referred to): Referred To, Markup By, Reported By, Discharged From, Hearings By (full committee), Hearings By (subcommittee), Reported Original Measure, Bills of Interest - Exchange of Letters, Unknown."
+      },
+      {
+        "column_name": "activity_date",
+        "column_type": "VARCHAR",
+        "description": "The publisher's timestamp for it, as written (2026-05-11T20:30:49Z); empty where the item states none, as every Bills of Interest - Exchange of Letters item does."
+      },
+      {
+        "column_name": "occurrence",
+        "column_type": "VARCHAR",
+        "description": "1 for an activity's first listing under this committee, 2 for an exact repeat (same name and timestamp), and so on: the publisher lists some referrals twice (119-s-545)."
+      },
+      {
+        "column_name": "parent_system_code",
+        "column_type": "VARCHAR",
+        "description": "The parent committee's system code when the activity is a subcommittee's."
+      },
+      {
+        "column_name": "snapshot_update_date",
+        "column_type": "VARCHAR",
+        "description": "The parent document's updateDate, so a committee's activities are versioned with its bill."
+      }
+    ],
+    "grain": "One row per activity a BILLSTATUS document lists under one of the bill's committees or subcommittees: what the committee did and when. A clean key for a committee's work but not a complete one: 119-s-545's lists Markup By and no Reported By while its actions record the report, so a report can appear in bill_actions only.",
+    "identity_columns": [
+      "bill_id",
+      "system_code",
+      "activity_name",
+      "activity_date",
+      "occurrence"
+    ]
+  },
   "bill_cosponsors": {
     "table": "bill_cosponsors",
     "label": "Bill cosponsor source occurrences",

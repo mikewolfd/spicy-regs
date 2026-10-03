@@ -372,6 +372,8 @@ FAMILY_TABLES: tuple[tuple[str, str], ...] = (
     ("bill_actions", "bill_actions"),
     ("bill_cosponsors", "bill_cosponsors"),
     ("bill_committees", "bill_committees"),
+    # spicy-docs 0.54.0 (round 4, B4): what each committee did and when, from the same committee walk.
+    ("bill_committee_activities", "bill_committee_activities"),
     ("bill_publisher_summaries", "bill_publisher_summaries"),
     ("bill_versions", "bill_versions"),
     ("bill_sections", "bill_sections"),
