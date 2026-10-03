@@ -4,8 +4,11 @@ HRC's final 118th Congress source facts now pass the explicit provider reader
 against the reviewed observation pin and a fresh exact original-PDF capture.
 The reader emits every named member, published rating, displayed item result and
 scored item in the inspected source scope. Independent reader review passed every selected record and the complete mapped
-output. Normal provider package adoption remains a separate gate; HRC has not
-been published.
+output. The normalized reader package is adopted, and the HRC source tables
+and exact downstream links are published. See the [public rating readback](../deployment/hrc_public_normalization_readback.json)
+and [analysis qualification](../deployment/hrc_analysis_qualification.json).
+Unattended refresh stays disabled; this reader supports the pinned final 118th
+Congress edition only.
 See `reader_qualification_v2.json` and `candidate_checkpoint.json` for current
 status. `reader_qualification.json` preserves the earlier parser-1 qualification.
 

@@ -1,6 +1,6 @@
 {
-  "observed_checkpoint_at": "2026-10-03T22:57:43.088223+00:00",
-  "status": "normalized_provider_reader_qualified_adoption_pending",
+  "observed_checkpoint_at": "2026-10-03T23:04:50.358179+00:00",
+  "status": "normalized_source_and_exact_analysis_published",
   "original_publisher_url": "https://hrc-prod-requests.s3-us-west-2.amazonaws.com/files/documents/118th-Congressional-Scorecard-HRC-2024-Final.pdf",
   "source_sha256": "sha256:804c1157e71da53a00821fdcaf15a1790448c682eb49d44613a577cfce9cb855",
   "edition": "118th Congress final scorecard",
@@ -33,12 +33,12 @@
     {
       "kind": "provider_adoption",
       "issue": "Build and adopt the tested provider wheel through the normal release workflow.",
-      "complete": false
+      "complete": true
     },
     {
       "kind": "publication",
       "issue": "Run consumer additive/scoped qualification and publication with hash-only evidence.",
-      "complete": false
+      "complete": true
     }
   ],
   "independent_review_receipts": [
@@ -88,9 +88,9 @@
   "source_values_patched": false,
   "official_congressional_data_reacquired": false,
   "production_reader_qualified": true,
-  "published": false,
+  "published": true,
   "registry_enabled": false,
-  "current_provider": "0.53.0+scorecards.fd38daf2d185",
+  "current_provider": "0.53.0+scorecards.5e973eeabe60",
   "reuse_note": "Reviewed Senate member observations retain original semantic v2 provenance; newer observations use v3. No old observation has been relabeled.",
   "reader": {
     "module": "spicy_docs.sources.scorecards.hrc",
@@ -126,5 +126,12 @@
     "all_other_native_fact_fields_equal": true,
     "private_readback_relative_path": "reader-qualification-v2/normalization_readback.json",
     "private_readback_sha256": "sha256:cafc16e000cdc24fc1c9e485b6498f67b075c90eb7d9223035e06e9e997c2b07"
+  },
+  "publication": {
+    "source_generation": "sha256:8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109",
+    "analysis_generation": "sha256:4a99801a8a935e1dbe617ddaf219e959b32d46061fa196a36b693806121a8b46",
+    "source_readback": "../deployment/hrc_public_normalization_readback.json",
+    "analysis_qualification": "../deployment/hrc_analysis_qualification.json",
+    "unattended_refresh_enabled": false
   }
 }

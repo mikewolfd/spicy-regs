@@ -32,12 +32,33 @@ WHERE r.scorecard_id='{CARD}' AND r.value_text='N/A'
 ORDER BY m.member_name,metric.name LIMIT 3"""
 GLYPHS = f"""SELECT result_text,count(*) AS rows FROM scorecard_member_item_results
 WHERE scorecard_id='{CARD}' GROUP BY result_text ORDER BY result_text"""
-NA = f"""SELECT count(*) AS rows,count(value_number) AS numeric_values
-FROM scorecard_member_ratings WHERE scorecard_id='{CARD}' AND value_text='N/A'"""
+NA = f"""SELECT count(*) FILTER(WHERE value_text='N/A') AS rows,
+count(value_number) FILTER(WHERE value_text='N/A') AS numeric_values,
+count(*) FILTER(WHERE value_text='NA') AS standalone_na
+FROM scorecard_member_ratings WHERE scorecard_id='{CARD}'"""
+FAMILY_RATINGS = """SELECT c.publisher_id,count(*) AS rows
+FROM scorecard_member_ratings r JOIN scorecards c USING(scorecard_id)
+GROUP BY c.publisher_id ORDER BY c.publisher_id"""
 
 
 def write(path, value):
     path.write_text(json.dumps(value, indent=2, ensure_ascii=False) + "\n")
+
+
+def query_rows(body):
+    """Read either documented row representation without changing retained replies."""
+    columns = body["columns"]
+    if any(not isinstance(name, str) for name in columns) or len(set(columns)) != len(columns):
+        raise ValueError("Hosted query columns are ambiguous")
+    rows = []
+    for row in body["rows"]:
+        if isinstance(row, dict) and set(row) == set(columns):
+            rows.append(row)
+        elif isinstance(row, list) and len(row) == len(columns):
+            rows.append(dict(zip(columns, row, strict=True)))
+        else:
+            raise ValueError("Hosted query row does not match its columns")
+    return rows
 
 
 async def run(args):
@@ -68,11 +89,14 @@ async def run(args):
                     for pin in body["publication"].values():
                         if pin.get("artifact_digest") != pins.get(pin.get("family")):
                             raise ValueError("Hosted HRC query still uses a different publication pin")
+                    body = {**body, "rows": query_rows(body)}
                 calls.append({"tool": tool, "label": label, "response_sha256": sha256(path.read_bytes()).hexdigest()})
                 return body
 
             listed = await call("list_sources", {}, "list_sources")
-            if "scorecard_member_ratings" not in {row["table"] for row in listed["tables"]}:
+            listed_tables = list(listed.get("tables", []))
+            listed_tables.extend(row for subject in listed.get("subjects", []) for row in subject["tables"])
+            if "scorecard_member_ratings" not in {row["table"] for row in listed_tables}:
                 raise ValueError("Hosted source table is not listed")
             described = await call("describe_table", {"table": "scorecard_member_ratings"}, "describe_ratings")
             if described["publication"]["artifact_digest"] != args.source_pin:
@@ -86,8 +110,16 @@ async def run(args):
             }:
                 raise ValueError("Hosted HRC source counts differ from the qualified edition")
             na = await call("query_sql", {"sql": NA, "max_rows": 10}, "literal_na")
-            if na["rows"] != [{"rows": 280, "numeric_values": 0}]:
+            if na["rows"] != [{"rows": 280, "numeric_values": 0, "standalone_na": 0}]:
                 raise ValueError("Hosted HRC N/A literals differ or gained numeric conversions")
+            family = await call("query_sql", {"sql": FAMILY_RATINGS, "max_rows": 10}, "family_rating_counts")
+            if {row["publisher_id"]: row["rows"] for row in family["rows"]} != {
+                "afp": 2120,
+                "hrc": 1620,
+                "ijm": 1912,
+                "lcv": 1102,
+            }:
+                raise ValueError("Hosted source-family rating counts changed")
             glyphs = await call("query_sql", {"sql": GLYPHS, "max_rows": 10}, "literal_results")
             if {row["result_text"]: row["rows"] for row in glyphs["rows"]} != {
                 "○": 9340,

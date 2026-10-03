@@ -1,0 +1,215 @@
+{
+  "status": "passed",
+  "scorecard_id": "hrc:118-final",
+  "family_pins": {
+    "scorecards": "sha256:8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109",
+    "scorecard-analysis": "sha256:4a99801a8a935e1dbe617ddaf219e959b32d46061fa196a36b693806121a8b46"
+  },
+  "calls": [
+    {
+      "tool": "list_sources",
+      "label": "list_sources",
+      "response_sha256": "cce9c6eb4b76f03192c1f6af0fd9ea88fcac460edf773314de8a71b5cf5c656e"
+    },
+    {
+      "tool": "describe_table",
+      "label": "describe_ratings",
+      "response_sha256": "4fd78c47fdbfc90064dc0c42b133050906f0cc6cf00b6da8cdd434203b4df3ad"
+    },
+    {
+      "tool": "query_sql",
+      "label": "source_counts",
+      "response_sha256": "87c3ac5ac059b88eb636e50c448fb2e37ccb77687644df0aae20eab57f6fd498"
+    },
+    {
+      "tool": "query_sql",
+      "label": "literal_na",
+      "response_sha256": "64adb00ed2d50c4726528587594dd0266969e303d377453e2340de057b0c30a5"
+    },
+    {
+      "tool": "query_sql",
+      "label": "family_rating_counts",
+      "response_sha256": "4f6d8c4ce2a87a3a021b7ddd8e0de3f0e394abf642f91155d6cd175c9c89f7f1"
+    },
+    {
+      "tool": "query_sql",
+      "label": "literal_results",
+      "response_sha256": "d5bed1778ccbd8edd7c25d49cc9f49ccdacf6fed205d8d14b1d078111adfb9f8"
+    },
+    {
+      "tool": "query_sql",
+      "label": "attributed_ratings",
+      "response_sha256": "a3179b5130d29371cab878291ef8d0a87d7e23bc88c7d5533e123ebe26dfee1f"
+    },
+    {
+      "tool": "query_sql",
+      "label": "scorecard_member_links",
+      "response_sha256": "5cc76edcdf973252e18ddfb3e88f3ddcea2e96e6aa4e5acf8f69ea2e44bc4419"
+    },
+    {
+      "tool": "query_sql",
+      "label": "scorecard_item_links",
+      "response_sha256": "3aaaad6594320ce918c747c0ad7e8756ce0b5ae067e1b7a22772e2451e58ea3d"
+    }
+  ],
+  "observed_at": "2026-10-03T23:07:40.150216+00:00",
+  "hosted_url": "https://mcp.spicygov.ai/mcp",
+  "source_counts": [
+    {
+      "kind": "members",
+      "rows": 540
+    },
+    {
+      "kind": "ratings",
+      "rows": 1620
+    },
+    {
+      "kind": "items",
+      "rows": 56
+    },
+    {
+      "kind": "results",
+      "rows": 19540
+    }
+  ],
+  "family_rating_counts": [
+    {
+      "publisher_id": "afp",
+      "rows": 2120
+    },
+    {
+      "publisher_id": "hrc",
+      "rows": 1620
+    },
+    {
+      "publisher_id": "ijm",
+      "rows": 1912
+    },
+    {
+      "publisher_id": "lcv",
+      "rows": 1102
+    }
+  ],
+  "rating_na": [
+    {
+      "rows": 280,
+      "numeric_values": 0,
+      "standalone_na": 0
+    }
+  ],
+  "result_tokens": [
+    {
+      "result_text": "N/A",
+      "rows": 422
+    },
+    {
+      "result_text": "P",
+      "rows": 1
+    },
+    {
+      "result_text": "⊗",
+      "rows": 471
+    },
+    {
+      "result_text": "○",
+      "rows": 9340
+    },
+    {
+      "result_text": "●",
+      "rows": 9306
+    }
+  ],
+  "member_resolution": [
+    {
+      "resolution_status": "resolved",
+      "resolution_rule": "exact_historical_name_context",
+      "rows": 458
+    },
+    {
+      "resolution_status": "unresolved",
+      "resolution_rule": "no_exact_member_match",
+      "rows": 82
+    }
+  ],
+  "item_reference_resolution": [
+    {
+      "resolution_status": "resolved",
+      "resolution_rule": "exact_bill",
+      "rows": 42
+    },
+    {
+      "resolution_status": "resolved",
+      "resolution_rule": "exact_bill_edition_congress",
+      "rows": 20
+    },
+    {
+      "resolution_status": "resolved",
+      "resolution_rule": "exact_roll_call",
+      "rows": 29
+    },
+    {
+      "resolution_status": "unresolved",
+      "resolution_rule": "exact_roll_call_incomplete",
+      "rows": 17
+    },
+    {
+      "resolution_status": "unresolved",
+      "resolution_rule": "no_exact_item_match_incomplete",
+      "rows": 19
+    }
+  ],
+  "attributed_examples": [
+    {
+      "publisher": "Human Rights Campaign",
+      "scorecard": "CONGRESSIONAL SCORECARD",
+      "member_name": "Alford, Mark",
+      "period": "116th SCORE",
+      "metric_chamber": "House",
+      "published_value": "N/A",
+      "value_number": null,
+      "publisher_url": "https://hrc-prod-requests.s3-us-west-2.amazonaws.com/files/documents/118th-Congressional-Scorecard-HRC-2024-Final.pdf",
+      "source_path": "pdf:page=18;observation=f0c9883d-2e50-4ec9-b2b9-4c7080c983fe;/members/326/record/ratings/2"
+    },
+    {
+      "publisher": "Human Rights Campaign",
+      "scorecard": "CONGRESSIONAL SCORECARD",
+      "member_name": "Alford, Mark",
+      "period": "117th SCORE",
+      "metric_chamber": "House",
+      "published_value": "N/A",
+      "value_number": null,
+      "publisher_url": "https://hrc-prod-requests.s3-us-west-2.amazonaws.com/files/documents/118th-Congressional-Scorecard-HRC-2024-Final.pdf",
+      "source_path": "pdf:page=18;observation=f0c9883d-2e50-4ec9-b2b9-4c7080c983fe;/members/326/record/ratings/1"
+    },
+    {
+      "publisher": "Human Rights Campaign",
+      "scorecard": "CONGRESSIONAL SCORECARD",
+      "member_name": "Amo, Gabe",
+      "period": "116th SCORE",
+      "metric_chamber": "House",
+      "published_value": "N/A",
+      "value_number": null,
+      "publisher_url": "https://hrc-prod-requests.s3-us-west-2.amazonaws.com/files/documents/118th-Congressional-Scorecard-HRC-2024-Final.pdf",
+      "source_path": "pdf:page=22;observation=f0c9883d-2e50-4ec9-b2b9-4c7080c983fe;/members/440/record/ratings/2"
+    }
+  ],
+  "live_fec_release": {
+    "receipt_sha256": "sha256:be129746b4a7fc163cc1958b032faf5a3462dbe097ed5194ca3d54b7911a9683",
+    "consumer": {
+      "code_sha256": "sha256:6eb9188f790971b2e5bfe3578c5a1234e92133b5a32e4f066415b21140beb7e4",
+      "image_digest": "sha256:f1942f995be72bd65a00295c9883425fcacd312837e9a74ebb63e047a3d89a39",
+      "package_versions": {
+        "duckdb": "1.5.5",
+        "mcp": "2.2.0",
+        "spicy-regs": "0.1.6"
+      }
+    },
+    "status_counts": {
+      "compatible": 72
+    },
+    "raw_query_financial_qualification": "not_inferred",
+    "details": "Call describe_table for a selected view's release compatibility evidence and reasons."
+  },
+  "hosted_dictionary_limitation": "Actual schemas and generation pins are available; scorecard-specific dictionary descriptions remain absent in the preserved live image.",
+  "earlier_attempts": "Earlier operational-helper parsing failures are retained privately. They did not indicate service refusal or data failure; this final batch parsed the observed grouped catalog and positional-row response forms."
+}
