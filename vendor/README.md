@@ -5,16 +5,21 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- `spicy_docs-0.54.0+chaos.16c2285ef63e`: the bills-lane 0.54.0 candidate (owner decision 1, round 5, 2026-10-03)
-  from branch `chaos/2026-10-03-bills-lane-r4` at `16c2285ef63e0bc887cdbf0684e613daccc1bed5`, with implementer E's
-  extras merged. SHA-256 `21ece738ac1b5cf25af11822c64fe89612974e284d8e49d7ccb284b59fbe1ac8`, 1,845,559 bytes; two
-  committed-archive builds produced identical bytes, and the body-text derivation digest read from the wheel equals
-  its pin (`sha256:91fa3ee5…`). It adds the `gao_decisions`, `cbo_feed_items` and `bill_committee_activities`
-  contracts, `party_totals_json`, the tie-breaker and MODS hearing columns and `detail_read`; the passed-stage hold,
-  the `calendared` and `passed_both` rungs and the money-bill precision rules; GAO's outcome reading
-  (`gao-decision-outcome/002`), `BillIdentity.from_bill_id`, the CFR id grammar and `BODY_TEXT_DERIVATION_VERSION`.
-  This is a vendored branch build, not a registry release. Build receipt:
-  `mcp-chaos-2026-10-02/round5/wheel-r5b/` (`README.md`, `READY.md`, `wheel.json`, `gate.log`, `smoke.out`).
+- `spicy_docs-0.54.0+chaos.a1b91ce28a2a`: the round-6 bills-lane build (2026-10-03), from branch
+  `chaos/2026-10-03-bills-lane-r6` at `a1b91ce28a2ac254d4f2301e5abb48a025dac198`: the round-5 build below plus round
+  6's three spicy-docs branches. SHA-256 `4ec97919319016d128b28b4d95db0ec795a6465c468b061ff6e9b7c80bd4ef08`,
+  1,865,157 bytes; two committed-archive builds produced identical bytes, and the body-text derivation digest read
+  from the wheel equals its pin (`sha256:91fa3ee5…`, unchanged). It adds the `cleared` stage, stage rule F (a mention
+  is no step; codes first) and a private law's signing date; the Register's regulations.gov link and four more stated
+  fields (acquisition policy 1.4, raw schema 1.2); GAO's listing number split with a cut flag and the decision-page
+  caption reader; the classification-table reader fix, the bare section key and `usc_place` on both OLRC tables, a
+  law's last Statutes page (`laws-uslm-v3`), the committee codes a hearing's MODS states, and one placeholder
+  predicate for FEC name fields. This is a vendored branch build, not a registry release. Build receipt:
+  `mcp-chaos-2026-10-02/round6/wheel-r6/` (`README.md`, `wheel.json`, `smoke.out`).
+
+- The superseded `spicy_docs-0.54.0+chaos.16c2285ef63e` (the round-5 build of `chaos/2026-10-03-bills-lane-r4` at
+  `16c2285`, SHA-256 `21ece738…1ac8`, receipt `mcp-chaos-2026-10-02/round5/wheel-r5b/`) was removed on October 3,
+  2026, when the round-6 build was adopted. Restore it with `git show b43e86f:vendor/<wheel> > vendor/<wheel>`.
 
 - The superseded SpicyDocs 0.53.0 wheels were removed on October 3, 2026, when 0.54.0+chaos was adopted:
   `0.53.0`, `+printing.11189d72bd29`, `+fec.14b98e9db916`, `+fec.3fc8388b368b`, `+fec.69964fe27c6d`,

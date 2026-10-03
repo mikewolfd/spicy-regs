@@ -1047,6 +1047,30 @@
       "measurement": null
     },
     {
+      "child": "law_code_sections",
+      "child_columns": [
+        "law_number",
+        "usc_title",
+        "usc_section_key",
+        "usc_place"
+      ],
+      "parent": "table3_records",
+      "parent_columns": [
+        "act_key",
+        "usc_title",
+        "usc_section_key",
+        "usc_place"
+      ],
+      "kind": "scope",
+      "reason": "Table III lags enactment (release point 119-73 on 2026-10-03): 517 of the 557 lines are of laws it does not hold yet. The other 40 are lines of held acts the two tables state differently (119-65: 20, 119-60: 18). Without usc_place 569 note or preceding lines met a record of another place; with it, 9. Measured on the published rows of 2026-10-03, both keys and places derived as the laws build now derives them (receipt round6/impl-W/m7/measure.out).",
+      "measured_via": null,
+      "baseline_keys": 2778,
+      "baseline_missing": 557,
+      "floor_pct": 79.9496,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
       "child": "documents",
       "child_columns": [
         "docket_id"
@@ -1092,7 +1116,7 @@
         "docket_id"
       ],
       "kind": "design",
-      "reason": "Raw publisher docket labels (many are agency docket numbers); the normalized bridge is rule_targets.docket_id -> dockets.",
+      "reason": "Printed rows carry raw publisher docket labels (many are agency docket numbers); the normalized bridge is rule_targets.docket_id -> dockets. A row whose link_source is regulations_dot_gov_info carries the Register's own regulations.gov docket id (from 2026-10-03), which names a regulations.gov docket; the baseline predates those rows.",
       "measured_via": null,
       "baseline_keys": 612342,
       "baseline_missing": 592102,
@@ -3580,6 +3604,21 @@
         "parent_table": "laws",
         "parent_columns": [
           "law_id"
+        ]
+      },
+      {
+        "child_columns": [
+          "law_number",
+          "usc_title",
+          "usc_section_key",
+          "usc_place"
+        ],
+        "parent_table": "table3_records",
+        "parent_columns": [
+          "act_key",
+          "usc_title",
+          "usc_section_key",
+          "usc_place"
         ]
       }
     ],

@@ -965,3 +965,34 @@ def test_metadata_the_contract_refuses_is_captured_refused_without_its_fields(sc
     row = _uslm_row(Source(), LAW_119_1, law, shape_law(LAW_119_1, law))
     assert (row["uslm_outcome"], row["uslm_reason"]) == ("captured_refused", "contract_refused")
     assert row["uslm_title"] is None and row["statutes_at_large_cite"] is None
+
+
+def test_held_classification_rows_take_the_bare_key_and_place_from_their_stored_columns(tmp_path, scoped):
+    """M7 (round 6): both OLRC tables key the bare section and state its place, re-derived each run from the stored
+    usc_section (and law_code_sections' action), so held rows are corrected without waiting for OLRC, which served
+    maintenance pages on 2026-10-02 and -03. The rows are published ones (laws generation of 2026-10-03)."""
+    held = {"congress": "119", "session": "1", "observed_at": "2026-09-19T00:00:00Z"}
+    seed(tmp_path, "law_code_sections", [
+        {**held, "seq": "0", "law_id": "119-public-1", "usc_title": "8", "usc_section": "1101", "action": "nt new",
+         "usc_section_key": "1101"},
+        {**held, "seq": "16", "law_id": "119-public-4", "usc_title": "5", "usc_section": "5301", "action": "prec",
+         "usc_section_key": "5301"},
+        {**held, "seq": "820", "law_id": "119-public-37", "usc_title": "38", "usc_section": "5701",
+         "action": "nt prec new", "usc_section_key": "5701"},
+    ])
+    seed(tmp_path, "table3_records", [
+        {"act_key": act, "seq": seq, "congress": "119", "usc_title": title, "usc_section": section,
+         "usc_section_key": section}
+        for act, seq, title, section in (("119-1", "0", "8", "1101 nt"), ("119-21", "193", "26", "prec. 211"),
+                                         ("119-60", "1199", "50", "2538a nts"), ("119-37", "34", "38", "nt. prec. 5701"),
+                                         ("119-60", "7", "10", "13, 13a"))
+    ])
+    _, sections, table3, _ = _build(tmp_path, olrc=StubOlrc(bulk=ConnectionError("stub: maintenance")))
+    placed = {r["seq"]: (r["usc_section_key"], r["usc_place"]) for r in _rows(sections) if r["session"] == "1"}
+    assert placed == {"0": ("1101", "note"), "16": ("5301", "preceding"), "820": ("5701", "note_preceding")}
+    assert all(r["usc_place"] is not None for r in _rows(sections) if r["session"] == "2"), "fresh rows too"
+    assert {(r["act_key"], r["seq"]): (r["usc_section_key"], r["usc_place"]) for r in _rows(table3)} == {
+        ("119-1", "0"): ("1101", "note"), ("119-21", "193"): ("211", "preceding"),
+        ("119-60", "1199"): ("2538a", "note"), ("119-37", "34"): ("5701", "note_preceding"),
+        ("119-60", "7"): (None, None),  # a list names no single section
+    }

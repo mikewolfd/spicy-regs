@@ -48,6 +48,13 @@ new products and leaves held rows, a MODS read among them, alone. On a row it
 holds, the listing fills only a NULL ``report_number``, never a stated one. Its
 legal decisions go to ``gao_decisions`` (:data:`DECISIONS_OUTPUT`), which a run
 without a walk carries forward unchanged.
+
+**GAO's decision pages.** ``decision_pages`` names a local capture of the decision
+pages (:mod:`spicy_regs.sources.gao_decision_pages`), read by reference with the
+walk: each decision's caption completes a number list the listing cut and states
+the day GAO decided it. A page the capture lacks, one with no caption and one the
+reader refuses keep the listing's values, each counted (refusals by reason) in the
+run journal, and the capture is an input of the generation by the receipts read.
 """
 
 from __future__ import annotations
@@ -58,6 +65,7 @@ from contextlib import nullcontext
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from urllib.parse import unquote
 
 if TYPE_CHECKING:
     from spicy_regs.source_evidence import CaptureEvidence
@@ -67,6 +75,7 @@ import pyarrow.parquet as pq
 from loguru import logger
 
 from spicy_regs.sources import gao_govinfo, gao_listing, gao_r_package, r2
+from spicy_regs.sources.gao_decision_pages import DecisionPageCapture
 from spicy_regs.sources.gao_reports import GaoReportsReader
 from spicy_regs.transforms.table_merge import merge_local_prior
 
@@ -104,6 +113,8 @@ _SCHEMA = pa.schema([(c, pa.int64() if c in COUNT_COLUMNS else pa.string()) for 
 DECISIONS_OUTPUT = "gao_decisions.parquet"
 #: The contract's two last columns, read from ``decision_status`` on every merged row each run, never carried.
 DECISION_READINGS = ("outcome", "outcome_rule")
+#: What a decision page's caption states, which a later listing read without the page keeps (``_build_decisions``).
+PAGE_READINGS = ("b_numbers_json", "b_numbers_truncated", "decided_date")
 #: Columns renamed in place, to the name a published prior still spells them with. ``released_date`` was
 #: ``decision_date`` until 2026-10-03 (owner decision): it is the date GAO released the decision, not the date
 #: GAO decided it (B-424477, decided 2026-08-07, released 2026-08-28).
@@ -234,10 +245,12 @@ def _govinfo_additions(
 
 
 def _listing_rows(
-    prior_file: Path | None, rows_now: list[dict], directory: Path, evidence: CaptureEvidence | None
+    prior_file: Path | None, rows_now: list[dict], directory: Path, evidence: CaptureEvidence | None,
+    pages: Path | None = None,
 ) -> tuple[list[dict], list[dict]]:
     """The listing's product rows for ids no row holds yet, held rows whose NULL ``report_number`` it fills, and its
-    decisions. ``rows_now`` (this run's rows) is filled in place; each page read is retained as evidence.
+    decisions, each read against its captured page where ``pages`` names a capture. ``rows_now`` (this run's rows) is
+    filled in place; each listing page read is retained as evidence.
     """
     rows, counts, run = gao_listing.read_listing(directory, evidence)
     added = _fill_only(rows, counts, prior_file=prior_file, held={row["report_id"] for row in rows_now})
@@ -255,7 +268,7 @@ def _listing_rows(
             if row["report_id"] in numbers and row["report_id"] not in now and row.get("report_number") is None:
                 filled.append({**row, "report_number": numbers[row["report_id"]]})
         counts["report_number_filled"] += len(filled)
-    decisions = _decision_rows(run)
+    decisions = _decision_rows(run, pages, evidence)
     counts.update(decision_rows=len(decisions), unnumbered_left_out=sum(o.product_number is None for o in run.others))
     logger.info("GAO reports: GAO listing {} (unfinished scopes left for a later run: {})", dict(counts),
                 list(run.incomplete_scopes))
@@ -310,13 +323,15 @@ def build_gao_reports(
     govinfo_mods: bool = False,
     mods: Any = None,
     listing_run: Path | None = None,
+    decision_pages: Path | None = None,
 ) -> tuple[Path, Path]:
     """Build ``gao_reports.parquet`` (append-only merge with the prior table).
 
     ``govinfo_history`` also walks GovInfo's GAOREPORTS listing, through
     ``govinfo`` when a caller supplies the reader; ``govinfo_mods`` reads the
     next batch of history rows' MODS, through ``mods`` when a caller supplies it;
-    ``listing_run`` also reads a finished walk of GAO's own listing from that directory.
+    ``listing_run`` also reads a finished walk of GAO's own listing from that directory,
+    and ``decision_pages`` a capture of its decisions' pages, read with that walk.
     Returns ``gao_reports.parquet`` and ``gao_decisions.parquet``.
     """
     import duckdb
@@ -348,7 +363,8 @@ def build_gao_reports(
             rows += _mods_reads(prior_file, acquirer, evidence)
     decisions: list[dict] = []
     if listing_run is not None:
-        listed, decisions = _listing_rows(prior_file if have_prior else None, rows, listing_run, evidence)
+        listed, decisions = _listing_rows(prior_file if have_prior else None, rows, listing_run, evidence,
+                                          decision_pages)
         rows += listed
     rows, taken_over = _over_lowest(prior_file if have_prior else None, rows)
     if taken_over:
@@ -380,25 +396,73 @@ def build_gao_reports(
     return out_file, _build_decisions(output_dir, decisions, evidence)
 
 
-def _decision_rows(run: gao_listing.ListingRun) -> list[dict]:
+def _decision_rows(
+    run: gao_listing.ListingRun, pages: Path | None = None, evidence: CaptureEvidence | None = None
+) -> list[dict]:
     """One contract row per listed decision: every B-numbered one and every numbered other (a docket has no B-number).
 
-    Shaped by spicy-docs, with the outcome its sentence states; each listed item carries its first listing page.
+    Shaped by spicy-docs, with the outcome its sentence states; each listed item carries its first listing page. With
+    ``pages``, each decision's page is read from that capture by spicy-docs' caption reader, whose File list replaces
+    the listing's numbers and whose Date fills ``decided_date``; a page not held, without a caption or refused keeps
+    the listing's values. O(listed decisions), one page read each.
     """
     from spicy_docs.interpretation.gao_decisions import decision_outcome
-    from spicy_docs.schemas.gao_decision_tables import shape_gao_decision
+    from spicy_docs.schemas.gao_decision_tables import GAO_SITE, shape_gao_decision
+    from spicy_docs.sources.gao.decision_pages import GaoDecisionPageError, read_decision_caption
 
     listed = [*run.decisions, *(other for other in run.others if other.product_number is not None)]
-    return [shape_gao_decision(item, outcome=decision_outcome(item.status)) for item in listed]
+    capture = None if pages is None else DecisionPageCapture(pages)
+    counts: Counter[str] = Counter()
+    refused: list[dict[str, str]] = []
+    rows = []
+    for item in listed:
+        caption = None
+        if capture is not None:
+            url = GAO_SITE + item.link
+            body = capture.page(url)
+            if body is None:
+                counts["not_held"] += 1
+            else:
+                try:
+                    caption = read_decision_caption(body, product_id=unquote(item.link.removeprefix("/products/")),
+                                                    listed=getattr(item, "decision_numbers", ()))
+                except GaoDecisionPageError as error:
+                    refused.append({"url": url, "reason": error.reason})
+                else:
+                    counts["read" if caption is not None else "no_caption"] += 1
+        rows.append(shape_gao_decision(item, outcome=decision_outcome(item.status), caption=caption))
+    if capture is not None:
+        digest, size = capture.record()
+        logger.info("GAO decisions: pages from capture {} ({}): {} read, {} without a caption, {} not held, {} refused "
+                    "{}", capture.campaign, digest, counts["read"], counts["no_caption"], counts["not_held"],
+                    len(refused), dict(Counter(entry["reason"] for entry in refused)))
+        if evidence:
+            evidence.event("gao-decision-pages", campaign=capture.campaign, receipts_sha256=digest, receipts_bytes=size,
+                           read=counts["read"], no_caption=counts["no_caption"], not_held=counts["not_held"],
+                           refused=refused)
+    return rows
+
+
+def _page_readings(prior_file: Path) -> dict[tuple[str, str], tuple[str, str, str]]:
+    """Each prior row's page reading, by (number, page), where a caption was read; none from a prior predating them."""
+    import duckdb
+
+    if "decided_date" not in pq.read_schema(prior_file).names:
+        return {}
+    rows = duckdb.sql(f"SELECT decision_number, url, {', '.join(PAGE_READINGS)} FROM read_parquet('{prior_file}') "
+                      "WHERE decided_date IS NOT NULL").fetchall()
+    return {(number, url): tuple(values) for number, url, *values in rows}
 
 
 def _build_decisions(output_dir: Path, decisions: list[dict], evidence: CaptureEvidence | None = None) -> Path:
     """``gao_decisions.parquet``: the prior table with this run's listed decisions over it, every outcome read again.
 
     The merge (on number and page) carries the stated columns; a prior that spells ``released_date`` as
-    ``decision_date`` (before 2026-10-03) is read renamed. ``outcome`` and ``outcome_rule`` are then read from each
-    merged row's ``decision_status`` by spicy-docs' closed table, so a new table version reaches every held row
-    without a re-read of the walk; sentences it does not read are counted in the run journal. O(rows).
+    ``decision_date`` (before 2026-10-03) is read renamed. A listed decision this run read no caption for keeps the
+    page reading a prior row holds (:data:`PAGE_READINGS`): the listing never restates a page's File list or Date, so
+    a later walk without the capture does not fall back to a cut list and no date. ``outcome`` and ``outcome_rule`` are
+    then read from each merged row's ``decision_status`` by spicy-docs' closed table, so a new table version reaches
+    every held row without a re-read of the walk; sentences it does not read are counted in the run journal. O(rows).
     """
     import duckdb
     from spicy_docs.interpretation.gao_decisions import GAO_OUTCOME_RULE, decision_outcome, unmapped_sentences
@@ -411,7 +475,12 @@ def _build_decisions(output_dir: Path, decisions: list[dict], evidence: CaptureE
     new_file = output_dir / "_gao_decisions_new.parquet"
     merged_file = output_dir / "_gao_decisions_merged.parquet"
     have_prior = prior_file.exists() or r2.download(DECISIONS_OUTPUT, prior_file)
+    read = _page_readings(prior_file) if have_prior else {}
     rows = [{column: row[column] for column in stated} for row in decisions]
+    for row in rows:
+        held = read.get((row["decision_number"], row["url"])) if row["decided_date"] is None else None
+        if held is not None:
+            row.update(zip(PAGE_READINGS, held, strict=True))
     pq.write_table(pa.Table.from_pylist(rows, schema=schema), new_file, compression="zstd")
     con = duckdb.connect()
     con.execute("SET preserve_insertion_order=false")

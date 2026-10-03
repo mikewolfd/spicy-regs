@@ -40,8 +40,9 @@ def recorded_reads() -> Iterator[dict[str, dict]]:
     """Note every table :func:`download_from_r2` fetches while active, at the bytes fetched.
 
     A managed table is noted by its pin: digest, size, family and generation. Any other object is noted by the digest
-    and size of the file written. A read that found nothing is not noted. What a caller then does with the bytes,
-    including failing to use them, does not change the note: the build read them.
+    and size of the file written, and an input read outside the bucket by what :func:`note_read` is given. A read that
+    found nothing is not noted. What a caller then does with the bytes, including failing to use them, does not change
+    the note: the build read them.
     """
     reads: dict[str, dict] = {}
     token = _reads.set(reads)
@@ -49,6 +50,16 @@ def recorded_reads() -> Iterator[dict[str, dict]]:
         yield reads
     finally:
         _reads.reset(token)
+
+
+def note_read(key: str, *, sha256: str, byte_size: int) -> None:
+    """Note a read of ``key`` at the bytes ``sha256`` and ``byte_size`` name, while :func:`recorded_reads` is active.
+
+    For an input a build reads outside the bucket, such as a local capture read by reference; ``key`` names it.
+    """
+    reads = _reads.get()
+    if reads is not None:
+        reads[key] = {"sha256": sha256, "byteSize": byte_size}
 
 
 def _note_read(remote_key: str, member, owner, local_path: Path) -> None:
@@ -60,8 +71,8 @@ def _note_read(remote_key: str, member, owner, local_path: Path) -> None:
                              "family": owner[0], "artifactDigest": owner[1]["artifactDigest"]}
     else:
         with local_path.open("rb") as stream:
-            reads[remote_key] = {"sha256": "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest(),
-                                 "byteSize": local_path.stat().st_size}
+            note_read(remote_key, sha256="sha256:" + hashlib.file_digest(stream, "sha256").hexdigest(),
+                      byte_size=local_path.stat().st_size)
 
 
 def download_from_r2(remote_key: str, local_path: Path, *, bare: bool = False) -> bool:

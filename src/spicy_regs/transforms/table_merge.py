@@ -30,6 +30,19 @@ ReplacementScope = tuple[str, Collection[str]] | tuple[tuple[str, ...], Collecti
 PARTITION_MEMBER = "part-000000.parquet"
 
 
+def set_column(table: pa.Table, name: str, values: Sequence[str | None]) -> pa.Table:
+    """``table`` with ``name`` holding ``values`` as VARCHAR, in its place, or appended where the table lacks it."""
+    column, index = pa.array(values, type=pa.string()), table.schema.get_field_index(name)
+    return table.set_column(index, name, column) if index >= 0 else table.append_column(name, column)
+
+
+def write_in_place(table: pa.Table, path: Path) -> None:
+    """Replace the merged table at ``path`` with ``table``, its file metadata (checkpoints) kept with its schema."""
+    temporary = path.with_suffix(".tmp.parquet")
+    pq.write_table(table, temporary, compression="zstd", row_group_size=50_000)
+    temporary.replace(path)
+
+
 def merge_local_prior(
     con,
     *,

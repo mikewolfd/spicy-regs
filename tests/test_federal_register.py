@@ -254,3 +254,86 @@ def test_a_prior_that_predates_topics_merges_and_fresh_rows_carry_them(tmp_path)
     by_number = {row["document_number"]: row for row in table.to_pylist()}
     assert by_number["P-old"]["topics_json"] is None
     assert by_number["F-again"]["topics_json"] == '["Air pollution control", "Reporting and recordkeeping requirements"]'
+
+
+# Round 6, M2: the Register's own regulations.gov link (spicy-docs 0.54.0+chaos.a1b91ce28a2a).
+
+def _linked_records():
+    """Seven real Register records: every shape of regulations_dot_gov_info, and its docket printed three ways."""
+    return json.loads((Path(__file__).parent / "fixtures/federal_register/regulations-dot-gov-info.json").read_text())
+
+
+def test_each_run_re_reads_the_last_120_days_so_the_relayed_comment_count_is_not_publication_weeks(tmp_path):
+    """The Register re-checks regulations.gov until about the comment period's close (median 32 days after
+    publication, 99th percentile about 91; impl-W/m2/overlap_days.out), so a week's overlap froze the count early."""
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    pq.write_table(pa.Table.from_pylist([{"document_number": "2026-19936", "publication_date": "2026-09-30"}]),
+                   tmp_path / "_fr_prior.parquet")
+    asked = []
+    build_federal_register(tmp_path, documents=lambda start: asked.append(start) or iter(()),
+                           download_prior=lambda k, p: False)
+    assert asked == [date(2026, 9, 30) - timedelta(days=120)]
+
+
+def _links(tmp_path, records):
+    import pyarrow.parquet as pq
+
+    from spicy_regs.transforms.build_fr_docket_links import build_fr_docket_links
+
+    build_federal_register(tmp_path, documents=lambda start: iter(records), download_prior=lambda k, p: False)
+    return pq.read_table(build_fr_docket_links(tmp_path)).to_pylist()
+
+
+def test_each_document_docket_pair_is_one_row_that_says_which_statement_carries_it(tmp_path):
+    """Printed labels, the Register's regulations.gov docket, or both: one row per pair, never one per statement.
+
+    A printed label carries the Register's docket when it is that id or SpicyDocs' normalizer reads that id from
+    it (E8-3813 prints "Docket No. FAA-2007-29334"). A docket is never read off a document id (2026-19200 states
+    FERC-2026-5579-0001 and no docket).
+    """
+    rows = _links(tmp_path, _linked_records())
+    got = sorted((r["document_number"], r["docket_id"], r["docket_source_ordinal"], r["link_source"]) for r in rows)
+    assert got == [
+        ("2016-04346", "NRC-2016-0040", 0, "both"),
+        ("2026-12696", "FNA-2026-0034", None, "regulations_dot_gov_info"),
+        ("2026-12696", "FNS-2026-0595", 0, "printed"),
+        ("2026-19200", "Docket No. IC26-36-000", 0, "printed"),
+        ("E8-3813", "AD 2008-05-04", 3, "printed"),
+        ("E8-3813", "Amendment 39-15398", 2, "printed"),
+        ("E8-3813", "Directorate Identifier 2006-NM-268-AD", 1, "printed"),
+        ("E8-3813", "Docket No. FAA-2007-29334", 0, "both"),
+        ("E8-4997", "Docket ID No. EPA-HQ-OW-2004-0015", 2, "both"),
+        ("E8-4997", "EPA-HQ-OW-2004-0015", 0, "both"),
+        ("E8-4997", "FRL-8541-7", 1, "printed"),
+    ]
+    fna = next(r for r in rows if r["docket_id"] == "FNA-2026-0034")
+    assert (fna["publication_date"], fna["normalized_docket_candidates_json"]) == ("2026-06-24", '["FNA-2026-0034"]')
+
+
+def test_a_register_table_read_before_the_link_was_requested_links_its_printed_labels_only(tmp_path):
+    """A held row whose regulations_dot_gov_info is NULL (not read) adds no row: absence of a read is not a link."""
+    import pyarrow.parquet as pq
+
+    from spicy_regs.transforms.build_fr_docket_links import build_fr_docket_links
+
+    build_federal_register(tmp_path, documents=lambda start: iter(_linked_records()), download_prior=lambda k, p: False)
+    table = pq.read_table(tmp_path / "federal_register.parquet")
+    pq.write_table(table.drop_columns([c for c in table.column_names if c.startswith("regulations_dot_gov")]),
+                   tmp_path / "federal_register.parquet")
+    rows = pq.read_table(build_fr_docket_links(tmp_path)).to_pylist()
+    assert {r["link_source"] for r in rows} == {"printed"} and len(rows) == 10
+
+
+def test_the_rulemaking_stages_read_the_printed_statement_only(tmp_path):
+    """Which dockets the rulemaking stages trust is unchanged: the Register's regulations.gov docket is a new
+    statement, and whether the stages read it is a later decision (scout C, M2 owner call 2)."""
+    from spicy_regs.ontology.federal_register import FederalRegisterIndex
+
+    _links(tmp_path, _linked_records())
+    index = FederalRegisterIndex(tmp_path / "federal_register.parquet")
+    dockets = {(reference["document_number"], docket)
+               for docket, reference in index.docket_links(tmp_path / "fr_docket_links.parquet")}
+    assert ("2026-12696", "FNA-2026-0034") not in dockets
+    assert {("2026-12696", "FNS-2026-0595"), ("2016-04346", "NRC-2016-0040")} <= dockets

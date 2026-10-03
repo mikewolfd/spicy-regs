@@ -58,7 +58,11 @@ longer lists, is published, its whole row set replaced. A failed read, or one
 the retirement guard or the reader refuses, publishes nothing for Table III and
 keeps every checkpoint, while ``laws`` and ``law_code_sections`` publish as
 usual; a refusal is journaled, and the nightly
-``scripts/check_source_refusals.py`` fails on it. A ``401``/``403`` from the
+``scripts/check_source_refusals.py`` fails on it. Whatever a run read, every
+merged row of both classification tables has ``usc_section_key`` and
+``usc_place`` derived again from its stored ``usc_section`` (and
+``law_code_sections.action``) by spicy-docs' ``usc_section_place``, so a
+change of that rule reaches held rows without a publisher read. A ``401``/``403`` from the
 list or PLAW route aborts the run. OLRC's is a journaled refusal with reason
 :data:`ACCESS_REFUSED` (the routes are keyless, so it is the publisher blocking
 the read, as Akamai did for the Table III zip on 2026-10-02 and -03); when it
@@ -87,6 +91,7 @@ from spicy_docs.schemas.law_tables import (
     shape_law_code_section,
     shape_law_section,
     shape_table3_record,
+    usc_section_place,
 )
 from spicy_docs.schemas.tables import TableContractError, digest, json_column
 from spicy_docs.sources.congress.listing import LIST_ROUTES, MAX_LIMIT, CongressListingReader, list_route_url
@@ -109,7 +114,13 @@ from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key
 from spicy_regs.transforms.congress_scope import congresses_from_env
 from spicy_regs.transforms.congress_walk import ListingSource, PerRunCap, walk_route
 from spicy_regs.transforms.read_checkpoints import checkpoint_metadata, read_checkpoints
-from spicy_regs.transforms.table_merge import merge_contract_table, published_table, retired_rows
+from spicy_regs.transforms.table_merge import (
+    merge_contract_table,
+    published_table,
+    retired_rows,
+    set_column,
+    write_in_place,
+)
 
 if TYPE_CHECKING:
     from spicy_regs.source_evidence import CaptureEvidence
@@ -763,6 +774,23 @@ def _rows_digest(rows: list[dict]) -> str | None:
     return digest(json_column([{name: value for name, value in row.items() if name != "observed_at"} for row in rows]))
 
 
+def _rederive_places(path: Path, *, action: bool) -> Path:
+    """Every row's ``usc_section_key`` and ``usc_place`` again, from its stored section (and action); O(rows).
+
+    Table III passes no action: it prints the place inside the section. Each distinct pair is read once.
+    """
+    import pyarrow.parquet as pq
+
+    table = pq.read_table(path)
+    sections = table["usc_section"].to_pylist()
+    actions = table["action"].to_pylist() if action else [None] * len(sections)
+    pairs = list(zip(sections, actions, strict=True))
+    derived = {pair: usc_section_place(*pair) for pair in set(pairs)}
+    table = set_column(table, "usc_section_key", [derived[pair][0] for pair in pairs])
+    write_in_place(set_column(table, "usc_place", [derived[pair][1] for pair in pairs]), path)
+    return path
+
+
 def build_laws(
     output_dir: Path,
     *,
@@ -816,11 +844,13 @@ def build_laws(
 
     return (
         merge_contract_table(output_dir, NAME, law_rows, prior_present=priors[NAME] is not None),
-        merge_contract_table(output_dir, CODE_SECTIONS, section_rows, prior_present=priors[CODE_SECTIONS] is not None,
-                             replace_parents=(("congress", "session"), sessions)),
-        merge_contract_table(output_dir, TABLE3, table3.rows, prior_present=priors[TABLE3] is not None,
-                             replace_parents=("act_key", evaluated),
-                             parquet_metadata=checkpoint_metadata(priors[TABLE3], "laws-table3", checkpoints.values())),
+        _rederive_places(merge_contract_table(output_dir, CODE_SECTIONS, section_rows,
+                                              prior_present=priors[CODE_SECTIONS] is not None,
+                                              replace_parents=(("congress", "session"), sessions)), action=True),
+        _rederive_places(merge_contract_table(output_dir, TABLE3, table3.rows, prior_present=priors[TABLE3] is not None,
+                                              replace_parents=("act_key", evaluated),
+                                              parquet_metadata=checkpoint_metadata(priors[TABLE3], "laws-table3",
+                                                                                   checkpoints.values())), action=False),
         merge_contract_table(output_dir, TEXT_SECTIONS, text_sections, prior_present=priors[TEXT_SECTIONS] is not None,
                              replace_parents=("law_id", text_evaluated)),
     )

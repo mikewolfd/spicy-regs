@@ -27,11 +27,13 @@ def _product(product_id: str, *, released: str | None = "2026-08-05", published:
 
 def _decision(link: str, number: str | None, *, numbers: tuple[str, ...] = (), label: str = "Bid Protest Decision",
               heading: str = "Acme Corp.", released: str | None = "2026-08-18",
-              topics: tuple[str, ...] = ("Bid Protest Decision",), status: str | None = None) -> SimpleNamespace:
-    """SpicyDocs' ``GaoListedDecision``, with the outcome sentence and first listing page it carries from 0.54.0."""
+              topics: tuple[str, ...] = ("Bid Protest Decision",), status: str | None = None,
+              cut: bool = False) -> SimpleNamespace:
+    """SpicyDocs' ``GaoListedDecision``, with the outcome sentence and first listing page it carries from 0.54.0, and
+    from round 6 whether the listing cut its number list."""
     return SimpleNamespace(link=link, product_number=number, decision_numbers=numbers or ((number,) if number else ()),
                            label=label, heading=heading, published=None, released=released, topics=topics,
-                           scopes=("2026-08",), status=status, listing_page=LISTING_PAGE)
+                           scopes=("2026-08",), status=status, listing_page=LISTING_PAGE, decision_numbers_cut=cut)
 
 
 def _other(link: str, number: str | None, *, label: str = "Legal Other Decision",

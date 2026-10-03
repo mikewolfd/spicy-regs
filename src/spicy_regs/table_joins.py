@@ -258,6 +258,14 @@ JOINS: tuple[Join, ...] = (
     _join("law_sections", "law_id", "laws", "law_id", 0, 0, "empty",
           "Sections from the law's own XML; public population not yet baselined."),
     _join("law_code_sections", "law_id", "laws", "law_id", 70, 0),
+    # The contract's own sentence: both OLRC tables key the bare section, so they meet on title, key and place.
+    _join("law_code_sections", ("law_number", "usc_title", "usc_section_key", "usc_place"),
+          "table3_records", ("act_key", "usc_title", "usc_section_key", "usc_place"), 2_778, 557, "scope",
+          "Table III lags enactment (release point 119-73 on 2026-10-03): 517 of the 557 lines are of laws it does not "
+          "hold yet. The other 40 are lines of held acts the two tables state differently (119-65: 20, 119-60: 18). "
+          "Without usc_place 569 note or preceding lines met a record of another place; with it, 9. Measured on the "
+          "published rows of 2026-10-03, both keys and places derived as the laws build now derives them (receipt "
+          "round6/impl-W/m7/measure.out)."),
     # Regulations.gov and the Federal Register.
     _join("documents", "docket_id", "dockets", "docket_id", 278_651, 114,
           reason="The mirror lacks these dockets' records, and fill-docket-gaps asked the Regulations.gov API for "
@@ -269,8 +277,10 @@ JOINS: tuple[Join, ...] = (
           reason="Asked of the Regulations.gov API by fill-docket-gaps like documents' orphans: 6 answer 404 and 22 "
                  "answer 400 Invalid ID (legacy -RULEMAKING/-NONRULEMAKING ids)."),
     _join("fr_docket_links", "docket_id", "dockets", "docket_id", 612_342, 592_102, "design",
-          "Raw publisher docket labels (many are agency docket numbers); the normalized bridge is "
-          "rule_targets.docket_id -> dockets."),
+          "Printed rows carry raw publisher docket labels (many are agency docket numbers); the normalized bridge is "
+          "rule_targets.docket_id -> dockets. A row whose link_source is regulations_dot_gov_info carries the "
+          "Register's own regulations.gov docket id (from 2026-10-03), which names a regulations.gov docket; the "
+          "baseline predates those rows."),
     _join("rule_targets", "docket_id", "dockets", "docket_id", 143_012, 83,
           reason="Normalized FR-to-Regulations.gov bridge from the materialized rulemaking snapshot. Each orphan "
                  "is one fill-docket-gaps asked for: 16 answer 404 and 67 answer 400 Invalid ID."),

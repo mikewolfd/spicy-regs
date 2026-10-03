@@ -42,9 +42,14 @@ OUTPUT = "federal_register.parquet"
 # The oldest documents the API serves. A backfill with no prior table starts here.
 FR_EPOCH = date(1994, 1, 1)
 
-# Re-scan this many days before the last stored publication_date on each run, so
-# documents added/corrected after their nominal publication date are picked up.
-OVERLAP_DAYS = 7
+# Re-scan this many days before the last stored publication_date on each run, so documents added or corrected after
+# their nominal publication date are picked up, and so regulations_dot_gov_comments_count is the Register's latest
+# relay rather than its publication-week one: the Register re-checks regulations.gov until about the comment period's
+# close. Measured 2026-10-03 (round6/impl-W/m2/overlap_days.out): since 2016 a period closes a median 32 days after
+# publication (90th percentile 62, 99th about 91; 487 of 96,442 later than 120); of the March 2024 documents the
+# Register relayed a count for, 64 of 325 were last checked within 7 days of publication and 269 within 120. About
+# 12 more keyless requests a day.
+OVERLAP_DAYS = 120
 
 
 def published_columns() -> tuple[str, ...]:

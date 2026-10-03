@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from importlib import import_module
+from pathlib import Path
 
 from spicy_docs.interpretation.gao_decisions import GAO_OUTCOME_RULE
 from spicy_docs.schemas import TABLE_CONTRACTS
@@ -72,7 +74,7 @@ def _repair_row(report_id: str) -> dict:
 
 
 def _run(tmp_path, monkeypatch, *, prior=None, feed=(), history=None, listed=None, evidence=None, decided=None,
-         with_decisions=False, others=()):
+         with_decisions=False, others=(), pages=None):
     """One build over a local prior and a stubbed feed; ``history`` is the GovInfo listing and ``listed`` GAO's own
     listing's products, each None for no read."""
     if prior is not None:
@@ -97,7 +99,8 @@ def _run(tmp_path, monkeypatch, *, prior=None, feed=(), history=None, listed=Non
     monkeypatch.setattr(module.gao_listing, "read_listing", read_listing)
     out = build_gao_reports(tmp_path, govinfo_history=history is not None,
                             govinfo=ListingReader(history) if history is not None else None,
-                            listing_run=tmp_path / "walk" if listed is not None else None, evidence=evidence)
+                            listing_run=tmp_path / "walk" if listed is not None else None, evidence=evidence,
+                            decision_pages=pages)
     out, decisions = out
     table = pq.read_table(out)
     assert table.column_names == list(COLUMNS)
@@ -224,6 +227,8 @@ def test_decisions_publish_under_the_spicy_docs_contract_with_the_outcome_their_
         "title": "Acme Corp.", "released_date": "2026-08-18", "topics_json": '["Bid Protest Decision"]',
         "url": "https://www.gao.gov/products/b-424129.2", "listing_page": LISTING_PAGE, "source": "gao_listing",
         "decision_status": "We deny the protest.", "outcome": "denied", "outcome_rule": GAO_OUTCOME_RULE,
+        # The listing's own values: its list is whole, and only a decision page states the decided day.
+        "b_numbers_truncated": "false", "decided_date": None,
     }
     assert (by_number["2020-02"]["b_numbers_json"], by_number["2020-02"]["outcome"]) == ("[]", None)
 
@@ -298,17 +303,19 @@ def test_a_listing_read_is_journaled_with_its_scopes_and_counts(tmp_path, monkey
     assert fields["rows"] == 2 and fields["already_held"] == 1 and fields["complete_scopes"] == 1
 
 
-def test_the_rollup_reads_a_listing_walk_only_when_one_is_named(tmp_path, monkeypatch):
+def test_the_rollup_reads_a_listing_walk_and_a_page_capture_only_when_one_is_named(tmp_path, monkeypatch):
     from spicy_regs.pipelines.rollups import gao_reports as rollup
 
     calls = []
-    monkeypatch.setattr(rollup, "build_gao_reports", lambda *_, **kwargs: calls.append(kwargs["listing_run"]))
+    monkeypatch.setattr(rollup, "build_gao_reports",
+                        lambda *_, **kwargs: calls.append((kwargs["listing_run"], kwargs["decision_pages"])))
     assert rollup.GaoReportsRollup.outputs == ("gao_reports.parquet", "gao_decisions.parquet")
     assert rollup.GaoReportsRollup.added_tables == ("gao_decisions.parquet",)
-    for value in ("", str(tmp_path / "walk")):
-        monkeypatch.setenv("GAO_LISTING_RUN", value)
+    for walk, pages in (("", ""), (str(tmp_path / "walk"), ""), (str(tmp_path / "walk"), str(CAPTURE))):
+        monkeypatch.setenv("GAO_LISTING_RUN", walk)
+        monkeypatch.setenv("GAO_DECISION_PAGES", pages)
         rollup.GaoReportsRollup(output_dir=tmp_path).build(tmp_path)
-    assert calls == [None, tmp_path / "walk"]
+    assert calls == [(None, None), (tmp_path / "walk", None), (tmp_path / "walk", CAPTURE)]
 
 
 def test_the_rollup_walks_govinfo_only_when_its_flag_says_so(tmp_path, monkeypatch):
@@ -322,3 +329,90 @@ def test_the_rollup_walks_govinfo_only_when_its_flag_says_so(tmp_path, monkeypat
         monkeypatch.setenv("GAO_GOVINFO_MODS", mods)
         rollup.GaoReportsRollup(output_dir=tmp_path).build(tmp_path)
     assert calls == [(False, False), (True, False), (False, True)]
+
+
+# Round 6 (L2 and the owner's instruction): every decision's page, read by reference from the local capture.
+
+CAPTURE = Path(__file__).parent / "fixtures/gao_decision_pages"
+
+
+def _captured_decisions():
+    """The four captured decisions as GAO's listing states them (numbers split by spicy-docs, with its cut flag)."""
+    from spicy_docs.sources.gao.month_in_review import decision_numbers
+
+    from tests.test_gao_listing import _decision
+
+    listed = []
+    for line in (CAPTURE / "targets.jsonl").read_text().splitlines():
+        target = json.loads(line)
+        numbers, cut = decision_numbers(target["decision_number"])
+        listed.append(_decision(target["url"].removeprefix("https://www.gao.gov"), target["decision_number"],
+                                numbers=numbers, cut=cut, released=target["released_date"]))
+    return listed
+
+
+def _by_number(rows):
+    return {row["decision_number"].split(",")[0]: row for row in rows}
+
+
+def test_a_decision_takes_its_whole_list_and_decided_day_from_its_captured_page(tmp_path, monkeypatch):
+    """The caption's File list completes a list the listing cut and its Date is the day GAO decided; a page with no
+    caption, a refused page and a page never captured keep the listing's values."""
+    _, rows = _run(tmp_path, monkeypatch, listed=[], decided=_captured_decisions(), with_decisions=True,
+                   pages=CAPTURE)
+    got = {number: (len(json.loads(row["b_numbers_json"])), row["b_numbers_truncated"], row["decided_date"])
+           for number, row in _by_number(rows).items()}
+    assert got == {
+        "B-403174": (8, "false", "2010-10-07"),  # the listing kept 7; the page adds B-403649
+        "B-412940": (22, "true", None),  # its page carries no decision text, so the list stays as cut
+        "B-420269": (2, "false", None),  # File 'B-420269.1, 420269.2' is refused
+        "B-419305.3": (1, "false", None),  # Zyte answered 520 on every attempt: no page held
+    }
+    assert json.loads(_by_number(rows)["B-403174"]["b_numbers_json"])[-1] == "B-403649"
+
+
+def test_the_run_journal_names_the_capture_and_each_page_it_could_not_read(tmp_path, monkeypatch):
+    from spicy_regs.source_evidence import CaptureEvidence
+
+    evidence = CaptureEvidence(tmp_path / "evidence", "gao-reports")
+    _run(tmp_path, monkeypatch, listed=[], decided=_captured_decisions(), with_decisions=True, pages=CAPTURE,
+         evidence=evidence)
+    journal = [json.loads(line) for line in (evidence.artifact_dir / "journal.jsonl").read_text().splitlines()]
+    [event] = [entry for entry in journal if entry["event"] == "gao-decision-pages"]
+    assert (event["campaign"], event["read"], event["no_caption"], event["not_held"]) == (CAPTURE.name, 1, 1, 1)
+    assert event["refused"] == [{"url": "https://www.gao.gov/products/b-420269%2Cb-420269.2",
+                                 "reason": "unreadable-file-line"}]
+
+
+def test_the_capture_is_an_input_of_the_generation_by_the_receipts_it_read(tmp_path, monkeypatch):
+    """Recorded through the read ledger, as every other input is: its campaign, and a digest over the receipt lines
+    of the pages read (so a later retry appending to receipts.jsonl does not move it)."""
+    import hashlib
+
+    held = sorted((json.loads(line)["url"], line) for line in (CAPTURE / "receipts.jsonl").read_text().splitlines()
+                  if json.loads(line).get("status_code") == 200)
+    read = "".join(line + "\n" for _, line in held).encode()
+    with module.r2.recorded_reads() as reads:
+        _run(tmp_path, monkeypatch, listed=[], decided=_captured_decisions(), with_decisions=True, pages=CAPTURE)
+    assert reads == {CAPTURE.name: {"sha256": "sha256:" + hashlib.sha256(read).hexdigest(), "byteSize": len(read)}}
+
+
+def test_without_the_capture_a_run_keeps_the_listings_values(tmp_path, monkeypatch):
+    _, rows = _run(tmp_path, monkeypatch, listed=[], decided=_captured_decisions(), with_decisions=True)
+    got = {number: (len(json.loads(row["b_numbers_json"])), row["b_numbers_truncated"], row["decided_date"])
+           for number, row in _by_number(rows).items()}
+    assert got == {"B-403174": (7, "true", None), "B-412940": (22, "true", None), "B-420269": (2, "false", None),
+                   "B-419305.3": (1, "false", None)}
+
+
+def test_a_walk_without_the_capture_keeps_what_an_earlier_run_read_from_a_page(tmp_path, monkeypatch):
+    """A page's File list and Date are facts the listing never restates, so a later walk that lists the decision
+    again without the capture keeps them rather than falling back to the listing's cut list and a NULL day."""
+    _run(tmp_path, monkeypatch, listed=[], decided=_captured_decisions(), with_decisions=True, pages=CAPTURE)
+    (tmp_path / "gao_reports.parquet").rename(tmp_path / "_gao_prior.parquet")
+    (tmp_path / "gao_decisions.parquet").rename(tmp_path / "_gao_decisions_prior.parquet")
+    _, rows = _run(tmp_path, monkeypatch, listed=[], decided=_captured_decisions(), with_decisions=True)
+    row = _by_number(rows)["B-403174"]
+    assert (len(json.loads(row["b_numbers_json"])), row["b_numbers_truncated"], row["decided_date"]) == (
+        8, "false", "2010-10-07")
+    assert _by_number(rows)["B-412940"]["b_numbers_truncated"] == "true"

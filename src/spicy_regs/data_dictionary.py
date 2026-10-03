@@ -596,8 +596,8 @@ DERIVED_SCHEMAS: dict[str, list[tuple[str, str]]] = {
         ("document_type", "VARCHAR"),
         ("document_count", "BIGINT"),
     ],
-    # Built by build_fr_docket_links: federal_register.docket_ids_json exploded to
-    # one row per (docket_id, document_number, publication_date), carrying FR display columns.
+    # Built by build_fr_docket_links: one row per document–docket pair the Register prints in
+    # docket_ids_json or states in its regulations.gov link, carrying FR display columns.
     "fr_docket_links": [
         ("docket_id", "VARCHAR"),
         ("docket_source_ordinal", "BIGINT"),
@@ -618,6 +618,7 @@ DERIVED_SCHEMAS: dict[str, list[tuple[str, str]]] = {
         ("html_url", "VARCHAR"),
         ("pdf_url", "VARCHAR"),
         ("executive_order_number", "VARCHAR"),
+        ("link_source", "VARCHAR"),
     ],
     # Built by build_discovery_signals from documents.parquet; CURRENT_DATE-relative,
     # so rows change on every rebuild. One row per spiking agency.

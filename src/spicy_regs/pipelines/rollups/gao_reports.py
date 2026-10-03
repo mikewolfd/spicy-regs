@@ -9,6 +9,9 @@ listing to a run; ``GAO_GOVINFO_MODS=true`` reads the next batch of those rows'
 MODS. ``GAO_LISTING_RUN=<directory>`` adds a finished SpicyDocs walk of GAO's Month
 in Review and Annual Index, made outside the rollup and read from disk; its legal
 decisions go to ``gao_decisions.parquet``, which runs without a walk carry forward.
+``GAO_DECISION_PAGES=<directory>`` adds, to such a run, a local capture of those
+decisions' pages, read by reference: each page's caption completes a cut number list
+and states the decided day (``spicy_regs.sources.gao_decision_pages``).
 """
 
 import os
@@ -37,6 +40,7 @@ class GaoReportsRollup(RollupPipeline):
             govinfo_history=flag_env("GAO_GOVINFO_HISTORY"),
             govinfo_mods=flag_env("GAO_GOVINFO_MODS"),
             listing_run=Path(listing) if (listing := os.environ.get("GAO_LISTING_RUN", "").strip()) else None,
+            decision_pages=Path(pages) if (pages := os.environ.get("GAO_DECISION_PAGES", "").strip()) else None,
         )
 
 

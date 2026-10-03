@@ -7,6 +7,7 @@ Every expected product id below was read from its gao.gov product page on
 from __future__ import annotations
 
 import pytest
+from spicy_docs.sources.gao.native import MAX_PRODUCT_ID_LENGTH
 
 from spicy_regs.sources import gao_govinfo
 from spicy_regs.sources.gao_govinfo import GaoGovInfoError, is_report, read_history, report_id, report_rows, report_type
@@ -44,8 +45,8 @@ def test_a_package_id_maps_to_the_gao_product_id(package_id, product_id):
     [
         "CRPT-118hrpt1",
         "GAOREPORTS-GAO-IMTEC-11_1_1",
-        # SpicyDocs' product-id grammar is the one in force, its 128-character bound included.
-        "GAOREPORTS-" + "A" * 129,
+        # SpicyDocs' product-id grammar is the one in force, its length bound included (256 from round 6).
+        "GAOREPORTS-" + "A" * (MAX_PRODUCT_ID_LENGTH + 1),
     ],
 )
 def test_a_package_outside_the_collection_or_without_a_product_reading_refuses(package_id):

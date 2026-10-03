@@ -20,7 +20,7 @@ One committee or subcommittee activity a bill's BILLSTATUS document lists: the c
 | `bill_id` | `VARCHAR` | The bill whose committee this activity belongs to. |
 | `system_code` | `VARCHAR` | The publisher's identifier of the committee or subcommittee that did it (ssju00). |
 | `activity_name` | `VARCHAR` | The publisher's activity name exactly as written, in either capitalisation it uses (Reported By and Reported by, Referred To and Referred to): Referred To, Markup By, Reported By, Discharged From, Hearings By (full committee), Hearings By (subcommittee), Reported Original Measure, Bills of Interest - Exchange of Letters, Unknown. |
-| `activity_date` | `VARCHAR` | The publisher's timestamp for it, as written (2026-05-11T20:30:49Z); empty where the item states none, as every Bills of Interest - Exchange of Letters item does. |
+| `activity_date` | `VARCHAR` | The publisher's timestamp for it, as written (2026-05-11T20:30:49Z), in UTC: an evening step can fall on the next day here while bill_actions.action_date keeps the day the publisher states for the action (119-hr-1703's discharge: 2026-10-01T03:17:50Z here, 2026-09-30 there). Empty where the item states none, as every Bills of Interest - Exchange of Letters item does. |
 | `occurrence` | `VARCHAR` | 1 for an activity's first listing under this committee, 2 for an exact repeat (same name and timestamp), and so on: the publisher lists some referrals twice (119-s-545). |
 | `parent_system_code` | `VARCHAR` | The parent committee's system code when the activity is a subcommittee's. |
 | `snapshot_update_date` | `VARCHAR` | The parent document's updateDate, so a committee's activities are versioned with its bill. |

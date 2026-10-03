@@ -41,13 +41,28 @@ class Route:
     grain: str = "one target record"
     #: Columns ``predicate`` reads that an older generation of ``table`` may lack; lacking one, every keyed row counts.
     predicate_columns: tuple[str, ...] = ()
+    #: A second way a row matches a key: SQL over the row ``t`` and the key ``r.lookup_key``, true where the key falls
+    #: inside a range the row states. A row the key matches this way only is stated as such (``match_basis``).
+    range_sql: str | None = None
+    #: Columns ``range_sql`` reads that an older generation may lack; lacking one, a key matches ``key_sql`` alone.
+    range_columns: tuple[str, ...] = ()
 
 
 ROUTES = {
     "bill_number": Route("congress_bills", "bill_id", ("bill_id",)),
     "public_law": Route("laws", "law_id", ("congress", "law_type", "number")),
+    # A pinpoint inside a law: its first page, or a page within its range where laws states the last one (M8).
     "statutes_at_large": Route("laws", "statutes_at_large_volume || '-' || statutes_at_large_page",
-                               ("congress", "law_type", "number")),
+                               ("congress", "law_type", "number"),
+                               grain="a law, by the first page of its Statutes at Large citation or, where laws states "
+                                     "its last page, by a page within that range in the cited volume (match_basis "
+                                     "says which); a page two laws share reads ambiguous, both listed",
+                               range_sql="t.statutes_at_large_last_page IS NOT NULL "
+                                         "AND split_part(r.lookup_key, '-', 1) = t.statutes_at_large_volume "
+                                         "AND TRY_CAST(split_part(r.lookup_key, '-', 2) AS INTEGER) "
+                                         "BETWEEN TRY_CAST(t.statutes_at_large_page AS INTEGER) "
+                                         "AND TRY_CAST(t.statutes_at_large_last_page AS INTEGER)",
+                               range_columns=("statutes_at_large_last_page",)),
     "usc_section": Route("law_code_sections", "usc_title || '-' || usc_section_key", ("congress", "session", "seq"),
                          "many", grain="OLRC classification rows naming this section; not hosted Code text"),
     # A part citation (2-200) keys every structural row of the part; its own granule is the target.
@@ -78,30 +93,53 @@ def _occurrence_key(item: Mapping[str, Any]) -> str:
     return hashlib.sha256(json.dumps([item.get(k) for k in fields], ensure_ascii=False).encode()).hexdigest()
 
 
+def _holds(cursor: Any, route: Route, columns: tuple[str, ...]) -> bool:
+    """Whether the selected table has every one of ``columns`` (an older generation can predate one)."""
+    if not columns:
+        return True
+    held = {column[0] for column in cursor.execute(f'SELECT * FROM "{route.table}" LIMIT 0').description}
+    return set(columns) <= held
+
+
 def _predicate(cursor: Any, route: Route) -> str:
     """The route's predicate, or every keyed row when the selected table predates a column the predicate reads."""
-    if not route.predicate_columns:
-        return route.predicate
-    held = {column[0] for column in cursor.execute(f'SELECT * FROM "{route.table}" LIMIT 0').description}
-    return route.predicate if set(route.predicate_columns) <= held else "true"
+    return route.predicate if _holds(cursor, route, route.predicate_columns) else "true"
+
+
+#: What ``match_basis`` says for a route with a range form, by whether its matches came by key or by range.
+MATCH_BASES = {(False, False): "first_page", (True, True): "page_range", (True, False): "first_page_and_page_range"}
 
 
 def _lookup(cursor: Any, route: Route, keys: list[str], max_candidates: int) -> dict[str, dict]:
-    """One parameterized read per distinct-key batch; retain bounded candidates and actual match counts."""
+    """One parameterized read per distinct-key batch; retain bounded candidates and actual match counts.
+
+    A route with a range form also matches a row whose range holds the key (and whose key is not it), and each
+    result says how its rows matched (:data:`MATCH_BASES`).
+    """
     predicate = _predicate(cursor, route)
     columns = ', '.join(f'CAST(t."{c}" AS VARCHAR) AS "{c}"' for c in route.identity)
     order = ', '.join(f'"{c}"' for c in route.identity)
+    keyed = f"CAST(({route.key_sql}) AS VARCHAR)=r.lookup_key"
+    ranged = "" if route.range_sql is None or not _holds(cursor, route, route.range_columns) else f"""
+                    UNION ALL SELECT r.lookup_key, {columns}, true AS by_range
+                    FROM requested r JOIN "{route.table}" t ON ({route.range_sql}) AND NOT coalesce({keyed}, false)
+                    WHERE {predicate}"""
     sql = f"""WITH requested AS (SELECT unnest(?::VARCHAR[]) AS lookup_key),
-        matches AS (SELECT r.lookup_key, {columns}
-                    FROM requested r JOIN "{route.table}" t ON CAST(({route.key_sql}) AS VARCHAR)=r.lookup_key
-                    WHERE {predicate}),
+        matches AS (SELECT r.lookup_key, {columns}, false AS by_range
+                    FROM requested r JOIN "{route.table}" t ON {keyed}
+                    WHERE {predicate}{ranged}),
         ranked AS (SELECT *, count(*) OVER (PARTITION BY lookup_key) AS match_count,
+                   bool_or(by_range) OVER (PARTITION BY lookup_key) AS any_range,
+                   bool_and(by_range) OVER (PARTITION BY lookup_key) AS all_range,
                    row_number() OVER (PARTITION BY lookup_key ORDER BY {order}) AS candidate_index FROM matches)
-        SELECT * EXCLUDE(candidate_index) FROM ranked WHERE candidate_index <= ? ORDER BY lookup_key, {order}"""
+        SELECT * EXCLUDE(candidate_index, by_range) FROM ranked WHERE candidate_index <= ?
+        ORDER BY lookup_key, {order}"""
     found: dict[str, dict] = {}
-    for row in cursor.execute(sql, [keys, max_candidates]).fetchall():
-        result = found.setdefault(row[0], {"candidate_keys": [], "match_count": int(row[-1])})
-        candidate = dict(zip(route.identity, row[1:-1]))
+    for lookup_key, *identity, count, any_range, all_range in cursor.execute(sql, [keys, max_candidates]).fetchall():
+        result = found.setdefault(lookup_key, {"candidate_keys": [], "match_count": int(count)})
+        if route.range_sql is not None:
+            result["match_basis"] = MATCH_BASES[bool(any_range), bool(all_range)]
+        candidate = dict(zip(route.identity, identity))
         if candidate not in result["candidate_keys"]:
             result["candidate_keys"].append(candidate)
     return found
