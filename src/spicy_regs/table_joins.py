@@ -313,7 +313,12 @@ JOINS: tuple[Join, ...] = (
           "mcp-chaos-2026-10-02/round4/joins-measured-2026-10-03.json and "
           "mcp-chaos-2026-10-02/round5/scout-A/m1b_rt_missing.out."),
     # FEC.
-    _join("org_committee_links", "committee_id", "fec_committees", "committee_id", 3_633, 0),
+    _join("org_committee_links", "committee_id", "fec_committees", "committee_id", 6_693, 0,
+          reason="The committee's status is here, not copied into the links: filing_frequency T or A means "
+          "terminated, and last_file_date is its latest filing. Measured 2026-10-03 on the rebuild of "
+          "org-committee-links 8487b62e's inputs (fec-committees ce80d98e, fec-committee-history 4ed93047) after "
+          "links to candidate committees and leadership PACs left: every committee resolves. Receipt "
+          "mcp-chaos-2026-10-02/round6/impl-C2/m6/measure.out."),
     # The Regulations.gov attribute tables (decisions 65-67): every row is a record the thin tables also hold.
     # First measured on the published attribute families (document-attributes 30f9aa29, docket-attributes ba5aba75;
     # join check 36360197318, 2026-09-27): every attribute row names a thin-table row.

@@ -24,7 +24,19 @@ which would be ~1.3B comparisons).
 many committees is usually a real affiliate network (*Planned Parenthood* hits
 ~90 state affiliate committees, SEIU ~16 locals, IBEW ~15), so rows are never
 truncated: each carries ``committee_match_count`` and a ``confidence`` that
-degrades with fan-out.
+degrades with fan-out. ``confidence`` grades the match rule alone.
+
+**Committees that are never an organization's own.** A candidate's committee
+(type H, S or P) or a leadership PAC (designation D) is matched and counted in
+the fan-out like any other committee, then left out of the table: a commenter
+named like one is a person, a namesake or a slogan.
+
+**The sponsor FEC states.** ``connected_organization_name`` is the committee's
+connected organization as it last stated one in ``fec_committee_history``,
+verbatim; FEC's placeholders (:mod:`~spicy_regs.transforms.fec_placeholders`)
+state none. ``sponsor_name_match`` compares it with the organization string,
+both read by the same normalization, and is evidence beside the grade, never
+part of it.
 
 **Junk guards.** A core must be ≥ :data:`MIN_CORE_LENGTH` chars and ≥
 :data:`MIN_CORE_TOKENS` tokens (which also blocks bare acronyms like ``NRDC``),
@@ -35,11 +47,9 @@ GROWERS ASSOCIATION`` free to match.
 **Coverage is small by upstream reality, not a bug.** ``comments.organization``
 holds what the publisher's record states (a submitter's entry or a campaign's
 sponsor; EPA and FDA state none): 2,222,760 of 26,415,400 comments on the
-2026-10-03 export (receipt ``sha256:77a08369…``), after the comment re-read
-filled rows read before the field was (~20.7K of ~25.8M on 2026-09-22, when
-~14.2K distinct strings left ~12.7K past the guards and a few hundred resolved).
-Most commenting organizations run no federal PAC, so a low match rate is the
-correct answer rather than a matcher to tune harder; ``name_source`` is stamped
+2026-10-03 export (receipt ``sha256:77a08369…``). Most commenting organizations
+run no federal PAC, so a low match rate is the correct answer rather than a
+matcher to tune harder; ``name_source`` is stamped
 on every row so text-derived names added later (comment title, letterhead,
 signature block) can arrive as extra rows without breaking consumers.
 
@@ -59,6 +69,7 @@ import pyarrow.parquet as pq
 from loguru import logger
 
 from spicy_regs.duckdb_settings import load_public_http
+from spicy_regs.transforms.fec_placeholders import not_stated_sql
 
 OUTPUT = "org_committee_links.parquet"
 
@@ -85,6 +96,8 @@ COLUMNS: tuple[tuple[str, str], ...] = (
     ("agency_codes_json", "VARCHAR"),
     ("first_comment_date", "VARCHAR"),
     ("last_comment_date", "VARCHAR"),
+    ("connected_organization_name", "VARCHAR"),
+    ("sponsor_name_match", "VARCHAR"),
 )
 
 # Where a matched name came from. Only the structured field today; text-derived
@@ -107,6 +120,12 @@ MAX_PREFIX_TOKENS = 8
 # networks exceed it (Planned Parenthood ~90, SEIU ~16) and are kept — the
 # confidence label is what tells them apart from an over-broad core.
 PREFIX_FANOUT_MEDIUM_MAX = 5
+
+# FEC committee kinds that are never an organization's own committee: a House, Senate or presidential candidate's
+# committee (committee type), and a member's leadership PAC (designation). A commenter named like one is a person, a
+# slogan or a namesake: 25 of 25 such links sampled on 2026-10-03 were false (round-6 scout C, M6).
+CANDIDATE_COMMITTEE_TYPES = ("H", "S", "P")
+LEADERSHIP_PAC_DESIGNATION = "D"
 
 # Trailing committee decorations, stripped from the FEC side to recover the
 # sponsoring organization's name. Longest phrases first so the alternation
@@ -293,7 +312,7 @@ def _resolve_comments_source(output_dir: Path) -> str:
     return url
 
 
-def build_query(comments_source: str, committees_file: str, out_file: str) -> str:
+def build_query(comments_source: str, committees_file: str, history_file: str, out_file: str) -> str:
     """Return the full COPY ... TO statement that materializes the link table.
 
     Split out from :func:`build_org_committee_links` so the exact published SQL
@@ -303,12 +322,17 @@ def build_query(comments_source: str, committees_file: str, out_file: str) -> st
     # does; the remote URL is separately validated in _resolve_comments_source.
     comments_source = comments_source.replace("'", "''")
     committees_file = committees_file.replace("'", "''")
+    history_file = history_file.replace("'", "''")
 
     org_norm = _normalize("r.organization")
     org_core = _core("o.organization_norm", decorations=False)
     cm_norm = _normalize("f.name")
     cm_core = _core("n.committee_norm", decorations=True)
+    # A filer often writes its PAC's own name as the sponsor, so the sponsor is read both as an organization and, with
+    # the PAC decorations peeled, as a committee; spaces are set aside ("DELTA AIRLINES" for "Delta Air Lines").
+    sponsor_keys = [f"replace({_core('h.sponsor_norm', decorations=peel)}, ' ', '')" for peel in (False, True)]
     blocklist = ", ".join(_sql_str(entry) for entry in sorted(GENERIC_ORG_CORES))
+    never_own_types = ", ".join(_sql_str(code) for code in CANDIDATE_COMMITTEE_TYPES)
 
     return f"""
     COPY (
@@ -362,6 +386,10 @@ def build_query(comments_source: str, committees_file: str, out_file: str) -> st
                 f.party_full,
                 f.organization_type_full,
                 f.state AS committee_state,
+                -- A candidate's committee or a leadership PAC is never an organization's own committee. It still
+                -- counts in the fan-out below, so a name it matches stays as generic as it was.
+                coalesce(f.committee_type, '') NOT IN ({never_own_types})
+                    AND coalesce(f.designation, '') <> {_sql_str(LEADERSHIP_PAC_DESIGNATION)} AS can_be_own,
                 {cm_norm} AS committee_norm
             FROM read_parquet('{committees_file}') f
             WHERE f.committee_id IS NOT NULL AND f.name IS NOT NULL
@@ -406,6 +434,20 @@ def build_query(comments_source: str, committees_file: str, out_file: str) -> st
             SELECT b.*,
                    count(*) OVER (PARTITION BY b.organization)::BIGINT AS committee_match_count
             FROM best b
+        ),
+        -- The connected organization each committee last stated, in its latest filing year that states one; FEC's
+        -- placeholders (NONE, N/A, BLANK, ...) are not a statement.
+        sponsors AS (
+            SELECT h.committee_id, h.connected_organization_name,
+                   {sponsor_keys[0]} AS sponsor_key, {sponsor_keys[1]} AS sponsor_peeled_key
+            FROM (
+                SELECT f.*, {_normalize("f.connected_organization_name")} AS sponsor_norm
+                FROM read_parquet('{history_file}') f
+                WHERE NOT {not_stated_sql("f.connected_organization_name")}
+                QUALIFY ROW_NUMBER() OVER (
+                    PARTITION BY f.committee_id ORDER BY TRY_CAST(f.cycle AS INTEGER) DESC NULLS LAST
+                ) = 1
+            ) h
         )
         -- Every column is cast explicitly so the published schema is pinned by
         -- this query rather than inherited from the input parquet (an all-null
@@ -433,10 +475,18 @@ def build_query(comments_source: str, committees_file: str, out_file: str) -> st
             o.docket_count::BIGINT AS docket_count,
             o.agency_codes_json::VARCHAR AS agency_codes_json,
             o.first_comment_date::VARCHAR AS first_comment_date,
-            o.last_comment_date::VARCHAR AS last_comment_date
+            o.last_comment_date::VARCHAR AS last_comment_date,
+            s.connected_organization_name::VARCHAR AS connected_organization_name,
+            CASE
+                WHEN s.committee_id IS NULL THEN 'not_stated'
+                WHEN replace(o.organization_core, ' ', '') IN (s.sponsor_key, s.sponsor_peeled_key) THEN 'agrees'
+                ELSE 'differs'
+            END::VARCHAR AS sponsor_name_match
         FROM counted m
         JOIN orgs_eligible o ON o.organization = m.organization
         JOIN committees c ON c.committee_id = m.committee_id
+        LEFT JOIN sponsors s ON s.committee_id = m.committee_id
+        WHERE c.can_be_own
         -- Sorted by organization so `WHERE organization = ?` prunes row groups.
         ORDER BY o.organization, m.match_method, c.committee_id
     ) TO '{out_file}' (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 50000);
@@ -447,9 +497,10 @@ def build_org_committee_links(output_dir: Path) -> Path:
     """Build ``org_committee_links.parquet`` (commenter org → FEC committee)."""
     import duckdb
 
-    committees_file = output_dir / "fec_committees.parquet"
-    if not committees_file.exists():
-        raise FileNotFoundError(f"fec_committees.parquet not found in {output_dir}")
+    committees_file, history_file = output_dir / "fec_committees.parquet", output_dir / "fec_committee_history.parquet"
+    for required in (committees_file, history_file):
+        if not required.exists():
+            raise FileNotFoundError(f"{required.name} not found in {output_dir}")
 
     comments_source = _resolve_comments_source(output_dir)
     out_file = output_dir / OUTPUT
@@ -466,7 +517,7 @@ def build_org_committee_links(output_dir: Path) -> Path:
         load_public_http(con)
 
     logger.info("Building org ↔ committee links via DuckDB...")
-    con.execute(build_query(comments_source, str(committees_file), str(out_file)))
+    con.execute(build_query(comments_source, str(committees_file), str(history_file), str(out_file)))
     con.close()
 
     rows = pq.ParquetFile(out_file).metadata.num_rows
