@@ -17,7 +17,14 @@ import pytest
 
 from spicy_regs.pipelines.rollups import cfr_sections as rollup
 from spicy_regs.sources.cfr_sections import API_KEY_ENV_VARS, CfrSectionsError, CfrSectionsReader, _resolve_api_key
-from spicy_regs.transforms.build_cfr_sections import COLUMNS, _cfr_ref, _shape, annual_volume, place_sections
+from spicy_regs.transforms.build_cfr_sections import (
+    COLUMNS,
+    _cfr_ref,
+    _shape,
+    annual_volume,
+    compound_parts,
+    place_sections,
+)
 
 ANCESTRY = Path(__file__).parent / "fixtures" / "cfr" / "ancestry"
 
@@ -459,3 +466,60 @@ def test_rollup_refuses_an_unreadable_replace_all(monkeypatch, tmp_path):
     monkeypatch.setenv("CFR_REPLACE_ALL", "yes")
     with pytest.raises(ValueError, match="CFR_REPLACE_ALL"):
         rollup.CfrSectionsRollup(output_dir=tmp_path).build(tmp_path)
+
+
+# -- Title 41's compound parts (60-1, 60-2) on structural rows ------------------
+# Literal granules of the 2025 edition (cfr_sections eab08a3f…): GovInfo's part ids keep only the chapter, and the
+# heading's leading "N-" is the part within it.
+_TITLE_41 = [
+    ("CFR-2025-title41-vol1-part60", "NODE", "1-OBLIGATIONS OF CONTRACTORS AND SUBCONTRACTORS"),
+    ("CFR-2025-title41-vol1-part60-id334", "NODE", "2-AFFIRMATIVE ACTION PROGRAMS"),
+    ("CFR-2025-title41-vol1-part60-id334-subpartA", "NODE", "General"),
+    ("CFR-2025-title41-vol1-part60-id334-toc-id335", "TOC", "Table Of Contents"),
+    ("CFR-2025-title41-vol1-part60-id357-subjectgroup-id379", "APPENDIX", "Appendix to Part 60-3"),
+    ("CFR-2025-title41-vol1-part60-id357", "NODE", "3-UNIFORM GUIDELINES ON EMPLOYEE SELECTION PROCEDURES (1978)"),
+]
+
+
+def _granules(specs, package_id="CFR-2025-title41-vol1"):
+    return [_shape({"granuleId": gid, "granuleClass": level, "title": heading, "_package_id": package_id})
+            for gid, level, heading in specs]
+
+
+def test_title_41_structural_rows_take_the_compound_part_their_part_granule_states():
+    rows = {row["granule_id"]: row for row in compound_parts(_granules(_TITLE_41))}
+    assert {gid: (row["part"], row["cfr_ref"]) for gid, row in rows.items()} == {
+        "CFR-2025-title41-vol1-part60": ("60-1", "41-60-1"),
+        "CFR-2025-title41-vol1-part60-id334": ("60-2", "41-60-2"),
+        "CFR-2025-title41-vol1-part60-id334-subpartA": ("60-2", "41-60-2"),
+        "CFR-2025-title41-vol1-part60-id334-toc-id335": ("60-2", "41-60-2"),
+        "CFR-2025-title41-vol1-part60-id357-subjectgroup-id379": ("60-3", "41-60-3"),
+        "CFR-2025-title41-vol1-part60-id357": ("60-3", "41-60-3"),
+    }
+
+
+def test_compound_parts_is_idempotent_and_leaves_sections_to_the_volume_scan():
+    section = _shape({"granuleId": "CFR-2025-title41-vol1-sec60-2-1", "granuleClass": "CONTENT",
+                      "_package_id": "CFR-2025-title41-vol1"})
+    once = compound_parts([*_granules(_TITLE_41), section])
+    assert compound_parts(once) == once
+    assert once[-1] == section
+
+
+@pytest.mark.parametrize(("granule_id", "heading"), [
+    ("CFR-2025-title7-vol1-part8", "4-H CLUB NAME AND EMBLEM"),
+    ("CFR-2025-title31-vol1-part82", "5-CENT AND ONE-CENT COIN REGULATIONS"),
+    ("CFR-2025-title49-vol9-part1240", "1259-REPORTS"),
+])
+def test_only_title_41_reads_a_part_from_its_heading(granule_id, heading):
+    rows = _granules([(granule_id, "NODE", heading)], package_id=granule_id.rsplit("-part", 1)[0])
+    assert compound_parts(rows) == rows
+
+
+def test_a_reserved_part_granule_of_a_compound_chapter_names_no_part():
+    """GovInfo's "Reserved" part granules state no number; the chapter (41-102) is no part, so the key is NULL."""
+    rows = compound_parts(_granules([
+        ("CFR-2025-title41-vol3-part102-id1058", "NODE", "74-FACILITY MANAGEMENT"),
+        ("CFR-2025-title41-vol3-part102-id122", "CONTENT", "Reserved"),
+    ], package_id="CFR-2025-title41-vol3"))
+    assert [(row["part"], row["cfr_ref"]) for row in rows] == [("102-74", "41-102-74"), (None, None)]

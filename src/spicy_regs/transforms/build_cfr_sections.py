@@ -29,10 +29,13 @@ validator before it is scanned; an empty scan places nothing.
 Placement changes only the rows the scan holds, plus the part of a section's
 appendix or TOC (``sec746-10-app1``) whose host section (``746-10``) it holds.
 Every other granule keeps its identifier-derived values: TOC, NODE and
-appendix part tokens (so Title 41's TOC and NODE parts stay cut at the first
-hyphen, ``part50-201`` gives ``50``), and for an appendix or TOC of a section
-the scan does not hold, the token's leading number, as published before
-cac7615. A plain section token the scan does not hold keeps an unknown part.
+appendix part tokens, and for an appendix or TOC of a section the scan does
+not hold, the token's leading number, as published before cac7615. A plain
+section token the scan does not hold keeps an unknown part. Title 41's part
+granule ids name only the chapter (``part60``, ``part60-id334``), so its
+structural rows take the compound part their part granule's heading states
+(:func:`compound_parts`: "2-AFFIRMATIVE ACTION PROGRAMS" is ``60-2``), on
+fresh rows and on the prior alike, with no volume read.
 
 A package is re-placed only when it is new to the prior table or any of its
 granules is new or carries a different ``last_modified``. GovInfo's granule
@@ -141,6 +144,51 @@ _HOST_RE = re.compile(r"^(.+?)-(?:app|toc)")
 # A section granule's token, less GovInfo's duplicate suffix: ``sec849-504-id915``
 # is the same printed section as ``sec849-504``.
 _SECTION_TOKEN_RE = re.compile(r"-sec(.+?)(?:-id\d+)?$")
+
+
+#: Title 41 numbers parts by chapter and part (60-1, 60-2), and GovInfo's part granule ids keep only the chapter
+#: (``part60``, ``part60-id334``): the part survives as the leading ``N-`` of the granule's heading ("2-AFFIRMATIVE
+#: ACTION PROGRAMS" is Part 60-2). The 2025 edition holds 190 such granules, the same 190 parts the volume scan places
+#: Title 41's sections in. No other title numbers parts so; elsewhere that heading shape is prose (7 CFR 8 "4-H CLUB
+#: NAME AND EMBLEM", 31 CFR 82 "5-CENT AND ONE-CENT COIN REGULATIONS", 49 CFR 1240 "1259-REPORTS").
+COMPOUND_PART_TITLE = "41"
+_PART_GRANULE_RE = re.compile(r"-part(\d+[A-Za-z]*)(?:-id\d+)?$")
+_COMPOUND_HEADING_RE = re.compile(r"^(\d+[A-Za-z]?)-")
+
+
+def compound_parts(rows: Iterable[dict]) -> list[dict]:
+    """Title 41's structural rows with the compound part their part granule's heading states; other rows unchanged.
+
+    A part granule's own row and every non-section granule nested under its id (``…-part60-id334-subpartA``: the
+    longest part-granule id prefixing it) take ``<chapter>-<N>`` and the ``cfr_ref`` that composes. A part granule of
+    such a chapter whose heading states no number (the 35 "Reserved" ones of the 2025 edition) names no part: its
+    rows take NULL rather than the chapter, which is no part and matched the Register's truncated chapter keys. The
+    chapter is read from the id, never from ``part``, so a row already compound comes back unchanged. Section
+    granules are the volume scan's (:func:`place_sections`). O(rows x id segments).
+    """
+    rows = list(rows)
+    stated: dict[str, tuple[str, str | None]] = {}
+    for row in rows:
+        chapter = _PART_GRANULE_RE.search(row["granule_id"]) if row["title"] == COMPOUND_PART_TITLE else None
+        if chapter:
+            number = _COMPOUND_HEADING_RE.match(row["heading"] or "")
+            stated[row["granule_id"]] = (chapter.group(1), number and f"{chapter.group(1)}-{number.group(1)}")
+    compound = {chapter for chapter, part in stated.values() if part}
+    parts = {granule_id: part for granule_id, (chapter, part) in stated.items() if chapter in compound}
+    if not parts:
+        return rows
+    compounded = []
+    for row in rows:
+        prefix = row["granule_id"]
+        if row["title"] == COMPOUND_PART_TITLE and not _SECTION_TOKEN_RE.search(prefix):
+            while prefix and prefix not in parts:
+                prefix = prefix.rpartition("-")[0]
+        if not prefix or prefix not in parts:
+            compounded.append(row)
+            continue
+        part = parts[prefix]
+        compounded.append({**row, "part": part, "cfr_ref": _cfr_ref(row["title"], part, row["section"])})
+    return compounded
 
 
 def _first(pattern: re.Pattern[str], text: str | None) -> str | None:
@@ -266,17 +314,33 @@ class _Prior:
 
 
 def _read_prior(prior_file: Path) -> _Prior:
-    """Read the prior table, first rewriting it without the index package's rows when it has any."""
+    """Read the prior table, first rewriting it without the index package's rows and with Title 41's compound parts.
+
+    An unchanged package keeps its prior rows unread by this run, so the prior carries :func:`compound_parts` itself.
+    """
+    import pyarrow.compute as pc
+
     [(key, value)] = PLACEMENT_MARKER.items()
     placed = (pq.read_schema(prior_file).metadata or {}).get(key.encode()) == value.encode()
     table = pq.read_table(prior_file)
+    rewrite = False
     packages = table["package_id"].to_pylist()
     keep = [package_id is None or not INDEX_PACKAGE_RE.fullmatch(package_id) for package_id in packages]
     if not all(keep):
         table = table.filter(pa.array(keep))
         packages = table["package_id"].to_pylist()
-        pq.write_table(table, prior_file, compression="zstd")
+        rewrite = True
         logger.info("CFR: dropped {} prior index-package row(s); they are not CFR sections", keep.count(False))
+    compound = pc.fill_null(pc.equal(table["title"], COMPOUND_PART_TITLE), False)
+    held = table.filter(compound).to_pylist()
+    if (fixed := compound_parts(held)) != held:
+        table = pa.concat_tables([table.filter(pc.invert(compound)), pa.Table.from_pylist(fixed, schema=table.schema)])
+        packages = table["package_id"].to_pylist()
+        rewrite = True
+        logger.info("CFR: {} prior Title {} row(s) took their compound part", sum(a != b for a, b in zip(fixed, held)),
+                    COMPOUND_PART_TITLE)
+    if rewrite:
+        pq.write_table(table, prior_file, compression="zstd")
     return _Prior(
         placed,
         dict(zip(table["granule_id"].to_pylist(), table["last_modified"].to_pylist(), strict=True)),
@@ -338,6 +402,7 @@ def build_cfr_sections(
     for granule in reader.iter_records():
         row = _shape(granule)
         packages.setdefault(row["package_id"], []).append(row)
+    packages = {package_id: compound_parts(rows) for package_id, rows in packages.items()}
 
     # 3. Re-place only changed packages, and only against a prior this rule placed
     # (see module docstring); an unchanged package or a failed volume keeps its prior rows.
