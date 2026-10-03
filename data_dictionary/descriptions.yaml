@@ -3715,6 +3715,35 @@ tables:
       held_dates_json NULL.
     columns_from: spicy_docs
 
+  cbo_feed_items:
+    measured_on: "2026-10-03"
+    label: "CBO cost-estimate feed items"
+    coverage: >-
+      Sampled: every item of CBO's keyless per-Congress cost-estimate feed for
+      each Congress a bill-family run has read the feed of, from the 108th on,
+      whether or not the item names a bill. A run reads each scoped Congress's
+      feed whole and its items replace that Congress's prior items; a feed it
+      could not read keeps them. The scheduled run reads the sitting Congress's
+      feed; earlier Congresses fill only by a bill-family dispatch scoped to
+      them.
+    summary: >-
+      One row per CBO publication as its feed lists it: the Congress, the
+      date as `cbo_cost_estimates.pub_date` spells it, the title, link and
+      description, and the `Bill_Number` exactly as stated (empty where CBO
+      names no bill). Joined to `cbo_cost_estimates` on `publication_id`, the
+      items with no estimate row are the ones naming no bill: CBO's weekly
+      estimates of the bills the House takes up under suspension of the
+      rules, a committee's reconciliation recommendations, and estimates filed
+      under no number. All columns are stored as VARCHAR.
+    data_quality: >-
+      An item that names no bill is the publisher's statement, not an
+      extraction miss; its bills are listed only in CBO's own document, which
+      is not requested. Measured with the spicy-docs reader over the
+      108th-119th feeds on 2026-10-03: 15,156 items, every one a row; 361 have
+      no estimate row (352 name no bill, 9 are refused), 53 of them in the
+      119th, 48 of those suspension notices.
+    columns_from: spicy_docs
+
   cbo_cost_estimates:
     measured_on: "2026-10-03"
     label: "CBO cost-estimate publication index"
@@ -3727,10 +3756,11 @@ tables:
       so theirs come from the feed alone; elsewhere the feed adds only what no
       BILLSTATUS record lists, such as the Recovery Act, H.R. 3200 and the ACA.
       A Congress no scoped run has read the feed of yet holds its BILLSTATUS
-      estimates only. A feed item that names no bill has no row: CBO's weekly
-      estimates of the bills the House takes up under suspension of the
-      rules, a committee's reconciliation recommendations, and an estimate
-      CBO files under no bill number. A bill passed under suspension can be
+      estimates only. A feed item that names no bill has no row here
+      (`cbo_feed_items` lists it): CBO's weekly estimates of the bills the
+      House takes up under suspension of the rules, a committee's
+      reconciliation recommendations, and an estimate CBO files under no bill
+      number. A bill passed under suspension can be
       scored in such a weekly estimate first or only, so its first row here
       does not date CBO's first estimate of it. An absent estimate does not
       mean CBO never scored a bill. No CBO.gov body is requested.

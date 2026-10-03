@@ -344,7 +344,7 @@ OWN_TABLES = {
 def test_every_family_table_is_published(family):
     expected = {contract for contract, _ in FAMILY_TABLES} | {"public_activity_events", *OWN_TABLES}
     assert set(family) == expected
-    assert len(family) == 20
+    assert len(family) == 21
 
 
 def test_each_published_table_matches_its_contract_schema_or_its_own(family):

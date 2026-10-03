@@ -98,11 +98,13 @@ def prior_citations(path: Path | None, congresses: Collection[int]) -> dict[Bill
 
 @dataclass(frozen=True, slots=True)
 class FeedRead:
-    """What this run read from CBO's feeds: the shaped rows, the refusals, and the Congresses read whole."""
+    """What this run read from CBO's feeds: the estimate rows, every item as listed, refusals, the Congresses read."""
 
     rows: tuple[dict[str, Any], ...]
     refusals: tuple[FamilyRefusal, ...]
     congresses: frozenset[int]
+    #: ``cbo_feed_items``: one row per item of each feed read, whether or not it names a bill (spicy-docs 0.54.0).
+    items: tuple[dict[str, Any], ...] = ()
 
 
 def read_cbo_feeds(
@@ -117,6 +119,7 @@ def read_cbo_feeds(
     scoped = sorted(congress for congress in set(congresses) if congress >= CBO_FEED_FLOOR)
     if not scoped:
         return FeedRead((), (), frozenset())
+    items: list[dict[str, Any]] = []
     if acquirer is None:
         acquirer = CboAcquirer(
             budget=CboBudget(
@@ -142,11 +145,12 @@ def read_cbo_feeds(
             continue
         tables = build_cbo_feed_cost_estimates(feed, congress, report_citations=citations, law_bills=law_bills)
         rows.extend(tables.cbo_cost_estimates)
+        items.extend(tables.cbo_feed_items)
         refusals.extend(tables.refusals)
         read.add(congress)
-        logger.info("Bill family: CBO's {} feed — {:,} items, {:,} rows, {:,} refused", congress, len(feed.items),
-                    len(tables.cbo_cost_estimates), len(tables.refusals))
-    return FeedRead(tuple(rows), tuple(refusals), frozenset(read))
+        logger.info("Bill family: CBO's {} feed — {:,} items, {:,} estimate rows, {:,} refused", congress,
+                    len(feed.items), len(tables.cbo_cost_estimates), len(tables.refusals))
+    return FeedRead(tuple(rows), tuple(refusals), frozenset(read), tuple(items))
 
 
 type CostEstimateScope = tuple[tuple[str, str], set[tuple[str, str]]]

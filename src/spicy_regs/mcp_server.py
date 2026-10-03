@@ -189,6 +189,7 @@ TABLES = (
     "hearing_transcripts",
     "hearing_bill_links",
     "cbo_cost_estimates",
+    "cbo_feed_items",
     "house_activity_reports",
     "budget_volumes",
     "bill_committee_actions",

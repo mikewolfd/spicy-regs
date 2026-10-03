@@ -14,6 +14,7 @@ from types import SimpleNamespace
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
+from spicy_docs.schemas import TABLE_CONTRACTS
 from spicy_docs.sources.cbo import parse_cbo_cost_estimates_feed
 from spicy_docs.sources.congress.bill_status import BillIdentity, parse_bill_status
 
@@ -150,6 +151,45 @@ def test_an_unread_feed_keeps_its_prior_feed_rows(tmp_path, scoped_118):
     unavailable = importlib.import_module("tests.conftest")._NoCboFeed()
     rows = estimates(run(tmp_path / "second", prior=tmp_path / "first", feed=unavailable))
     assert ("118-hr-12", "60500") in rows and rows[("118-hr-12", "60500")]["source"] == "cbo_feed"
+
+
+def _suspension(key: int) -> str:
+    """CBO's weekly suspension notice: an empty Bill_Number and no bill in its title (62589, 2026-09-08).
+
+    A feed item's key is its position in the document, so the caller places it.
+    """
+    return _item(key, "Legislation Considered Under Suspension of the Rules, September 8, 2026", 62589, "",
+                 date="Tue, 08 Sep 2026 10:00:00 -0400")
+
+
+def _items(paths):
+    return {row["publication_id"]: row for row in pq.read_table(paths["cbo_feed_items"]).to_pylist()}
+
+
+def test_every_item_of_a_read_feed_is_a_cbo_feed_items_row_whether_or_not_it_names_a_bill(tmp_path, scoped_118):
+    """spicy-docs 0.54.0's cbo_feed_items: the feed as CBO lists it, published beside the estimates it yields.
+
+    An item naming no bill (a suspension-calendar notice) has no cbo_cost_estimates row, so before this table it
+    left no trace; the anti-join on publication_id now finds it.
+    """
+    _laws(tmp_path / "prior")
+    paths = run(tmp_path / "first", prior=tmp_path / "prior", feed=StubCbo(*ITEMS.values(), _suspension(4)))
+    items = _items(paths)
+    assert set(items) == {"60249", "60300", "60400", "60500", "62589"}
+    assert pq.read_schema(paths["cbo_feed_items"]).names == list(TABLE_CONTRACTS["cbo_feed_items"].columns)
+    assert (items["62589"]["bill_number"], items["62589"]["congress"]) == ("", "118")
+    named = {row["publication_id"] for row in pq.read_table(paths["cbo_cost_estimates"]).to_pylist()}
+    assert set(items) - named == {"62589"}, "the anti-join gives exactly the bill-less item"
+
+
+def test_a_later_feed_read_replaces_its_congresss_items_and_an_unread_feed_keeps_them(tmp_path, scoped_118):
+    _laws(tmp_path / "prior")
+    run(tmp_path / "first", prior=tmp_path / "prior", feed=StubCbo(*ITEMS.values(), _suspension(4)))
+    later = run(tmp_path / "second", prior=tmp_path / "first", feed=StubCbo(ITEMS["billstatus"], _suspension(1)))
+    assert set(_items(later)) == {"60249", "62589"}, "an item the feed no longer lists leaves with the feed read"
+    unavailable = importlib.import_module("tests.conftest")._NoCboFeed()
+    kept = run(tmp_path / "third", prior=tmp_path / "second", feed=unavailable)
+    assert _items(kept) == _items(later)
 
 
 def test_law_bills_reads_the_published_laws(tmp_path):

@@ -289,6 +289,8 @@ CONTRACT_TABLES: tuple[str, ...] = (
     "hearing_transcripts",
     "hearing_bill_links",
     "cbo_cost_estimates",
+    # Every item of CBO's per-Congress feeds, a spicy-docs contract from 0.54.0; the bill family writes it.
+    "cbo_feed_items",
     # GAO's legal decisions, a spicy-docs contract from 0.54.0 (DRY X1); the gao-reports rollup writes it.
     "gao_decisions",
     # A8/A9 (laws and rosters): the laws and committee-rosters rollups.

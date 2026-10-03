@@ -212,9 +212,10 @@ def test_a_soft_input_is_an_ingest_output_its_writer_produces_first(rollup, soft
     )
 
 
-def test_the_bill_family_declares_all_fifteen_plus_its_own_four():
-    assert {"bill_cosponsors.parquet", "bill_committee_activities.parquet"} <= set(BillFamilyRollup.outputs)
-    assert len(BillFamilyRollup.outputs) == 20
+def test_the_bill_family_declares_all_sixteen_plus_its_own_four():
+    assert {"bill_cosponsors.parquet", "bill_committee_activities.parquet", "cbo_feed_items.parquet"} <= set(
+        BillFamilyRollup.outputs)
+    assert len(BillFamilyRollup.outputs) == 21
     assert BillFamilyRollup.outputs[0] == "congress_bills.parquet"
     assert set(BillFamilyRollup.outputs[-4:]) == {f"{name}.parquet" for name in BILL_OWN_TABLES}
     # The property the freshness checker uses resolves to the first key.
@@ -397,6 +398,7 @@ def test_the_reusable_workflow_declares_every_input_the_callers_pass():
 
 def test_member_and_cosponsor_family_growth_is_explicit():
     assert MembersRollup.added_tables == ("member_party_affiliations.parquet",)
-    assert BillFamilyRollup.added_tables == ("bill_cosponsors.parquet", "bill_committee_activities.parquet")
+    assert BillFamilyRollup.added_tables == (
+        "bill_cosponsors.parquet", "bill_committee_activities.parquet", "cbo_feed_items.parquet")
     for rollup in (MembersRollup, BillFamilyRollup):
         assert set(rollup.added_tables) <= set(rollup.outputs)

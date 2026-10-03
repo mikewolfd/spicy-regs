@@ -384,6 +384,8 @@ FAMILY_TABLES: tuple[tuple[str, str], ...] = (
     ("bill_summaries", "bill_summaries"),
     ("diff_summaries", "diff_summaries"),
     ("cbo_cost_estimates", "cbo_cost_estimates"),
+    # spicy-docs 0.54.0: every item of each CBO feed read, whether or not it names a bill.
+    ("cbo_feed_items", "cbo_feed_items"),
 )
 
 #: Contracts stored one file per partition (multi-file design §4.2): ``bill_sections`` by the Congress its
@@ -2282,7 +2284,7 @@ def build_bill_family(
         },
         prior=prior_paths.get("cbo_cost_estimates"),
     )
-    folded = replace(folded, cbo_cost_estimates=tuple(estimates))
+    folded = replace(folded, cbo_cost_estimates=tuple(estimates), cbo_feed_items=feed.items)
     # Each scope names parents whose prior child rows this run replaces --
     # emptying them where the run publishes none.
     replaced: dict[str, ReplacementScope] = {
@@ -2297,6 +2299,8 @@ def build_bill_family(
             },
         ),
         "cbo_cost_estimates": estimate_scope,
+        # A feed is read whole, so its Congress's items replace that Congress's prior items; an unread feed's stand.
+        "cbo_feed_items": ("congress", {str(congress) for congress in feed.congresses}),
         "bill_versions": (version_identity, retired_versions | superseded | body.unread),
         "bill_sections": (version_identity, section_scopes | retired_versions | body.unread),
         "bill_summaries": (version_identity, set(index.invalid_targets)),

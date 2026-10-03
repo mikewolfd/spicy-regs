@@ -20192,7 +20192,7 @@
     "table": "cbo_cost_estimates",
     "label": "CBO cost-estimate publication index",
     "summary": "One row per bill and CBO publication, using build_bill_family's own cbo_cost_estimates output and spicy-docs' feed builder, merged by `merge_cbo_cost_estimates`: where both routes state one bill and publication, the BILLSTATUS row stands. One publication can stand under two bills, and both rows publish. All columns are stored as VARCHAR.",
-    "coverage": "Sampled: the estimates CBO lists for the bills the bill family has read, from the 108th Congress on, from two routes merged: each bill's BILLSTATUS record (`source` `billstatus_bulk`) and CBO's own per-Congress feed (`cbo_feed`), read once by every run for each Congress it is scoped to. BILLSTATUS states no estimate for the 112th and 113th, so theirs come from the feed alone; elsewhere the feed adds only what no BILLSTATUS record lists, such as the Recovery Act, H.R. 3200 and the ACA. A Congress no scoped run has read the feed of yet holds its BILLSTATUS estimates only. A feed item that names no bill has no row: CBO's weekly estimates of the bills the House takes up under suspension of the rules, a committee's reconciliation recommendations, and an estimate CBO files under no bill number. A bill passed under suspension can be scored in such a weekly estimate first or only, so its first row here does not date CBO's first estimate of it. An absent estimate does not mean CBO never scored a bill. No CBO.gov body is requested.",
+    "coverage": "Sampled: the estimates CBO lists for the bills the bill family has read, from the 108th Congress on, from two routes merged: each bill's BILLSTATUS record (`source` `billstatus_bulk`) and CBO's own per-Congress feed (`cbo_feed`), read once by every run for each Congress it is scoped to. BILLSTATUS states no estimate for the 112th and 113th, so theirs come from the feed alone; elsewhere the feed adds only what no BILLSTATUS record lists, such as the Recovery Act, H.R. 3200 and the ACA. A Congress no scoped run has read the feed of yet holds its BILLSTATUS estimates only. A feed item that names no bill has no row here (`cbo_feed_items` lists it): CBO's weekly estimates of the bills the House takes up under suspension of the rules, a committee's reconciliation recommendations, and an estimate CBO files under no bill number. A bill passed under suspension can be scored in such a weekly estimate first or only, so its first row here does not date CBO's first estimate of it. An absent estimate does not mean CBO never scored a bill. No CBO.gov body is requested.",
     "kind": "sampled",
     "measured_on": "2026-10-03",
     "data_quality": "The bill's cbo_cost_estimates_outcome distinguishes an absent or empty element, an unexpected shape, and populated estimates. An empty index does not establish that CBO never scored the bill. Report citations are the bill's list, not proof that each publication is reprinted in each report; the report's recital gate is evaluated separately. A feed row carries its bill's own BILLSTATUS report citations, read by the same run or carried from the bill's published rows, and NULL where neither names them. A successfully evaluated bill replaces its prior BILLSTATUS rows, including when the list is absent or empty; an unexpected list shape retains prior rows until a successful read can establish the current relationships. A feed read replaces its Congress's prior feed rows, so an item CBO withdraws or re-files leaves, and a feed that cannot be read keeps them. `found_by` says how each row names its bill; the rows published before it take `billstatus` in a one-time backfill. `title_bill_id` is the bill the estimate's title leads with: where it differs from `bill_id` (7 of the 12,732 BILLSTATUS rows on 2026-09-29), `bill_id` is a numbering error as published and `title_bill_id` the bill scored. A title leading with a public law reads through the published `laws` table, which held the 119th Congress alone on 2026-09-29, so such a title of an earlier Congress leaves `title_bill_id` NULL and a blank feed item titled by an earlier law has no row (110th P.L. 110-50 and 112th P.L. 112-8). CBO's 119th-Congress feed, read 2026-10-03, holds 53 items that name no bill and have no row, 48 of them weekly suspension estimates. 23 of them are among the feed's 674 items dated 2026: 21 suspension estimates, 62413 (reconciliation recommendations of the Senate Homeland Security and Governmental Affairs committee) and 62643 (the Continuing Appropriations and Extensions Act, 2027).",
@@ -20296,6 +20296,61 @@
     "grain": "One row per bill and CBO publication a source names as a cost estimate of it: the bill's own BILLSTATUS document or CBO's per-Congress feed, read for every Congress and merged, the bill's own record winning where both name one bill and publication.",
     "identity_columns": [
       "bill_id",
+      "publication_id"
+    ]
+  },
+  "cbo_feed_items": {
+    "table": "cbo_feed_items",
+    "label": "CBO cost-estimate feed items",
+    "summary": "One row per CBO publication as its feed lists it: the Congress, the date as `cbo_cost_estimates.pub_date` spells it, the title, link and description, and the `Bill_Number` exactly as stated (empty where CBO names no bill). Joined to `cbo_cost_estimates` on `publication_id`, the items with no estimate row are the ones naming no bill: CBO's weekly estimates of the bills the House takes up under suspension of the rules, a committee's reconciliation recommendations, and estimates filed under no number. All columns are stored as VARCHAR.",
+    "coverage": "Sampled: every item of CBO's keyless per-Congress cost-estimate feed for each Congress a bill-family run has read the feed of, from the 108th on, whether or not the item names a bill. A run reads each scoped Congress's feed whole and its items replace that Congress's prior items; a feed it could not read keeps them. The scheduled run reads the sitting Congress's feed; earlier Congresses fill only by a bill-family dispatch scoped to them.",
+    "kind": "sampled",
+    "measured_on": "2026-10-03",
+    "data_quality": "An item that names no bill is the publisher's statement, not an extraction miss; its bills are listed only in CBO's own document, which is not requested. Measured with the spicy-docs reader over the 108th-119th feeds on 2026-10-03: 15,156 items, every one a row; 361 have no estimate row (352 name no bill, 9 are refused), 53 of them in the 119th, 48 of those suspension notices.",
+    "columns": [
+      {
+        "column_name": "publication_id",
+        "column_type": "VARCHAR",
+        "description": "CBO's own publication number, the digits of the item's Link, and this row's identity: no publication is listed twice across the 15,156 items of the 108th-119th feeds (2026-10-03).  cbo_cost_estimates.publication_id joins here, and an item with no row there is one no estimate row holds: one that names no bill (the House's weekly 'Legislation considered under suspension' notices, reconciliation titles, a continuing appropriations act; 53 in the 119th feed on 2026-10-03), a title led by a public law the host's laws table did not map, or a Bill_Number no rule maps, which the family pass refuses by name."
+      },
+      {
+        "column_name": "congress",
+        "column_type": "VARCHAR",
+        "description": "The numbered Congress whose feed lists the item, which a bill it names belongs to."
+      },
+      {
+        "column_name": "pub_date",
+        "column_type": "VARCHAR",
+        "description": "The item's Date as the UTC instant cbo_cost_estimates.pub_date spells it, so the two compare as text; the merge prefers the larger value.  An item whose Date names no instant is a named refusal, not a row (none in the 108th-119th feeds, 2026-10-03)."
+      },
+      {
+        "column_name": "title",
+        "column_type": "VARCHAR",
+        "description": "The item's Title as CBO states it, which names the bill where it names one."
+      },
+      {
+        "column_name": "link",
+        "column_type": "VARCHAR",
+        "description": "The item's Link, the publication page on www.cbo.gov, exactly as stated; every measured one is walled."
+      },
+      {
+        "column_name": "description",
+        "column_type": "VARCHAR",
+        "description": "The item's Description as the feed parser trims it, which states the printing scored; NULL where the element is empty, as cbo_cost_estimates.description is."
+      },
+      {
+        "column_name": "bill_number",
+        "column_type": "VARCHAR",
+        "description": "The item's Bill_Number exactly as CBO states it, `` (the empty string) where the element is empty: the feed's own statement that the item names no bill by number.  Every item of the 108th-119th feeds states the element (2026-10-03).  Unparsed here; cbo_cost_estimates.bill_id is the bill a rule reads from it, or from the title where it is empty."
+      },
+      {
+        "column_name": "feed_url",
+        "column_type": "VARCHAR",
+        "description": "The per-Congress feed the item was read from, the one keyless request a re-read repeats."
+      }
+    ],
+    "grain": "One row per item of CBO's keyless per-Congress cost-estimate feed, as CBO lists it, whether or not the item names a bill.",
+    "identity_columns": [
       "publication_id"
     ]
   },
