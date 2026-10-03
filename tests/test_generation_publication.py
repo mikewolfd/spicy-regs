@@ -778,11 +778,16 @@ def test_the_backfill_command_writes_only_with_apply(tmp_path, monkeypatch, caps
     directory, _ = build(tmp_path)
     store = Store()
     _unstamped(store, *publish(store, directory)["families"])
+    purged = []
     monkeypatch.setattr(r2, "get_r2_client", lambda: store)
+    monkeypatch.setattr("scripts.backfill_published_at.purge_urls", purged.extend)
     monkeypatch.setenv("R2_BUCKET_NAME", "test")
+    monkeypatch.setenv("R2_PUBLIC_URL", "https://test/")
     writes = list(store.writes)
     assert main([]) == 0
-    assert json.loads(capsys.readouterr().out)["applied"] is False and store.writes == writes
+    assert json.loads(capsys.readouterr().out)["applied"] is False and store.writes == writes and not purged
     assert main(["--apply"]) == 0
     assert json.loads(capsys.readouterr().out)["applied"] is True and store.writes == [*writes, pub.INDEX_V2_KEY]
     assert "publishedAt" in pub.parse_index(store.objects[pub.INDEX_V2_KEY])["families"]["test"]
+    assert purged == [f"https://test/{pub.INDEX_V2_KEY}"]
+    assert main(["--apply"]) == 0 and json.loads(capsys.readouterr().out)["applied"] is False and len(purged) == 1
