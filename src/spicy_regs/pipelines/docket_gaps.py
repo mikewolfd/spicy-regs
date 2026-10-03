@@ -20,7 +20,6 @@ served dockets are still merged, and the step fails so the run shows it.
 from __future__ import annotations
 
 import hashlib
-import os
 import re
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
@@ -35,6 +34,7 @@ from cyclopts import App, Parameter
 from dotenv import load_dotenv
 from loguru import logger
 
+from spicy_regs.pipelines.keyed_regulations import keyed_reader, load_outcomes, save_outcomes
 from spicy_regs.schemas.regulations import RECORD_TYPES
 from spicy_regs.sources import iceberg, r2
 from spicy_regs.transforms import ExtractRecords, write_staging
@@ -123,10 +123,7 @@ def fill(
     for key, path in local.items():
         if not path.exists() and not r2.download_working_copy(key, path):
             raise RuntimeError(f"docket gaps: working copy {key} is missing")
-    outcome_file = output_dir / OUTCOMES
-    if not outcome_file.exists():
-        r2.download_working_copy(OUTCOMES, outcome_file)
-    prior = pl.read_parquet(outcome_file) if outcome_file.exists() else pl.DataFrame(schema=OUTCOME_SCHEMA)
+    outcome_file, prior = load_outcomes(output_dir, OUTCOMES, OUTCOME_SCHEMA)
 
     missing = missing_dockets(local["documents.parquet"], local["comments_index.parquet"], local["dockets.parquet"])
     asked = due(missing, prior, now())[:max_dockets]
@@ -154,15 +151,14 @@ def fill(
             r2.upload_file(exported, remote_key=exported.name)
 
     observed_at = now().isoformat()
-    fresh = pl.DataFrame(
+    save_outcomes(
+        outcome_file,
+        prior,
         [{"docket_id": a.docket_id, "outcome": a.outcome, "http_status": a.http_status, "observed_at": observed_at,
           "body_sha256": hashlib.sha256(a.body).hexdigest(), "canonical_id": a.canonical_id} for a in answers],
-        schema=OUTCOME_SCHEMA,
+        key="docket_id",
+        skip_upload=skip_upload,
     )
-    merged = pl.concat([prior.join(fresh.select("docket_id"), on="docket_id", how="anti"), fresh]).sort("docket_id")
-    merged.write_parquet(outcome_file)
-    if not skip_upload:
-        r2.upload_file(outcome_file, remote_key=OUTCOMES)
     if failures:
         raise RuntimeError(f"docket gaps: {failures} docket request(s) answered nothing; they will be asked again")
     return counts
@@ -177,15 +173,8 @@ def main(
     max_dockets: Annotated[int, Parameter(help="Most dockets to ask for in one run")] = DEFAULT_MAX_DOCKETS,
     skip_upload: Annotated[bool, Parameter(help="Ask and report only; no catalog merge or upload")] = True,
 ) -> None:
-    from spicy_docs.reading.paged_json import PagedJsonBudget
-    from spicy_docs.sources.regulations_gov.api import RegulationsGovApiReader
-
     load_dotenv()
-    key = os.environ.get("DATA_GOV_API_KEY")
-    if not key:
-        raise RuntimeError("DATA_GOV_API_KEY is required to ask the Regulations.gov API")
-    budget = PagedJsonBudget(max_requests=3, max_page_bytes=1 << 20, timeout_seconds=60, min_request_interval_seconds=1.0)
-    with RegulationsGovApiReader(budget=budget, api_key=key) as reader:
+    with keyed_reader(max_requests=3, min_request_interval_seconds=1.0) as reader:
         fill(output_dir, reader, max_dockets=max_dockets, skip_upload=skip_upload)
 
 

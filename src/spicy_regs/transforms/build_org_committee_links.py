@@ -52,17 +52,15 @@ the MCP server's ``comments`` view so counts here agree with counts there.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pyarrow.parquet as pq
 from loguru import logger
 
 from spicy_regs.duckdb_settings import load_public_http
+from spicy_regs.public_url import comments_source
 
 OUTPUT = "org_committee_links.parquet"
-
-DEFAULT_R2_BASE_URL = "https://data.spicy-regs.dev"
 
 # The published schema, in a fixed order.
 COLUMNS: tuple[tuple[str, str], ...] = (
@@ -269,30 +267,6 @@ def _core(expr: str, *, decorations: bool) -> str:
     return f"trim({out})"
 
 
-def _resolve_comments_source(output_dir: Path) -> str:
-    """Return the ``read_parquet`` target for comments: local file, else R2 URL.
-
-    A local ``comments.parquet`` (a primed run, or a developer's copy) wins so
-    the transform never reaches the network unnecessarily. Otherwise the public
-    bucket is read directly and projection pushdown keeps the transfer to the
-    handful of columns this query names.
-    """
-    local = output_dir / "comments.parquet"
-    if local.exists():
-        logger.info("org_committee_links: using local {}", local)
-        return str(local)
-
-    base_url = os.environ.get("R2_PUBLIC_URL") or DEFAULT_R2_BASE_URL
-    base_url = base_url.rstrip("/")
-    if not base_url.startswith("https://"):
-        raise RuntimeError(f"R2_PUBLIC_URL must be an https:// URL, got {base_url!r}")
-    if any(c in base_url for c in ("'", "\\", "\x00", "\n", "\r")):
-        raise RuntimeError(f"R2_PUBLIC_URL contains illegal characters: {base_url!r}")
-    url = f"{base_url}/comments.parquet"
-    logger.info("org_committee_links: reading comments remotely from {} (column projection)", url)
-    return url
-
-
 def build_query(comments_source: str, committees_file: str, out_file: str) -> str:
     """Return the full COPY ... TO statement that materializes the link table.
 
@@ -300,7 +274,7 @@ def build_query(comments_source: str, committees_file: str, out_file: str) -> st
     can be inspected and exercised without a DuckDB connection or R2 access.
     """
     # Escape the interpolated paths the way `data_dictionary.discover_schemas`
-    # does; the remote URL is separately validated in _resolve_comments_source.
+    # does; the remote URL is separately validated in public_url.comments_source.
     comments_source = comments_source.replace("'", "''")
     committees_file = committees_file.replace("'", "''")
 
@@ -451,7 +425,7 @@ def build_org_committee_links(output_dir: Path) -> Path:
     if not committees_file.exists():
         raise FileNotFoundError(f"fec_committees.parquet not found in {output_dir}")
 
-    comments_source = _resolve_comments_source(output_dir)
+    comments = comments_source(output_dir)
     out_file = output_dir / OUTPUT
 
     spill_dir = output_dir / ".duckdb_tmp"
@@ -462,11 +436,11 @@ def build_org_committee_links(output_dir: Path) -> Path:
     con.execute("SET preserve_insertion_order=false")
     con.execute("SET threads=2")
     con.execute(f"SET temp_directory='{spill_dir}'")
-    if comments_source.startswith("https://"):
+    if comments.startswith("https://"):
         load_public_http(con)
 
     logger.info("Building org ↔ committee links via DuckDB...")
-    con.execute(build_query(comments_source, str(committees_file), str(out_file)))
+    con.execute(build_query(comments, str(committees_file), str(out_file)))
     con.close()
 
     rows = pq.ParquetFile(out_file).metadata.num_rows
