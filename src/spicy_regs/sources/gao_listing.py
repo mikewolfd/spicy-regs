@@ -54,7 +54,6 @@ FINER_PRODUCT_TYPES = frozenset(
         "Oral Presentation",
     }
 )
-PRODUCT_URL = "https://www.gao.gov/products/{}"
 SITE = "https://www.gao.gov"
 #: A walk directory as ``python -m spicy_docs.sources.gao.month_in_review walk`` writes it.
 RECEIPTS = "receipts.jsonl"
@@ -87,6 +86,8 @@ class PageEvidence(Protocol):
 
 def listing_rows(run: ListingRun) -> tuple[list[dict], Counter[str]]:
     """One row per listed product, and counts of what the run read and left out."""
+    from spicy_docs.sources.gao.native import gao_product_url
+
     rows = [
         {
             "report_id": product.product_id,
@@ -96,7 +97,7 @@ def listing_rows(run: ListingRun) -> tuple[list[dict], Counter[str]]:
             "abstract": None,
             "agencies_json": None,
             "topics_json": json.dumps(list(product.topics), ensure_ascii=False),
-            "url": PRODUCT_URL.format(product.product_id),
+            "url": gao_product_url(product.product_id),
             "source": SOURCE,
             "product_type": product.label if product.label in FINER_PRODUCT_TYPES else None,
             "report_number": product.product_number,
