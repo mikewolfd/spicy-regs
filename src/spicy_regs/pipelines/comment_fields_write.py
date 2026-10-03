@@ -9,7 +9,10 @@ commit. docs/comment-fields-fill.md is the runbook.
 **The rules.** A read row fills a catalog row only at the same ``comment_id`` and ``modify_date`` (a copy of another
 version is counted and skipped), only into a column the catalog holds as NULL, and only for a column on which every
 copy read for that version agrees; copies that disagree on a column are listed in ``fill/conflicts.parquet`` and fill
-nothing in that column. A stated 0 is a value; NULL stays NULL.
+nothing in that column. A stated 0 is a value; NULL stays NULL. One rule replaces a held value: in an :data:`ADDITIVE`
+column, under the same version and agreement, a read that only adds to the held value (the held value is the read's
+with the additions taken out, byte for byte) replaces it; any other read value that differs is refused, counted and
+listed in ``fill/refusals.parquet``.
 
 **Big O.** The table is unpartitioned and R2's compacted files each span most agencies, and DuckDB writes Iceberg
 merge-on-read: a MERGE rewrites nothing in place but writes each changed row anew with a positional delete. A batch
@@ -43,6 +46,7 @@ import json
 import secrets
 import shutil
 import time
+from contextlib import suppress
 from os import getenv
 from pathlib import Path
 
@@ -61,9 +65,59 @@ HOST_COLUMNS = ("text_content", "text_extraction_status", "pdf_extraction_result
 #: submitter's ``first_name``, ``last_name``, ``organization`` and ``category`` NULL on every row ingested before the
 #: extract mapped them (ff812e5, 2026-06-15) although the 2026-09-28 re-read had them in hand.
 FILL_COLUMNS = tuple(c for c in COMMENT.schema if c not in (*KEY_COLUMNS, "comment", *HOST_COLUMNS))
-#: What :func:`prepare` reads of each read copy: the object key naming the copy, the version, and the fill values.
-#: The staged fill input (runbook) holds exactly these.
-READ_COLUMNS = ("key", "comment_id", "modify_date", *FILL_COLUMNS)
+#: The fill columns a fill considers, by name. ``attachments`` is the 2026-10 re-read's fill (owner, 2026-10-03): only
+#: ``attachments_json`` moved under SpicyDocs b19b092, so its staged read carries nothing else.
+PROFILES = {"all": FILL_COLUMNS, "attachments": ("attachments_json",)}
+
+
+def fill_columns(profile: str) -> tuple[str, ...]:
+    """The fill columns ``profile`` names; an unknown profile is refused."""
+    if profile not in PROFILES:
+        raise ValueError(f"no fill profile {profile!r}; one of {sorted(PROFILES)}")
+    return PROFILES[profile]
+
+
+def read_columns(profile: str) -> tuple[str, ...]:
+    """What :func:`prepare` reads of each read copy: the object key naming the copy, the version, and the profile's
+    fill values. A staged fill input (runbook) holds exactly these."""
+    return ("key", "comment_id", "modify_date", *fill_columns(profile))
+
+
+READ_COLUMNS = read_columns("all")
+
+
+#: The keys b19b092 adds to an attachment's entry, and only when the record states them.
+_RESTRICTIONS = ("restrictReasonType", "restrictReason")
+
+
+def downloadable_attachments(value: str | None) -> str | None:
+    """``attachments_json`` less what offers no file: every rendition with no ``url``, every entry left with none (a
+    withheld attachment states no ``fileFormats``) and each entry's restriction.
+
+    That is what the rule before SpicyDocs b19b092 (2026-03-15 to 0.53.0) wrote for the same record, NULL for no entry,
+    so a held value equal to this is one the read only adds to. Only removals: the value must be in the extract's own
+    spelling (``json.dumps``), and what is kept keeps its keys and order. None for a value of any other spelling or
+    shape, which then equals no held value.
+    """
+    try:
+        listed = json.loads(value or "null")
+        if json.dumps(listed) != value:
+            return None
+        kept = []
+        for entry in listed:
+            formats = [rendition for rendition in entry["formats"] or [] if rendition["url"]]
+            if formats:
+                kept.append({**{k: v for k, v in entry.items() if k not in _RESTRICTIONS}, "formats": formats})
+    except (ValueError, TypeError, KeyError, AttributeError):
+        return None
+    return json.dumps(kept) if kept else None
+
+
+#: Fill columns whose held value a read may replace, each with what takes the read's additions back out. Only
+#: ``attachments_json``: b19b092 lists every attachment a record lists, the rule before it dropped a withheld one and
+#: every rendition without a file, and the ETL rewrites a row only when its ``modify_date`` moves, so a row read
+#: before b19b092 keeps the shorter list until the re-read replaces it.
+ADDITIVE = {"attachments_json": downloadable_attachments}
 #: The Iceberg scan's virtual column naming each row's data file.
 FILE_COLUMN = "filename"
 #: Compressed bytes of catalog data files per batch; a larger file is still one batch.
@@ -96,6 +150,22 @@ def _row_md5(values: dict[str, str]) -> str:
 
 def _columns_md5(columns: list[str]) -> str:
     return _row_md5({c: f'"{c}"' for c in columns})
+
+
+def _filled(column: str, old: str, new: str) -> str:
+    """The cell after the fill, for row alias ``old`` and fill-row alias ``new`` (whose ``_held_`` value an
+    :data:`ADDITIVE` replacement expects to find)."""
+    held, kept, read = f'{new}."_held_{column}"', f'{old}."{column}"', f'{new}."{column}"'
+    if column not in ADDITIVE:
+        return f"COALESCE({kept}, {read})"
+    return f"CASE WHEN {held} IS NULL THEN COALESCE({kept}, {read}) WHEN {kept} = {held} THEN {read} ELSE {kept} END"
+
+
+def _changes(column: str, old: str, new: str) -> str:
+    """Whether the fill changes the cell (aliases as in :func:`_filled`)."""
+    held, kept, read = f'{new}."_held_{column}"', f'{old}."{column}"', f'{new}."{column}"'
+    fills = f"({kept} IS NULL AND {read} IS NOT NULL)"
+    return fills if column not in ADDITIVE else f"(CASE WHEN {held} IS NULL THEN {fills} ELSE {kept} = {held} END)"
 
 
 def _sha256(path: Path) -> str:
@@ -244,14 +314,19 @@ def _refuse_committed_failures(workdir: Path) -> None:
 # --------------------------------------------------------------------------- #
 # Prepare
 # --------------------------------------------------------------------------- #
-def prepare(workdir: Path, *, scope: dict[str, str] | None = None, reads: Path | None = None, con=None) -> dict:
+def prepare(
+    workdir: Path, *, scope: dict[str, str] | None = None, reads: Path | None = None, profile: str = "all", con=None,
+) -> dict:
     """Compute the fill at the catalog's current snapshot; return and write the counts-only receipt.
 
-    ``reads`` is the staged fill input (:data:`READ_COLUMNS`); by default the read parts under ``workdir/parts``.
-    Refuses a snapshot that lacks a fill column: the columns arrive with the deployed branch's first data commit
-    (runbook), never from this tool. Refuses while any batch committed and failed its check. Touches no catalog row
-    and needs no lock.
+    ``reads`` is the staged fill input (:func:`read_columns` of ``profile``); by default the read parts under
+    ``workdir/parts``. ``profile`` names the fill columns considered (:data:`PROFILES`); the receipt keeps them for
+    :func:`write`. Refuses a snapshot that lacks a fill column: the columns arrive with the deployed branch's first
+    data commit (runbook), never from this tool. Refuses a read that lacks one, and while any batch committed and
+    failed its check. Touches no catalog row and needs no lock.
     """
+    columns = fill_columns(profile)
+    additive = [c for c in columns if c in ADDITIVE]
     _refuse_committed_failures(workdir)
     own = con is None
     con = con or iceberg._connect()
@@ -262,10 +337,16 @@ def prepare(workdir: Path, *, scope: dict[str, str] | None = None, reads: Path |
         storage_access(con)
         snapshot = iceberg._read_snapshot(con, COMMENT)
         source = iceberg._snapshot_query(COMMENT, snapshot)
-        missing = [c for c in FILL_COLUMNS if c not in con.sql(source).columns]
+        missing = [c for c in columns if c not in con.sql(source).columns]
         if missing:
             raise RuntimeError(f"the comments catalog lacks {missing} at snapshot {snapshot.snapshot_id}: deploy the "
                                "branch and let one ETL data commit migrate the table before preparing "
+                               "(docs/comment-fields-fill.md)")
+        read_from = reads or workdir / "parts" / "*" / "*.parquet"
+        parts = f"read_parquet({_sql(read_from)}, hive_partitioning=false)"
+        lacking = [c for c in read_columns(profile) if c not in con.sql(f"SELECT * FROM {parts}").columns]
+        if lacking:
+            raise RuntimeError(f"the reads {read_from} lack {lacking}: stage them for the {profile!r} profile "
                                "(docs/comment-fields-fill.md)")
         table_rows = con.execute(f"SELECT count(*) FROM ({source})").fetchone()[0]
         where = " AND ".join(f'"{column}" = {_sql(value)}' for column, value in (scope or {}).items()) or "TRUE"
@@ -276,20 +357,22 @@ def prepare(workdir: Path, *, scope: dict[str, str] | None = None, reads: Path |
         # ``fill/work``, outside the artifact's ``fill/*.parquet``, and go once the receipt is written.
         work = out / "work"
         work.mkdir(exist_ok=True)
-        cat_file, read_file, versions_file = work / "catalog.parquet", work / "reads.parquet", work / "versions.parquet"
-        catalog, read_rows, versions = (f"read_parquet({_sql(path)})" for path in (cat_file, read_file, versions_file))
-        # Of a catalog cell the fill reads only whether it is NULL, so the catalog side is the key, the data file and
-        # one flag per fill column: the one scan of the remote table, streamed to disk.
-        nulls = ", ".join(f'"{c}" IS NULL AS "null_{c}"' for c in FILL_COLUMNS)
-        con.execute(f"""COPY (SELECT comment_id, modify_date, {nulls}, _file FROM ({with_file}) WHERE {where})
+        cat_file, read_file, versions_file, differs_file = (
+            work / f"{name}.parquet" for name in ("catalog", "reads", "versions", "differs"))
+        catalog, read_rows, versions, differs = (
+            f"read_parquet({_sql(path)})" for path in (cat_file, read_file, versions_file, differs_file))
+        # Of a catalog cell the fill reads only whether it is NULL, and the value only where a read may replace it, so
+        # the catalog side is the key, the data file, one flag per fill column and the replaceable values: the one
+        # scan of the remote table, streamed to disk.
+        nulls = ", ".join(f'"{c}" IS NULL AS "null_{c}"' for c in columns)
+        held = "".join(f', "{c}" AS "held_{c}"' for c in additive)
+        con.execute(f"""COPY (SELECT comment_id, modify_date, {nulls}{held}, _file FROM ({with_file}) WHERE {where})
                         TO {_sql(cat_file)} (FORMAT PARQUET, COMPRESSION ZSTD)""")
         duplicated = con.execute(f"SELECT count(*) FROM (SELECT comment_id FROM {catalog} GROUP BY 1 HAVING count(*) > 1)"
                                  ).fetchone()[0]
         if duplicated:
             raise RuntimeError(f"{duplicated} comment ids appear more than once in the catalog; run the dedupe first")
-        read_from = reads or workdir / "parts" / "*" / "*.parquet"
-        parts = f"read_parquet({_sql(read_from)}, hive_partitioning=false)"
-        values = ", ".join(f'CAST(s."{c}" AS VARCHAR) AS "{c}"' for c in FILL_COLUMNS)
+        values = ", ".join(f'CAST(s."{c}" AS VARCHAR) AS "{c}"' for c in columns)
         # The copies of the comments in scope, less their object keys: only a version read more than once can
         # conflict, so only those keys are read again, below.
         con.execute(f"""COPY (SELECT s.comment_id, s.modify_date, {values} FROM {parts} s
@@ -304,14 +387,14 @@ def prepare(workdir: Path, *, scope: dict[str, str] | None = None, reads: Path |
         spell = ", ".join(
             f"""count(DISTINCT CASE WHEN "{c}" IS NULL THEN 'n' ELSE 'v' || "{c}" END) AS "n_{c}", """
             f"""any_value("{c}") AS "v_{c}\""""
-            for c in FILL_COLUMNS)
+            for c in columns)
         con.execute(f"""CREATE OR REPLACE TEMP TABLE _spellings AS SELECT comment_id, modify_date, {spell}
                         FROM {read_rows} r WHERE EXISTS (SELECT 1 FROM _multi m WHERE {same})
                         GROUP BY comment_id, modify_date""")
         # Each version's value per column: a version read once states it; one read more often states it only where
         # its copies agree, so a conflicted column holds NULL and fills nothing.
-        agreed = ", ".join(f'CASE WHEN "n_{c}" = 1 THEN "v_{c}" END AS "{c}"' for c in FILL_COLUMNS)
-        stated = ", ".join(f'"{c}"' for c in FILL_COLUMNS)
+        agreed = ", ".join(f'CASE WHEN "n_{c}" = 1 THEN "v_{c}" END AS "{c}"' for c in columns)
+        stated = ", ".join(f'"{c}"' for c in columns)
         con.execute(f"""COPY (
             SELECT comment_id, modify_date, {stated} FROM {read_rows} r
             WHERE NOT EXISTS (SELECT 1 FROM _multi m WHERE {same})
@@ -322,42 +405,75 @@ def prepare(workdir: Path, *, scope: dict[str, str] | None = None, reads: Path |
                         FROM {parts} r WHERE EXISTS (SELECT 1 FROM _multi m WHERE {same}) GROUP BY ALL""")
         conflicts = " UNION ALL ".join(
             f"""SELECT comment_id, modify_date, '{c}' AS "column" FROM _spellings WHERE "n_{c}" > 1"""
-            for c in FILL_COLUMNS)
+            for c in columns)
         con.execute(f"""COPY (SELECT x.comment_id, x.modify_date, x."column", k.keys FROM ({conflicts}) x
                               JOIN _keys k ON k.comment_id = x.comment_id
                               AND k.modify_date IS NOT DISTINCT FROM x.modify_date ORDER BY 1, 3)
                         TO {_sql(out / 'conflicts.parquet')} (FORMAT PARQUET)""")
-        fills = {c: f"""(c."null_{c}" AND v."{c}" IS NOT NULL)""" for c in FILL_COLUMNS}
-        # Only the value to fill, NULL elsewhere: a write that overwrote instead of filling would blank a cell.
-        filled = ", ".join(f'CASE WHEN {fills[c]} THEN v."{c}" END AS "{c}"' for c in FILL_COLUMNS)
+        on_version = "v.comment_id = c.comment_id AND v.modify_date IS NOT DISTINCT FROM c.modify_date"
+        # Where a replaceable cell holds a value the version's agreed read differs from: whether the read only adds
+        # to it, and the value it would replace. Few rows, so the rule runs in Python on these alone, and the held
+        # value travels from here: carried through the whole-table join below it doubled that join's time (a
+        # stand-in of the 26.3M-row catalog, 2026-10-03: 6.0 s against 13.2 s).
+        for c in additive:
+            con.create_function(f"_additive_{c}", ADDITIVE[c], ["VARCHAR"], "VARCHAR", null_handling="special")
+        differing = [f"""SELECT c.comment_id, c.modify_date, '{c}' AS "column",
+                                _additive_{c}(v."{c}") IS NOT DISTINCT FROM c."held_{c}" AS additive,
+                                c."held_{c}" AS held
+                         FROM {catalog} c JOIN {versions} v ON {on_version}
+                         WHERE c."held_{c}" IS NOT NULL AND v."{c}" IS NOT NULL AND v."{c}" <> c."held_{c}\""""
+                     for c in additive]
+        none = ('SELECT NULL::VARCHAR AS comment_id, NULL::VARCHAR AS modify_date, NULL::VARCHAR AS "column", '
+                "NULL::BOOLEAN AS additive, NULL::VARCHAR AS held WHERE false")
+        con.execute(f"COPY ({' UNION ALL '.join(differing) or none}) TO {_sql(differs_file)} "
+                    "(FORMAT PARQUET, COMPRESSION ZSTD)")
+        con.execute(f"""COPY (SELECT comment_id, modify_date, "column" FROM {differs} WHERE NOT additive ORDER BY 1, 3)
+                        TO {_sql(out / 'refusals.parquet')} (FORMAT PARQUET)""")
+        replaces = {c: f"r_{c}.comment_id IS NOT NULL" for c in additive}
+        replaced = "".join(
+            f""" LEFT JOIN (SELECT comment_id, modify_date, held FROM {differs} WHERE "column" = '{c}' AND additive) r_{c}
+                 ON r_{c}.comment_id = c.comment_id AND r_{c}.modify_date IS NOT DISTINCT FROM c.modify_date"""
+            for c in additive)
+        fills = {c: f"""(c."null_{c}" AND v."{c}" IS NOT NULL)""" for c in columns}
+        changes = {c: f"({fills[c]} OR {replaces[c]})" if c in replaces else fills[c] for c in columns}
+        # Only the value to write, NULL elsewhere: a write that overwrote instead of filling would blank a cell. A
+        # replacement also carries the value it replaces, which the write requires the row still to hold.
+        filled = ", ".join(f'CASE WHEN {changes[c]} THEN v."{c}" END AS "{c}"' for c in columns)
+        expected = "".join(f', r_{c}.held AS "_held_{c}"' for c in additive)
         # Unsorted: a sort of the 17.3M rows to fill (2026-10-03) spilled past 14 GB under a 3 GB budget, and a
         # batch reads this file filtered on ``_file`` whatever its order.
         con.execute(f"""COPY (
-            SELECT c.comment_id, c.modify_date, c._file, {filled}
-            FROM {catalog} c JOIN {versions} v ON v.comment_id = c.comment_id
-            AND v.modify_date IS NOT DISTINCT FROM c.modify_date
-            WHERE {' OR '.join(fills.values())}
+            SELECT c.comment_id, c.modify_date, c._file, {filled}{expected}
+            FROM {catalog} c JOIN {versions} v ON {on_version}{replaced}
+            WHERE {' OR '.join(changes.values())}
         ) TO {_sql(out / 'fill.parquet')} (FORMAT PARQUET, COMPRESSION ZSTD)""")
         counts = con.execute(f"""
             SELECT count(*),
                    count(*) FILTER (WHERE NOT EXISTS (SELECT 1 FROM {read_rows} r WHERE r.comment_id = c.comment_id)),
                    count(*) FILTER (WHERE EXISTS (SELECT 1 FROM {read_rows} r WHERE r.comment_id = c.comment_id)
-                                    AND NOT EXISTS (SELECT 1 FROM {versions} v WHERE v.comment_id = c.comment_id
-                                                    AND v.modify_date IS NOT DISTINCT FROM c.modify_date))
+                                    AND NOT EXISTS (SELECT 1 FROM {versions} v WHERE {on_version}))
             FROM {catalog} c""").fetchall()[0]
         fill_rows = f"read_parquet({_sql(out / 'fill.parquet')})"
-        # A fill cell is non-NULL exactly where its rule held, so the fill file counts its own cells.
-        counted = ", ".join(f'count("{c}")' for c in FILL_COLUMNS)
-        to_fill, *by_column = con.execute(f"SELECT count(*), {counted} FROM {fill_rows}").fetchall()[0]
-        cells = dict(zip(FILL_COLUMNS, by_column))
-        conflicted = dict(zip(FILL_COLUMNS, con.execute(
-            f"SELECT {', '.join(f'count(*) FILTER (WHERE n_{c} > 1)' for c in FILL_COLUMNS)} FROM _spellings"
+        # A fill cell is non-NULL exactly where its rule held, so the fill file counts its own cells: a NULL filled
+        # where it carries no replaced value, a replacement where it does.
+        counted = [f'count("{c}") FILTER (WHERE "_held_{c}" IS NULL)' if c in replaces else f'count("{c}")'
+                   for c in columns] + [f'count("_held_{c}")' for c in additive]
+        to_fill, *by_column = con.execute(f"SELECT count(*), {', '.join(counted)} FROM {fill_rows}").fetchall()[0]
+        cells = dict(zip(columns, by_column))
+        replaced_cells = dict(zip(additive, by_column[len(columns):]))
+        refused = dict(con.execute(f"""SELECT "column", count(*) FILTER (WHERE NOT additive) FROM {differs}
+                                       GROUP BY 1""").fetchall())
+        conflicted = dict(zip(columns, con.execute(
+            f"SELECT {', '.join(f'count(*) FILTER (WHERE n_{c} > 1)' for c in columns)} FROM _spellings"
         ).fetchall()[0]))
         sizes = data_files(con)
         con.execute(f"""COPY (SELECT _file AS file, count(*) AS rows FROM {fill_rows}
                         GROUP BY 1 ORDER BY 1) TO {_sql(out / 'files.parquet')} (FORMAT PARQUET)""")
         files = con.execute(f"SELECT file, rows FROM read_parquet({_sql(out / 'files.parquet')})").fetchall()
     finally:
+        for c in additive:
+            with suppress(Exception):
+                con.remove_function(f"_additive_{c}")
         if own:
             con.close()
     unsized = [file for file, _ in files if sizes.get(file) is None]
@@ -367,9 +483,12 @@ def prepare(workdir: Path, *, scope: dict[str, str] | None = None, reads: Path |
     fill_sha256 = _sha256(out / "fill.parquet")
     receipt = {
         "prepare_id": f"{snapshot.snapshot_id}-{fill_sha256[:12]}-{secrets.token_hex(4)}", "fill_sha256": fill_sha256,
-        "snapshot": snapshot.__dict__, "scope": scope or {}, "reads": str(read_from),
+        "snapshot": snapshot.__dict__, "scope": scope or {}, "reads": str(read_from), "profile": profile,
+        "columns": list(columns),
         "table_rows": table_rows, "catalog_rows": counts[0], "unread": counts[1], "other_version_only": counts[2],
-        "rows_to_fill": to_fill, "cells_by_column": cells, "conflicted_versions_by_column": conflicted,
+        "rows_to_fill": to_fill, "cells_by_column": cells, "replaced_by_column": replaced_cells,
+        "refused_not_additive_by_column": {c: refused.get(c, 0) for c in additive},
+        "conflicted_versions_by_column": conflicted,
         "files": {file: {"rows": rows, "bytes": sizes[file]} for file, rows in files},
         "prepared_at": _now(),
     }
@@ -414,6 +533,8 @@ def write(
         raise RuntimeError("fill.parquet is not the one prepare.json names; prepare again")
     if not by_file and not prepared["scope"]:
         raise RuntimeError("--no-by-file is for a scoped pilot: prepare with --docket or --agency first")
+    if "columns" not in prepared:
+        raise RuntimeError("prepare.json names no fill columns (it predates fill profiles); prepare again")
     journal = _journal(workdir, prepared)
     blocking = [(path, line) for path, line in _unresolved_failures(workdir)
                 if path == journal or line.get("committed")]
@@ -434,7 +555,7 @@ def write(
     resources.configure(con, out / "spill")
     storage_access(con)
     table = iceberg._qualified(COMMENT)
-    missing = [c for c in FILL_COLUMNS if c not in iceberg._column_types(con, COMMENT)]
+    missing = [c for c in prepared["columns"] if c not in iceberg._column_types(con, COMMENT)]
     if missing:
         raise RuntimeError(f"the comments catalog lacks {missing}; the fill never migrates it")
     totals = {"batches": 0, "rows_changed": 0, "files_skipped_verified": len(done)}
@@ -486,7 +607,7 @@ def _write_batch(con, workdir, journal, prepared, table, files, expected, by_fil
                         TO {_sql(preimage)} (FORMAT PARQUET, COMPRESSION ZSTD)""")
         con.execute(f"CREATE OR REPLACE TEMP VIEW _prior AS SELECT * FROM read_parquet({_sql(preimage)})")
         kept = {"preimage": str(preimage), "preimage_sha256": _sha256(preimage)}
-        need = " OR ".join(f'(p."{c}" IS NULL AND b."{c}" IS NOT NULL)' for c in FILL_COLUMNS)
+        need = " OR ".join(_changes(c, "p", "b") for c in prepared["columns"])
         planned = con.execute(f"""SELECT count(*) FROM _prior p JOIN _batch b
             ON p.comment_id = b.comment_id AND p.modify_date IS NOT DISTINCT FROM b.modify_date WHERE {need}""").fetchone()[0]
         _append(journal, {"state": "pending", **ids, "planned": planned, "snapshot_before": current.__dict__, **kept,
@@ -494,14 +615,15 @@ def _write_batch(con, workdir, journal, prepared, table, files, expected, by_fil
         changed = 0
         if planned:
             on_file = f" AND t.{FILE_COLUMN} = s._file" if by_file else ""
-            sets = ", ".join(f'"{c}" = COALESCE(t."{c}", s."{c}")' for c in FILL_COLUMNS)
-            need_t = " OR ".join(f'(t."{c}" IS NULL AND s."{c}" IS NOT NULL)' for c in FILL_COLUMNS)
+            sets = ", ".join(f'"{c}" = {_filled(c, "t", "s")}' for c in prepared["columns"])
+            need_t = " OR ".join(_changes(c, "t", "s") for c in prepared["columns"])
             changed = con.execute(f"""MERGE INTO {table} t USING _batch s
                 ON t.comment_id = s.comment_id AND t.modify_date IS NOT DISTINCT FROM s.modify_date{on_file}
                 WHEN MATCHED AND ({need_t}) THEN UPDATE SET {sets}""").fetchone()[0]
             if changed != planned:
                 raise FillVerificationError(f"MERGE changed {changed} rows for {planned} planned")
-            _check(con, table, columns, files, before_files, by_file, prepared["table_rows"], postimage=postimage)
+            _check(con, table, columns, prepared["columns"], files, before_files, by_file, prepared["table_rows"],
+                   postimage=postimage)
             kept |= {"postimage": str(postimage), "postimage_sha256": _sha256(postimage)}
         con.execute("COMMIT")
     except Exception as error:
@@ -528,10 +650,10 @@ def _write_batch(con, workdir, journal, prepared, table, files, expected, by_fil
     return after, changed
 
 
-def _check(con, table: str, columns: list[str], files: list[str], before_files: set[str] | None, by_file: bool,
-           table_rows: int, *, postimage: Path, at: int | None = None) -> None:
-    """Inside the transaction: the batch's rows equal the pre-image with the fill applied, new files hold nothing
-    else, and the table holds the ``table_rows`` it held at prepare.
+def _check(con, table: str, columns: list[str], filled: list[str], files: list[str], before_files: set[str] | None,
+           by_file: bool, table_rows: int, *, postimage: Path, at: int | None = None) -> None:
+    """Inside the transaction: the batch's rows equal the pre-image with the fill applied to its ``filled`` columns,
+    new files hold nothing else, and the table holds the ``table_rows`` it held at prepare.
 
     Rows are read from the batch's old files (those the MERGE left) and from files that did not exist before the
     transaction (those it wrote). ``before_files`` is None for a scoped pilot, which reads the batch's keys anywhere.
@@ -562,8 +684,7 @@ def _check(con, table: str, columns: list[str], files: list[str], before_files: 
     con.execute(f"""CREATE OR REPLACE TEMP TABLE _got AS SELECT comment_id, {_columns_md5(columns)} AS row_md5
                     FROM {table} WHERE {where} AND comment_id IN (SELECT comment_id FROM _prior)""")
     con.execute(f"COPY _got TO {_sql(postimage)} (FORMAT PARQUET, COMPRESSION ZSTD)")
-    want = {c: f'CASE WHEN p."{c}" IS NULL THEN b."{c}" ELSE p."{c}" END' if c in FILL_COLUMNS else f'p."{c}"'
-            for c in columns}
+    want = {c: _filled(c, "p", "b") if c in filled else f'p."{c}"' for c in columns}
     con.execute(f"""CREATE OR REPLACE TEMP TABLE _want AS SELECT p.comment_id, {_row_md5(want)} AS row_md5
                     FROM _prior p LEFT JOIN _batch b
                     ON p.comment_id = b.comment_id AND p.modify_date IS NOT DISTINCT FROM b.modify_date""")
@@ -631,8 +752,8 @@ def _recover(con, journal: Path, pending: dict, prepared: dict, table: str, expe
                 f"{_sql(fill_dir(journal.parent.parent) / 'fill.parquet')}) WHERE _file IN ({file_list})")
     postimage = Path(kept["preimage"]).with_name(f"{Path(kept['preimage']).stem}-written.parquet")
     try:
-        _check(con, table, list(COMMENT.schema), pending["files"], set(pending["before_files"]), pending["by_file"],
-               prepared["table_rows"], postimage=postimage, at=after["snapshot_id"])
+        _check(con, table, list(COMMENT.schema), prepared["columns"], pending["files"], set(pending["before_files"]),
+               pending["by_file"], prepared["table_rows"], postimage=postimage, at=after["snapshot_id"])
     except FillVerificationError as error:
         kept |= {"postimage": str(postimage), "postimage_sha256": _sha256(postimage)}
         _append(journal, {"state": "failed", **ids, "committed": True, "reason": f"recovered commit: {error}", **kept,

@@ -1,9 +1,11 @@
 name: Fill comment fields (one-off)
 
 # The comment re-read's catalog write (docs/comment-fields-fill.md), run once by
-# hand: fill the comment columns older catalog rows lack, from the staged read
-# (a fill-only Parquet in the data bucket), one verified batch of data files at
-# a time. Also undoes a committed batch from a run's pre-images. Never scheduled.
+# hand: fill the comment columns older catalog rows lack, and replace an
+# attachments list the re-read only adds to, from the staged read (a fill-only
+# Parquet in the data bucket, built for one profile), one verified batch of
+# data files at a time. Also undoes a committed batch from a run's pre-images.
+# Never scheduled.
 on:
   workflow_dispatch:
     inputs:
@@ -20,6 +22,12 @@ on:
         description: 'Its sha256, from the runbook; the run refuses any other bytes'
         required: false
         type: string
+      profile:
+        description: 'The fill columns the staged read was built for: all | attachments (the 2026-10 re-read); prepare refuses a read lacking one'
+        required: false
+        default: 'all'
+        type: choice
+        options: [all, attachments]
       pilot_docket:
         description: 'pilot: the docket to fill as one batch'
         required: false
@@ -138,10 +146,11 @@ jobs:
         env:
           OPERATION: ${{ inputs.operation }}
           PILOT_DOCKET: ${{ inputs.pilot_docket }}
+          PROFILE: ${{ inputs.profile }}
         run: |
           SCOPE=""
           if [ "$OPERATION" = "pilot" ]; then SCOPE="--docket $PILOT_DOCKET"; fi
-          uv run fill-comment-fields prepare --workdir "$WORKDIR" --reads "$WORKDIR/reads.parquet" $SCOPE
+          uv run fill-comment-fields prepare --workdir "$WORKDIR" --reads "$WORKDIR/reads.parquet" --profile "$PROFILE" $SCOPE
 
       - name: Write, one verified batch at a time
         if: inputs.operation == 'fill' || inputs.operation == 'pilot'

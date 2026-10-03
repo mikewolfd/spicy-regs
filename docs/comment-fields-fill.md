@@ -19,6 +19,12 @@ reaches rows read before it existed. That is why these are NULL:
 
 The same read seeds `comment_attributes`.
 
+Owner decision, 2026-10-03: read the archive again (record shape `s3`,
+below) so that `attachments_json` lists every attachment the publisher
+lists, withheld ones included (SpicyDocs b19b092), and replace a held list
+the new read only adds to. Sizing:
+`mcp-chaos-2026-10-02/round5/reread-sizing.md`.
+
 Receipts: `~/Work/corpora/supply-2026-09-02/receipts/comments-full-reread-2026-09-28/`.
 
 ## Commands
@@ -31,16 +37,22 @@ All run through `uv run --frozen fill-comment-fields …` (locally,
 | --- | --- | --- |
 | Plan | `plan --workdir W --manifest manifest.parquet` | no |
 | Read | `read --workdir W --shard i --shards n` (`run_read.zsh` runs eight) | no |
+| Stage | `stage --workdir W --out D [--profile P]` (the staged read) | no |
+| Upload | `upload-staged --out D` | no |
 | Fetch | `fetch --workdir W --key K --sha256 H` (the staged read) | no |
 | Journals | `journals --workdir W --prefix P [--push]` | no |
-| Prepare | `prepare --workdir W [--reads F] [--docket D \| --agency A]` | reads one snapshot |
+| Prepare | `prepare --workdir W [--reads F] [--profile P] [--docket D \| --agency A]` | reads one snapshot |
 | Write | `write --workdir W [--no-by-file] [--clear-failure]` | writes, under the lock |
 | Undo | `undo --workdir W --batch B --expected-snapshot S` | writes, under the lock |
 | Seed attributes | `attributes --workdir W` | no |
 
 **Plan** splits the ETL manifest's comment keys into 20,000-key chunks per
 agency. A plan is named by the manifest digest and the record shape, so a
-newer manifest adds only the keys since and a new shape is a new plan.
+newer manifest adds only the keys since and a new shape is a new plan. The
+shape is `s3` since 2026-10-03: `attachments_json` as SpicyDocs b19b092
+extracts it. The 2026-09-28 parts are `s2`. `plan` and `read` refuse to run
+under a SpicyDocs that drops withheld attachments, since its `s3` parts
+would hold `s2`'s values.
 
 **Read** writes one part per chunk. Each part row holds:
 
@@ -54,20 +66,33 @@ objects are journaled. Each process stops cleanly past `--max-rss-mb`, or
 before a chunk when the disk has less than `--min-free-gb`.
 
 **The staged read.** A runner cannot see the parts, so one fill-only Parquet
-file carries what `prepare` reads of them (`READ_COLUMNS`): each copy's object
-key, `comment_id`, `modify_date` and the fill columns, which since 2026-10-03
-are every column of the table a part holds (`FILL_COLUMNS`: the submitter's
-name, organization and category among them). It holds no attribute JSON and
-no body; every column it holds goes public in `comments` anyway, which is why
-it may sit in the data bucket. A staged read built for the earlier seven-column
-fill lacks the new columns, and `prepare --reads` refuses it on the first
-missing one: stage the parts again before the next fill. `fetch` refuses any bytes but the named sha256. Delete the staging
-prefix (the file, its `.sha256` and `journals/`, after copying the journals
-into the receipts) once the fill is done.
+file carries what `prepare` reads of them for one profile
+(`read_columns(profile)`): each copy's object key, `comment_id`,
+`modify_date` and the profile's fill columns.
+
+- `all` (the default): every column of the table a part holds
+  (`FILL_COLUMNS`), the submitter's name, organization and category among
+  them.
+- `attachments`: `attachments_json` alone, for the 2026-10 re-read.
+
+`stage` builds it from this shape's parts, every read copy a row. It holds no
+attribute JSON (email, phone, fax), no ETag or size, and no body digest:
+every column but the key goes public in `comments` anyway, which is why it
+may sit in the data bucket. `stage` checks the written file against the
+parts with DuckDB and with Arrow, and removes it on any failure. It writes
+`reads.parquet.sha256` and `staging.json`. `upload-staged` puts both files
+under `staging/comment-fields-fill-<sha12>/`, refuses a prefix that holds
+anything, and reads the file back. `prepare --reads` refuses a staged read
+that lacks a column of its profile, and the workflow's `profile` input must
+name the profile the file was staged for. `fetch` refuses any bytes but the
+named sha256. Delete the staging prefix (the file, its `.sha256` and
+`journals/`, after copying the journals into the receipts) once the fill is
+done.
 
 **Prepare** reads the catalog narrowly at its current snapshot: the key,
-`modify_date`, whether each fill column is NULL (never its value) and each
-row's data file, and counts the table's rows. It checks the fill columns at
+`modify_date`, whether each fill column is NULL (the value only of
+`attachments_json`, which a read may replace) and each row's data file, and
+counts the table's rows. It checks the fill columns at
 that snapshot and refuses if one is missing. It also refuses while any journal
 holds a batch that committed and failed its check (below). Each step streams
 its input into a Parquet file under `fill/work/`, outside the artifact,
@@ -92,6 +117,22 @@ A read row fills a catalog cell only when all of these hold:
   stated null counting as one spelling. A column the copies disagree on is
   listed in `fill/conflicts.parquet` and fills nothing; the others still fill.
 
+One rule replaces a value, in `attachments_json` only (`ADDITIVE`). Under
+the same version and agreement, a read replaces the held list when it only
+adds to it: the read is in the extract's own spelling, and with its
+renditions that have no `url`, the entries left with none and each entry's
+restriction removed (`downloadable_attachments`), it equals the held value
+byte for byte. That removal is exactly the rule before b19b092, so a list
+read before it is replaced by the same record's full list. Any other read
+list that differs from a held one is refused, counted
+(`refused_not_additive_by_column`) and listed in `fill/refusals.parquet`. A
+read that states no list never blanks a held one.
+
+`prepare.json` names its profile and `columns`, and counts per column the
+NULL cells filled (`cells_by_column`), the lists replaced
+(`replaced_by_column`), the refusals and the conflicted versions;
+`other_version_only` counts rows read only at another `modify_date`.
+
 **Write** applies the fill in batches of whole data files, up to 512 MiB of
 compressed files each. It never migrates the table and refuses if a fill
 column is missing. Each batch runs in one transaction. The transaction reads
@@ -103,12 +144,15 @@ another writer committed meanwhile:
 2. It writes the batch's rows, as they are, to `fill/preimage/`, and journals
    the batch as `pending` with the pre-image's digest.
 3. It runs one MERGE on `comment_id`, `modify_date` and `filename` that fills
-   only NULL cells, and requires the MERGE's count to equal the planned count.
+   only NULL cells, and replaces a list only where the row still holds the
+   value prepare read (the fill row carries it). It requires the MERGE's
+   count to equal the planned count.
 4. It reads the batch's rows back inside the transaction, from its old files
    and from the files the MERGE wrote, and keeps each row's key and digest in
    `fill/preimage/…-written.parquet`. The rows must equal the pre-image with
-   the fill applied, on every column; the new files must hold no row outside
-   the batch; and the table must hold exactly the rows it held at prepare.
+   the fill and the replacements applied, on every column; the new files must
+   hold no row outside the batch; and the table must hold exactly the rows it
+   held at prepare.
    DuckDB's Iceberg transaction reads its own MERGE before COMMIT
    (`bench/txn_readback.json`).
 
@@ -266,6 +310,40 @@ Order of dispatches:
    (above) before anything else.
 
 The next mirror publication carries the filled rows.
+
+## The 2026-10 re-read (`attachments`)
+
+Read, stage, then fill, each step after the last has finished:
+
+1. **Read**, on a workstation, with no lock. Use a branch that vendors the
+   SpicyDocs release carrying b19b092 (`plan` refuses any other), deployed to
+   the ETL first so that rows ingested meanwhile get the same rule. Use a
+   fresh workdir: the 2026-09-28 one holds `s2` parts and logs.
+   `plan --workdir W --manifest <current manifest.parquet>`, then
+   `read --workdir W --shard i --shards 8` for each shard (the 2026-09-28
+   receipts' `run_read.zsh` runs eight and retries; point its `cd` and `R` at
+   the branch and `W`). That is about 26.7M unsigned GETs to the public
+   bucket, about 76 GB and 3–4 hours. A shard that exits 3 resumes on rerun.
+2. **Stage**: `stage --workdir W --out W/staging-attachments --profile attachments`,
+   then `upload-staged --out W/staging-attachments`. Copy `staging.json` into
+   the receipts.
+3. **Fill**, on a runner: dispatch `fill-comment-fields.yml` with
+   `profile: attachments`, the upload's `staging_key` and `reads_sha256`, in
+   this order: `prepare` (review `replaced_by_column`, the refusals, the
+   conflicts and `other_version_only`), then `pilot` on a docket with withheld
+   attachments (EPA-HQ-OW-2022-0114 lists 58 entries in 16 records), then
+   `fill`.
+
+Cautions:
+
+- Dispatch only after the 18-column fill has finished and its staging prefix
+  is deleted.
+- `comments-catalog-write` holds one running and one pending run; a third
+  dispatch cancels the pending one. Check `gh run list` first and dispatch
+  one step at a time, clear of the 06:25Z sweep (about 3 hours; it checks out
+  `main` at start) and the 18:25Z retry.
+- An ETL commit between batches stops the fill: prepare again. The workflow
+  re-enables compaction at the end; confirm it did.
 
 ## Preconditions
 

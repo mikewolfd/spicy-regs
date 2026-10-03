@@ -20,6 +20,16 @@ from spicy_regs.sources import iceberg
 
 T0 = "2020-01-01T00:00:00Z"
 
+# One comment's attachments in both shapes. HELD is the rule before SpicyDocs b19b092 (2026-03-15 to 0.53.0): only
+# downloadable renditions, an entry with none dropped. LISTED is b19b092's: every attachment the record lists, a
+# withheld one with ``formats`` null and its restriction, a rendition with no file with ``url`` null.
+_PDF = {"url": "https://downloads.regulations.gov/EPA-X-0001-0002/attachment_1.pdf", "format": "pdf", "size": 1000}
+HELD = json.dumps([{"title": "Letter", "formats": [_PDF]}])
+LISTED = json.dumps([
+    {"title": "Letter", "formats": [_PDF, {"url": None, "format": "docx", "size": 900}]},
+    {"title": "Study", "formats": None, "restrictReasonType": "Copyrighted", "restrictReason": "Copyrighted material"},
+])
+
 
 @pytest.fixture
 def catalog(tmp_path, monkeypatch):
@@ -64,7 +74,8 @@ def seed(connect, rows):
 
 
 def reads(tmp_path, rows, agency="EPA"):
-    part = tmp_path / "parts" / f"agency={agency}" / f"p{len(list(tmp_path.glob('parts/*/*')))}.parquet"
+    """One read part, named as ``read`` names this record shape's parts."""
+    part = tmp_path / "parts" / f"agency={agency}" / f"p-{cf.RECORD_SHAPE}-{len(list(tmp_path.glob('parts/*/*'))):05d}.parquet"
     part.parent.mkdir(parents=True, exist_ok=True)
     full = [{**dict.fromkeys(cf.PART_SCHEMA), "agency_code": agency, "modify_date": T0, **r} for r in rows]
     pl.DataFrame(full, schema=cf.PART_SCHEMA).write_parquet(part)
@@ -150,7 +161,7 @@ def test_prepare_leaves_only_its_outputs_where_the_artifact_collects_them(tmp_pa
     prepared = cfw.prepare(tmp_path)
     assert (prepared["rows_to_fill"], prepared["conflicted_versions_by_column"]["subtype"]) == (1, 1)
     assert sorted(path.name for path in (tmp_path / "fill").glob("*.parquet")) == [
-        "conflicts.parquet", "files.parquet", "fill.parquet"]
+        "conflicts.parquet", "files.parquet", "fill.parquet", "refusals.parquet"]
     assert not (tmp_path / "fill" / "work").exists()
 
 
@@ -174,6 +185,120 @@ def test_copies_that_disagree_on_one_column_block_only_that_column(tmp_path, cat
     assert [(c["comment_id"], c["column"], list(c["keys"])) for c in conflicts] == [("A", "attachments_json",
                                                                                      ["a", "a(1)"])]
     assert prepared["conflicted_versions_by_column"]["attachments_json"] == 1
+
+
+def test_a_read_that_only_adds_withheld_attachments_replaces_the_held_list(tmp_path, catalog):
+    """The 2026-10 re-read: the held list is the read's with its withheld entries and file-less renditions removed."""
+    seed(catalog, [row("A", attachments_json=HELD)])
+    reads(tmp_path, [{"key": "a", "comment_id": "A", "attachments_json": LISTED}])
+    prepared, written = fill(tmp_path, catalog)
+    assert table(catalog)["A"]["attachments_json"] == LISTED
+    assert (prepared["rows_to_fill"], written["rows_changed"]) == (1, 1)
+    assert (prepared["replaced_by_column"], prepared["cells_by_column"]["attachments_json"]) == ({"attachments_json": 1}, 0)
+    assert prepared["refused_not_additive_by_column"] == {"attachments_json": 0}
+
+
+def test_the_downloadable_part_of_a_listed_value_is_the_earlier_rules_value():
+    """Both shapes: b19b092's value less what offers no file is the earlier rule's, and the earlier rule's is its own."""
+    assert cfw.downloadable_attachments(LISTED) == HELD
+    assert cfw.downloadable_attachments(HELD) == HELD
+    only_withheld = json.dumps([{"title": "Study", "formats": None, "restrictReasonType": "Copyrighted"}])
+    assert cfw.downloadable_attachments(only_withheld) is None  # the earlier rule wrote NULL for it
+    for other in ("{}", "[1]", '[{"title": "x"}]', "not json", None):
+        assert cfw.downloadable_attachments(other) is None
+
+
+def test_the_installed_extract_projects_to_the_earlier_rules_value():
+    """Whichever SpicyDocs is installed, before or after b19b092, its value for a record listing a withheld attachment
+    and a rendition with no file projects to the earlier rule's value."""
+    record = {"data": {"id": "EPA-X-0001-0002", "attributes": {"modifyDate": T0}}, "included": [
+        {"type": "attachments", "attributes": {"title": "Letter", "fileFormats": [
+            {"fileUrl": _PDF["url"], "format": "pdf", "size": 1000}, {"fileUrl": None, "format": "docx", "size": 900}]}},
+        {"type": "attachments", "attributes": {"title": "Study", "fileFormats": None,
+                                               "restrictReasonType": "Copyrighted",
+                                               "restrictReason": "Copyrighted material"}},
+    ]}
+    assert cfw.downloadable_attachments(COMMENT.extract(record)["attachments_json"]) == HELD
+
+
+@pytest.mark.parametrize("read", [
+    json.dumps([{"title": "Letter", "formats": [{**_PDF, "url": _PDF["url"] + "?v=2"}]}]),  # a changed file
+    json.dumps([{"title": "Study", "formats": None, "restrictReasonType": "Copyrighted"}]),  # the held entry gone
+    json.dumps([{"title": "Letter", "formats": [_PDF]}], separators=(",", ":")),  # another spelling of the same list
+    json.dumps([{"formats": [_PDF], "title": "Letter"}]),  # the same entry, its keys reordered
+    json.dumps([{"title": "Letter", "formats": [{**_PDF, "checksum": "x"}]}]),  # a rendition with more than a file
+])
+def test_a_read_that_does_more_than_add_is_refused_and_counted(tmp_path, catalog, read):
+    seed(catalog, [row("A", attachments_json=HELD)])
+    reads(tmp_path, [{"key": "a", "comment_id": "A", "attachments_json": read}])
+    prepared, written = fill(tmp_path, catalog)
+    assert table(catalog)["A"]["attachments_json"] == HELD
+    assert (prepared["rows_to_fill"], written["rows_changed"]) == (0, 0)
+    assert prepared["refused_not_additive_by_column"] == {"attachments_json": 1}
+    assert pl.read_parquet(tmp_path / "fill" / "refusals.parquet").to_dicts() == [
+        {"comment_id": "A", "modify_date": T0, "column": "attachments_json"}]
+
+
+def test_a_read_of_another_version_replaces_nothing(tmp_path, catalog):
+    seed(catalog, [row("A", attachments_json=HELD)])
+    reads(tmp_path, [{"key": "a", "comment_id": "A", "modify_date": "2021-06-01T00:00:00Z", "attachments_json": LISTED}])
+    prepared, written = fill(tmp_path, catalog)
+    assert table(catalog)["A"]["attachments_json"] == HELD
+    assert (prepared["other_version_only"], prepared["replaced_by_column"], written["rows_changed"]) == (
+        1, {"attachments_json": 0}, 0)
+
+
+def test_copies_that_disagree_replace_nothing(tmp_path, catalog):
+    longer = json.dumps([*json.loads(LISTED), {"title": "Annex", "formats": None, "restrictReasonType": "Other"}])
+    seed(catalog, [row("A", attachments_json=HELD)])
+    reads(tmp_path, [{"key": "a", "comment_id": "A", "attachments_json": LISTED},
+                     {"key": "a(1)", "comment_id": "A", "attachments_json": longer}])
+    prepared, written = fill(tmp_path, catalog)
+    assert table(catalog)["A"]["attachments_json"] == HELD
+    assert prepared["conflicted_versions_by_column"]["attachments_json"] == 1
+    assert (prepared["replaced_by_column"], prepared["refused_not_additive_by_column"]) == (
+        {"attachments_json": 0}, {"attachments_json": 0})
+
+
+def test_a_null_held_list_still_fills_and_an_equal_one_is_left_alone(tmp_path, catalog):
+    seed(catalog, [row("A"), row("B", attachments_json=LISTED)])
+    reads(tmp_path, [{"key": "a", "comment_id": "A", "attachments_json": LISTED},
+                     {"key": "b", "comment_id": "B", "attachments_json": LISTED}])
+    prepared, written = fill(tmp_path, catalog)
+    assert (table(catalog)["A"]["attachments_json"], table(catalog)["B"]["attachments_json"]) == (LISTED, LISTED)
+    assert (prepared["cells_by_column"]["attachments_json"], prepared["replaced_by_column"]) == (
+        1, {"attachments_json": 0})
+    assert written["rows_changed"] == 1
+
+
+def test_a_replacement_is_written_only_over_the_value_it_replaces(tmp_path, catalog):
+    """A stale fill row expecting another held value matches no MERGE update, so the cell keeps what it holds."""
+    seed(catalog, [row("A", attachments_json=HELD), row("B", attachments_json="[]")])
+    reads(tmp_path, [{"key": "a", "comment_id": "A", "attachments_json": LISTED}])
+    cfw.prepare(tmp_path)
+    fill_file = tmp_path / "fill" / "fill.parquet"
+    rows = pl.read_parquet(fill_file)
+    pl.concat([rows, rows.with_columns(pl.lit("B").alias("comment_id"))]).write_parquet(fill_file)  # B holds "[]"
+    _restamp(tmp_path)
+    with catalog() as con:
+        assert cfw.write(tmp_path, con=con)["rows_changed"] == 1
+    assert (table(catalog)["A"]["attachments_json"], table(catalog)["B"]["attachments_json"]) == (LISTED, "[]")
+
+
+def test_a_merge_that_replaces_without_the_held_guard_is_rolled_back(tmp_path, catalog):
+    seed(catalog, [row("A", attachments_json=HELD), row("B", attachments_json="[]")])
+    reads(tmp_path, [{"key": "a", "comment_id": "A", "attachments_json": LISTED}])
+    cfw.prepare(tmp_path)
+    fill_file = tmp_path / "fill" / "fill.parquet"
+    rows = pl.read_parquet(fill_file)
+    pl.concat([rows, rows.with_columns(pl.lit("B").alias("comment_id"))]).write_parquet(fill_file)
+    _restamp(tmp_path)
+    unguarded = lambda sql: re.sub(  # noqa: E731
+        r'WHEN t\."attachments_json" = s\."_held_attachments_json" THEN', "WHEN TRUE THEN",
+        re.sub(r"WHEN MATCHED AND \(.*\) THEN UPDATE", "WHEN MATCHED THEN UPDATE", sql, flags=re.S)) if _merge(sql) else sql
+    with catalog() as con, pytest.raises(cfw.FillVerificationError):
+        cfw.write(tmp_path, con=Proxy(con, rewrite=unguarded))
+    assert (table(catalog)["A"]["attachments_json"], table(catalog)["B"]["attachments_json"]) == (HELD, "[]")
 
 
 def test_a_stated_null_disagreeing_with_a_value_is_a_conflict(tmp_path, catalog):
@@ -504,6 +629,78 @@ def test_prepare_reads_the_staged_fill_input_as_it_reads_the_parts(tmp_path, cat
     staged = tmp_path / "reads.parquet"
     pl.read_parquet(tmp_path / "parts" / "*" / "*.parquet").select(cfw.READ_COLUMNS).write_parquet(staged)
     assert cfw.prepare(tmp_path, reads=staged)["fill_sha256"] == from_parts["fill_sha256"]
+
+
+# --------------------------------------------------------------------------- #
+# Profiles and the staged read
+# --------------------------------------------------------------------------- #
+def test_the_attachments_profile_stages_four_columns_and_fills_only_attachments(tmp_path, catalog):
+    seed(catalog, [row("A", attachments_json=HELD), row("B")])
+    reads(tmp_path, [{"key": "a", "comment_id": "A", "attachments_json": LISTED, "subtype": "S"},
+                     {"key": "b", "comment_id": "B", "attachments_json": LISTED, "subtype": "S"},
+                     {"key": "b(1)", "comment_id": "B", "attachments_json": LISTED, "first_name": "Kristen"}])
+    staged = cf.stage(tmp_path, tmp_path / "staged", profile="attachments")
+    assert staged["columns"] == ["key", "comment_id", "modify_date", "attachments_json"] and all(staged["checks"].values())
+    assert pl.read_parquet(tmp_path / "staged" / "reads.parquet").columns == staged["columns"]
+    assert (staged["rows"], staged["distinct_comment_ids"], staged["non_null_by_column"]["attachments_json"]) == (3, 2, 3)
+    from_parts = cfw.prepare(tmp_path, profile="attachments")
+    prepared = cfw.prepare(tmp_path, reads=tmp_path / "staged" / "reads.parquet", profile="attachments")
+    assert prepared["fill_sha256"] == from_parts["fill_sha256"] and prepared["columns"] == ["attachments_json"]
+    assert (prepared["replaced_by_column"], prepared["cells_by_column"]) == ({"attachments_json": 1},
+                                                                            {"attachments_json": 1})
+    with catalog() as con:
+        assert cfw.write(tmp_path, con=con)["rows_changed"] == 2
+    rows = table(catalog)
+    assert (rows["A"]["attachments_json"], rows["B"]["attachments_json"]) == (LISTED, LISTED)
+    assert (rows["A"]["subtype"], rows["B"]["subtype"], rows["B"]["first_name"]) == (None, None, None)
+
+
+def test_a_staged_read_lacking_a_profile_column_is_refused(tmp_path, catalog):
+    seed(catalog, [row("A")])
+    reads(tmp_path, [{"key": "a", "comment_id": "A", "attachments_json": LISTED}])
+    cf.stage(tmp_path, tmp_path / "staged", profile="attachments")
+    with pytest.raises(RuntimeError, match="lack"):
+        cfw.prepare(tmp_path, reads=tmp_path / "staged" / "reads.parquet")  # the "all" profile
+    with pytest.raises(ValueError, match="profile"):
+        cfw.prepare(tmp_path, profile="attachment")
+
+
+def test_no_profile_stages_a_private_column_and_the_check_would_catch_one(tmp_path, monkeypatch):
+    """The private-attributes rule: a staged read holds the key and columns ``comments`` publishes, never the parts'
+    attribute JSON (email, phone, fax), ETag, size or body digest."""
+    staged = {c for profile in cfw.PROFILES for c in cfw.read_columns(profile)}
+    assert staged - {"key"} <= set(COMMENT.schema) - {"comment"}
+    assert not {c for c in staged if any(word in c for word in cf.PRIVATE_WORDS)}
+    private = set(cf.PART_SCHEMA) - set(COMMENT.schema) - {"key"}
+    assert private == {"etag", "size", "comment_sha256", "comment_length", "attributes_json"}
+    assert all(any(word in c for word in cf.PRIVATE_WORDS) for c in private)
+    reads(tmp_path, [{"key": "a", "comment_id": "A", "attributes_json": '{"email": "x@example.org"}'}])
+    monkeypatch.setitem(cfw.PROFILES, "leaky", ("attachments_json", "attributes_json"))
+    with pytest.raises(RuntimeError, match="private"):
+        cf.stage(tmp_path, tmp_path / "staged", profile="leaky")
+    assert not (tmp_path / "staged" / "reads.parquet").exists()
+
+
+def test_a_staged_read_is_built_once_and_uploaded_once_never_over_an_object(tmp_path):
+    from tests.generation_fakes import Store
+
+    reads(tmp_path, [{"key": "a", "comment_id": "A", "attachments_json": LISTED}])
+    out = tmp_path / "staged"
+    staged = cf.stage(tmp_path, out, profile="attachments")
+    with pytest.raises(RuntimeError, match="already holds"):
+        cf.stage(tmp_path, out, profile="attachments")
+    store = Store()
+    uploaded = cf.upload_staged(out, client=store)
+    sha = staged["file"]["sha256"]
+    assert uploaded["key"] == f"staging/comment-fields-fill-{sha[:12]}/reads.parquet"
+    assert store.objects[uploaded["key"]] == (out / "reads.parquet").read_bytes()
+    assert store.objects[uploaded["key"] + ".sha256"] == f"{sha}  reads.parquet\n".encode()
+    assert json.loads((out / "staging.json").read_text())["upload"] == uploaded
+    with pytest.raises(RuntimeError, match="already holds"):
+        cf.upload_staged(out, client=store)
+    (out / "reads.parquet").write_bytes(b"other bytes")
+    with pytest.raises(RuntimeError, match="not the staged read"):
+        cf.upload_staged(out, client=Store())
 
 
 def _filled(tmp_path, catalog) -> dict:

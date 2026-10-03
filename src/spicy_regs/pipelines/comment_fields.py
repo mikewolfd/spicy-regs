@@ -17,7 +17,9 @@ Two phases, so the long read holds no lock and the catalog write holds it briefl
   failures stays unwritten for the next run. Answers that are not transport failures (unreadable or empty objects)
   are kept in the chunk's journal line. A plan is named by the manifest digest and the record shape, so a changed
   shape is a new plan, never parts of two shapes stitched together.
-* ``write`` (see :func:`fill_catalog`) runs under the catalog lock.
+* ``stage`` writes what ``prepare`` reads of the parts for one fill profile into one checked file a runner fetches
+  (:func:`stage`, :func:`upload_staged`); ``prepare`` and ``write`` (``comment_fields_write``) then run under the
+  catalog lock.
 """
 
 from __future__ import annotations
@@ -30,6 +32,7 @@ import sys
 import time
 import zlib
 from collections.abc import Iterator
+from glob import glob
 from pathlib import Path
 
 import duckdb
@@ -40,8 +43,10 @@ from loguru import logger
 from spicy_regs.pipelines.comment_fields_write import (
     BATCH_BYTES,
     HOST_COLUMNS,
+    WRITE_RESOURCES,
     fetch_staged,
     prepare,
+    read_columns,
     sync_journals,
     undo,
     write,
@@ -50,8 +55,15 @@ from spicy_regs.schemas import COMMENT
 
 #: Keys per chunk: the resume unit, about 17 s of reads at the measured rate.
 CHUNK_KEYS = 20_000
-#: The part record's shape; a plan carries it, so a new shape is a new plan.
-RECORD_SHAPE = "s2"
+#: The part record's shape; a plan carries it, so a new shape is a new plan. s3 (2026-10-03): ``attachments_json`` as
+#: SpicyDocs b19b092 extracts it, every attachment the record lists, withheld ones included. The s2 parts (the
+#: 2026-09-28 read) hold the rule before it; under s2, ``plan`` on their workdir would add only the keys ingested since
+#: and keep the rest, so the owner's full re-read (2026-10-03) would replace nothing. :func:`require_record_shape`
+#: refuses to plan or read s3 under an extract that drops a withheld attachment.
+RECORD_SHAPE = "s3"
+#: A record listing one withheld attachment (no ``fileFormats``), which an s3 part keeps.
+_WITHHELD = {"data": {"id": "PROBE-0000-0001", "attributes": {}}, "included": [
+    {"type": "attachments", "attributes": {"title": "withheld", "fileFormats": None, "restrictReasonType": "Other"}}]}
 #: The ``data.attributes`` keys ``COMMENT.extract`` maps into the thin row; every other stated key is kept in
 #: ``attributes_json``. ``test_extracted_attributes_are_the_keys_the_extract_reads`` derives this set independently.
 EXTRACTED_ATTRIBUTES = frozenset({
@@ -79,6 +91,14 @@ def part_row(keyed) -> dict:
         "comment_length": None if body is None else len(body),
         "attributes_json": json.dumps(stated, separators=(",", ":"), sort_keys=True, ensure_ascii=False),
     }
+
+
+def require_record_shape(extract=None) -> None:
+    """Refuse an extract that reads another shape than :data:`RECORD_SHAPE`: one that drops a withheld attachment
+    (SpicyDocs before b19b092) would write s3 parts holding s2's ``attachments_json``."""
+    if (extract or COMMENT.extract)(_WITHHELD)["attachments_json"] is None:
+        raise RuntimeError(f"record shape {RECORD_SHAPE} keeps withheld attachments, and this environment's SpicyDocs "
+                           "drops them: run from a branch that vendors SpicyDocs with b19b092 (0.54.0 or later)")
 
 
 def _sql(value: str | Path) -> str:
@@ -146,6 +166,11 @@ def _chunks(
 
 def part_path(workdir: Path, plan_id: str, agency: str, chunk: int) -> Path:
     return workdir / "parts" / f"agency={agency}" / f"{plan_id}-{chunk:05d}.parquet"
+
+
+def shape_parts(workdir: Path) -> Path:
+    """The glob of this record shape's parts: a workdir that also holds an earlier shape's never mixes them in."""
+    return workdir / "parts" / "agency=*" / f"*-{RECORD_SHAPE}-*.parquet"
 
 
 def _peak_rss_mb() -> float:
@@ -246,6 +271,143 @@ def status(workdir: Path) -> dict:
             "read_chunks": len(done), "read_keys": read_keys}
 
 
+#: Words no staged column's name may carry. A part also keeps each copy's other stated attributes (``attributes_json``:
+#: email, phone, fax, address), its ETag and size and its body's digest; a staged read sits in the data bucket and
+#: holds only the object key and columns ``comments`` publishes (:func:`read_columns`).
+PRIVATE_WORDS = ("attribute", "email", "phone", "fax", "address", "etag", "size", "sha256", "length", "body")
+
+
+def _column_totals(con, source: str, columns: list[str]) -> dict:
+    """DuckDB's side: rows, distinct keys and ids, blank ids, and each column's non-null count and hash sum."""
+    select = ["count(*) AS rows", "count(DISTINCT key) AS distinct_keys",
+              "count(DISTINCT comment_id) AS distinct_comment_ids",
+              "count(*) FILTER (WHERE comment_id IS NULL OR trim(comment_id) = '') AS blank_comment_ids",
+              *(f'count("{c}") AS "nn:{c}"' for c in columns),
+              *(f'sum(hash("{c}"))::VARCHAR AS "hash:{c}"' for c in columns)]
+    cursor = con.execute(f"SELECT {', '.join(select)} FROM {source}")
+    return dict(zip([d[0] for d in cursor.description], cursor.fetchone()))
+
+
+def _arrow_totals(files: list[str], columns: list[str]) -> dict:
+    """Arrow's side, another reader and other kernels: rows, footer rows, and each column's non-null count and
+    UTF-8 byte total (a number's sum)."""
+    import pyarrow as pa
+    import pyarrow.compute as pc
+    import pyarrow.parquet as pq
+
+    totals = {"rows": 0, "footer_rows": 0, **{f"nn:{c}": 0 for c in columns}, **{f"total:{c}": 0 for c in columns}}
+    for file in files:
+        handle = pq.ParquetFile(file)
+        totals["footer_rows"] += handle.metadata.num_rows
+        for batch in handle.iter_batches(columns=columns, batch_size=1 << 20):
+            totals["rows"] += batch.num_rows
+            for c in columns:
+                values = batch.column(c)
+                totals[f"nn:{c}"] += len(values) - values.null_count
+                measured = (values.cast(pa.int64()) if pa.types.is_integer(values.type)
+                            else pc.call_function("binary_length", [values]))
+                totals[f"total:{c}"] += pc.call_function("sum", [measured]).as_py() or 0
+    return totals
+
+
+def stage(workdir: Path, out: Path, *, profile: str = "all") -> dict:
+    """Write the staged fill input ``out/reads.parquet`` for ``profile`` from this record shape's parts, check it
+    against them, and write ``reads.parquet.sha256`` and ``staging.json``; return the receipt.
+
+    One row per read copy, a copy stating NULL included (it counts toward the copies' agreement), holding exactly
+    :func:`read_columns` of ``profile``, sorted by ``comment_id`` and key. Every check reads the written file back:
+    its columns, no private column, and against the parts, by DuckDB (rows, one row per key, no blank id, each
+    column's non-null count and hash sum) and by Arrow (rows, footer rows, each column's non-null count and byte
+    total). A failed check removes the file. :func:`upload_staged` puts it where a runner fetches it.
+    """
+    import pyarrow.parquet as pq
+
+    from spicy_regs.sources.publication import file_identity
+
+    columns = list(read_columns(profile))
+    parts = sorted(glob(str(shape_parts(workdir))))
+    if not parts:
+        raise RuntimeError(f"no {RECORD_SHAPE} parts under {workdir / 'parts'}")
+    target = out / "reads.parquet"
+    if target.exists() or (out / "staging.json").exists():
+        raise RuntimeError(f"{out} already holds a staged read; stage into a new directory")
+    out.mkdir(parents=True, exist_ok=True)
+    source = f"read_parquet([{', '.join(map(_sql, parts))}], hive_partitioning=false)"
+    begun = time.monotonic()
+    with duckdb.connect() as con:
+        WRITE_RESOURCES.configure(con, out / "spill")
+        selected = ", ".join(f'"{c}"' for c in columns)
+        con.execute(f"COPY (SELECT {selected} FROM {source} ORDER BY comment_id, key) TO {_sql(target)} "
+                    "(FORMAT PARQUET, COMPRESSION ZSTD)")
+        from_parts, from_file = (_column_totals(con, rel, columns) for rel in (source, f"read_parquet({_sql(target)})"))
+    shutil.rmtree(out / "spill", ignore_errors=True)
+    arrow_parts, arrow_file = _arrow_totals(parts, columns), _arrow_totals([str(target)], columns)
+    names = pq.read_schema(target).names
+    checks = {
+        "the file holds exactly the profile's read columns, in order": names == columns,
+        "no column name carries a private word": not [n for n in names if any(w in n.lower() for w in PRIVATE_WORDS)],
+        "one row per object key": from_file["distinct_keys"] == from_file["rows"],
+        "no blank comment_id": from_file["blank_comment_ids"] == 0,
+        "DuckDB: rows, ids, non-null counts and hash sums equal the parts'": from_file == from_parts,
+        "Arrow: rows, footer rows, non-null counts and byte totals equal the parts'": arrow_file == arrow_parts,
+    }
+    failed = [name for name, passed in checks.items() if not passed]
+    if failed:
+        target.unlink()
+        raise RuntimeError(f"the staged read failed {failed}; nothing kept")
+    identity = file_identity(target)
+    sha256 = identity["sha256"].removeprefix("sha256:")
+    (out / "reads.parquet.sha256").write_text(f"{sha256}  reads.parquet\n")
+    receipt = {
+        "purpose": "the fill input `fill-comment-fields prepare --reads` reads (docs/comment-fields-fill.md); delete "
+                   "it from the data bucket once the fill is done",
+        "profile": profile, "columns": columns, "record_shape": RECORD_SHAPE, "parts_dir": str(workdir / "parts"),
+        "part_files": len(parts),
+        **{k: from_file[k] for k in ("rows", "distinct_keys", "distinct_comment_ids")},
+        "non_null_by_column": {c: from_file[f"nn:{c}"] for c in columns},
+        "file": {"name": target.name, "bytes": identity["bytes"], "sha256": sha256, "etag": identity["etag"]},
+        "checks": checks, "seconds": round(time.monotonic() - begun, 1),
+        "built_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
+    (out / "staging.json").write_text(json.dumps(receipt, indent=2) + "\n")
+    return receipt
+
+
+def upload_staged(out: Path, *, client=None) -> dict:
+    """Put a staged read and its ``.sha256`` under ``staging/comment-fields-fill-<sha12>/`` in the data bucket, never
+    over an object; read it back whole and record the upload in ``staging.json``.
+
+    Refuses a prefix that already holds anything and a file that is not the one ``staging.json`` names.
+    """
+    from spicy_regs.pipelines.comment_fields_write import _bucket
+    from spicy_regs.sources import r2
+    from spicy_regs.sources.publication import _put_immutable, file_identity
+
+    receipt = json.loads((out / "staging.json").read_text())
+    sha256 = receipt["file"]["sha256"]
+    files = {"reads.parquet": out / "reads.parquet", "reads.parquet.sha256": out / "reads.parquet.sha256"}
+    if file_identity(files["reads.parquet"])["sha256"] != f"sha256:{sha256}":
+        raise RuntimeError(f"{files['reads.parquet']} is not the staged read {sha256}")
+    client = client or r2.get_r2_client()
+    bucket, prefix = _bucket(), f"staging/comment-fields-fill-{sha256[:12]}"
+    held = [item["Key"] for page in client.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=f"{prefix}/")
+            for item in page.get("Contents", [])]
+    if held:
+        raise RuntimeError(f"{prefix}/ already holds {held}; nothing uploaded")
+    for name, path in files.items():
+        _put_immutable(client, bucket, f"{prefix}/{name}", path, sha256=file_identity(path)["sha256"])
+    # The bytes a runner will fetch, read back whole: only these were checked.
+    digest, fetched = hashlib.sha256(), client.get_object(Bucket=bucket, Key=f"{prefix}/reads.parquet")
+    for block in iter(lambda: fetched["Body"].read(1 << 20), b""):
+        digest.update(block)
+    if digest.hexdigest() != sha256:
+        raise RuntimeError(f"{prefix}/reads.parquet reads back as {digest.hexdigest()}, not {sha256}")
+    receipt["upload"] = {"bucket": bucket, "key": f"{prefix}/reads.parquet", "sha256": sha256,
+                         "etag": fetched["ETag"],
+                         "journals": f"{prefix}/journals", "uploaded_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+    (out / "staging.json").write_text(json.dumps(receipt, indent=2) + "\n")
+    return receipt["upload"]
+
 
 def build_attributes(workdir: Path, out: Path | None = None, *, fetch=None) -> dict:
     """Seed ``comment_attributes.parquet`` from the re-read parts; return counts and write refusals beside it.
@@ -312,6 +474,7 @@ app = App(name="fill-comment-fields", help=__doc__)
 @app.command(name="plan")
 def plan_command(*, workdir: Path, manifest: Path, chunk_keys: int = CHUNK_KEYS) -> None:
     """Add a manifest's unplanned comment keys as new chunks."""
+    require_record_shape()
     plan(workdir, manifest, chunk_keys=chunk_keys)
 
 
@@ -326,6 +489,7 @@ def read_command(
     pair = (shard, shards) if shard is not None and shards is not None else None
     if pair is not None and not 0 <= pair[0] < pair[1]:
         raise ValueError(f"shard {pair[0]} is outside 0..{pair[1] - 1}")
+    require_record_shape()
     name = f"progress-{shard}.json" if shard is not None else "progress.json"
     totals = read(workdir, workers=workers, max_rss_mb=max_rss_mb, min_free_gb=min_free_gb, shard=pair,
                   progress_name=name)
@@ -334,19 +498,38 @@ def read_command(
         raise SystemExit(3)
 
 
+@app.command(name="stage")
+def stage_command(*, workdir: Path, out: Path, profile: str = "all") -> None:
+    """Write and check the staged fill input for ``--profile`` (``attachments`` for the 2026-10 re-read) under
+    ``--out``, from this record shape's parts (no upload)."""
+    print(json.dumps(stage(workdir, out, profile=profile), indent=2))
+
+
+@app.command(name="upload-staged")
+def upload_staged_command(*, out: Path) -> None:
+    """Put the staged read under ``--out`` in the data bucket, never over an object, and read it back."""
+    from dotenv import load_dotenv
+
+    load_dotenv()
+    print(json.dumps(upload_staged(out), indent=2))
+
+
 @app.command(name="prepare")
 def prepare_command(
     *, workdir: Path, docket: str | None = None, agency: str | None = None, reads: Path | None = None,
+    profile: str = "all",
 ) -> None:
     """Compute the fill at the catalog's current snapshot (no write); ``--docket``/``--agency`` scope a pilot.
 
-    ``--reads`` is the staged fill input (runbook); by default the read parts under the workdir.
+    ``--reads`` is the staged fill input (runbook); by default this record shape's parts under the workdir.
+    ``--profile`` names the fill columns, ``attachments`` for the 2026-10 re-read (runbook).
     """
     from dotenv import load_dotenv
 
     load_dotenv()
     scope = {k: v for k, v in (("docket_id", docket), ("agency_code", agency)) if v}
-    print(json.dumps(prepare(workdir, scope=scope or None, reads=reads), indent=2))
+    print(json.dumps(prepare(workdir, scope=scope or None, reads=reads or shape_parts(workdir), profile=profile),
+                     indent=2))
 
 
 @app.command(name="write")

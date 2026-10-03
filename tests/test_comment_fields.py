@@ -1,6 +1,7 @@
 """The comment-field fill: a resumable read that holds no lock, and a catalog write that fills only what is unread."""
 
 import json
+from glob import glob
 from pathlib import Path
 
 import duckdb
@@ -47,6 +48,38 @@ def test_plan_chunks_comment_keys_per_agency_and_a_newer_manifest_adds_only_new_
     second = cf.plan(tmp_path, _manifest(tmp_path, keys, "newer.parquet"), chunk_keys=2)
     assert pl.read_parquet(second)["key"].to_list() == keys[3:]
     assert cf.status(tmp_path)["planned_keys"] == len(keys)
+
+
+def test_a_new_record_shape_reads_every_key_again_beside_an_earlier_shapes_parts(tmp_path, monkeypatch):
+    """The 2026-10 re-read on the 2026-09-28 workdir: s3 plans and reads every key, not only the keys since."""
+    store, shape = _store(), cf.RECORD_SHAPE
+    assert shape != "s2"
+    monkeypatch.setattr(cf, "RECORD_SHAPE", "s2")
+    cf.plan(tmp_path, _manifest(tmp_path, store), chunk_keys=10)
+    assert cf.read(tmp_path, workers=2, resource=_FakeS3Resource(store))["keys"] == len(store)
+    monkeypatch.setattr(cf, "RECORD_SHAPE", shape)
+    cf.plan(tmp_path, _manifest(tmp_path, store), chunk_keys=10)
+    assert cf.read(tmp_path, workers=2, resource=_FakeS3Resource(store))["keys"] == len(store)
+    assert len(list(tmp_path.glob("parts/*/*.parquet"))) == 4  # two chunks per shape
+    assert len(glob(str(cf.shape_parts(tmp_path)))) == 2
+
+
+def test_planning_or_reading_the_shape_needs_an_extract_that_keeps_withheld_attachments(tmp_path, monkeypatch):
+    dropped = lambda record: {"attachments_json": None}  # noqa: E731 (SpicyDocs before b19b092)
+    kept = lambda record: {"attachments_json": '[{"title": "withheld", "formats": null}]'}  # noqa: E731
+    with pytest.raises(RuntimeError, match="b19b092"):
+        cf.require_record_shape(dropped)
+    cf.require_record_shape(kept)
+
+    def refuse(extract=None):
+        raise RuntimeError("refused")
+
+    monkeypatch.setattr(cf, "require_record_shape", refuse)
+    for command in (["plan", "--workdir", str(tmp_path), "--manifest", str(_manifest(tmp_path, _store()))],
+                    ["read", "--workdir", str(tmp_path)]):
+        with pytest.raises(RuntimeError, match="refused"):
+            cf.app(command)
+    assert not (tmp_path / "plan").exists()
 
 
 def test_read_keeps_the_thin_row_the_body_digest_and_every_other_stated_attribute(tmp_path):
@@ -181,6 +214,11 @@ def test_the_fill_workflow_is_manual_holds_the_writers_lock_and_always_restores_
     for step in steps[order[-3]:]:
         assert step["if"].startswith("always()"), step["name"]
     assert "--sha256" in steps[order[0]]["run"] and "fetch" in steps[order[0]]["run"]
+    from spicy_regs.pipelines.comment_fields_write import PROFILES
+
+    profile = workflow[True]["workflow_dispatch"]["inputs"]["profile"]
+    assert (profile["default"], profile["options"]) == ("all", list(PROFILES))
+    assert '--profile "$PROFILE"' in steps[order[3]]["run"] and steps[order[3]]["env"]["PROFILE"] == "${{ inputs.profile }}"
 
 
 def test_the_attributes_seed_projects_every_copy_and_keeps_the_newest(tmp_path):
