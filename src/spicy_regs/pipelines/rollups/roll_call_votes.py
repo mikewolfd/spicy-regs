@@ -7,9 +7,14 @@ fetch every roll call twice.
 Reads the bill family's published ``bill_vote_references`` best-effort at
 merge time, its only linkage source — a ``soft_input``, so a run with no family
 output still acquires the native vote identities. A bill link remains NULL when
-no recorded reference establishes it. Both publishers are keyless, so the run
-needs no credential. The cron runs an hour after the family's to reuse any
-available links.
+no recorded reference establishes it. It also reads the published ``members``
+crosswalk best-effort after the ``member_votes`` merge, to fill each Senate
+row's ``bioguide_id`` through its LIS id; ``run-rollup-members`` writes that
+table in this same refresh workflow, so the fill sees the previous run's
+crosswalk, a day's lag at most (not a declared ``soft_input`` only because the
+declaration test requires the writer's cron to fire earlier). Both publishers
+are keyless, so the run needs no credential. The cron runs an hour after the
+family's to reuse any available links.
 
 A dispatch scopes the Congresses (``BILL_FAMILY_CONGRESSES``), the chambers
 (``ROLL_CALL_CHAMBERS``) and the per-run cap (``ROLL_CALL_MAX_VOTES``), which is

@@ -367,6 +367,53 @@ def test_both_chambers_keep_same_roll_number_and_native_lis_identity(tmp_path, s
     assert next(row for row in votes if row["chamber"] == "senate")["bill_id"] is None
 
 
+def _member(**fields):
+    return SimpleNamespace(**{"lis_id": None, "bioguide_id": None, "name": "Member", "party": "D", "state": "CA",
+                              "vote": "Yea", "vote_normalized": "yea", **fields})
+
+
+def test_a_senate_position_takes_its_bioguide_id_from_the_members_table(tmp_path, scoped):
+    """The Senate file states a LIS id; the published ``members`` table resolves it, so the base row carries the
+    bioguide id the column promises. House rows, a LIS id two members share, and a row stating no LIS id are left
+    exactly as the file stated them, and a held Senate row is filled with the fresh ones."""
+    members_columns = TABLE_CONTRACTS["members"].columns
+    votes_columns = TABLE_CONTRACTS["member_votes"].columns
+
+    def prior(remote, local):
+        if remote == "members.parquet":
+            rows = [{"bioguide_id": "K000383", "lis_id": "S363"}, {"bioguide_id": "A000001", "lis_id": None},
+                    {"bioguide_id": "D000001", "lis_id": "S777"}, {"bioguide_id": "D000002", "lis_id": "S777"}]
+        elif remote == "member_votes.parquet":
+            rows = [{"vote_id": "119-senate-1-9", "member_key": "lis:S363", "congress": "119", "chamber": "senate",
+                     "session": "1", "roll_number": "9", "lis_id": "S363", "bioguide_id": None}]
+        else:
+            return False
+        columns = members_columns if remote == "members.parquet" else votes_columns
+        pq.write_table(pa.Table.from_pylist([dict.fromkeys(columns) | r for r in rows],
+                                            schema=pa.schema([(c, pa.string()) for c in columns])), local)
+        return True
+
+    class Members(StubVoteAcquirer):
+        def acquire(self, locator, *, crosswalk=None):
+            acquired = super().acquire(locator)
+            if locator.chamber == "senate":
+                acquired.vote.member_votes = (_member(lis_id="S363"), _member(lis_id="S777", name="Shared"),
+                                              _member(name="Nameless"))
+            else:
+                acquired.vote.member_votes = (_member(bioguide_id="A000001"),)
+            return acquired
+
+    paths = build_roll_call_votes(tmp_path, acquirer=Members(senate_rolls=(7,), house_rolls=(7,)), download_prior=prior)
+    rows = {(r["vote_id"], r["member_key"]): r for r in pq.read_table(paths[1]).to_pylist()}
+    assert rows[("119-senate-1-7", "lis:S363")]["bioguide_id"] == "K000383"
+    assert rows[("119-senate-1-7", "lis:S777")]["bioguide_id"] is None, "a LIS id two members carry fills nothing"
+    assert rows[("119-senate-1-7", "name:Nameless")]["bioguide_id"] is None
+    assert rows[("119-house-1-7", "A000001")]["bioguide_id"] == "A000001"
+    assert rows[("119-senate-1-9", "lis:S363")]["bioguide_id"] == "K000383", "a held row is filled too"
+    assert {r["lis_id"] for r in rows.values()} == {"S363", "S777", None}, "no native column moved"
+    assert not prior_scratch_path(tmp_path, "members").exists()
+
+
 @pytest.mark.parametrize(
     "error", [VoteSourceError("menu lists no votes"), VoteRefusedError("https://www.senate.gov/menu")]
 )
