@@ -52,8 +52,9 @@ ROUTES = {
     "federal_register_cite": Route("federal_register", "volume || '-' || start_page",
                                    ("document_number", "publication_date")),
     "rin": Route("unified_agenda", "rin", ("rin", "agenda_edition"), "many", grain="agenda editions for a RIN"),
-    "gao_product_id": Route("gao_reports", "upper(report_id)", ("report_id",)),
-    "crs_report_id": Route("crs_reports", "upper(report_id)", ("report_id",)),
+    # spicy-docs keys a GAO citation on the printed number, upper-cased; a row stating none falls back to its slug.
+    "gao_product_id": Route("gao_reports", "upper(coalesce(report_number, report_id))", ("report_id",)),
+    "crs_report_id": Route("crs_reports", "report_id", ("report_id",)),
     "docket_number": Route("dockets", "docket_id", ("docket_id",)),
     "committee_name": Route("committees", "system_code", ("system_code",)),
     "us_reports_cite": Route("court_citations", "volume || '-' || page", ("cluster_id",),
@@ -138,7 +139,7 @@ def resolve_citations(cursor: Any, occurrences: Sequence[Mapping[str, Any]],
         if not snapshot or snapshot.get("status") in {"legacy_unversioned", "local_unversioned", "unavailable"}:
             row["reason"] = "target_snapshot_unavailable"
             continue
-        pair = (route, key.upper() if kind in {"gao_product_id", "crs_report_id"} else key)
+        pair = (route, key)
         if pair not in admitted and len(admitted) >= max_target_keys:
             row["reason"] = "target_key_limit"
             continue
