@@ -140,3 +140,56 @@ def test_month_only_heading_block_does_not_infer_day():
     with ZipFile(Path(__file__).parent/'fixtures/gao_target/product-page.zip') as archive:
         body=archive.read('product.html').replace(b'Published: Feb 15, 2017.',b'Published: February 2017.')
     assert product_page_metadata(_page(body),PRODUCT).published_date is None
+
+
+#: GAO's Bid Protest Annual Reports, FY2021 and FY2025 (fixtures README): pages with no topic and an unlabeled date.
+ANNUAL_REPORTS = {"gao-22-900379": ("GAO Bid Protest Annual Report to Congress for Fiscal Year 2021", "2021-11-16"),
+                  "gao-26-900695": ("GAO Bid Protest Annual Report to Congress for Fiscal Year 2025", "2025-12-12")}
+
+
+def test_one_candidate_appends_several_retained_pages_and_carries_the_familys_other_table(tmp_path, monkeypatch):
+    """The gao-reports family holds gao_decisions beside gao_reports; a repair candidate carries it byte for byte.
+
+    Several retained product pages append in one candidate over the published prior, each under spicy-docs'
+    product-page rule, so the five annual reports are one verified local generation, not five chained ones.
+    """
+    from pathlib import Path
+    import json
+    from spicy_docs.sources.gao.product_metadata import PRODUCT_PAGE_METADATA_RULE
+    from spicy_regs.generations import build_generation, verify_generation
+    from spicy_regs.sources import publication
+    from spicy_regs.transforms.build_gao_target import prepare_target_generation
+    from tests.generation_fakes import Store
+
+    prior = tmp_path / 'gao_reports.parquet'
+    row = dict.fromkeys(_SCHEMA.names)
+    row.update(report_id='gao-26-1', title='Existing')
+    pq.write_table(pa.Table.from_pylist([row], schema=_SCHEMA), prior)
+    decisions = tmp_path / 'gao_decisions.parquet'
+    pq.write_table(pa.table({'decision_number': ['B-1.1'], 'url': ['https://www.gao.gov/products/b-1.1']}), decisions)
+    directory = tmp_path / 'prior-generation'
+    build_generation(directory, family='gao-reports', files=[prior, decisions],
+                     expected_keys=[prior.name, decisions.name], schemas={})
+    snapshot = publication.publish_generation(directory, client=Store(), bucket='test',
+                                              prior_index=publication.empty_index())
+    raw = (directory / 'artifact.json').read_bytes()
+    monkeypatch.setattr(publication, 'load_family_root', lambda *_: (raw, json.loads(raw)))
+    pages = {product: (Path(__file__).parent / f'fixtures/gao_target/{product}.zip').read_bytes()
+             for product in ANNUAL_REPORTS}
+
+    report = prepare_target_generation(tmp_path / 'target', prior_file=prior, prior_index=snapshot,
+                                       public_url='https://test.invalid', retained_product_pages=pages,
+                                       carried_files={decisions.name: decisions})
+    assert report['status'] == 'verified_candidate_not_published'
+    assert report['added_report_ids'] == sorted(ANNUAL_REPORTS) and report['candidate_rows'] == 3
+    generation = tmp_path / 'target/generation'
+    verify_generation(generation)
+    added = {r['report_id']: r for r in pq.read_table(generation / 'gao_reports.parquet').to_pylist()[1:]}
+    assert {product: (r['title'], r['published_date'], r['topics_json'], r['source'])
+            for product, r in added.items()} == {
+        product: (title, day, None, 'gao_repair') for product, (title, day) in ANNUAL_REPORTS.items()}
+    assert (generation / 'gao_decisions.parquet').read_bytes() == decisions.read_bytes()
+    events = [json.loads(line) for line in Path(report['evidence_directory'], 'journal.jsonl').read_text().splitlines()]
+    replays = [e for e in events if e['event'] == 'retained-product-page-replay']
+    assert {e['product_id'] for e in replays} == set(ANNUAL_REPORTS)
+    assert {e['rule'] for e in replays} == {PRODUCT_PAGE_METADATA_RULE}

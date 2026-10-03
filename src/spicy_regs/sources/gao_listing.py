@@ -21,8 +21,8 @@ A product row keys on the page the listing links, gao.gov's own product id, lowe
 rows. It takes the title (``label: heading``, the feed's own titles), the public-release date (equal to the feed's
 and upstream's on all 33 August 2026 products both held), the topic headings in listed order as ``topics_json``, a
 type from the number as :func:`gao_govinfo.report_type` rules, and the product number as the page prints it
-(``GAO-26-108426``, ``B-331093``) as ``report_number``. A decision row keys on its number as GAO spells it and its
-page.
+(``GAO-26-108426``, ``B-331093``) as ``report_number``. A decision row is spicy-docs' ``gao_decisions`` contract,
+shaped from the listed decision by ``build_gao_reports``.
 """
 
 from __future__ import annotations
@@ -32,7 +32,6 @@ from collections import Counter
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Protocol
-from urllib.parse import unquote
 
 from spicy_regs.sources.gao_govinfo import report_type
 
@@ -54,8 +53,6 @@ FINER_PRODUCT_TYPES = frozenset(
         "Oral Presentation",
     }
 )
-PRODUCT_URL = "https://www.gao.gov/products/{}"
-SITE = "https://www.gao.gov"
 #: A walk directory as ``python -m spicy_docs.sources.gao.month_in_review walk`` writes it.
 RECEIPTS = "receipts.jsonl"
 BLOBS = "blobs"
@@ -87,6 +84,8 @@ class PageEvidence(Protocol):
 
 def listing_rows(run: ListingRun) -> tuple[list[dict], Counter[str]]:
     """One row per listed product, and counts of what the run read and left out."""
+    from spicy_docs.sources.gao.native import gao_product_url
+
     rows = [
         {
             "report_id": product.product_id,
@@ -96,7 +95,7 @@ def listing_rows(run: ListingRun) -> tuple[list[dict], Counter[str]]:
             "abstract": None,
             "agencies_json": None,
             "topics_json": json.dumps(list(product.topics), ensure_ascii=False),
-            "url": PRODUCT_URL.format(product.product_id),
+            "url": gao_product_url(product.product_id),
             "source": SOURCE,
             "product_type": product.label if product.label in FINER_PRODUCT_TYPES else None,
             "report_number": product.product_number,
@@ -110,38 +109,6 @@ def listing_rows(run: ListingRun) -> tuple[list[dict], Counter[str]]:
         decisions_left_out=len(run.decisions),
         others_left_out=len(run.others),
         rows=len(rows),
-    )
-    return rows, counts
-
-
-def decision_rows(run: ListingRun) -> tuple[list[dict], Counter[str]]:
-    """One row per listed decision: every B-numbered decision and every numbered other, each with its listing page.
-
-    ``listing_page`` is the first retained walk page that listed the decision, the evidence a reader can open.
-    """
-    first_page: dict[str, str] = {}
-    for retained in run.pages:
-        for entry in retained.page.entries:
-            first_page.setdefault(unquote(entry.link), retained.capture.requested_url)
-    # A numbered other (a Contract Appeals Board docket) states no B-number, so its list is empty.
-    decided = [(item, list(item.decision_numbers)) for item in run.decisions]
-    decided += [(other, []) for other in run.others if other.product_number is not None]
-    rows = [
-        {
-            "decision_number": item.product_number,
-            "b_numbers_json": json.dumps(b_numbers, ensure_ascii=False),
-            "decision_type": item.label,
-            "title": item.heading,
-            "decision_date": item.released or item.published,
-            "topics_json": json.dumps(list(item.topics), ensure_ascii=False),
-            "url": SITE + item.link,
-            "listing_page": first_page.get(unquote(item.link)),
-            "source": SOURCE,
-        }
-        for item, b_numbers in decided
-    ]
-    counts: Counter[str] = Counter(
-        decision_rows=len(rows), unnumbered_left_out=sum(other.product_number is None for other in run.others)
     )
     return rows, counts
 

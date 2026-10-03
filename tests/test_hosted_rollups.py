@@ -33,6 +33,7 @@ from spicy_regs.pipelines.rollups.members import MembersRollup
 from spicy_regs.pipelines.rollups.print_citations import PrintCitationsRollup
 from spicy_regs.pipelines.rollups.press_releases import PressReleasesRollup
 from spicy_regs.pipelines.rollups.roll_call_votes import RollCallVotesRollup
+from spicy_regs.pipelines.rollups.gao_reports import GaoReportsRollup
 from spicy_regs.pipelines.rollups.senate_expenditures import SenateExpendituresRollup
 
 # A8/A9 (laws and rosters)
@@ -71,6 +72,11 @@ OWN_TABLES = BILL_OWN_TABLES | {READS_TABLE: READ_COLUMNS}
 #: refresh's base families like ``documents`` itself, not by a standalone rollup (decisions 65-67).
 ETL_TABLES = {"document_attributes", "docket_attributes", "comment_attributes"}
 
+#: Tables of this repository's own that a hosted rollup publishes beside its contracts: gao-reports' typed product
+#: table, whose schema is the transform's Arrow schema (``build_gao_reports._SCHEMA``), and print-citations' held-field
+#: reads, rebuilt from its citation table's checkpoints (``held_citations.READS_COLUMNS``).
+HOSTED_OWN_TABLES = {"gao_reports", "document_citation_reads"}
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = REPO_ROOT / ".github" / "workflows"
@@ -103,6 +109,8 @@ HOSTED_ROLLUPS = (
     GaoRecommendationsRollup,
     # The fec-publish branch's fec_candidate_history contract (decision 53's shape).
     FecCandidateHistoryRollup,
+    # SpicyDocs 0.54.0's gao_decisions contract (DRY X1), written beside this repository's own gao_reports.
+    GaoReportsRollup,
 )
 
 #: Rollups that host contracts but run on demand over an explicit retained-input manifest, so they have no schedule
@@ -205,9 +213,10 @@ def test_a_soft_input_is_an_ingest_output_its_writer_produces_first(rollup, soft
     )
 
 
-def test_the_bill_family_declares_all_fourteen_plus_its_own_four():
-    assert "bill_cosponsors.parquet" in BillFamilyRollup.outputs
-    assert len(BillFamilyRollup.outputs) == 19
+def test_the_bill_family_declares_all_sixteen_plus_its_own_four():
+    assert {"bill_cosponsors.parquet", "bill_committee_activities.parquet", "cbo_feed_items.parquet"} <= set(
+        BillFamilyRollup.outputs)
+    assert len(BillFamilyRollup.outputs) == 21
     assert BillFamilyRollup.outputs[0] == "congress_bills.parquet"
     assert set(BillFamilyRollup.outputs[-4:]) == {f"{name}.parquet" for name in BILL_OWN_TABLES}
     # The property the freshness checker uses resolves to the first key.
@@ -216,17 +225,20 @@ def test_the_bill_family_declares_all_fourteen_plus_its_own_four():
 
 @pytest.mark.parametrize("table", sorted(OWN_TABLES), ids=str)
 def test_a_non_contract_output_is_declared_once_in_each_place_that_needs_it(table):
-    """Their columns are this repository's, so three lists state them and none may drift.
+    """Their columns are this repository's: the transform owns the tuple it writes and the dictionary reads it.
 
-    The transform owns the tuple it writes; ``DERIVED_SCHEMAS`` is what the
-    dictionary reconciles descriptions against; the MCP server lists it
-    literally because it must stay installable without the source-readers
-    group. Same shape as ``test_mcp_server_tables_match_dictionary``.
+    ``expected_schemas()`` imports the tuple, so ``DERIVED_SCHEMAS`` must not
+    restate it; this checks the wiring (the right tuple on the right table).
+    The MCP server lists the table literally because it must stay installable
+    without the source-readers group. Same shape as
+    ``test_mcp_server_tables_match_dictionary``.
     """
     from spicy_regs import mcp_server
 
-    assert [column for column, _ in dd.DERIVED_SCHEMAS[table]] == list(OWN_TABLES[table])
-    assert all(kind == "VARCHAR" for _, kind in dd.DERIVED_SCHEMAS[table])
+    declared = dd.expected_schemas()[table]
+    assert [column for column, _ in declared] == list(OWN_TABLES[table])
+    assert all(kind == "VARCHAR" for _, kind in declared)
+    assert table not in dd.DERIVED_SCHEMAS, "a transform's own declaration is read, never restated"
     assert table in dd.TABLES
     assert table in mcp_server.TABLES
     assert table not in dd.CONTRACT_TABLES, "it is this repository's own table, not a hosted contract"
@@ -245,7 +257,7 @@ def test_every_hosted_table_has_exactly_one_writer():
         for key in _declared_keys(rollup):
             written.setdefault(key.removesuffix(".parquet"), []).append(rollup.name)
 
-    assert set(written) == set(dd.CONTRACT_TABLES) - ETL_TABLES | set(OWN_TABLES), (
+    assert set(written) == set(dd.CONTRACT_TABLES) - ETL_TABLES | set(OWN_TABLES) | HOSTED_OWN_TABLES, (
         "every contract, plus the bill family's own two tables, must be published by exactly one rollup"
     )
     doubled = {table: names for table, names in written.items() if len(names) > 1}
@@ -387,6 +399,7 @@ def test_the_reusable_workflow_declares_every_input_the_callers_pass():
 
 def test_member_and_cosponsor_family_growth_is_explicit():
     assert MembersRollup.added_tables == ("member_party_affiliations.parquet",)
-    assert BillFamilyRollup.added_tables == ("bill_cosponsors.parquet",)
+    assert BillFamilyRollup.added_tables == (
+        "bill_cosponsors.parquet", "bill_committee_activities.parquet", "cbo_feed_items.parquet")
     for rollup in (MembersRollup, BillFamilyRollup):
         assert set(rollup.added_tables) <= set(rollup.outputs)

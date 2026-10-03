@@ -30,7 +30,6 @@ import spicy_regs.transforms.build_senate_expenditures as transform
 from spicy_regs.transforms.build_senate_expenditures import (
     MAX_PAGES_PER_FILE,
     NAME,
-    REPORT_TITLE,
     build_senate_expenditures,
 )
 from spicy_regs.transforms.read_checkpoints import checkpoint_metadata, read_checkpoints
@@ -189,12 +188,16 @@ OTHER_CDOC_TITLES = (
 
 @pytest.mark.parametrize("title", REAL_REPORT_TITLES)
 def test_the_title_rule_matches_every_real_report(title):
-    assert REPORT_TITLE.search(title) is not None
+    from spicy_docs.sources.govinfo.senate_expenditure_reports import is_senate_expenditure_report
+
+    assert is_senate_expenditure_report("GPO-CDOC-119sdoc6", title)
 
 
 @pytest.mark.parametrize("title", OTHER_CDOC_TITLES)
 def test_the_title_rule_refuses_the_rest_of_the_collection(title):
-    assert REPORT_TITLE.search(title) is None
+    from spicy_docs.sources.govinfo.senate_expenditure_reports import is_senate_expenditure_report
+
+    assert not is_senate_expenditure_report("GPO-CDOC-119sdoc6", title)
 
 
 # --------------------------------------------------------------------------

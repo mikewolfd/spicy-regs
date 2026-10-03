@@ -164,6 +164,7 @@ TABLES = (
     # test_mcp_server_tables_match_dictionary keeps the two lists equal.
     "bill_actions",
     "bill_committees",
+    "bill_committee_activities",
     "bill_cosponsors",
     "bill_publisher_summaries",
     "bill_versions",
@@ -188,6 +189,7 @@ TABLES = (
     "hearing_transcripts",
     "hearing_bill_links",
     "cbo_cost_estimates",
+    "cbo_feed_items",
     "house_activity_reports",
     "budget_volumes",
     "bill_committee_actions",
@@ -221,6 +223,7 @@ TABLES = (
     "bill_family_backfills",
     "bill_family_backfill_walks",
     "committee_report_reads",
+    "document_citation_reads",
     "native_legal_references",
     "native_legal_reference_reads",
     "court_opinion_pdf_extractions",

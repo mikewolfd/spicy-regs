@@ -83,7 +83,11 @@ BUDGET = GovInfoBodyBudget(
 def _mods_bytes(package_id: str) -> bytes:
     if package_id.startswith("BUDGET-"):
         return (BUDGET_DIR / f"mods-{package_id}.xml").read_bytes()
-    return (MODS_DIR / f"mods-{package_id}.xml").read_bytes()
+    path = MODS_DIR / f"mods-{package_id}.xml"
+    if path.exists():
+        return path.read_bytes()
+    # A queue needs many report ids; each reads as CRPT_ID's MODS under its own id.
+    return (MODS_DIR / f"mods-{CRPT_ID}.xml").read_bytes().replace(CRPT_ID.encode(), package_id.encode())
 
 
 def _package(
@@ -929,16 +933,6 @@ def test_new_budget_parts_reach_the_publisher_and_root_answers_are_counted(tmp_p
     assert any("1 publisher package-root format answers (not failures)" in message for message in messages)
 
 
-def test_the_reader_is_keyed_on_its_code_not_its_release(monkeypatch):
-    """A version-only SpicyDocs release (0.39.2 against 0.39.1) must not re-read every held print."""
-    from spicy_regs.transforms import build_print_citations as module
-
-    real = module.version
-    baseline = module._processing_versions({})
-    monkeypatch.setattr(module, "version", lambda name: "9.9.9" if name == "spicy-docs" else real(name))
-    assert module._processing_versions({}) == baseline
-
-
 def test_the_source_digest_moves_with_code_and_data_but_not_prose(tmp_path):
     from spicy_regs.generations import source_digest
 
@@ -952,3 +946,128 @@ def test_the_source_digest_moves_with_code_and_data_but_not_prose(tmp_path):
     assert source_digest(tmp_path / "pkg", suffixes) == before
     (tmp_path / "pkg" / "vocabulary.json").write_text('{"a": 2}')
     assert source_digest(tmp_path / "pkg", suffixes) != before
+
+
+# --------------------------------------------------------------------------
+# The re-read queue: which outstanding packages a capped run reads first.
+# --------------------------------------------------------------------------
+
+QUEUE_PAGES = [["ACTIVITY REPORT", "The Committee ordered H.R. 1093 reported on March 4, 2024."]]
+MODULE = "spicy_regs.transforms.build_print_citations"
+
+
+def _queue_reports(count: int) -> tuple[list[str], dict[str, list[dict]], _Acquirer]:
+    """``count`` distinct House activity reports, listed in id order, and an acquirer holding each."""
+    ids = [f"CRPT-119hrpt{number}" for number in range(100, 100 + count)]
+    acquirer = _Acquirer({package_id: _package(package_id, pages=QUEUE_PAGES) for package_id in ids})
+    return ids, {"CRPT": [_listing(package_id, "ACTIVITY REPORT of the COMMITTEE") for package_id in ids]}, acquirer
+
+
+def test_a_capped_run_reads_reports_held_under_another_rule_set_first(tmp_path, monkeypatch):
+    """Reports whose rows an older citation rule set wrote go ahead of reports already at the installed one.
+
+    Round 5, W5-2: the merge writes a run's own rows first, so once every report
+    was outstanding again the held order put the 20 just read at the head, and a
+    cap of 20 re-read those same 20 every day while 21 stayed behind -- among
+    them CRPT-118hrpt964, whose "H.R. 8528 (117th Congress)" rule 004 keys to
+    the 118th. Here 41 reports are outstanding, the 20 at the installed rule
+    set are held first, and the cap is 21: the 21 behind them must be the ones read.
+    """
+    ids, listing, acquirer = _queue_reports(41)
+    monkeypatch.setattr(f"{MODULE}.CITATION_RULE_SET_VERSION", "rule-004")
+    _publish_as_prior(_build(tmp_path, _Reader(listing), acquirer, max_packages=41))
+    monkeypatch.setattr(f"{MODULE}.CITATION_RULE_SET_VERSION", "rule-006")
+    _publish_as_prior(_build(tmp_path, _Reader(listing), acquirer, max_packages=20))
+    current = set(acquirer.asked[41:])
+    stale = set(ids) - current
+    assert (len(current), len(stale)) == (20, 21)
+    held = pq.read_table(tmp_path / f"_{ACTIVITY_REPORTS}_prior.parquet").to_pylist()
+    assert {row["package_id"] for row in held[:20]} == current, "the run's own rows lead the held table"
+
+    # An action-rule release leaves every report outstanding again.
+    monkeypatch.setattr(f"{MODULE}.PRINT_ACTION_RULE_SET_VERSION", "another-action-rule")
+    acquirer.asked.clear()
+    activity = _build(tmp_path, _Reader(listing), acquirer, max_packages=21)[0]
+    assert set(acquirer.asked) == stale
+    assert {row["rule_set_version"] for row in _rows(activity)} == {"rule-006"}
+
+
+def test_a_package_that_refuses_moves_behind_the_others_and_is_still_retried(tmp_path):
+    """A print the publisher keeps refusing never holds the head of a capped queue, and never leaves it."""
+    ids, listing, acquirer = _queue_reports(3)
+    first, second, third = ids
+    acquirer.refuse[first] = PagedJsonSourceError("the publisher served its error page")
+    asked: list[str] = []
+    for _run in range(4):
+        acquirer.asked.clear()
+        _publish_as_prior(_build(tmp_path, _Reader(listing), acquirer, max_packages=1))
+        asked += acquirer.asked
+    assert asked == [first, second, third, first]
+
+
+def test_a_spicy_docs_build_that_moves_no_reading_input_rereads_nothing(tmp_path, monkeypatch):
+    """Adopting another SpicyDocs build or release with the same rules re-reads no held print.
+
+    Every vendored build moved the installed package's whole-code digest (the
+    FEC, laws and printing builds each did, 2026-09-30..10-02), and each move
+    made every held print outstanding; a version-only release (0.39.2 against
+    0.39.1) must not either.
+    """
+    from spicy_regs.transforms import build_print_citations as module
+
+    listings = {"CRPT": [_listing(CRPT_ID, "ACTIVITY REPORT of the COMMITTEE")],
+                "BUDGET": [_listing(BUDGET_ID, "Mid-Session Review")]}
+    acquirer = _Acquirer({CRPT_ID: _package(CRPT_ID, pages=REPORT_PAGES),
+                          BUDGET_ID: _package(BUDGET_ID, pages=BUDGET_PAGES)})
+    _publish_as_prior(_build(tmp_path, _Reader(listings), acquirer))
+    acquirer.asked.clear()
+
+    def another_build() -> str:
+        return "digest-of-another-spicy-docs-build"
+
+    monkeypatch.setattr("spicy_regs.generations.spicy_docs_code", another_build)
+    monkeypatch.setattr(module, "spicy_docs_code", another_build, raising=False)
+    real = module.version
+    monkeypatch.setattr(module, "version", lambda name: "0.53.0+votes.0" if name == "spicy-docs" else real(name))
+    _build(tmp_path, _Reader(listings), acquirer)
+    assert acquirer.asked == []
+
+
+def test_a_budget_volume_whose_root_offers_no_body_moves_behind_the_others(tmp_path):
+    """A root answer reads nothing, so like a refusal it waits behind every volume that has not just answered."""
+    from spicy_docs.sources.govinfo.body_acquisition import GovInfoFormatNotOfferedError
+
+    unoffered = "BUDGET-2025-OBJCLASS"
+    acquirer = _Acquirer(
+        {BUDGET_ID: _package(BUDGET_ID, pages=BUDGET_PAGES)},
+        refuse={unoffered: GovInfoFormatNotOfferedError(unoffered, PRINT_BODY_PREFERENCE, ())},
+    )
+    listing = {"BUDGET": [_listing(unoffered, "Object Class Analysis"), _listing(BUDGET_ID, "Mid-Session Review")]}
+    asked: list[str] = []
+    for _run in range(3):
+        acquirer.asked.clear()
+        _publish_as_prior(_build(tmp_path, _Reader(listing), acquirer, max_packages=1))
+        asked += acquirer.asked
+    assert asked == [unoffered, BUDGET_ID, unoffered]
+
+
+@pytest.mark.parametrize("moved", ["derivation version", "a rule's target table", "an output contract"])
+def test_each_named_reading_input_moves_the_processing_version(monkeypatch, moved):
+    """What the whole-code digest stood for still re-reads a held print, one named input at a time."""
+    from dataclasses import replace
+
+    from spicy_regs.transforms import build_print_citations as module
+
+    baseline = module._processing_versions({})
+    if moved == "derivation version":
+        monkeypatch.setattr(module, "BODY_TEXT_DERIVATION_VERSION", "another")
+    elif moved == "a rule's target table":
+        first, *rest = module.CITATION_RULES
+        monkeypatch.setattr(module, "CITATION_RULES", (replace(first, target_table="relabelled"), *rest))
+    else:
+        contract = TABLE_CONTRACTS[CITATIONS]
+        widened = SimpleNamespace(columns=(*contract.columns, "added_column"), types=contract.types)
+        monkeypatch.setattr(module, "TABLE_CONTRACTS", {**TABLE_CONTRACTS, CITATIONS: widened})
+    after = module._processing_versions({})
+    assert {collection: after[collection] != baseline[collection] for collection in baseline} == {
+        "CRPT": True, "BUDGET": True}

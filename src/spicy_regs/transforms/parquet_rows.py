@@ -1,4 +1,4 @@
-"""Bounded Arrow writes that replace the destination only on full consumption."""
+"""Bounded Arrow writes that replace the destination only on full consumption, and the VARCHAR cell rule."""
 
 from collections.abc import Iterable
 from itertools import islice
@@ -24,3 +24,12 @@ def write_rows(records: Iterable[dict], destination: Path, schema: pa.Schema, *,
                 writer.write_table(pa.Table.from_pylist(batch, schema=schema))
         temporary.replace(destination)
     return destination
+
+
+def str_or_none(value: object) -> str | None:
+    """A source scalar as an all-VARCHAR table stores it: NULL stays NULL, anything else is ``str(value)``.
+
+    The one spelling of the rule eight ingest transforms each restated as ``_s`` (DRY work list F35). An empty string
+    stays empty; the court clusters' rule, which reads it as NULL, is that transform's own.
+    """
+    return None if value is None else str(value)

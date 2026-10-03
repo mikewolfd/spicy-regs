@@ -219,14 +219,14 @@ class CountingVoteAcquirer:
         self.requested.append(locator.roll_number)
         raise _Unavailable("stub: no Clerk file in a hermetic test")
 
-    def list_house_votes(self, congress, session):
-        """The Clerk's index for the 119th's first session: rolls 1-40, newest first."""
+    def list_house_votes(self, congress, session, *, start_roll=1):
+        """The Clerk's roll files for the 119th's first session: rolls 1-40, newest first."""
         from types import SimpleNamespace
 
         from spicy_docs.sources.congress.votes import ClerkVoteIndex, ClerkVoteIndexEntry
 
         rolls = range(40, 0, -1) if session == 1 else ()
-        entries = tuple(ClerkVoteIndexEntry(n, "8-Sep", None, None, None, None) for n in rolls)
+        entries = tuple(ClerkVoteIndexEntry(n) for n in rolls)
         return SimpleNamespace(index=ClerkVoteIndex(congress, session, 2024 + session, entries))
 
     def list_senate_votes(self, congress, session):
@@ -265,6 +265,7 @@ def test_roll_call_votes_skips_what_it_already_published(tmp_path, monkeypatch):
                 "yea": "220",
                 "legis_num": "H R 3424",
                 "clerk_body_element": "chamber",
+                "party_totals_json": "[]",
             }
             for n in range(1, 41)
         ],

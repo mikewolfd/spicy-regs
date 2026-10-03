@@ -35,8 +35,10 @@ CONTRACT_NAMES = sorted(TABLE_CONTRACTS)
 #: 0.44.0 adds the typed attributes; 0.50.0 adds bill cosponsors and member party intervals
 #: (released 0.47.0, ``f549c16``, only adds ``bill_sections.congress``); 0.52.0 adds the two native legal-reference
 #: tables; 0.53.0 adds comment attributes and GAO recommendations; the candidate master adds fec_candidate_history.
-#: The law-text candidate adds ``law_sections``, hosted by the existing laws rollup.
-ADOPTED_CONTRACT_COUNT = 54
+#: The law-text candidate adds ``law_sections``, hosted by the existing laws rollup. 0.54.0 adds
+#: ``bill_committee_activities`` and ``cbo_feed_items``, both written by the bill family, and ``gao_decisions``, which
+#: the gao-reports rollup already wrote as this repository's own table and now writes under the contract.
+ADOPTED_CONTRACT_COUNT = 57
 
 #: A contract here leaves the set when its owning rollup hosts it.
 UNHOSTED_CONTRACTS = frozenset()

@@ -21,7 +21,7 @@ One row per recommendation per agency that GAO's recommendations database has li
 | `publication_title` | `VARCHAR` | The publication's title as the export states it, a line break GAO left in it included. |
 | `publication_date` | `VARCHAR` | The date GAO issued the publication, as an ISO date. |
 | `director_name` | `VARCHAR` | The GAO director or directors the export names as the publication's contact, several joined by commas as GAO writes them, so a comma can also be part of one name (as in a suffix); NULL where it names none. |
-| `agency` | `VARCHAR` | The agency the recommendation is made to; a recommendation made to several agencies is one row for each. |
+| `agency` | `VARCHAR` | The agency the recommendation is made to, as GAO's addressee label spells it, with no parent department (U.S. Coast Guard is not nested under DHS); a generic label (`Office of the Director`, `Office of the Under Secretary`, `Other`) names different agencies on different publications, so read publication_title beside it. A recommendation made to several agencies is one row for each. |
 | `recommendation` | `VARCHAR` | The recommendation's text in full, the number GAO states at its end included. |
 | `recommendation_kind` | `VARCHAR` | Which of GAO's numbered series the text's closing tag names: `recommendation` to an agency, or `matter` for Congress to consider; NULL where the text states no number. |
 | `recommendation_number` | `VARCHAR` | The number GAO states for it within its publication and kind, as GAO writes it; NULL where it states none. |
@@ -32,4 +32,4 @@ One row per recommendation per agency that GAO's recommendations database has li
 | `first_seen` | `VARCHAR` | The date the status-as-of stamp states on the first export read that listed it: when this table first saw it open, not when GAO made it. |
 | `last_seen` | `VARCHAR` | The date the status-as-of stamp states on the latest export read that listed it. |
 | `listed_open` | `VARCHAR` | Whether the latest export read lists it under this key. `false` says only that it is no longer listed: GAO closing it is the usual cause, but an edit to its number, text or agency, or a defective export, reads the same. |
-| `status_as_of` | `VARCHAR` | The export's own status-as-of stamp, verbatim, from the latest export that listed it; GAO labels it EST year round, though it is Eastern local time. |
+| `status_as_of` | `VARCHAR` | The export's own status-as-of stamp, verbatim, from the latest export that listed it; GAO labels it EST year round, though it is Eastern local time. Text in GAO's spelling (`Sep 30, 2026 at 1:18 PM EST`), not sortable: last_seen carries the same stamp's date in ISO form, so order and filter by it. |

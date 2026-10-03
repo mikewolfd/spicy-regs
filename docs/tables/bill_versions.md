@@ -21,7 +21,7 @@ One row per printing of a bill, per source that supplied it. The full text is de
 | `version_code` | `VARCHAR` | The printing's code: its stage's sealed slug, or a numbered reprint's own package suffix (eas2). |
 | `source` | `VARCHAR` | Which acquisition path supplied this row (govinfo, congress, govinfo-pdf, upload). |
 | `label` | `VARCHAR` | The publisher's version-type string verbatim, which is not unique per printing. |
-| `version_date` | `VARCHAR` | The publisher's date for this printing; the merge prefers the larger value. |
+| `version_date` | `VARCHAR` | The publisher's date for this printing; the merge prefers the larger value. An enrolled printing's date is empty at the publisher (BILLSTATUS `<date/>` and the printing's own dc:date), so version_date is '' (not NULL) on enrolled rows, which sorts before every date: order printings with printing_order or NULLIF(version_date, ''). |
 | `package_id` | `VARCHAR` | The GovInfo BILLS package id, read from a stated format URL rather than derived by name. |
 | `format_name` | `VARCHAR` | Which rendition was read (xml, txt, pdf, html, uslm), as choose_format named it. |
 | `format_type` | `VARCHAR` | The publisher's own format type string on the chosen link, where it states one. |

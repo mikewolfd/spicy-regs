@@ -31,7 +31,7 @@ One row per amendment, from the Congress.gov amendment list and detail routes. K
 | `latest_action_text` | `VARCHAR` | Text of the publisher's latestAction entry on this amendment. |
 | `sponsor_bioguide_id` | `VARCHAR` | Bioguide id of the first sponsor the publisher lists. |
 | `sponsor_full_name` | `VARCHAR` | Full name of that sponsor, exactly as the publisher spells it. |
-| `sponsor_party` | `VARCHAR` | The sponsor's party string in full, not a single letter. |
+| `sponsor_party` | `VARCHAR` | The sponsor's party as the list route states it: a one-letter code (D, R, I); NULL for the House amendments the Rules Committee sponsors, which name no party. |
 | `amended_bill_id` | `VARCHAR` | Natural key of the bill this amendment amends, where it amends a bill. |
 | `amended_amendment_id` | `VARCHAR` | Natural key of the amendment this amendment amends, where it amends one. |
 | `url` | `VARCHAR` | The publisher's own URL for this amendment. |

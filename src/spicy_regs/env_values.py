@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Sequence
 from datetime import date
 
 
@@ -28,6 +29,16 @@ def flag_env(name: str) -> bool:
 def text_env(name: str) -> str | None:
     """A free-text env var with its outer whitespace removed, or None when unset or blank."""
     return os.environ.get(name, "").strip() or None
+
+
+def first_env(names: Sequence[str]) -> str | None:
+    """The first of ``names`` set to a non-blank value, with its outer whitespace removed; None when none is.
+
+    The one rule for a credential several variables may carry: a blank value
+    reads as unset, and the key returned is the key sent and the one scrubbed
+    from source evidence, never a copy with a stray newline.
+    """
+    return next((value for name in names if (value := text_env(name))), None)
 
 
 def int_env(name: str) -> int | None:

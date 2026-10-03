@@ -56,6 +56,7 @@ from typing import Any, Protocol
 
 from loguru import logger
 from spicy_docs.extraction.body_text import body_text
+from spicy_docs.reading.media_types import bare_media_type
 from spicy_docs.interpretation.bill_family import (
     BillFamilyTables,
     BillSummarizer,
@@ -159,7 +160,7 @@ class BulkBillsSource(Protocol):
 
 def body_kind(content_type: str | None, format_name: str | None) -> str | None:
     """Classify a fetched body as ``pdf``, ``xml``, or the source's own format name."""
-    media = (content_type or "").split(";", 1)[0].strip().lower()
+    media = bare_media_type(content_type)
     if media == "application/pdf":
         return "pdf"
     if media in {"application/xml", "text/xml"} or media.endswith("+xml"):
@@ -273,12 +274,6 @@ class BodyOutcome:
     captured: int = 0
 
 
-def bill_identity(bill_id: str) -> BillIdentity:
-    """``119-hr-983`` back to its identity; the provider's own ``bill_id`` spelling."""
-    congress, bill_type, number = bill_id.split("-")
-    return BillIdentity(int(congress), bill_type, int(number))
-
-
 def listed_digest(printing: Printing) -> str:
     """The package as the printing's listing states it, which is everything a per-package fetch is made from.
 
@@ -350,7 +345,7 @@ def plan_work(
             Printing(
                 code=code,
                 version=version_from_row(row),
-                package_id=supported_package(bill_identity(bill), version_from_row(row)),
+                package_id=supported_package(BillIdentity.from_bill_id(bill), version_from_row(row)),
                 held=code in held_codes,
                 xml=code in xml_codes,
                 sha256=digests.get((bill, code)),
@@ -379,7 +374,7 @@ def plan_work(
             and (bill, older, newer) not in complete_pairs
         ]
         if pending or open_pairs:
-            work.append(BillWork(bill, bill_identity(bill), printings, pending, open_pairs))
+            work.append(BillWork(bill, BillIdentity.from_bill_id(bill), printings, pending, open_pairs))
     return work, retired, redundant
 
 
@@ -858,7 +853,6 @@ __all__ = [
     "BulkBillsSource",
     "PackageBodySource",
     "Printing",
-    "bill_identity",
     "body_kind",
     "listed_digest",
     "plan_work",

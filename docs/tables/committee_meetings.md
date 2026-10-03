@@ -9,6 +9,7 @@ One row per scheduled committee meeting, as the Congress.gov committee-meeting l
 **Coverage.** Sampled, and accumulating. Each run walks the current Congress's whole `committee-meeting` list, and the previous Congress's from the day before its newest held `updateDate` (or its oldest unread row), and reads the detail of every meeting the table does not yet hold, newest `updateDate` first, at most 1,000 a run; a meeting whose detail is unread or refused has its list fields only. The previous Congress stays in scope because its meetings change when GovInfo prints their transcripts, and hearing transcripts have named meetings the table lacked (receipt `join-gaps-2026-09-26/f/`). *(measured 2026-09-28)*
 
 **Data quality.** A row whose `committees_json` is NULL is list-only: its detail has not been read yet, and every detail-only column is NULL with it; a read detail states `[]` where it lists none. Event ids are keyed with their chamber because their uniqueness across chambers is unmeasured (spicy-docs' contract note); the 119th's House and Senate event ids come from different ranges, so an id alone does not say which chamber. The publisher's witness entries can repeat within one meeting, so count people by name, not entries, and a bill named only in meeting documents is not in `bill_ids_json`.
+**Senate and NoChamber meetings list no witnesses here.** Congress.gov's committee-meeting detail, the route this table reads, has no `witnesses` element for those chambers (retained detail `119/nochamber/338692`): on committee-meetings generation 31e62420… (2026-10-03) none of the 2,336 Senate and NoChamber rows lists a witness (each reads `witnesses_json` `[]` and `witness_count` 0), while 2,735 of the 3,761 House rows do. Such a row without witnesses means the route stated none, not that the meeting had none: GovInfo's MODS for a printed hearing (`hearing_transcripts.package_id`) can name them (CHRG-119shrg64653 names four), and this service does not read MODS for witnesses.
 The publisher's `NoChamber` value is stored as `nochamber`, matching its detail address and preserving the existing row identity. It is neither NULL nor an inferred `joint` chamber. The source reader accepts that address, so previously list-only rows can fill at an unchanged timestamp. Retained meeting `119/nochamber/338692` names the Helsinki Commission; the September 24 committee-meetings audit retains its list row and served detail.
 
 - **Parquet file:** `committee_meetings.parquet`
@@ -28,20 +29,21 @@ The publisher's `NoChamber` value is stored as `nochamber`, matching its detail 
 | `location_building` | `VARCHAR` | The building the detail names. |
 | `location_room` | `VARCHAR` | The room the detail names. |
 | `committee_system_code` | `VARCHAR` | System code of the first committee the detail lists. |
-| `committee_count` | `VARCHAR` | How many committees the detail lists; every one is in committees_json. |
-| `committees_json` | `VARCHAR` | Every committee the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read. |
+| `committee_count` | `VARCHAR` | How many committees the detail lists; every one is in committees_json, and NULL where it is NULL. |
+| `committees_json` | `VARCHAR` | Every committee the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one. |
 | `hearing_jacket` | `VARCHAR` | The first hearing transcript jacket number the detail lists, where it lists any. |
-| `hearing_jacket_count` | `VARCHAR` | How many transcript jackets the detail lists; every one is in hearing_jackets_json. |
-| `hearing_jackets_json` | `VARCHAR` | Every transcript jacket number the detail lists, as a JSON array of strings. NULL where no detail was read. |
-| `bill_count` | `VARCHAR` | How many bills the detail relates to the meeting; every one is in bill_ids_json. |
-| `bill_ids_json` | `VARCHAR` | Natural keys of every bill in relatedItems.bills, as a JSON array, in publisher order. NULL where no detail was read. |
-| `witness_count` | `VARCHAR` | How many witnesses the detail lists. |
-| `witnesses_json` | `VARCHAR` | Every witness the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read. |
-| `witness_document_count` | `VARCHAR` | How many witness documents the detail lists. |
-| `witness_documents_json` | `VARCHAR` | Every witness document the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read. |
-| `meeting_document_count` | `VARCHAR` | How many meeting documents the detail lists. |
-| `meeting_documents_json` | `VARCHAR` | Every meeting document the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read. |
-| `document_urls_json` | `VARCHAR` | The URL of every document the meeting lists, witness documents first then meeting documents, in publisher order: what the map's meeting-to-documents edge resolves. NULL where no detail was read. |
-| `videos_json` | `VARCHAR` | Every video link the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read. |
+| `hearing_jacket_count` | `VARCHAR` | How many transcript jackets the detail lists; every one is in hearing_jackets_json, and NULL where it is NULL. |
+| `hearing_jackets_json` | `VARCHAR` | Every transcript jacket number the detail lists, as a JSON array of strings. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one. |
+| `bill_count` | `VARCHAR` | How many bills the detail relates to the meeting; every one is in bill_ids_json, and NULL where it is NULL. |
+| `bill_ids_json` | `VARCHAR` | Natural keys of every bill in relatedItems.bills, as a JSON array, in publisher order; a bill named only in a meeting document is not here. NULL where no detail was read or the detail states no relatedItems.bills; `[]` where it states an empty one. |
+| `witness_count` | `VARCHAR` | How many witness entries the detail lists, repeats included; not a count of people. NULL where witnesses_json is NULL. |
+| `witnesses_json` | `VARCHAR` | Every witness entry the detail lists, as a JSON array of the publisher's objects, in publisher order and as published: an entry can repeat within one meeting, so count people by name, not entries. NULL where no detail was read or the detail states no witnesses (the Senate and NoChamber details retained so far omit the key: no witness list, not an empty one); `[]` where it states an empty one. |
+| `witness_document_count` | `VARCHAR` | How many witness documents the detail lists; NULL where witness_documents_json is NULL. |
+| `witness_documents_json` | `VARCHAR` | Every witness document the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one. |
+| `meeting_document_count` | `VARCHAR` | How many meeting documents the detail lists; NULL where meeting_documents_json is NULL. |
+| `meeting_documents_json` | `VARCHAR` | Every meeting document the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one. |
+| `document_urls_json` | `VARCHAR` | The URL of every document the meeting lists, witness documents first then meeting documents, in publisher order: what the map's meeting-to-documents edge resolves. NULL where neither list is stated (or no detail was read); `[]` where the stated lists carry no URL. |
+| `videos_json` | `VARCHAR` | Every video link the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one. |
 | `update_date` | `VARCHAR` | The publisher's updateDate; the merge prefers the larger value. |
 | `url` | `VARCHAR` | The publisher's own URL for this meeting, which only the list row states. |
+| `detail_read` | `VARCHAR` | `true` where the Congress.gov detail route was read for this row, `false` where the row holds the list route's record only (a detail not yet reached under a run's cap, or refused). The one test of whether a detail was read: a list column cannot say it, because a read detail omits a list it does not state and the column is then NULL as for an unread one. |

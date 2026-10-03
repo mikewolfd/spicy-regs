@@ -108,6 +108,9 @@ class RollupPipeline(Pipeline):
         self.output_dir = output_dir
         self.skip_upload = skip_upload
         self.source_evidence = None
+        #: A failure ``build`` met and built around (one source refused, the rest was read): ``run`` publishes the
+        #: generation and then raises it, so the run still fails.
+        self.deferred_failure: BaseException | None = None
 
     def run(self) -> None:
         if not self.generation_tables:
@@ -132,6 +135,8 @@ class RollupPipeline(Pipeline):
             self.source_evidence = CaptureEvidence(output_dir, self.publication_family or self.name)
         try:
             self._run_tables(output_dir)
+            if self.deferred_failure is not None:
+                raise self.deferred_failure
         except BaseException as error:
             if self.source_evidence:
                 self.source_evidence.finish(error)

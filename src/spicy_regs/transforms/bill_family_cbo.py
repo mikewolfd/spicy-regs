@@ -44,6 +44,7 @@ from spicy_docs.sources.cbo import CboAcquirer, CboBudget, CboSourceError
 from spicy_docs.sources.congress.bill_status import BillIdentity
 from spicy_docs.transport.credentials import scrub_credential
 
+
 if TYPE_CHECKING:
     from spicy_regs.source_evidence import CaptureEvidence
 
@@ -75,12 +76,6 @@ def law_bills_from(path: Path | None) -> dict[str, str] | None:
     return dict(rows)
 
 
-def bill_identity(bill: str) -> BillIdentity:
-    """A ``bill_id`` (``119-hr-1``) as the identity spicy-docs keys it by."""
-    congress, bill_type, number = bill.split("-")
-    return BillIdentity(int(congress), bill_type, int(number))
-
-
 def prior_citations(path: Path | None, congresses: Collection[int]) -> dict[BillIdentity, tuple[str, ...]]:
     """Each bill's report citations as its published rows state them, for the bills of ``congresses``.
 
@@ -97,17 +92,19 @@ def prior_citations(path: Path | None, congresses: Collection[int]) -> dict[Bill
         f"SELECT bill_id, any_value(report_citations_json) FROM read_parquet('{path}') "
         f"WHERE congress IN ({wanted}) AND report_citations_json IS NOT NULL GROUP BY bill_id"
     ).fetchall():
-        found[bill_identity(bill)] = tuple(entry["citation"] for entry in json.loads(cited))
+        found[BillIdentity.from_bill_id(bill)] = tuple(entry["citation"] for entry in json.loads(cited))
     return found
 
 
 @dataclass(frozen=True, slots=True)
 class FeedRead:
-    """What this run read from CBO's feeds: the shaped rows, the refusals, and the Congresses read whole."""
+    """What this run read from CBO's feeds: the estimate rows, every item as listed, refusals, the Congresses read."""
 
     rows: tuple[dict[str, Any], ...]
     refusals: tuple[FamilyRefusal, ...]
     congresses: frozenset[int]
+    #: ``cbo_feed_items``: one row per item of each feed read, whether or not it names a bill (spicy-docs 0.54.0).
+    items: tuple[dict[str, Any], ...] = ()
 
 
 def read_cbo_feeds(
@@ -122,6 +119,7 @@ def read_cbo_feeds(
     scoped = sorted(congress for congress in set(congresses) if congress >= CBO_FEED_FLOOR)
     if not scoped:
         return FeedRead((), (), frozenset())
+    items: list[dict[str, Any]] = []
     if acquirer is None:
         acquirer = CboAcquirer(
             budget=CboBudget(
@@ -147,11 +145,12 @@ def read_cbo_feeds(
             continue
         tables = build_cbo_feed_cost_estimates(feed, congress, report_citations=citations, law_bills=law_bills)
         rows.extend(tables.cbo_cost_estimates)
+        items.extend(tables.cbo_feed_items)
         refusals.extend(tables.refusals)
         read.add(congress)
-        logger.info("Bill family: CBO's {} feed — {:,} items, {:,} rows, {:,} refused", congress, len(feed.items),
-                    len(tables.cbo_cost_estimates), len(tables.refusals))
-    return FeedRead(tuple(rows), tuple(refusals), frozenset(read))
+        logger.info("Bill family: CBO's {} feed — {:,} items, {:,} estimate rows, {:,} refused", congress,
+                    len(feed.items), len(tables.cbo_cost_estimates), len(tables.refusals))
+    return FeedRead(tuple(rows), tuple(refusals), frozenset(read), tuple(items))
 
 
 type CostEstimateScope = tuple[tuple[str, str], set[tuple[str, str]]]
@@ -198,7 +197,6 @@ __all__ = [
     "CBO_FEED_BUDGET",
     "CBO_FEED_FLOOR",
     "FeedRead",
-    "bill_identity",
     "cost_estimate_publication",
     "law_bills_from",
     "prior_citations",

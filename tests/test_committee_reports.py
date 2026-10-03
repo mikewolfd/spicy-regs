@@ -545,3 +545,15 @@ def test_a_credential_refusal_on_the_hearing_detail_aborts_the_run(tmp_path, mon
             hearings=Refusing(),
             download_prior=_no_prior,
         )
+
+
+def test_a_hearing_read_before_the_mods_columns_is_read_once_more():
+    """spicy-docs 0.54.0 reads a hearing's MODS event ids, witnesses and held date (E's 7db044f) into three appended
+    hearing_transcripts columns; a hearing read under the rule before them is not complete, so each held hearing is
+    read once more and gains them. A report's rule is untouched: CRPT reads gain nothing from the MODS columns."""
+    from spicy_regs.transforms.committee_report_reads import HEARING_BILL_LINK_RULE_VERSION, RULE_VERSIONS, complete
+
+    # The CHRG rule every held hearing was read under before the adoption (d2b5f53).
+    before = f"{HEARING_BILL_LINK_RULE_VERSION};body=placeholder-pdf-002"
+    assert not complete({"outcome": "complete", "rule_version": before}, "CHRG")
+    assert complete({"outcome": "complete", "rule_version": RULE_VERSIONS["CHRG"]}, "CHRG")

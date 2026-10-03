@@ -4,7 +4,7 @@
 
 **Public comment counts**
 
-A small row-count index over `comments`. Each row counts the comments of one agency, docket and posting month, so consumers can compute comment totals without scanning the full table. It is rebuilt from the same catalog snapshot as each comments publication. Its rows are groups, not files: no Parquet file exists per row.
+A small row-count index over `comments`. Each row counts the comments of one agency, docket and posting month, so consumers can compute comment totals without scanning the full table. It is rebuilt from the same catalog snapshot as each comments publication. Its rows are groups, not files: no Parquet file exists per row. Months are posting months: an agency posts in batches, so a spike here dates postings, and `comments.receive_date`, the agency's stated receipt date, dates receipt.
 
 **Coverage.** Derived. Counts over `comments` by agency, docket and posting month; it covers exactly what that table covers and adds no rows of its own. *(measured 2026-09-06)*
 

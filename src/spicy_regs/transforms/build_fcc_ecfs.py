@@ -28,7 +28,6 @@ from __future__ import annotations
 
 import json
 import hashlib
-import os
 from collections.abc import Generator, Hashable, Iterable, Iterator, Mapping
 from contextlib import closing
 from datetime import UTC, date, datetime, timedelta
@@ -39,8 +38,9 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from loguru import logger
 
+from spicy_regs.env_values import first_env
 from spicy_regs.sources import r2
-from spicy_regs.transforms.parquet_rows import write_rows
+from spicy_regs.transforms.parquet_rows import str_or_none, write_rows
 from spicy_regs.transforms.table_merge import merge_local_prior
 
 if TYPE_CHECKING:
@@ -104,12 +104,6 @@ FILING_COLUMNS = (
 _FILING_SCHEMA = pa.schema([(c, pa.string()) for c in FILING_COLUMNS])
 
 
-def _s(value: object) -> str | None:
-    """Coerce a scalar to str, preserving NULL (ids/counts/flags come as ints)."""
-    if value is None:
-        return None
-    return str(value)
-
 
 def _names(entries: list | None) -> list[str]:
     """Extract the ``name`` of each dict in an API list field, dropping empties."""
@@ -135,7 +129,7 @@ def _shape_proceeding(raw: dict) -> dict:
     bureau = _dict_field(raw, "bureau")
     return {
         "name": raw.get("name"),
-        "id_proceeding": _s(raw.get("id_proceeding")),
+        "id_proceeding": str_or_none(raw.get("id_proceeding")),
         "description": raw.get("description_display") or raw.get("description"),
         "bureau_code": bureau.get("code") or raw.get("bureau_code"),
         "bureau_name": bureau.get("name") or raw.get("bureau_name"),
@@ -157,7 +151,7 @@ def _shape_filing(raw: dict) -> dict:
         {key: raw[key] for key in ("proceedings", "filers", "authors", "lawfirms", "bureaus", "documents") if key in raw},
         sort_keys=True, separators=(",", ":"), ensure_ascii=False,
     )
-    id_submission = _s(raw.get("id_submission"))
+    id_submission = str_or_none(raw.get("id_submission"))
     submissiontype = _dict_field(raw, "submissiontype")
     filingstatus = _dict_field(raw, "filingstatus")
     viewingstatus = _dict_field(raw, "viewingstatus")
@@ -171,7 +165,7 @@ def _shape_filing(raw: dict) -> dict:
         "native_fields_sha256": "sha256:" + hashlib.sha256(native_fields.encode()).hexdigest(),
         "proceeding_names_json": json.dumps(_names(raw.get("proceedings"))),
         "submission_type": submissiontype.get("description"),
-        "express_comment": _s(raw.get("express_comment")),
+        "express_comment": str_or_none(raw.get("express_comment")),
         "date_received": raw.get("date_received"),
         "date_submission": raw.get("date_submission"),
         "date_disseminated": raw.get("date_disseminated"),
@@ -183,7 +177,7 @@ def _shape_filing(raw: dict) -> dict:
         "lawfirms_json": json.dumps(_names(raw.get("lawfirms"))),
         "bureaus_json": json.dumps(_names(raw.get("bureaus"))),
         "text_data": raw.get("text_data"),
-        "total_page_count": _s(raw.get("total_page_count")),
+        "total_page_count": str_or_none(raw.get("total_page_count")),
         "documents_json": json.dumps(
             [
                 {"filename": d.get("filename"), "src": d.get("src")}
@@ -213,11 +207,8 @@ class FccEcfsError(ValueError):
 
 
 def _resolve_api_key() -> str | None:
-    for name in API_KEY_ENV_VARS:
-        value = os.environ.get(name, "").strip()
-        if value:
-            return value
-    return None
+    """Return the first nonempty configured api.data.gov key."""
+    return first_env(API_KEY_ENV_VARS)
 
 
 def _fetch_fcc(

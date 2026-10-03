@@ -11,7 +11,10 @@ import sys
 from types import ModuleType, SimpleNamespace
 
 from spicy_regs.sources import gao_listing
-from spicy_regs.sources.gao_listing import SOURCE, decision_rows, listing_rows, read_listing
+from spicy_regs.sources.gao_listing import SOURCE, listing_rows, read_listing
+
+#: The retained Month in Review page a test's decisions were listed on.
+LISTING_PAGE = "https://www.gao.gov/reports-testimonies/month-in-review/2026/August?page=3"
 
 
 def _product(product_id: str, *, released: str | None = "2026-08-05", published: str | None = "2026-07-14",
@@ -24,17 +27,19 @@ def _product(product_id: str, *, released: str | None = "2026-08-05", published:
 
 def _decision(link: str, number: str | None, *, numbers: tuple[str, ...] = (), label: str = "Bid Protest Decision",
               heading: str = "Acme Corp.", released: str | None = "2026-08-18",
-              topics: tuple[str, ...] = ("Bid Protest Decision",)) -> SimpleNamespace:
+              topics: tuple[str, ...] = ("Bid Protest Decision",), status: str | None = None) -> SimpleNamespace:
+    """SpicyDocs' ``GaoListedDecision``, with the outcome sentence and first listing page it carries from 0.54.0."""
     return SimpleNamespace(link=link, product_number=number, decision_numbers=numbers or ((number,) if number else ()),
                            label=label, heading=heading, published=None, released=released, topics=topics,
-                           scopes=("2026-08",))
+                           scopes=("2026-08",), status=status, listing_page=LISTING_PAGE)
 
 
 def _other(link: str, number: str | None, *, label: str = "Legal Other Decision",
            topics: tuple[str, ...] = ("Other Decision",)) -> SimpleNamespace:
     """SpicyDocs' ``GaoListedOther``: no B-numbers of its own."""
     return SimpleNamespace(link=link, product_number=number, label=label, heading="Acme Corp.", published=None,
-                           released="2026-08-18", topics=topics, scopes=("2026-08",))
+                           released="2026-08-18", topics=topics, scopes=("2026-08",), status=None,
+                           listing_page=LISTING_PAGE)
 
 
 def _page(url: str, *links: str) -> SimpleNamespace:
@@ -92,28 +97,6 @@ def test_report_number_is_printed_as_the_page_prints_it_and_a_type_label_is_the_
         ("GAO-09-431T", None),
         ("GAO-15-1R", None),
     ]
-
-
-def test_decisions_become_rows_keyed_on_their_number_and_page_with_the_page_that_listed_them():
-    """Every B-numbered decision and every numbered other (a Contract Appeals Board docket) is a decision row."""
-    joint = _decision("/products/b-423916.2%2Cb-423916.3", "B-423916.2,B-423916.3",
-                      numbers=("B-423916.2", "B-423916.3"))
-    docket = _other("/products/2020-02-0", "2020-02")
-    numberless = _other("/products/p00459", None, label="Antideficiency Act Report")
-    page = "https://www.gao.gov/reports-testimonies/month-in-review/2026/August?page=3"
-    run = _run(decisions=[joint], others=[docket, numberless],
-               pages=[_page(page, "/products/b-423916.2%2Cb-423916.3", "/products/2020-02-0", "/products/p00459")])
-    rows, counts = decision_rows(run)
-    assert rows == [
-        {"decision_number": "B-423916.2,B-423916.3", "b_numbers_json": '["B-423916.2", "B-423916.3"]',
-         "decision_type": "Bid Protest Decision", "title": "Acme Corp.", "decision_date": "2026-08-18",
-         "topics_json": '["Bid Protest Decision"]', "url": "https://www.gao.gov/products/b-423916.2%2Cb-423916.3",
-         "listing_page": page, "source": SOURCE},
-        {"decision_number": "2020-02", "b_numbers_json": "[]", "decision_type": "Legal Other Decision",
-         "title": "Acme Corp.", "decision_date": "2026-08-18", "topics_json": '["Other Decision"]',
-         "url": "https://www.gao.gov/products/2020-02-0", "listing_page": page, "source": SOURCE},
-    ]
-    assert counts["decision_rows"] == 2 and counts["unnumbered_left_out"] == 1
 
 
 def test_topic_headings_keep_gaos_spelling_in_json():

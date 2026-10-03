@@ -39,7 +39,7 @@ One row per item in one appropriations committee press-release feed capture. `bi
 | `description_text` | `VARCHAR` | That description read as plain text, not a truncated excerpt. |
 | `description_chars` | `VARCHAR` | Character length of description_text. |
 | `pub_date` | `VARCHAR` | The item's pubDate exactly as the publisher spelled it, wrong zone abbreviation included. |
-| `pub_date_instant` | `VARCHAR` | That pubDate parsed to an instant under RFC 822's fixed abbreviation table. |
+| `pub_date_instant` | `VARCHAR` | That pubDate parsed to an instant under RFC 822's fixed abbreviation table.  A zone label is taken at its word: the Senate feed stamps `EST` all year, so a summer release reads -05:00, an hour off its clock time. |
 | `author` | `VARCHAR` | The item's author, which the Senate feed states as a shared mailbox. |
 | `creator` | `VARCHAR` | The item's dc:creator, which the House feed states as a named staffer. |
 | `categories_json` | `VARCHAR` | Every category the item lists, as a JSON array. |
@@ -48,6 +48,6 @@ One row per item in one appropriations committee press-release feed capture. `bi
 | `enclosure_type` | `VARCHAR` | The enclosure media type, where the item states one. |
 | `observed_at` | `VARCHAR` | When the feed was captured; the merge prefers the larger value. |
 | `bill_id` | `VARCHAR` | The bill this release names, where a bill-number pattern matched. |
-| `match_rule` | `VARCHAR` | Which release-matching rule fired, including unmatched. |
+| `match_rule` | `VARCHAR` | Which release-matching rule fired: a rule's name where it found a bill, `unmatched` where the matching pass ran and found none; NULL where no matching pass ran, which says nothing about whether the release names a bill. |
 | `matched_field` | `VARCHAR` | Which field the mention was found in; the Senate feed can only ever match on title. |
 | `matched_text` | `VARCHAR` | The exact text that matched, so a false positive is readable from the row. |

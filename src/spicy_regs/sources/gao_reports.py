@@ -25,7 +25,7 @@ _MAX_REQUESTS = 5
 
 
 class GaoReportsReader(Reader):
-    """Yield GAO report items (title, link, description, pub_date) from the reports RSS feed.
+    """Yield GAO report items (product_id, title, link, description, pub_date) from the reports RSS feed.
 
     Refuses any ``url`` other than ``RSS_URL``; ``max_records`` yields only the feed's first items.
     """
@@ -70,4 +70,5 @@ class GaoReportsReader(Reader):
             feed = reader.acquire_reports_feed().feed
         items = feed.items if self.max_records is None else feed.items[: self.max_records]
         for item in items:
-            yield {"title": item.title, "link": item.link, "description": item.description, "pub_date": item.pub_date}
+            yield {"product_id": item.product_id, "title": item.title, "link": item.link,
+                   "description": item.description, "pub_date": item.pub_date}

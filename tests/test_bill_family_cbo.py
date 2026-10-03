@@ -14,6 +14,7 @@ from types import SimpleNamespace
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
+from spicy_docs.schemas import TABLE_CONTRACTS
 from spicy_docs.sources.cbo import parse_cbo_cost_estimates_feed
 from spicy_docs.sources.congress.bill_status import BillIdentity, parse_bill_status
 
@@ -152,6 +153,45 @@ def test_an_unread_feed_keeps_its_prior_feed_rows(tmp_path, scoped_118):
     assert ("118-hr-12", "60500") in rows and rows[("118-hr-12", "60500")]["source"] == "cbo_feed"
 
 
+def _suspension(key: int) -> str:
+    """CBO's weekly suspension notice: an empty Bill_Number and no bill in its title (62589, 2026-09-08).
+
+    A feed item's key is its position in the document, so the caller places it.
+    """
+    return _item(key, "Legislation Considered Under Suspension of the Rules, September 8, 2026", 62589, "",
+                 date="Tue, 08 Sep 2026 10:00:00 -0400")
+
+
+def _items(paths):
+    return {row["publication_id"]: row for row in pq.read_table(paths["cbo_feed_items"]).to_pylist()}
+
+
+def test_every_item_of_a_read_feed_is_a_cbo_feed_items_row_whether_or_not_it_names_a_bill(tmp_path, scoped_118):
+    """spicy-docs 0.54.0's cbo_feed_items: the feed as CBO lists it, published beside the estimates it yields.
+
+    An item naming no bill (a suspension-calendar notice) has no cbo_cost_estimates row, so before this table it
+    left no trace; the anti-join on publication_id now finds it.
+    """
+    _laws(tmp_path / "prior")
+    paths = run(tmp_path / "first", prior=tmp_path / "prior", feed=StubCbo(*ITEMS.values(), _suspension(4)))
+    items = _items(paths)
+    assert set(items) == {"60249", "60300", "60400", "60500", "62589"}
+    assert pq.read_schema(paths["cbo_feed_items"]).names == list(TABLE_CONTRACTS["cbo_feed_items"].columns)
+    assert (items["62589"]["bill_number"], items["62589"]["congress"]) == ("", "118")
+    named = {row["publication_id"] for row in pq.read_table(paths["cbo_cost_estimates"]).to_pylist()}
+    assert set(items) - named == {"62589"}, "the anti-join gives exactly the bill-less item"
+
+
+def test_a_later_feed_read_replaces_its_congresss_items_and_an_unread_feed_keeps_them(tmp_path, scoped_118):
+    _laws(tmp_path / "prior")
+    run(tmp_path / "first", prior=tmp_path / "prior", feed=StubCbo(*ITEMS.values(), _suspension(4)))
+    later = run(tmp_path / "second", prior=tmp_path / "first", feed=StubCbo(ITEMS["billstatus"], _suspension(1)))
+    assert set(_items(later)) == {"60249", "62589"}, "an item the feed no longer lists leaves with the feed read"
+    unavailable = importlib.import_module("tests.conftest")._NoCboFeed()
+    kept = run(tmp_path / "third", prior=tmp_path / "second", feed=unavailable)
+    assert _items(kept) == _items(later)
+
+
 def test_law_bills_reads_the_published_laws(tmp_path):
     _laws(tmp_path)
     assert cbo.law_bills_from(tmp_path / "laws.parquet") == {"118-public-5": "118-hr-9999"}
@@ -231,6 +271,36 @@ def test_rederived_stages_fold_published_actions_in_publisher_order(tmp_path):
     assert build.rederived_stages(path) == {"119-hr-1": "passed_chamber"}, "index 0 is the newest of one day"
     assert build.rederived_stages(path, {"119-hr-2"}) == {}
     assert build.rederived_stages(None) == {}
+
+
+def test_rederived_stages_read_published_rows_as_the_build_reads_bills(tmp_path):
+    """A published row passes as it is: its chamber's system and the bill's own type reach the stage rule (DRY A1).
+
+    A Senate bill the House holds at the desk is in the other chamber only when the rule knows the bill is a
+    Senate bill and that the House's system entered "Held at the desk." (it names neither chamber). Renaming the
+    rows into BILLSTATUS keys and dropping both read it ``passed_chamber``, so every such bill raised a false
+    ``stage_changed`` event against the stage the build publishes.
+    """
+    from spicy_docs.interpretation.bill_stage import infer_stage
+
+    rows = [
+        {"bill_id": "119-s-12", "action_index": "0", "action_text": "Held at the desk.", "action_code": None,
+         "action_type": "Floor", "action_date": "2026-03-05", "action_time": None,
+         "source_system_name": "House floor actions"},
+        {"bill_id": "119-s-12", "action_index": "1",
+         "action_text": "Passed Senate without amendment by Unanimous Consent.", "action_code": "17000",
+         "action_type": "Floor", "action_date": "2026-03-04", "action_time": None,
+         "source_system_name": "Library of Congress"},
+        {"bill_id": "119-s-12", "action_index": "2", "action_text": "Introduced in Senate", "action_code": "10000",
+         "action_type": "IntroReferral", "action_date": "2026-03-01", "action_time": None,
+         "source_system_name": "Library of Congress"},
+    ]
+    path = tmp_path / "bill_actions.parquet"
+    pq.write_table(pa.Table.from_pylist(rows), path)
+    published = infer_stage([{k: v for k, v in row.items() if k != "bill_id"} for row in rows], newest_first=True,
+                            bill_type="s").stage
+    assert published == "other_chamber"
+    assert build.rederived_stages(path) == {"119-s-12": published}
 
 
 def test_a_bare_summary_digest_refuses_the_run_before_any_compare(tmp_path, scoped_119):

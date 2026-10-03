@@ -4,7 +4,7 @@
 
 **Treaty documents**
 
-One row per treaty document, as the Congress.gov treaty list and detail routes state it, keyed `(congress_received, number, suffix)`. `package_id` is the GovInfo CDOC id by the `CDOC-{congress}tdoc{number}` rule on an unpartitioned treaty. All columns are stored as VARCHAR.
+One row per treaty document, as the Congress.gov treaty list and detail routes state it, keyed `(congress_received, number, suffix)`. `package_id` is the GovInfo CDOC id by the `CDOC-{congress}tdoc{number}` rule on an unpartitioned treaty. That package's MODS (`https://www.govinfo.gov/metadata/pkg/{package_id}/mods.xml`) states the committee the treaty was referred to, which this table does not carry (CDOC-119tdoc1 and -tdoc2: Foreign Relations); the id is derived by rule, so GovInfo may not have published it yet. All columns are stored as VARCHAR.
 
 **Coverage.** Sampled. The 119th Congress's treaty documents from the retained list and their details. Not treaty bodies, action histories, older Congresses, suffixed parts or interpreted legal/in-force effects. Receipts: fork-execution-2026-09-21/legislative-publication-summary.json, legislative-seeds/sealed-candidates.json and legislative-mcp-audit/. *(measured 2026-09-21)*
 
@@ -30,10 +30,10 @@ One row per treaty document, as the Congress.gov treaty list and detail routes s
 | `resolution_text` | `VARCHAR` | The resolution of ratification text, where the detail states one. |
 | `formal_title` | `VARCHAR` | The detail's `Treaty - Formal Title` entry. |
 | `short_title` | `VARCHAR` | The detail's `Treaty - Short Title` entry. |
-| `titles_json` | `VARCHAR` | Every title the detail lists, as a JSON array of the publisher's objects. |
-| `countries_json` | `VARCHAR` | Every country party the detail names, as a JSON array of names. |
-| `index_terms_json` | `VARCHAR` | Every index term the detail names, as a JSON array of names. |
-| `related_docs_json` | `VARCHAR` | Every related document the detail lists, as a JSON array of the publisher's objects. |
+| `titles_json` | `VARCHAR` | Every title the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one. |
+| `countries_json` | `VARCHAR` | Every country party the detail names, as a JSON array of names. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one. |
+| `index_terms_json` | `VARCHAR` | Every index term the detail names, as a JSON array of names. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one. |
+| `related_docs_json` | `VARCHAR` | Every related document the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one. |
 | `parts_json` | `VARCHAR` | The publisher's parts object, as JSON. |
 | `action_count` | `VARCHAR` | How many actions the detail says the treaty has. |
 | `actions_url` | `VARCHAR` | The publisher's URL for the treaty's action list. |
@@ -41,3 +41,4 @@ One row per treaty document, as the Congress.gov treaty list and detail routes s
 | `package_id_rule` | `VARCHAR` | How package_id was derived: `cdoc_tdoc_number`. |
 | `update_date` | `VARCHAR` | The publisher's updateDate; the merge prefers the larger value. |
 | `url` | `VARCHAR` | The publisher's own URL for this treaty, which only the list row states. |
+| `detail_read` | `VARCHAR` | `true` where the Congress.gov detail route was read for this row, `false` where the row holds the list route's record only (a detail not yet reached under a run's cap, or refused). The one test of whether a detail was read: a list column cannot say it, because a read detail omits a list it does not state and the column is then NULL as for an unread one. |

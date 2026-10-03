@@ -56,7 +56,6 @@ DECISION_CLASS = "COMPTROLLERDECISION"
 
 _JOINT = re.compile(r"([a-z]+(?:-[a-z]+)+)(-\d{2}-.+)")
 _TESTIMONY = re.compile(r"t-.+|.+-\d+t")
-_PRODUCT_ID = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 
 
 class GaoGovInfoError(ValueError):
@@ -81,15 +80,23 @@ def _redundant_gao(number: str) -> bool:
 
 
 def report_id(package_id: str) -> str:
-    """The gao.gov product id for a GAOREPORTS package id; see the module docstring for each rule."""
+    """The gao.gov product id for a GAOREPORTS package id; see the module docstring for each rule.
+
+    The result must read as a gao.gov product id under spicy-docs' own grammar
+    (``gao_product_url``); a package id with no such reading refuses.
+    """
+    from spicy_docs.sources.gao.native import GaoProductSourceError, gao_product_url
+
     number = _number(package_id)
     if _redundant_gao(number):
         number = number[4:]
     prefix = "t-" if number.startswith("t-") else ""
     if joint := _JOINT.fullmatch(number.removeprefix(prefix)):
         number = prefix + joint[1].replace("-", "") + joint[2]
-    if not _PRODUCT_ID.fullmatch(number):
-        raise GaoGovInfoError(f"GAOREPORTS package id has no product-id reading: {package_id}")
+    try:
+        gao_product_url(number)
+    except GaoProductSourceError as error:
+        raise GaoGovInfoError(f"GAOREPORTS package id has no product-id reading: {package_id}") from error
     return number
 
 

@@ -33,6 +33,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from loguru import logger
 
+from spicy_regs.transforms.parquet_rows import str_or_none
 from spicy_regs.sources import r2
 
 if TYPE_CHECKING:
@@ -49,8 +50,8 @@ DEFAULT_MAX_PAGES = 100
 FUNDED_WALK_PAGE_BOUND = 5_000
 _MAX_REQUESTS_PER_PAGE = 5
 
-# The published schema, all VARCHAR, in a fixed order (``data_dictionary`` declares
-# the same list). ``recipient_id`` is the primary / dedup key.
+# The published schema, all VARCHAR, in a fixed order (``data_dictionary`` reads
+# this list). ``recipient_id`` is the primary / dedup key.
 COLUMNS = (
     "recipient_id",
     "uei",
@@ -64,12 +65,6 @@ COLUMNS = (
 _SCHEMA = pa.schema([(c, pa.string()) for c in COLUMNS])
 
 
-def _s(value: object) -> str | None:
-    """Coerce a scalar to str, preserving NULL. (``amount`` comes as a float.)"""
-    if value is None:
-        return None
-    return str(value)
-
 
 def _shape(doc: dict) -> dict:
     """Map one raw USASpending recipient onto the published column shape."""
@@ -79,7 +74,7 @@ def _shape(doc: dict) -> dict:
         "duns": doc.get("duns"),
         "name": doc.get("name"),
         "recipient_level": doc.get("recipient_level"),
-        "total_award_amount": _s(doc.get("amount")),
+        "total_award_amount": str_or_none(doc.get("amount")),
         "observed_at": doc.get("_source_observed_at"),
         "source_capture_sha256": doc.get("_source_capture_sha256"),
     }

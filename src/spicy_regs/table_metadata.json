@@ -136,7 +136,7 @@
       {
         "column_name": "comment_end_date",
         "column_type": "VARCHAR",
-        "description": "Literal Regulations.gov commentEndDate. Convert offset-bearing instants to America/New_York for calendar searches; date-only values and the source's bare T00:00:00Z convention keep their printed day (see data_quality). Neither purpose nor the controlling/current deadline follows from this field; inspect filing instructions and later notices. NULL does not mean no deadline."
+        "description": "Literal Regulations.gov commentEndDate as Regulations.gov states it now, which can reflect a later extension rather than the notice's own date: when a later notice extends the period, Regulations.gov can rewrite the original notice's date too (FS-2025-0001-223869, FR 2026-16965, reads 2026-10-07T03:59:59Z, the extension FR 2026-18648 set, while the Register's comments_close_on for 2026-16965 is 2026-09-21). For the date a notice printed, read federal_register.comments_close_on by fr_doc_num. Convert offset-bearing instants to America/New_York for calendar searches; date-only values and the source's bare T00:00:00Z convention keep their printed day (see data_quality). Neither purpose nor the controlling/current deadline follows from this field; inspect filing instructions and later notices. NULL does not mean no deadline."
       },
       {
         "column_name": "file_url",
@@ -243,7 +243,7 @@
       {
         "column_name": "comment_on_document_id",
         "column_type": "VARCHAR",
-        "description": "Literal Regulations.gov commentOnDocumentId: the named parent document, independently nullable from docket_id. No identifier-prefix inference. NULL where the row predates reading this field, which today is most rows, including every row of the largest agencies; NULL does not mean the comment names no document."
+        "description": "Literal Regulations.gov commentOnDocumentId: the named parent document, independently nullable from docket_id. No identifier-prefix inference. The comment re-read filled it: on receipt sha256:77a08369… (2026-10-03) it is set on 26,388,456 of 26,415,400 rows, on at least 98.97% of each of the 12 largest agencies' rows, and below 95% only at MSHA (1,892 of 1,993) and TRAIN (1 of 114). NULL means the record states none or the row was not read; `comment_reference_values_json` tells the two apart. NULL does not mean the comment names no document."
       },
       {
         "column_name": "comment_on_object_id",
@@ -278,7 +278,7 @@
       {
         "column_name": "organization",
         "column_type": "VARCHAR",
-        "description": "The organization the commenter stated, where the row's read carried it. NULL where the publisher's record states none (FDA and EPA state none; EPA classifies submitters in `subtype` instead), where the row's read did not carry the field, and on mass comment campaigns; `count(organization)` by `agency_code` is the measure."
+        "description": "The organization the commenter stated, where the row's read carried it. NULL where the publisher's record states none (FDA and EPA state none; EPA classifies submitters in `subtype` instead) and where the row's read did not carry the field. A campaign record carries it where the publisher states it: on receipt sha256:77a08369… (2026-10-03) FWS states it on 340 of its 408 `Mass Mail Campaign` and 10 of its 13 `Late Mass Mail Campaign` records, EPA on none of 7,842. `count(organization)` by `agency_code` is the measure."
       },
       {
         "column_name": "category",
@@ -318,7 +318,7 @@
       {
         "column_name": "attachments_json",
         "column_type": "VARCHAR",
-        "description": "JSON array of any files attached to the comment: `[{title, formats:[{url, format, size}]}]`, from the object's `included` attachments. NULL when the comment lists none, and also where the row predates reading them: the extract gained this column on 2026-03-15 and rows ingested earlier kept NULL, since the ETL rewrites a row only when its modify_date moves (about 2.3M such rows, estimated 2026-09-28 in mirrulations-field-census-2026-09-28/attachments_weighted.json, every posted year from 1996; cause proven in comments-full-reread-2026-09-28/attachments-root-cause/). The comment re-read fills them; until then NULL does not mean no attachments."
+        "description": "JSON array of the comment's downloadable attachments: `[{title, formats:[{url, format, size}]}]`, from the object's `included` attachments, keeping only formats with a file URL. NULL, never `[]`, when it keeps none, so NULL does not mean no attachments: an attachment regulations.gov lists with no downloadable file (a `restrictReasonType` such as `Copyrighted`) is left out, and a comment whose attachments are all such reads NULL. The source records of EPA-HQ-OW-2022-0114 list 58 such attachments on 16 records, all Copyrighted; -1540, whose only attachment is one, reads NULL. Rows ingested before the extract gained this column (2026-03-15) kept NULL until the comment re-read (cause proven in comments-full-reread-2026-09-28/attachments-root-cause/), which on receipt sha256:77a08369… (2026-10-03) has written 26,414,926 of 26,415,400 rows: a non-NULL `comment_reference_values_json`, which the same extract always writes, marks a row it wrote, though the re-read leaves a column NULL where two copies of the record's version disagree."
       },
       {
         "column_name": "text_content",
@@ -343,7 +343,7 @@
       {
         "column_name": "duplicate_comments",
         "column_type": "INTEGER",
-        "description": "How many received submissions the agency says this posted record stands for (regulations.gov `duplicateComments`), as stated. Agencies that count (EPA and FWS among them) state 1 for a single comment and the campaign's size on a `Mass Mail Campaign` record (15,851 on EPA-HQ-OW-2022-0114-1811, National Wildlife Federation Action Fund); agencies that do not count state 0 on every record. Rows are posted records. To estimate submissions, sum `GREATEST(duplicate_comments, 1)`, each posted record standing for at least itself, and first count the NULL rows: GREATEST reads NULL as 1. The sum is the agency's posted accounting, not its official total: EPA-HQ-OW-2022-0114's 1,629 records sum to 53,707 (52,086 on 23 campaign records), while EPA's response to comments reports about 122,200 received. The 2026-09-28 sample found it stated on every record: 0 on 5,281, 1 on 660, more than 1 on 4. NULL where the row predates reading this field; 0 is a stated zero."
+        "description": "How many received submissions the agency says this posted record stands for (regulations.gov `duplicateComments`), as stated. Agencies that count (EPA and FWS among them) state 1 for a single comment and the campaign's size on a `Mass Mail Campaign` record (15,851 on EPA-HQ-OW-2022-0114-1811, National Wildlife Federation Action Fund); agencies that do not count state 0 on every record. Rows are posted records. To estimate submissions, sum `GREATEST(duplicate_comments, 1)`, each posted record standing for at least itself, and first count the NULL rows: GREATEST reads NULL as 1. The sum counts the submissions the agency says its posted records stand for, each record at least itself: its posted accounting, not its official total. On the comments export of receipt sha256:77a08369… (2026-10-03), EPA-HQ-OW-2022-0114's 1,629 records sum to 53,692, 52,086 of them on its 23 `Mass Mail Campaign` records, while EPA's response to comments reports about 122,200 received. The 2026-09-28 sample found it stated on every record: 0 on 5,281, 1 on 660, more than 1 on 4. NULL where the row predates reading this field; 0 is a stated zero."
       },
       {
         "column_name": "comment_text",
@@ -375,7 +375,7 @@
   "comments_index": {
     "table": "comments_index",
     "label": "Public comment counts",
-    "summary": "A small row-count index over `comments`. Each row counts the comments of one agency, docket and posting month, so consumers can compute comment totals without scanning the full table. It is rebuilt from the same catalog snapshot as each comments publication. Its rows are groups, not files: no Parquet file exists per row.",
+    "summary": "A small row-count index over `comments`. Each row counts the comments of one agency, docket and posting month, so consumers can compute comment totals without scanning the full table. It is rebuilt from the same catalog snapshot as each comments publication. Its rows are groups, not files: no Parquet file exists per row. Months are posting months: an agency posts in batches, so a spike here dates postings, and `comments.receive_date`, the agency's stated receipt date, dates receipt.",
     "coverage": "Derived. Counts over `comments` by agency, docket and posting month; it covers exactly what that table covers and adds no rows of its own.",
     "kind": "derived",
     "measured_on": "2026-09-06",
@@ -778,7 +778,7 @@
     "table": "discovery_signals",
     "label": "Agency activity spikes",
     "summary": "Per-agency document-output spike signal that powers the feed's discovery panel — agencies whose document count in the trailing 30 days is at least 2× their prior-year monthly mean, requiring ≥24 documents in the prior year to suppress tiny-denominator noise. Recomputed relative to the run date, so rows turn over on every rebuild; it is a current-state signal, not a time series. Built by `build_discovery_signals` from `documents`.",
-    "coverage": "Not a range. A dated snapshot recomputed from `documents` at each build; the Parquet metadata records its calculation time in UTC, its date policy and its parent digest. Future dates are excluded from recent activity. This is not a historical series or a complete measure of agency activity. Receipt: fork-execution-2026-09-21/discovery-utc/MANUAL-AUDIT.md.",
+    "coverage": "Not a range. A dated snapshot recomputed from `documents` at each build. Its date is the calculation instant the file's metadata records (`spicy_regs.discovery_signals.as_of`, beside the date policy and the `documents` digest it read; `parquet_kv_metadata` on the generation's file returns them), not `measured_on`, which dates the audit of this note. Future dates are excluded from recent activity. This is not a historical series or a complete measure of agency activity. Receipt: fork-execution-2026-09-21/discovery-utc/MANUAL-AUDIT.md.",
     "kind": "not_a_range",
     "measured_on": "2026-09-21",
     "data_quality": "Activity windows use UTC instants and preserve explicit source offsets. Dates and timestamps without offsets use UTC; source values remain unchanged. Corpus backfills and source date anomalies can affect these document-count signals.",
@@ -812,10 +812,10 @@
   "cfr_sections": {
     "table": "cfr_sections",
     "label": "Code of Federal Regulations sections",
-    "summary": "One row per GovInfo annual CFR granule, including sections, appendices, tables of contents and other structural units; metadata only, no regulatory body text. Neither a granule id nor a printed section number establishes the enclosing part, so each section granule is placed under the PART heading of its package's annual volume XML: Title 43 numbers sections by subpart (§ 1601.0-1 is in Part 1600), Title 41's parts contain a hyphen (`50-201`) and Title 14 Part 241 prints `19-8.1`. `part` is that structure; `cfr_ref` is the printed citation that joins the Federal Register side. Other granules keep the part their identifier spells, except in Title 41, whose identifiers cut a compound part at the hyphen (`…-part60` is Part 60-1): there a structural row takes the compound part its part granule's heading states (`60-2`), as the section rows do, and a Reserved part granule whose heading states no number takes NULL. The Parquet footer key `spicy_regs.cfr_sections.placement` records that every row was placed by this rule; generations without it keep identifier-derived parts. A package is re-placed only when it is new or its GovInfo lastModified changed; an unchanged package, or one whose volume cannot be read, keeps its prior rows. Missing credentials and incomplete source traversals refuse before output replacement. GovInfo's annual index package (`GPO-CFR-INDEX-2025`) is not a title volume and is not in the table. All columns are stored as VARCHAR.",
-    "coverage": "Window. Annual-edition section metadata from the 2025 and 2026 editions, not full publication history or body text. Each section's part comes from its volume's PART heading; on 2026-09-23 every compared Title 41, 43 and 14 section agreed with eCFR's 2025-01-01 structure. Receipts: fork-execution-2026-09-21/cfr-ancestry-fix-2026-09-23/ (candidate.json, validation.json).",
+    "summary": "One row per GovInfo annual CFR granule, including sections, appendices, tables of contents and other structural units; metadata only, no regulatory body text. Neither a granule id nor a printed section number establishes the enclosing part, so each section granule is placed under the PART heading of its package's annual volume XML: Title 43 numbers sections by subpart (§ 1601.0-1 is in Part 1600), Title 41's parts contain a hyphen (`50-201`) and Title 14 Part 241 prints `19-8.1`. `part` is that structure; `cfr_ref` is the printed citation that joins the Federal Register side. Other granules keep the part their identifier spells, except in Title 41, whose identifiers cut a compound part at the hyphen (`…-part60` is Part 60-1): there a structural row takes the compound part its part granule's heading states (`60-2`), as the section rows do, and a Reserved part granule whose heading states no number takes NULL. The Parquet footer key `spicy_regs.cfr_sections.placement` records that every section row was placed by this rule; generations without it keep identifier-derived parts. The key says nothing of Title 41's structural rows, which no volume scan places: they take their compound part from their part granule's heading on every run from 2026-10-03, under the same key. A generation built before keeps the identifier's chapter there (`part` `60`, `cfr_ref` `41-60` on `…-part60-id334`), and `count(*) WHERE title = '41' AND section IS NULL AND part LIKE '%-%'` is 0 on it and above 0 once the compound parts are in. A package is re-placed only when it is new or its GovInfo lastModified changed; an unchanged package, or one whose volume cannot be read, keeps its prior rows. Missing credentials and incomplete source traversals refuse before output replacement. GovInfo's annual index package (`GPO-CFR-INDEX-2025`) is not a title volume and is not in the table. All columns are stored as VARCHAR.",
+    "coverage": "Window. Annual-edition section metadata from the 2025 edition and, for some titles, the 2026 edition (`SELECT DISTINCT edition_year, title` lists which), not full publication history or body text. Each section's part comes from its volume's PART heading; on 2026-09-23 every compared Title 41, 43 and 14 section agreed with eCFR's 2025-01-01 structure. Receipts: fork-execution-2026-09-21/cfr-ancestry-fix-2026-09-23/ (candidate.json, validation.json).",
     "kind": "window",
-    "measured_on": "2026-09-28",
+    "measured_on": "2026-10-03",
     "data_quality": null,
     "columns": [
       {
@@ -831,7 +831,7 @@
       {
         "column_name": "cfr_ref",
         "column_type": "VARCHAR",
-        "description": "Join key to Federal Register `cfr_references_json`. For a section, the title and its printed citation (e.g. `43-1601.0-1`, `41-50-201.1`); Title 43 keeps its subpart-numbered spelling while `part` names the enclosing part. The Federal Register side cuts every Title 41 compound part at the hyphen (`41 CFR 60-1.4` reads `41-60`), so a Title 41 reference there names a chapter, not a part, and matches no row here: match it at chapter level (`title = '41' AND part LIKE '60-%'`). NULL for ranges, publisher typos, unprefixed numbers (`Sec. 1-1`), parenthesized citations (`1.401(k)-1`), sections outside a numbered PART and section tokens the volume does not hold; 12 single sections printed with `§§` (`§§ 2.188`) are read as ranges until spicy-docs 0.31.0. For other granules, composed from the part and the identifier's tokens (e.g. `48-700`, `15-746.10-app1`); NULL without a part. A part-level reference (`40-60`) equals `cfr_ref` only on a part's structural rows, and a part held only as sections has none (50 CFR 622 among 12 on 2026-10-03): match a part on `title` and `part`, which section rows carry."
+        "description": "Join key to Federal Register `cfr_references_json`. For a section, the title and its printed citation (e.g. `43-1601.0-1`, `41-50-201.1`); Title 43 keeps its subpart-numbered spelling while `part` names the enclosing part. The Federal Register side cuts every Title 41 compound part at the hyphen (`41 CFR 60-1.4` reads `41-60`), so a Title 41 reference there names a chapter, not a part, and matches no structural row here once the generation carries Title 41's compound parts (see the summary): match it at chapter level (`title = '41' AND part LIKE '60-%'`). NULL for ranges, publisher typos, unprefixed numbers (`Sec. 1-1`), parenthesized citations (`1.401(k)-1`), sections outside a numbered PART and section tokens the volume does not hold; 12 single sections printed with `§§` (`§§ 2.188`) are read as ranges until spicy-docs 0.31.0. For other granules, composed from the part and the identifier's tokens (e.g. `48-700`, `15-746.10-app1`); NULL without a part. A part-level reference (`40-60`) equals `cfr_ref` only on a part's structural rows, and a part held only as sections has none (50 CFR 622 among 12 on 2026-10-03): match a part on `title` and `part`, which section rows carry."
       },
       {
         "column_name": "title",
@@ -887,7 +887,7 @@
     "coverage": "True range on the archive index, mixed on enrichment. The archive index lists bills back to the earliest Congresses (latest actions from 1799-12-16); the bill family fills every column from GovInfo BILLSTATUS for the Congresses it has read, which begin at the 108th. On 2026-09-26 the 108th-117th rows, then written by a retired list walk, lacked bills against the BILLSTATUS listings (receipt `join-gaps-2026-09-26/d/`); bill-family runs scoped to those Congresses fill them. An absent CBO element does not mean CBO never scored a bill. The bill family re-reads its own prior once where the CBO outcome is missing, or where a reader other than the running one read it, even when the publisher stamp is unchanged; a bill of the 82nd-107th filled from the detail route is re-read the same way, within the run's fetch cap. A bill the running reader found refused in, or dropped from, its folder's unchanged zip is not read again until the zip moves or another reader runs.",
     "kind": "true_range",
     "measured_on": "2026-09-29",
-    "data_quality": "**Historical cosponsor-count defect:** the 2026-09-21 native-XML audit found 13,154 wrong zero counts in the then-retained 118th Congress HR/S output using SpicyDocs 0.24.2. The current reader counts the publisher's separate cosponsors list, including withdrawn entries, as the column description states. Corrected code does not establish that every historical row has been re-read; consult the selected generation's audit before claiming population-wide repair. Historical receipt: `legislative-release-candidate-2026-09-21/`. `statutes_at_large_cite` is filled at this table's merge by joining the published `laws` table on `bill_id`, as its column sentence says: `bill-family` reads `laws` best-effort after its merge and takes the law's citation where one is published, keeping a citation already here where `laws` has none for the bill; with no `laws` table published the column stays as it was, NULL on a cold start. It is never guessed: `laws` publishes a citation only from a captured PLAW USLM file, and reads a NULL through its own `uslm_outcome`. `public_law_number` and `law_type` are not that case: they come from the bill's own publisher record — its `laws` entry, when the publisher states one — and are filled wherever the bill family has reached. `url_source` `congress_api_list` marks a row the retired list writer last wrote. Its run of 2026-09-23 replaced 3,044 BILLSTATUS `update_date` instants with the list route's same-day dates and 3,095 congress.gov page URLs with API resource URLs (receipt `drift-audit-2026-09-23/`). The bill family re-reads every such bill in its scope instead of skipping it as unchanged, so the current Congress's rows heal on its next run; the 47 rows it relabelled in the 114th–118th (five of the replaced URLs among them) are re-read only by a run scoped to their Congress. `update_date` merges by the larger value, so a re-read never moves it backwards; the 46 rows of the 119th (and 42 older) whose list date is later than BILLSTATUS's therefore keep that date-only value after the re-read, and until BILLSTATUS catches up they read `url_source` `billstatus` beside an `update_date` no BILLSTATUS document stated. `stage` reads a bill's actions in the publisher's order under spicy-docs 0.51.0, which moved 154,374 of the 172,991 stages with actions in its replay of the live generation (reproduced on 2026-09-29); a row keeps the earlier rule's stage until its Congress is re-read. The 26 BILLSTATUS bills of the 108th-111th and 117th that stayed in doubt after every read on 2026-09-29 list a printing twice or without a type, so their `version_count` exceeds their `bill_versions` rows.\n`stage` `other_chamber` is not chamber-aware, here and in the per-action `bill_actions.stage`: the rule reads calendar, motion-to-proceed and cloture text from either chamber, so a bill placed on its own chamber's calendar reads `other_chamber`. On bill-family generation fd1bb730… (2026-10-03), 659 of the 1,453 bills of the 119th that read `other_chamber` are still in their own chamber: Senate bills by `placed on senate legislative calendar` (353), `motion to proceed` (52), `cloture` (1) and `calendar` (1), House bills by `placed on the union calendar` (238) and `calendar` (14). `stage_matcher` names the text that fired; `received in the senate`, `received in the house` and `held at the desk` are the other chamber's own acts. The 108th-112th still carry the rule from before spicy-docs 0.51.0, which also reads `referred` and `star print` as `other_chamber`. A chamber-aware rule is on a spicy-docs branch: once its wheel is adopted the scheduled bill-family run re-stages the 119th, while the 113th-118th and the 108th-112th are re-staged only by a bill-family dispatch scoped to them, so the note then narrows to the Congresses not yet dispatched. (interim until spicy-docs > 0.53.0+laws.f8431033f626)",
+    "data_quality": "**Historical cosponsor-count defect:** the 2026-09-21 native-XML audit found 13,154 wrong zero counts in the then-retained 118th Congress HR/S output using SpicyDocs 0.24.2. The current reader counts the publisher's separate cosponsors list, including withdrawn entries, as the column description states. Corrected code does not establish that every historical row has been re-read; consult the selected generation's audit before claiming population-wide repair. Historical receipt: `legislative-release-candidate-2026-09-21/`. `statutes_at_large_cite` is filled at this table's merge by joining the published `laws` table on `bill_id`, as its column sentence says: `bill-family` reads `laws` best-effort after its merge and takes the law's citation where one is published, keeping a citation already here where `laws` has none for the bill; with no `laws` table published the column stays as it was, NULL on a cold start. It is never guessed: `laws` publishes a citation only from a captured PLAW USLM file, and reads a NULL through its own `uslm_outcome`. `public_law_number` and `law_type` are not that case: they come from the bill's own publisher record — its `laws` entry, when the publisher states one — and are filled wherever the bill family has reached. `url_source` `congress_api_list` marks a row the retired list writer last wrote. Its run of 2026-09-23 replaced 3,044 BILLSTATUS `update_date` instants with the list route's same-day dates and 3,095 congress.gov page URLs with API resource URLs (receipt `drift-audit-2026-09-23/`). The bill family re-reads every such bill in its scope instead of skipping it as unchanged, so the current Congress's rows heal on its next run; the 47 rows it relabelled in the 114th–118th (five of the replaced URLs among them) are re-read only by a run scoped to their Congress. `update_date` merges by the larger value, so a re-read never moves it backwards; the 46 rows of the 119th (and 42 older) whose list date is later than BILLSTATUS's therefore keep that date-only value after the re-read, and until BILLSTATUS catches up they read `url_source` `billstatus` beside an `update_date` no BILLSTATUS document stated. `stage` reads a bill's actions in the publisher's order under spicy-docs 0.51.0, which moved 154,374 of the 172,991 stages with actions in its replay of the live generation (reproduced on 2026-09-29); a row keeps the earlier rule's stage until its Congress is re-read. The 26 BILLSTATUS bills of the 108th-111th and 117th that stayed in doubt after every read on 2026-09-29 list a printing twice or without a type, so their `version_count` exceeds their `bill_versions` rows.",
     "columns": [
       {
         "column_name": "bill_id",
@@ -1037,7 +1037,7 @@
       {
         "column_name": "stage",
         "column_type": "VARCHAR",
-        "description": "Interpreted legislative stage, including failed/vetoed outcomes; enacted law is terminal."
+        "description": "The whole bill's interpreted legislative stage, read from its actions under the current rule: `introduced`, `committee`, `calendared`, `passed_chamber`, `other_chamber`, `passed_both`, `conference`, `presented` or `law` (the terminal rung; the literal is `law`, never `enacted`), or an outcome, `failed` or `vetoed`, which has no rung. `introduced` is also the default when no rule fires (see stage_rule). NULL where the bill's actions were not examined, which is not a statement about enactment. A calendar placement, the desk, a motion to proceed or cloture reads `other_chamber` only where the chamber that took it (as the text names it, else the system that entered it) is not the one the bill's type originates in. In its own chamber a placement on the Union, House or Senate Legislative Calendar reads `calendared` (a reported bill awaiting the floor, or one placed there unreported under Senate Rule XIV or a discharge), and the desk, a motion to proceed or cloture moves nothing. `passed_both` is the bill's state once both chambers have passed it (the Library of Congress's 8000 and 17000 where the actions carry codes, else the text), read from the passage that completed it; a later conference, presentation or law outranks it. The stage never moves back once a chamber has passed the bill: the other chamber's referral or report, a star print or an introduction phrase does not lower it, and only a passage the Senate states it vitiated is undone. Where the bill's actions carry publisher codes, the Library of Congress's passage code (8000 House, 17000 Senate) is what holds it. A motion's or a point of order's result (\"motion to proceed ... agreed to in Senate\") is not the measure's passage, and \"disagreed to in Senate\" reads `failed`."
       },
       {
         "column_name": "stage_rule",
@@ -1087,7 +1087,7 @@
       {
         "column_name": "money_bill_kind",
         "column_type": "VARCHAR",
-        "description": "Interpreted money-bill kind, or NULL when no rule claimed the measure."
+        "description": "Interpreted money-bill kind, or NULL when no rule claimed the measure. A title heuristic with unmeasured recall: an appropriations act whose title lacks the pattern, or an appropriations division inside another bill, is NULL (money_bill_rule names the rule that fired). A simple or concurrent resolution (H. Res., S. Res., H. Con. Res., S. Con. Res.) is never a money bill, though a House special rule names the one it brings up, and `omnibus` is an appropriations omnibus only, not a statute named \"Omnibus\" (the Omnibus Crime Control and Safe Streets Act)."
       },
       {
         "column_name": "money_bill_rule",
@@ -1102,12 +1102,12 @@
       {
         "column_name": "fiscal_year",
         "column_type": "VARCHAR",
-        "description": "Fiscal year detected in the title, spelled FY plus the year."
+        "description": "Fiscal year the display title states, spelled FY plus the year: `fiscal year 2027`, the long title's `for the fiscal year ending September 30, 2027`, or an appropriations act's closing year (`... Appropriations Act, 2027`, `Continuing Appropriations and Extensions Act, 2027`). Never read from short_title, which a reused vehicle takes from the act it replaced. NULL where the title states none."
       },
       {
         "column_name": "appropriations_subcommittee",
         "column_type": "VARCHAR",
-        "description": "Which of the twelve appropriations subcommittees the title names."
+        "description": "Which of the twelve appropriations subcommittees the title names, under the statutory names: the House's National Security, Department of State, and Related Programs reads `State, Foreign Operations`. Read only where the regular-appropriations rule (or a manual override) classified the bill."
       },
       {
         "column_name": "referral_signals",
@@ -1117,7 +1117,7 @@
       {
         "column_name": "short_title",
         "column_type": "VARCHAR",
-        "description": "The publisher's short title, from the first titles[] entry whose titleType names a short title; NULL where the measure states none, which is ordinary."
+        "description": "The publisher's short title for the whole measure: the first titles[] entry whose titleType names a short title, which is the newest stage's because the publisher lists titles newest stage first, skipping the types that name only portions of the bill (an omnibus's divisions); NULL where the measure states no short title for the whole of it, which is ordinary."
       },
       {
         "column_name": "related_bills_json",
@@ -1247,7 +1247,7 @@
       {
         "column_name": "agenda_edition",
         "column_type": "VARCHAR",
-        "description": "Semiannual agenda edition the row was published in, as `YYYYMM` (MM 04=Spring, 10=Fall). Half of the primary/dedup key. Every readable edition since 199510 is held, so filter to one edition, or count distinct `rin`, before counting rules."
+        "description": "Semiannual agenda edition the row was published in, as reginfo.gov's `pubId` `YYYYMM`: MM 04 and 10 are its spring and fall editions, except that reginfo.gov titles 202510 the \"2026\" agenda (202504 is Spring 2025). The month is not a release date: an edition appears months later (USDA printed 202510 in the Register on 2026-08-14), and no release date is held. Half of the primary/dedup key. Every readable edition since 199510 is held, so filter to one edition, or count distinct `rin`, before counting rules."
       },
       {
         "column_name": "major",
@@ -1796,7 +1796,7 @@
     "coverage": "Derived, and bounded by its inputs: every docketed proceeding, paired from its cleaned `lifecycle_events` and censored at the day its inputs end.",
     "kind": "derived",
     "measured_on": "2026-09-28",
-    "data_quality": "A Regulations.gov document that states no Register number in `fr_doc_num`, or whose stated number resolves to no Register row, is dated by its upload, which for a legacy document can be years after the rule: on snapshot_9b2c770e's inputs 262 lifecycles anchor on such a document, 74 of them upload pairs outside survival (docs/ontology.md). A proposal typed only by Regulations.gov (`lifecycle_events.source = 'regulations_gov'`, an unnumbered upload) can be a petition for rulemaking, a state program submission or an information-collection notice the Register files under another type: on snapshot_62318069's inputs 515 survival lifecycles since 2015 anchor on one (352 open); a Register number its title names is not read as its identity. Where the proceeding also holds the Register's proposal, the Register's anchors (54d); an upload keeps its anchor when a final falls between the two or the Register's is a comment-period extension or correction, so an earlier proposal whose Register copy is missing may still anchor on its later re-proposal (FDA's 1978 OTC-monograph dockets re-proposed in the 1990s). A final that finalizes another docket's proposal is paired in its own proceeding only and the proposal stays `open`: a RIN never groups dockets (56a), and the Register's docket labels are often an agency's own (2026-15833 names 'CMS-1849-F and CMS-0062-F' and no RIN). A Register proposal naming several dockets anchors one lifecycle per docket (502 proposals behind 2,358 of 35,327 survival rows on snapshot_62318069's inputs; EPA 20%).\nFor `routine_family` `pesticide_tolerance` the proposal is usually EPA's notice that it received a pesticide petition (FFDCA 408(d)(3)), typed Proposed Rule, not a proposal of rule text: 443 of the 459 EPA tolerance lifecycles proposed since 2020 on snapshot_448e6d9a's inputs. Time to final then runs from the receipt notice, and `proposal_form` does not tell the two apart.",
+    "data_quality": "A Regulations.gov document that states no Register number in `fr_doc_num`, or whose stated number resolves to no Register row, is dated by its upload, which for a legacy document can be years after the rule: on snapshot_9b2c770e's inputs 262 lifecycles anchor on such a document, 74 of them upload pairs outside survival (docs/ontology.md). A proposal typed only by Regulations.gov (`lifecycle_events.source = 'regulations_gov'`, an unnumbered upload) can be a petition for rulemaking, a state program submission or an information-collection notice the Register files under another type: on snapshot_62318069's inputs 515 survival lifecycles since 2015 anchor on one (352 open); a Register number its title names is not read as its identity. Where the proceeding also holds the Register's proposal, the Register's anchors (54d); an upload keeps its anchor when a final falls between the two or the Register's is a comment-period extension or correction, so an earlier proposal whose Register copy is missing may still anchor on its later re-proposal (FDA's 1978 OTC-monograph dockets re-proposed in the 1990s). A final that finalizes another docket's proposal is paired in its own proceeding only and the proposal stays `open`: a RIN never groups dockets (56a), and the Register's docket labels are often an agency's own (2026-15833 names 'CMS-1849-F and CMS-0062-F' and no RIN). A Register proposal naming several dockets anchors one lifecycle per docket (502 proposals behind 2,358 of 35,327 survival rows on snapshot_62318069's inputs; EPA 20%).\nFor `routine_family` `pesticide_tolerance` the proposal is usually EPA's notice that it received a pesticide petition (FFDCA 408(d)(3)), typed Proposed Rule, not a proposal of rule text: 443 of the 459 EPA tolerance lifecycles proposed since 2020 on snapshot_448e6d9a's inputs. Time to final then runs from the receipt notice, and `proposal_form` does not tell the two apart.\nFDA's notices that it filed a food or color additive petition (\"Filing of Food Additive Petition\", \"… Color Additive Petition\") are the same case with no stratum: the Register types them Proposed Rule (its `action`, \"Notification of petition.\", is not carried by `federal_register`), `routine_family` is NULL, and on snapshot_55d396ee's inputs 64 of the 199 FDA lifecycles proposed since 2018, and 130 of the 831 in the published FDA cell, anchor on one. Match the proposal's Register title (`filing of … petition`) to set them apart. A count of lifecycles counts docketed proceedings, not rulemakings: FNA's three open lifecycles on that snapshot are one RIN, 0584-AF22, in dockets FNA-2026-0034, -0166 and -0201; count distinct `proceedings.rin` for rulemakings.",
     "columns": [
       {
         "column_name": "proceeding_id",
@@ -16424,67 +16424,6 @@
       "report_id"
     ]
   },
-  "gao_decisions": {
-    "table": "gao_decisions",
-    "label": "Government Accountability Office legal decisions",
-    "summary": "One row per GAO legal decision page, read from GAO's own listing of what it issued by month and year. A decision is keyed on its number as GAO spells it and its page: one teaser can name several B-numbers (`B-423916.2,B-423916.3`), and one B-number can have two pages released months apart (`b-331093` and `b-331093-0`). `listing_page` names the retained listing page that listed it, which the run keeps as evidence. A later walk refreshes the rows it lists; a run without one carries the table forward. All columns are stored as VARCHAR.",
-    "coverage": "True range from 2009 on: every legal decision GAO's own Month in Review and Annual Index list for each year or month a finished walk of those pages read: the B-numbered decisions (bid protests, appropriations law, vacancies letters, other decisions) and the Contract Appeals Board decisions GAO numbers as dockets (`2020-02`) or `P` numbers. Federal Agency Major Rule Reports, B-numbered from April 2017, are in `gao_reports`, not here. Entries GAO gives no number are left out. A year or month the walk has not finished adds nothing, and a month with no listed decision adds nothing either; this table does not record which case a missing month is. The months read are the distinct `listing_page` values: a month after the newest one is unread, a month before it with no rows is a publisher zero (October 2025, when GAO was closed by the lapse in appropriations, is one).",
-    "kind": "true_range",
-    "measured_on": "2026-09-28",
-    "data_quality": null,
-    "columns": [
-      {
-        "column_name": "decision_number",
-        "column_type": "VARCHAR",
-        "description": "The decision's number as GAO's listing spells it, suffixes and all (`B-424129.2`, `B-423916.2,B-423916.3`, `B-235577.2-O.M.`, a docket `2020-02`). With `url`, the key."
-      },
-      {
-        "column_name": "b_numbers_json",
-        "column_type": "VARCHAR",
-        "description": "JSON array of the B-numbers in `decision_number`, split on commas and semicolons; a fragment GAO cut mid-number is left out. `[]` for a docket- or P-numbered decision."
-      },
-      {
-        "column_name": "decision_type",
-        "column_type": "VARCHAR",
-        "description": "GAO's label for the decision (e.g. `Bid Protest Decision`, `Appropriations Decision`, `Legal Other Decision`)."
-      },
-      {
-        "column_name": "title",
-        "column_type": "VARCHAR",
-        "description": "The decision's heading as GAO's listing states it: the protester or the question decided. GAO double-escapes some headings, so a few keep `&mdash;`, `&#151;` or `&amp;` literally; apply `html.unescape` when matching."
-      },
-      {
-        "column_name": "decision_date",
-        "column_type": "VARCHAR",
-        "description": "The listing's \"Publicly Released\" date (its \"Published\" date where it states no release) as an ISO date string. Sort key."
-      },
-      {
-        "column_name": "topics_json",
-        "column_type": "VARCHAR",
-        "description": "JSON array of GAO's headings the decision was listed under, in listed order."
-      },
-      {
-        "column_name": "url",
-        "column_type": "VARCHAR",
-        "description": "The decision's gao.gov page, as the listing links it (percent-encoded where GAO encodes it). With `decision_number`, the key."
-      },
-      {
-        "column_name": "listing_page",
-        "column_type": "VARCHAR",
-        "description": "The first retained Month in Review or Annual Index page that listed the decision, the evidence a reader can open."
-      },
-      {
-        "column_name": "source",
-        "column_type": "VARCHAR",
-        "description": "The route that supplied the row: `gao_listing` (GAO's own Month in Review and Annual Index)."
-      }
-    ],
-    "grain": null,
-    "identity_columns": [
-      "decision_number",
-      "url"
-    ]
-  },
   "crs_reports": {
     "table": "crs_reports",
     "label": "Congressional Research Service reports",
@@ -17635,7 +17574,7 @@
       {
         "column_name": "stage",
         "column_type": "VARCHAR",
-        "description": "Stage this one action's qualified code and text classify as, including failed/vetoed outcomes."
+        "description": "The stage this one action's qualified code and text classify as, in the same vocabulary as congress_bills.stage (`introduced`, `committee`, `calendared`, `passed_chamber`, `other_chamber`, `conference`, `presented`, `law`, or the outcomes `failed` and `vetoed`; never `passed_both`, which is a bill's state, not one action's); `introduced` with stage_rule NULL when no rule classifies the action, as for the desk or a floor step in the bill's own chamber. One action's classification, not the bill's state."
       },
       {
         "column_name": "stage_rule",
@@ -17648,7 +17587,7 @@
         "description": "The matched text pattern, publisher code or vote-result reading used by the named rule."
       }
     ],
-    "grain": "One row per action entry in a bill's BILLSTATUS document, in publisher order.",
+    "grain": "One row per entry of the bill's own action list (actions in its BILLSTATUS document), in publisher order; actions recorded under the bill's amendments (amendments/amendment/actions) are not rows, so a roll call on an amendment can have no action here.",
     "identity_columns": [
       "bill_id",
       "action_index"
@@ -17718,6 +17657,60 @@
     "identity_columns": [
       "bill_id",
       "system_code"
+    ]
+  },
+  "bill_committee_activities": {
+    "table": "bill_committee_activities",
+    "label": "Bill committee activities",
+    "summary": "One committee or subcommittee activity a bill's BILLSTATUS document lists: the committee, the activity's name and timestamp as written, and an occurrence number for exact repeats. Not a complete record of what committees did: a report can appear in `bill_actions` only (119-s-545 lists Markup By and no Reported By). A re-read merges on the key and keeps the newer document's row, so an activity the publisher later drops is not removed.",
+    "coverage": "Sampled, and filling: what each committee and subcommittee a BILLSTATUS document lists did and when, for the bills the bill family has read under spicy-docs 0.54.0. A bill read before that has no rows here until its Congress is read again, so an absent bill is unread, not inactive. The scheduled run reads the sitting Congress; earlier Congresses fill only by a bill-family dispatch scoped to them.",
+    "kind": "sampled",
+    "measured_on": "2026-10-03",
+    "data_quality": "Measured with the spicy-docs reader over the 119th's 19,531 BILLSTATUS documents (round 4, 2026-10-03): 32,102 rows on 18,998 bills, no reader refusal; 1,468 Reported By rows, 820 exact repeats (occurrence 2 and above) and 49 undated items, whose `activity_date` is empty.",
+    "columns": [
+      {
+        "column_name": "bill_id",
+        "column_type": "VARCHAR",
+        "description": "The bill whose committee this activity belongs to."
+      },
+      {
+        "column_name": "system_code",
+        "column_type": "VARCHAR",
+        "description": "The publisher's identifier of the committee or subcommittee that did it (ssju00)."
+      },
+      {
+        "column_name": "activity_name",
+        "column_type": "VARCHAR",
+        "description": "The publisher's activity name exactly as written, in either capitalisation it uses (Reported By and Reported by, Referred To and Referred to): Referred To, Markup By, Reported By, Discharged From, Hearings By (full committee), Hearings By (subcommittee), Reported Original Measure, Bills of Interest - Exchange of Letters, Unknown."
+      },
+      {
+        "column_name": "activity_date",
+        "column_type": "VARCHAR",
+        "description": "The publisher's timestamp for it, as written (2026-05-11T20:30:49Z); empty where the item states none, as every Bills of Interest - Exchange of Letters item does."
+      },
+      {
+        "column_name": "occurrence",
+        "column_type": "VARCHAR",
+        "description": "1 for an activity's first listing under this committee, 2 for an exact repeat (same name and timestamp), and so on: the publisher lists some referrals twice (119-s-545)."
+      },
+      {
+        "column_name": "parent_system_code",
+        "column_type": "VARCHAR",
+        "description": "The parent committee's system code when the activity is a subcommittee's."
+      },
+      {
+        "column_name": "snapshot_update_date",
+        "column_type": "VARCHAR",
+        "description": "The parent document's updateDate, so a committee's activities are versioned with its bill."
+      }
+    ],
+    "grain": "One row per activity a BILLSTATUS document lists under one of the bill's committees or subcommittees: what the committee did and when. A clean key for a committee's work but not a complete one: 119-s-545's lists Markup By and no Reported By while its actions record the report, so a report can appear in bill_actions only.",
+    "identity_columns": [
+      "bill_id",
+      "system_code",
+      "activity_name",
+      "activity_date",
+      "occurrence"
     ]
   },
   "bill_cosponsors": {
@@ -17896,7 +17889,7 @@
       {
         "column_name": "version_date",
         "column_type": "VARCHAR",
-        "description": "The publisher's date for this printing; the merge prefers the larger value."
+        "description": "The publisher's date for this printing; the merge prefers the larger value. An enrolled printing's date is empty at the publisher (BILLSTATUS `<date/>` and the printing's own dc:date), so version_date is '' (not NULL) on enrolled rows, which sorts before every date: order printings with printing_order or NULLIF(version_date, '')."
       },
       {
         "column_name": "package_id",
@@ -18949,7 +18942,7 @@
       {
         "column_name": "sponsor_party",
         "column_type": "VARCHAR",
-        "description": "The sponsor's party string in full, not a single letter."
+        "description": "The sponsor's party as the list route states it: a one-letter code (D, R, I); NULL for the House amendments the Rules Committee sponsors, which name no party."
       },
       {
         "column_name": "amended_bill_id",
@@ -19096,7 +19089,7 @@
       {
         "column_name": "pub_date_instant",
         "column_type": "VARCHAR",
-        "description": "That pubDate parsed to an instant under RFC 822's fixed abbreviation table."
+        "description": "That pubDate parsed to an instant under RFC 822's fixed abbreviation table.  A zone label is taken at its word: the Senate feed stamps `EST` all year, so a summer release reads -05:00, an hour off its clock time."
       },
       {
         "column_name": "author",
@@ -19141,7 +19134,7 @@
       {
         "column_name": "match_rule",
         "column_type": "VARCHAR",
-        "description": "Which release-matching rule fired, including unmatched."
+        "description": "Which release-matching rule fired: a rule's name where it found a bill, `unmatched` where the matching pass ran and found none; NULL where no matching pass ran, which says nothing about whether the release names a bill."
       },
       {
         "column_name": "matched_field",
@@ -19162,11 +19155,11 @@
   "roll_call_votes": {
     "table": "roll_call_votes",
     "label": "House and Senate roll-call votes",
-    "summary": "One row per roll call: the publisher's own tally, and the bill it refers to. The four tally columns are the publisher's own counts or they are NULL; they are never zero-filled. All columns are stored as VARCHAR.",
-    "coverage": "Sampled, and accumulating: both chambers' roll calls from each chamber's own session index (the Senate LIS menu and the House Clerk's EVS index pages, both keyless), newest first under a per-run cap. The scheduled scope is the sitting Congress; an earlier Congress is backfilled by dispatching its number under the same cap and, once held, is never re-read. A roll call already published with a tally is not fetched again, except the newest few of a sitting Congress, re-read in case the publisher corrected them. The Clerk and LIS files reach the 101st Congress (the Clerk's archive begins in 1990, the 101st's second session); the bill family's references reach the 108th. The House files of 1990-2002, the 101st-107th Congresses, are a House-only dispatch (`congresses` 101-107, `chambers` house) run until a run fetches nothing; replayed over the retained Clerk archive through this rollup they refuse none and change no published row (see the output ledger's roll-call row). A set of roll calls reached from bills alone is not an index of a session's roll calls. A House roll call that a bill's own action names can be published a cron before the Clerk's index lists it, with the same tally and member positions. `vote_date` keeps the Clerk's own spelling (`9-Sep-2025`, and `3-JAN-1991` on eight files of 1991-2001), which does not sort as a date, so no range over it is quoted here.",
+    "summary": "One row per roll call: the publisher's own tally, and the bill it refers to. The four tally columns are the publisher's own counts, NULL on a candidate election (a Speaker vote), whose choices `tallies_json` keeps under their own labels. A Senate count element the file leaves empty or omits (`<present/>`, `<absent/>`) is read as 0, which is what the Senate means by it (119-senate-1-15: 50 yea, 50 nay, 0 present, 0 absent). All columns are stored as VARCHAR.",
+    "coverage": "Sampled, and accumulating: both chambers' roll calls from each chamber's own session listing (the Senate LIS menu, and the House Clerk's roll files, read forward from the session's last held roll until the Clerk stops serving the next ones; a session the Clerk serves no roll of yet, as before its first vote, lists none; both keyless), newest first under a per-run cap. The Clerk's EVS index pages answer 404 since 2026-10-02 and are not read. Each chamber is listed on its own: a run whose listing of one chamber refuses reads none of that chamber's roll calls, keeps its published rows as they were, publishes the other chamber and then fails, so one chamber's newest roll calls can lag the other's. The scheduled scope is the sitting Congress; an earlier Congress is backfilled by dispatching its number under the same cap and, once held, is never re-read. A roll call already published with a tally is not fetched again, except the newest few of a sitting Congress, re-read in case the publisher corrected them. The Clerk and LIS files reach the 101st Congress (the Clerk's archive begins in 1990, the 101st's second session); the bill family's references reach the 108th. The House files of 1990-2002, the 101st-107th Congresses, are a House-only dispatch (`congresses` 101-107, `chambers` house) run until a run fetches nothing; replayed over the retained Clerk archive through this rollup they refuse none and change no published row (see the output ledger's roll-call row). A set of roll calls reached from bills alone is not an index of a session's roll calls. A House roll call that a bill's own action names can be published a cron before the Clerk's roll files list it, with the same tally and member positions. `vote_date` keeps the Clerk's own spelling (`9-Sep-2025`, and `3-JAN-1991` on eight files of 1991-2001), which does not sort as a date, so no range over it is quoted here.",
     "kind": "sampled",
     "measured_on": "2026-09-29",
-    "data_quality": "Two statements link a roll call to a bill, and `match_rule` names the one that did. `bill_action_recorded_vote`: a `recordedVotes` entry on the bill's own action, read from `bill_vote_references`. `vote_file_legislation`: the vote file's own statement of its measure, the Clerk's `legis_num` or the Senate's document, with the file's own URL as `match_url`; on a Senate amendment vote that document is `S.Amdt.`, not a bill, so such a roll call links to a bill only where the rollup resolved one through the bill's own recorded-vote action (`count(bill_id)` over amendment votes is the measure). The bill's action wins; where two bills' actions record one roll call, the one the file names wins (the Senate passing a House bill after its Senate twin); with no recorded reference the file links alone. A procedural question, a nomination, a treaty or two different bills link nothing. Measured on the 108th and 119th (receipt `votes-backfill-2026-09-26/file-links/`), the files add 881 links and agree with the recorded reference on 1,803 of the 1,809 roll calls both link; the six others are those Senate passages. `conflict_count` is per roll call, not per run: it counts the later references, the file's included, that named a different bill for *this* roll call, and they are kept rather than dropped. Before 2003 only the file's `legis_num` links: it links 6,614 of the 7,327 files of 1990-2002 to 2,842 bills, 26 of which have no `congress_bills` row yet. A held row is relinked from its own columns without a fetch; a House row published before `legis_num` or `clerk_body_element` existed is read again once to gain both, with `vote_desc`. Replayed over the retained files of the 108th-118th, that read fills the element on all 14,503 published House rows (3,742 `committee`) and `vote_desc` on 9,191, and changes no other column and no member row; it also publishes the five votes the House vacated before recording a position, which have zero tallies, `member_vote_count` 0 and no `member_votes` rows. The Clerk's 2003 Speaker election (108-1-2), whose candidate totals contradict its members' choices, still refuses. The contract's `house_vote_legislation` rule (Congress.gov's `house-vote` listing) is no longer produced and no published row carries it: it was retired with the api.data.gov key it needed (2026-09-26). Each run fills a NULL `vote_day` on every held (completely captured) roll call from its own `vote_date` before merging, so a row published before the column existed gains it without a re-fetch. An incomplete capture is not held: it is re-fetched first each run and takes its day from the file. A linkage-only row keeps NULL.\nThe vendored `tallies_json` sentence says it holds every count the publisher stated; it holds each roll call's overall totals only, under the publisher's names (the Clerk's `yea-total`, `nay-total`, `present-total` and `not-voting-total`; the Senate's `yeas`, `nays`, `present` and `absent`; a candidate's name in a Speaker election). The Clerk's `totals-by-party` are not carried: count `member_votes` by `party` for a party split, which matched the Clerk's party totals on the House roll calls checked 2026-10-03. (interim until spicy-docs > 0.53.0+laws.f8431033f626)",
+    "data_quality": "Two statements link a roll call to a bill, and `match_rule` names the one that did. `bill_action_recorded_vote`: a `recordedVotes` entry on the bill's own action, read from `bill_vote_references`. `vote_file_legislation`: the vote file's own statement of its measure, the Clerk's `legis_num` or the Senate's document, with the file's own URL as `match_url`; on a Senate amendment vote that document is `S.Amdt.`, not a bill, so such a roll call links to a bill only where the rollup resolved one through the bill's own recorded-vote action (`count(bill_id)` over amendment votes is the measure). The bill's action wins; where two bills' actions record one roll call, the one the file names wins (the Senate passing a House bill after its Senate twin); with no recorded reference the file links alone. A procedural question, a nomination, a treaty or two different bills link nothing. Measured on the 108th and 119th (receipt `votes-backfill-2026-09-26/file-links/`), the files add 881 links and agree with the recorded reference on 1,803 of the 1,809 roll calls both link; the six others are those Senate passages. `conflict_count` is per roll call, not per run: it counts the later references, the file's included, that named a different bill for *this* roll call, and they are kept rather than dropped. Before 2003 only the file's `legis_num` links: it links 6,614 of the 7,327 files of 1990-2002 to 2,842 bills, 26 of which have no `congress_bills` row yet. A held row is relinked from its own columns without a fetch; a House row published before `legis_num` or `clerk_body_element` existed is read again once to gain both, with `vote_desc`. Replayed over the retained files of the 108th-118th, that read fills the element on all 14,503 published House rows (3,742 `committee`) and `vote_desc` on 9,191, and changes no other column and no member row; it also publishes the five votes the House vacated before recording a position, which have zero tallies, `member_vote_count` 0 and no `member_votes` rows. The Clerk's 2003 Speaker election (108-1-2), whose candidate totals contradict its members' choices, still refuses. The contract's `house_vote_legislation` rule (Congress.gov's `house-vote` listing) is no longer produced and no published row carries it: it was retired with the api.data.gov key it needed (2026-09-26). Each run fills a NULL `vote_day` on every held (completely captured) roll call from its own `vote_date` before merging, so a row published before the column existed gains it without a re-fetch. An incomplete capture is not held: it is re-fetched first each run and takes its day from the file. A linkage-only row keeps NULL.",
     "columns": [
       {
         "column_name": "vote_id",
@@ -19216,27 +19209,27 @@
       {
         "column_name": "yea",
         "column_type": "VARCHAR",
-        "description": "Yea votes, from the Clerk's yea-total or the Senate's yeas."
+        "description": "Yea votes, from the Clerk's yea-total or the Senate's yeas; a blank Senate count reads 0 (see present)."
       },
       {
         "column_name": "nay",
         "column_type": "VARCHAR",
-        "description": "Nay votes, from the Clerk's nay-total or the Senate's nays."
+        "description": "Nay votes, from the Clerk's nay-total or the Senate's nays; a blank Senate count reads 0 (see present)."
       },
       {
         "column_name": "present",
         "column_type": "VARCHAR",
-        "description": "Present votes, as each publisher counts them."
+        "description": "Present votes, as each publisher counts them. A Senate count element the file leaves empty or omits (`<present/>`) reads 0, which is what the Senate means by it: 119-senate-1-15 states 50 yeas, 50 nays and empty present and absent, 100 positions."
       },
       {
         "column_name": "not_voting",
         "column_type": "VARCHAR",
-        "description": "Members not voting: the Clerk's not-voting-total, or the Senate's absent, folded to one column."
+        "description": "Members not voting: the Clerk's not-voting-total, or the Senate's absent, folded to one column. A blank Senate `<absent/>` reads 0, as for present."
       },
       {
         "column_name": "tallies_json",
         "column_type": "VARCHAR",
-        "description": "Every count the publisher stated, under the publisher's own names, as a JSON object. Candidate elections keep literal choice labels here and leave the four ordinary tally columns NULL."
+        "description": "The overall totals the publisher stated, under the publisher's own names, as a JSON object; the Clerk's totals by party are party_totals_json. Candidate elections keep literal choice labels here and leave the four ordinary tally columns NULL."
       },
       {
         "column_name": "member_vote_count",
@@ -19302,6 +19295,41 @@
         "column_name": "vote_desc",
         "column_type": "VARCHAR",
         "description": "The Clerk's own vote-desc as the House vote file states it, most often the measure's title (\"PRECIP Act\"); 13,780 of the Clerk's 22,512 files of 1990-2026 state one.  On the five roll calls the House vacated by unanimous consent before recording a position (112-1-484, 112-2-327, 113-2-275, 114-1-300, 114-2-44) it is the file's statement of what happened (\"This vote was vacated by unanimous consent on 4-Jun-2015.\"), and the row has zero tallies, member_vote_count 0 and no member_votes rows.  A vote vacated after its positions were recorded publishes as any other: 110-2-640 (2008) lists 433 members and says \"Proceedings on Roll Call 640 were vacated by unanimous consent.\"  Empty when a captured Clerk file states none; NULL on Senate rows, linkage-only rows and House rows captured before this column."
+      },
+      {
+        "column_name": "vote_question_text",
+        "column_type": "VARCHAR",
+        "description": "The Senate's full question text as the file states it, the amendment and the measure named in words (On the Amendment S.Amdt. 2360 to H.R. 1), so it names the amendment voted on even when the amendment block is empty (119-2-180 and 119-2-182 name SA 5823 only here and in vote_title). Empty when a captured Senate file states none; NULL on House rows, linkage-only rows and Senate rows captured before this column."
+      },
+      {
+        "column_name": "vote_title",
+        "column_type": "VARCHAR",
+        "description": "The Senate's vote title as the file states it (`Amdt. No. 2360, as Amended`). Empty when a captured Senate file states none; NULL on House rows, linkage-only rows and Senate rows captured before this column."
+      },
+      {
+        "column_name": "majority_requirement",
+        "column_type": "VARCHAR",
+        "description": "The majority the Senate file states the question needed: `1/2`, `3/5` or `2/3`. Empty when a captured Senate file states none; NULL on House rows, linkage-only rows and Senate rows captured before this column."
+      },
+      {
+        "column_name": "modify_date",
+        "column_type": "VARCHAR",
+        "description": "The Senate file's own modify_date literal (`July 1, 2025,  12:57 PM`), when the publisher last changed it; sorts as text. Empty when a captured Senate file states none; NULL on House rows, linkage-only rows and Senate rows captured before this column."
+      },
+      {
+        "column_name": "tie_breaker_by_whom",
+        "column_type": "VARCHAR",
+        "description": "Who cast the tie-breaking vote, as the Senate's tie_breaker block names them (`Vice President of the United States`): the reason a 50-50 roll call reads Agreed to. NULL when the vote was not tied (the block is present and empty), on House rows, linkage-only rows and Senate rows captured before this column."
+      },
+      {
+        "column_name": "tie_breaker_vote",
+        "column_type": "VARCHAR",
+        "description": "The tie-breaking vote as cast (`Yea`); NULL wherever tie_breaker_by_whom is."
+      },
+      {
+        "column_name": "party_totals_json",
+        "column_type": "VARCHAR",
+        "description": "The Clerk's totals by party, as a JSON array in the file's order: each object the party as the Clerk names it (Republican, Democratic, Independent; member_votes.party spells the same parties R, D and I) and its yea-total, nay-total, present-total and not-voting-total. [] when a captured Clerk file states none (a Speaker election). NULL on Senate rows, whose files state none; on linkage-only rows; and on House rows captured before this column until they are read again."
       }
     ],
     "grain": "One row per roll call: the publisher's own tally, and the bill it refers to.",
@@ -19354,7 +19382,7 @@
       {
         "column_name": "bioguide_id",
         "column_type": "VARCHAR",
-        "description": "The voting member's bioguide id, where the publisher or the crosswalk supplies one."
+        "description": "The voting member's bioguide id: stated by the publisher on a House row (the Clerk's name-id, from 2003), and filled by the host's crosswalk at merge time on a Senate row, whose file states only lis_id (members.lis_id resolves it); NULL where neither supplies one."
       },
       {
         "column_name": "lis_id",
@@ -19945,7 +19973,7 @@
     "coverage": "Sampled. Selected hearing packages from GovInfo, each with its native event identifiers checked: package and body metadata, not speaker turns or complete hearing history.",
     "kind": "sampled",
     "measured_on": "2026-09-28",
-    "data_quality": "Cover bills come from the package's MODS and cost no extra requests. BODY mentions do not become hearing links. event_id comes from a verified Congress.gov hearing detail; NULL can mean no meeting or a refused detail. committee_report_reads distinguishes a completed read from a refused one. body_completeness says what the read text states about itself: a publisher_placeholder body is the publisher's notice that the document is only in the PDF. When the package offers that PDF it is read instead (pdf_extracted, with text_derivation naming the extraction); when it offers none, the notice is published as it stands. NULL on rows not re-read since the column was added.",
+    "data_quality": "Cover bills come from the package's MODS and cost no extra requests. BODY mentions do not become hearing links. event_id is the meeting the Congress.gov hearing record names (its associatedMeeting), carried as the publisher pairs them. NULL means that record names no meeting, or was refused, and committee_report_reads says which: on committee-reports generation 9aa9d10d… (2026-10-03) all 164 NULL rows were completed reads naming none. It does not mean no meeting exists: a meeting can list the transcript's jacket in `committee_meetings.hearing_jackets_json` without the hearing record naming it. That jacket route is the publisher's many-to-many listing, not a declared join: on committee-meetings generation 31e62420… (2026-10-03) 1,021 meetings list two or more distinct jackets and 1,075 (congress, jacket) values sit on two or more meetings. The declared event_id join reads `complete` because every event_id names a meeting row; that does not check the pairing: CHRG-118hhrg63377 names meeting 116369, an Oversight and Investigations hearing the same day, while its MODS and docs.house.gov place it at 116330. body_completeness says what the read text states about itself: a publisher_placeholder body is the publisher's notice that the document is only in the PDF. When the package offers that PDF it is read instead (pdf_extracted, with text_derivation naming the extraction); when it offers none, the notice is published as it stands. NULL on rows not re-read since the column was added.",
     "columns": [
       {
         "column_name": "package_id",
@@ -19985,7 +20013,7 @@
       {
         "column_name": "date_issued",
         "column_type": "VARCHAR",
-        "description": "The date the package was issued."
+        "description": "The date GovInfo issued the package; for CHRG packages this is the (first) held date: the summary's dateIssued equals the MODS's first heldDate on 185 of 185 published transcripts (2026-10-03), and the meeting's date on 117 of 117 matched to committee_meetings.  held_date states it from the MODS itself."
       },
       {
         "column_name": "last_modified",
@@ -20056,6 +20084,21 @@
         "column_name": "text_derivation",
         "column_type": "VARCHAR",
         "description": "The derivation that produced the text text_sha256 digests (`markup-reader`, `text-rendition-cleanup` or `pdf-extraction-gpo-normalized`), from the body sha256 digests; NULL on a row not re-read since the column was added."
+      },
+      {
+        "column_name": "witnesses_json",
+        "column_type": "VARCHAR",
+        "description": "Every witness the package's GovInfo MODS states, as a JSON array of its `<witness>` strings verbatim in document order -- name, position and organization as GPO wrote them, unsplit, because the record joins them in one string and spells them differently by chamber.  NULL where the MODS states none, never `[]`: MODS has no element for an empty witness list, so its silence is absence.  The Congress.gov meeting record lists no Senate witness at all, while the MODS lists them for 63 of 85 published Senate transcripts (2026-10-03)."
+      },
+      {
+        "column_name": "held_date",
+        "column_type": "VARCHAR",
+        "description": "The day the hearing was held, as the package's MODS states it in `<heldDate>`; NULL where the MODS states none.  A compiled volume states several (2 of 185 published transcripts, 2026-10-03; CHRG-117shrg56721 states eleven) and this is the first: it dates the package, as date_issued does, so there it is when the series began, not each session's date.  hearing_bill_links.held_date is NULL on the same volume for a different reason: a link pairs a date with a bill, and the volume pairs none."
+      },
+      {
+        "column_name": "mods_event_id",
+        "column_type": "VARCHAR",
+        "description": "The committee-meeting event id the package's GovInfo MODS states in `<eventId>` (the first, where it states several), which committee_meetings.event_id joins on with congress and chamber.  A second publisher's statement beside event_id, never overriding it: a consumer may fall back to it where event_id is NULL.  43 of 185 published transcripts state one, 22 where Congress.gov names none, 21 of them Senate; where both state one they agree 21 of 21 (2026-10-03), including a misassignment both make (CHRG-118hhrg63377 names 116369, another subcommittee's hearing that day), so agreement is not independent confirmation."
       }
     ],
     "grain": "One row per captured GovInfo hearing transcript package.",
@@ -20149,10 +20192,10 @@
     "table": "cbo_cost_estimates",
     "label": "CBO cost-estimate publication index",
     "summary": "One row per bill and CBO publication, using build_bill_family's own cbo_cost_estimates output and spicy-docs' feed builder, merged by `merge_cbo_cost_estimates`: where both routes state one bill and publication, the BILLSTATUS row stands. One publication can stand under two bills, and both rows publish. All columns are stored as VARCHAR.",
-    "coverage": "Sampled: the estimates CBO lists for the bills the bill family has read, from the 108th Congress on, from two routes merged: each bill's BILLSTATUS record (`source` `billstatus_bulk`) and CBO's own per-Congress feed (`cbo_feed`), read once by every run for each Congress it is scoped to. BILLSTATUS states no estimate for the 112th and 113th, so theirs come from the feed alone; elsewhere the feed adds only what no BILLSTATUS record lists, such as the Recovery Act, H.R. 3200 and the ACA. A Congress no scoped run has read the feed of yet holds its BILLSTATUS estimates only. An absent estimate does not mean CBO never scored a bill. No CBO.gov body is requested.",
+    "coverage": "Sampled: the estimates CBO lists for the bills the bill family has read, from the 108th Congress on, from two routes merged: each bill's BILLSTATUS record (`source` `billstatus_bulk`) and CBO's own per-Congress feed (`cbo_feed`), read once by every run for each Congress it is scoped to. BILLSTATUS states no estimate for the 112th and 113th, so theirs come from the feed alone; elsewhere the feed adds only what no BILLSTATUS record lists, such as the Recovery Act, H.R. 3200 and the ACA. A Congress no scoped run has read the feed of yet holds its BILLSTATUS estimates only. A feed item that names no bill has no row here (`cbo_feed_items` lists it): CBO's weekly estimates of the bills the House takes up under suspension of the rules, a committee's reconciliation recommendations, and an estimate CBO files under no bill number. A bill passed under suspension can be scored in such a weekly estimate first or only, so its first row here does not date CBO's first estimate of it. An absent estimate does not mean CBO never scored a bill. No CBO.gov body is requested.",
     "kind": "sampled",
-    "measured_on": "2026-09-29",
-    "data_quality": "The bill's cbo_cost_estimates_outcome distinguishes an absent or empty element, an unexpected shape, and populated estimates. An empty index does not establish that CBO never scored the bill. Report citations are the bill's list, not proof that each publication is reprinted in each report; the report's recital gate is evaluated separately. A feed row carries its bill's own BILLSTATUS report citations, read by the same run or carried from the bill's published rows, and NULL where neither names them. A successfully evaluated bill replaces its prior BILLSTATUS rows, including when the list is absent or empty; an unexpected list shape retains prior rows until a successful read can establish the current relationships. A feed read replaces its Congress's prior feed rows, so an item CBO withdraws or re-files leaves, and a feed that cannot be read keeps them. `found_by` says how each row names its bill; the rows published before it take `billstatus` in a one-time backfill. `title_bill_id` is the bill the estimate's title leads with: where it differs from `bill_id` (7 of the 12,732 BILLSTATUS rows on 2026-09-29), `bill_id` is a numbering error as published and `title_bill_id` the bill scored. A title leading with a public law reads through the published `laws` table, which held the 119th Congress alone on 2026-09-29, so such a title of an earlier Congress leaves `title_bill_id` NULL and a blank feed item titled by an earlier law has no row (110th P.L. 110-50 and 112th P.L. 112-8).",
+    "measured_on": "2026-10-03",
+    "data_quality": "The bill's cbo_cost_estimates_outcome distinguishes an absent or empty element, an unexpected shape, and populated estimates. An empty index does not establish that CBO never scored the bill. Report citations are the bill's list, not proof that each publication is reprinted in each report; the report's recital gate is evaluated separately. A feed row carries its bill's own BILLSTATUS report citations, read by the same run or carried from the bill's published rows, and NULL where neither names them. A successfully evaluated bill replaces its prior BILLSTATUS rows, including when the list is absent or empty; an unexpected list shape retains prior rows until a successful read can establish the current relationships. A feed read replaces its Congress's prior feed rows, so an item CBO withdraws or re-files leaves, and a feed that cannot be read keeps them. `found_by` says how each row names its bill; the rows published before it take `billstatus` in a one-time backfill. `title_bill_id` is the bill the estimate's title leads with: where it differs from `bill_id` (7 of the 12,732 BILLSTATUS rows on 2026-09-29), `bill_id` is a numbering error as published and `title_bill_id` the bill scored. A title leading with a public law reads through the published `laws` table, which held the 119th Congress alone on 2026-09-29, so such a title of an earlier Congress leaves `title_bill_id` NULL and a blank feed item titled by an earlier law has no row (110th P.L. 110-50 and 112th P.L. 112-8). CBO's 119th-Congress feed, read 2026-10-03, holds 53 items that name no bill and have no row, 48 of them weekly suspension estimates. 23 of them are among the feed's 674 items dated 2026: 21 suspension estimates, 62413 (reconciliation recommendations of the Senate Homeland Security and Governmental Affairs committee) and 62643 (the Continuing Appropriations and Extensions Act, 2027).",
     "columns": [
       {
         "column_name": "bill_id",
@@ -20256,6 +20299,137 @@
       "publication_id"
     ]
   },
+  "cbo_feed_items": {
+    "table": "cbo_feed_items",
+    "label": "CBO cost-estimate feed items",
+    "summary": "One row per CBO publication as its feed lists it: the Congress, the date as `cbo_cost_estimates.pub_date` spells it, the title, link and description, and the `Bill_Number` exactly as stated (empty where CBO names no bill). Joined to `cbo_cost_estimates` on `publication_id`, the items with no estimate row are the ones naming no bill: CBO's weekly estimates of the bills the House takes up under suspension of the rules, a committee's reconciliation recommendations, and estimates filed under no number. All columns are stored as VARCHAR.",
+    "coverage": "Sampled: every item of CBO's keyless per-Congress cost-estimate feed for each Congress a bill-family run has read the feed of, from the 108th on, whether or not the item names a bill. A run reads each scoped Congress's feed whole and its items replace that Congress's prior items; a feed it could not read keeps them. The scheduled run reads the sitting Congress's feed; earlier Congresses fill only by a bill-family dispatch scoped to them.",
+    "kind": "sampled",
+    "measured_on": "2026-10-03",
+    "data_quality": "An item that names no bill is the publisher's statement, not an extraction miss; its bills are listed only in CBO's own document, which is not requested. Measured with the spicy-docs reader over the 108th-119th feeds on 2026-10-03: 15,156 items, every one a row; 361 have no estimate row (352 name no bill, 9 are refused), 53 of them in the 119th, 48 of those suspension notices.",
+    "columns": [
+      {
+        "column_name": "publication_id",
+        "column_type": "VARCHAR",
+        "description": "CBO's own publication number, the digits of the item's Link, and this row's identity: no publication is listed twice across the 15,156 items of the 108th-119th feeds (2026-10-03).  cbo_cost_estimates.publication_id joins here, and an item with no row there is one no estimate row holds: one that names no bill (the House's weekly 'Legislation considered under suspension' notices, reconciliation titles, a continuing appropriations act; 53 in the 119th feed on 2026-10-03), a title led by a public law the host's laws table did not map, or a Bill_Number no rule maps, which the family pass refuses by name."
+      },
+      {
+        "column_name": "congress",
+        "column_type": "VARCHAR",
+        "description": "The numbered Congress whose feed lists the item, which a bill it names belongs to."
+      },
+      {
+        "column_name": "pub_date",
+        "column_type": "VARCHAR",
+        "description": "The item's Date as the UTC instant cbo_cost_estimates.pub_date spells it, so the two compare as text; the merge prefers the larger value.  An item whose Date names no instant is a named refusal, not a row (none in the 108th-119th feeds, 2026-10-03)."
+      },
+      {
+        "column_name": "title",
+        "column_type": "VARCHAR",
+        "description": "The item's Title as CBO states it, which names the bill where it names one."
+      },
+      {
+        "column_name": "link",
+        "column_type": "VARCHAR",
+        "description": "The item's Link, the publication page on www.cbo.gov, exactly as stated; every measured one is walled."
+      },
+      {
+        "column_name": "description",
+        "column_type": "VARCHAR",
+        "description": "The item's Description as the feed parser trims it, which states the printing scored; NULL where the element is empty, as cbo_cost_estimates.description is."
+      },
+      {
+        "column_name": "bill_number",
+        "column_type": "VARCHAR",
+        "description": "The item's Bill_Number exactly as CBO states it, `` (the empty string) where the element is empty: the feed's own statement that the item names no bill by number.  Every item of the 108th-119th feeds states the element (2026-10-03).  Unparsed here; cbo_cost_estimates.bill_id is the bill a rule reads from it, or from the title where it is empty."
+      },
+      {
+        "column_name": "feed_url",
+        "column_type": "VARCHAR",
+        "description": "The per-Congress feed the item was read from, the one keyless request a re-read repeats."
+      }
+    ],
+    "grain": "One row per item of CBO's keyless per-Congress cost-estimate feed, as CBO lists it, whether or not the item names a bill.",
+    "identity_columns": [
+      "publication_id"
+    ]
+  },
+  "gao_decisions": {
+    "table": "gao_decisions",
+    "label": "Government Accountability Office legal decisions",
+    "summary": "One row per GAO legal decision page, read from GAO's own listing of what it issued by month and year. A decision is keyed on its number as GAO spells it and its page: one teaser can name several B-numbers (`B-423916.2,B-423916.3`), and one B-number can have two pages released months apart (`b-331093` and `b-331093-0`). `listing_page` names the retained listing page that listed it, which the run keeps as evidence. A later walk refreshes the rows it lists; a run without one carries the table forward. `outcome` is read again from `decision_status` on every row each run, by spicy-docs' closed table of GAO's sentences, so a new table version reaches held rows without a re-read of the walk. All columns are stored as VARCHAR.",
+    "coverage": "True range from 2009 on: every legal decision GAO's own Month in Review and Annual Index list for each year or month a finished walk of those pages read: the B-numbered decisions (bid protests, appropriations law, vacancies letters, other decisions) and the Contract Appeals Board decisions GAO numbers as dockets (`2020-02`) or `P` numbers. Federal Agency Major Rule Reports, B-numbered from April 2017, are in `gao_reports`, not here. Entries GAO gives no number are left out. A year or month the walk has not finished adds nothing, and a month with no listed decision adds nothing either; this table does not record which case a missing month is. A walk reads a year's listing (`month-in-review/2025?page=N`) or a month's (`month-in-review/2026/August`), as its scopes name, and the held rows came from year scopes for 2009-2025 and month scopes for 2026, so one listing page can span several months and `listing_page` names a scope, not a month. A month inside a year scope read, or before the newest month scope read, with no rows is a publisher zero (October 2025, when GAO was closed by the lapse in appropriations, is one); a month after the newest month scope is unread.",
+    "kind": "true_range",
+    "measured_on": "2026-10-03",
+    "data_quality": "`released_date` is when GAO released the decision, not when it decided it; the decision page and `gao.gov/docket/<B-number>.1` state the decision date. Apply `html.unescape` when matching a `title`. `decision_status` is captured from spicy-docs 0.54.0, so it, `outcome` and `outcome_rule` are NULL on every row until a walk is read again; on gao-reports generation 42d9c8a5… (2026-10-03) none of the 6,616 rows carries one. Read again from the retained walk under 0.54.0, 5,903 rows get an outcome and 713 do not: 681 state no sentence and 32 state one the table leaves unmapped (an advisory or appropriations opinion), which each run's journal counts.",
+    "columns": [
+      {
+        "column_name": "decision_number",
+        "column_type": "VARCHAR",
+        "description": "The decision's number as GAO's listing spells it, suffixes and all (`B-424129.2`, `B-423916.2,B-423916.3`, `B-235577.2-O.M.`, a docket `2020-02`). With `url`, the key."
+      },
+      {
+        "column_name": "b_numbers_json",
+        "column_type": "VARCHAR",
+        "description": "JSON array of the B-numbers in `decision_number`, split on commas and semicolons; a fragment GAO cut mid-number is left out. `[]` for a docket- or P-numbered decision."
+      },
+      {
+        "column_name": "decision_type",
+        "column_type": "VARCHAR",
+        "description": "GAO's label for the decision: `Bid Protest Decision`, `Appropriations Decision`, `Legal Other Decision` and the like."
+      },
+      {
+        "column_name": "title",
+        "column_type": "VARCHAR",
+        "description": "The decision's heading as GAO's listing states it: the protester or the question decided. GAO double-escapes some headings, so a few keep `&mdash;`, `&#151;` or `&amp;` literally."
+      },
+      {
+        "column_name": "released_date",
+        "column_type": "VARCHAR",
+        "description": "The listing's Publicly Released date (its Published date where it states no release), as an ISO date: when GAO released the decision, not when it decided it (B-424477: decided 2026-08-07, released 2026-08-28). A count by fiscal year counts releases."
+      },
+      {
+        "column_name": "topics_json",
+        "column_type": "VARCHAR",
+        "description": "JSON array of GAO's headings the decision was listed under, in listed order."
+      },
+      {
+        "column_name": "url",
+        "column_type": "VARCHAR",
+        "description": "The decision's gao.gov page, as the listing links it (percent-encoded where GAO encodes it). With `decision_number`, the key."
+      },
+      {
+        "column_name": "listing_page",
+        "column_type": "VARCHAR",
+        "description": "The first Month in Review or Annual Index page that listed the decision, as requested."
+      },
+      {
+        "column_name": "source",
+        "column_type": "VARCHAR",
+        "description": "The route that supplied the row: `gao_listing` (GAO's own Month in Review and Annual Index)."
+      },
+      {
+        "column_name": "decision_status",
+        "column_type": "VARCHAR",
+        "description": "GAO's outcome sentence for the decision as its listing states it, word for word with HTML whitespace collapsed (`We deny the protest.`); NULL where the listing states none."
+      },
+      {
+        "column_name": "outcome",
+        "column_type": "VARCHAR",
+        "description": "The outcome decision_status states, read by a closed table of GAO's exact sentences: `sustained`, `sustained_in_part`, `denied`, `dismissed`, `denied_in_part_dismissed_in_part`, or `request` where the sentence decides only a request (reconsideration, costs, reimbursement, dismissal); a sentence deciding the protest and a request reads the protest's outcome. NULL where no sentence is stated or the table does not read it (an advisory opinion, an appropriations opinion, a wording GAO wrote after the table was made): never a guess."
+      },
+      {
+        "column_name": "outcome_rule",
+        "column_type": "VARCHAR",
+        "description": "The table that read outcome, `gao-decision-outcome/002`; NULL where outcome is NULL. A row read under an earlier table names that table."
+      }
+    ],
+    "grain": "One row per legal decision page GAO's own Month in Review or Annual Index lists with a number: every B-numbered decision and every docket- or P-numbered other. Federal Agency Major Rule Reports, B-numbered from April 2017, are products, not rows here.",
+    "identity_columns": [
+      "decision_number",
+      "url"
+    ]
+  },
   "laws": {
     "table": "laws",
     "label": "Enacted laws",
@@ -20263,7 +20437,7 @@
     "coverage": "Sampled. Every law the Congress.gov law route lists for the scoped Congresses (the current one by default), walked whole each run; the PLAW USLM citation is added per law, newest first, under a per-run cap. A steady-state run is meant to ask only about laws whose list row moved or whose PLAW the bulk folder had not yet served.",
     "kind": "sampled",
     "measured_on": "2026-09-28",
-    "data_quality": "`statutes_at_large_cite` is set when `uslm_outcome` is `captured`; read every NULL through `uslm_outcome` and `uslm_reason`. `unavailable` (reason `source_unavailable`) is the publisher's own lag, a `404` from the exact PLAW locator: on 2026-09-19 the route listed 108 laws and the PLAW bulk folder held 104, the four newest (119-103, 119-104, 119-109, 119-110) absent; each is retried every run until the folder serves it.\n`captured_partial` is a validated USLM file that states no Statutes at Large citation (reason `statutes_citation_not_stated`): the two private laws of the 119th (`PLAW-119pvtl1`, `PLAW-119pvtl2`), whose own `citableAs` values are kept in `uslm_citable_as_json`. Until reader rule `laws-uslm-v2` (2026-09-25) the contract refused those two files and their rows said `not_requested`, although both were requested and served. `captured_refused` keeps the digest of a `200` body the reader refused, either another law's file (`native_identity_refused`) or not native USLM at all, such as an HTML page (`native_shape_refused`), and none of its unvalidated fields. `request_failed` is an attempted read that established nothing, a transport failure included; it is never published as `unavailable`. `not_requested` means only that no request was made, which the per-run cap decides.\nA validated row with parsed text is read again when its listing or metadata/text reader changes, or its matching section output is missing. A failed later attempt preserves its prior metadata and parsed sections. `law_text_outcome` distinguishes unread, parsed and refused text; an unavailable XML file does not mean the law has no provisions. Join `law_sections` on `law_id` for native sections. `law_body_remainder` retains main-body text outside those sections, including appropriation blocks; it is NULL unless parsed and may be an empty string on success. The section rows and remainder are printed law text, not consolidated current law. A publisher-refused Table III read is journaled `table3-bulk-refused` with reason `access-refused`, and the laws family publishes without the Table III rows that read would have added. `statutes_at_large_volume` follows the session that cleared the bill, not the year the law was approved: 119-69 and 119-71 to 119-73, approved in January 2026 on bills cleared in December 2025, are in volume 139, and 119-70 and 119-74 on are in volume 140. All columns are stored as VARCHAR.\nTwo vendored column sentences are wrong. `latest_action_date` is not the became-law action but the publisher's latest action, which can follow enactment (119-public-68: a committee report filed 2026-02-11 after approval on 2025-12-29). For the enactment date use `approved_date`, else `congress_bills.signed_date` through `bill_id` (NULL on a private law, rule `no_public_law`). `uslm_observed_at` is not only a capture time: it is when the read this row's outcome states got its response, the 404 on an `unavailable` row included, and NULL when no read was attempted or the attempt got no response. (interim until spicy-docs > 0.53.0+laws.f8431033f626)",
+    "data_quality": "`statutes_at_large_cite` is set when `uslm_outcome` is `captured`; read every NULL through `uslm_outcome` and `uslm_reason`. `unavailable` (reason `source_unavailable`) is the publisher's own lag, a `404` from the exact PLAW locator: on 2026-09-19 the route listed 108 laws and the PLAW bulk folder held 104, the four newest (119-103, 119-104, 119-109, 119-110) absent; each is retried every run until the folder serves it.\n`captured_partial` is a validated USLM file that states no Statutes at Large citation (reason `statutes_citation_not_stated`): the two private laws of the 119th (`PLAW-119pvtl1`, `PLAW-119pvtl2`), whose own `citableAs` values are kept in `uslm_citable_as_json`. Until reader rule `laws-uslm-v2` (2026-09-25) the contract refused those two files and their rows said `not_requested`, although both were requested and served. `captured_refused` keeps the digest of a `200` body the reader refused, either another law's file (`native_identity_refused`) or not native USLM at all, such as an HTML page (`native_shape_refused`), and none of its unvalidated fields. `request_failed` is an attempted read that established nothing, a transport failure included; it is never published as `unavailable`. `not_requested` means only that no request was made, which the per-run cap decides.\nA validated row with parsed text is read again when its listing or metadata/text reader changes, or its matching section output is missing. A failed later attempt preserves its prior metadata and parsed sections. `law_text_outcome` distinguishes unread, parsed and refused text; an unavailable XML file does not mean the law has no provisions. Join `law_sections` on `law_id` for native sections. `law_body_remainder` retains main-body text outside those sections, including appropriation blocks; it is NULL unless parsed and may be an empty string on success. The section rows and remainder are printed law text, not consolidated current law. A publisher-refused Table III read is journaled `table3-bulk-refused` with reason `access-refused`, and the laws family publishes without the Table III rows that read would have added. `statutes_at_large_volume` follows the session that cleared the bill, not the year the law was approved: 119-69 and 119-71 to 119-73, approved in January 2026 on bills cleared in December 2025, are in volume 139, and 119-70 and 119-74 on are in volume 140. All columns are stored as VARCHAR.",
     "columns": [
       {
         "column_name": "law_id",
@@ -20333,7 +20507,7 @@
       {
         "column_name": "latest_action_date",
         "column_type": "VARCHAR",
-        "description": "Date of the publisher's latestAction entry, which for a law is the became-law action."
+        "description": "Date of the publisher's latestAction entry. Usually the became-law action, but the publisher lists a later action when there is one (119-public-68: a committee report filed after signing), so for the enactment date read approved_date where the PLAW was captured, else congress_bills.signed_date through bill_id (NULL on a private law, rule no_public_law)."
       },
       {
         "column_name": "latest_action_text",
@@ -20393,7 +20567,7 @@
       {
         "column_name": "uslm_observed_at",
         "column_type": "VARCHAR",
-        "description": "When the PLAW USLM was captured."
+        "description": "When the read whose outcome this row states got its response: the validated file's capture, the refused body's, or the 404's; a later failed read the row does not record leaves it unchanged. NULL when no read was attempted (not_requested) or the attempt got no response."
       },
       {
         "column_name": "uslm_outcome",
@@ -20438,7 +20612,7 @@
       {
         "column_name": "law_body_remainder",
         "column_type": "VARCHAR",
-        "description": "Main-body text outside every native section subtree, including hierarchy headings and enacting formula; block-spaced like section body. Empty string means parsed with no remainder; NULL means not parsed. Print furniture is excluded with an issue."
+        "description": "Main-body text outside every native section subtree, including hierarchy headings and enacting formula; block-spaced like section body. Empty string means parsed with no remainder; NULL means not parsed. Print furniture (page numbers, running heads and, from law_text_reader_version law-sections-uslm-v2, the margin notes: the approval date, the bill number, the short-title note) is excluded with an issue in law_text_issues_json."
       },
       {
         "column_name": "law_text_issues_json",
@@ -20465,7 +20639,7 @@
     "coverage": "Derived: source-native sections from identity-validated GovInfo public and private law XML acquired by the laws rollup. Join law_id to laws.law_id, then laws.bill_id to congress_bills.bill_id. A missing section row does not establish that the law has no text: check laws.law_text_outcome and law_section_count. Coverage follows successfully read XML, not all enacted laws. PDF-only sources are outside this reader.",
     "kind": "derived",
     "measured_on": "2026-10-02",
-    "data_quality": "Under `reader_version` `law-sections-uslm-v1`, every row of laws generation c1ed486d… (2026-10-03), the USLM margin notes are lines of `body`, unflagged: citation notes such as `42 USC 405 note.`, the approval date, catchwords such as `Contracts.`; `issues_json` names only page furniture, though the vendored `body` sentence says print furniture is excluded. Remove them before quoting; the same holds for `laws.law_body_remainder`. Reader `law-sections-uslm-v2` excludes them as print furniture. (interim until spicy-docs > 0.53.0+laws.f8431033f626)",
+    "data_quality": null,
     "columns": [
       {
         "column_name": "law_id",
@@ -20520,7 +20694,7 @@
       {
         "column_name": "body",
         "column_type": "VARCHAR",
-        "description": "Section-owned source text: block boundaries become newlines; inline adjacency survives. Excludes own number/heading, print furniture and nested sections, which have separate rows. This is not consolidated or applied law text."
+        "description": "Section-owned source text: block boundaries become newlines; inline adjacency survives, amending actions included. Excludes own number/heading, print furniture and nested sections, which have separate rows. Print furniture is the page's apparatus beside the enacted words: page numbers, running heads and, from law_text_reader_version law-sections-uslm-v2, the USLM sidenote margin notes (`42 USC 405 note.`, a topical catchword such as `Contracts.`), each flagged in issues_json as print_furniture_excluded:<element>; under law-sections-uslm-v1 the margin notes were kept as body lines. This is not consolidated or applied law text."
       },
       {
         "column_name": "is_quoted",
@@ -20611,7 +20785,7 @@
       {
         "column_name": "action",
         "column_type": "VARCHAR",
-        "description": "Column 3 verbatim (nt, new, nt new, nt [tbl], prec, fr, to, gen amd, omitted, repealed, ed chg); NULL where the page left it blank, which the page's legend reads as amended."
+        "description": "Column 3 verbatim; NULL where the page left it blank. The page's own legend (Explanation of Table, column 3, as the retained tbl119pl_2nd.htm prints it): `nt` means note; `nt [tbl]` means note [table]; `prec` means preceding; `fr` means a transfer from another section; `to` means a transfer to another section; `new` means a new section or new note; `gen amd` means the section or note is generally amended; `omitted` means the section is omitted; `repealed` means the section or note is repealed; `nt ed chg` and `ed chg` refer to the Editorial Classification Change Table; no entry or `nt` by itself means the section or note is amended. Tokens combine (`nt new`: a new note)."
       },
       {
         "column_name": "act_section",
@@ -21026,7 +21200,7 @@
       {
         "column_name": "document_type",
         "column_type": "VARCHAR",
-        "description": "The Register's category: `Rule`, `Proposed Rule`, `Notice` or `Presidential Document`."
+        "description": "The Register's category as the API states it: `Rule`, `Proposed Rule`, `Notice`, `Presidential Document`, and on older records `Uncategorized Document`, `Correction` (none after 2008-08-08) and `Sunshine Act Document`; NULL on a few records. Since 2008 a correction, an effective-date delay or a confirmation of a rule is itself typed `Rule` and shares the rule's RIN, docket and title; subtype is NULL on recent records, so tell them apart by title, abstract and publication_date."
       },
       {
         "column_name": "publication_date",
@@ -21066,7 +21240,7 @@
       {
         "column_name": "regulation_id_numbers_json",
         "column_type": "VARCHAR",
-        "description": "The Regulation Identifier Numbers the document states, a JSON array; often `[]`."
+        "description": "The Regulation Identifier Numbers the API lists, a JSON array. `[]` on a large share of Rule documents every year, an API limit: some of those state a RIN in the printed text, and some print it inside docket_ids_json."
       },
       {
         "column_name": "cfr_references_json",
@@ -21111,7 +21285,7 @@
       {
         "column_name": "subtype",
         "column_type": "VARCHAR",
-        "description": "The Register's subtype, when set; often NULL."
+        "description": "The Register's subtype when the API sets it; NULL on recent records, so it does not separate a correction from its rule."
       },
       {
         "column_name": "executive_order_number",
@@ -21919,12 +22093,12 @@
       {
         "column_name": "referral_count",
         "column_type": "VARCHAR",
-        "description": "How many committees the detail lists; every one is in committees_json."
+        "description": "How many committees the detail lists; every one is in committees_json, and NULL where it is NULL."
       },
       {
         "column_name": "committees_json",
         "column_type": "VARCHAR",
-        "description": "Every committee referral the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read. On a `congressional-record-granule` row, one `{name}` object per committee the printed referral tail names, in printed order."
+        "description": "Every committee referral the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read or the detail states no committees; `[]` where it states an empty list. On a `congressional-record-granule` row, one `{name}` object per committee the printed referral tail names, in printed order."
       },
       {
         "column_name": "matching_requirement_number",
@@ -21934,12 +22108,12 @@
       {
         "column_name": "matching_requirement_count",
         "column_type": "VARCHAR",
-        "description": "How many requirements the detail lists; every one is in matching_requirements_json."
+        "description": "How many requirements the detail lists; every one is in matching_requirements_json, and NULL where it is NULL."
       },
       {
         "column_name": "matching_requirements_json",
         "column_type": "VARCHAR",
-        "description": "Every matching requirement the detail lists, as a JSON array of numbers. NULL where no detail was read."
+        "description": "Every matching requirement the detail lists, as a JSON array of numbers. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one."
       },
       {
         "column_name": "rin",
@@ -21995,6 +22169,11 @@
         "column_name": "reconstruction_rule_version",
         "column_type": "VARCHAR",
         "description": "The `record-communication-` rule identity that produced the derived fields (`RECORD_COMMUNICATION_RULE_VERSION`); NULL on a publisher-decomposed row."
+      },
+      {
+        "column_name": "detail_read",
+        "column_type": "VARCHAR",
+        "description": "`true` where the Congress.gov detail route was read for this row, `false` where the row holds the list route's record only (a detail not yet reached under a run's cap, or refused). The one test of whether a detail was read: a list column cannot say it, because a read detail omits a list it does not state and the column is then NULL as for an unread one. `false` on a `congressional-record-granule` row, which no detail route serves."
       }
     ],
     "grain": "One row per House executive communication: the Congress.gov house-communication routes where the publisher decomposes it, the Congressional Record entry it printed where the publisher does not.",
@@ -22011,7 +22190,7 @@
     "coverage": "Sampled, and accumulating. Each run walks the current Congress's whole `committee-meeting` list, and the previous Congress's from the day before its newest held `updateDate` (or its oldest unread row), and reads the detail of every meeting the table does not yet hold, newest `updateDate` first, at most 1,000 a run; a meeting whose detail is unread or refused has its list fields only. The previous Congress stays in scope because its meetings change when GovInfo prints their transcripts, and hearing transcripts have named meetings the table lacked (receipt `join-gaps-2026-09-26/f/`).",
     "kind": "sampled",
     "measured_on": "2026-09-28",
-    "data_quality": "A row whose `committees_json` is NULL is list-only: its detail has not been read yet, and every detail-only column is NULL with it; a read detail states `[]` where it lists none. Event ids are keyed with their chamber because their uniqueness across chambers is unmeasured (spicy-docs' contract note); the 119th's House and Senate event ids come from different ranges, so an id alone does not say which chamber. The publisher's witness entries can repeat within one meeting, so count people by name, not entries, and a bill named only in meeting documents is not in `bill_ids_json`.\nThe publisher's `NoChamber` value is stored as `nochamber`, matching its detail address and preserving the existing row identity. It is neither NULL nor an inferred `joint` chamber. The source reader accepts that address, so previously list-only rows can fill at an unchanged timestamp. Retained meeting `119/nochamber/338692` names the Helsinki Commission; the September 24 committee-meetings audit retains its list row and served detail.",
+    "data_quality": "A row whose `committees_json` is NULL is list-only: its detail has not been read yet, and every detail-only column is NULL with it; a read detail states `[]` where it lists none. Event ids are keyed with their chamber because their uniqueness across chambers is unmeasured (spicy-docs' contract note); the 119th's House and Senate event ids come from different ranges, so an id alone does not say which chamber. The publisher's witness entries can repeat within one meeting, so count people by name, not entries, and a bill named only in meeting documents is not in `bill_ids_json`.\n**Senate and NoChamber meetings list no witnesses here.** Congress.gov's committee-meeting detail, the route this table reads, has no `witnesses` element for those chambers (retained detail `119/nochamber/338692`): on committee-meetings generation 31e62420… (2026-10-03) none of the 2,336 Senate and NoChamber rows lists a witness (each reads `witnesses_json` `[]` and `witness_count` 0), while 2,735 of the 3,761 House rows do. Such a row without witnesses means the route stated none, not that the meeting had none: GovInfo's MODS for a printed hearing (`hearing_transcripts.package_id`) can name them (CHRG-119shrg64653 names four), and this service does not read MODS for witnesses.\nThe publisher's `NoChamber` value is stored as `nochamber`, matching its detail address and preserving the existing row identity. It is neither NULL nor an inferred `joint` chamber. The source reader accepts that address, so previously list-only rows can fill at an unchanged timestamp. Retained meeting `119/nochamber/338692` names the Helsinki Commission; the September 24 committee-meetings audit retains its list row and served detail.",
     "columns": [
       {
         "column_name": "congress",
@@ -22066,12 +22245,12 @@
       {
         "column_name": "committee_count",
         "column_type": "VARCHAR",
-        "description": "How many committees the detail lists; every one is in committees_json."
+        "description": "How many committees the detail lists; every one is in committees_json, and NULL where it is NULL."
       },
       {
         "column_name": "committees_json",
         "column_type": "VARCHAR",
-        "description": "Every committee the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read."
+        "description": "Every committee the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one."
       },
       {
         "column_name": "hearing_jacket",
@@ -22081,62 +22260,62 @@
       {
         "column_name": "hearing_jacket_count",
         "column_type": "VARCHAR",
-        "description": "How many transcript jackets the detail lists; every one is in hearing_jackets_json."
+        "description": "How many transcript jackets the detail lists; every one is in hearing_jackets_json, and NULL where it is NULL."
       },
       {
         "column_name": "hearing_jackets_json",
         "column_type": "VARCHAR",
-        "description": "Every transcript jacket number the detail lists, as a JSON array of strings. NULL where no detail was read."
+        "description": "Every transcript jacket number the detail lists, as a JSON array of strings. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one."
       },
       {
         "column_name": "bill_count",
         "column_type": "VARCHAR",
-        "description": "How many bills the detail relates to the meeting; every one is in bill_ids_json."
+        "description": "How many bills the detail relates to the meeting; every one is in bill_ids_json, and NULL where it is NULL."
       },
       {
         "column_name": "bill_ids_json",
         "column_type": "VARCHAR",
-        "description": "Natural keys of every bill in relatedItems.bills, as a JSON array, in publisher order. NULL where no detail was read."
+        "description": "Natural keys of every bill in relatedItems.bills, as a JSON array, in publisher order; a bill named only in a meeting document is not here. NULL where no detail was read or the detail states no relatedItems.bills; `[]` where it states an empty one."
       },
       {
         "column_name": "witness_count",
         "column_type": "VARCHAR",
-        "description": "How many witnesses the detail lists."
+        "description": "How many witness entries the detail lists, repeats included; not a count of people. NULL where witnesses_json is NULL."
       },
       {
         "column_name": "witnesses_json",
         "column_type": "VARCHAR",
-        "description": "Every witness the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read."
+        "description": "Every witness entry the detail lists, as a JSON array of the publisher's objects, in publisher order and as published: an entry can repeat within one meeting, so count people by name, not entries. NULL where no detail was read or the detail states no witnesses (the Senate and NoChamber details retained so far omit the key: no witness list, not an empty one); `[]` where it states an empty one."
       },
       {
         "column_name": "witness_document_count",
         "column_type": "VARCHAR",
-        "description": "How many witness documents the detail lists."
+        "description": "How many witness documents the detail lists; NULL where witness_documents_json is NULL."
       },
       {
         "column_name": "witness_documents_json",
         "column_type": "VARCHAR",
-        "description": "Every witness document the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read."
+        "description": "Every witness document the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one."
       },
       {
         "column_name": "meeting_document_count",
         "column_type": "VARCHAR",
-        "description": "How many meeting documents the detail lists."
+        "description": "How many meeting documents the detail lists; NULL where meeting_documents_json is NULL."
       },
       {
         "column_name": "meeting_documents_json",
         "column_type": "VARCHAR",
-        "description": "Every meeting document the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read."
+        "description": "Every meeting document the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one."
       },
       {
         "column_name": "document_urls_json",
         "column_type": "VARCHAR",
-        "description": "The URL of every document the meeting lists, witness documents first then meeting documents, in publisher order: what the map's meeting-to-documents edge resolves. NULL where no detail was read."
+        "description": "The URL of every document the meeting lists, witness documents first then meeting documents, in publisher order: what the map's meeting-to-documents edge resolves. NULL where neither list is stated (or no detail was read); `[]` where the stated lists carry no URL."
       },
       {
         "column_name": "videos_json",
         "column_type": "VARCHAR",
-        "description": "Every video link the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read."
+        "description": "Every video link the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one."
       },
       {
         "column_name": "update_date",
@@ -22147,6 +22326,11 @@
         "column_name": "url",
         "column_type": "VARCHAR",
         "description": "The publisher's own URL for this meeting, which only the list row states."
+      },
+      {
+        "column_name": "detail_read",
+        "column_type": "VARCHAR",
+        "description": "`true` where the Congress.gov detail route was read for this row, `false` where the row holds the list route's record only (a detail not yet reached under a run's cap, or refused). The one test of whether a detail was read: a list column cannot say it, because a read detail omits a list it does not state and the column is then NULL as for an unread one."
       }
     ],
     "grain": "One row per scheduled committee meeting, as the Congress.gov committee-meeting routes state it.",
@@ -22193,7 +22377,7 @@
       {
         "column_name": "chambers",
         "column_type": "VARCHAR",
-        "description": "Which chambers this issue records a sitting of, unit-separator joined and sorted (`house`, `senate`); NULL where no detail was read, empty where the detail names no chamber section."
+        "description": "Which chambers this issue records a sitting of, unit-separator joined and sorted (`house`, `senate`); NULL where sections_json is NULL, empty where the detail names no chamber section."
       },
       {
         "column_name": "chambers_rule",
@@ -22203,22 +22387,22 @@
       {
         "column_name": "section_count",
         "column_type": "VARCHAR",
-        "description": "How many sections the detail lists."
+        "description": "How many sections the detail lists; NULL where sections_json is NULL."
       },
       {
         "column_name": "section_names",
         "column_type": "VARCHAR",
-        "description": "Every section name the detail lists, unit-separator joined, in publisher order."
+        "description": "Every section name the detail lists, unit-separator joined, in publisher order; NULL where sections_json is NULL."
       },
       {
         "column_name": "sections_json",
         "column_type": "VARCHAR",
-        "description": "Every section the detail lists, as a JSON array of the publisher's objects."
+        "description": "Every section the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one."
       },
       {
         "column_name": "entire_issue_json",
         "column_type": "VARCHAR",
-        "description": "Every whole-issue rendition the detail lists, as a JSON array of the publisher's objects."
+        "description": "Every whole-issue rendition the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one."
       },
       {
         "column_name": "package_id",
@@ -22249,6 +22433,11 @@
         "column_name": "url",
         "column_type": "VARCHAR",
         "description": "The publisher's own URL for this issue."
+      },
+      {
+        "column_name": "detail_read",
+        "column_type": "VARCHAR",
+        "description": "`true` where the Congress.gov detail route was read for this row, `false` where the row holds the list route's record only (a detail not yet reached under a run's cap, or refused). The one test of whether a detail was read: a list column cannot say it, because a read detail omits a list it does not state and the column is then NULL as for an unread one."
       }
     ],
     "grain": "One row per daily Congressional Record issue, which is also one legislative day per chamber named.",
@@ -22260,7 +22449,7 @@
   "treaties": {
     "table": "treaties",
     "label": "Treaty documents",
-    "summary": "One row per treaty document, as the Congress.gov treaty list and detail routes state it, keyed `(congress_received, number, suffix)`. `package_id` is the GovInfo CDOC id by the `CDOC-{congress}tdoc{number}` rule on an unpartitioned treaty. All columns are stored as VARCHAR.",
+    "summary": "One row per treaty document, as the Congress.gov treaty list and detail routes state it, keyed `(congress_received, number, suffix)`. `package_id` is the GovInfo CDOC id by the `CDOC-{congress}tdoc{number}` rule on an unpartitioned treaty. That package's MODS (`https://www.govinfo.gov/metadata/pkg/{package_id}/mods.xml`) states the committee the treaty was referred to, which this table does not carry (CDOC-119tdoc1 and -tdoc2: Foreign Relations); the id is derived by rule, so GovInfo may not have published it yet. All columns are stored as VARCHAR.",
     "coverage": "Sampled. The 119th Congress's treaty documents from the retained list and their details. Not treaty bodies, action histories, older Congresses, suffixed parts or interpreted legal/in-force effects. Receipts: fork-execution-2026-09-21/legislative-publication-summary.json, legislative-seeds/sealed-candidates.json and legislative-mcp-audit/.",
     "kind": "sampled",
     "measured_on": "2026-09-21",
@@ -22334,22 +22523,22 @@
       {
         "column_name": "titles_json",
         "column_type": "VARCHAR",
-        "description": "Every title the detail lists, as a JSON array of the publisher's objects."
+        "description": "Every title the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one."
       },
       {
         "column_name": "countries_json",
         "column_type": "VARCHAR",
-        "description": "Every country party the detail names, as a JSON array of names."
+        "description": "Every country party the detail names, as a JSON array of names. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one."
       },
       {
         "column_name": "index_terms_json",
         "column_type": "VARCHAR",
-        "description": "Every index term the detail names, as a JSON array of names."
+        "description": "Every index term the detail names, as a JSON array of names. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one."
       },
       {
         "column_name": "related_docs_json",
         "column_type": "VARCHAR",
-        "description": "Every related document the detail lists, as a JSON array of the publisher's objects."
+        "description": "Every related document the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one."
       },
       {
         "column_name": "parts_json",
@@ -22385,6 +22574,11 @@
         "column_name": "url",
         "column_type": "VARCHAR",
         "description": "The publisher's own URL for this treaty, which only the list row states."
+      },
+      {
+        "column_name": "detail_read",
+        "column_type": "VARCHAR",
+        "description": "`true` where the Congress.gov detail route was read for this row, `false` where the row holds the list route's record only (a detail not yet reached under a run's cap, or refused). The one test of whether a detail was read: a list column cannot say it, because a read detail omits a list it does not state and the column is then NULL as for an unread one."
       }
     ],
     "grain": "One row per treaty document, as the Congress.gov treaty routes state it.",
@@ -22441,7 +22635,7 @@
       {
         "column_name": "is_civilian",
         "column_type": "VARCHAR",
-        "description": "Whether the publisher's nominationType says the nomination is civilian."
+        "description": "Whether the nomination is civilian, as the publisher's nominationType states it: `true` where it states isCivilian true (or isMilitary false), `false` where it states isMilitary true (or isCivilian false). The list route states exactly one of the two keys (2,287 of 2,287 rows of the 119th, 2026-10-03). NULL where it states neither, or both with contradicting values; nomination_type_json keeps what it stated, so `is_civilian IS NULL AND nomination_type_json IS NOT NULL` counts the contradictions."
       },
       {
         "column_name": "nomination_type_json",
@@ -22972,7 +23166,7 @@
       {
         "column_name": "evidence_page",
         "column_type": "VARCHAR",
-        "description": "The printed page the bill designator sits on, one-based, where the rendition states page boundaries; NULL where it states none."
+        "description": "The one-based page the bill designator sits on, counted in the rendition's own page sequence (for a PDF, the page's position in the file, not the folio printed on it), where the rendition states page boundaries; NULL where it states none."
       },
       {
         "column_name": "rule_name",
@@ -23022,11 +23216,11 @@
   "document_citations": {
     "table": "document_citations",
     "label": "Document citation link table",
-    "summary": "One row per occurrence of one cited key in one document's text: the key, the exact characters that named it, and the character span it was read at. Thirteen citation kinds, from bill numbers and public laws to RINs, agency dockets and GAO product ids. One shared link table over every document family, written by exactly one rollup. All columns are stored as VARCHAR.",
-    "coverage": "Derived: citations read from the bodies of the held source texts. Each row's document_kind is one of the kinds the resolve_document_citations tool accepts (govinfo_package, budget_volume, bill_section, report_section, lobbying_activity, comment_inline, communication_authority, communication_report_nature, communication_record_entry, court_opinion_derived_pdf); the tool refuses any other kind, and a kind with no held rows yet resolves to no occurrences. A budget root the reader refuses yields no citations. Every kind has one writer, the print-citations rollup.",
+    "summary": "One row per occurrence of one cited key in one document's text: the key, the exact characters that named it, and the character span it was read at. Citation kinds run from bill numbers and public laws to RINs, agency dockets and GAO product ids (`SELECT DISTINCT cite_kind` lists them). One shared link table over every document family, written by exactly one rollup. All columns are stored as VARCHAR.",
+    "coverage": "Derived, and selective: not a list of the texts the service holds. Every House activity report (`govinfo_package`) and budget volume (`budget_volume`) the print-citations family holds is read, and `house_activity_reports` and `budget_volumes` state each read (`pages_read`, `citation_rows`; `citation_rows` 0 is a read that found none). The held-field kinds (bill_section, report_section, lobbying_activity, comment_inline, communication_authority, communication_report_nature, communication_record_entry, court_opinion_derived_pdf) are read only for the fields an operator selects, at most 100 a run, so a held text of those kinds has rows here only once it has been selected. A document with no rows may be held and unread: look a committee report up in `committee_reports` and `report_sections`, a bill's text in `bill_sections`. Each row's document_kind is one the resolve_document_citations tool accepts; the tool refuses any other kind, and a kind with no held rows yet resolves to no occurrences. A budget root the reader refuses yields no citations. Every kind is written by the print-citations family.",
     "kind": "derived",
-    "measured_on": "2026-09-28",
-    "data_quality": "**The span is in the identity because the span is the yield.** Keying on document, kind and target alone would collapse CRPT-118hrpt968's repeated mentions of one bill into one row; the aggregate is derivable from this table with `GROUP BY document_key, cite_kind, target_key` and the reverse is not. **Different text digests retain their histories.** A source revision producing a new `text_sha256` adds findings beside earlier text versions. A successful rule correction for the same document and text digest replaces that digest's findings, including an empty result; it can retire obsolete rows. A failed read preserves previous findings. Size grows with retained text revisions and their citations. Filter to the digest the document row states (`house_activity_reports.text_sha256` or `budget_volumes.text_sha256`) to read exactly one extraction. Prints are revised rarely, so this is a property to know before building on the table; pruning earlier text digests would require a separate retention decision. `stated_by_index` is three-valued and the third value matters: `true`/`false` where a keyed index record was read and could state a key of this shape, and **NULL where no comparison was possible** — either no index record was supplied or the MODS vocabulary has no element of that shape, which is the case for every bill citation of a budget volume. So the consumer predicate for \"what the print adds\" is `WHERE stated_by_index IS NOT TRUE`, never `= false`. `target_resolved` false means the cite was found and its key is unsettled, not that the cite is wrong. `target_rule` says **how** a key was reached and separates lookups from inferences: `exact` and `roster_prefix` are lookups against a supplied vocabulary, while `name_prefix` and `sibling_prefix` are inferences from the printed text that a consumer may decline. `evidence_page` is NULL where the rendition states no page boundary, and a match straddling a page break is attributed to the page it began on.",
+    "measured_on": "2026-10-03",
+    "data_quality": "**The span is in the identity because the span is the yield.** Keying on document, kind and target alone would collapse CRPT-118hrpt968's repeated mentions of one bill into one row; the aggregate is derivable from this table with `GROUP BY document_key, cite_kind, target_key` and the reverse is not. **Different text digests retain their histories.** A source revision producing a new `text_sha256` adds findings beside earlier text versions. A successful rule correction for the same document and text digest replaces that digest's findings, including an empty result; it can retire obsolete rows. A failed read preserves previous findings. Size grows with retained text revisions and their citations. Filter to the digest the document row states (`house_activity_reports.text_sha256` or `budget_volumes.text_sha256`) to read exactly one extraction. Prints are revised rarely, so this is a property to know before building on the table; pruning earlier text digests would require a separate retention decision. `stated_by_index` is three-valued and the third value matters: `true`/`false` where a keyed index record was read and could state a key of this shape, and **NULL where no comparison was possible** — either no index record was supplied or the MODS vocabulary has no element of that shape, which is the case for every bill citation of a budget volume. So the consumer predicate for \"what the print adds\" is `WHERE stated_by_index IS NOT TRUE`, never `= false`. `target_resolved` false means the cite was found and its key is unsettled, not that the cite is wrong. `target_rule` says **how** a key was reached and separates lookups from inferences: `exact` and `roster_prefix` are lookups against a supplied vocabulary, while `name_prefix` and `sibling_prefix` are inferences from the printed text that a consumer may decline. `evidence_page` is NULL where the rendition states no page boundary, and a match straddling a page break is attributed to the page it began on.\n**A document with no rows here is not shown to be unheld.** On print-citations generation 685f2e27… (2026-10-03) the report_section rows cover 1 of the 158 report packages `report_sections` holds, and each other held-field kind with rows covers two documents. GAO product ids join `gao_reports` on `report_number = target_key`, GAO's own spelling (`report_id` is the same id in lower case): 241 of the 248 distinct ids resolve; the other 7 are six `…SU` products and the misprint `GAO-21-105520` (GAO-23-105520 is held).",
     "columns": [
       {
         "column_name": "document_key",
@@ -23041,7 +23235,7 @@
       {
         "column_name": "cite_kind",
         "column_type": "VARCHAR",
-        "description": "What kind of thing is cited: `bill_number`, `public_law`, `usc_section`, `cfr_section`, `federal_register_cite`, `gao_product_id`, `crs_report_id`, `case_docket_number` or `committee_name`."
+        "description": "What kind of thing is cited, by the rule that read it: `bill_number`, `public_law`, `statutes_at_large`, `usc_section`, `cfr_section`, `federal_register_cite`, `rin`, `gao_product_id`, `crs_report_id`, `docket_number`, `case_docket_number`, `us_reports_cite` or `committee_name`."
       },
       {
         "column_name": "target_key",
@@ -23061,7 +23255,7 @@
       {
         "column_name": "evidence_page",
         "column_type": "VARCHAR",
-        "description": "The printed page the match starts on, one-based, where the rendition states page boundaries; NULL where it states none.  A match straddling a page break is attributed to the page it began on."
+        "description": "The one-based page the match starts on, counted in the rendition's own page sequence (for a PDF, the page's position in the file, not the folio printed on it: BUDGET-2027-PER's PDF page 83 prints \"Governmental Receipts 75\"), where the rendition states page boundaries; NULL where it states none.  A match straddling a page break is attributed to the page it began on."
       },
       {
         "column_name": "matched_text",
@@ -23071,12 +23265,12 @@
       {
         "column_name": "target_table",
         "column_type": "VARCHAR",
-        "description": "Which table or publisher addresses the target key, as the rule names it."
+        "description": "The namespace the target key belongs to, as the rule names it (`congress_bills`, `gao products (product id as GAO prints it)`): what the key identifies, not whether a host holds a table of it."
       },
       {
         "column_name": "target_resolved",
         "column_type": "VARCHAR",
-        "description": "Whether `target_key` is the hosted target's own spelling.  `false` means the rule found the cite but nothing settled the key: a bill with no stated Congress, or a committee name no supplied roster reaches."
+        "description": "Whether `target_key` is the hosted target's own spelling.  `false` means the rule found the cite but nothing settled the key: a bill with no stated Congress, or a committee name no supplied roster reaches.  A shape check, not an existence check: a resolved key can name nothing the target table holds; join the target table to learn whether it is held."
       },
       {
         "column_name": "target_rule",
@@ -23131,7 +23325,7 @@
     "coverage": "Sampled: a page window inside each file. Secretary-of-the-Senate expenditure reports reprinted as GovInfo CDOC packages from the 2024-01-01 issue floor, read under a per-run package cap. **Every count over this table is a floor on the volume**: each report runs to well over a thousand pages and only the first 80 of each file are read, so `pages_capped` is true on every row. In Part I (`-1.pdf`) those pages carry the `A-` summary-of-transactions section and the start of the `B-` detailed statement; in Part II (`-2.pdf`) they carry the `A-` summary again and then its own `B-` pages from the middle of the statement; the `C-` compensation-of-members and `D-` mail-allocation sections lie far past the read window and are not reached (measured 2026-09-20, receipt `rollups-pdf-families-2026-09-20/`).",
     "kind": "sampled",
     "measured_on": "2026-09-28",
-    "data_quality": "**Most rows carry one cell, not a row of cells, and `cells_ruled` is how you tell.** Of the ruled body rows across the pages spicy-docs measured when it wrote the contract (release 0.23.0), those in an `appropriation_summary` grid carry all nine cells and every other one carries exactly **one** cell of ten or of seven: the print rules a whole payee block as a single cell. That is why the contract has no `payee_name`, `document_number`, `date_posted` or singular `amount` column — those would be a parse of one cell's newlines presented as separate facts. `WHERE cells_ruled` selects the rows whose cells are separate facts; everything else is in `cells_json` exactly as printed. **`cells_json` is the row**; every other content column is a promotion out of it. `office`, `funding_year`, `appropriation_title` and `section_heading` are read from the page text and are **NULL on a continuation page**, which is 56 of the 139 measured table pages — forward-fill them in `printed_page` order. `printed_page`, not `page`, is what the report's own contents index by. `grid_kind` is NULL where the first row states none of the three known labels, so an unrecognised grid is visible rather than mislabelled. An amount must carry a decimal point to be parsed into `amounts_json`: without that rule a bare integer read stacked fiscal years and account numbers as money, and every amount-shaped line measured carries a `.dd` tail while the lines that do not are all account numbers or fiscal years. The check that makes the extraction falsifiable is the print's own `Totals` row, which agreed to the cent with the sum of its account rows over seven money columns on both measured sections.",
+    "data_quality": "**Most rows carry one cell, not a row of cells, and `cells_ruled` is how you tell.** Of the ruled body rows across the pages spicy-docs measured when it wrote the contract (release 0.23.0), those in an `appropriation_summary` grid carry all nine cells and every other one carries exactly **one** cell of ten or of seven: the print rules a whole payee block as a single cell. That is why the contract has no `payee_name`, `document_number`, `date_posted` or singular `amount` column — those would be a parse of one cell's newlines presented as separate facts. `WHERE cells_ruled` selects the rows whose cells are separate facts; everything else is in `cells_json` exactly as printed. **`cells_json` is the row**; every other content column is a promotion out of it. `office`, `funding_year`, `appropriation_title` and `section_heading` are read from the page text and are **NULL on a continuation page**, which is 56 of the 139 measured table pages — forward-fill them in `printed_page` order. `printed_page`, not `page`, is what the report's own contents index by. `grid_kind` is NULL where the first row states none of the three known labels, so an unrecognised grid is visible rather than mislabelled. An amount must carry a decimal point to be parsed into `amounts_json`: without that rule a bare integer read stacked fiscal years and account numbers as money, and every amount-shaped line measured carries a `.dd` tail while the lines that do not are all account numbers or fiscal years. The check that makes the extraction falsifiable is the print's own `Totals` row, which agreed to the cent with the sum of its account rows over seven money columns on both measured sections.\n**What each package's read window holds.** Part I's pages reach the `A-` summary and the leadership and officers' `B-` pages; Part II's reach a short alphabetical run of senators' offices (in GPO-CDOC-119sdoc6: Justice, Kaine, Kelly and Kennedy), so a Senate-wide or other senator's figure is not here; `SELECT DISTINCT office` for the package says which offices are. The `A-` summary is by appropriation account only, with no object-class (travel and the like) rollup: object classes are in each office's `ORGANIZATION TOTALS` block. One report period's spending is spread over one block per funding year (FY2024, FY2025 and FY2026 in the October 2025 to March 2026 report), so sum the blocks' period amounts. A zero prints as `$.00`.\nA payroll cell can interleave two printed lines letter by letter (\"D SEIR NE AC TT OO RR\" for DIRECTOR and SENATOR, on GPO-CDOC-119sdoc5-2 page B-1470 and 119sdoc6-2 page B-1262), so the cells hold the print exactly for the amounts, which stayed intact, and not always for the text.",
     "columns": [
       {
         "column_name": "package_id",
@@ -23141,7 +23335,7 @@
       {
         "column_name": "file_name",
         "column_type": "VARCHAR",
-        "description": "Which PDF of that package this page is in, `GPO-CDOC-119sdoc3-1.pdf`.  Part of the identity because the package's `Full Report` and `Part I` files carry the same printed pages -- measured byte-identical extracted text over the first 60 pages of GPO-CDOC-119sdoc3 -- and keying on the package alone would collide them."
+        "description": "Which PDF of that package this page is in, `GPO-CDOC-119sdoc3-1.pdf`.  Part of the identity because the package's two files, `Part I` (-1.pdf) and `Part II` (-2.pdf) as its MODS titles them, open with the same printed pages -- measured byte-identical extracted text over the first 60 pages of GPO-CDOC-119sdoc3 -- before Part II goes on to its own half of the B- statement, and keying on the package alone would collide them."
       },
       {
         "column_name": "page",
@@ -23191,7 +23385,7 @@
       {
         "column_name": "office",
         "column_type": "VARCHAR",
-        "description": "The office or account the page names above its `Funding Year` line, `SENATOR TIM KAINE`.  NULL on a continuation page, which the print leaves unlabelled; a consumer forward-fills in `printed_page` order."
+        "description": "The office or account the page names between its section heading and its `Funding Year` line, `SENATOR TIM KAINE`; a label the print wraps over two lines is joined with one space (`CHAIRMAN MAJORITY POLICY COMMITTEE (D)`, printed with `(D)` on its own line), so the Majority and Minority Conference chairs are not both `COMMITTEE (D)`.  NULL on a continuation page, which the print leaves unlabelled; a consumer forward-fills in `printed_page` order."
       },
       {
         "column_name": "funding_year",
@@ -23558,7 +23752,7 @@
       {
         "column_name": "agency",
         "column_type": "VARCHAR",
-        "description": "The agency the recommendation is made to; a recommendation made to several agencies is one row for each."
+        "description": "The agency the recommendation is made to, as GAO's addressee label spells it, with no parent department (U.S. Coast Guard is not nested under DHS); a generic label (`Office of the Director`, `Office of the Under Secretary`, `Other`) names different agencies on different publications, so read publication_title beside it. A recommendation made to several agencies is one row for each."
       },
       {
         "column_name": "recommendation",
@@ -23613,7 +23807,7 @@
       {
         "column_name": "status_as_of",
         "column_type": "VARCHAR",
-        "description": "The export's own status-as-of stamp, verbatim, from the latest export that listed it; GAO labels it EST year round, though it is Eastern local time."
+        "description": "The export's own status-as-of stamp, verbatim, from the latest export that listed it; GAO labels it EST year round, though it is Eastern local time. Text in GAO's spelling (`Sep 30, 2026 at 1:18 PM EST`), not sortable: last_seen carries the same stamp's date in ISO form, so order and filter by it."
       }
     ],
     "grain": "One row per recommendation per agency that GAO's open-recommendations export has listed, with its status as last listed.",
@@ -23898,6 +24092,53 @@
     "grain": null,
     "identity_columns": [
       "package_id"
+    ]
+  },
+  "document_citation_reads": {
+    "table": "document_citation_reads",
+    "label": "Held-field citation reads",
+    "summary": "One row per complete held-field read, rebuilt each run from the checkpoints `document_citations` itself carries, so the two always agree. Join `document_citations` on `document_kind`, `document_key` and `text_sha256`: a row here with `citation_rows` 0 is a field read that found no citation, which is a different answer from a field never read. All columns are stored as VARCHAR.",
+    "coverage": "Not a range. One row per held field (a report section, a comment, a lobbying activity, a communication, a court PDF extraction) whose text an operator selected for a citation read and that read completely: the field, the text it read and how many citation rows it wrote, zero included. A field never selected, or whose read was refused or capped, has no row. A GovInfo package's or budget volume's read is stated on its own row in `house_activity_reports` or `budget_volumes` instead.",
+    "kind": "not_a_range",
+    "measured_on": "2026-10-03",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "document_kind",
+        "column_type": "VARCHAR",
+        "description": "The held field's kind, as `document_citations.document_kind` spells it (`report_section`, `comment_inline`, ...)."
+      },
+      {
+        "column_name": "document_key",
+        "column_type": "VARCHAR",
+        "description": "The field's own key in its kind's spelling, as `document_citations.document_key` spells it."
+      },
+      {
+        "column_name": "text_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the field text this read read, as `document_citations.text_sha256` spells it."
+      },
+      {
+        "column_name": "rule_set_version",
+        "column_type": "VARCHAR",
+        "description": "The citation rule set the read ran under (`CITATION_RULE_SET_VERSION`); NULL on a read recorded before this table existed."
+      },
+      {
+        "column_name": "read_at",
+        "column_type": "VARCHAR",
+        "description": "UTC time the read ran; NULL on a read recorded before this table existed."
+      },
+      {
+        "column_name": "citation_rows",
+        "column_type": "VARCHAR",
+        "description": "How many citation rows the read wrote, as a decimal string; `0` for a read that found none."
+      }
+    ],
+    "grain": null,
+    "identity_columns": [
+      "document_kind",
+      "document_key",
+      "text_sha256"
     ]
   }
 }

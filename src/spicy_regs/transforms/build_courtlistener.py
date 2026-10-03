@@ -40,6 +40,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from loguru import logger
 
+from spicy_regs.transforms.parquet_rows import str_or_none
 from spicy_regs.sources import r2
 from spicy_regs.sources.courtlistener import CourtListenerDocketIdReader, CourtListenerReader, docket_id_queries
 from spicy_regs.transforms.table_merge import merge_local_prior
@@ -87,12 +88,6 @@ PUBLISHED_COLUMNS = (*COLUMNS, *DERIVED)
 FILL_QUERIES_PER_RUN = 15
 
 
-def _s(value: object) -> str | None:
-    """Coerce a scalar to str, preserving NULL. (ids come as ints.)"""
-    if value is None:
-        return None
-    return str(value)
-
 
 def _strings(value: object) -> list[str]:
     """Normalize a search-result array field to a list of strings, dropping blanks."""
@@ -113,7 +108,7 @@ def _shape(docket: dict) -> dict:
     """Map one raw CourtListener RECAP search result onto the published columns."""
     meta = docket.get("meta") or {}
     return {
-        "cl_docket_id": _s(docket.get("docket_id")),
+        "cl_docket_id": str_or_none(docket.get("docket_id")),
         "case_name": docket.get("caseName"),
         "case_name_full": docket.get("case_name_full") or None,
         "court_id": docket.get("court_id"),
@@ -132,7 +127,7 @@ def _shape(docket: dict) -> dict:
         "parties_json": json.dumps(_strings(docket.get("party"))),
         "attorneys_json": json.dumps(_strings(docket.get("attorney"))),
         "firms_json": json.dumps(_strings(docket.get("firm"))),
-        "pacer_case_id": _s(docket.get("pacer_case_id")),
+        "pacer_case_id": str_or_none(docket.get("pacer_case_id")),
         "date_created": meta.get("date_created") if isinstance(meta, dict) else None,
         "absolute_url": _abs_url(docket),
     }

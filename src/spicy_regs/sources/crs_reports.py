@@ -12,7 +12,6 @@ windows remain valid.
 
 from __future__ import annotations
 
-import os
 from collections.abc import Iterator, Mapping
 from datetime import date
 from operator import itemgetter
@@ -24,6 +23,7 @@ if TYPE_CHECKING:
 
 import httpx
 
+from spicy_regs.env_values import first_env
 from spicy_regs.sources.base import Reader
 
 API_BASE = "https://api.congress.gov/v3"
@@ -38,11 +38,8 @@ class CrsReportsError(ValueError):
 
 
 def _resolve_api_key() -> str | None:
-    for var in API_KEY_ENV_VARS:
-        value = os.environ.get(var, "").strip()
-        if value:
-            return value
-    return None
+    """Return the first nonempty configured api.data.gov key."""
+    return first_env(API_KEY_ENV_VARS)
 
 
 class CrsReportsReader(Reader):

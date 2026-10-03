@@ -4,9 +4,14 @@ Each complete field is its own text scope. No section is called a complete
 document, no comment attachment is implied by inline text, and no source body
 is acquired here. Successful zero-result reads replace only that kind/key/text/
 rule scope; refused reads leave prior findings and checkpoints untouched.
+
+Every successful read is a checkpoint in ``document_citations``' metadata, and
+``document_citation_reads`` (:func:`write_citation_reads`) publishes them as
+rows, so a field read with no citation is told from one never read.
 """
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 import hashlib
 import json
 from pathlib import Path
@@ -16,7 +21,14 @@ from threading import Timer
 from typing import Any, Mapping, Sequence
 
 import duckdb
-from spicy_docs.interpretation.citations import CITATION_RULES_BY_NAME, DOCUMENT_CITATION_KINDS, find_citations
+import pyarrow as pa
+import pyarrow.parquet as pq
+from spicy_docs.interpretation.citations import (
+    CITATION_RULE_SET_VERSION,
+    CITATION_RULES_BY_NAME,
+    DOCUMENT_CITATION_KINDS,
+    find_citations,
+)
 from spicy_docs.schemas.document_citation_tables import DocumentProvenance, shape_document_citation
 
 from spicy_regs.citation_sources import TEXT_SOURCES, document_key
@@ -24,6 +36,10 @@ from spicy_regs.transforms.read_checkpoints import checkpoint_metadata, read_che
 from spicy_regs.transforms.table_merge import merge_contract_table, prior_scratch_path, published_table
 
 NAMESPACE = "held-citations-explicit-context"
+#: One row per held-field read the citation table's checkpoints record: the field, the text read, the citation rule
+#: set the read ran under, when, and how many citation rows it wrote (0 for a read that found none).
+READS_TABLE = "document_citation_reads"
+READS_COLUMNS = ("document_kind", "document_key", "text_sha256", "rule_set_version", "read_at", "citation_rows")
 ADAPTER_VERSION = "held-fields/1"
 MAX_SELECTIONS = 100
 MAX_FIELD_BYTES = 4 * 1024 * 1024
@@ -212,7 +228,9 @@ def build_held_citations(
                                                 f"{spec.derivation}:{spec.table}.{spec.field}/{ADAPTER_VERSION}", text_sha)
                 rows.extend(shape_document_citation(f, provenance) for f in findings)
                 replaced.update((*identity, kind) for kind in kinds)
-                states[identity] = {**state, "findings": len(findings)}
+                # Beside the read's identity, never part of it: when it ran and under which rule set.
+                states[identity] = {**state, "findings": len(findings), "rule_set_version": CITATION_RULE_SET_VERSION,
+                                    "read_at": datetime.now(UTC).isoformat(timespec="seconds")}
                 receipt.update(text_sha256=text_sha, findings=len(findings))
         receipts.append(receipt)
         if evidence is not None:
@@ -226,3 +244,26 @@ def build_held_citations(
         replace_parents=(("document_kind", "document_key", "text_sha256", "rule_name"), replaced),
         parquet_metadata=checkpoint_metadata(prior, NAMESPACE, states.values()),
     )
+
+
+def write_citation_reads(output_dir: Path, citations: Path) -> Path:
+    """``document_citation_reads.parquet``: each held-field read ``citations``' checkpoints record, one row per read.
+
+    Derived whole from the citation table's own checkpoints, so the two never disagree; a read checkpointed before
+    ``read_at`` and ``rule_set_version`` were kept states both NULL. A refused or capped read writes no checkpoint and
+    so no row: absence here is "not read". ``citation_rows`` counts the rows that read wrote. O(reads).
+    """
+    def text(value: Any) -> str | None:
+        return None if value is None else str(value)
+
+    states = read_checkpoints(citations, NAMESPACE)
+    rows = sorted(
+        ({"document_kind": text(state.get("document_kind")), "document_key": text(state.get("document_key")),
+          "text_sha256": text(state.get("text_sha256")), "rule_set_version": text(state.get("rule_set_version")),
+          "read_at": text(state.get("read_at")), "citation_rows": text(state.get("findings"))} for state in states),
+        key=lambda row: (row["document_kind"] or "", row["document_key"] or "", row["text_sha256"] or ""),
+    )
+    schema = pa.schema([(column, pa.string()) for column in READS_COLUMNS])
+    out = output_dir / f"{READS_TABLE}.parquet"
+    pq.write_table(pa.Table.from_pylist(rows, schema=schema), out, compression="zstd")
+    return out

@@ -7,7 +7,8 @@ The data dictionary has two layers:
   :data:`spicy_regs.schemas.regulations.RECORD_TYPES` for the core tables, the
   spicy-docs contracts for the hosted tables, a builder's own column list or
   Arrow schema where it has one, and :data:`DERIVED_SCHEMAS` below for the
-  rest. This keeps generation deterministic and offline.
+  rollups whose SQL is their only declaration. This keeps generation
+  deterministic and offline.
 * **Descriptions (curated prose).** Human descriptions live in
   ``data_dictionary/descriptions.yaml``, keyed by table and column.
 
@@ -264,6 +265,7 @@ CONTRACT_TABLES: tuple[str, ...] = (
     "congress_bills",
     "bill_actions",
     "bill_committees",
+    "bill_committee_activities",
     "bill_cosponsors",
     "bill_publisher_summaries",
     "bill_versions",
@@ -287,6 +289,10 @@ CONTRACT_TABLES: tuple[str, ...] = (
     "hearing_transcripts",
     "hearing_bill_links",
     "cbo_cost_estimates",
+    # Every item of CBO's per-Congress feeds, a spicy-docs contract from 0.54.0; the bill family writes it.
+    "cbo_feed_items",
+    # GAO's legal decisions, a spicy-docs contract from 0.54.0 (DRY X1); the gao-reports rollup writes it.
+    "gao_decisions",
     # A8/A9 (laws and rosters): the laws and committee-rosters rollups.
     "laws",
     "law_sections",
@@ -434,7 +440,6 @@ TABLES: tuple[str, ...] = (
     *FEC_TYPED_TABLES,
     "org_committee_links",
     "gao_reports",
-    "gao_decisions",
     "crs_reports",
     "court_dockets",
     "court_docket_groups",
@@ -453,13 +458,14 @@ TABLES: tuple[str, ...] = (
     *(name for name in CONTRACT_TABLES if name != "congress_bills"),
     # Published, but not contract tables: the bill-family rollup's own
     # processing state, and the vote references the roll-call rollup joins
-    # against. Their columns are this repository's, so they live in
-    # DERIVED_SCHEMAS and their prose is inline in descriptions.yaml.
+    # against. Their columns are this repository's, so expected_schemas()
+    # takes them from the transform and their prose is inline in descriptions.yaml.
     "bill_family_archives",
     "bill_vote_references",
     "bill_family_backfills",
     "bill_family_backfill_walks",
     "committee_report_reads",
+    "document_citation_reads",
 )
 
 # Tables the MCP server (list_sources / describe_table / query_sql) exposes.
@@ -496,8 +502,6 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         *FEC_TYPED_TABLES,
         "org_committee_links",
         "gao_reports",
-        "gao_decisions",
-    "gao_decisions",
         "crs_reports",
         "court_dockets",
         "court_docket_groups",
@@ -514,16 +518,19 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "bill_family_backfills",
         "bill_family_backfill_walks",
         "committee_report_reads",
+        "document_citation_reads",
         "member_vote_terms",
         *RULEMAKING_TABLES,
         *CONTRACT_TABLES,
     }
 )
 
-# Schemas for the derived rollups. These mirror the SQL/Polars schemas in
-# src/spicy_regs/transforms/{build_feed_summary,build_agency_rollups}.py and
-# sources/iceberg.py (_build_comments_index). Types are DuckDB type names, matching what a
-# DESCRIBE of the published parquet returns (see `check --source r2`).
+# Schemas for the derived rollups whose SQL is their only declaration: they mirror
+# src/spicy_regs/transforms/{build_feed_summary,build_agency_rollups,build_fr_docket_links,
+# build_discovery_signals}.py and sources/iceberg.py (_build_comments_index). A table whose
+# transform declares its columns is read from that declaration in expected_schemas(), never
+# restated here. Types are DuckDB type names, matching what a DESCRIBE of the published
+# parquet returns (see `check --source r2`).
 DERIVED_SCHEMAS: dict[str, list[tuple[str, str]]] = {
     "comments_index": [
         ("agency_code", "VARCHAR"),
@@ -556,21 +563,6 @@ DERIVED_SCHEMAS: dict[str, list[tuple[str, str]]] = {
         ("document_type", "VARCHAR"),
         ("document_count", "BIGINT"),
     ],
-    # Ingested from GovInfo CFR (build_cfr_sections); section metadata + citations
-    # only (not full text). All columns are stored as VARCHAR.
-    "cfr_sections": [
-        ("granule_id", "VARCHAR"),
-        ("package_id", "VARCHAR"),
-        ("cfr_ref", "VARCHAR"),
-        ("title", "VARCHAR"),
-        ("part", "VARCHAR"),
-        ("section", "VARCHAR"),
-        ("heading", "VARCHAR"),
-        ("structure_level", "VARCHAR"),
-        ("edition_year", "VARCHAR"),
-        ("last_modified", "VARCHAR"),
-        ("url", "VARCHAR"),
-    ],
     # Built by build_fr_docket_links: federal_register.docket_ids_json exploded to
     # one row per (docket_id, document_number, publication_date), carrying FR display columns.
     "fr_docket_links": [
@@ -601,260 +593,6 @@ DERIVED_SCHEMAS: dict[str, list[tuple[str, str]]] = {
         ("recent_30d", "BIGINT"),
         ("baseline", "DOUBLE"),
         ("ratio", "DOUBLE"),
-    ],
-    # Ingested from reginfo.gov (build_unified_agenda); all columns are stored as
-    # VARCHAR, array fields serialized as JSON strings. Keyed by (rin, agenda_edition).
-    "unified_agenda": [
-        ("rin", "VARCHAR"),
-        ("agency_code", "VARCHAR"),
-        ("agency_name", "VARCHAR"),
-        ("title", "VARCHAR"),
-        ("abstract", "VARCHAR"),
-        ("rin_status", "VARCHAR"),
-        ("rule_stage", "VARCHAR"),
-        ("priority_category", "VARCHAR"),
-        ("agenda_edition", "VARCHAR"),
-        ("major", "VARCHAR"),
-        ("publication_id", "VARCHAR"),
-        ("timetable_json", "VARCHAR"),
-        ("cfr_references_json", "VARCHAR"),
-        ("legal_authority_json", "VARCHAR"),
-        ("first_action_date", "VARCHAR"),
-        ("next_action_date", "VARCHAR"),
-        ("url", "VARCHAR"),
-    ],
-    # Ingested from the OpenFEC /committees endpoint (build_fec_committees); a
-    # committee/PAC reference dimension, all columns stored as VARCHAR with array
-    # fields serialized as JSON strings. Keyed by committee_id.
-    "fec_committees": [
-        ("committee_id", "VARCHAR"),
-        ("name", "VARCHAR"),
-        ("committee_type", "VARCHAR"),
-        ("committee_type_full", "VARCHAR"),
-        ("designation", "VARCHAR"),
-        ("designation_full", "VARCHAR"),
-        ("party", "VARCHAR"),
-        ("party_full", "VARCHAR"),
-        ("state", "VARCHAR"),
-        ("treasurer_name", "VARCHAR"),
-        ("organization_type_full", "VARCHAR"),
-        ("filing_frequency", "VARCHAR"),
-        ("first_file_date", "VARCHAR"),
-        ("last_file_date", "VARCHAR"),
-        ("cycles_json", "VARCHAR"),
-        ("candidate_ids_json", "VARCHAR"),
-    ],
-    # Derived by build_org_committee_links: commenter organization names from
-    # comments.organization name-matched to fec_committees. One row per
-    # (organization, committee_id); counts are BIGINT, everything else VARCHAR.
-    "org_committee_links": [
-        ("organization", "VARCHAR"),
-        ("organization_norm", "VARCHAR"),
-        ("organization_core", "VARCHAR"),
-        ("name_source", "VARCHAR"),
-        ("committee_id", "VARCHAR"),
-        ("committee_name", "VARCHAR"),
-        ("committee_type_full", "VARCHAR"),
-        ("designation_full", "VARCHAR"),
-        ("party_full", "VARCHAR"),
-        ("organization_type_full", "VARCHAR"),
-        ("committee_state", "VARCHAR"),
-        ("match_method", "VARCHAR"),
-        ("confidence", "VARCHAR"),
-        ("committee_match_count", "BIGINT"),
-        ("comment_count", "BIGINT"),
-        ("docket_count", "BIGINT"),
-        ("agency_codes_json", "VARCHAR"),
-        ("first_comment_date", "VARCHAR"),
-        ("last_comment_date", "VARCHAR"),
-    ],
-    # Ingested from the GAO reports RSS feed (build_gao_reports), explicit
-    # repairs, GovInfo's closed GAOREPORTS collection with its MODS, and GAO's
-    # own Month in Review listing; an append-only accumulator, `source` naming
-    # each row's route. All columns are stored as VARCHAR. Keyed by report_id.
-    "gao_reports": [
-        ("report_id", "VARCHAR"),
-        ("title", "VARCHAR"),
-        ("report_type", "VARCHAR"),
-        ("published_date", "VARCHAR"),
-        ("abstract", "VARCHAR"),
-        ("agencies_json", "VARCHAR"),
-        ("topics_json", "VARCHAR"),
-        ("url", "VARCHAR"),
-        ("source", "VARCHAR"),
-        ("product_type", "VARCHAR"),
-        ("report_number", "VARCHAR"),
-        ("requester_type", "VARCHAR"),
-        ("requester_committees_json", "VARCHAR"),
-        ("requester_members_json", "VARCHAR"),
-        ("recommendation_count", "BIGINT"),
-        ("matters_for_congress_count", "BIGINT"),
-        ("page_count", "BIGINT"),
-        ("subject_terms_json", "VARCHAR"),
-    ],
-    # GAO's legal decisions from its own Month in Review listing (build_gao_reports),
-    # one row per decision page; all VARCHAR. Keyed by (decision_number, url).
-    "gao_decisions": [
-        ("decision_number", "VARCHAR"),
-        ("b_numbers_json", "VARCHAR"),
-        ("decision_type", "VARCHAR"),
-        ("title", "VARCHAR"),
-        ("decision_date", "VARCHAR"),
-        ("topics_json", "VARCHAR"),
-        ("url", "VARCHAR"),
-        ("listing_page", "VARCHAR"),
-        ("source", "VARCHAR"),
-    ],
-    # Ingested from the Congress.gov v3 API (build_crs_reports); list-level
-    # fields only, all stored as VARCHAR. Keyed by report_id.
-    "crs_reports": [
-        ("report_id", "VARCHAR"),
-        ("title", "VARCHAR"),
-        ("report_type", "VARCHAR"),
-        ("status", "VARCHAR"),
-        ("published_date", "VARCHAR"),
-        ("update_date", "VARCHAR"),
-        ("version", "VARCHAR"),
-        ("url", "VARCHAR"),
-    ],
-    # Derived from the verified CourtListener bulk dockets edition: same-case
-    # record groups for court_dockets (the publisher's doppeldocket problem —
-    # PACER main + per-defendant sub-dockets, FLP wiki / issue #2185). The
-    # publisher's own parent_docket_id is blank in the edition, so the parent
-    # is inferred: lowest pacer_case_id among the group's published members.
-    # Rows only exist for grouped dockets; the parent row carries
-    # parent_cl_docket_id = cl_docket_id. confidence_tier separates tight-pacer
-    # doppeldockets from wide-spread refilings.
-    "court_docket_groups": [
-        ("cl_docket_id", "VARCHAR"),
-        ("parent_cl_docket_id", "VARCHAR"),
-        ("confidence_tier", "VARCHAR"),
-        ("group_size", "BIGINT"),
-        ("edition", "VARCHAR"),
-        ("rule_version", "VARCHAR"),
-    ],
-    # Ingested from the USASpending.gov /api/v2/recipient/ endpoint
-    # (build_usaspending_recipients); a federal-award recipient reference
-    # dimension of every recipient funded in the trailing 12 months (the weekly
-    # walk, decision 48) with the top of the ranking refreshed daily, all
-    # columns stored as VARCHAR. Keyed by recipient_id.
-    "usaspending_recipients": [
-        ("recipient_id", "VARCHAR"),
-        ("uei", "VARCHAR"),
-        ("duns", "VARCHAR"),
-        ("name", "VARCHAR"),
-        ("recipient_level", "VARCHAR"),
-        ("total_award_amount", "VARCHAR"),
-        ("observed_at", "VARCHAR"),
-        ("source_capture_sha256", "VARCHAR"),
-    ],
-    # Ingested from the FCC ECFS public API (build_fcc_proceedings); the FCC's
-    # docket equivalent — the FCC does not participate in regulations.gov. All
-    # columns stored as VARCHAR. Keyed by name (the docket number).
-    "fcc_proceedings": [
-        ("name", "VARCHAR"),
-        ("id_proceeding", "VARCHAR"),
-        ("description", "VARCHAR"),
-        ("bureau_code", "VARCHAR"),
-        ("bureau_name", "VARCHAR"),
-        ("rulemaking_or_docket", "VARCHAR"),
-        ("filing_status", "VARCHAR"),
-        ("date_created", "VARCHAR"),
-        ("date_closed", "VARCHAR"),
-        ("comment_start_date", "VARCHAR"),
-        ("comment_end_date", "VARCHAR"),
-        ("reply_comment_start_date", "VARCHAR"),
-        ("reply_comment_end_date", "VARCHAR"),
-        ("filed_by", "VARCHAR"),
-    ],
-    # Ingested from the FCC ECFS public API (build_fcc_filings); the FCC's
-    # comment equivalent. All columns stored as VARCHAR, array fields
-    # serialized as JSON strings. Keyed by id_submission.
-    "fcc_filings": [
-        ("id_submission", "VARCHAR"),
-        ("proceeding_names_json", "VARCHAR"),
-        ("submission_type", "VARCHAR"),
-        ("express_comment", "VARCHAR"),
-        ("date_received", "VARCHAR"),
-        ("date_submission", "VARCHAR"),
-        ("date_disseminated", "VARCHAR"),
-        ("filing_status", "VARCHAR"),
-        ("viewing_status", "VARCHAR"),
-        ("exparte_or_late_filed", "VARCHAR"),
-        ("filers_json", "VARCHAR"),
-        ("authors_json", "VARCHAR"),
-        ("lawfirms_json", "VARCHAR"),
-        ("bureaus_json", "VARCHAR"),
-        ("text_data", "VARCHAR"),
-        ("total_page_count", "VARCHAR"),
-        ("documents_json", "VARCHAR"),
-        ("filing_url", "VARCHAR"),
-        ("native_fields_json", "VARCHAR"),
-        ("native_fields_sha256", "VARCHAR"),
-        ("pdf_extraction_results_json", "VARCHAR"),
-    ],
-    # The bill-family rollup's own processing state (build_bill_family):
-    # one retained GovInfo bulkdata listing entry per BILLSTATUS folder, which
-    # the next run compares the live listing against to decide whether the zip
-    # needs downloading at all. Listed literally, like every other entry here;
-    # test_hosted_rollups pins it equal to the transform's ARCHIVE_COLUMNS, the
-    # same way mcp_server.TABLES is pinned to this module's TABLES.
-    "bill_family_archives": [
-        ("name", "VARCHAR"),
-        ("link", "VARCHAR"),
-        ("formatted_last_modified_time", "VARCHAR"),
-        ("modified_at", "VARCHAR"),
-        ("size", "VARCHAR"),
-        ("congress", "VARCHAR"),
-        ("bill_type", "VARCHAR"),
-        ("observed_at", "VARCHAR"),
-    ],
-    # The bill family's second non-contract output (build_bill_family): the
-    # roll calls each bill's own actions record, which the roll-call rollup
-    # reads back as a linkage index. Pinned to the transform's own
-    # VOTE_REFERENCE_COLUMNS by test_hosted_rollups, like the entry above.
-    "bill_vote_references": [
-        ("bill_id", "VARCHAR"),
-        ("chamber", "VARCHAR"),
-        ("congress", "VARCHAR"),
-        ("session", "VARCHAR"),
-        ("roll_number", "VARCHAR"),
-        ("action_index", "VARCHAR"),
-        ("url", "VARCHAR"),
-        ("date", "VARCHAR"),
-        ("full_action_name", "VARCHAR"),
-        ("observed_at", "VARCHAR"),
-    ],
-    # The bill family's pre-BILLSTATUS backfill state (build_bill_family):
-    # per attempted bill, the list stamp it was attempted under and whether
-    # it was filled or refused — a filled row whose stamp matches is skipped,
-    # a refused row is retried first next run — and, per (congress, bill_type)
-    # walked, the route's declared total against what was reached, so a capped
-    # or refused walk cannot read as an empty unit. Pinned to the transform's
-    # BACKFILL_COLUMNS / BACKFILL_WALK_COLUMNS by test_hosted_rollups, like
-    # the two entries above.
-    "bill_family_backfills": [
-        ("congress", "VARCHAR"),
-        ("bill_type", "VARCHAR"),
-        ("number", "VARCHAR"),
-        ("list_update_date_including_text", "VARCHAR"),
-        ("refusal", "VARCHAR"),
-        ("observed_at", "VARCHAR"),
-    ],
-    "committee_report_reads": [
-        (column, "VARCHAR") for column in ("package_id", "last_modified", "outcome", "rule_version", "observed_at")
-    ],
-    "bill_family_backfill_walks": [
-        ("congress", "VARCHAR"),
-        ("bill_type", "VARCHAR"),
-        ("declared_count", "VARCHAR"),
-        ("records_walked", "VARCHAR"),
-        ("pages_walked", "VARCHAR"),
-        ("list_completed", "VARCHAR"),
-        ("unwalkable_count", "VARCHAR"),
-        ("repeated_count", "VARCHAR"),
-        ("backfilled_count", "VARCHAR"),
-        ("observed_at", "VARCHAR"),
     ],
 }
 
@@ -952,6 +690,27 @@ def expected_schemas() -> dict[str, list[tuple[str, str]]]:
         COLUMNS as LOBBYING_COLUMNS,
         LOBBYIST_COLUMNS as LOBBYING_LOBBYIST_COLUMNS,
     )
+    from spicy_regs.transforms.build_cfr_sections import COLUMNS as CFR_SECTION_COLUMNS
+    from spicy_regs.transforms.build_unified_agenda import COLUMNS as UNIFIED_AGENDA_COLUMNS
+    from spicy_regs.transforms.build_fec_committees import COLUMNS as FEC_COMMITTEE_COLUMNS
+    # gao_reports types its three counts; its Arrow schema is the one declaration that says so.
+    from spicy_regs.transforms.build_gao_reports import _SCHEMA as GAO_REPORT_SCHEMA
+    from spicy_regs.transforms.build_crs_reports import COLUMNS as CRS_REPORT_COLUMNS
+    from spicy_regs.transforms.build_court_docket_groups import SCHEMA as COURT_DOCKET_GROUP_SCHEMA
+    from spicy_regs.transforms.build_usaspending_recipients import COLUMNS as USASPENDING_COLUMNS
+    from spicy_regs.transforms.build_fcc_ecfs import (
+        FILING_COLUMNS as FCC_FILING_COLUMNS,
+        PROCEEDING_COLUMNS as FCC_PROCEEDING_COLUMNS,
+    )
+    from spicy_regs.transforms.build_bill_family import (
+        ARCHIVE_COLUMNS,
+        BACKFILL_COLUMNS,
+        BACKFILL_WALK_COLUMNS,
+        VOTE_REFERENCE_COLUMNS,
+    )
+    from spicy_regs.transforms.committee_report_reads import READ_COLUMNS as COMMITTEE_REPORT_READ_COLUMNS
+    from spicy_regs.transforms.held_citations import READS_COLUMNS as CITATION_READ_COLUMNS
+    from spicy_regs.transforms.build_org_committee_links import COLUMNS as ORG_COMMITTEE_LINK_COLUMNS
 
     builder_columns = {
         "fec_source_catalog": FEC_CATALOG_COLUMNS,
@@ -976,18 +735,39 @@ def expected_schemas() -> dict[str, list[tuple[str, str]]]:
         "regulatory_agenda_items": ITEM_COLUMNS,
         "agenda_item_proceedings": RELATIONSHIP_COLUMNS,
         "comment_periods": COMMENT_PERIOD_COLUMNS,
+        "cfr_sections": CFR_SECTION_COLUMNS,
+        "unified_agenda": UNIFIED_AGENDA_COLUMNS,
+        "fec_committees": FEC_COMMITTEE_COLUMNS,
+        "crs_reports": CRS_REPORT_COLUMNS,
+        "usaspending_recipients": USASPENDING_COLUMNS,
+        "fcc_proceedings": FCC_PROCEEDING_COLUMNS,
+        "fcc_filings": FCC_FILING_COLUMNS,
+        "bill_family_archives": ARCHIVE_COLUMNS,
+        "bill_vote_references": VOTE_REFERENCE_COLUMNS,
+        "bill_family_backfills": BACKFILL_COLUMNS,
+        "bill_family_backfill_walks": BACKFILL_WALK_COLUMNS,
+        "committee_report_reads": COMMITTEE_REPORT_READ_COLUMNS,
+        "document_citation_reads": CITATION_READ_COLUMNS,
     }
     # Writers that type their columns natively (DATE, INTEGER, BOOLEAN), spelled as DuckDB describes the file.
     builder_schemas = {
         "rulemaking_lifecycles": LIFECYCLE_SCHEMA,
         "lifecycle_events": EVENT_SCHEMA,
         "agency_lifecycle_stats": AGENCY_LIFECYCLE_STATS_SCHEMA,
+        "gao_reports": GAO_REPORT_SCHEMA,
+        "court_docket_groups": COURT_DOCKET_GROUP_SCHEMA,
+    }
+    # Writers whose SQL states the DuckDB type itself, as (column, type) pairs.
+    builder_pairs = {
+        "org_committee_links": ORG_COMMITTEE_LINK_COLUMNS,
     }
     for name in TABLES:
         if name in builder_columns:
             schemas[name] = [(column, "VARCHAR") for column in builder_columns[name]]
         elif name in builder_schemas:
             schemas[name] = described_schema(builder_schemas[name])
+        elif name in builder_pairs:
+            schemas[name] = list(builder_pairs[name])
         elif name in from_fec:
             schemas[name] = from_fec[name]
         elif name in from_contracts:
@@ -1407,8 +1187,8 @@ def cmd_check(args: argparse.Namespace) -> int:
             print(f"  - {err}", file=sys.stderr)
         if errors:
             print(
-                "\nUpdate data_dictionary/descriptions.yaml (and DERIVED_SCHEMAS / RECORD_TYPES "
-                "if the schema changed) so they line up.",
+                "\nUpdate data_dictionary/descriptions.yaml (and the table's schema declaration "
+                "if the schema changed; see expected_schemas) so they line up.",
                 file=sys.stderr,
             )
         return 1

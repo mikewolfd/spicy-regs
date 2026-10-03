@@ -31,6 +31,7 @@ from spicy_docs.interpretation.hearing_bill_links import cover_links
 from spicy_docs.schemas.hearing_bill_link_tables import shape_hearing_bill_link
 from spicy_docs.reading.paged_json import PagedJsonBudget
 from spicy_docs.schemas.committee_report_tables import (
+    CHAMBER_BY_DOCUMENT_TYPE,
     shape_committee_report,
     shape_hearing_transcript,
     shape_report_section,
@@ -47,7 +48,7 @@ from spicy_docs.sources.govinfo.body_acquisition import (
 from spicy_docs.reading.refusals import RefusedResponse
 from spicy_docs.reading.paged_json import PagedJsonSourceError
 from spicy_docs.schemas.tables import text
-from spicy_docs.sources.congress.listing import LIST_ROUTES, list_route_url
+from spicy_docs.sources.congress.listing import LIST_ROUTES, hearing_detail_event_id, list_route_url
 from spicy_docs.sources.govinfo.discovery import GovInfoDiscoveryReader, collection_url
 from spicy_docs.transport.credentials import CredentialRefusedError, scrub_credential
 
@@ -375,10 +376,6 @@ def _bill_key(package_id: str, bill: ModsBill) -> str | None:
     return natural_key(bill.congress, bill.normalized_bill_type, int(bill.number))
 
 
-#: A CHRG package id spells its chamber in the first letter of its document
-#: type (``hhrg``, ``shrg``, ``jhrg``); the hearing detail route wants the word.
-_CHAMBER_OF_DOCUMENT_TYPE = {"h": "house", "s": "senate", "j": "joint"}
-
 #: What one hearing-detail request can refuse with, short of a credential
 #: refusal, which propagates: the reader's own refusals (``404`` included), a
 #: transport failure after its retries, and a record not shaped as expected.
@@ -394,7 +391,8 @@ def _event_id(hearings: HearingDetailSource, package: Any,
     the package id spells, or it is refused rather than read.
     """
     identity = package.identity
-    chamber = _CHAMBER_OF_DOCUMENT_TYPE.get(str(identity.document_type)[:1])
+    # The hearing detail route wants the chamber's word; spicy-docs maps each document type to it.
+    chamber = CHAMBER_BY_DOCUMENT_TYPE.get(str(identity.document_type))
     route = LIST_ROUTES["hearing-detail"]
     try:
         if chamber is None:
@@ -403,13 +401,8 @@ def _event_id(hearings: HearingDetailSource, package: Any,
         page = next(iter(hearings.records(route, url, max_pages=1)))
         if evidence:
             evidence.capture(page.capture, stage=identity.package_id + ":hearing-detail")
-        if len(page.records) != 1:
-            raise PagedJsonSourceError(f"hearing-detail answered {len(page.records)} records, not one")
-        record = page.records[0]
-        if str(record["jacketNumber"]) != str(int(identity.number)) or str(record["congress"]) != str(
-            identity.congress
-        ):
-            raise PagedJsonSourceError("hearing-detail identity differs from the requested jacket")
+        # spicy-docs reads the answer as the hearing asked for (one record, its jacket and Congress) (X5).
+        event_id = hearing_detail_event_id(page.records, congress=identity.congress, jacket=identity.number)
     except CredentialRefusedError:
         raise
     except _HEARING_REFUSALS as error:
@@ -418,8 +411,6 @@ def _event_id(hearings: HearingDetailSource, package: Any,
         logger.warning("CHRG: {} hearing detail refused: {}", identity.package_id,
                        scrub_credential(str(error), evidence.credential if evidence else ""))
         return None, "refused"
-    meeting = record.get("associatedMeeting")
-    event_id = text(meeting.get("eventId")) if isinstance(meeting, dict) else None
     return event_id, "meeting" if event_id is not None else "no_meeting"
 
 

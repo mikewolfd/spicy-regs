@@ -16,6 +16,10 @@ declaration test requires the writer's cron to fire earlier). Both publishers
 are keyless, so the run needs no credential. The cron runs an hour after the
 family's to reuse any available links.
 
+A chamber whose listing refuses is left out of the run and the other chamber is
+published; the run then fails, so the refusal is seen
+(``build_roll_call_votes.ChamberListingRefused``).
+
 A dispatch scopes the Congresses (``BILL_FAMILY_CONGRESSES``), the chambers
 (``ROLL_CALL_CHAMBERS``) and the per-run cap (``ROLL_CALL_MAX_VOTES``), which is
 how the 101st-107th House backfill runs: House only, newest first under the
@@ -26,7 +30,11 @@ from pathlib import Path
 from typing import ClassVar
 
 from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
-from spicy_regs.transforms.build_roll_call_votes import build_roll_call_votes, max_votes_from_env
+from spicy_regs.transforms.build_roll_call_votes import (
+    ChamberListingRefused,
+    build_roll_call_votes,
+    max_votes_from_env,
+)
 
 
 class RollCallVotesRollup(RollupPipeline):
@@ -39,7 +47,12 @@ class RollCallVotesRollup(RollupPipeline):
     retain_source_evidence: ClassVar[bool] = True
 
     def build(self, output_dir: Path) -> tuple[Path, ...]:
-        return build_roll_call_votes(output_dir, max_votes=max_votes_from_env(), evidence=self.source_evidence)
+        try:
+            return build_roll_call_votes(output_dir, max_votes=max_votes_from_env(), evidence=self.source_evidence)
+        except ChamberListingRefused as refused:
+            # Publish the chamber that was read; ``run`` raises the refusal once the generation is published.
+            self.deferred_failure = refused
+            return refused.outputs
 
 
 app = make_rollup_app(RollCallVotesRollup)

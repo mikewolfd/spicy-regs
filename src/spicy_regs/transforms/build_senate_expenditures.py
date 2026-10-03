@@ -33,7 +33,6 @@ and granule-MODS routes (bodies are keyless); a ``401``/``403`` aborts the run.
 from __future__ import annotations
 
 import os
-import re
 from collections import Counter
 from collections.abc import Callable, Iterator, Sequence
 from datetime import UTC, datetime
@@ -52,6 +51,7 @@ from spicy_docs.schemas.senate_expenditure_tables import (
 from spicy_docs.sources.govinfo.body_acquisition import GovInfoBodyAcquirer, GovInfoBodyBudget
 from spicy_docs.sources.govinfo.bodies import parse_package_id
 from spicy_docs.sources.govinfo.discovery import GovInfoDiscoveryReader, package_granules_url, published_url
+from spicy_docs.sources.govinfo.senate_expenditure_reports import is_senate_expenditure_report
 from spicy_docs.transport.credentials import CredentialRefusedError, scrub_credential
 
 from spicy_regs.sources import r2
@@ -63,18 +63,12 @@ NAME = "senate_expenditures"
 #: Bump when this adapter changes how it reads or interprets a page stream.
 READ_POLICY_VERSION = "001"
 
-#: The collection walked, and the id prefix a row must carry to be one of
-#: these reports. The two differ on purpose — the reprints live inside the
-#: ``CDOC`` collection under a ``GPO-CDOC-`` id, and ``GPO-CDOC`` is its own
-#: entry in spicy-docs' package-id grammar so that ``GPO-J6-REPORT``, which
-#: states the same ``collectionCode``, is still refused by name.
+#: The collection walked. Which of its rows are the report is spicy-docs' rule (``is_senate_expenditure_report``,
+#: round 5 X5): a ``GPO-CDOC-`` id, the collection and prefix differing on purpose (the reprints live inside ``CDOC``
+#: under a ``GPO-CDOC-`` id, and ``GPO-CDOC`` is its own entry in the package-id grammar so that ``GPO-J6-REPORT``,
+#: which states the same ``collectionCode``, is still refused by name), and the report's own title, which every one
+#: of the five matched packages states in full. Selective on real data: 291 CDOC rows walked, 5 matched (2026-09-20).
 COLLECTION = "CDOC"
-PACKAGE_PREFIX = "GPO-CDOC-"
-
-#: The report's own title, which every one of the five matched packages states
-#: in full. Selective on real data: 291 CDOC rows walked, 5 matched
-#: (2026-09-20). Pinned in ``tests/test_senate_expenditures.py``.
-REPORT_TITLE = re.compile(r"(?i)\breport of the secretary of the senate\b")
 
 #: Granules that are a file of the report rather than metadata.
 CONTENT_GRANULE = "CONTENT"
@@ -240,7 +234,7 @@ def _listed(reader: PackageDiscoverySource, since: str) -> list[tuple[str, str |
         for record in page.records:
             walked += 1
             package_id = str(record.get("packageId") or "")
-            if not package_id.startswith(PACKAGE_PREFIX) or REPORT_TITLE.search(str(record.get("title") or "")) is None:
+            if not is_senate_expenditure_report(package_id, str(record.get("title") or "")):
                 continue
             try:
                 parse_package_id(package_id)

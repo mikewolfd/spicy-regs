@@ -23,7 +23,7 @@ One row per Regulation Identifier Number (RIN) per agenda edition, ingested from
 | `rin_status` | `VARCHAR` | Status of the RIN in this edition (e.g. `Active`, `Completed`, `Long-Term`). |
 | `rule_stage` | `VARCHAR` | Stage of the rulemaking in this edition (e.g. `Prerule`, `Proposed Rule`, `Final Rule`). |
 | `priority_category` | `VARCHAR` | OIRA priority classification (e.g. `Economically Significant`, `Other Significant`, `Substantive, Nonsignificant`). |
-| `agenda_edition` | `VARCHAR` | Semiannual agenda edition the row was published in, as `YYYYMM` (MM 04=Spring, 10=Fall). Half of the primary/dedup key. Every readable edition since 199510 is held, so filter to one edition, or count distinct `rin`, before counting rules. |
+| `agenda_edition` | `VARCHAR` | Semiannual agenda edition the row was published in, as reginfo.gov's `pubId` `YYYYMM`: MM 04 and 10 are its spring and fall editions, except that reginfo.gov titles 202510 the "2026" agenda (202504 is Spring 2025). The month is not a release date: an edition appears months later (USDA printed 202510 in the Register on 2026-08-14), and no release date is held. Half of the primary/dedup key. Every readable edition since 199510 is held, so filter to one edition, or count distinct `rin`, before counting rules. |
 | `major` | `VARCHAR` | Whether the action is a major rule, as reported by the agenda (e.g. `Yes`/`No`). Often null. |
 | `publication_id` | `VARCHAR` | reginfo.gov publication identifier for this agenda entry, when present. |
 | `timetable_json` | `VARCHAR` | JSON array of planned and actual milestone actions with literal source dates and Federal Register citations. A date with day 00 has month precision; labels such as To Be Determined remain unchanged. |

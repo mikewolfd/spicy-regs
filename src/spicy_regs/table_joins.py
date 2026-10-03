@@ -18,11 +18,15 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from dataclasses import dataclass, replace
 from pathlib import Path
 
 RECORD = Path(__file__).with_name("table_joins.json")
 RECORD_FORMAT = "spicy-regs-table-joins"
+#: A path on a maintainer's machine (``~/…`` or an absolute ``/dir/…``), which means nothing to a reader of a
+#: record the server ships. A repository-relative path, a URL and a token such as ``/002`` do not match.
+_MAINTAINER_PATH = re.compile(r"(?<![\w/.~])(?:~|/[A-Za-z][\w.-]*)/[^`\s]*")
 BASELINE_DATE = "2026-09-26"
 BASELINE_RECEIPTS = (
     "src/spicy_regs/join_measurements.json",
@@ -143,6 +147,10 @@ JOINS: tuple[Join, ...] = (
                  "print re-keys moved Senate reports to their covered Congress and subheaded bills to theirs. "
                  "Receipts join-gaps-2026-09-26/d/, congress-bills-backfill-2026-09-26/."),
     _join("bill_committees", "bill_id", _BILL, "bill_id", 37_473, 0),
+    _join("bill_committee_activities", "bill_id", _BILL, "bill_id", 0, 0, "empty",
+          "New in spicy-docs 0.54.0: filled as each Congress's BILLSTATUS is re-read; not yet baselined."),
+    _join("bill_committee_activities", ("bill_id", "system_code"), "bill_committees", ("bill_id", "system_code"),
+          0, 0, "empty", "Read from the same committee walk as bill_committees; not yet baselined."),
     _join("bill_publisher_summaries", "bill_id", _BILL, "bill_id", 17_839, 0),
     _join("bill_sections", "bill_id", _BILL, "bill_id", 1_849, 0),
     _join("bill_subjects", "bill_id", _BILL, "bill_id", 149_261, 0),
@@ -197,6 +205,12 @@ JOINS: tuple[Join, ...] = (
           reason="Complete since committee_meetings keeps the previous Congress: the 7 orphans of the first "
                  "baseline were 118th-Congress meetings it had not listed (join-gaps-2026-09-26/f/). Receipt "
                  "join-map-2026-09-26/live-check-after-fixes.json."),
+    _join("hearing_transcripts", ("congress", "chamber", "mods_event_id"), "committee_meetings",
+          ("congress", "chamber", "event_id"), 43, 1,
+          reason="The meeting GovInfo's MODS names (spicy-docs 0.54.0), filled as each held hearing is read again. Baseline "
+          "from the reader over the 185 retained MODS (round 5, implementer E, 2026-10-03): 42 of 43 keys name a held "
+          "meeting; CHRG-119hhrg60746's 417109 names none. Where Congress.gov's event_id also names one they agree "
+          "21 of 21."),
     _join("report_sections", ("package_id", "part_id"), "committee_reports", ("package_id", "part_id"), 142, 0),
     _join("law_sections", "law_id", "laws", "law_id", 0, 0, "empty",
           "Sections from the law's own XML; public population not yet baselined."),
@@ -271,14 +285,21 @@ JOINS: tuple[Join, ...] = (
     # build_cfr_sections, released with this declaration, does not drop the join below its floor.
     _join("rule_targets", ("cfr_title", "cfr_part"), "cfr_sections", ("title", "part"), 6_146, 812, "scope",
           "rule_targets holds part-level keys, so the join is on title and part, which a part held only as section "
-          "rows also has; the printed cfr_ref missed 12 such parts (50 CFR 622 among them). cfr_sections holds the "
-          "2025 and 2026 editions of every title, so most missing parts were removed or redesignated after the "
-          "citing document. Title 41 matches at chapter level only: the Federal Register cuts a compound part at "
-          "the hyphen (41 CFR 60-1.4 is part 60), so its 13 Title 41 keys (chapters 50, 51, 60, 61, 101, 102, 105, "
-          "128, 201 and 300-303) name chapters, which no cfr_sections part matches once its Title 41 structural "
-          "rows carry their compound parts; they are counted missing. Measured 2026-10-03 on rule_targets "
-          "snapshot_448e6d9a… and cfr_sections eab08a3f…: 6,146 keys, 799 missing, plus those 13. Receipt "
-          "mcp-chaos-2026-10-02/round4/joins-measured-2026-10-03.json."),
+          "rows also has; the printed cfr_ref missed 12 such parts (50 CFR 622 among them). cfr_sections holds "
+          "the 2025 edition of every title and the 2026 edition of titles 5, 7, 9-12 and 14-16 only, so a part can "
+          "be missing either way: 679 of the 799 missing keys were last cited before 2025, which fits a part removed "
+          "or redesignated since; a key first cited later can name a part created after the held edition (41 CFR "
+          "105-9 and 105-10 are new in 2026) or one a proposed rule would create, which no edition holds (2 CFR "
+          "6100, 10 CFR 57, 21 CFR 1108 and 43 CFR 1700 are in no eCFR version of 2025-01-01 or 2026-09-30). "
+          "Title 41 matches at chapter level only: the Federal Register cuts a compound part at the hyphen (41 CFR "
+          "60-1.4 is part 60), so 13 of its 14 Title 41 keys (chapters 50, 51, 60, 61, 101, 102, 105, 128, 201 and "
+          "300-303) name chapters, which no cfr_sections part matches once its Title 41 structural rows carry their "
+          "compound parts; they are counted missing (the 14th, 41-74, names no Title 41 chapter and is among the "
+          "799). A Register reference that names a chapter and no part (FR 2026-00929, chapters 300-304) yields "
+          "no edge. Measured 2026-10-03 on rule_targets snapshot_448e6d9a… and cfr_sections eab08a3f…: 6,146 "
+          "keys, 799 missing, plus those 13; the same counts on snapshot_55d396ee…. Receipts "
+          "mcp-chaos-2026-10-02/round4/joins-measured-2026-10-03.json and "
+          "mcp-chaos-2026-10-02/round5/scout-A/m1b_rt_missing.out."),
     # FEC.
     _join("org_committee_links", "committee_id", "fec_committees", "committee_id", 3_633, 0),
     # The Regulations.gov attribute tables (decisions 65-67): every row is a record the thin tables also hold.
@@ -397,6 +418,12 @@ def references() -> dict[str, list[dict]]:
     return shaped
 
 
+def maintainer_path(text: str) -> str | None:
+    """The first path on a maintainer's machine ``text`` names, or None; a served record must name none."""
+    found = _MAINTAINER_PATH.search(text)
+    return found.group(0) if found else None
+
+
 def joins_record() -> dict:
     """The bundled ``table_joins.json`` document."""
     return {
@@ -406,7 +433,7 @@ def joins_record() -> dict:
         # mean nothing there, so only repository-relative receipts are bundled.
         "baseline": {
             "date": BASELINE_DATE,
-            "receipts": [receipt for receipt in BASELINE_RECEIPTS if not receipt.startswith(("~", "/"))],
+            "receipts": [receipt for receipt in BASELINE_RECEIPTS if not maintainer_path(receipt)],
         },
         "kinds": list(KINDS),
         "joins": [record(join) for join in JOINS],

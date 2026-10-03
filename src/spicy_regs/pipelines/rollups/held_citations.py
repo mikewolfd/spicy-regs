@@ -13,7 +13,7 @@ from spicy_regs.citation_sources import TEXT_SOURCES
 from spicy_regs.duckdb_settings import load_public_http
 from spicy_regs.pipelines.rollups.base import RollupPipeline
 from spicy_regs.sources import publication, r2
-from spicy_regs.transforms.held_citations import build_held_citations, parse_selections
+from spicy_regs.transforms.held_citations import build_held_citations, parse_selections, write_citation_reads
 
 
 class HeldCitationsRollup(RollupPipeline):
@@ -22,7 +22,9 @@ class HeldCitationsRollup(RollupPipeline):
     name = "held-citations"
     publication_family = "print-citations"
     inputs = ("document_citations.parquet",)
-    output = "document_citations.parquet"
+    #: The citation table and the reads its checkpoints record. A partial writer: the print-citations rollup must
+    #: have published ``document_citation_reads`` in the family first (its next scheduled run adds it).
+    outputs = ("document_citations.parquet", "document_citation_reads.parquet")
     retain_source_evidence = True
 
     def __init__(self, *, selection: Path, **kwargs):
@@ -73,9 +75,10 @@ class HeldCitationsRollup(RollupPipeline):
             for table, url in self.source_members.items():
                 escaped = url.replace("'", "''")
                 con.execute(f'CREATE VIEW "{table}" AS SELECT * FROM read_parquet(\'{escaped}\')')
-            return build_held_citations(output_dir, cursor=con, selections=self.selections,
-                                        input_pins=self.input_pins, download_prior=r2.download,
-                                        evidence=self.source_evidence)
+            citations = build_held_citations(output_dir, cursor=con, selections=self.selections,
+                                             input_pins=self.input_pins, download_prior=r2.download,
+                                             evidence=self.source_evidence)
+        return citations, write_citation_reads(output_dir, citations)
 
 
 app = App(help=__doc__)

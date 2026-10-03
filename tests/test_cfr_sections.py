@@ -14,14 +14,13 @@ import datetime as dt
 from pathlib import Path
 
 import pytest
+from spicy_docs.sources.cfr.models import AnnualCfrSelection
 
 from spicy_regs.pipelines.rollups import cfr_sections as rollup
 from spicy_regs.sources.cfr_sections import API_KEY_ENV_VARS, CfrSectionsError, CfrSectionsReader, _resolve_api_key
 from spicy_regs.transforms.build_cfr_sections import (
     COLUMNS,
-    _cfr_ref,
     _shape,
-    annual_volume,
     compound_parts,
     place_sections,
 )
@@ -216,14 +215,6 @@ def test_shape_cfr_ref_full_citation():
     assert row["cfr_ref"] == "21-1.5"
 
 
-def test_cfr_ref_degrades_gracefully():
-    # Full citation, part-only, then null when title or part is missing.
-    assert _cfr_ref("40", "60", "1") == "40-60.1"
-    assert _cfr_ref("40", "60", None) == "40-60"
-    assert _cfr_ref("40", None, None) is None
-    assert _cfr_ref(None, None, None) is None
-
-
 def test_shape_handles_missing_fields():
     row = _shape({"granuleId": "x"})
     assert row["granule_id"] == "x"
@@ -283,7 +274,7 @@ def _validated_title(package_id: str) -> int | None:
     """The title SpicyDocs' annual validator, which ``acquire_annual`` runs before the scan, reads; a refusal raises."""
     from spicy_docs.sources.cfr.annual import annual_cfr_xml_locator, validate_annual_cfr_xml
 
-    volume = annual_volume(package_id)
+    volume = AnnualCfrSelection.from_package_id(package_id)
     assert volume is not None
     xml = (ANCESTRY / f"{package_id}.xml").read_bytes()
     return validate_annual_cfr_xml(xml, identity=volume, final_url=annual_cfr_xml_locator(volume)).title
@@ -405,8 +396,9 @@ def test_an_appendix_only_volume_is_admitted_and_places_nothing():
         (None, None),
     ],
 )
-def test_annual_volume_reads_only_volume_package_ids(package_id, volume):
-    selection = annual_volume(package_id)
+def test_only_a_volume_package_id_names_an_annual_volume(package_id, volume):
+    """Which packages the build places: spicy-docs' inverse of the volume package id (X3), not a regex of ours."""
+    selection = AnnualCfrSelection.from_package_id(package_id)
     assert (None if selection is None else (selection.year, selection.title, selection.volume)) == volume
 
 

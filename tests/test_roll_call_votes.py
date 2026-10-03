@@ -26,6 +26,7 @@ import pyarrow.parquet as pq
 import pytest
 from spicy_docs.interpretation.vote_matching import index_vote_references, read_vote_key
 from spicy_docs.schemas import TABLE_CONTRACTS
+from spicy_docs.transport.captured import CapturedBodyResponse
 from spicy_docs.sources.congress.votes import (
     ClerkVoteIndex,
     ClerkVoteIndexEntry,
@@ -33,6 +34,7 @@ from spicy_docs.sources.congress.votes import (
     SenateVoteMenuEntry,
     VoteRefusedError,
     VoteSourceError,
+    VoteUnavailableError,
     parse_clerk_vote,
     parse_senate_vote,
     vote_day,
@@ -148,12 +150,15 @@ class StubVoteAcquirer:
         self.senate_rolls = senate_rolls
         self.house_rolls = house_rolls
         self.withheld_senate_rolls = withheld_senate_rolls
+        #: Each House listing asked for, as ``(congress, session, start_roll)``.
+        self.house_starts: list[tuple[int, int, int]] = []
 
-    def list_house_votes(self, congress, session):
+    def list_house_votes(self, congress, session, *, start_roll=1):
+        self.house_starts.append((congress, session, start_roll))
         # As with the menu, empty tuples isolate reference-driven selections;
         # the real reader refuses an empty or gapped Clerk index.
         entries = tuple(
-            ClerkVoteIndexEntry(n, "8-Sep", None, None, None, None)
+            ClerkVoteIndexEntry(n)
             for n in sorted(self.house_rolls, reverse=True)
             if session == 1
         )
@@ -412,38 +417,6 @@ def test_a_senate_position_takes_its_bioguide_id_from_the_members_table(tmp_path
     assert rows[("119-senate-1-9", "lis:S363")]["bioguide_id"] == "K000383", "a held row is filled too"
     assert {r["lis_id"] for r in rows.values()} == {"S363", "S777", None}, "no native column moved"
     assert not prior_scratch_path(tmp_path, "members").exists()
-
-
-@pytest.mark.parametrize(
-    "error", [VoteSourceError("menu lists no votes"), VoteRefusedError("https://www.senate.gov/menu")]
-)
-def test_senate_menu_failure_preserves_existing_outputs(tmp_path, scoped, error):
-    class FailedMenu(StubVoteAcquirer):
-        def list_senate_votes(self, congress, session):
-            raise error
-
-    retained = tmp_path / "roll_call_votes.parquet"
-    retained.write_bytes(b"prior output")
-    acquirer = FailedMenu(house_rolls=(7,))
-    with pytest.raises(type(error)):
-        build_roll_call_votes(tmp_path, acquirer=acquirer, download_prior=_no_prior)
-    assert acquirer.requested == [] and retained.read_bytes() == b"prior output"
-
-
-@pytest.mark.parametrize("error", [VoteSourceError("index skips roll 100"), VoteRefusedError("https://clerk.house.gov")])
-def test_clerk_index_failure_preserves_existing_outputs(tmp_path, scoped, error):
-    """A refused or gapped House index cannot establish the House population, so nothing is written."""
-
-    class FailedIndex(StubVoteAcquirer):
-        def list_house_votes(self, congress, session):
-            raise error
-
-    retained = tmp_path / "roll_call_votes.parquet"
-    retained.write_bytes(b"prior output")
-    acquirer = FailedIndex(senate_rolls=(1,))
-    with pytest.raises(type(error)):
-        build_roll_call_votes(tmp_path, acquirer=acquirer, download_prior=_no_prior)
-    assert acquirer.requested == [] and retained.read_bytes() == b"prior output"
 
 
 def test_the_clerk_index_is_the_house_population_before_the_115th(tmp_path, monkeypatch):
@@ -1039,6 +1012,7 @@ def test_a_prior_that_has_vote_day_fills_only_its_nulls_and_is_not_rewritten_whe
             "vote_day": day,
             "legis_num": "QUORUM" if yea else None,
             "clerk_body_element": "chamber" if yea else None,
+            "party_totals_json": "[]" if yea else None,
         }
 
     prior = tmp_path / "prior.parquet"
@@ -1205,12 +1179,12 @@ class ArchiveAcquirer(StubVoteAcquirer):
         #: Each file fetched, by ``(congress, session, roll)``: a backfill spans Congresses and sessions.
         self.fetched: list[tuple[int, int, int]] = []
 
-    def list_house_votes(self, congress, session):
+    def list_house_votes(self, congress, session, *, start_roll=1):
         year = 1789 + 2 * (congress - 1) + session - 1
         if year < 1990:
             raise VoteSourceError(f"clerk.house.gov/evs/{year}/index.asp answered 404")
         self.indexes.append((congress, session))
-        entries = tuple(ClerkVoteIndexEntry(n, "3-Jan", None, None, None, None) for n in sorted(self.house_rolls, reverse=True))
+        entries = tuple(ClerkVoteIndexEntry(n) for n in sorted(self.house_rolls, reverse=True))
         return SimpleNamespace(index=ClerkVoteIndex(congress, session, year, entries))
 
     def list_senate_votes(self, congress, session):
@@ -1333,6 +1307,28 @@ def test_a_house_row_published_before_clerk_body_element_is_read_once_more_then_
     assert resumed.requested == []
 
 
+def test_a_house_row_published_before_party_totals_is_read_once_more_then_held(tmp_path, scoped):
+    """spicy-docs 0.54.0 appends party_totals_json; a captured Clerk file always states it ([] at the least).
+
+    So a held House row with NULL there was captured before the column, and its file is read once more, as for
+    legis_num; the re-read row is held from then on.
+    """
+    legacy = {**_held_row(240), "party_totals_json": None}
+    first = tmp_path / "first"
+    first.mkdir()
+    acquirer = RealBodyAcquirer(house_rolls=(240,))
+    rows = _real_run(first, _published({"roll_call_votes": [legacy], "member_votes": []}), acquirer=acquirer, overlap=0)
+    assert acquirer.requested == [("house", 240)]
+    assert {total["party"] for total in json.loads(rows["119-house-1-240"]["party_totals_json"])} >= {
+        "Republican", "Democratic"}
+
+    second = tmp_path / "second"
+    second.mkdir()
+    resumed = RealBodyAcquirer(house_rolls=(240,))
+    assert _real_run(second, _carried(first), acquirer=resumed, overlap=0) == rows
+    assert resumed.requested == []
+
+
 def test_a_dispatch_names_its_chambers_and_cap_and_refuses_anything_else(monkeypatch):
     from spicy_regs.pipelines.rollups import roll_call_votes as rollup
     from spicy_regs.transforms.build_roll_call_votes import (
@@ -1375,3 +1371,207 @@ def test_the_dispatch_inputs_reach_the_rollup_through_the_shared_workflow():
     [step] = [step for step in shared["jobs"]["rollup"]["steps"] if step.get("name") == "Run rollup"]
     assert step["env"]["ROLL_CALL_CHAMBERS"] == "${{ inputs.roll_call_chambers }}"
     assert step["env"]["ROLL_CALL_MAX_VOTES"] == "${{ inputs.roll_call_max_votes }}"
+
+
+# --------------------------------------------------------------------------- #
+# Round 5 (W5-4): the Clerk's retired index refused every run for two days, and
+# with it the Senate's roll calls. Each chamber is listed on its own.
+# --------------------------------------------------------------------------- #
+def _not_found(url: str) -> VoteUnavailableError:
+    """The publisher's 404 as the acquirer raises it, with the capture riding on the error."""
+    return VoteUnavailableError(
+        CapturedBodyResponse(requested_url=url, resolved_url=url, status_code=404, content_type="text/html",
+                             observed_at=OBSERVED_AT, body=b"Not Found")
+    )
+
+
+class RefusingListing(StubVoteAcquirer):
+    """A stub whose listing of the chambers in ``refused`` raises the error given for it."""
+
+    def __init__(self, refused: dict[str, Exception], **kwargs):
+        super().__init__(**kwargs)
+        self.refused = refused
+
+    def list_house_votes(self, congress, session, *, start_roll=1):
+        if "house" in self.refused:
+            raise self.refused["house"]
+        return super().list_house_votes(congress, session, start_roll=start_roll)
+
+    def list_senate_votes(self, congress, session):
+        if "senate" in self.refused:
+            raise self.refused["senate"]
+        return super().list_senate_votes(congress, session)
+
+
+#: How each chamber's listing refused in the measured failure and its symmetric case.
+REFUSALS: dict[str, Exception] = {
+    "house": _not_found("https://clerk.house.gov/evs/2026/index.asp"),
+    "senate": VoteRefusedError("https://www.senate.gov/legislative/LIS/roll_call_lists/vote_menu_119_2.xml"),
+}
+
+
+def _held_run(tmp_path: Path) -> tuple[Path, dict[str, dict]]:
+    """A published run holding House roll 7 and Senate roll 1 of the 119th's first session."""
+    first = tmp_path / "held"
+    first.mkdir()
+    paths = build_roll_call_votes(
+        first, acquirer=StubVoteAcquirer(house_rolls=(7,), senate_rolls=(1,)), download_prior=_no_prior,
+        open_congresses=(119,),
+    )
+    return first, {row["vote_id"]: row for row in pq.read_table(paths[0]).to_pylist()}
+
+
+@pytest.mark.parametrize("refused", ["house", "senate"])
+def test_a_chamber_whose_listing_refuses_leaves_the_run_and_the_other_publishes(tmp_path, scoped, refused):
+    """The refused chamber's held rows stay as published, the other's new roll call lands, and the run still fails.
+
+    Measured: from 2026-10-02 the Clerk's ``evs/2026/index.asp`` answered 404,
+    each daily run aborted before any row was written, and Senate roll 2-256
+    (2026-09-30) never landed although its file was served.
+    """
+    from spicy_regs.transforms.build_roll_call_votes import ChamberListingRefused
+
+    held_run, held = _held_run(tmp_path)
+    other = "senate" if refused == "house" else "house"
+    acquirer = RefusingListing({refused: REFUSALS[refused]}, house_rolls=(7, 8), senate_rolls=(1, 2))
+    run = tmp_path / "run"
+    run.mkdir()
+    with pytest.raises(ChamberListingRefused) as raised:
+        build_roll_call_votes(run, acquirer=acquirer, download_prior=_carried(held_run), open_congresses=(119,))
+
+    assert {chamber for chamber, _roll in acquirer.requested} == {other}, "nothing of the refused chamber is read"
+    assert set(raised.value.refused) == {refused}
+    published = {row["vote_id"]: row for row in pq.read_table(raised.value.outputs[0]).to_pylist()}
+    assert {vote_id for vote_id in published if f"-{other}-" in vote_id} == {f"119-{other}-1-{n}" for n in (
+        (7, 8) if other == "house" else (1, 2))}, "the other chamber's new roll call lands"
+    kept = {vote_id: row for vote_id, row in held.items() if f"-{refused}-" in vote_id}
+    assert kept and {vote_id: published[vote_id] for vote_id in kept} == kept, "held rows are as published"
+    assert not any(f"-{refused}-" in vote_id for vote_id in set(published) - set(kept)), "no absence is published"
+    assert raised.value.outputs[1].exists()
+
+
+def test_both_chambers_refusing_publishes_nothing(tmp_path, scoped):
+    """With no chamber listed the run has nothing it can establish: the first refusal propagates, nothing is written."""
+    retained = tmp_path / "roll_call_votes.parquet"
+    retained.write_bytes(b"prior output")
+    acquirer = RefusingListing(REFUSALS, house_rolls=(7,), senate_rolls=(1,))
+    with pytest.raises(VoteSourceError):
+        build_roll_call_votes(tmp_path, acquirer=acquirer, download_prior=_no_prior)
+    assert acquirer.requested == [] and retained.read_bytes() == b"prior output"
+
+
+def test_a_chambers_refused_listing_is_journaled_with_its_capture(tmp_path, scoped):
+    """The run's source evidence says which chamber left the run, why, and keeps the publisher's 404."""
+    from spicy_regs.source_evidence import CaptureEvidence
+    from spicy_regs.transforms.build_roll_call_votes import ChamberListingRefused
+
+    evidence = CaptureEvidence(tmp_path / "audit", "roll-call-votes")
+    acquirer = RefusingListing({"house": REFUSALS["house"]}, senate_rolls=(1,))
+    with pytest.raises(ChamberListingRefused):
+        build_roll_call_votes(tmp_path, acquirer=acquirer, download_prior=_no_prior, evidence=evidence,
+                              open_congresses=(119,))
+    [left] = _events(evidence, "vote-chamber-refused")
+    assert (left["chamber"], left["error_type"]) == ("house", "VoteUnavailableError")
+    [refusal] = [event for event in _events(evidence, "refusal") if event["stage"] == "vote-listing"]
+    assert refusal["error_type"] == "VoteUnavailableError"
+    assert [event["stage"] for event in _events(evidence, "capture")] == ["vote-listing:refused"]
+
+
+def test_the_rollup_retains_the_other_chambers_generation_then_fails_the_run(tmp_path, scoped, monkeypatch):
+    """Publish, then exit non-zero: the generation is built and retained before the refusal is raised."""
+    from spicy_regs.pipelines.rollups import roll_call_votes as rollup
+    from spicy_regs.transforms.build_roll_call_votes import ChamberListingRefused
+
+    monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
+    real = rollup.build_roll_call_votes
+    acquirer = RefusingListing({"house": REFUSALS["house"]}, senate_rolls=(1, 2))
+    monkeypatch.setattr(rollup, "build_roll_call_votes", lambda output_dir, **kwargs: real(
+        output_dir, acquirer=acquirer, download_prior=_no_prior, open_congresses=(119,), **kwargs))
+    pipeline = rollup.RollCallVotesRollup(output_dir=tmp_path, skip_upload=True)
+    with pytest.raises(ChamberListingRefused):
+        pipeline.run()
+    [generation] = (tmp_path / "generations").iterdir()
+    assert (generation / "roll_call_votes.parquet").exists()
+    evidence = pipeline.source_evidence
+    assert evidence is not None
+    outcome = json.loads((evidence.directory / "run-outcome.json").read_text())
+    assert (outcome["outcome"], outcome["error_type"]) == ("failed", "ChamberListingRefused")
+
+
+def test_the_house_listing_starts_at_each_sessions_largest_held_roll(tmp_path, scoped):
+    """The roll-file lister probes forward from ``start_roll``: from roll 1 it re-reads a whole session each run.
+
+    About 682 requests for the 119th at the two-a-second pacing (spicy-docs
+    c167701's adoption note), against one re-read of the last held roll, the
+    new ones and the closing run of unserved rolls.
+    """
+    first = tmp_path / "held"
+    first.mkdir()
+    build_roll_call_votes(first, acquirer=StubVoteAcquirer(house_rolls=(3, 7)), download_prior=_no_prior,
+                          open_congresses=(119,))
+    acquirer = StubVoteAcquirer(house_rolls=(3, 7, 8))
+    build_roll_call_votes(tmp_path, acquirer=acquirer, download_prior=_carried(first), open_congresses=(119,))
+    assert acquirer.house_starts == [(119, 1, 7), (119, 2, 1)], "a session holding nothing starts at roll 1"
+
+
+# --------------------------------------------------------------------------- #
+# A House session that has begun with no roll call yet: the Clerk serves no roll 1.
+# --------------------------------------------------------------------------- #
+class UnservedSession(StubVoteAcquirer):
+    """The Clerk serves no roll ``start_roll`` of the sessions in ``unserved`` (its not-served envelope), or 404s it."""
+
+    def __init__(self, unserved: dict[tuple[int, int], Exception], **kwargs):
+        super().__init__(**kwargs)
+        self.unserved = unserved
+
+    def list_house_votes(self, congress, session, *, start_roll=1):
+        if (congress, session) in self.unserved:
+            self.house_starts.append((congress, session, start_roll))
+            raise self.unserved[(congress, session)]
+        return super().list_house_votes(congress, session, start_roll=start_roll)
+
+
+def _not_served(session: int, roll: int = 1):
+    from spicy_docs.sources.congress.votes import ClerkRollNotServedError, VoteLocator
+
+    return ClerkRollNotServedError(VoteLocator("house", 119, session, roll), "<xml>Error sanitizing file</xml>")
+
+
+def test_a_session_whose_first_roll_is_not_served_yet_is_empty_not_a_refusal(tmp_path, scoped):
+    """January of a new session: no House vote yet, so roll 1 answers the Clerk's not-served envelope.
+
+    With nothing held there, that is the session's own state, so it lists nothing and the run succeeds; the
+    other session and the Senate land, and the empty session is journaled.
+    """
+    from spicy_regs.source_evidence import CaptureEvidence
+
+    evidence = CaptureEvidence(tmp_path / "audit", "roll-call-votes")
+    acquirer = UnservedSession({(119, 2): _not_served(2)}, house_rolls=(7,), senate_rolls=(1,))
+    paths = build_roll_call_votes(tmp_path, acquirer=acquirer, download_prior=_no_prior, evidence=evidence,
+                                  open_congresses=(119,))
+    assert {row["vote_id"] for row in pq.read_table(paths[0]).to_pylist()} == {"119-house-1-7", "119-senate-1-1"}
+    [event] = _events(evidence, "vote-session-empty")
+    assert (event["chamber"], event["congress"], event["session"]) == ("house", 119, 2)
+
+
+def test_a_held_roll_the_clerk_no_longer_serves_still_refuses_the_house(tmp_path, scoped):
+    """Where a roll is held, its envelope is not an empty session: the Clerk stopped serving what it served."""
+    from spicy_regs.transforms.build_roll_call_votes import ChamberListingRefused
+
+    first = tmp_path / "held"
+    first.mkdir()
+    build_roll_call_votes(first, acquirer=StubVoteAcquirer(house_rolls=(7,)), download_prior=_no_prior,
+                          open_congresses=(119,))
+    acquirer = UnservedSession({(119, 1): _not_served(1, roll=7)}, senate_rolls=(1,))
+    with pytest.raises(ChamberListingRefused):
+        build_roll_call_votes(tmp_path, acquirer=acquirer, download_prior=_carried(first), open_congresses=(119,))
+    assert (119, 1, 7) in acquirer.house_starts
+
+
+def test_a_404_at_roll_one_still_refuses_the_house(tmp_path, scoped):
+    from spicy_regs.transforms.build_roll_call_votes import ChamberListingRefused
+
+    acquirer = UnservedSession({(119, 2): _not_found("https://clerk.house.gov/evs/2026/roll001.xml")},
+                               house_rolls=(7,), senate_rolls=(1,))
+    with pytest.raises(ChamberListingRefused):
+        build_roll_call_votes(tmp_path, acquirer=acquirer, download_prior=_no_prior, open_congresses=(119,))

@@ -55,7 +55,6 @@ refusal aborts the run.
 
 from __future__ import annotations
 
-import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
@@ -66,13 +65,14 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from loguru import logger
 
+from spicy_regs.transforms.parquet_rows import str_or_none
 from spicy_regs.sources import r2
 from spicy_regs.sources.cfr_sections import INDEX_PACKAGE_RE, CfrSectionsError, CfrSectionsReader
 from spicy_regs.transforms.table_merge import merge_local_prior
 
 if TYPE_CHECKING:
     from spicy_docs.sources.cfr.acquisition import CfrAcquirer
-    from spicy_docs.sources.cfr.models import AnnualCfrSelection
+    from spicy_docs.sources.cfr.annual import AnnualCfrGranuleId
 
 OUTPUT = "cfr_sections.parquet"
 
@@ -108,52 +108,20 @@ COLUMNS = (
 _SCHEMA = pa.schema([(c, pa.string()) for c in COLUMNS])
 
 
-def _s(value: object) -> str | None:
-    """Coerce a scalar to str, preserving NULL. (title/part come as ints.)"""
-    if value is None:
-        return None
-    return str(value)
-
-
-def _cfr_ref(title: object, part: object, section: object) -> str | None:
-    """Compose a compact CFR citation like ``40-60.1`` from title/part/section."""
-    if title is None or part is None:
-        return None
-    if section is None:
-        return f"{title}-{part}"
-    return f"{title}-{part}.{section}"
-
-
-# ID-grammar parsers. GovInfo CFR IDs look like:
-#   package: CFR-2024-title48-vol5
-#   granule: CFR-2024-title48-vol5-chap7-appA / …-part700 / …-sec60-1
-# A section token alone does not establish its enclosing part.
-_EDITION_RE = re.compile(r"CFR-(\d{4})")
-_TITLE_RE = re.compile(r"title(\d+)")
-# Letter suffixes are part of the publisher's identifier: Part 1203a and
-# Part 1203b must not collapse into Part 1203, including their TOC/child rows.
-_PART_RE = re.compile(r"part(\d+[A-Za-z]*)")
-_SECTION_RE = re.compile(r"sec([\w.-]+)")
-# A section's appendix or TOC (``746-10-app1``, ``1002-31-toc-id1699``) is not a
-# section the volume scan holds; it keeps the part its token's leading number
-# spells and the rest as its section, as every generation before cac7615 did.
-_ATTACHED_RE = re.compile(r"^(\d+[A-Za-z]*)-(.+-(?:app|toc).*)$")
-_VOLUME_RE = re.compile(r"CFR-(\d{4})-title(\d+)-vol(\d+)")
-# The host section of an appendix or TOC token: ``746-10`` for ``746-10-app1``.
-_HOST_RE = re.compile(r"^(.+?)-(?:app|toc)")
-# A section granule's token, less GovInfo's duplicate suffix: ``sec849-504-id915``
-# is the same printed section as ``sec849-504``.
-_SECTION_TOKEN_RE = re.compile(r"-sec(.+?)(?:-id\d+)?$")
-
 
 #: Title 41 numbers parts by chapter and part (60-1, 60-2), and GovInfo's part granule ids keep only the chapter
 #: (``part60``, ``part60-id334``): the part survives as the leading ``N-`` of the granule's heading ("2-AFFIRMATIVE
 #: ACTION PROGRAMS" is Part 60-2). The 2025 edition holds 190 such granules, the same 190 parts the volume scan places
 #: Title 41's sections in. No other title numbers parts so; elsewhere that heading shape is prose (7 CFR 8 "4-H CLUB
-#: NAME AND EMBLEM", 31 CFR 82 "5-CENT AND ONE-CENT COIN REGULATIONS", 49 CFR 1240 "1259-REPORTS").
-COMPOUND_PART_TITLE = "41"
-_PART_GRANULE_RE = re.compile(r"-part(\d+[A-Za-z]*)(?:-id\d+)?$")
-_COMPOUND_HEADING_RE = re.compile(r"^(\d+[A-Za-z]?)-")
+#: NAME AND EMBLEM", 31 CFR 82 "5-CENT AND ONE-CENT COIN REGULATIONS", 49 CFR 1240 "1259-REPORTS"). The title, the
+#: chapter's place in a granule id and the heading rule are spicy-docs' (``sources.cfr``, round 5 X3).
+
+
+def _ids(granule_id: str, package_id: str | None = None) -> AnnualCfrGranuleId:
+    """A GovInfo CFR granule id's tokens, read by spicy-docs' id grammar (edition, title, part, section, ...)."""
+    from spicy_docs.sources.cfr import split_annual_cfr_granule_id
+
+    return split_annual_cfr_granule_id(granule_id, package_id=package_id)
 
 
 def compound_parts(rows: Iterable[dict]) -> list[dict]:
@@ -166,13 +134,15 @@ def compound_parts(rows: Iterable[dict]) -> list[dict]:
     chapter is read from the id, never from ``part``, so a row already compound comes back unchanged. Section
     granules are the volume scan's (:func:`place_sections`). O(rows x id segments).
     """
+    from spicy_docs.interpretation.citation_grammar import cfr_key
+    from spicy_docs.sources.cfr import COMPOUND_PART_TITLE, compound_part
+
     rows = list(rows)
     stated: dict[str, tuple[str, str | None]] = {}
     for row in rows:
-        chapter = _PART_GRANULE_RE.search(row["granule_id"]) if row["title"] == COMPOUND_PART_TITLE else None
+        chapter = _ids(row["granule_id"]).part_granule if row["title"] == COMPOUND_PART_TITLE else None
         if chapter:
-            number = _COMPOUND_HEADING_RE.match(row["heading"] or "")
-            stated[row["granule_id"]] = (chapter.group(1), number and f"{chapter.group(1)}-{number.group(1)}")
+            stated[row["granule_id"]] = (chapter, compound_part(chapter, row["heading"]))
     compound = {chapter for chapter, part in stated.values() if part}
     parts = {granule_id: part for granule_id, (chapter, part) in stated.items() if chapter in compound}
     if not parts:
@@ -180,23 +150,15 @@ def compound_parts(rows: Iterable[dict]) -> list[dict]:
     compounded = []
     for row in rows:
         prefix = row["granule_id"]
-        if row["title"] == COMPOUND_PART_TITLE and not _SECTION_TOKEN_RE.search(prefix):
+        if row["title"] == COMPOUND_PART_TITLE and not _ids(prefix).section_token:
             while prefix and prefix not in parts:
                 prefix = prefix.rpartition("-")[0]
         if not prefix or prefix not in parts:
             compounded.append(row)
             continue
         part = parts[prefix]
-        compounded.append({**row, "part": part, "cfr_ref": _cfr_ref(row["title"], part, row["section"])})
+        compounded.append({**row, "part": part, "cfr_ref": cfr_key(row["title"], part, row["section"])})
     return compounded
-
-
-def _first(pattern: re.Pattern[str], text: str | None) -> str | None:
-    """Return the first capture group of ``pattern`` in ``text``, else None."""
-    if not text:
-        return None
-    match = pattern.search(text)
-    return match.group(1) if match else None
 
 
 def _shape(granule: dict) -> dict:
@@ -208,46 +170,31 @@ def _shape(granule: dict) -> dict:
     granule_id = granule.get("granuleId")
     if not isinstance(granule_id, str) or not granule_id.strip():
         raise CfrSectionsError("CFR row requires a nonempty granuleId")
-    package_id = _s(granule.get("_package_id") or granule.get("packageId"))
+    from spicy_docs.interpretation.citation_grammar import cfr_key
 
-    # CFR title number + edition year: prefer the package id (always well-formed),
-    # fall back to the granule id, then dateIssued's leading year for the edition.
-    id_for_meta = package_id or granule_id
-    edition_year = _first(_EDITION_RE, id_for_meta)
+    package_id = str_or_none(granule.get("_package_id") or granule.get("packageId"))
+    # Title and edition from the package id where one is stated (always well formed), else the granule id; part and
+    # section from the granule id (both nullable -- see the module docstring). The edition falls back to dateIssued.
+    ids = _ids(granule_id, package_id)
+    edition_year = ids.edition_year
     if edition_year is None:
-        date_issued = _s(granule.get("dateIssued"))
+        date_issued = str_or_none(granule.get("dateIssued"))
         edition_year = date_issued[:4] if date_issued else None
-    title_num = _first(_TITLE_RE, id_for_meta)
-
-    # Part / section tokens from the granule id (both nullable — see module docstring).
-    part = _first(_PART_RE, granule_id)
-    section = _first(_SECTION_RE, granule_id)
-    attached = _ATTACHED_RE.match(section) if part is None and section is not None else None
-    if attached:
-        part, section = attached.group(1), attached.group(2)
 
     return {
         "granule_id": granule_id,
         "package_id": package_id,
-        "cfr_ref": _cfr_ref(title_num, part, section),
-        "title": title_num,
-        "part": part,
-        "section": section,
+        "cfr_ref": cfr_key(ids.title, ids.part, ids.section),
+        "title": ids.title,
+        "part": ids.part,
+        "section": ids.section,
         # The granule list-level ``title`` field is the heading text.
-        "heading": _s(granule.get("title")),
-        "structure_level": _s(granule.get("granuleClass")),
+        "heading": str_or_none(granule.get("title")),
+        "structure_level": str_or_none(granule.get("granuleClass")),
         "edition_year": edition_year,
-        "last_modified": _s(granule.get("lastModified") or granule.get("_package_last_modified")),
+        "last_modified": str_or_none(granule.get("lastModified") or granule.get("_package_last_modified")),
         "url": f"https://www.govinfo.gov/app/details/{package_id}/{granule_id}" if package_id and granule_id else None,
     }
-
-
-def annual_volume(package_id: str | None) -> AnnualCfrSelection | None:
-    """The annual volume a package id names; ``None`` for other CFR packages (``GPO-CFR-INDEX-2025``)."""
-    from spicy_docs.sources.cfr.models import AnnualCfrSelection
-
-    match = _VOLUME_RE.fullmatch(package_id or "")
-    return AnnualCfrSelection(int(match[1]), int(match[2]), int(match[3])) if match else None
 
 
 def place_sections(rows: Iterable[dict], xml: bytes) -> list[dict]:
@@ -265,11 +212,10 @@ def place_sections(rows: Iterable[dict], xml: bytes) -> list[dict]:
 
     placed = []
     for row in rows:
-        token = _first(_SECTION_TOKEN_RE, row["granule_id"])
-        section = sections.get(token) if token else None
+        ids = _ids(row["granule_id"])
+        section = sections.get(ids.section_token) if ids.section_token else None
         if section is None:
-            host = _HOST_RE.match(token) if token else None
-            held = sections.get(host.group(1)) if host else None
+            held = sections.get(ids.host_section) if ids.host_section else None
             placed.append(row if held is None else {**row, "part": held.part})
             continue
         number = split_annual_cfr_section(section.number, section.part, section.subpart)
@@ -292,10 +238,12 @@ def _placed_package(acquirer: CfrAcquirer, package_id: str | None, rows: list[di
     package in place (the merge keeps them); a 401/403
     (``CredentialRefusedError``) is not a volume failure and aborts.
     """
-    volume = annual_volume(package_id)
-    if volume is None or not any(_SECTION_TOKEN_RE.search(row["granule_id"]) for row in rows):
+    from spicy_docs.sources.cfr.models import AnnualCfrSelection, CfrSourceError
+
+    # A volume package names an annual volume; another CFR package (GPO-CFR-INDEX-2025) does not.
+    volume = AnnualCfrSelection.from_package_id(package_id)
+    if volume is None or not any(_ids(row["granule_id"]).section_token for row in rows):
         return rows
-    from spicy_docs.sources.cfr.models import CfrSourceError
 
     try:
         return place_sections(rows, acquirer.acquire_annual(volume, max_bytes=MAX_VOLUME_BYTES).xml)
@@ -329,6 +277,8 @@ def _read_prior(prior_file: Path) -> _Prior:
         packages = table["package_id"].to_pylist()
         rewrite = True
         logger.info("CFR: dropped {} prior index-package row(s); they are not CFR sections", keep.count(False))
+    from spicy_docs.sources.cfr import COMPOUND_PART_TITLE
+
     compound = [title == COMPOUND_PART_TITLE for title in table["title"].to_pylist()]
     held = table.filter(pa.array(compound)).to_pylist()
     if (fixed := compound_parts(held)) != held:
