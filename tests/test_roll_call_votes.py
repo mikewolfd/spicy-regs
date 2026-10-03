@@ -153,7 +153,7 @@ class StubVoteAcquirer:
         # As with the menu, empty tuples isolate reference-driven selections;
         # the real reader refuses an empty or gapped Clerk index.
         entries = tuple(
-            ClerkVoteIndexEntry(n, "8-Sep", None, None, None, None)
+            ClerkVoteIndexEntry(n)
             for n in sorted(self.house_rolls, reverse=True)
             if session == 1
         )
@@ -1210,7 +1210,7 @@ class ArchiveAcquirer(StubVoteAcquirer):
         if year < 1990:
             raise VoteSourceError(f"clerk.house.gov/evs/{year}/index.asp answered 404")
         self.indexes.append((congress, session))
-        entries = tuple(ClerkVoteIndexEntry(n, "3-Jan", None, None, None, None) for n in sorted(self.house_rolls, reverse=True))
+        entries = tuple(ClerkVoteIndexEntry(n) for n in sorted(self.house_rolls, reverse=True))
         return SimpleNamespace(index=ClerkVoteIndex(congress, session, year, entries))
 
     def list_senate_votes(self, congress, session):

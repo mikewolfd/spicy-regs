@@ -5,6 +5,16 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
+- `spicy_docs-0.53.0+votes.8d7f3fe3b489`: the `+laws` build plus one commit, `8d7f3fe`
+  (cherry-picked from bills-lane `c167701`), on base `f8431033f62633b1e7ffbb00a063748f582f6ab4`.
+  SHA-256 `7e8d7f99e169628cf7dc64f50f9b766b3d8968697b2e71463ca55b7f8a84f0e7`, 1,803,825 bytes;
+  two committed-archive builds produced identical bytes. It differs from the `+laws` wheel only
+  in `spicy_docs/sources/congress/votes.py` (and `METADATA`/`RECORD`): House roll calls are
+  listed from the Clerk's roll files instead of the retired `evs/{year}/index.asp`, which
+  answers 404 since 2026-10-02. A development stand-in for the bills-lane release that
+  carries the same change; vendored branch build, not a registry release. Build receipt:
+  `mcp-chaos-2026-10-02/round5/wheel/` (`README.md`, `wheel.json`, `gate.log`).
+
 - `spicy_docs-0.53.0+laws.f8431033f626`: native enacted-law sections and source URLs from
   source commit `f8431033f62633b1e7ffbb00a063748f582f6ab4`.
   SHA-256 `b011d6a57622cc8756b54560c484fd5c7fa3b0a4a893298d75239a7b64766686`. Two committed-archive

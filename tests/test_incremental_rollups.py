@@ -226,7 +226,7 @@ class CountingVoteAcquirer:
         from spicy_docs.sources.congress.votes import ClerkVoteIndex, ClerkVoteIndexEntry
 
         rolls = range(40, 0, -1) if session == 1 else ()
-        entries = tuple(ClerkVoteIndexEntry(n, "8-Sep", None, None, None, None) for n in rolls)
+        entries = tuple(ClerkVoteIndexEntry(n) for n in rolls)
         return SimpleNamespace(index=ClerkVoteIndex(congress, session, 2024 + session, entries))
 
     def list_senate_votes(self, congress, session):

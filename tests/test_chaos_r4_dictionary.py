@@ -15,7 +15,7 @@ import pytest
 from spicy_regs import data_dictionary as dd
 from spicy_regs import table_joins
 
-VENDORED = "0.53.0+laws.f8431033f626"
+VENDORED = "0.53.0+votes.8d7f3fe3b489"
 NOTE = f"The vendored column sentence is wrong. (interim until spicy-docs > {VENDORED})"
 
 

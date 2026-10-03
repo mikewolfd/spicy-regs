@@ -501,7 +501,7 @@ tables:
       re-stages the 119th, while the 113th-118th and the 108th-112th are
       re-staged only by a bill-family dispatch scoped to them, so the note
       then narrows to the Congresses not yet dispatched.
-      (interim until spicy-docs > 0.53.0+laws.f8431033f626)
+      (interim until spicy-docs > 0.53.0+votes.8d7f3fe3b489)
     columns_from: spicy_docs
 
   bill_subjects:
@@ -2534,7 +2534,7 @@ tables:
       Clerk's `totals-by-party` are not carried: count `member_votes` by
       `party` for a party split, which matched the Clerk's party totals on
       the House roll calls checked 2026-10-03.
-      (interim until spicy-docs > 0.53.0+laws.f8431033f626)
+      (interim until spicy-docs > 0.53.0+votes.8d7f3fe3b489)
     columns_from: spicy_docs
 
   member_votes:
@@ -2954,7 +2954,7 @@ tables:
       is when the read this row's outcome states got its response, the 404 on
       an `unavailable` row included, and NULL when no read was attempted or the
       attempt got no response.
-      (interim until spicy-docs > 0.53.0+laws.f8431033f626)
+      (interim until spicy-docs > 0.53.0+votes.8d7f3fe3b489)
     summary: >-
       One row per enacted law the Congress.gov law list route states, with the
       Statutes at Large citation from the law's own PLAW USLM file where
@@ -2995,7 +2995,7 @@ tables:
       is excluded. Remove them before quoting; the same holds for
       `laws.law_body_remainder`. Reader `law-sections-uslm-v2` excludes them as
       print furniture.
-      (interim until spicy-docs > 0.53.0+laws.f8431033f626)
+      (interim until spicy-docs > 0.53.0+votes.8d7f3fe3b489)
     columns_from: spicy_docs
 
   law_code_sections:
