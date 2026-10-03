@@ -863,13 +863,16 @@ def _pinned_rows(index: dict, rulemaking: dict, name: str) -> int | None:
     return pinned["rows"] if pinned is not None else None
 
 
-def _published_at(index: dict, name: str) -> str | None:
-    """When the publisher moved the pointer to ``name``'s generation (the index's ``publishedAt``); None for a
-    table no family pins, or a generation published before the index recorded the instant. Not a data-as-of."""
-    from spicy_regs.sources.publication import table_owner
+def _published_at(index: dict, name: str) -> dict[str, str | None]:
+    """When the publisher moved the pointer to ``name``'s generation (the index's ``publishedAt``) and what that value
+    observed: the move (``pointer_move``) or, for a value the 2026-10-03 backfill wrote, the generation's last object
+    write, at or before the move (``last_object_write``). Both null for a table no family pins or a generation
+    published before the index recorded the instant. Not a data-as-of."""
+    from spicy_regs.sources.publication import published_at_basis, table_owner
 
     owner = table_owner(index, f"{name}.parquet")
-    return owner[1].get("publishedAt") if owner is not None else None
+    instant = owner[1].get("publishedAt") if owner is not None else None
+    return {"published_at": instant, "published_at_basis": published_at_basis(instant)}
 
 
 #: Each family generation's ``spec.parents`` by (base URL, artifact digest): roots are immutable, so one read
@@ -903,14 +906,31 @@ def _family_parents(base_url: str, entry: Mapping) -> dict[str, dict]:
     return parents
 
 
-def _input_lineage(index: dict, name: str) -> dict[str, Any]:
-    """The parent generations a managed table's family was built from beside the live ones; {} when it records none.
+def _all_current(claims: Sequence[bool | None]) -> bool | None:
+    """Three-valued: false if any input lags, else null if any is unknown, else true."""
+    return False if False in claims else None if None in claims else True
 
-    ``built_from`` and ``live`` are family generations. ``input_table_current``
-    compares the parent table's own bytes where both pins state them, so a parent
-    family that moved for another table does not mark this one stale; a storage-version
-    parent (an ETag, or a local copy's digest) makes no lag claim. An unreadable
-    root is stated, never guessed.
+
+def _export_pin(exports: Mapping[str, dict], table: str, parent: Mapping) -> tuple[str | None, bool | None]:
+    """The live pin of the kind ``parent`` recorded (the file's sha256, or its ETag) from the export receipt this
+    connection matched at build, and whether the two agree; (None, None) when no receipt pins a matching file."""
+    export = exports.get(table)
+    if export is None or export["rows_basis"] != "comments_export_receipt":
+        return None, None
+    kind = "sha256" if "sha256" in parent else "etag"
+    live = export["export_receipt"][kind]
+    return live, parent[kind] == live
+
+
+def _input_lineage(index: dict, name: str, exports: Mapping[str, dict]) -> dict[str, Any]:
+    """The parents a managed table's family recorded beside the live ones; {} when it records none.
+
+    A parent in the table's own family is its previous output, read to carry rows forward: it is stated as
+    ``prior_generation``, never as an input that can lag (roots already published are immutable, so this holds
+    whatever the writers record next). ``built_from`` and ``live`` are pins of one kind: family generations for a
+    managed parent, whose ``input_table_current`` compares the parent table's own bytes, so a parent family that
+    moved for another table does not mark this one stale; the file's sha256 or ETag for an export parent, compared
+    with the export receipt this connection matched (``exports``). An unreadable root is stated, never guessed.
     """
     from spicy_regs.sources.publication import PublicationError, table_owner
 
@@ -922,12 +942,16 @@ def _input_lineage(index: dict, name: str) -> dict[str, Any]:
     except (PublicationError, httpx.HTTPError, OSError) as error:
         logger.warning("%s: generation root unavailable (%s)", owner[0], type(error).__name__)
         return {"inputs": None, "inputs_status": "root_unavailable"}
-    inputs = []
+    inputs, prior = [], sorted({parent["artifactDigest"] for parent in parents.values()
+                                if parent.get("family") == owner[0]})
     for key, parent in sorted(parents.items()):
+        table = key.removesuffix(".parquet")
+        if parent.get("family") == owner[0]:
+            continue
         if "family" not in parent:
-            inputs.append({"table": key.removesuffix(".parquet"), "family": None,
-                           "built_from": parent.get("etag") or parent.get("sha256"), "live": None,
-                           "input_table_current": None})
+            live_pin, current = _export_pin(exports, table, parent)
+            inputs.append({"table": table, "family": None, "built_from": parent.get("etag") or parent.get("sha256"),
+                           "live": live_pin, "input_table_current": current})
             continue
         live = table_owner(index, key)
         if live is None:  # no family publishes the parent now: nothing to compare
@@ -937,12 +961,37 @@ def _input_lineage(index: dict, name: str) -> dict[str, Any]:
         else:
             live_digest = live[1]["artifactDigest"]
             current = parent["artifactDigest"] == live_digest
-        inputs.append({"table": key.removesuffix(".parquet"), "family": parent["family"],
+        inputs.append({"table": table, "family": parent["family"],
                        "built_from": parent["artifactDigest"], "live": live_digest, "input_table_current": current})
-    if not inputs:
-        return {}
-    claims = [item["input_table_current"] for item in inputs if item["input_table_current"] is not None]
-    return {"inputs": inputs, "inputs_current": all(claims) if claims else None}
+    lineage: dict[str, Any] = {"prior_generation": prior[0] if len(prior) == 1 else prior} if prior else {}
+    if inputs:
+        lineage |= {"inputs": inputs, "inputs_current": _all_current([item["input_table_current"] for item in inputs])}
+    return lineage
+
+
+def _snapshot_lineage(index: dict, manifest: Mapping) -> dict[str, Any]:
+    """The rulemaking snapshot's sources beside the live tables, and its previous snapshot as ``prior_generation``.
+
+    The manifest records sources per snapshot, and its stages record what they depend on but not what they read,
+    so which sources one table read is unknown: they are ``snapshot_inputs``, and a table's ``inputs_current`` is
+    true only when every one is live, else null, never false for a source the table may not have read.
+    """
+    from spicy_regs.sources.publication import table_owner
+
+    recorded = manifest.get("inputs") or {}
+    sources = []
+    for key, source in sorted((recorded.get("sources") or {}).items()):
+        live = table_owner(index, key)
+        live_sha = live[1]["tables"][key].get("sha256") if live is not None else None
+        built_from = f"sha256:{source['sha256']}"
+        sources.append({"table": key.removesuffix(".parquet"), "built_from": built_from, "live": live_sha,
+                        "input_table_current": None if live_sha is None else live_sha == built_from})
+    lineage: dict[str, Any] = (
+        {"prior_generation": recorded["previous_snapshot_id"]} if recorded.get("previous_snapshot_id") else {})
+    if sources:
+        lineage |= {"snapshot_inputs": sources,
+                    "inputs_current": True if all(item["input_table_current"] for item in sources) else None}
+    return lineage
 
 
 def _export_rows(cursor: duckdb.DuckDBPyConnection) -> dict[str, dict]:
@@ -971,13 +1020,12 @@ def _reply_pins(cursor: duckdb.DuckDBPyConnection, publication: dict[str, dict],
     """Each named table's pin with the facts a reply states instead of prose that decays.
 
     ``rows`` is the pinned index's or snapshot manifest's count, a managed
-    generation adds ``published_at`` (when the publisher moved the pointer to
-    it; null until the publisher records it, and never when the data was
-    read) and, when its root records parents, ``inputs`` and
-    ``inputs_current`` (:func:`_input_lineage`), a snapshot table adds its manifest's ``run_id`` and
-    ``asserted_at``, a comments export
-    adds its receipt's count with ``rows_basis`` (:func:`_export_rows`), and
-    ``coverage`` is the dictionary's coverage kind. They join the pin only here:
+    generation adds ``published_at`` and its basis (when the publisher moved
+    the pointer to it; never when the data was read) and what its root
+    records (:func:`_input_lineage`), a snapshot table adds its manifest's
+    ``run_id``, ``asserted_at`` and sources (:func:`_snapshot_lineage`), a
+    comments export adds its receipt's count with ``rows_basis``
+    (:func:`_export_rows`), and ``coverage`` is the dictionary's coverage kind. They join the pin only here:
     derived views embed :func:`_publication_status` pins in provenance columns
     and candidate identities, which these facts must not move.
     """
@@ -989,14 +1037,15 @@ def _reply_pins(cursor: duckdb.DuckDBPyConnection, publication: dict[str, dict],
     for name in names:
         pin = dict(publication[name])
         if pin["status"] in ("managed_generation", "managed_download"):
-            pin |= {"rows": _pinned_rows(index, rulemaking, name), "published_at": _published_at(index, name)}
+            pin |= {"rows": _pinned_rows(index, rulemaking, name), **_published_at(index, name)}
             # A local download holds no generation roots; the remote root is read on first use, never at build.
-            pin |= (_input_lineage(index, name) if pin["status"] == "managed_generation"
+            pin |= (_input_lineage(index, name, exports) if pin["status"] == "managed_generation"
                     else {"inputs": None, "inputs_status": "root_unavailable"})
         elif pin["status"] == "rulemaking_snapshot":
             manifest = rulemaking["manifest"]
             pin |= {"rows": rulemaking["tables"][f"{name}.parquet"]["rows"],
-                    "run_id": manifest.get("run_id"), "asserted_at": manifest.get("asserted_at")}
+                    "run_id": manifest.get("run_id"), "asserted_at": manifest.get("asserted_at"),
+                    **_snapshot_lineage(index, manifest)}
         elif name in exports:
             pin |= exports[name]
         declared = _table_metadata().get(name) or relationships.get(name, {}).get("metadata", {})
@@ -1629,32 +1678,34 @@ def _tools() -> list[Tool]:
     def describe_table(table: str, detail: bool = False) -> dict[str, Any]:
         """Return a table's columns with their meanings, row identity, coverage caveats and joins.
 
-        Coverage metadata describes supported output, not this connection's
-        population or freshness. columns are the loaded view's, each with its
-        dictionary meaning (an unavailable table returns its declared columns);
-        schema_differences names any column or type the view does not share
-        with the dictionary. publication is the live data version with its
-        pinned row count, published_at (when the publisher moved the pointer to
-        this generation, not when data was read) and coverage kind; prefer its
-        rows to a count in prose. publication.inputs names each parent
-        generation a derived table was built from beside the live one;
-        input_table_current compares the parent table's bytes (its family can
-        move for another table); inputs_current is false when any lags.
-        qualification gives the live pin and the output ledger's audited pin,
-        date and disposition as separate fields, only for the ledger's
-        publisher; not_in_ledger means the table is absent from the
-        bundled output ledger, not that no other evidence exists. joins lists
-        the declared joins it makes (outgoing) and receives (incoming).
-        detail=false (default) omits each join's measurement record and the
-        ledger's statements, named in detail.omitted; detail=true returns them.
-        A derived view's column carries its source column's meaning when it
-        projects it unchanged, else its declared meaning or null.
-        For a FEC view, release_compatibility appears once: in publication when
-        available, or relationship when unavailable; detail=false keeps its pins
-        and reasons, each dependency's family and generation, and the receipts'
-        count. compatible means the captured data, interpretation and consumer
-        match the selected release, not current/net money or completeness. A
-        financial row's eligible status is only for its named purpose.
+        Coverage metadata describes supported output, not population or
+        freshness. columns are the loaded view's with dictionary meanings
+        (declared ones if unavailable); schema_differences names what the view
+        does not share with the dictionary. publication is the live data
+        version: pinned rows (prefer them to prose counts), coverage kind and
+        published_at, when the publisher moved the pointer, not when data was
+        read (basis last_object_write: the move was at or after it). inputs:
+        the parents its producer recorded (none recorded is not none; a read
+        that bypassed the download helper is not recorded), built_from beside
+        live; input_table_current compares the parent table's bytes (its
+        family can move for another table); inputs_current is false if any
+        lags, else null if any is unknown. prior_generation: the table's own
+        earlier output, not an input. snapshot_inputs: a rulemaking snapshot's
+        sources.
+        qualification: the live pin beside the output ledger's audited pin,
+        date and disposition, for the ledger's publisher only; not_in_ledger:
+        absent from the bundled output ledger, not unevidenced. joins: the
+        declared joins it makes (outgoing) and receives (incoming).
+        detail=true adds each join's measurement record and the ledger's
+        statements, which detail=false (default) names in detail.omitted.
+        A view column projecting a source column unchanged carries its
+        meaning, else its declared one or null. A FEC view's
+        release_compatibility appears once, in publication (relationship when
+        unavailable); detail=false keeps its pins, reasons, dependency
+        generations and receipt count. compatible means the captured data,
+        interpretation and consumer match the selected release, not
+        current/net money or completeness. A financial row's eligible status
+        is only for its named purpose.
         """
         cursor = _get_connection().cursor()
         with _statement_timeout(cursor):
@@ -1753,7 +1804,9 @@ def _tools() -> list[Tool]:
         shared names in joins. sql echoes the statement this reply answers.
         publication gives each named table its live data version, pinned row
         count, published_at, coverage kind (a window or sample is not the full
-        history) and, for a table built from others, inputs. Qualified-view
+        history) and inputs: the parents its producer recorded
+        (none recorded is not none; a read that bypassed the download helper
+        is not recorded), as describe_table explains. Qualified-view
         pins keep the registered meaning and purpose limits even for SELECT
         value only; release compatible is not financial eligibility or
         current/net-money qualification. Call describe_table for full release

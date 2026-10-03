@@ -1107,6 +1107,22 @@ def _merge_family(index: dict, family: str, entry: dict) -> tuple[dict, bytes]:
     return updated, raw
 
 
+#: When :func:`backfill_published_at` was applied to the live index (2026-10-03, round 5, its only run). Every
+#: ``publishedAt`` at or before it was written by that backfill: the last object write under the generation's
+#: prefix, with the pointer moved at or after it. Every later one was stamped at the pointer write. A writer-stamped
+#: value at or before this instant would be the move itself, which "at or after" still describes. Another
+#: backfill moves this instant.
+PUBLISHED_AT_BACKFILLED_THROUGH = "2026-10-03T16:13:56Z"
+
+
+def published_at_basis(instant: str | None) -> str | None:
+    """What a ``publishedAt`` value observed: ``pointer_move``, or ``last_object_write`` for one the backfill wrote."""
+    if instant is None:
+        return None
+    moved = datetime.fromisoformat(instant) > datetime.fromisoformat(PUBLISHED_AT_BACKFILLED_THROUGH)
+    return "pointer_move" if moved else "last_object_write"
+
+
 def backfill_published_at(client, bucket: str, *, apply: bool = False) -> dict:
     """Plan, or with ``apply`` write, ``publishedAt`` for each version-2 family entry that lacks it.
 

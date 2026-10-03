@@ -579,20 +579,56 @@ file its reader cannot page, so two of five personas never read a row.
   `list_sources`. Reading each member's Parquet key-value metadata for a time
   was measured and rejected: only `discovery_signals` records an `as_of`, and
   the reads doubled a cold build's requests to the bucket (+519, +5.2 s).
-- **A derived table's pin states the parent generations it was built from
-  (round 5, owner decision 2026-10-03).** A generation root (`artifact.json`)
+  `published_at_basis` (round 6) names what the value observed:
+  `pointer_move`, stamped at the pointer write, or `last_object_write`, the
+  newest object under the generation's prefix that
+  `publication.backfill_published_at` wrote for entries published before the
+  writer, the pointer having moved at or after it. The backfill ran once,
+  applied at 2026-10-03T16:13:56Z (`PUBLISHED_AT_BACKFILLED_THROUGH`), and the
+  writer stamps only later instants, so the basis is read from the value with
+  no index change; another backfill moves the constant. Round 5's research
+  note called a backfilled value a "lower bound", which a reader can take
+  either way round; the basis says what was observed instead.
+- **A derived table's pin states the parents its producer recorded (round 5,
+  owner decision 2026-10-03; round 6).** A generation root (`artifact.json`)
   records `spec.parents`: each parent table's family, generation and bytes, or
   a storage version (an ETag, or a local copy's digest) for a parent no family
-  pins. `_input_lineage` adds `inputs`, one `{table, family, built_from, live,
-  input_table_current}` per parent, and `inputs_current`. `built_from` and
-  `live` are family generations; `input_table_current` compares the parent
-  table's own `sha256` where both pins state one (else the generations), so a
-  parent family that moved for another table does not mark this one stale.
-  The name says so (coordinator answer 7): `built_from` can differ from `live`
-  while `input_table_current` is true. A storage-version parent makes no lag
-  claim (`input_table_current: null`, ignored by `inputs_current`, which is
-  null when no parent can be compared). A family
-  whose root records no parents gets no `inputs` key. The root is read on the
+  pins. None recorded is not none: a read that bypassed the download helper is
+  not recorded (scout C's read ledger is the pipeline half). `_input_lineage`
+  adds `inputs`, one `{table, family, built_from, live, input_table_current}`
+  per parent, and `inputs_current`; `built_from` and `live` are always pins of
+  one kind.
+  - A managed parent's are family generations; `input_table_current` compares
+    the parent table's own `sha256` where both pins state one (else the
+    generations), so a parent family that moved for another table does not
+    mark this one stale. The name says so (coordinator answer 7): `built_from`
+    can differ from `live` while `input_table_current` is true.
+  - A parent in the table's own family is its previous output, read to carry
+    rows forward (`generations._check_parents` requires the generation the
+    build captured): it is `prior_generation`, never an input that can lag.
+    Round 5 compared it with the table's live bytes, so `gao_reports` read
+    stale against itself. Roots already published are immutable, so the
+    server reads them this way whatever the writers record next.
+  - A parent no family pins (the comments export) is compared with the export
+    receipt the connection matched at build (`_export_pin`): the recorded
+    sha256 with the receipt's sha256, or the ETag with its ETag. A file that
+    moved since its receipt, or no receipt, gives `live: null`.
+  - `inputs_current` is three-valued (`_all_current`): false if any input
+    lags, else null if any is unknown, else true. Round 5 dropped unknowns
+    from the vote, so a null beside a true read as true.
+
+  A rulemaking snapshot table states its snapshot's sources
+  (`_snapshot_lineage`): the manifest records `inputs.sources` per snapshot,
+  and its stages record `depends_on` and `outputs` but not what each stage
+  read, so one table's own sources cannot be derived. They are
+  `snapshot_inputs` (`{table, built_from, live, input_table_current}`, table
+  sha256s), and the table's `inputs_current` is true when every source is
+  live, else null: never false for a source it may not have read (round 6
+  review, item 3). Its `prior_generation` is the manifest's
+  `previous_snapshot_id`. Per-stage sources would let each table state its
+  own; that is the pipeline's change.
+
+  A family whose root records no parents gets no `inputs` key. The root is read on the
   first reply that pins the generation, never at build, and kept per artifact
   digest (`_ROOT_PARENTS`; roots are immutable); a read that fails states
   `inputs: null` with `inputs_status: root_unavailable`, and the root is not
@@ -605,8 +641,7 @@ file its reader cannot page, so two of five personas never read a row.
   `list_sources`. On 2026-10-03, 10 of 52 families recorded parents, and
   bill-subjects (`congress_bills`) and member-vote-terms (`members`,
   `member_terms`) were built from parent bytes no longer live. Tests keep root
-  reads off the network (`tests/conftest.py::no_generation_roots`). The
-  describe_table description is at 1,982 of its 2,000 characters.
+  reads off the network (`tests/conftest.py::no_generation_roots`).
 - **`list_sources` states each table's pinned `rows`** (the index descriptor's or
   the snapshot manifest's count; null for a legacy table no pointer pins) so a
   declared table whose generation publishes no rows is visible at discovery
