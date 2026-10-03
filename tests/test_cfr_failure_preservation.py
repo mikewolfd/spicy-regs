@@ -527,3 +527,23 @@ def test_prior_index_package_rows_are_dropped(monkeypatch, tmp_path):
     )
     assert set(rows) == {GRANULE["granuleId"]}
     assert is_marked(tmp_path)
+
+
+def test_an_unchanged_title_41_package_takes_compound_parts_from_its_prior_without_a_volume(monkeypatch, tmp_path):
+    """The prior's cut keys (41-60) are corrected in place: an unchanged package's rows are never re-read."""
+    package_id, stamp = "CFR-2025-title41-vol1", "2026-09-11T17:30:58Z"
+    granules = [{"granuleId": f"{package_id}-part60", "title": "1-OBLIGATIONS OF CONTRACTORS AND SUBCONTRACTORS",
+                 "granuleClass": "NODE"},
+                {"granuleId": f"{package_id}-part60-id334", "title": "2-AFFIRMATIVE ACTION PROGRAMS",
+                 "granuleClass": "NODE"},
+                {"granuleId": f"{package_id}-part60-id334-subpartA", "title": "General", "granuleClass": "NODE"}]
+    prior = [build._shape({**g, "_package_id": package_id, "_package_last_modified": stamp}) for g in granules]
+    assert {row["cfr_ref"] for row in prior} == {"41-60"}
+    walk = Transport(page("packages", [{"packageId": package_id, "lastModified": stamp}]), page("granules", granules))
+    acquirer, calls = volumes()
+    rows = build_with(monkeypatch, tmp_path, walk, acquirer, prior_rows=prior, marked=True)
+    assert calls == []
+    assert {gid: row["cfr_ref"] for gid, row in rows.items()} == {
+        f"{package_id}-part60": "41-60-1", f"{package_id}-part60-id334": "41-60-2",
+        f"{package_id}-part60-id334-subpartA": "41-60-2"}
+    assert is_marked(tmp_path)

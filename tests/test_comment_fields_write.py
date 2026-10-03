@@ -142,6 +142,18 @@ def test_submitter_fields_the_row_predates_are_filled_and_a_stated_one_is_kept(t
     assert (prepared["rows_to_fill"], written["rows_changed"]) == (1, 1)
 
 
+def test_prepare_leaves_only_its_outputs_where_the_artifact_collects_them(tmp_path, catalog):
+    """Its whole-table intermediates stream through ``fill/work`` and go: the artifact uploads ``fill/*.parquet``."""
+    seed(catalog, [row("A"), row("B")])
+    reads(tmp_path, [{"key": "a", "comment_id": "A", "subtype": "S"}, {"key": "a(1)", "comment_id": "A", "subtype": "T"},
+                     {"key": "b", "comment_id": "B", "subtype": "S"}])
+    prepared = cfw.prepare(tmp_path)
+    assert (prepared["rows_to_fill"], prepared["conflicted_versions_by_column"]["subtype"]) == (1, 1)
+    assert sorted(path.name for path in (tmp_path / "fill").glob("*.parquet")) == [
+        "conflicts.parquet", "files.parquet", "fill.parquet"]
+    assert not (tmp_path / "fill" / "work").exists()
+
+
 def test_a_read_of_another_version_fills_nothing(tmp_path, catalog):
     seed(catalog, [row("A")])
     reads(tmp_path, [{"key": "a", "comment_id": "A", "modify_date": "2021-06-01T00:00:00Z", "subtype": "Read"}])

@@ -12,6 +12,7 @@ import pytest
 from spicy_regs.duckdb_settings import ExportResources
 from spicy_regs.pipelines import comments_mirror as mirror
 from spicy_regs.schemas import COMMENT
+from spicy_regs.schemas.regulations import COMMENT_MIRROR_COLUMNS
 from spicy_regs.sources import iceberg
 from spicy_regs.transforms.partition_comments import assemble_comments, sort_comment_agencies, stage_comment_agencies
 from spicy_regs.transforms.write_staging import write_staging
@@ -224,10 +225,10 @@ _EXPORT = iceberg.export_public_comments  # the publication fixture fakes it; th
 _SUBMITTER = ("subtype", "duplicate_comments")
 
 
-def _comment(comment_id, agency, subtype, count):
+def _comment(comment_id, agency, subtype, count, comment=None):
     row = dict.fromkeys(COMMENT.schema)
     row.update(comment_id=comment_id, agency_code=agency, docket_id=f"{agency}-2025-1", posted_date="2025-01-15T00:00:00Z",
-               modify_date="2025-01-15T00:00:00Z", subtype=subtype, duplicate_comments=count)
+               modify_date="2025-01-15T00:00:00Z", subtype=subtype, duplicate_comments=count, comment=comment)
     return row
 
 
@@ -257,7 +258,8 @@ def published(request, publication, monkeypatch):
         return con
 
     monkeypatch.setattr(iceberg, "_connect", connect)
-    rows = {"EPA": [_comment("EPA-1", "EPA", "Mass Mail Campaign", 15851), _comment("EPA-2", "EPA", "Public Comment", 0)],
+    rows = {"EPA": [_comment("EPA-1", "EPA", "Mass Mail Campaign", 15851, "I&#39;m writing<br/>&amp; asking."),
+                    _comment("EPA-2", "EPA", "Public Comment", 0)],
             "CMS": [_comment("CMS-1", "CMS", None, None), _comment("CMS-2", "CMS", None, None)]}
     for agency, agency_rows in rows.items():
         write_staging(agency, COMMENT.name, agency_rows, catalog / "staging", COMMENT.schema)
@@ -317,7 +319,7 @@ def test_every_member_is_republished_together_from_the_pinned_snapshot(published
     agencies = {code: f"comments/agency/agency_code={code}/part-0.parquet" for code in ("CMS", "DOT", "EPA")}
     assert receipt["files"].keys() == {"comments.parquet", "comments_index.parquet", *agencies.values()}
     flat = _footer(root / "comments.parquet")
-    assert list(flat) == list(COMMENT.schema)
+    assert list(flat) == [*COMMENT.schema, *COMMENT_MIRROR_COLUMNS]
     del flat["agency_code"]  # the partition key, carried by each agency file's path
     for key in agencies.values():
         assert list(_footer(root / key).items()) == list(flat.items()), key
@@ -328,6 +330,42 @@ def test_every_member_is_republished_together_from_the_pinned_snapshot(published
     assert index == {"CMS": 2, "EPA": 2}
     assert {code: receipt["files"][key]["rows"] for code, key in agencies.items()} == {**index, "DOT": 0}
     assert receipt["files"]["comments.parquet"]["rows"] == sum(index.values())
+
+
+def test_comment_text_is_the_body_read_as_plain_text_in_every_member(published):
+    """The publisher serves the body as HTML; the mirror adds its text and keeps the publisher's bytes beside it."""
+    _, state, root, _ = published
+    flat = {row["comment_id"]: (row["comment"], row["comment_text"])
+            for row in pq.read_table(root / "comments.parquet", columns=["comment_id", "comment", "comment_text"]).to_pylist()}
+    assert flat["EPA-1"] == ("I&#39;m writing<br/>&amp; asking.", "I'm writing\n& asking.")
+    assert flat["EPA-2"] == (None, None)
+    epa = pq.read_table(root / "comments/agency/agency_code=EPA/part-0.parquet", columns=["comment_id", "comment_text"])
+    assert dict(zip(*epa.to_pydict().values())) == {"EPA-1": "I'm writing\n& asking.", "EPA-2": None}
+    assert all(_footer(root / key)["comment_text"] == ("string", "BYTE_ARRAY", "VARCHAR")
+               for key in state["receipt"]["files"] if key != "comments_index.parquet")
+
+
+def _member(path, rows: int, row_group: int):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pq.write_table(pa.table({"comment_id": [str(i) for i in range(rows)]}), path, row_group_size=row_group)
+    return {"rows": rows}
+
+
+def test_a_receipt_whose_agency_rows_do_not_sum_to_the_monolith_is_refused(tmp_path):
+    files = {"comments.parquet": _member(tmp_path / "comments.parquet", 3, 2),
+             "comments_index.parquet": _member(tmp_path / "comments_index.parquet", 1, 1),
+             "comments/agency/agency_code=EPA/part-0.parquet":
+                 _member(tmp_path / "comments/agency/agency_code=EPA/part-0.parquet", 2, 1)}
+    with pytest.raises(RuntimeError, match="agency files hold 2 rows; the export validated 3"):
+        mirror.check_receipt_rows(tmp_path, files, 3)
+    files["comments/agency/agency_code=CMS/part-0.parquet"] = _member(
+        tmp_path / "comments/agency/agency_code=CMS/part-0.parquet", 1, 1)
+    mirror.check_receipt_rows(tmp_path, files, 3)
+    with pytest.raises(RuntimeError, match="comments.parquet states 3 rows; the export validated 4"):
+        mirror.check_receipt_rows(tmp_path, files, 4)
+    files["comments_index.parquet"]["rows"] = 2
+    with pytest.raises(RuntimeError, match="comments_index.parquet states 2 rows and its row groups hold 1"):
+        mirror.check_receipt_rows(tmp_path, files, 3)
 
 
 def test_export_refuses_a_catalog_moved_from_the_pinned_snapshot(tmp_path, monkeypatch):

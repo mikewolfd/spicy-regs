@@ -65,13 +65,18 @@ missing one: stage the parts again before the next fill. `fetch` refuses any byt
 prefix (the file, its `.sha256` and `journals/`, after copying the journals
 into the receipts) once the fill is done.
 
-**Prepare** reads the catalog narrowly at its current snapshot: key, agency,
-docket, `modify_date`, the fill columns and each row's data file, and counts
-the table's rows. It checks the fill columns at that snapshot and refuses if
-one is missing. It also refuses while any journal holds a batch that committed
-and failed its check (below). It writes three files:
+**Prepare** reads the catalog narrowly at its current snapshot: the key,
+`modify_date`, whether each fill column is NULL (never its value) and each
+row's data file, and counts the table's rows. It checks the fill columns at
+that snapshot and refuses if one is missing. It also refuses while any journal
+holds a batch that committed and failed its check (below). Each step streams
+its input into a Parquet file under `fill/work/`, outside the artifact,
+removed once the receipt is written: the catalog scan, the read copies of the
+comments in scope (without their object keys), and one value per version and
+column (NULL where its copies disagree). It writes three files:
 
-- `fill/fill.parquet`, holding only the values to fill;
+- `fill/fill.parquet`, holding only the values to fill, unsorted (a batch
+  reads it filtered on `_file`);
 - `fill/files.parquet`, each file's rows and bytes; a file whose size cannot
   be read refuses the prepare, since batches pack by size;
 - a counts-only `fill/prepare.json`. Its `prepare_id` is the snapshot, the
@@ -191,9 +196,26 @@ one with the most bytes (4 files, 4.5M rows) and the one with the most rows
 
 Comparing whole rows took 206–301 s per batch, so the check compares each
 row's key and digest instead. The MERGE's write side (the batch's rows anew,
-about 0.5 GB, plus position deletes) cannot be measured read-only. `prepare`
-at full scale, against a local stand-in of the table, took 93 s and 7.8 GB
-peak memory (`write-review/prepare-scale/`), plus the 19 s narrow scan.
+about 0.5 GB, plus position deletes) cannot be measured read-only.
+
+`prepare` against the live catalog (snapshot 3006217674017424405, 26,415,400
+rows) and the 18-column staged read (`f9d5d7c2…`), read-only from a laptop on
+2026-10-03, under `WRITE_RESOURCES` (6 GB, 4 threads):
+
+| Code | Budget | Outcome | Wall | Peak RSS | Peak spill |
+| --- | --- | --- | --- | --- | --- |
+| bde43c0 (three in-memory temp tables) | 6 GB | out of memory at `_versions` | 126 s | 9.9 GB | 13.9 GB (cap) |
+| streamed intermediates, unsorted fill | 6 GB | 17,341,368 rows to fill | 165 s | 9.1 GB | 7.6 GB |
+| streamed intermediates, unsorted fill | 3 GB | the same rows | 169 s | 6.5 GB | 12.3 GB |
+
+The runner's run of bde43c0 (37105894011) ran out of its 6 GB at the fill's
+COPY after 11 minutes; locally, with the temp directory capped at 15 GB to
+spare the disk, it failed one step earlier. Peak RSS is macOS's maximum
+resident size, above the DuckDB budget; spill was sampled every 10 s. The
+three outputs above hold the same rows, and on FDA alone bde43c0 and the
+streamed code wrote the same fill, files and counts (1,081,203 rows; peak RSS
+7.3 GB and 3.0 GB). Under-budget runs spill to `fill/spill`, which is
+`/mnt` on the runner.
 
 The projection, scaled by rows (the MERGE and the check cost by row, the
 pre-image by byte): about 255 s of pre-images, 116 s of MERGE reads, 71 s of
