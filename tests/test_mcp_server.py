@@ -376,6 +376,11 @@ READ_FORMS = [
     "/* lead */ SELECT 1",
     "SELECT 1 -- COPY (SELECT 1) TO '/tmp/x.csv'",
     "SELECT 'COPY (SELECT 1) TO /tmp/x.csv' AS s",
+    # DuckDB rewrites PRAGMA's table-returning forms to SELECT (round 6, L9: the tool text now says so).
+    "PRAGMA version",
+    "PRAGMA show_tables",
+    "PRAGMA table_info('dockets')",
+    "PRAGMA database_size",
 ]
 
 WRITE_FORMS = [
@@ -397,6 +402,10 @@ WRITE_FORMS = [
     ("CALL pragma_version()", "CALL"),
     ("PREPARE p AS SELECT 1", "PREPARE"),
     ("BEGIN TRANSACTION", "TRANSACTION"),
+    # PRAGMA's state-changing forms keep their own statement type, or parse as the SET they are.
+    ("PRAGMA enable_profiling", "PRAGMA"),
+    ("PRAGMA threads=4", "SET"),
+    ("PRAGMA memory_limit='1GB'", "SET"),
 ]
 
 
@@ -416,6 +425,21 @@ def test_read_forms_pass_the_guard(sql):
 def test_write_forms_are_named_and_rejected(sql, expected):
     con = _sandboxed_connection()
     assert mcp_server._first_write_statement(con, sql) == expected
+
+
+def test_import_database_is_refused_by_the_locked_connection_where_the_guard_cannot_see_it(tmp_path, monkeypatch):
+    """DuckDB expands PRAGMA import_database while parsing, reading the directory's schema.sql: a file of SELECTs
+    passes the statement guard on an open connection, so only the locked connection's file boundary refuses it."""
+    (tmp_path / "schema.sql").write_text("SELECT 42;")
+    (tmp_path / "load.sql").write_text("")
+    statement = f"PRAGMA import_database('{tmp_path}')"
+    assert mcp_server._first_write_statement(duckdb.connect(), statement) is None
+    con = _sandboxed_connection()
+    with pytest.raises(duckdb.PermissionException, match="schema.sql"):
+        mcp_server._first_write_statement(con, statement)
+    monkeypatch.setattr(mcp_server, "_get_connection", lambda: con)
+    with pytest.raises(ToolError, match="Permission Error"):
+        _tool_data(mcp_server.build_server(), "query_sql", {"sql": statement})
 
 
 def test_guard_catches_a_write_stacked_behind_a_select():

@@ -195,11 +195,17 @@ last result, so a trailing write would otherwise land with nothing in the
 response to show for it.
 
 **The SELECT allowlist includes other read forms.** DuckDB folds
-`DESCRIBE`, `SHOW`, `SUMMARIZE`, `VALUES`, `TABLE`, and the FROM-first
-shorthand (`FROM comments LIMIT 1`) into `StatementType.SELECT`, so all of them
-still run. `tests/test_mcp_server.py::test_read_forms_pass_the_guard` pins that
+`DESCRIBE`, `SHOW`, `SUMMARIZE`, `VALUES`, `TABLE`, the FROM-first
+shorthand (`FROM comments LIMIT 1`) and PRAGMA's table-returning forms
+(`PRAGMA table_info('dockets')`, `PRAGMA show_tables`) into
+`StatementType.SELECT`, so all of them still run; PRAGMA's state-changing
+forms parse as `PRAGMA` or `SET` and are refused. `tests/test_mcp_server.py::test_read_forms_pass_the_guard` pins that
 folding; if a DuckDB upgrade splits any of them into its own statement type,
 that test fails rather than clients silently losing a query form.
+`PRAGMA import_database` is expanded while DuckDB parses, reading the named
+directory's `schema.sql` before the guard sees a statement: a file of SELECTs
+passes the guard on an open connection, and only the locked connection's file
+boundary refuses it (`test_import_database_is_refused_by_the_locked_connection_where_the_guard_cannot_see_it`).
 
 Matching is on `StatementType.name`, not the enum member, because duckdb's type
 stubs do not declare the members and `ty` gates merges — comparing names keeps

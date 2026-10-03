@@ -458,3 +458,9 @@ def test_list_sources_groups_tables_by_subject_with_unassigned_tables_last(monke
     assert [(group["subject"], [row["table"] for row in group["tables"]]) for group in listed["subjects"]] == [
         ("rulemaking", ["dockets", "documents"]), ("congress", ["laws"]), (None, ["comments"])]
     assert set(listed["subjects"][0]["tables"][0]) == {"table", "label", "coverage", "rows"}
+
+
+def test_the_query_text_says_pragmas_table_forms_count_as_select():
+    """L9: a persona read PRAGMA as refused; DuckDB rewrites its table-returning forms to SELECT."""
+    [tool] = [t for t in asyncio.run(server.build_server().list_tools()) if t.name == "query_sql"]
+    assert "PRAGMA's table forms" in " ".join((tool.description or "").split())
