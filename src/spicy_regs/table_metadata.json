@@ -1787,11 +1787,11 @@
   "rulemaking_lifecycles": {
     "table": "rulemaking_lifecycles",
     "label": "Rulemaking lifecycles",
-    "summary": "One row per docketed proceeding (owner decisions 54-56c): its earliest proposal, the earliest final strictly after it, or what else its events make (`kind`), with survival columns (`outcome`, `duration_days`, `censor_date`) for time-to-final estimates, Unified Agenda status and routine-family strata. A docket-less proceeding is one Register document that cannot pair and is left out. Keyed `proceeding_id`; joins `proceedings` on it and is joined by `lifecycle_events`. Built by `build_lifecycles`; dates are DATE, counts INTEGER and flags BOOLEAN. Replaces the documents-based rollup withdrawn on 2026-09-23.",
+    "summary": "One row per docketed proceeding (owner decisions 54-56c): its earliest proposal, the earliest the Register dates, else its upload-dated one (decision 54d), the earliest final strictly after it, or what else its events make (`kind`), with survival columns (`outcome`, `duration_days`, `censor_date`) for time-to-final estimates, Unified Agenda status and routine-family strata. A docket-less proceeding is one Register document that cannot pair and is left out. Keyed `proceeding_id`; joins `proceedings` on it and is joined by `lifecycle_events`. Built by `build_lifecycles`; dates are DATE, counts INTEGER and flags BOOLEAN. Replaces the documents-based rollup withdrawn on 2026-09-23.",
     "coverage": "Derived, and bounded by its inputs: every docketed proceeding, paired from its cleaned `lifecycle_events` and censored at the day its inputs end.",
     "kind": "derived",
     "measured_on": "2026-09-28",
-    "data_quality": "A Regulations.gov document that states no Register number in `fr_doc_num`, or whose stated number resolves to no Register row, is dated by its upload, which for a legacy document can be years after the rule: on snapshot_9b2c770e's inputs 262 lifecycles anchor on such a document, 74 of them upload pairs outside survival (docs/ontology.md). A Register-dated proposal is time zero: an upload-dated Regulations.gov proposal anchors only where its proceeding holds no Register-dated proposal, so an agency's early unnumbered display copy (CMS posts one on the public-inspection day) does not date the proposal. A proposal typed only by Regulations.gov (`lifecycle_events.source` `regulations_gov`, an unnumbered upload) can be a notice the Register files under another type, such as CDC's and ATSDR's information-collection notices, whose titles carry a Register number this reader does not read; it enters as a proposal and stays `open`. A final that finalizes another docket's proposal is paired in its own proceeding only, and that proposal stays `open`: a RIN never groups dockets (decision 56a), and the Register's docket labels are often an agency's own, not Regulations.gov ids.",
+    "data_quality": "A Regulations.gov document that states no Register number in `fr_doc_num`, or whose stated number resolves to no Register row, is dated by its upload, which for a legacy document can be years after the rule: on snapshot_9b2c770e's inputs 262 lifecycles anchor on such a document, 74 of them upload pairs outside survival (docs/ontology.md). A proposal typed only by Regulations.gov (`lifecycle_events.source = 'regulations_gov'`, an unnumbered upload) can be a petition for rulemaking, a state program submission or an information-collection notice the Register files under another type: on snapshot_62318069's inputs 515 survival lifecycles since 2015 anchor on one (352 open); a Register number its title names is not read as its identity. Where the proceeding also holds the Register's proposal, the Register's anchors (54d); an upload keeps its anchor when a final falls between the two or the Register's is a comment-period extension or correction, so an earlier proposal whose Register copy is missing may still anchor on its later re-proposal (FDA's 1978 OTC-monograph dockets re-proposed in the 1990s). A final that finalizes another docket's proposal is paired in its own proceeding only and the proposal stays `open`: a RIN never groups dockets (56a), and the Register's docket labels are often an agency's own (2026-15833 names 'CMS-1849-F and CMS-0062-F' and no RIN). A Register proposal naming several dockets anchors one lifecycle per docket (502 proposals behind 2,358 of 35,327 survival rows on snapshot_62318069's inputs; EPA 20%).",
     "columns": [
       {
         "column_name": "proceeding_id",
@@ -1806,7 +1806,7 @@
       {
         "column_name": "kind",
         "column_type": "VARCHAR",
-        "description": "What its events make: `finalized` (a final strictly after the proposal), `companion` (a Register-dated final on the proposal's Register day, decision 54b; no survival outcome), `upload_pair` (an upload-dated proposal with a final the same day, 54c; no survival outcome), `withdrawn`, `open` (censored at `censor_date`), `final_without_observed_proposal` or `no_anchor`."
+        "description": "What its events make: `finalized` (a final strictly after the proposal), `companion` (a Register-dated final on the proposal's Register day, 54b; no survival outcome), `upload_pair` (an upload-dated proposal and a final that day, 54c; no survival outcome), `withdrawn` (a Register or Agenda withdrawal on or after the proposal, no later final), `open` (censored at `censor_date`), `final_without_observed_proposal` or `no_anchor`."
       },
       {
         "column_name": "proposal_date",
@@ -1816,7 +1816,7 @@
       {
         "column_name": "proposal_document_id",
         "column_type": "VARCHAR",
-        "description": "The proposal's document: a dated Register record id (`number@YYYY-MM-DD`) when the Register dates it, else a Regulations.gov document id."
+        "description": "The proposal's document: a dated Register record id (`number@YYYY-MM-DD`) when the Register dates a proposal of the proceeding, else a Regulations.gov document id (decision 54d)."
       },
       {
         "column_name": "proposal_form",
@@ -1881,7 +1881,7 @@
       {
         "column_name": "routine_family",
         "column_type": "VARCHAR",
-        "description": "The routine family its agency and its proposal's title name at time zero (`airworthiness_directive`, `airspace`, `state_air_plan`, `pesticide_tolerance`, which a pesticide petition receipt also names, `coast_guard_local`); a lifecycle with no proposal reads its proceeding's title; NULL otherwise. The final's title is not read, so the stratum does not depend on the outcome."
+        "description": "The routine family the proposal's own title names (the final's without a proposal; the proceeding's with no anchor), read at time zero so the stratum never depends on the outcome (decision 55a): `airworthiness_directive`, `airspace`, `state_air_plan`, `pesticide_tolerance` (pesticide-petition receipts included), `coast_guard_local`; NULL otherwise."
       },
       {
         "column_name": "agenda_priority",
@@ -1957,7 +1957,7 @@
   "lifecycle_events": {
     "table": "lifecycle_events",
     "label": "Rulemaking lifecycle events",
-    "summary": "One row per staged document of a docketed proceeding: the events each `rulemaking_lifecycles` row is paired from. A Regulations.gov document whose own `fr_doc_num` resolves to one Register document is that document, dated by the Register (decision 60; `joined_by` `fr_copy`); one that states no number in that field keeps its Regulations.gov type and posted day (`dated_by` `regulations_gov`), whatever its title says. An Agenda entry completed as withdrawn adds its dated withdrawal. Keyed (`proceeding_id`, `document_id`); `dated_by` says which kind of id `document_id` is. Joins `rulemaking_lifecycles` on `proceeding_id`. Built by `build_lifecycles`; `event_date` is DATE.",
+    "summary": "One row per staged document of a docketed proceeding: the events each `rulemaking_lifecycles` row is paired from. A Regulations.gov document whose own `fr_doc_num` resolves to one Register document is that document, dated by the Register (decision 60); a document that states no number keeps Regulations.gov's type and its upload day. An Agenda entry completed as withdrawn adds its dated withdrawal. Keyed (`proceeding_id`, `document_id`); `dated_by` says which kind of id `document_id` is. Joins `rulemaking_lifecycles` on `proceeding_id`. Built by `build_lifecycles`; `event_date` is DATE.",
     "coverage": "Derived, and bounded by its inputs: the stage events of every docketed proceeding, one per document, less those undated or dated after the run's day.",
     "kind": "derived",
     "measured_on": "2026-09-28",
@@ -2048,11 +2048,11 @@
   "agency_lifecycle_stats": {
     "table": "agency_lifecycle_stats",
     "label": "Time to final rule by agency",
-    "summary": "The Aalen-Johansen cumulative incidence of a final rule, withdrawal competing (decision 54a), per agency and for all agencies (`agency_code` NULL), overall, routine, non-routine and per routine family: the first day it reaches each quartile, NULL where it never does, with a 95% interval from the log-log band. A cell under 30 rules keeps its row, `suppressed`, with no estimates; the Parquet metadata states the estimator exactly. Keyed (`agency_code`, `stratum`). Built by `build_agency_lifecycle_stats`; counts and days are INTEGER.",
+    "summary": "The Aalen-Johansen cumulative incidence of a final rule, withdrawal competing (decision 54a), per agency and for all agencies (`agency_code` NULL), overall, routine, non-routine and per routine family: the first day it reaches each quartile, NULL where it never does, with a 95% interval from the log-log band. A cell under 30 rules keeps its row, `suppressed`, with no estimates; the Parquet metadata states the estimator exactly. Routine families exist for FAA, EPA and USCG only; for every other agency `non_routine` equals `all`. Cells cover all years; a cohort (proposals since 2015) is computed from `rulemaking_lifecycles`. A rule is a docketed proceeding, so a Register proposal naming several dockets counts once per docket and the band treats them as independent. Keyed (`agency_code`, `stratum`). Built by `build_agency_lifecycle_stats`; counts and days are INTEGER.",
     "coverage": "Derived from `rulemaking_lifecycles` with a survival outcome, every proposal year together (no cohort window), per `agency_code` as the proceeding states it (no department roll-up: HHS, CMS and FDA are separate cells). A cell covering fewer than 30 rules is suppressed.",
     "kind": "derived",
     "measured_on": "2026-09-27",
-    "data_quality": "On 2026-09-27 every unsuppressed estimate equalled R's multi-state `survfit`. Routine families exist for FAA, EPA and USCG only, so every other agency's `non_routine` cell equals its `all` cell. A rule is a docketed proceeding: a Register proposal naming several dockets anchors one lifecycle per docket, and the band treats them as independent.",
+    "data_quality": "On 2026-09-27 every unsuppressed estimate equalled R's multi-state `survfit`.",
     "columns": [
       {
         "column_name": "agency_code",

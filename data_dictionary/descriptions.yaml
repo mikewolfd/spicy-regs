@@ -781,30 +781,35 @@ tables:
       Derived, and bounded by its inputs: every docketed proceeding, paired from
       its cleaned `lifecycle_events` and censored at the day its inputs end.
     measured_on: "2026-09-28"
-    # E1 (phase3-review, decision 54d as approved): the "time zero" sentence describes the
-    # builder change landing with this release; without it an upload-dated copy anchors the
-    # proposal on its posted day. E3 (title-stated Register numbers) is blocked and not described.
+    # Decisions 54d (Register-dated anchor, windowless) and 55a (time-zero strata) landed with
+    # the 2026-10-03 lifecycle rebuild; decision 60b (title-stated Register numbers) was refused.
     data_quality: >-
       A Regulations.gov document that states no Register number in `fr_doc_num`,
       or whose stated number resolves to no Register row, is dated by its
       upload, which for a legacy document can be years after the rule: on
       snapshot_9b2c770e's inputs 262 lifecycles anchor on such a document, 74
-      of them upload pairs outside survival (docs/ontology.md). A Register-dated
-      proposal is time zero: an upload-dated Regulations.gov proposal anchors
-      only where its proceeding holds no Register-dated proposal, so an
-      agency's early unnumbered display copy (CMS posts one on the
-      public-inspection day) does not date the proposal. A proposal typed only
-      by Regulations.gov (`lifecycle_events.source` `regulations_gov`, an
-      unnumbered upload) can be a notice the Register files under another
-      type, such as CDC's and ATSDR's information-collection notices, whose
-      titles carry a Register number this reader does not read; it enters as a
-      proposal and stays `open`. A final that finalizes another docket's
-      proposal is paired in its own proceeding only, and that proposal stays
-      `open`: a RIN never groups dockets (decision 56a), and the Register's
-      docket labels are often an agency's own, not Regulations.gov ids.
+      of them upload pairs outside survival (docs/ontology.md). A proposal typed
+      only by Regulations.gov (`lifecycle_events.source = 'regulations_gov'`, an
+      unnumbered upload) can be a petition for rulemaking, a state program
+      submission or an information-collection notice the Register files under
+      another type: on snapshot_62318069's inputs 515 survival lifecycles since
+      2015 anchor on one (352 open); a Register number its title names is not
+      read as its identity. Where the proceeding also holds the Register's
+      proposal, the Register's anchors (54d); an upload keeps its anchor when a
+      final falls between the two or the Register's is a comment-period
+      extension or correction, so an earlier proposal whose Register copy is
+      missing may still anchor on its later re-proposal (FDA's 1978
+      OTC-monograph dockets re-proposed in the 1990s). A final that finalizes
+      another docket's proposal is paired in its own proceeding only and the
+      proposal stays `open`: a RIN never groups dockets (56a), and the
+      Register's docket labels are often an agency's own (2026-15833 names
+      'CMS-1849-F and CMS-0062-F' and no RIN). A Register proposal naming
+      several dockets anchors one lifecycle per docket (502 proposals behind
+      2,358 of 35,327 survival rows on snapshot_62318069's inputs; EPA 20%).
     summary: >-
       One row per docketed proceeding (owner decisions 54-56c): its earliest
-      proposal, the earliest final strictly after it, or what else its events
+      proposal, the earliest the Register dates, else its upload-dated one
+      (decision 54d), the earliest final strictly after it, or what else its events
       make (`kind`), with survival columns (`outcome`, `duration_days`,
       `censor_date`) for time-to-final estimates, Unified Agenda status and
       routine-family strata. A docket-less proceeding is one Register
@@ -817,9 +822,9 @@ tables:
     columns:
       proceeding_id: "The docketed proceeding the lifecycle reads; joins `proceedings.proceeding_id`."
       agency_code: "The proceeding's agency code."
-      kind: "What its events make: `finalized` (a final strictly after the proposal), `companion` (a Register-dated final on the proposal's Register day, decision 54b; no survival outcome), `upload_pair` (an upload-dated proposal with a final the same day, 54c; no survival outcome), `withdrawn`, `open` (censored at `censor_date`), `final_without_observed_proposal` or `no_anchor`."
+      kind: "What its events make: `finalized` (a final strictly after the proposal), `companion` (a Register-dated final on the proposal's Register day, 54b; no survival outcome), `upload_pair` (an upload-dated proposal and a final that day, 54c; no survival outcome), `withdrawn` (a Register or Agenda withdrawal on or after the proposal, no later final), `open` (censored at `censor_date`), `final_without_observed_proposal` or `no_anchor`."
       proposal_date: "Day of the earliest proposed event; NULL without a proposal."
-      proposal_document_id: "The proposal's document: a dated Register record id (`number@YYYY-MM-DD`) when the Register dates it, else a Regulations.gov document id."
+      proposal_document_id: "The proposal's document: a dated Register record id (`number@YYYY-MM-DD`) when the Register dates a proposal of the proceeding, else a Regulations.gov document id (decision 54d)."
       proposal_form: "The proposal's form from its title: `proposed`, `advance_proposed`, `comment_period` or `correction`."
       final_date: "Day of the final the lifecycle pairs or anchors on; NULL without one."
       final_document_id: "The final's document, spelled as `proposal_document_id` is."
@@ -832,8 +837,7 @@ tables:
       duration_days: "Days from the proposal to the final, the withdrawal or `censor_date`; NULL without an outcome."
       censor_date: "The generation's last event day, capped at the run's day, where open lifecycles are censored; one date in every row."
       open_signal: "What the latest Unified Agenda entry of its specific RINs says (`agenda_completed_final`, `agenda_completed_withdrawn`, `agenda_completed_other`, `agenda_long_term`, `agenda_active`, `agenda_dropped_off`), else `not_on_agenda` or `no_specific_rin`."
-      # E2 (phase3-review): classified from the proposal title at time zero; before this release the final's and the proceeding's titles were read too, so the stratum could depend on the outcome.
-      routine_family: "The routine family its agency and its proposal's title name at time zero (`airworthiness_directive`, `airspace`, `state_air_plan`, `pesticide_tolerance`, which a pesticide petition receipt also names, `coast_guard_local`); a lifecycle with no proposal reads its proceeding's title; NULL otherwise. The final's title is not read, so the stratum does not depend on the outcome."
+      routine_family: "The routine family the proposal's own title names (the final's without a proposal; the proceeding's with no anchor), read at time zero so the stratum never depends on the outcome (decision 55a): `airworthiness_directive`, `airspace`, `state_air_plan`, `pesticide_tolerance` (pesticide-petition receipts included), `coast_guard_local`; NULL otherwise."
       agenda_priority: "That Agenda entry's `priority_category` (e.g. `Economically Significant`); NULL without one."
       agenda_major: "That Agenda entry's `major` (`Yes`, `No` or `Undetermined`); NULL without one."
       specific_rins_json: "JSON array of the RINs the proceeding's docket-side evidence alone holds."
@@ -855,10 +859,9 @@ tables:
       One row per staged document of a docketed proceeding: the events each
       `rulemaking_lifecycles` row is paired from. A Regulations.gov document
       whose own `fr_doc_num` resolves to one Register document is that
-      document, dated by the Register (decision 60; `joined_by` `fr_copy`); one
-      that states no number in that field keeps its Regulations.gov type and
-      posted day (`dated_by` `regulations_gov`), whatever its title says. An
-      Agenda entry completed as withdrawn adds its dated withdrawal. Keyed
+      document, dated by the Register (decision 60); a document that states no
+      number keeps Regulations.gov's type and its upload day. An Agenda entry
+      completed as withdrawn adds its dated withdrawal. Keyed
       (`proceeding_id`, `document_id`); `dated_by` says which kind of id
       `document_id` is. Joins `rulemaking_lifecycles` on `proceeding_id`.
       Built by `build_lifecycles`; `event_date` is DATE.
@@ -890,10 +893,7 @@ tables:
     measured_on: "2026-09-27"
     data_quality: >-
       On 2026-09-27 every unsuppressed estimate equalled R's multi-state
-      `survfit`. Routine families exist for FAA, EPA and USCG only, so every
-      other agency's `non_routine` cell equals its `all` cell. A rule is a
-      docketed proceeding: a Register proposal naming several dockets anchors
-      one lifecycle per docket, and the band treats them as independent.
+      `survfit`.
     summary: >-
       The Aalen-Johansen cumulative incidence of a final rule, withdrawal
       competing (decision 54a), per agency and for all agencies
@@ -901,7 +901,12 @@ tables:
       family: the first day it reaches each quartile, NULL where it never
       does, with a 95% interval from the log-log band. A cell under 30 rules
       keeps its row, `suppressed`, with no estimates; the Parquet metadata
-      states the estimator exactly. Keyed (`agency_code`, `stratum`). Built
+      states the estimator exactly. Routine families exist for FAA, EPA and
+      USCG only; for every other agency `non_routine` equals `all`. Cells cover
+      all years; a cohort (proposals since 2015) is computed from
+      `rulemaking_lifecycles`. A rule is a docketed proceeding, so a Register
+      proposal naming several dockets counts once per docket and the band
+      treats them as independent. Keyed (`agency_code`, `stratum`). Built
       by `build_agency_lifecycle_stats`; counts and days are INTEGER.
     grain: "One agency (or all agencies) and one stratum of rules."
     identity_columns: [agency_code, stratum]
