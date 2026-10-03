@@ -283,17 +283,17 @@
       {
         "column_name": "category",
         "column_type": "VARCHAR",
-        "description": "Submitter category as classified on regulations.gov. Often null, and empty for whole agencies: EPA, for one, classifies submitters in `subtype` instead (Company/Organization, Government, Mass Mail Campaign, …) and counts campaigns in `duplicate_comments`."
+        "description": "Submitter category as regulations.gov states it, where the row's read carried it (FDA's records state one, such as `Individual Consumer` or `Private Industry - C0003`). NULL where the publisher's record states none (EPA states none: it classifies submitters in `subtype` and counts campaigns in `duplicate_comments`) or where the row's read did not carry the field; NULL across a whole agency does not mean the agency does not classify. `count(category)` by `agency_code` is the measure."
       },
       {
         "column_name": "title",
         "column_type": "VARCHAR",
-        "description": "Comment title / subject line."
+        "description": "Comment title / subject line, as the publisher serves it; a few carry HTML entities (`&#39;`, `&amp;`)."
       },
       {
         "column_name": "comment",
         "column_type": "VARCHAR",
-        "description": "Full free-text body of the comment as typed into the comment form; filled for nearly every comment. Text of attached files is in `text_content`, which is filled only where an attachment was extracted. The largest field in the dataset."
+        "description": "The comment body as regulations.gov serves it: an HTML fragment, not plain text. Line breaks are `<br/>` tags and many characters are HTML entities (`&#39;`, `&quot;`, `&amp;`, `&rsquo;`) on many rows of every agency, so a pattern with a plain apostrophe or quotation mark misses them: replace the entities before grouping or quoting. Filled for nearly every comment. Text of attached files is in `text_content`, which is filled only where an attachment was extracted. The largest field in the dataset."
       },
       {
         "column_name": "document_type",
@@ -807,7 +807,7 @@
   "cfr_sections": {
     "table": "cfr_sections",
     "label": "Code of Federal Regulations sections",
-    "summary": "One row per GovInfo annual CFR granule, including sections, appendices, tables of contents and other structural units; metadata only, no regulatory body text. Neither a granule id nor a printed section number establishes the enclosing part, so each section granule is placed under the PART heading of its package's annual volume XML: Title 43 numbers sections by subpart (§ 1601.0-1 is in Part 1600), Title 41's parts contain a hyphen (`50-201`) and Title 14 Part 241 prints `19-8.1`. `part` is that structure; `cfr_ref` is the printed citation that joins the Federal Register side. Other granules keep the part their identifier spells, so Title 41's TOC and NODE rows keep parts cut at the hyphen (`50`). The Parquet footer key `spicy_regs.cfr_sections.placement` records that every row was placed by this rule; generations without it keep identifier-derived parts. A package is re-placed only when it is new or its GovInfo lastModified changed; an unchanged package, or one whose volume cannot be read, keeps its prior rows. Missing credentials and incomplete source traversals refuse before output replacement. GovInfo's annual index package (`GPO-CFR-INDEX-2025`) is not a title volume and is not in the table. All columns are stored as VARCHAR.",
+    "summary": "One row per GovInfo annual CFR granule, including sections, appendices, tables of contents and other structural units; metadata only, no regulatory body text. Neither a granule id nor a printed section number establishes the enclosing part, so each section granule is placed under the PART heading of its package's annual volume XML: Title 43 numbers sections by subpart (§ 1601.0-1 is in Part 1600), Title 41's parts contain a hyphen (`50-201`) and Title 14 Part 241 prints `19-8.1`. `part` is that structure; `cfr_ref` is the printed citation that joins the Federal Register side. Other granules keep the part their identifier spells, except in Title 41, whose identifiers cut a compound part at the hyphen (`…-part60` is Part 60-1): there a structural row takes the compound part its part granule's heading states (`60-2`), as the section rows do. The Parquet footer key `spicy_regs.cfr_sections.placement` records that every row was placed by this rule; generations without it keep identifier-derived parts. A package is re-placed only when it is new or its GovInfo lastModified changed; an unchanged package, or one whose volume cannot be read, keeps its prior rows. Missing credentials and incomplete source traversals refuse before output replacement. GovInfo's annual index package (`GPO-CFR-INDEX-2025`) is not a title volume and is not in the table. All columns are stored as VARCHAR.",
     "coverage": "Window. Annual-edition section metadata from the 2025 and 2026 editions, not full publication history or body text. Each section's part comes from its volume's PART heading; on 2026-09-23 every compared Title 41, 43 and 14 section agreed with eCFR's 2025-01-01 structure. Receipts: fork-execution-2026-09-21/cfr-ancestry-fix-2026-09-23/ (candidate.json, validation.json).",
     "kind": "window",
     "measured_on": "2026-09-28",
@@ -826,7 +826,7 @@
       {
         "column_name": "cfr_ref",
         "column_type": "VARCHAR",
-        "description": "Join key to Federal Register `cfr_references_json`. For a section, the title and its printed citation (e.g. `43-1601.0-1`, `41-50-201.1`); Title 43 keeps its subpart-numbered spelling while `part` names the enclosing part. Title 41's compound-part citations do not join yet: the Federal Register side reads `41 CFR 50-201.1` as `41-50` (plan A7). NULL for ranges, publisher typos, unprefixed numbers (`Sec. 1-1`), parenthesized citations (`1.401(k)-1`), sections outside a numbered PART and section tokens the volume does not hold; 12 single sections printed with `§§` (`§§ 2.188`) are read as ranges until spicy-docs 0.31.0. For other granules, composed from the identifier's tokens (e.g. `48-700`, `15-746.10-app1`); NULL without a part."
+        "description": "Join key to Federal Register `cfr_references_json`. For a section, the title and its printed citation (e.g. `43-1601.0-1`, `41-50-201.1`); Title 43 keeps its subpart-numbered spelling while `part` names the enclosing part. The Federal Register side cuts every Title 41 compound part at the hyphen (`41 CFR 60-1.4` reads `41-60`), so a Title 41 reference there names a chapter, not a part, and matches no row here: match it at chapter level (`title = '41' AND part LIKE '60-%'`). NULL for ranges, publisher typos, unprefixed numbers (`Sec. 1-1`), parenthesized citations (`1.401(k)-1`), sections outside a numbered PART and section tokens the volume does not hold; 12 single sections printed with `§§` (`§§ 2.188`) are read as ranges until spicy-docs 0.31.0. For other granules, composed from the part and the identifier's tokens (e.g. `48-700`, `15-746.10-app1`); NULL without a part. A part-level reference (`40-60`) equals `cfr_ref` only on a part's structural rows, and a part held only as sections has none (50 CFR 622 among 12 on 2026-10-03): match a part on `title` and `part`, which section rows carry."
       },
       {
         "column_name": "title",
@@ -836,7 +836,7 @@
       {
         "column_name": "part",
         "column_type": "VARCHAR",
-        "description": "For a section, the number in the enclosing PART heading of the package's annual volume XML (e.g. `1600`, `50-201`, `241`); NULL outside a numbered PART or when the volume does not hold the section. For a section's appendix or TOC (`sec746-10-app1`), its host section's part when the volume holds the host, else its token's leading number. For other granules, the identifier's part token including letter suffixes (e.g. `1203a`), which cuts Title 41's compound parts at the hyphen."
+        "description": "For a section, the number in the enclosing PART heading of the package's annual volume XML (e.g. `1600`, `50-201`, `241`); NULL outside a numbered PART or when the volume does not hold the section. For a section's appendix or TOC (`sec746-10-app1`), its host section's part when the volume holds the host, else its token's leading number. For other granules, the identifier's part token including letter suffixes (e.g. `1203a`); in Title 41, whose identifiers cut a compound part at the hyphen, the compound part its part granule's heading states (`60-2`)."
       },
       {
         "column_name": "section",
@@ -1686,7 +1686,7 @@
     "coverage": "Derived, and bounded by its inputs: every `federal_register` record with a `comments_close_on`, every `documents` row with a comment end date, and every Register record such a document copies lands in exactly one period, anchored or not. Left out are windows that close before they open, placeholder closes (see data quality), and legacy Regulations.gov documents that state a comment end but neither a comment start nor a posting date (all closing by 2011); the builder logs each count. Live row counts come from `describe_table`.",
     "kind": "derived",
     "measured_on": "2026-09-28",
-    "data_quality": "For date-range discovery, test all three date columns (`close_date`, `register_close_date` and `regulations_gov_close_date`). They can concern different purposes, including comments, replies, objections, hearings or petitions; the builder does not classify legal submission purpose. `close_date` is the maximum normalized close among grouped records, not the legally controlling/current deadline. The source-specific columns retain each source's maximum; a difference is not resolved by choosing the later value. Base Federal Register dates remain historical statements of each dated publication, not current status, and Regulations.gov records can update independently. Inspect source filing instructions and later notices; neither title matching nor a shared docket/RIN proves legal effect. Extension/correction documents with NULL dates can exist outside these windows, and NULL does not establish no deadline. A close on or after 2050-01-01 is a placeholder and states nothing: the inputs hold no close from 2033 to 2049, and every later one is a stand-in (Regulations.gov's 2099 and 2100 dates, FDA's 2050-02-21 open dockets, Register year typos such as 3008 for 2008). A record whose only close is a placeholder, or whose window closes before it opens, adds no dates; it is listed only as its notice's Register record when a copy states a window. The formal rulespec export is the anchored rows (`anchor_kind <> 'none'`), since rulespec's CommentPeriod needs a proceeding or docket anchor; no export exists yet. A Regulations.gov document is a notice's copy only when its `fr_doc_num` says so, so a copy that omits it stands as its own notice: on the 2026-09-28 inputs about 2,950 such documents share a docket, close day and opening (within three days) with a Register notice. An extension that names its notice by neither page nor RIN, or whose title says \"extension of time for comments\", stays its own period. A legacy Regulations.gov document whose posting date is decades early (see `documents`) opens its period that early.",
+    "data_quality": "For date-range discovery, test all three date columns (`close_date`, `register_close_date` and `regulations_gov_close_date`). They can concern different purposes, including comments, replies, objections, hearings or petitions; the builder does not classify legal submission purpose. `close_date` is the maximum normalized close among grouped records, not the legally controlling/current deadline. The source-specific columns retain each source's maximum; a difference is not resolved by choosing the later value. Base Federal Register dates remain historical statements of each dated publication, not current status, and Regulations.gov records can update independently. Inspect source filing instructions and later notices; neither title matching nor a shared docket/RIN proves legal effect. Extension/correction documents with NULL dates can exist outside these windows, and NULL does not establish no deadline. A close on or after 2050-01-01 is a placeholder and states nothing: the inputs hold no close from 2033 to 2049, and every later one is a stand-in (Regulations.gov's 2099 and 2100 dates, FDA's 2050-02-21 open dockets, Register year typos such as 3008 for 2008). A record whose only close is a placeholder, or whose window closes before it opens, adds no dates; it is listed only as its notice's Register record when a copy states a window. The formal rulespec export is the anchored rows (`anchor_kind <> 'none'`), since rulespec's CommentPeriod needs a proceeding or docket anchor; no export exists yet. A Regulations.gov document is a notice's copy only when its `fr_doc_num` says so, so a copy that omits it stands as its own notice: on the 2026-09-28 inputs about 2,950 such documents share a docket, close day and opening (within three days) with a Register notice. An extension stays its own period when it names its notice by neither page nor RIN, when its title says \"extension of time for comments\" (the title matcher misses that phrasing), or when its page or RINs name more than one open notice: one extension of two proposals (2022-13209 extends 2022-08993 and 2022-08994 under RINs 0910-AI28 and 0910-AI60) links to neither. A legacy Regulations.gov document whose posting date is decades early (see `documents`) opens its period that early.",
     "columns": [
       {
         "column_name": "comment_period_id",
@@ -1791,7 +1791,7 @@
     "coverage": "Derived, and bounded by its inputs: every docketed proceeding, paired from its cleaned `lifecycle_events` and censored at the day its inputs end.",
     "kind": "derived",
     "measured_on": "2026-09-28",
-    "data_quality": "A Regulations.gov document that states no Register number in `fr_doc_num`, or whose stated number resolves to no Register row, is dated by its upload, which for a legacy document can be years after the rule: on snapshot_9b2c770e's inputs 262 lifecycles anchor on such a document, 74 of them upload pairs outside survival (docs/ontology.md). A proposal typed only by Regulations.gov (`lifecycle_events.source = 'regulations_gov'`, an unnumbered upload) can be a petition for rulemaking, a state program submission or an information-collection notice the Register files under another type: on snapshot_62318069's inputs 515 survival lifecycles since 2015 anchor on one (352 open); a Register number its title names is not read as its identity. Where the proceeding also holds the Register's proposal, the Register's anchors (54d); an upload keeps its anchor when a final falls between the two or the Register's is a comment-period extension or correction, so an earlier proposal whose Register copy is missing may still anchor on its later re-proposal (FDA's 1978 OTC-monograph dockets re-proposed in the 1990s). A final that finalizes another docket's proposal is paired in its own proceeding only and the proposal stays `open`: a RIN never groups dockets (56a), and the Register's docket labels are often an agency's own (2026-15833 names 'CMS-1849-F and CMS-0062-F' and no RIN). A Register proposal naming several dockets anchors one lifecycle per docket (502 proposals behind 2,358 of 35,327 survival rows on snapshot_62318069's inputs; EPA 20%).",
+    "data_quality": "A Regulations.gov document that states no Register number in `fr_doc_num`, or whose stated number resolves to no Register row, is dated by its upload, which for a legacy document can be years after the rule: on snapshot_9b2c770e's inputs 262 lifecycles anchor on such a document, 74 of them upload pairs outside survival (docs/ontology.md). A proposal typed only by Regulations.gov (`lifecycle_events.source = 'regulations_gov'`, an unnumbered upload) can be a petition for rulemaking, a state program submission or an information-collection notice the Register files under another type: on snapshot_62318069's inputs 515 survival lifecycles since 2015 anchor on one (352 open); a Register number its title names is not read as its identity. Where the proceeding also holds the Register's proposal, the Register's anchors (54d); an upload keeps its anchor when a final falls between the two or the Register's is a comment-period extension or correction, so an earlier proposal whose Register copy is missing may still anchor on its later re-proposal (FDA's 1978 OTC-monograph dockets re-proposed in the 1990s). A final that finalizes another docket's proposal is paired in its own proceeding only and the proposal stays `open`: a RIN never groups dockets (56a), and the Register's docket labels are often an agency's own (2026-15833 names 'CMS-1849-F and CMS-0062-F' and no RIN). A Register proposal naming several dockets anchors one lifecycle per docket (502 proposals behind 2,358 of 35,327 survival rows on snapshot_62318069's inputs; EPA 20%).\nFor `routine_family` `pesticide_tolerance` the proposal is usually EPA's notice that it received a pesticide petition (FFDCA 408(d)(3)), typed Proposed Rule, not a proposal of rule text: 443 of the 459 EPA tolerance lifecycles proposed since 2020 on snapshot_448e6d9a's inputs. Time to final then runs from the receipt notice, and `proposal_form` does not tell the two apart.",
     "columns": [
       {
         "column_name": "proceeding_id",
@@ -1931,7 +1931,7 @@
       {
         "column_name": "supersedes_id",
         "column_type": "VARCHAR",
-        "description": "Id of a prior row this one continues; always NULL here."
+        "description": "Id of a prior row this one continues; always NULL here: lifecycles are recomputed each snapshot and continue no prior row. `proceedings.supersedes_id` differs: there a continuing proceeding names its own id."
       }
     ],
     "grain": "One lifecycle per docketed proceeding.",
@@ -1957,7 +1957,7 @@
   "lifecycle_events": {
     "table": "lifecycle_events",
     "label": "Rulemaking lifecycle events",
-    "summary": "One row per staged document of a docketed proceeding: the events each `rulemaking_lifecycles` row is paired from. A Regulations.gov document whose own `fr_doc_num` resolves to one Register document is that document, dated by the Register (decision 60); a document that states no number keeps Regulations.gov's type and its upload day. An Agenda entry completed as withdrawn adds its dated withdrawal. Keyed (`proceeding_id`, `document_id`); `dated_by` says which kind of id `document_id` is. Joins `rulemaking_lifecycles` on `proceeding_id`. Built by `build_lifecycles`; `event_date` is DATE.",
+    "summary": "One row per staged document of a docketed proceeding: the events each `rulemaking_lifecycles` row is paired from. A Regulations.gov document whose own `fr_doc_num` resolves to one Register document is that document, dated by the Register (decision 60); a document that states no number keeps Regulations.gov's type and its upload day. A stage comes only from a document's own Rule or Proposed Rule type (decision 58), so a Register document typed Notice is never an event: a petition withdrawal or receipt the Register types Notice (EPA's withdrawals 2010-8292, 2010-13540, 2011-8549 and 2011-16199; the receipts 2021-08335 and 2023-14192) neither closes nor opens a lifecycle. An Agenda entry completed as withdrawn adds its dated withdrawal. Keyed (`proceeding_id`, `document_id`); `dated_by` says which kind of id `document_id` is. Joins `rulemaking_lifecycles` on `proceeding_id`. Built by `build_lifecycles`; `event_date` is DATE.",
     "coverage": "Derived, and bounded by its inputs: the stage events of every docketed proceeding, one per document, less those undated or dated after the run's day.",
     "kind": "derived",
     "measured_on": "2026-09-28",
@@ -2036,7 +2036,7 @@
       {
         "column_name": "supersedes_id",
         "column_type": "VARCHAR",
-        "description": "Id of a prior row this one continues; always NULL here."
+        "description": "Id of a prior row this one continues; always NULL here: events are recomputed each snapshot and continue no prior row. `proceedings.supersedes_id` differs: there a continuing proceeding names its own id."
       }
     ],
     "grain": "One stage event per document of one docketed proceeding.",
@@ -2048,7 +2048,7 @@
   "agency_lifecycle_stats": {
     "table": "agency_lifecycle_stats",
     "label": "Time to final rule by agency",
-    "summary": "The Aalen-Johansen cumulative incidence of a final rule, withdrawal competing (decision 54a), per agency and for all agencies (`agency_code` NULL), overall, routine, non-routine and per routine family: the first day it reaches each quartile, NULL where it never does, with a 95% interval from the log-log band. A cell under 30 rules keeps its row, `suppressed`, with no estimates; the Parquet metadata states the estimator exactly. Routine families exist for FAA, EPA and USCG only; for every other agency `non_routine` equals `all`. Cells cover all years; a cohort (proposals since 2015) is computed from `rulemaking_lifecycles`. A rule is a docketed proceeding, so a Register proposal naming several dockets counts once per docket and the band treats them as independent. Keyed (`agency_code`, `stratum`). Built by `build_agency_lifecycle_stats`; counts and days are INTEGER.",
+    "summary": "The Aalen-Johansen cumulative incidence of a final rule, withdrawal competing (decision 54a), per agency and for all agencies (`agency_code` NULL), overall, routine, non-routine and per routine family: the first day it reaches each quartile, NULL where it never does, with a 95% interval from the log-log band. A cell under 30 rules keeps its row, `suppressed`, with no estimates; the Parquet metadata states the estimator exactly. Routine families exist for FAA, EPA and USCG only; for every other agency `non_routine` equals `all`. Cells pool every proposal year and no cohort cell is published; for a cohort (proposals since 2015, say), select its `rulemaking_lifecycles` rows by `proposal_date` and estimate it the same way. A rule is a docketed proceeding, so a Register proposal naming several dockets counts once per docket and the band treats them as independent. Keyed (`agency_code`, `stratum`). Built by `build_agency_lifecycle_stats`; counts and days are INTEGER.",
     "coverage": "Derived from `rulemaking_lifecycles` with a survival outcome, every proposal year together (no cohort window), per `agency_code` as the proceeding states it (no department roll-up: HHS, CMS and FDA are separate cells). A cell covering fewer than 30 rules is suppressed.",
     "kind": "derived",
     "measured_on": "2026-09-27",
@@ -2314,7 +2314,7 @@
       {
         "column_name": "filing_type",
         "column_type": "VARCHAR",
-        "description": "The LDA filing-type code as the API states it: `RR` registration; `Q1`–`Q4` quarterly reports and `MM` the pre-2008 mid-year report; `1A`–`4A` and `MA` amendments; `1T`–`4T` and `MT` terminations; `1@`–`4@` and `M@` termination amendments; a trailing `Y` marks a no-activity report (`Q1Y`, `1@Y`). The LDA constants endpoint (`/api/v1/constants/filing/filingtypes/`) is the authority. An amendment is a separate filing that restates its quarter's report; take the latest filing per registrant, client and period."
+        "description": "The LDA filing-type code as the API states it: `RR` registration; `Q1`–`Q4` quarterly reports and `MM` the pre-2008 mid-year report; `1A`–`4A` and `MA` amendments; `1T`–`4T` and `MT` terminations; `1@`–`4@` and `M@` termination amendments; a trailing `Y` marks a no-activity report (`Q1Y`, `1@Y`). The LDA constants endpoint (`/api/v1/constants/filing/filingtypes/`) is the authority. An amendment is a separate filing that restates its quarter's report. To total amounts, drop registrations (`RR`, `RA`), which carry a `filing_period` too, then keep the latest filing per registrant, `client_id` and period: with registrations kept, a later one displaced a quarterly report in 103 groups of 2025 (measured 2026-10-03). For issues or activities, choose filing types first: a termination chain (`1T`, then a no-activity `1@Y`) shares the period, and the latest filing can be the no-activity one."
       },
       {
         "column_name": "filing_year",
@@ -2344,22 +2344,22 @@
       {
         "column_name": "client_name",
         "column_type": "VARCHAR",
-        "description": "The client's name as the registrant filed it; a name, not an identity. A self-filing organization is both registrant and client, often under a spelling other registrants do not use for it (McKesson files as `MCKESSON CORPORATION & AFFILIATES …`). `client_id` and `registrant_id` are the stable keys; a match to `comments.organization` or `sam_entities.legal_business_name` is a name match."
+        "description": "The client's name as the registrant filed it; a name, not an identity. A self-filing organization is both registrant and client, often under a spelling other registrants do not use for it (McKesson files as `MCKESSON CORPORATION & AFFILIATES …`). `registrant_id` keys the registrant across its filings and `client_id` keys a client only within one registrant (see `client_id`); a match to `comments.organization` or `sam_entities.legal_business_name` is a name match."
       },
       {
         "column_name": "client_id",
         "column_type": "VARCHAR",
-        "description": "LDA client id."
+        "description": "LDA's `client.id`: one registrant's record of one client, stable across that registrant's filings, not an organization identity. No id is shared between registrants (129,434 ids for 129,434 registrant-client pairs, measured 2026-10-03), so an organization hired by several firms has one id per firm (AT&T Services, Inc.: 21 ids under 21 registrants in 2025)."
       },
       {
         "column_name": "income",
         "column_type": "VARCHAR",
-        "description": "Lobbying income reported by a lobbying firm for the period, in USD. Null for self-filers (who report `expenses`). An amended report (`filing_type` `1A`–`4A`) restates its quarter's amount, often unchanged, so summing over every filing counts that quarter twice; keep the latest filing per registrant, client and quarter."
+        "description": "Lobbying income reported by a lobbying firm for the period, in USD. Null for self-filers (who report `expenses`). An amended report (`filing_type` `1A`–`4A`) restates its quarter's amount, often unchanged, so summing over every filing counts that quarter twice; drop registrations (`RR`, `RA`) and keep the latest filing per registrant, `client_id` and quarter (see `filing_type`)."
       },
       {
         "column_name": "expenses",
         "column_type": "VARCHAR",
-        "description": "Lobbying expenses reported by a self-filing organization for the period, in USD. Null for firms (who report `income`). An amended report (`filing_type` `1A`–`4A`) restates its quarter's amount, often unchanged, so summing over every filing counts that quarter twice; keep the latest filing per registrant, client and quarter. A self-filing organization's expenses already include what it pays outside lobbying firms, whose `income` for that client is reported separately; do not add the two."
+        "description": "Lobbying expenses reported by a self-filing organization for the period, in USD. Null for firms (who report `income`). An amended report (`filing_type` `1A`–`4A`) restates its quarter's amount, often unchanged, so summing over every filing counts that quarter twice; drop registrations (`RR`, `RA`) and keep the latest filing per registrant, `client_id` and quarter (see `filing_type`). A self-filing organization's expenses already include what it pays outside lobbying firms, whose `income` for that client is reported separately; do not add the two."
       },
       {
         "column_name": "lobbying_activities_json",
@@ -2374,7 +2374,7 @@
       {
         "column_name": "url",
         "column_type": "VARCHAR",
-        "description": "URL of the filing's printable document page on lda.senate.gov (`filing_document_url`)."
+        "description": "URL of the filing's printable document page on lda.gov (`filing_document_url`; lda.senate.gov redirects there)."
       }
     ],
     "grain": null,
@@ -16717,12 +16717,12 @@
     "coverage": "Not a range. The complete 2026-06-30 CourtListener opinion-clusters export, every mapped source field checked against the original export; the court fields agree with the same-edition docket map and court reference data. A search catch-up adds every cluster whose id is above the export's highest, whatever its filing date; a correction to an exported cluster arrives with the next export. Opinion bodies and broader historical coverage are separate. Per-court gaps are the publisher's: cadc has no unpublished cluster between 2001-04 and 2020-07. See docs/research/fork-output-ledger-2026-09-21.md and receipt join-gaps-2026-09-26/i/.",
     "kind": "not_a_range",
     "measured_on": "2026-09-22",
-    "data_quality": "Bulk and search records expose different fields. ingest_source identifies the selected row's route; unavailable fields are NULL and metadata empty strings are normalized to NULL. A search row never replaces a bulk row of the same export, whose ids it lies above, and a later export's bulk row replaces it. Opinion search does not index RECAP trial-court clusters, so one created after the export arrives only with the next export. Missing court scope is unknown, not proof of a non-federal court. court_dockets is a narrower selection, so unmatched docket IDs are expected. Names, judge strings and citations do not establish cross-source identity.",
+    "data_quality": "Bulk and search records expose different fields. ingest_source identifies the selected row's route; unavailable fields are NULL and metadata empty strings are normalized to NULL. A search row never replaces a bulk row of the same export, whose ids it lies above, and a later export's bulk row replaces it. Opinion search does not index RECAP trial-court clusters, so one created after the export arrives only with the next export. Missing court scope is unknown, not proof of a non-federal court. court_dockets is a narrower selection, so unmatched docket IDs are expected. Names, judge strings and citations do not establish cross-source identity.\nOne decision can be several clusters. On the 2026-06-30 export (measured 2026-10-03), 131 of the 140 Supreme Court decisions reported in 600-606 U.S., grouped by `cl_docket_id` and U.S. citation, have two to five clusters, none with an `scdb_id`. That grouping is a heuristic: it cannot see a decision with no reporter citation yet.",
     "columns": [
       {
         "column_name": "cluster_id",
         "column_type": "VARCHAR",
-        "description": "CourtListener opinion-cluster ID, the decision-level primary/dedup key. Join to court_opinions.cluster_id and court_citations.cluster_id; not an opinion_id."
+        "description": "CourtListener opinion-cluster ID: this table's primary/dedup key, one per CourtListener record of a decision, not per decision. The publisher can hold several clusters for one decision, a Supreme Court slip opinion and its later U.S. Reports print above all, and later opinions cite either (Loper Bright: 9986254 and 10600041). Count decisions by `scdb_id`, the publisher's decision key, where it is set; it is unset on every Supreme Court cluster filed after 2019. Otherwise group by `cl_docket_id` and reporter citation (court_citations), a heuristic that misses a decision with no reporter citation yet. Join to court_opinions.cluster_id and court_citations.cluster_id; not an opinion_id."
       },
       {
         "column_name": "cl_docket_id",
@@ -16742,7 +16742,7 @@
       {
         "column_name": "court_is_federal",
         "column_type": "VARCHAR",
-        "description": "Derived federal classification from court jurisdiction: t or f as a string; NULL when the classification is unavailable."
+        "description": "`t` where CourtListener's jurisdiction code for the court starts with F (F appellate, FD district, FB bankruptcy, FBP bankruptcy appellate panel, FS special), `f` otherwise, as a string; NULL when the classification is unavailable. FS covers courts outside the circuit system, Article I courts and executive adjudicators among them (`cit`, `uscfc`, `cavc`, `bia`, `mspb`), so `t` does not mean an Article III court: filter `court_jurisdiction` for that."
       },
       {
         "column_name": "case_name",
@@ -16792,7 +16792,7 @@
       {
         "column_name": "scdb_id",
         "column_type": "VARCHAR",
-        "description": "Supreme Court Database identifier as supplied by CourtListener, when available."
+        "description": "Supreme Court Database identifier as supplied by CourtListener: the publisher's decision key for a Supreme Court decision where it is set. NULL on every Supreme Court cluster filed after 2019 (2026-06-30 export), whose decisions only the heuristic `cluster_id` names can group."
       },
       {
         "column_name": "scdb_decision_direction",
@@ -16923,11 +16923,11 @@
   "court_citations": {
     "table": "court_citations",
     "label": "Court reporter citations",
-    "summary": "Every reporter citation CourtListener records for a decision, such as \"410 U.S. 113\", \"93 S. Ct. 705\" or a WestLaw or neutral cite. Join cluster_id to court_opinion_clusters.cluster_id to reach the decision; a U.S. Reports citation found in a document (SpicyDocs' us_reports_cite rule) resolves through the row with reporter 'U.S.'. Rebuilt whole from each quarterly export. All columns are VARCHAR, copied as the publisher wrote them.",
+    "summary": "Every reporter citation CourtListener records for a decision, such as \"410 U.S. 113\", \"93 S. Ct. 705\" or a WestLaw or neutral cite. Join cluster_id to court_opinion_clusters.cluster_id to reach the decision; a U.S. Reports citation found in a document (SpicyDocs' us_reports_cite rule) resolves through the rows with reporter 'U.S.', to every cluster carrying it (often two for a recent Supreme Court decision). Rebuilt whole from each quarterly export. All columns are VARCHAR, copied as the publisher wrote them.",
     "coverage": "Not a range. The complete 2026-06-30 CourtListener citations export, copied field for field: every (cluster_id, volume, reporter, page) unique as the publisher's schema requires. The publisher cut this export hours after the cluster export, so a few citations name a cluster court_opinion_clusters lacks (63 on 2026-09-26, 43 of them added by the clusters' catch-up; receipt join-gaps-2026-09-26/i/).",
     "kind": "not_a_range",
     "measured_on": "2026-09-22",
-    "data_quality": "Citations are the publisher's, not re-derived from opinion text; a decision missing a citation here may still carry one in print. Reporter strings are the publisher's abbreviations and are not normalized. page is text because some reporters page with letters or asterisks. A new export is refused until the published court_opinion_clusters reaches every cluster id it names; a cluster the publisher merged away after the export still dangles.",
+    "data_quality": "Citations are the publisher's, not re-derived from opinion text; a decision missing a citation here may still carry one in print. Reporter strings are the publisher's abbreviations and are not normalized. page is text because some reporters page with letters or asterisks. A new export is refused until the published court_opinion_clusters reaches every cluster id it names; a cluster the publisher merged away after the export still dangles. The 2026-06-30 export holds no S. Ct. citation in volumes 143 and 144 (measured 2026-10-03).",
     "columns": [
       {
         "column_name": "citation_id",
@@ -16987,7 +16987,7 @@
     "coverage": "Not a range. The complete 2026-06-30 CourtListener citation-map export: citing/cited opinion pairs, each unique as the publisher's schema requires, with no NULL depth. Only the publisher's surrogate row id is dropped. Citing and cited ids resolve through court_opinions of the same edition except a small residue (see data_quality).",
     "kind": "not_a_range",
     "measured_on": "2026-09-22",
-    "data_quality": "On 2026-09-22 all but 3,758 citing ids and one cited id resolved through court_opinions of the same edition. The edges are the publisher's automated citation resolution, not a reviewed citator: citations it could not resolve are absent, and depth counts mentions, not treatment (followed, distinguished or overruled are not recorded). Several opinions of one decision each carry their own edges, so count distinct clusters, not rows, when ranking decisions.",
+    "data_quality": "On 2026-09-22 all but 3,758 citing ids and one cited id resolved through court_opinions of the same edition. The edges are the publisher's automated citation resolution, not a reviewed citator: citations it could not resolve are absent, and depth counts mentions, not treatment (followed, distinguished or overruled are not recorded). Several opinions of one decision each carry their own edges, and so do several clusters of one decision (see court_opinion_clusters.cluster_id): count decisions, not rows or clusters, by `scdb_id` where it is set, else by the heuristic `cl_docket_id` plus reporter citation, and query every cluster of a cited decision. Edges reach a recent decision late: Loper Bright (decided 2024-06-28) has one citing decision filed in 2024 against 151 for Chevron over the same months, and none of its citing clusters was created before 2025-01-13 (measured 2026-10-03 on the 2026-06-30 export); the publisher does not say why.",
     "columns": [
       {
         "column_name": "citing_opinion_id",
@@ -17069,7 +17069,7 @@
   "court_opinions": {
     "table": "court_opinions",
     "label": "Court opinions (index, no text)",
-    "summary": "Every CourtListener opinion's decision, type and author, without its text. It is what connects court_citation_map and court_parentheticals, which name opinions, to court_opinion_clusters, which holds decisions: join opinion_id from either, then cluster_id to court_opinion_clusters.cluster_id. local_path and download_url locate the original document. Rebuilt whole from each quarterly export, locally rather than on a schedule, because the source export is 54.6 GB. All columns are VARCHAR.",
+    "summary": "Every CourtListener opinion's decision, type and author, without its text. It is what connects court_citation_map and court_parentheticals, which name opinions, to court_opinion_clusters, which holds CourtListener's decision records (one decision can have several): join opinion_id from either, then cluster_id to court_opinion_clusters.cluster_id. local_path and download_url locate the original document. Rebuilt whole from each quarterly export, locally rather than on a schedule, because the source export is 54.6 GB. All columns are VARCHAR.",
     "coverage": "Not a range. The complete 2026-06-30 CourtListener opinions export without its eight text fields: every opinion_id unique and every cluster_id set. All but 21 name a decision in court_opinion_clusters; those 21 are RECAP trial-court opinions created between the two exports, which opinion search does not index, and resolve with the next export (receipt join-gaps-2026-09-26/i/). Opinion text is not included: the fork links out to CourtListener instead.",
     "kind": "not_a_range",
     "measured_on": "2026-09-22",
@@ -17306,8 +17306,8 @@
   "usaspending_recipients": {
     "table": "usaspending_recipients",
     "label": "Federal award recipients",
-    "summary": "One row per federal-award recipient, ingested from the USASpending.gov `/api/v2/recipient/` endpoint by `build_usaspending_recipients`. A keyless (no API key) org-resolution reference dimension keyed by UEI and name — the organizations that receive federal money — complementary to the SAM entity registry and the `fec_committees` table for resolving and enriching the organizations that comment on rulemakings by their federal funding. Scope is deliberately bounded to the top-N recipients by trailing-12-month federal award amount (the endpoint reports ~18M recipients, too many for a daily full walk); the transform merges each run's top-N with the prior table so coverage stays monotonic. Retained recipients outside a run's selection keep their earlier amounts and their original observation columns. All columns are stored as VARCHAR.",
-    "coverage": "Not a range. Accumulated recipients from bounded top-N walks ranked by trailing-12-month award amount. Each run refreshes its selected recipients and retains earlier rows outside that selection with their previous amounts, so the amounts can describe different trailing-12-month periods. A row read since per-row capture evidence was added states its `observed_at` and the digest of its source page; a row carried from earlier runs keeps NULL there, because its read time was not retained. An absent recipient may still exist in the publisher's awards data.",
+    "summary": "One row per federal-award recipient, ingested from the USASpending.gov `/api/v2/recipient/` endpoint by `build_usaspending_recipients`. A keyless (no API key) org-resolution reference dimension keyed by UEI and name — the organizations that receive federal money — complementary to the SAM entity registry and the `fec_committees` table for resolving and enriching the organizations that comment on rulemakings by their federal funding. Two selections of the endpoint's ranking by trailing-12-month federal award amount (owner decision 48): a daily read of the top 10,000, and a weekly walk of every recipient with a positive amount, to the end of the funded tail (the endpoint lists about 18M recipients, most unfunded in the window). Each run merges with the prior table, preferring the fresh row, so a recipient outside a run's selection keeps its earlier amount and its original observation columns. A recipient absent here had no positive trailing-12-month amount at the last weekly walk, or is newer than it. All columns are stored as VARCHAR.",
+    "coverage": "Not a range. Every recipient with a positive trailing-12-month award amount at the latest weekly walk, the top of the ranking refreshed daily (owner decision 48). Each run refreshes its selected recipients and retains earlier rows outside that selection with their previous amounts, so the amounts can describe different trailing-12-month periods. A row read since per-row capture evidence was added states its `observed_at` and the digest of its source page; a row carried from earlier runs keeps NULL there, because its read time was not retained. An absent recipient may still exist in the publisher's awards data.",
     "kind": "not_a_range",
     "measured_on": "2026-09-24",
     "data_quality": null,
@@ -17335,12 +17335,12 @@
       {
         "column_name": "recipient_level",
         "column_type": "VARCHAR",
-        "description": "Recipient rollup level: `P` (parent), `C` (child), or `R` (standalone recipient with no parent). The same UEI can appear at multiple levels, and the levels do not sum: a `C` row's amount is the child's own awards, which can sit under more than one parent UEI, so a child can exceed the `P` row of its own UEI; the `P` and `C` rows of one UEI can also come from different reads, so compare `observed_at` before comparing amounts."
+        "description": "Recipient rollup level: `P` (parent), `C` (child), or `R` (recipient, no parent in that attribution). USAspending keeps one figure per level, so one UEI can hold `R`, `P` and `C` rows at once, each the publisher's own current figure (NMLEHM4JTN15: `P` and `C` $674,040.31, `R` $4.43B, read 2026-10-02), and the levels do not sum: a `C` row's amount is the child's own awards, which can sit under more than one parent UEI, so a child can exceed the `P` row of its own UEI; the `P` and `C` rows of one UEI can also come from different reads, so compare `observed_at` before comparing amounts. The list's amounts can differ from the recipient profile page's (that UEI's `R` profile stated $611.8M on 2026-10-03)."
       },
       {
         "column_name": "total_award_amount",
         "column_type": "VARCHAR",
-        "description": "Trailing-12-month federal award dollars reported by the recipient list endpoint at the recipient's last read, as a numeric string (e.g. `63465270734.15`). The top-N sort key. Retained rows outside the latest selection can carry older amounts; `observed_at` says when this amount was read."
+        "description": "Trailing-12-month federal award dollars reported by the recipient list endpoint at the recipient's last read, as a numeric string (e.g. `63465270734.15`). The ranking's sort key. Retained rows outside the latest selection can carry older amounts; `observed_at` says when this amount was read."
       },
       {
         "column_name": "observed_at",
@@ -17447,7 +17447,7 @@
     "table": "fcc_filings",
     "label": "FCC filings",
     "summary": "One row per FCC ECFS filing — the FCC's comment equivalent: comments, reply comments, ex-parte notices, letters, and other submissions — ingested from the FCC ECFS public API (`/filings`) by `build_fcc_filings`. Requires an api.data.gov key (`DATA_GOV_API_KEY`). Incremental by `date_received`, deduped on `id_submission`; each window is pooled over whole walks until one is clean or the pool holds exactly the count ECFS aggregates for it. Because ECFS holds tens of millions of filings, a first run with no prior table is bounded to the trailing 30 days; deeper history is backfilled in slices via `FCC_SINCE` and/or scoped to specific proceedings via `FCC_PROCEEDINGS`. All columns are stored as VARCHAR, array fields serialized as JSON strings.",
-    "coverage": "Window, not the ECFS archive: filings ECFS received on or after 2026-08-24, when this table started, extended by a daily run. Earlier filings are held only for proceedings backfilled on purpose, so a proceeding's count here is not its ECFS total. Attachment text is extracted for a few selected PDFs only.",
+    "coverage": "Window, not the ECFS archive: filings ECFS received on or after 2026-08-24, when this table started, extended by a daily run. Earlier filings are held only for proceedings backfilled on purpose, so a proceeding's count here is not its ECFS total. Attachment text is extracted for a few selected PDFs only. Each daily run re-reads the trailing seven days by `date_received` and nothing older, so a filing ECFS disseminates more than a week after receiving it is missed, and `proceeding_names_json` is the assignment as last read: ECFS later moves filings out of `INBOX-…` placeholders into dockets, and a held filing keeps the placeholder. The newest day is partial, ending at the last run.",
     "kind": "window",
     "measured_on": "2026-09-28",
     "data_quality": null,
@@ -17566,11 +17566,11 @@
   "bill_actions": {
     "table": "bill_actions",
     "label": "Bill actions",
-    "summary": "One row per action entry in a bill's BILLSTATUS document, in publisher order. Each row also carries the stage the action text implies, with the rule and matcher that fired, which makes `congress_bills.stage` auditable action by action. All columns are stored as VARCHAR.",
+    "summary": "One row per entry of the bill's own action list (`actions` in its BILLSTATUS document), in publisher order; actions recorded under the bill's amendments (`amendments/amendment/actions`) are not rows, so a roll call on an amendment can have no action here. Each row also carries the stage the action text implies, with the rule and matcher that fired, which makes `congress_bills.stage` auditable action by action. All columns are stored as VARCHAR.",
     "coverage": "Sampled: bills the bill family has read from GovInfo BILLSTATUS, Congress by Congress from the 108th on; group by the Congress in bill_id to see which Congresses are filled.",
     "kind": "sampled",
     "measured_on": "2026-09-28",
-    "data_quality": null,
+    "data_quality": "One event is often entered by more than one system (`source_system_name`). Library of Congress and House floor rows carry an `action_code`; Senate and House committee rows carry none. The same event can appear once per system in different words, and some events appear in one system only (S. 545's committee report has a Senate row and no Library of Congress row; 119th Congress, checked 2026-10-03). Counting rows counts entries, not events; filtering to one system, or to rows with an `action_code`, drops the events the other systems alone record.",
     "columns": [
       {
         "column_name": "bill_id",
@@ -17652,7 +17652,7 @@
   "bill_committees": {
     "table": "bill_committees",
     "label": "Bill committee referrals",
-    "summary": "One row per committee or subcommittee a bill reached, as its BILLSTATUS document names it. `referral_signal` is set only for the six appropriations committees the money-bill classifier keys on; it is NULL elsewhere rather than absent. All columns are stored as VARCHAR.",
+    "summary": "One row per committee or subcommittee a bill reached, as its BILLSTATUS document names it. `referral_signal` is set only for the six appropriations committees the money-bill classifier keys on; it is NULL elsewhere rather than absent. It names committees, not what they did: the committee activities BILLSTATUS lists under each committee (Referred To, Markup By, Reported By, with their dates) are not published, so find a committee's report in `bill_actions`. `bill_committee_actions` is a different source, the House committees' activity-report prints, filed at the end of each Congress, so it holds no rows for the sitting Congress. All columns are stored as VARCHAR.",
     "coverage": "Sampled: bills the bill family has read from GovInfo BILLSTATUS, Congress by Congress from the 108th on; group by the Congress in bill_id to see which Congresses are filled.",
     "kind": "sampled",
     "measured_on": "2026-09-28",
@@ -19314,7 +19314,7 @@
     "coverage": "Sampled, and accumulating. One row per member per roll call in `roll_call_votes`, so it inherits that table's both-chambers scope, per-run cap and skip-what-is-already-held behavior exactly.",
     "kind": "sampled",
     "measured_on": "2026-09-28",
-    "data_quality": "House rows with `state` `XX` are the non-voting delegates and the Resident Commissioner, as the Clerk marks them. The Clerk marks them only on amendment votes and motions in committee, so leave them out when ranking voting Representatives. A member who died before a term began can appear as Not Voting on its opening quorum call, as the Clerk's file lists them. One `bioguide_id` can carry more than one spelling of `member_name`; group by `bioguide_id`. The Clerk's files of 1990-2002 (the 101st-107th Congresses) name no member by bioguide id: their rows key `name:` plus the Clerk's label (`name:Jones (NC)`) with `bioguide_id` NULL, and that key identifies the row within its roll call, not a person, since at least 21 labels of those years name two different members. `member_vote_terms` leaves such a row `unresolved_member`; no name is matched to a member. Senate rows carry the bioguide id resolved from their LIS id through `members` at the votes merge; a Senate row still NULL has a LIS id that `members` does not hold, or holds twice (`unresolved_member`).",
+    "data_quality": "House rows with `state` `XX` are the non-voting delegates and the Resident Commissioner, as the Clerk marks them. The Clerk marks them only on amendment votes and motions in committee, so leave them out when ranking voting Representatives. A member who died before a term began can appear as Not Voting on its opening quorum call, as the Clerk's file lists them. One `bioguide_id` can carry more than one spelling of `member_name`; group by `bioguide_id`. The Clerk's files of 1990-2002 (the 101st-107th Congresses) name no member by bioguide id: their rows key `name:` plus the Clerk's label (`name:Jones (NC)`) with `bioguide_id` NULL, and that key identifies the row within its roll call, not a person, since at least 21 labels of those years name two different members. `member_vote_terms` leaves such a row `unresolved_member`; no name is matched to a member. Senate rows carry the bioguide id resolved from their LIS id through `members` at the votes merge; a Senate row still NULL has a LIS id that `members` does not hold, or holds twice (`unresolved_member`).\nThe Clerk lists the Speaker only on the roll calls the Speaker votes on; on the others the Speaker has no row at all, not a Not Voting row (Johnson, J000299, has no row on 54 of the 314 House roll calls of 2026, measured 2026-10-03), so an absence rate over roll calls does not apply to the Speaker. `party` is the label the publisher printed on that roll call, and a change of label starts on the roll call that first prints it: the Clerk prints Kiley (K000401) `R` through roll 95 (2026-03-18) and `I` from roll 96 (2026-03-19), while `member_party_affiliations` dates the change 2026-03-09. Use `party` for a split as the chamber recorded it, and `member_party_affiliations` for a party as of a date.",
     "columns": [
       {
         "column_name": "vote_id",
@@ -19505,7 +19505,7 @@
     "table": "member_terms",
     "label": "Legislator terms",
     "summary": "One row per term a legislator served, in the crosswalk's own order. All columns are stored as VARCHAR.",
-    "coverage": "Sampled. The fork selection retains every term from the same complete September 22, 2026 UTC captures as `members`. All mapped values, parent joins and per-member term counts agree with the originals; earlier retained term identities survive. Source order defines term_index. The single party value per term does not reproduce the finer party_affiliations histories, which the crosswalk records only for terms with a mid-term party change; a member with no affiliation interval never switched, and `member_votes.party` is the party printed on each roll call. Receipts: fork-execution-2026-09-21/members-qualification/.",
+    "coverage": "Sampled. The fork selection retains every term from the same complete September 22, 2026 UTC captures as `members`. All mapped values, parent joins and per-member term counts agree with the originals; earlier retained term identities survive. Source order defines term_index. The single party value per term does not reproduce the finer party_affiliations histories, which the crosswalk records only for terms with a mid-term party change; a member with no affiliation interval never switched. Receipts: fork-execution-2026-09-21/members-qualification/.",
     "kind": "sampled",
     "measured_on": "2026-09-22",
     "data_quality": null,

@@ -735,7 +735,8 @@ DERIVED_SCHEMAS: dict[str, list[tuple[str, str]]] = {
     ],
     # Ingested from the USASpending.gov /api/v2/recipient/ endpoint
     # (build_usaspending_recipients); a federal-award recipient reference
-    # dimension bounded to the top-N recipients by trailing-12-month award amount, all
+    # dimension of every recipient funded in the trailing 12 months (the weekly
+    # walk, decision 48) with the top of the ranking refreshed daily, all
     # columns stored as VARCHAR. Keyed by recipient_id.
     "usaspending_recipients": [
         ("recipient_id", "VARCHAR"),

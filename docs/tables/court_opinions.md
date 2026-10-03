@@ -4,7 +4,7 @@
 
 **Court opinions (index, no text)**
 
-Every CourtListener opinion's decision, type and author, without its text. It is what connects court_citation_map and court_parentheticals, which name opinions, to court_opinion_clusters, which holds decisions: join opinion_id from either, then cluster_id to court_opinion_clusters.cluster_id. local_path and download_url locate the original document. Rebuilt whole from each quarterly export, locally rather than on a schedule, because the source export is 54.6 GB. All columns are VARCHAR.
+Every CourtListener opinion's decision, type and author, without its text. It is what connects court_citation_map and court_parentheticals, which name opinions, to court_opinion_clusters, which holds CourtListener's decision records (one decision can have several): join opinion_id from either, then cluster_id to court_opinion_clusters.cluster_id. local_path and download_url locate the original document. Rebuilt whole from each quarterly export, locally rather than on a schedule, because the source export is 54.6 GB. All columns are VARCHAR.
 
 **Coverage.** Not a range. The complete 2026-06-30 CourtListener opinions export without its eight text fields: every opinion_id unique and every cluster_id set. All but 21 name a decision in court_opinion_clusters; those 21 are RECAP trial-court opinions created between the two exports, which opinion search does not index, and resolve with the next export (receipt join-gaps-2026-09-26/i/). Opinion text is not included: the fork links out to CourtListener instead. *(measured 2026-09-22)*
 
