@@ -1,0 +1,95 @@
+{
+  "reviewed_at": "2026-10-03",
+  "scope": "bounded independent original-render counterexamples; not an exhaustive transcription qualification",
+  "source_pdf_sha256": "804c1157e71da53a00821fdcaf15a1790448c682eb49d44613a577cfce9cb855",
+  "source_physical_page": 6,
+  "source_render_sha256": "8eb545dd6d39445edd88ecc4e3e99120f308f688cb3e84feacb5e6995c1de7d9",
+  "outcome_sha256": "79f007643d646e9d10088ce142e1a9b65367a136354297ea885669b37412fa93",
+  "private_run": "scorecards-hrc-2026-10-03/gemini-page6-resolved",
+  "model": "gemini-3.8-flash",
+  "finish_reason": "STOP",
+  "schema_validated": true,
+  "source_qualified": false,
+  "source_action_counterexamples": [
+    {
+      "source_member_text": "Romney, Mitt",
+      "action_column": "F",
+      "source_visible_glyph": "⊗",
+      "model_glyph": "○",
+      "model_locator": "/rows/7/action_values/5"
+    },
+    {
+      "source_member_text": "Romney, Mitt",
+      "action_column": "I",
+      "source_visible_glyph": "⊗",
+      "model_glyph": "○",
+      "model_locator": "/rows/7/action_values/8"
+    },
+    {
+      "source_member_text": "Murray, Patty",
+      "action_column": "H",
+      "source_visible_glyph": "●",
+      "model_glyph": "⊗",
+      "model_locator": "/rows/13/action_values/7"
+    },
+    {
+      "source_member_text": "Murray, Patty",
+      "action_column": "I",
+      "source_visible_glyph": "⊗",
+      "model_glyph": "○",
+      "model_locator": "/rows/13/action_values/8"
+    },
+    {
+      "source_member_text": "Murray, Patty",
+      "action_column": "J",
+      "source_visible_glyph": "○",
+      "model_glyph": "●",
+      "model_locator": "/rows/13/action_values/9"
+    },
+    {
+      "source_member_text": "Manchin, Joseph",
+      "action_column": "H",
+      "source_visible_glyph": "○",
+      "model_glyph": "⊗",
+      "model_locator": "/rows/15/action_values/7"
+    },
+    {
+      "source_member_text": "Manchin, Joseph",
+      "action_column": "I",
+      "source_visible_glyph": "⊗",
+      "model_glyph": "○",
+      "model_locator": "/rows/15/action_values/8"
+    },
+    {
+      "source_member_text": "Johnson, Ron",
+      "action_column": "H",
+      "source_visible_glyph": "○",
+      "model_glyph": "⊗",
+      "model_locator": "/rows/17/action_values/7"
+    },
+    {
+      "source_member_text": "Johnson, Ron",
+      "action_column": "I",
+      "source_visible_glyph": "⊗",
+      "model_glyph": "○",
+      "model_locator": "/rows/17/action_values/8"
+    },
+    {
+      "source_member_text": "Barrasso, John",
+      "action_column": "H",
+      "source_visible_glyph": "○",
+      "model_glyph": "⊗",
+      "model_locator": "/rows/18/action_values/7"
+    },
+    {
+      "source_member_text": "Barrasso, John",
+      "action_column": "I",
+      "source_visible_glyph": "⊗",
+      "model_glyph": "○",
+      "model_locator": "/rows/18/action_values/8"
+    }
+  ],
+  "party_parentheses_removed_count": 20,
+  "model_reported_uncertainties": [],
+  "production_admission": false
+}

@@ -1,0 +1,120 @@
+name: Rollup — congressional scorecards
+on:
+  workflow_dispatch:
+    inputs:
+      skip_upload:
+        description: 'Build only; publication requires separately qualified enabled sources'
+        type: boolean
+        default: true
+      publishers:
+        description: 'Comma-separated enabled publisher IDs; blank selects all enabled sources'
+        type: string
+        default: ''
+      editions:
+        description: 'Comma-separated literal edition or scorecard IDs'
+        type: string
+        default: ''
+      zyte_publishers:
+        description: 'Comma-separated publishers explicitly acquired through Zyte; requires ZYTE_TOKEN'
+        type: string
+        default: ''
+      zyte_browser_publishers:
+        description: 'Explicit browser API rendition for IJM; index and scripts use publisher bytes'
+        type: string
+        default: ''
+      historical_backfill:
+        description: 'Use explicitly enabled historical acquisition'
+        type: boolean
+        default: false
+      force:
+        description: 'Ignore cadence; never bypass source qualification or disabled flags'
+        type: boolean
+        default: false
+concurrency:
+  group: scorecards-publication
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v4
+      - name: Install pinned dependencies
+        run: uv sync --frozen
+      - name: Retain invocation
+        env:
+          SCORECARD_INPUTS: ${{ toJSON(inputs) }}
+        run: |
+          mkdir -p output
+          python - <<'PY'
+          import datetime, json, os
+          from pathlib import Path
+          Path('output/invocation.json').write_text(json.dumps({
+              'started_at': datetime.datetime.now(datetime.UTC).isoformat(),
+              'code_revision': os.environ['GITHUB_SHA'],
+              'inputs': json.loads(os.environ['SCORECARD_INPUTS']),
+              'scope': 'Qualified complete source editions; no schedule is enabled',
+          }, indent=2) + '\n')
+          PY
+      - name: Build or publish scorecard family
+        env:
+          SCORECARD_PUBLISHERS: ${{ inputs.publishers }}
+          SCORECARD_EDITIONS: ${{ inputs.editions }}
+          SCORECARD_ZYTE_PUBLISHERS: ${{ inputs.zyte_publishers }}
+          SCORECARD_ZYTE_BROWSER_PUBLISHERS: ${{ inputs.zyte_browser_publishers }}
+          ZYTE_TOKEN: ${{ secrets.ZYTE_TOKEN }}
+          SCORECARD_HISTORY: ${{ inputs.historical_backfill }}
+          SCORECARD_FORCE: ${{ inputs.force }}
+          SCORECARD_SKIP_UPLOAD: ${{ inputs.skip_upload }}
+          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+        run: |
+          ARGS=(--output-dir output --skip-upload)
+          if [[ "$SCORECARD_SKIP_UPLOAD" == 'false' ]]; then ARGS=(--output-dir output --no-skip-upload); fi
+          IFS=',' read -r -a PUBLISHERS <<< "$SCORECARD_PUBLISHERS"
+          IFS=',' read -r -a EDITIONS <<< "$SCORECARD_EDITIONS"
+          IFS=',' read -r -a ZYTE_PUBLISHERS <<< "$SCORECARD_ZYTE_PUBLISHERS"
+          IFS=',' read -r -a ZYTE_BROWSER_PUBLISHERS <<< "$SCORECARD_ZYTE_BROWSER_PUBLISHERS"
+          for publisher in "${PUBLISHERS[@]}"; do
+            if [[ -n "$publisher" ]]; then ARGS+=(--publisher "$publisher"); fi
+          done
+          for edition in "${EDITIONS[@]}"; do
+            if [[ -n "$edition" ]]; then ARGS+=(--edition "$edition"); fi
+          done
+          for publisher in "${ZYTE_PUBLISHERS[@]}"; do
+            if [[ -n "$publisher" ]]; then ARGS+=(--zyte-publisher "$publisher"); fi
+          done
+          for publisher in "${ZYTE_BROWSER_PUBLISHERS[@]}"; do
+            if [[ -n "$publisher" ]]; then ARGS+=(--zyte-browser-publisher "$publisher"); fi
+          done
+          if [[ "$SCORECARD_HISTORY" == 'true' ]]; then ARGS+=(--historical-backfill); fi
+          if [[ "$SCORECARD_FORCE" == 'true' ]]; then ARGS+=(--force); fi
+          uv run --frozen run-rollup-scorecards "${ARGS[@]}"
+      - name: Retain invocation and permitted evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scorecards-audit-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            output/invocation.json
+            output/source-evidence/
+          if-no-files-found: ignore
+          retention-days: 30
+      - name: Retain build-only outputs and failures
+        if: failure() || (success() && inputs.skip_upload)
+        uses: actions/upload-artifact@v4
+        with:
+          name: scorecards-output-${{ github.run_id }}-${{ github.run_attempt }}
+          path: output/
+          if-no-files-found: ignore
+          compression-level: 0
+          retention-days: 30

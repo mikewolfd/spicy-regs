@@ -125,7 +125,8 @@ def prepare_target_generation(output_dir: Path, *, product_id: str, prior_file: 
             # 47 product pages retained on 2026-08-22 link one Full Report (spicy-docs decisions, 0.50.1).
             index=product_page_metadata(retained_product_page,product_id)
             digest='sha256:'+hashlib.sha256(retained_product_page).hexdigest()
-            evidence.store.put_blob(digest,len(retained_product_page),[retained_product_page])
+            evidence.retain_bytes(retained_product_page,stage="gao-retained-product-page",
+                product_id=product_id,source_url=index.product_url,origin_requests=0)
             evidence.event('retained-product-page-replay',product_id=product_id,sha256=digest,
                 byte_size=len(retained_product_page),source_url=index.product_url,origin_requests=0,
                 heading=index.title,published_date=index.published_date,

@@ -1,0 +1,269 @@
+{
+  "version": 1,
+  "generated_at": "2026-10-03T17:54:53.651449+00:00",
+  "scope_note": "Research qualification candidates only. Complete disclosed scopes and admitted parser scopes are separate; complete_edition_claim false is deliberate for bounded scope observations.",
+  "profiles": [
+    {
+      "sample_id": "afl_cio:2025:workbooks",
+      "publisher_id": "afl_cio",
+      "scope": "2025 House and Senate publisher-issued downloadable scorecards, including every published member/rating/item cell.",
+      "model_fit": "fits_proposed_source_model",
+      "acquisition_completeness": "complete_disclosed_scope",
+      "complete_edition_claim": false,
+      "capture_ids": [
+        "afl-house-2025-xlsx",
+        "afl-senate-2025-xlsx",
+        "afl-2025-votes",
+        "afl-senate-votes-ajax",
+        "afl-2025-method",
+        "afl2025-house-item-01",
+        "afl2025-house-item-02",
+        "afl2025-house-item-03",
+        "afl2025-house-item-04",
+        "afl2025-house-item-05",
+        "afl2025-house-item-06",
+        "afl2025-house-item-07",
+        "afl2025-house-item-08",
+        "afl2025-house-item-09",
+        "afl2025-house-item-10",
+        "afl2025-house-item-11",
+        "afl2025-house-item-12",
+        "afl2025-house-item-13",
+        "afl2025-senate-item-01",
+        "afl2025-senate-item-02",
+        "afl2025-senate-item-03",
+        "afl2025-senate-item-04",
+        "afl2025-senate-item-05",
+        "afl2025-senate-item-06",
+        "afl2025-senate-item-07",
+        "afl2025-senate-item-08",
+        "afl2025-senate-item-09"
+      ],
+      "proof": [
+        "Publisher download links label the year and chamber. Valid XLSX ZIP has one worksheet and declared dimension; every worksheet row has the expected width.",
+        "House worksheet A1:S439 gives 438 member rows and 13 item columns; Senate A1:N103 gives 102 and 9. Separate HTML item lists reconcile exactly to 13 and 9; all 22 linked item pages captured.",
+        "Annual and lifetime cells are text percentages. Worksheet preserves 6612 member-item cells, including all blank cells and source glyphs."
+      ],
+      "limits": [
+        "Item-page member tables show only the first page; member outcomes are taken from complete downloadable workbooks, not these partial page tables.",
+        "No numeric interpretation is assigned to blank, circle or check cells without publisher legend context.",
+        "A source note explains that its letter item uses no-vote encoding for signed letters and that its passed/failed notation does not apply.",
+        "Lifetime underlying historical items are outside the 2025 workbook; lifetime published values can be retained without score reproduction.",
+        "The duplicated H.R.4 workbook columns have no proven linkage to the two dated item URLs. Production member-item mapping must establish a unique source-backed crosswalk or refuse that scope."
+      ],
+      "production_recommendation": "admit_after_adapter_qualification",
+      "production_qualified": false,
+      "reproduction_support": "unsupported",
+      "rights_status": "unreviewed",
+      "evidence_policy": "hash_only"
+    },
+    {
+      "sample_id": "lcv:2025:published_export",
+      "publisher_id": "lcv",
+      "scope": "Complete current publisher export for session_year=2025 with include_former=1, both chambers; complete offered 2025 item index.",
+      "model_fit": "fits_proposed_source_model",
+      "acquisition_completeness": "complete_disclosed_scope",
+      "complete_edition_claim": false,
+      "capture_ids": [
+        "lcv-2025-senate-csv",
+        "lcv-2025-house-csv",
+        "lcv-2025-senate-html",
+        "lcv-2025-house-html",
+        "lcv-2025-votes-csv",
+        "lcv-2025-votes-html",
+        "lcv-2025-pdf",
+        "lcv-method",
+        "lcv-example-member",
+        "lcv-example-vote"
+      ],
+      "proof": [
+        "Export action was derived from publisher form fields and public JavaScript. Both chamber requests return identical two-chamber CSVs.",
+        "All 551 distinct member URLs reconcile to all 551 HTML cards; annual/lifetime cells agree under explicit representation-only cross-checks for trailing percent sign and na/N/A. No transformed value is substituted into source observations.",
+        "CSV sections contain 103 Senate and 448 House rows; item export contains 34 Senate and 32 House rows. Complete official 96-page PDF also retained privately."
+      ],
+      "limits": [
+        "Scope is the publisher current response to a 2025 request, not an inferred historical roster. Three listed members have blank annual cells and lifetime na: Alan Armstrong, Clay Fuller and Analilia Mejia.",
+        "Do not create a nonblank annual rating for an empty cell. Member presence is independently retained.",
+        "CSV values are bare strings; HTML percentages and na/N/A are separate source representations.",
+        "Whole member-item PDF grid is captured but not parsed or qualified. A complete item-result reader needs separate qualification.",
+        "CSV is recommended authoritative rendition for V1 ratings; source unit context is retained separately."
+      ],
+      "production_recommendation": "admit_after_adapter_qualification",
+      "production_qualified": false,
+      "reproduction_support": "unsupported",
+      "rights_status": "unreviewed",
+      "evidence_policy": "hash_only"
+    },
+    {
+      "sample_id": "nea:119:2025",
+      "publisher_id": "nea",
+      "scope": "Complete published 2025 House and Senate grade tables and disclosed scored-vote list.",
+      "model_fit": "fits_proposed_source_model",
+      "acquisition_completeness": "complete_disclosed_scope",
+      "complete_edition_claim": false,
+      "capture_ids": [
+        "nea-119-html",
+        "nea-119-pdf",
+        "nea-119-votes-pdf"
+      ],
+      "proof": [
+        "Both complete named HTML tables contain 100 Senate and 431 House rows.",
+        "All 531 name/state/district/grade rows exactly reconcile to the official 13-page downloadable PDF. All PDF table regions were read, not only sample cells.",
+        "Two-page vote supplement lists six House and six Senate vote references with publisher positions."
+      ],
+      "limits": [
+        "Published ratings do not disclose all leadership/accessibility/committee contributions. Their absence prevents reproduction, not grade retention.",
+        "Literal state NES for Pete Ricketts occurs in both renditions and must remain unchanged.",
+        "The amendment item names S.Amdt.2382 to S.Amdt.2360 to H.R.1; preserve multiple references rather than selecting one arbitrarily."
+      ],
+      "production_recommendation": "admit_after_adapter_qualification",
+      "production_qualified": false,
+      "reproduction_support": "unsupported",
+      "rights_status": "unreviewed",
+      "evidence_policy": "hash_only"
+    },
+    {
+      "sample_id": "humane:2025:senate",
+      "publisher_id": "humane_world_action",
+      "scope": "Complete Senate chart in the final 2025 edition, with disclosed Senate item and leader columns.",
+      "model_fit": "fits_proposed_source_model",
+      "acquisition_completeness": "complete_disclosed_scope",
+      "complete_edition_claim": false,
+      "capture_ids": [
+        "humane-2025-final",
+        "humane-method"
+      ],
+      "proof": [
+        "The complete final PDF is 20 pages. Senate method is physical page5 and the entire Senate chart occupies pages6–8 before the next section.",
+        "Parsed all 100 unique member rows, source state headings and both action columns; every source state contains two listed senators.",
+        "Rendered pages6–7 confirm the extracted table layout and legend. Preserve raw PDF glyph tokens ü and ê as well as rendered check/star meaning.",
+        "Score column includes numeric strings, 100+ and ••. The legend expressly states •• means top leaders have no numerical score."
+      ],
+      "limits": [
+        "House grid and historical PDF layouts remain unqualified for extraction. Select for adapter implementation, but require complete House qualification before enabling any whole-edition replacement; no runtime chamber scope is assumed.",
+        "Leader is an aggregate activity indicator; a star does not establish an exact numeric bonus or disclose all contributing actions.",
+        "Raw empty cells remain empty, not inferred negative actions."
+      ],
+      "production_recommendation": "admit_after_adapter_qualification",
+      "production_qualified": false,
+      "reproduction_support": "unsupported",
+      "rights_status": "unreviewed",
+      "evidence_policy": "hash_only"
+    },
+    {
+      "sample_id": "heritage_action:119:observed",
+      "publisher_id": "heritage_action",
+      "scope": "Observed current 119th member ratings and every item returned by the public current-edition catalogs.",
+      "model_fit": "fits_proposed_source_model",
+      "acquisition_completeness": "complete_disclosed_scope",
+      "complete_edition_claim": false,
+      "capture_ids": [
+        "heritage-119-members",
+        "heritage-119-members-repeat",
+        "heritage-119-votes",
+        "heritage-119-votes-repeat",
+        "heritage-119-cosponsorships",
+        "heritage-119-cosponsors-repeat",
+        "heritage119-cosponsor-hr4448-119",
+        "heritage119-cosponsor-hr4620-119",
+        "heritage119-cosponsor-hr7651-119",
+        "heritage119-cosponsor-hr925-119",
+        "heritage119-cosponsor-s128-119",
+        "heritage119-cosponsor-s2343-119",
+        "heritage119-cosponsor-s2376-119",
+        "heritage119-cosponsor-s382-119",
+        "heritage119-vote-h11-2026",
+        "heritage119-vote-h120-2026",
+        "heritage119-vote-h151-2026",
+        "heritage119-vote-h168-2025",
+        "heritage119-vote-h190-2025",
+        "heritage119-vote-h201-2025",
+        "heritage119-vote-h207-2026",
+        "heritage119-vote-h266-2026",
+        "heritage119-vote-h269-2026",
+        "heritage119-vote-h27-2026",
+        "heritage119-vote-h280-2026",
+        "heritage119-vote-h4-2026",
+        "heritage119-vote-h44-2026",
+        "heritage119-vote-h69-2026",
+        "heritage119-vote-s15-2026",
+        "heritage119-vote-s152-2026",
+        "heritage119-vote-s253-2026",
+        "heritage119-vote-s372-2025",
+        "heritage119-vote-s411-2025",
+        "heritage119-vote-s60-2026"
+      ],
+      "proof": [
+        "Key-vote response declares total20, last_page1, nextnull, and contains20 rows. Every listed vote detail was captured.",
+        "Cosponsorship response is an unpaginated data list of8 entries, below the public app requested limit25. Every listed detail was captured. This is an observed public-list scope, not an independent proof of unlisted publisher items.",
+        "All three catalogs repeat identically at the data level after detail capture. All28 details identify Congress119.",
+        "All item member groups have unique IDs per item; 8780 member-item rows cover544 people. Every live-list member is represented, and all repeated API score values agree.",
+        "Current live roster has531 members; complete item groups also include13 former members. Preserve the union and source provenance."
+      ],
+      "limits": [
+        "API null and HTML N/A are different literal score representations for four live members.",
+        "The historical /scorecard/members/118 page declares118 but embeds current members. Reject historical full-edition snapshots from that route.",
+        "Historical exact-item responses remain valid challenge observations and must not be elevated to a historical edition replacement.",
+        "This is an observed crawl. It cannot prove historical completeness or an immutable publisher version."
+      ],
+      "production_recommendation": "admit_after_adapter_qualification",
+      "production_qualified": false,
+      "reproduction_support": "unsupported",
+      "rights_status": "unreviewed",
+      "evidence_policy": "hash_only"
+    },
+    {
+      "sample_id": "us_chamber:composite_method",
+      "publisher_id": "us_chamber",
+      "scope": "Published 116th-era composite methodology only",
+      "model_fit": "fits_proposed_source_model",
+      "acquisition_completeness": "incomplete_for_member_ratings",
+      "capture_ids": [
+        "chamber-index",
+        "chamber-method",
+        "chamber-method-current",
+        "chamber-2019-sample-pdf"
+      ],
+      "production_recommendation": "defer_until_complete_member_source",
+      "production_qualified": false,
+      "reproduction_support": "unsupported",
+      "rights_status": "unreviewed",
+      "evidence_policy": "hash_only",
+      "proof": [
+        "Current How They Voted index was captured and contains introductory text and methodology link but no member rating table or downloadable member dataset.",
+        "A historical indexed sample PDF route returns404. This is retained as failure, not an empty scorecard."
+      ],
+      "limits": [
+        "No complete member/component dataset was found in the bounded pass. Keep composite-method shape in V1 and explicitly defer production ingestion.",
+        "Methodology pages differ in detail: current method describes leadership relative to party peers. Pin source/version; do not merge it silently with the older example."
+      ],
+      "complete_edition_claim": false
+    },
+    {
+      "sample_id": "c4ip:2024:grades",
+      "publisher_id": "c4ip",
+      "scope": "All published Senate and House grades in Tables4 and5 of the March2024 first edition.",
+      "model_fit": "fits_proposed_source_model",
+      "acquisition_completeness": "complete_disclosed_scope",
+      "complete_edition_claim": false,
+      "capture_ids": [
+        "c4ip-2024-pdf"
+      ],
+      "proof": [
+        "Table4 is explicitly the complete results for included senators; entire table is on physical/printed pages28–30, followed by a figure and House discussion.",
+        "Parsed all99 source rows with unique names; Table4 has one California row. This is source-defined coverage, not a reconstructed expected roster.",
+        "Rendered page28 confirms grade cells and first/last-name columns. Composite/signed-contribution methodology is on pages18–22."
+      ],
+      "limits": [
+        "Data Annex and per-member component calculations were not acquired. No reproduction claim.",
+        "Whole HouseTable5 was also parsed:431unique name/state/district rows across physical pages32–43. Together the two tables contain530published grades; do not fill omitted members.",
+        "Recommend this as a sixth shape representative if Chamber remains inaccessible; it does not replace qualification of Chamber-specific formulas. No member component values should be silently omitted when a future accessible DataAnnex is admitted."
+      ],
+      "production_recommendation": "admit_after_adapter_qualification",
+      "production_qualified": false,
+      "reproduction_support": "unsupported",
+      "rights_status": "unreviewed",
+      "evidence_policy": "hash_only"
+    }
+  ]
+}

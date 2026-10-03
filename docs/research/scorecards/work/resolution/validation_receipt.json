@@ -1,0 +1,48 @@
+{
+  "checked_at": "2026-10-03T19:59:48.484457+00:00",
+  "rule_version": "scorecard-resolution-v1.2",
+  "focused_tests": {
+    "command": "uv run --frozen --no-sync pytest -q tests/test_scorecard_resolution.py tests/test_scorecard_analysis.py",
+    "passed": 73
+  },
+  "ruff": "passed",
+  "integration_review": "integration_review.md",
+  "source_pins": {
+    "src/spicy_regs/scorecards/resolution.py": "3386f0697217b3c1e6cb2676b34f3473cbc6d37b9c6cac28669490e58f93dc51",
+    "tests/test_scorecard_resolution.py": "6eb89e9624f5d76d450f50edbd997bcf5aaf60d72b55a79c5cb1370a15638772",
+    "tests/test_scorecard_analysis.py": "c86e9da95685772f1912d83184cefdfa387c1212585821fd69a02a5d1c1d59d7"
+  },
+  "production_publication": false,
+  "limitations": [
+    "Pure row resolver only; caller verifies files against pinned descriptors.",
+    "Heritage cong_id semantics remain unqualified; no implicit Bioguide crosswalk.",
+    "Unrecognized explicit periods remain unresolved, without release-year fallback.",
+    "Senate district literals are retained and explicitly marked not applicable; House at-large context remains restrictive.",
+    "Adoption requires rebuilt members with votesmart_id, bioguide_previous_json and other_names_json; no official input was rebuilt or published.",
+    "Dated name patches use conservative half-open alias intervals; unqualified or undated aliases cannot establish historical matches.",
+    "Typed upstream vote IDs need a qualified chamber vote_date and existing canonical vote_id; incomplete hN-YEAR IDs remain unresolved and no session arithmetic is used."
+  ],
+  "provider_tests": {
+    "cwd": "spicy-docs",
+    "command": "uv run --frozen --no-sync pytest -q tests/test_legislators.py tests/test_table_contracts.py -k 'legislator or members or member_terms'",
+    "passed": 265,
+    "deselected": 1279
+  },
+  "provider_source_pins": {
+    "src/spicy_docs/sources/legislators.py": "d2e7b55ec5ee5fb8df41b01b0784ac2d69186061bf6f9d716c6164af7f5279b1",
+    "src/spicy_docs/schemas/legislator_tables.py": "60d40b17b4e152f7adb1a2821df8f2ff329e46bb246bc1575f00755ffab29f47",
+    "tests/test_legislators.py": "7e85542627fb69646adefa728e3cb6b86291dee7d82e70a1929dd0eed4238f77",
+    "tests/test_table_contracts.py": "1490ffe02ea851445a1448c1bf05637b5cb48f25973e471387d0071afb0d57b5"
+  },
+  "resolver_type_check": {
+    "command": "uv run --no-sync ty check src/spicy_regs/scorecards/resolution.py tests/test_scorecard_resolution.py",
+    "result": "passed"
+  },
+  "historical_identity_measurement": {
+    "script": "measure_historical_identities.py",
+    "receipt": "historical_identity_measurement.json",
+    "command": "From spicy-docs: uv run --frozen --no-sync python ../spicy-regs/docs/research/scorecards/work/resolution/measure_historical_identities.py --input-dir /tmp/scorecard-reuse-20261003/unitedstates/congress-legislators --output ../spicy-regs/docs/research/scorecards/work/resolution/historical_identity_measurement.json",
+    "resolver_examples": "historical_identity_resolution_examples.json",
+    "exact_real_crosswalk_fixture_examples": 8
+  }
+}

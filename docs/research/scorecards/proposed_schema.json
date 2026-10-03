@@ -1,0 +1,942 @@
+{
+  "version": "scorecards-v1",
+  "frozen": true,
+  "physical_types": "All public columns are VARCHAR in V1. Optional exact numeric projections are decimal strings, never binary floating point or unit conversions; publisher literals remain authoritative.",
+  "common_source_fields": [
+    "snapshot_id",
+    "capture_id",
+    "source_url",
+    "source_path"
+  ],
+  "tables": [
+    {
+      "name": "scorecard_publishers",
+      "grain": "One stable publisher identity; historical names remain on edition observations.",
+      "key": [
+        "publisher_id"
+      ],
+      "fields": [
+        "publisher_id",
+        "name",
+        "abbreviation",
+        "aliases_json",
+        "homepage_url",
+        "scorecard_index_url",
+        "observed_at",
+        "capture_id",
+        "source_url",
+        "source_path"
+      ],
+      "types": {
+        "publisher_id": "VARCHAR",
+        "name": "VARCHAR",
+        "abbreviation": "VARCHAR",
+        "aliases_json": "VARCHAR",
+        "homepage_url": "VARCHAR",
+        "scorecard_index_url": "VARCHAR",
+        "observed_at": "VARCHAR",
+        "capture_id": "VARCHAR",
+        "source_url": "VARCHAR",
+        "source_path": "VARCHAR"
+      },
+      "references": []
+    },
+    {
+      "name": "scorecards",
+      "grain": "One publisher-defined edition, with a series_id for continuity; a live series is not itself an edition.",
+      "key": [
+        "scorecard_id"
+      ],
+      "fields": [
+        "scorecard_id",
+        "publisher_id",
+        "series_id",
+        "publisher_edition_key",
+        "publisher_name_text",
+        "title",
+        "edition_label_text",
+        "chamber_scope_text",
+        "year_text",
+        "congress_text",
+        "session_text",
+        "timespan_text",
+        "periods_json",
+        "source_url",
+        "methodology_url",
+        "published_at_text",
+        "updated_at_text",
+        "observed_at",
+        "snapshot_id",
+        "capture_id",
+        "source_path"
+      ],
+      "types": {
+        "scorecard_id": "VARCHAR",
+        "publisher_id": "VARCHAR",
+        "series_id": "VARCHAR",
+        "publisher_edition_key": "VARCHAR",
+        "publisher_name_text": "VARCHAR",
+        "title": "VARCHAR",
+        "edition_label_text": "VARCHAR",
+        "chamber_scope_text": "VARCHAR",
+        "year_text": "VARCHAR",
+        "congress_text": "VARCHAR",
+        "session_text": "VARCHAR",
+        "timespan_text": "VARCHAR",
+        "periods_json": "VARCHAR",
+        "source_url": "VARCHAR",
+        "methodology_url": "VARCHAR",
+        "published_at_text": "VARCHAR",
+        "updated_at_text": "VARCHAR",
+        "observed_at": "VARCHAR",
+        "snapshot_id": "VARCHAR",
+        "capture_id": "VARCHAR",
+        "source_path": "VARCHAR"
+      },
+      "references": [
+        {
+          "child_columns": [
+            "publisher_id"
+          ],
+          "parent_table": "scorecard_publishers",
+          "parent_columns": [
+            "publisher_id"
+          ],
+          "optional": false
+        },
+        {
+          "child_columns": [
+            "snapshot_id"
+          ],
+          "parent_table": "scorecard_snapshots",
+          "parent_columns": [
+            "snapshot_id"
+          ],
+          "optional": false
+        }
+      ]
+    },
+    {
+      "name": "scorecard_snapshots",
+      "grain": "One complete accepted edition capture and parse; unsuccessful attempts remain in the run journal.",
+      "key": [
+        "snapshot_id"
+      ],
+      "fields": [
+        "snapshot_id",
+        "scorecard_id",
+        "observed_at",
+        "capture_ids_json",
+        "parser_version",
+        "methodology_digest",
+        "completeness_status",
+        "completeness_rule",
+        "source_declared_counts_json",
+        "parsed_counts_json",
+        "evidence_policy",
+        "capture_roles_json",
+        "rendition_selection_rule",
+        "identity_rule_version",
+        "capture_id",
+        "source_url",
+        "source_path"
+      ],
+      "types": {
+        "snapshot_id": "VARCHAR",
+        "scorecard_id": "VARCHAR",
+        "observed_at": "VARCHAR",
+        "capture_ids_json": "VARCHAR",
+        "parser_version": "VARCHAR",
+        "methodology_digest": "VARCHAR",
+        "completeness_status": "VARCHAR",
+        "completeness_rule": "VARCHAR",
+        "source_declared_counts_json": "VARCHAR",
+        "parsed_counts_json": "VARCHAR",
+        "evidence_policy": "VARCHAR",
+        "capture_roles_json": "VARCHAR",
+        "rendition_selection_rule": "VARCHAR",
+        "identity_rule_version": "VARCHAR",
+        "capture_id": "VARCHAR",
+        "source_url": "VARCHAR",
+        "source_path": "VARCHAR"
+      },
+      "references": [
+        {
+          "child_columns": [
+            "scorecard_id"
+          ],
+          "parent_table": "scorecards",
+          "parent_columns": [
+            "scorecard_id"
+          ],
+          "optional": false
+        }
+      ]
+    },
+    {
+      "name": "scorecard_methodologies",
+      "grain": "One source-stated rule set in an edition, scoped to chamber and cohort as stated.",
+      "key": [
+        "scorecard_id",
+        "methodology_id"
+      ],
+      "fields": [
+        "scorecard_id",
+        "methodology_id",
+        "chamber_text",
+        "cohort_text",
+        "effective_at_text",
+        "methodology_text",
+        "methodology_url",
+        "disclosure_status",
+        "capture_id",
+        "source_path",
+        "snapshot_id",
+        "source_url"
+      ],
+      "types": {
+        "scorecard_id": "VARCHAR",
+        "methodology_id": "VARCHAR",
+        "chamber_text": "VARCHAR",
+        "cohort_text": "VARCHAR",
+        "effective_at_text": "VARCHAR",
+        "methodology_text": "VARCHAR",
+        "methodology_url": "VARCHAR",
+        "disclosure_status": "VARCHAR",
+        "capture_id": "VARCHAR",
+        "source_path": "VARCHAR",
+        "snapshot_id": "VARCHAR",
+        "source_url": "VARCHAR"
+      },
+      "references": [
+        {
+          "child_columns": [
+            "scorecard_id"
+          ],
+          "parent_table": "scorecards",
+          "parent_columns": [
+            "scorecard_id"
+          ],
+          "optional": false
+        },
+        {
+          "child_columns": [
+            "snapshot_id"
+          ],
+          "parent_table": "scorecard_snapshots",
+          "parent_columns": [
+            "snapshot_id"
+          ],
+          "optional": false
+        }
+      ]
+    },
+    {
+      "name": "scorecard_metrics",
+      "grain": "One publisher measurement for an explicit chamber, cohort and period in an edition.",
+      "key": [
+        "scorecard_id",
+        "metric_id"
+      ],
+      "fields": [
+        "scorecard_id",
+        "metric_id",
+        "methodology_id",
+        "name",
+        "value_unit_text",
+        "chamber_text",
+        "cohort_text",
+        "period_text",
+        "periods_json",
+        "is_primary",
+        "scale_text",
+        "rank_population_text",
+        "snapshot_id",
+        "capture_id",
+        "source_url",
+        "source_path"
+      ],
+      "types": {
+        "scorecard_id": "VARCHAR",
+        "metric_id": "VARCHAR",
+        "methodology_id": "VARCHAR",
+        "name": "VARCHAR",
+        "value_unit_text": "VARCHAR",
+        "chamber_text": "VARCHAR",
+        "cohort_text": "VARCHAR",
+        "period_text": "VARCHAR",
+        "periods_json": "VARCHAR",
+        "is_primary": "VARCHAR",
+        "scale_text": "VARCHAR",
+        "rank_population_text": "VARCHAR",
+        "snapshot_id": "VARCHAR",
+        "capture_id": "VARCHAR",
+        "source_url": "VARCHAR",
+        "source_path": "VARCHAR"
+      },
+      "references": [
+        {
+          "child_columns": [
+            "scorecard_id"
+          ],
+          "parent_table": "scorecards",
+          "parent_columns": [
+            "scorecard_id"
+          ],
+          "optional": false
+        },
+        {
+          "child_columns": [
+            "snapshot_id"
+          ],
+          "parent_table": "scorecard_snapshots",
+          "parent_columns": [
+            "snapshot_id"
+          ],
+          "optional": false
+        },
+        {
+          "child_columns": [
+            "scorecard_id",
+            "methodology_id"
+          ],
+          "parent_table": "scorecard_methodologies",
+          "parent_columns": [
+            "scorecard_id",
+            "methodology_id"
+          ],
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "scorecard_items",
+      "grain": "One publisher-identified action or scoring item; multiple actions on one bill remain separate.",
+      "key": [
+        "scorecard_id",
+        "item_id"
+      ],
+      "fields": [
+        "scorecard_id",
+        "item_id",
+        "publisher_item_id",
+        "item_kind_text",
+        "title",
+        "item_date_text",
+        "congress_text",
+        "chamber_text",
+        "session_text",
+        "roll_number_text",
+        "bill_citation_text",
+        "amendment_citation_text",
+        "references_json",
+        "source_url",
+        "source_path",
+        "publisher_position_text",
+        "position_basis",
+        "position_source_path",
+        "snapshot_id",
+        "capture_id"
+      ],
+      "types": {
+        "scorecard_id": "VARCHAR",
+        "item_id": "VARCHAR",
+        "publisher_item_id": "VARCHAR",
+        "item_kind_text": "VARCHAR",
+        "title": "VARCHAR",
+        "item_date_text": "VARCHAR",
+        "congress_text": "VARCHAR",
+        "chamber_text": "VARCHAR",
+        "session_text": "VARCHAR",
+        "roll_number_text": "VARCHAR",
+        "bill_citation_text": "VARCHAR",
+        "amendment_citation_text": "VARCHAR",
+        "references_json": "VARCHAR",
+        "source_url": "VARCHAR",
+        "source_path": "VARCHAR",
+        "publisher_position_text": "VARCHAR",
+        "position_basis": "VARCHAR",
+        "position_source_path": "VARCHAR",
+        "snapshot_id": "VARCHAR",
+        "capture_id": "VARCHAR"
+      },
+      "references": [
+        {
+          "child_columns": [
+            "scorecard_id"
+          ],
+          "parent_table": "scorecards",
+          "parent_columns": [
+            "scorecard_id"
+          ],
+          "optional": false
+        },
+        {
+          "child_columns": [
+            "snapshot_id"
+          ],
+          "parent_table": "scorecard_snapshots",
+          "parent_columns": [
+            "snapshot_id"
+          ],
+          "optional": false
+        }
+      ]
+    },
+    {
+      "name": "scorecard_metric_items",
+      "grain": "One item's participation in a metric under a particular source rule.",
+      "key": [
+        "scorecard_id",
+        "metric_id",
+        "item_id",
+        "participation_id"
+      ],
+      "fields": [
+        "scorecard_id",
+        "metric_id",
+        "item_id",
+        "participation_id",
+        "methodology_id",
+        "publisher_position_text",
+        "position_basis",
+        "weight_text",
+        "weight_number",
+        "contribution_rule_text",
+        "counts_toward_metric",
+        "snapshot_id",
+        "capture_id",
+        "source_url",
+        "source_path"
+      ],
+      "types": {
+        "scorecard_id": "VARCHAR",
+        "metric_id": "VARCHAR",
+        "item_id": "VARCHAR",
+        "participation_id": "VARCHAR",
+        "methodology_id": "VARCHAR",
+        "publisher_position_text": "VARCHAR",
+        "position_basis": "VARCHAR",
+        "weight_text": "VARCHAR",
+        "weight_number": "VARCHAR",
+        "contribution_rule_text": "VARCHAR",
+        "counts_toward_metric": "VARCHAR",
+        "snapshot_id": "VARCHAR",
+        "capture_id": "VARCHAR",
+        "source_url": "VARCHAR",
+        "source_path": "VARCHAR"
+      },
+      "references": [
+        {
+          "child_columns": [
+            "scorecard_id"
+          ],
+          "parent_table": "scorecards",
+          "parent_columns": [
+            "scorecard_id"
+          ],
+          "optional": false
+        },
+        {
+          "child_columns": [
+            "snapshot_id"
+          ],
+          "parent_table": "scorecard_snapshots",
+          "parent_columns": [
+            "snapshot_id"
+          ],
+          "optional": false
+        },
+        {
+          "child_columns": [
+            "scorecard_id",
+            "metric_id"
+          ],
+          "parent_table": "scorecard_metrics",
+          "parent_columns": [
+            "scorecard_id",
+            "metric_id"
+          ],
+          "optional": false
+        },
+        {
+          "child_columns": [
+            "scorecard_id",
+            "item_id"
+          ],
+          "parent_table": "scorecard_items",
+          "parent_columns": [
+            "scorecard_id",
+            "item_id"
+          ],
+          "optional": false
+        },
+        {
+          "child_columns": [
+            "scorecard_id",
+            "methodology_id"
+          ],
+          "parent_table": "scorecard_methodologies",
+          "parent_columns": [
+            "scorecard_id",
+            "methodology_id"
+          ],
+          "optional": true
+        }
+      ]
+    },
+    {
+      "name": "scorecard_metric_components",
+      "grain": "One source-stated relationship between a component metric and its parent metric.",
+      "key": [
+        "scorecard_id",
+        "parent_metric_id",
+        "component_metric_id"
+      ],
+      "fields": [
+        "scorecard_id",
+        "parent_metric_id",
+        "component_metric_id",
+        "weight_text",
+        "weight_number",
+        "combination_rule_text",
+        "snapshot_id",
+        "capture_id",
+        "source_url",
+        "source_path"
+      ],
+      "types": {
+        "scorecard_id": "VARCHAR",
+        "parent_metric_id": "VARCHAR",
+        "component_metric_id": "VARCHAR",
+        "weight_text": "VARCHAR",
+        "weight_number": "VARCHAR",
+        "combination_rule_text": "VARCHAR",
+        "snapshot_id": "VARCHAR",
+        "capture_id": "VARCHAR",
+        "source_url": "VARCHAR",
+        "source_path": "VARCHAR"
+      },
+      "references": [
+        {
+          "child_columns": [
+            "scorecard_id"
+          ],
+          "parent_table": "scorecards",
+          "parent_columns": [
+            "scorecard_id"
+          ],
+          "optional": false
+        },
+        {
+          "child_columns": [
+            "snapshot_id"
+          ],
+          "parent_table": "scorecard_snapshots",
+          "parent_columns": [
+            "snapshot_id"
+          ],
+          "optional": false
+        },
+        {
+          "child_columns": [
+            "scorecard_id",
+            "parent_metric_id"
+          ],
+          "parent_table": "scorecard_metrics",
+          "parent_columns": [
+            "scorecard_id",
+            "metric_id"
+          ],
+          "optional": false
+        },
+        {
+          "child_columns": [
+            "scorecard_id",
+            "component_metric_id"
+          ],
+          "parent_table": "scorecard_metrics",
+          "parent_columns": [
+            "scorecard_id",
+            "metric_id"
+          ],
+          "optional": false
+        }
+      ]
+    },
+    {
+      "name": "scorecard_members",
+      "grain": "One source member occurrence/context in the edition, including ungraded or excluded members.",
+      "key": [
+        "scorecard_id",
+        "publisher_member_key"
+      ],
+      "fields": [
+        "scorecard_id",
+        "publisher_member_key",
+        "publisher_member_id",
+        "identifiers_json",
+        "member_name",
+        "chamber_text",
+        "state",
+        "district",
+        "party",
+        "period_text",
+        "eligibility_text",
+        "notes_text",
+        "snapshot_id",
+        "capture_id",
+        "source_url",
+        "source_path"
+      ],
+      "types": {
+        "scorecard_id": "VARCHAR",
+        "publisher_member_key": "VARCHAR",
+        "publisher_member_id": "VARCHAR",
+        "identifiers_json": "VARCHAR",
+        "member_name": "VARCHAR",
+        "chamber_text": "VARCHAR",
+        "state": "VARCHAR",
+        "district": "VARCHAR",
+        "party": "VARCHAR",
+        "period_text": "VARCHAR",
+        "eligibility_text": "VARCHAR",
+        "notes_text": "VARCHAR",
+        "snapshot_id": "VARCHAR",
+        "capture_id": "VARCHAR",
+        "source_url": "VARCHAR",
+        "source_path": "VARCHAR"
+      },
+      "references": [
+        {
+          "child_columns": [
+            "scorecard_id"
+          ],
+          "parent_table": "scorecards",
+          "parent_columns": [
+            "scorecard_id"
+          ],
+          "optional": false
+        },
+        {
+          "child_columns": [
+            "snapshot_id"
+          ],
+          "parent_table": "scorecard_snapshots",
+          "parent_columns": [
+            "snapshot_id"
+          ],
+          "optional": false
+        }
+      ]
+    },
+    {
+      "name": "scorecard_member_ratings",
+      "grain": "One source-reported metric value for a member; different grades, ranks and scores remain distinct measurements.",
+      "key": [
+        "scorecard_id",
+        "metric_id",
+        "publisher_member_key"
+      ],
+      "fields": [
+        "scorecard_id",
+        "metric_id",
+        "publisher_member_key",
+        "value_text",
+        "value_number",
+        "value_status_text",
+        "rank_text",
+        "notes_text",
+        "source_url",
+        "source_path",
+        "snapshot_id",
+        "capture_id"
+      ],
+      "types": {
+        "scorecard_id": "VARCHAR",
+        "metric_id": "VARCHAR",
+        "publisher_member_key": "VARCHAR",
+        "value_text": "VARCHAR",
+        "value_number": "VARCHAR",
+        "value_status_text": "VARCHAR",
+        "rank_text": "VARCHAR",
+        "notes_text": "VARCHAR",
+        "source_url": "VARCHAR",
+        "source_path": "VARCHAR",
+        "snapshot_id": "VARCHAR",
+        "capture_id": "VARCHAR"
+      },
+      "references": [
+        {
+          "child_columns": [
+            "scorecard_id"
+          ],
+          "parent_table": "scorecards",
+          "parent_columns": [
+            "scorecard_id"
+          ],
+          "optional": false
+        },
+        {
+          "child_columns": [
+            "snapshot_id"
+          ],
+          "parent_table": "scorecard_snapshots",
+          "parent_columns": [
+            "snapshot_id"
+          ],
+          "optional": false
+        },
+        {
+          "child_columns": [
+            "scorecard_id",
+            "metric_id"
+          ],
+          "parent_table": "scorecard_metrics",
+          "parent_columns": [
+            "scorecard_id",
+            "metric_id"
+          ],
+          "optional": false
+        },
+        {
+          "child_columns": [
+            "scorecard_id",
+            "publisher_member_key"
+          ],
+          "parent_table": "scorecard_members",
+          "parent_columns": [
+            "scorecard_id",
+            "publisher_member_key"
+          ],
+          "optional": false
+        }
+      ]
+    },
+    {
+      "name": "scorecard_member_item_results",
+      "grain": "One publisher-reported member result for an item, with optional source-stated metric participation. Metric-free grids require no fabricated measurement.",
+      "key": [
+        "scorecard_id",
+        "item_id",
+        "publisher_member_key",
+        "result_id"
+      ],
+      "fields": [
+        "scorecard_id",
+        "result_id",
+        "metric_id",
+        "item_id",
+        "participation_id",
+        "publisher_member_key",
+        "action_text",
+        "result_text",
+        "contribution_text",
+        "contribution_number",
+        "eligibility_text",
+        "counts_toward_metric",
+        "adjustment_text",
+        "reason_text",
+        "snapshot_id",
+        "capture_id",
+        "source_url",
+        "source_path"
+      ],
+      "types": {
+        "scorecard_id": "VARCHAR",
+        "result_id": "VARCHAR",
+        "metric_id": "VARCHAR",
+        "item_id": "VARCHAR",
+        "participation_id": "VARCHAR",
+        "publisher_member_key": "VARCHAR",
+        "action_text": "VARCHAR",
+        "result_text": "VARCHAR",
+        "contribution_text": "VARCHAR",
+        "contribution_number": "VARCHAR",
+        "eligibility_text": "VARCHAR",
+        "counts_toward_metric": "VARCHAR",
+        "adjustment_text": "VARCHAR",
+        "reason_text": "VARCHAR",
+        "snapshot_id": "VARCHAR",
+        "capture_id": "VARCHAR",
+        "source_url": "VARCHAR",
+        "source_path": "VARCHAR"
+      },
+      "references": [
+        {
+          "child_columns": [
+            "scorecard_id"
+          ],
+          "parent_table": "scorecards",
+          "parent_columns": [
+            "scorecard_id"
+          ],
+          "optional": false
+        },
+        {
+          "child_columns": [
+            "snapshot_id"
+          ],
+          "parent_table": "scorecard_snapshots",
+          "parent_columns": [
+            "snapshot_id"
+          ],
+          "optional": false
+        },
+        {
+          "child_columns": [
+            "scorecard_id",
+            "publisher_member_key"
+          ],
+          "parent_table": "scorecard_members",
+          "parent_columns": [
+            "scorecard_id",
+            "publisher_member_key"
+          ],
+          "optional": false
+        },
+        {
+          "child_columns": [
+            "scorecard_id",
+            "item_id"
+          ],
+          "parent_table": "scorecard_items",
+          "parent_columns": [
+            "scorecard_id",
+            "item_id"
+          ],
+          "optional": false
+        },
+        {
+          "child_columns": [
+            "scorecard_id",
+            "metric_id",
+            "item_id",
+            "participation_id"
+          ],
+          "parent_table": "scorecard_metric_items",
+          "parent_columns": [
+            "scorecard_id",
+            "metric_id",
+            "item_id",
+            "participation_id"
+          ],
+          "optional": true
+        }
+      ]
+    }
+  ],
+  "deferred_analysis_tables": [
+    "scorecard_member_links",
+    "scorecard_item_links",
+    "scorecard_member_actions",
+    "scorecard_reproductions"
+  ],
+  "unresolved_design_choices": [],
+  "snapshot_model": "One accepted snapshot per scorecard in each family generation. All edition-scoped facts carry the selected snapshot_id. Previous snapshots survive in immutable prior generations, not as competing rows in the current generation. Publisher identity observations are independent.",
+  "json_shapes": {
+    "periods_json": "Ordered array of source period occurrences. Each object has occurrence_id, period_text, kind (explicit or relative), nullable source-stated year_text/congress_text/session_text/chamber_text, and source_path. A relative current/prior-six-session rule stays literal; no inferred endpoints. Metric periods may differ from edition periods.",
+    "references_json": "Ordered array of references with occurrence_id, citation_text, kind, nullable source-stated congress_text/chamber_text/session_text/roll_number_text/bill_citation_text/amendment_citation_text, and source_path. Preserve repeated references; never inherit an edition Congress for an item without source evidence.",
+    "capture_roles_json": "Ordered array of capture_id, role and field_groups. Every capture must belong to capture_ids_json. Declare one primary rendition for each field group; alternate displays remain validation evidence, not duplicate metric values.",
+    "identifiers_json": "Ordered array of source-supplied identifier scheme and literal value. No derived identity belongs here."
+  },
+  "invariants": [
+    "Keys contain nonempty strings; identities are unique before merge and versioned per adapter. Row offset alone is not durable identity.",
+    "Exactly one accepted snapshot per edition in a family generation, every fact snapshot matches its edition, every fact capture belongs to its snapshot, and all references stay within the selected snapshot.",
+    "Member-item metric_id and participation_id are both null or both nonempty. No metric is created merely to store an item result.",
+    "Item-level targets require source-stated context and locator. Metric-specific targets live on metric participation; do not infer one from the other.",
+    "Metric components form an acyclic directed graph. Primary metrics are scoped by chamber/cohort/period.",
+    "Selected source rendition and identity rules are recorded per snapshot. Literal display values are not converted to agree with corroborating captures.",
+    "Source action labels never imply an official action. Preserve publisher-specific semantic rules, including AFL-CIO no-means-signed letter encoding.",
+    "Schema fit, acquisition completeness, parser qualification and reproduction readiness are independent statuses.",
+    "Rolling editions use a source-defined live edition identity; refresh changes snapshot. Relative windows remain literal until publisher endpoints are supplied."
+  ],
+  "deferred_source_tables": [
+    {
+      "name": "scorecard_member_adjustments",
+      "reason": "No qualified source-backed standalone member adjustment ledger was observed. Preserve literal ratings, item-level adjustment text and methodology; acquire a real ledger fixture before adding this table.",
+      "candidate_definition": {
+        "name": "scorecard_member_adjustments",
+        "grain": "One source-stated metric-level member adjustment that has no item result.",
+        "key": [
+          "scorecard_id",
+          "metric_id",
+          "publisher_member_key",
+          "adjustment_id"
+        ],
+        "fields": [
+          "scorecard_id",
+          "metric_id",
+          "publisher_member_key",
+          "adjustment_id",
+          "adjustment_text",
+          "adjustment_number",
+          "reason_text",
+          "snapshot_id",
+          "capture_id",
+          "source_url",
+          "source_path"
+        ],
+        "types": {
+          "scorecard_id": "VARCHAR",
+          "metric_id": "VARCHAR",
+          "publisher_member_key": "VARCHAR",
+          "adjustment_id": "VARCHAR",
+          "adjustment_text": "VARCHAR",
+          "adjustment_number": "VARCHAR",
+          "reason_text": "VARCHAR",
+          "snapshot_id": "VARCHAR",
+          "capture_id": "VARCHAR",
+          "source_url": "VARCHAR",
+          "source_path": "VARCHAR"
+        },
+        "references": [
+          {
+            "child_columns": [
+              "scorecard_id"
+            ],
+            "parent_table": "scorecards",
+            "parent_columns": [
+              "scorecard_id"
+            ],
+            "optional": false
+          },
+          {
+            "child_columns": [
+              "snapshot_id"
+            ],
+            "parent_table": "scorecard_snapshots",
+            "parent_columns": [
+              "snapshot_id"
+            ],
+            "optional": false
+          },
+          {
+            "child_columns": [
+              "scorecard_id",
+              "metric_id"
+            ],
+            "parent_table": "scorecard_metrics",
+            "parent_columns": [
+              "scorecard_id",
+              "metric_id"
+            ],
+            "optional": false
+          },
+          {
+            "child_columns": [
+              "scorecard_id",
+              "publisher_member_key"
+            ],
+            "parent_table": "scorecard_members",
+            "parent_columns": [
+              "scorecard_id",
+              "publisher_member_key"
+            ],
+            "optional": false
+          }
+        ]
+      }
+    }
+  ]
+}

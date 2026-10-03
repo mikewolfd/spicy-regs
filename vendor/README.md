@@ -5,6 +5,22 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
+- `spicy_docs-0.53.0+scorecards.9916a2fc8473`: local scorecard and historical identity candidate,
+  over the reviewed FEC baseline `69964fe27c6ddc437e817041a3c5cca57a02723c`.
+  SHA-256 `e0123d4e093354d8c0781fd0a5cbdef700c01c89198692d205505388d2778f51`.
+  Independent builds are byte-identical with pinned uv/uv_build and recorded
+  Python versions; the explicit overlay preserves every
+  baseline package file, including FEC candidate history. It adds scorecard
+  readers, pinned GovTrack discovery, member crosswalk fields, and the requested
+  existing Docling/OvisOCR2 extraction infrastructure, plus schema-validated Gemini
+  page outcomes and explicit HRC page schemas. IJM additionally supports its
+  explicitly identified browser-rendered API JSON. Reconstruction remains at
+  the native-only baseline; the receipt lists the scoped extraction tests. The `yaml` extra is now
+  selected for discovery; PDF model configuration remains explicit at the host.
+  See [build recipe](../docs/research/scorecards/work/integration/build_reader_wheel.py)
+  and [hash/overlay receipt](../docs/research/scorecards/work/integration/reader_wheel_semantic.json).
+  This is local package adoption, not a registry release or source qualification.
+
 - `spicy_docs-0.53.0+fec.69964fe27c6d`: reviewed FEC source at
   commit `69964fe27c6ddc437e817041a3c5cca57a02723c`.
   SHA-256 `824296eed3c333277feaa4dca03a2dc8faec437d803c374186d61c8761bf8c7b`. Repeated committed-archive

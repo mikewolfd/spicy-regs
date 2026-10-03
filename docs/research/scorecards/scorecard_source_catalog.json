@@ -1,0 +1,4443 @@
+{
+  "dataset": "scorecard_source_catalog",
+  "schema_version": 1,
+  "surveyed_at": "2026-10-03T17:48:51.414495+00:00",
+  "coverage_statement": "Initial discovery census; candidates include historical leads and mixed candidate guides. Year extrema and congress arrays record evidence observed, never continuous availability. No production-supported publisher.",
+  "sources": [
+    {
+      "source_id": "aauw:federal",
+      "publisher_id": "aauw",
+      "publisher_name": "American Association of University Women",
+      "publisher_aliases": [],
+      "homepage_url": "https://www.aauw.org/",
+      "scorecard_name": "Congressional Voting Record",
+      "scorecard_index_url": "https://www.aauwaction.org/wp-content/uploads/2024/10/CVR-2024-FINAL-VERSION-2.pdf",
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [
+        116,
+        117,
+        118
+      ],
+      "chamber_scope": "unknown",
+      "source_format": [
+        "pdf"
+      ],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "member_office_directory",
+          "url": "https://cohen.house.gov/about/vote-ratings",
+          "capture_id": "cohen-directory"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": "2026-10-03T17:30:45.630828+00:00",
+      "discovery_status": "profiled",
+      "rights_status": "unreviewed",
+      "notes": "Historical lead from a member-office directory; original scorecard, federal scope, independent scoring and archive still require verification. AAUW Action Fund is the actual scorecard publisher. Table includes current and previous Congress scores, not one lifetime value; unrecorded/ineligible cells and Speaker caveat remain literal. Vote and cosponsorship check marks represent publisher agreement, not official action strings.",
+      "verification_capture_ids": [
+        "census-aauw-118"
+      ],
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_discovery_outcome": {
+        "outcome": "profile_added",
+        "capture_ids": [
+          "census-aauw-118",
+          "census-votesmart-root"
+        ],
+        "notes": "Profile and readiness assessment added."
+      }
+    },
+    {
+      "source_id": "acec:federal",
+      "publisher_id": "acec",
+      "publisher_name": "American Council of Engineering Companies",
+      "publisher_aliases": [],
+      "homepage_url": "https://www.acec.org/",
+      "scorecard_name": "Legislative Scorecards",
+      "scorecard_index_url": "https://www.acec.org/advocacy/legislative-scorecards/",
+      "archive_url": null,
+      "first_known_year": 2007,
+      "last_known_year": 2020,
+      "congresses_available": [
+        110,
+        111,
+        112,
+        113,
+        114,
+        115,
+        116
+      ],
+      "chamber_scope": "both",
+      "source_format": [
+        "html",
+        "pdf"
+      ],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "web_search",
+          "url": "https://www.acec.org/advocacy/legislative-scorecards/"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": "2026-10-03T17:36:12.259521+00:00",
+      "discovery_status": "profiled",
+      "rights_status": "unreviewed",
+      "notes": "Index verified; some Senate links point to a general membership page and need repair by source discovery. Senate PDF mixes roll calls, bill cosponsorship and a funding letter. Empty cells remain empty; no denominator or blank-cell rule was established. Preserve distinct member tenure context rather than assuming current membership.",
+      "verification_capture_ids": [
+        "acec-index",
+        "census-acec-116-pdf",
+        "census-acec-116-issues-pdf"
+      ],
+      "scope_status": "federal_scorecard_confirmed",
+      "latest_discovery_outcome": {
+        "outcome": "profile_added",
+        "capture_ids": [
+          "census-acec-116-issues-pdf",
+          "census-acec-116-pdf",
+          "census-votesmart-root"
+        ],
+        "notes": "Profile and readiness assessment added."
+      }
+    },
+    {
+      "source_id": "aclu:federal",
+      "publisher_id": "aclu",
+      "publisher_name": "American Civil Liberties Union",
+      "publisher_aliases": [],
+      "homepage_url": "https://www.aclu.org/",
+      "scorecard_name": "Congressional Scorecards",
+      "scorecard_index_url": "https://www.aclu.org/congressional-scorecards",
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "govtrack_directory",
+          "url": "https://www.aclu.org/congressional-scorecards"
+        },
+        {
+          "kind": "govtrack_directory",
+          "url": "https://github.com/govtrack/advocacy-organization-scorecards",
+          "capture_id": "govtrack-directory"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": "2026-10-03T16:34:57.453070+00:00",
+      "discovery_status": "verified",
+      "rights_status": "unreviewed",
+      "notes": "Landing page verified; no complete member table qualified.",
+      "verification_capture_ids": [
+        "aclu-index"
+      ],
+      "scope_status": "federal_scorecard_confirmed",
+      "latest_discovery_outcome": {
+        "outcome": "unverified_after_bounded_search",
+        "capture_ids": [
+          "aclu-index"
+        ],
+        "notes": "Delivered original scorecard landing page contains no usable method, member rows or edition links. Keep verified series; acquisition is incomplete."
+      }
+    },
+    {
+      "source_id": "ada:federal",
+      "publisher_id": "ada",
+      "publisher_name": "Americans for Democratic Action",
+      "publisher_aliases": [],
+      "homepage_url": "https://adaction.org/",
+      "scorecard_name": "Annual Voting Records / Liberal Quotient",
+      "scorecard_index_url": "https://adaction.org/voting-records/",
+      "archive_url": null,
+      "first_known_year": 1947,
+      "last_known_year": 2023,
+      "congresses_available": [
+        118
+      ],
+      "chamber_scope": "both",
+      "source_format": [
+        "html",
+        "pdf"
+      ],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "web_search",
+          "url": "https://adaction.org/voting-records/"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": "2026-10-03T17:34:10.415008+00:00",
+      "discovery_status": "profiled",
+      "rights_status": "unreviewed",
+      "notes": "1947 is publisher-stated start; archive coverage not enumerated. Each agreement earns five points; absence loses credit. The 2023 notes distinguish strategic no votes and incomplete service; committee work and lifetime performance are expressly outside this rating. Scanned PDF with no extractable text layer. Cover visually confirms historic report-card format; no member cells qualified. Current methodology must not be applied retroactively.",
+      "verification_capture_ids": [
+        "ada-index",
+        "census-ada-2023",
+        "census-ada-1947"
+      ],
+      "scope_status": "federal_scorecard_confirmed",
+      "latest_discovery_outcome": {
+        "outcome": "profile_added",
+        "capture_ids": [
+          "ada-index",
+          "census-ada-1947",
+          "census-ada-2023"
+        ],
+        "notes": "Profile and readiness assessment added."
+      }
+    },
+    {
+      "source_id": "afl_cio:federal",
+      "publisher_id": "afl_cio",
+      "publisher_name": "AFL-CIO",
+      "publisher_aliases": [],
+      "homepage_url": "https://aflcio.org/",
+      "scorecard_name": "Legislative Scorecard",
+      "scorecard_index_url": "https://aflcio.org/scorecard",
+      "archive_url": null,
+      "first_known_year": 1980,
+      "last_known_year": 2025,
+      "congresses_available": [
+        119
+      ],
+      "chamber_scope": "both",
+      "source_format": [
+        "html",
+        "xlsx"
+      ],
+      "machine_readable": "acquired_structured_source",
+      "discovered_via": [
+        {
+          "kind": "web_search",
+          "url": "https://aflcio.org/scorecard"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": "2026-10-03T16:34:54.037346+00:00",
+      "discovery_status": "profiled",
+      "rights_status": "unreviewed",
+      "notes": "Publisher offers an XLSX export; export bytes were not acquired. Archive years are not continuous.",
+      "verification_capture_ids": [
+        "afl-cio-index",
+        "afl-cio-members",
+        "afl-house-2025-xlsx",
+        "afl-senate-2025-xlsx"
+      ],
+      "scope_status": "federal_scorecard_confirmed"
+    },
+    {
+      "source_id": "afp:federal",
+      "publisher_id": "afp",
+      "publisher_name": "Americans for Prosperity",
+      "publisher_aliases": [],
+      "homepage_url": "https://americansforprosperity.org/",
+      "scorecard_name": "National Scorecard",
+      "scorecard_index_url": "https://americansforprosperity.org/national-scorecard/",
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "both",
+      "source_format": [
+        "html"
+      ],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "web_search",
+          "url": "https://americansforprosperity.org/national-scorecard/"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": "2026-10-03T16:34:57.436688+00:00",
+      "discovery_status": "verified",
+      "rights_status": "unreviewed",
+      "notes": "",
+      "verification_capture_ids": [
+        "afp-index"
+      ],
+      "scope_status": "federal_scorecard_confirmed",
+      "latest_discovery_outcome": {
+        "outcome": "unverified_after_bounded_search",
+        "capture_ids": [
+          "afp-index",
+          "census-votesmart-root"
+        ],
+        "notes": "Delivered page has educational-use disclaimer and unloaded application; no member rows qualified."
+      }
+    },
+    {
+      "source_id": "afscme:federal",
+      "publisher_id": "afscme",
+      "publisher_name": "American Federation of State, County and Municipal Employees",
+      "publisher_aliases": [],
+      "homepage_url": "https://www.afscme.org/",
+      "scorecard_name": "Legislative Scorecard",
+      "scorecard_index_url": "https://scorecard.afscme.org/",
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "both",
+      "source_format": [
+        "html"
+      ],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "web_search",
+          "url": "https://scorecard.afscme.org/"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": "2026-10-03T16:34:57.031941+00:00",
+      "discovery_status": "verified",
+      "rights_status": "unreviewed",
+      "notes": "",
+      "verification_capture_ids": [
+        "afscme-index"
+      ],
+      "scope_status": "federal_scorecard_confirmed",
+      "latest_discovery_outcome": {
+        "outcome": "unverified_after_bounded_search",
+        "capture_ids": [
+          "afscme-index"
+        ],
+        "notes": "Original method states selected roll calls; delivered sample UI contains lorem ipsum and generic 82% placeholders. Those values must never become ratings."
+      }
+    },
+    {
+      "source_id": "ajp_action:federal",
+      "publisher_id": "ajp_action",
+      "publisher_name": "Americans for Justice in Palestine Action",
+      "publisher_aliases": [],
+      "homepage_url": "https://ajpaction.org/",
+      "scorecard_name": "Palestine Congressional Scorecard",
+      "scorecard_index_url": "https://ajpaction.org/scorecard2026/",
+      "archive_url": null,
+      "first_known_year": 2024,
+      "last_known_year": 2026,
+      "congresses_available": [
+        118,
+        119
+      ],
+      "chamber_scope": "both",
+      "source_format": [
+        "html"
+      ],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "web_search",
+          "url": "https://ajpaction.org/scorecard2026/"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": "2026-10-03T16:34:56.006901+00:00",
+      "discovery_status": "profiled",
+      "rights_status": "unreviewed",
+      "notes": "",
+      "verification_capture_ids": [
+        "ajp-2026"
+      ],
+      "scope_status": "federal_scorecard_confirmed"
+    },
+    {
+      "source_id": "alaska_wilderness_action:federal",
+      "publisher_id": "alaska_wilderness_action",
+      "publisher_name": "Alaska Wilderness Action",
+      "publisher_aliases": [],
+      "homepage_url": "https://alaskawildernessaction.org/",
+      "scorecard_name": "National Congressional Scorecard",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "member_office_directory",
+          "url": "https://cohen.house.gov/about/vote-ratings",
+          "capture_id": "cohen-directory"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Historical lead from a member-office directory; original scorecard, federal scope, independent scoring and archive still require verification.",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_discovery_outcome": {
+        "outcome": "unverified_after_bounded_search",
+        "capture_ids": [],
+        "notes": "Bounded publisher-name/domain scorecard search and directory comparison did not establish a captured original edition. No inference of retirement or nonexistence."
+      }
+    },
+    {
+      "source_id": "animal_welfare_institute:federal",
+      "publisher_id": "animal_welfare_institute",
+      "publisher_name": "Animal Welfare Institute",
+      "publisher_aliases": [],
+      "homepage_url": "https://awionline.org/",
+      "scorecard_name": "Congressional Ratings",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "member_office_directory",
+          "url": "https://cohen.house.gov/about/vote-ratings",
+          "capture_id": "cohen-directory"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Historical lead from a member-office directory; original scorecard, federal scope, independent scoring and archive still require verification.",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_discovery_outcome": {
+        "outcome": "access_or_content_block",
+        "capture_ids": [
+          "census-awi-2006",
+          "census-votesmart-root"
+        ],
+        "notes": "Publisher 2006 magazine search reveals jointly developed Compassion Index with American Humane Association and SAPL; direct original response was403. Verify joint attribution and current successor series before merging identities."
+      }
+    },
+    {
+      "source_id": "ara:federal",
+      "publisher_id": "ara",
+      "publisher_name": "Alliance for Retired Americans",
+      "publisher_aliases": [],
+      "homepage_url": "https://retiredamericans.org/",
+      "scorecard_name": "Annual Congressional Voting Record",
+      "scorecard_index_url": "https://retiredamericans.org/voting-record/",
+      "archive_url": null,
+      "first_known_year": 2024,
+      "last_known_year": 2025,
+      "congresses_available": [
+        119
+      ],
+      "chamber_scope": "both",
+      "source_format": [
+        "html",
+        "pdf"
+      ],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "web_search",
+          "url": "https://retiredamericans.org/voting-record/"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": "2026-10-03T17:34:10.878383+00:00",
+      "discovery_status": "profiled",
+      "rights_status": "unreviewed",
+      "notes": " Grid reports Pro-Retiree Score and Lifetime Score as numbers; glyph text extraction misreads check/cross symbols as digits, so symbol cells require rendered checks. Full yearly/lifetime reproduction not qualified.",
+      "verification_capture_ids": [
+        "ara-index",
+        "census-ara-2025"
+      ],
+      "scope_status": "federal_scorecard_confirmed",
+      "latest_discovery_outcome": {
+        "outcome": "profile_added",
+        "capture_ids": [
+          "ara-index",
+          "census-ara-2025",
+          "census-votesmart-root"
+        ],
+        "notes": "Profile and readiness assessment added."
+      }
+    },
+    {
+      "source_id": "arts_action:federal",
+      "publisher_id": "arts_action",
+      "publisher_name": "Americans for the Arts Action Fund",
+      "publisher_aliases": [],
+      "homepage_url": "https://www.americansforthearts.org/",
+      "scorecard_name": "Congressional Arts Report Card",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "member_office_directory",
+          "url": "https://cohen.house.gov/about/vote-ratings",
+          "capture_id": "cohen-directory"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Historical lead from a member-office directory; original scorecard, federal scope, independent scoring and archive still require verification.",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_discovery_outcome": {
+        "outcome": "access_or_content_block",
+        "capture_ids": [
+          "census-arts-index",
+          "census-votesmart-root"
+        ],
+        "notes": "Original partner page is indexed as offering a Congressional Arts Report Card, but direct response403 prevents captured verification."
+      }
+    },
+    {
+      "source_id": "boilermakers:federal",
+      "publisher_id": "boilermakers",
+      "publisher_name": "International Brotherhood of Boilermakers",
+      "publisher_aliases": [],
+      "homepage_url": "https://www.boilermakers.org/",
+      "scorecard_name": "Congressional Voting Record",
+      "scorecard_index_url": "https://boilermakers.org/sites/default/files/reporter/V39N2_0.pdf",
+      "archive_url": null,
+      "first_known_year": 1999,
+      "last_known_year": 1999,
+      "congresses_available": [
+        106
+      ],
+      "chamber_scope": "unknown",
+      "source_format": [
+        "pdf"
+      ],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "member_office_directory",
+          "url": "https://cohen.house.gov/about/vote-ratings",
+          "capture_id": "cohen-directory"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": "2026-10-03T17:30:47.476033+00:00",
+      "discovery_status": "profiled",
+      "rights_status": "unreviewed",
+      "notes": "Historical lead from a member-office directory; original scorecard, federal scope, independent scoring and archive still require verification. Historic publisher-specific series must remain separate from present-day AFL-CIO redistribution. Publisher comparison article explicitly reports different Boilermaker/AFL-CIO values for 2005. Member grid is embedded inside a union newspaper.",
+      "verification_capture_ids": [
+        "census-boilermakers-1999",
+        "census-boilermakers-compare"
+      ],
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_discovery_outcome": {
+        "outcome": "profile_added",
+        "capture_ids": [
+          "census-boilermakers-1999",
+          "census-boilermakers-compare",
+          "census-votesmart-root"
+        ],
+        "notes": "Historic independent ratings are verified; current AFL-CIO redistribution is a different relationship and must not erase the historical series."
+      }
+    },
+    {
+      "source_id": "c4ip:federal",
+      "publisher_id": "c4ip",
+      "publisher_name": "Council for Innovation Promotion",
+      "publisher_aliases": [],
+      "homepage_url": "https://c4ip.org/",
+      "scorecard_name": "Congressional Innovation Scorecard",
+      "scorecard_index_url": "https://c4ip.org/wp-content/uploads/2024/03/2024-Congressional-Innovation-Scorecard.pdf",
+      "archive_url": null,
+      "first_known_year": 2024,
+      "last_known_year": 2024,
+      "congresses_available": [
+        116,
+        117,
+        118
+      ],
+      "chamber_scope": "both",
+      "source_format": [
+        "pdf"
+      ],
+      "machine_readable": "pdf_text_layer_observed",
+      "discovered_via": [
+        {
+          "kind": "web_search",
+          "url": "https://c4ip.org/wp-content/uploads/2024/03/2024-Congressional-Innovation-Scorecard.pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": "2026-10-03T16:34:56.121455+00:00",
+      "discovery_status": "profiled",
+      "rights_status": "unreviewed",
+      "notes": "2024 is the edition year; it scores activity across Congresses. Data Annex has not been acquired.",
+      "verification_capture_ids": [
+        "c4ip-2024-pdf"
+      ],
+      "scope_status": "federal_scorecard_confirmed"
+    },
+    {
+      "source_id": "childrens_defense:federal",
+      "publisher_id": "childrens_defense",
+      "publisher_name": "Children's Defense Fund",
+      "publisher_aliases": [],
+      "homepage_url": "https://www.childrensdefense.org/",
+      "scorecard_name": "Congressional Scorecard",
+      "scorecard_index_url": "https://www.childrensdefense.org/cdf-action-council-releases-report/",
+      "archive_url": null,
+      "first_known_year": 2021,
+      "last_known_year": 2021,
+      "congresses_available": [
+        117
+      ],
+      "chamber_scope": "unknown",
+      "source_format": [
+        "html"
+      ],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "member_office_directory",
+          "url": "https://cohen.house.gov/about/vote-ratings",
+          "capture_id": "cohen-directory"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": "2026-10-03T17:30:46.680124+00:00",
+      "discovery_status": "profiled",
+      "rights_status": "unreviewed",
+      "notes": "Historical lead from a member-office directory; original scorecard, federal scope, independent scoring and archive still require verification. Publisher announces quarterly updates and grade-based assessment across bills in multiple policy areas. The announcement is verification and methodology context; actual member rows and per-bill scoring rules remain unacquired.",
+      "verification_capture_ids": [
+        "census-cdf-117"
+      ],
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_discovery_outcome": {
+        "outcome": "profile_added",
+        "capture_ids": [
+          "census-cdf-117",
+          "census-votesmart-root"
+        ],
+        "notes": "Profile and readiness assessment added."
+      }
+    },
+    {
+      "source_id": "club_for_growth:federal",
+      "publisher_id": "club_for_growth",
+      "publisher_name": "Club for Growth Foundation",
+      "publisher_aliases": [
+        "Club for Growth"
+      ],
+      "homepage_url": "https://www.clubforgrowth.org/",
+      "scorecard_name": "Congressional Scorecard",
+      "scorecard_index_url": "https://www.clubforgrowth.org/scorecards/",
+      "archive_url": "https://www.clubforgrowth.org/scorecards/",
+      "first_known_year": 2005,
+      "last_known_year": 2025,
+      "congresses_available": [],
+      "chamber_scope": "both",
+      "source_format": [
+        "html"
+      ],
+      "machine_readable": "html_table_observed",
+      "discovered_via": [
+        {
+          "kind": "govtrack_directory",
+          "url": "https://www.clubforgrowth.org/scorecards/"
+        },
+        {
+          "kind": "govtrack_directory",
+          "url": "https://github.com/govtrack/advocacy-organization-scorecards",
+          "capture_id": "govtrack-directory"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": "2026-10-03T16:57:24.628026+00:00",
+      "discovery_status": "profiled",
+      "rights_status": "unreviewed",
+      "notes": "Index offers editions since 2005; sampled 2025 House grid and methodology. Exact historic publisher attribution remains edition-specific.",
+      "verification_capture_ids": [
+        "club-index",
+        "club-2025-method",
+        "club-2025-house"
+      ],
+      "scope_status": "federal_scorecard_confirmed"
+    },
+    {
+      "source_id": "cpac:federal",
+      "publisher_id": "cpac",
+      "publisher_name": "CPAC Foundation",
+      "publisher_aliases": [
+        "American Conservative Union Foundation"
+      ],
+      "homepage_url": "https://www.cpac.org/",
+      "scorecard_name": "Congressional Ratings",
+      "scorecard_index_url": "https://www.cpac.org/foundation/centers-legislative-accountability",
+      "archive_url": null,
+      "first_known_year": 2024,
+      "last_known_year": 2025,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [
+        "pdf"
+      ],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "web_search",
+          "url": "https://www.cpac.org/foundation/centers-legislative-accountability"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": "2026-10-03T17:40:03.430244+00:00",
+      "discovery_status": "profiled",
+      "rights_status": "unreviewed",
+      "notes": "Keep historical publisher names by edition; do not count the rebrand as another publisher. PDF edition label is 2025 while its narrative says it scores the 2024 legislative session. Preserve both labels; do not join on PDF year alone. Award lists provide some member scores but are not the complete scored roster.",
+      "verification_capture_ids": [
+        "cpac-index",
+        "census-cpac-2025-pdf"
+      ],
+      "scope_status": "federal_scorecard_confirmed",
+      "latest_discovery_outcome": {
+        "outcome": "profile_added",
+        "capture_ids": [
+          "census-cpac-2025-pdf",
+          "census-votesmart-root"
+        ],
+        "notes": "Profile and readiness assessment added."
+      }
+    },
+    {
+      "source_id": "dav:federal",
+      "publisher_id": "dav",
+      "publisher_name": "Disabled American Veterans",
+      "publisher_aliases": [],
+      "homepage_url": "https://www.dav.org/",
+      "scorecard_name": "Congressional Ratings",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "member_office_directory",
+          "url": "https://cohen.house.gov/about/vote-ratings",
+          "capture_id": "cohen-directory"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Historical lead from a member-office directory; original scorecard, federal scope, independent scoring and archive still require verification.",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_discovery_outcome": {
+        "outcome": "unverified_after_bounded_search",
+        "capture_ids": [
+          "census-votesmart-root"
+        ],
+        "notes": "Bounded publisher-name/domain scorecard search and directory comparison did not establish a captured original edition. No inference of retirement or nonexistence."
+      }
+    },
+    {
+      "source_id": "defenders_action:federal",
+      "publisher_id": "defenders_action",
+      "publisher_name": "Defenders of Wildlife Action Fund",
+      "publisher_aliases": [],
+      "homepage_url": "https://www.defenders.org/",
+      "scorecard_name": "Congressional Scorecard",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "member_office_directory",
+          "url": "https://cohen.house.gov/about/vote-ratings",
+          "capture_id": "cohen-directory"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Historical lead from a member-office directory; original scorecard, federal scope, independent scoring and archive still require verification.",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_discovery_outcome": {
+        "outcome": "unverified_after_bounded_search",
+        "capture_ids": [
+          "census-votesmart-root"
+        ],
+        "notes": "Bounded publisher-name/domain scorecard search and directory comparison did not establish a captured original edition. No inference of retirement or nonexistence."
+      }
+    },
+    {
+      "source_id": "drug_policy_action:federal",
+      "publisher_id": "drug_policy_action",
+      "publisher_name": "Drug Policy Action",
+      "publisher_aliases": [],
+      "homepage_url": "https://www.drugpolicyaction.org/",
+      "scorecard_name": "Congressional Ratings",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "member_office_directory",
+          "url": "https://cohen.house.gov/about/vote-ratings",
+          "capture_id": "cohen-directory"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Historical lead from a member-office directory; original scorecard, federal scope, independent scoring and archive still require verification.",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_discovery_outcome": {
+        "outcome": "unverified_after_bounded_search",
+        "capture_ids": [],
+        "notes": "Bounded publisher-name/domain scorecard search and directory comparison did not establish a captured original edition. No inference of retirement or nonexistence."
+      }
+    },
+    {
+      "source_id": "drum_major:federal",
+      "publisher_id": "drum_major",
+      "publisher_name": "Drum Major Institute for Public Policy",
+      "publisher_aliases": [],
+      "homepage_url": "https://www.drummajorinst.org/",
+      "scorecard_name": "Congressional Scorecard",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "member_office_directory",
+          "url": "https://cohen.house.gov/about/vote-ratings",
+          "capture_id": "cohen-directory"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Historical lead from a member-office directory; original scorecard, federal scope, independent scoring and archive still require verification.",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_discovery_outcome": {
+        "outcome": "access_or_content_block",
+        "capture_ids": [
+          "census-drummajor-2005-history"
+        ],
+        "notes": "Original annual report discovered but direct capture failed. Keep historical lead; no false current support claim."
+      }
+    },
+    {
+      "source_id": "end_citizens_united:federal",
+      "publisher_id": "end_citizens_united",
+      "publisher_name": "End Citizens United",
+      "publisher_aliases": [],
+      "homepage_url": "https://endcitizensunited.org/",
+      "scorecard_name": "Congressional Scorecard",
+      "scorecard_index_url": "https://www.endcitizensunited.org/end-citizens-united-scorecard",
+      "archive_url": null,
+      "first_known_year": 2026,
+      "last_known_year": 2026,
+      "congresses_available": [
+        119
+      ],
+      "chamber_scope": "unknown",
+      "source_format": [
+        "html"
+      ],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "member_office_directory",
+          "url": "https://cohen.house.gov/about/vote-ratings",
+          "capture_id": "cohen-directory"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": "2026-10-03T17:30:46.932373+00:00",
+      "discovery_status": "profiled",
+      "rights_status": "unreviewed",
+      "notes": "Historical lead from a member-office directory; original scorecard, federal scope, independent scoring and archive still require verification. Published member grades include A+ and F. Criteria include rejecting corporate PAC money as well as congressional actions. No complete formula or item-level result grid is disclosed here; source-backed ratings fit while reproduction remains unsupported.",
+      "verification_capture_ids": [
+        "census-ecu-119"
+      ],
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_discovery_outcome": {
+        "outcome": "profile_added",
+        "capture_ids": [
+          "census-ecu-119",
+          "census-votesmart-root"
+        ],
+        "notes": "Profile and readiness assessment added."
+      }
+    },
+    {
+      "source_id": "environment_america:federal",
+      "publisher_id": "environment_america",
+      "publisher_name": "Environment America",
+      "publisher_aliases": [],
+      "homepage_url": "https://environmentamerica.org/",
+      "scorecard_name": "Congressional Scorecard",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "member_office_directory",
+          "url": "https://cohen.house.gov/about/vote-ratings",
+          "capture_id": "cohen-directory"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Historical lead from a member-office directory; original scorecard, federal scope, independent scoring and archive still require verification.",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_discovery_outcome": {
+        "outcome": "unverified_after_bounded_search",
+        "capture_ids": [
+          "census-votesmart-root"
+        ],
+        "notes": "Bounded publisher-name/domain scorecard search and directory comparison did not establish a captured original edition. No inference of retirement or nonexistence."
+      }
+    },
+    {
+      "source_id": "few:federal",
+      "publisher_id": "few",
+      "publisher_name": "Federally Employed Women",
+      "publisher_aliases": [],
+      "homepage_url": "https://www.few.org/",
+      "scorecard_name": "Congressional Ratings",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "member_office_directory",
+          "url": "https://cohen.house.gov/about/vote-ratings",
+          "capture_id": "cohen-directory"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Historical lead from a member-office directory; original scorecard, federal scope, independent scoring and archive still require verification.",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_discovery_outcome": {
+        "outcome": "access_or_content_block",
+        "capture_ids": [
+          "census-few-117",
+          "census-votesmart-root"
+        ],
+        "notes": "The requested PDF path returned an HTML homepage (soft failure), not the expected legislative scorecard."
+      }
+    },
+    {
+      "source_id": "ffrf_action:federal",
+      "publisher_id": "ffrf_action",
+      "publisher_name": "FFRF Action Fund",
+      "publisher_aliases": [],
+      "homepage_url": "https://ffrfaction.org/",
+      "scorecard_name": "Dynamic Congressional Scorecards",
+      "scorecard_index_url": "https://ffrfaction.org/scorecard/",
+      "archive_url": null,
+      "first_known_year": 2026,
+      "last_known_year": 2026,
+      "congresses_available": [],
+      "chamber_scope": "both",
+      "source_format": [
+        "html"
+      ],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "web_search",
+          "url": "https://ffrfaction.org/scorecard/"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": "2026-10-03T16:36:32.430875+00:00",
+      "discovery_status": "profiled",
+      "rights_status": "unreviewed",
+      "notes": "House and Senate have separate methodologies. Embedded member grid not acquired.",
+      "verification_capture_ids": [
+        "ffrf-house",
+        "ffrf-senate",
+        "ffrf-house-method",
+        "ffrf-senate-method"
+      ],
+      "scope_status": "federal_scorecard_confirmed"
+    },
+    {
+      "source_id": "first_focus:federal",
+      "publisher_id": "first_focus",
+      "publisher_name": "First Focus Campaign for Children",
+      "publisher_aliases": [],
+      "homepage_url": "https://www.ffccscorecard.org/",
+      "scorecard_name": "Legislative Scorecard",
+      "scorecard_index_url": "https://www.ffccscorecard.org/",
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "member_office_directory",
+          "url": "https://www.ffccscorecard.org/"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": null,
+      "discovery_status": "blocked",
+      "rights_status": "unreviewed",
+      "notes": "Directory discovery; direct site returns 404 / website expired. Find the current original publisher archive before profiling.",
+      "verification_capture_ids": [
+        "firstfocus-index"
+      ],
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_discovery_outcome": {
+        "outcome": "unverified_after_bounded_search",
+        "capture_ids": [
+          "firstfocus-index"
+        ],
+        "notes": "Old dedicated scorecard domain failed in baseline; current original publisher search locates newer scorecard. Follow-up acquisition remains pending; never retire based on old route."
+      }
+    },
+    {
+      "source_id": "flyersrights:federal",
+      "publisher_id": "flyersrights",
+      "publisher_name": "FlyersRights.org",
+      "publisher_aliases": [],
+      "homepage_url": "https://flyersrights.org/",
+      "scorecard_name": "Congressional Ratings",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "member_office_directory",
+          "url": "https://cohen.house.gov/about/vote-ratings",
+          "capture_id": "cohen-directory"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Historical lead from a member-office directory; original scorecard, federal scope, independent scoring and archive still require verification.",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_discovery_outcome": {
+        "outcome": "unverified_after_bounded_search",
+        "capture_ids": [],
+        "notes": "Bounded publisher-name/domain scorecard search and directory comparison did not establish a captured original edition. No inference of retirement or nonexistence."
+      }
+    },
+    {
+      "source_id": "food_policy_action:federal",
+      "publisher_id": "food_policy_action",
+      "publisher_name": "Food Policy Action",
+      "publisher_aliases": [],
+      "homepage_url": "https://foodpolicyaction.org/",
+      "scorecard_name": "National Food Policy Scorecard",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "member_office_directory",
+          "url": "https://cohen.house.gov/about/vote-ratings",
+          "capture_id": "cohen-directory"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Historical lead from a member-office directory; original scorecard, federal scope, independent scoring and archive still require verification.",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_discovery_outcome": {
+        "outcome": "unverified_after_bounded_search",
+        "capture_ids": [
+          "census-votesmart-root"
+        ],
+        "notes": "A 113th publisher-authored PDF was found at an academic mirror; publisher origin/edition authentication remains pending. Mirror alone does not verify original location."
+      }
+    },
+    {
+      "source_id": "foreign_policy_america:federal",
+      "publisher_id": "foreign_policy_america",
+      "publisher_name": "Foreign Policy for America",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "Congressional Scorecard",
+      "scorecard_index_url": "https://www.fp4america.org/wp-content/uploads/2025/04/FP4A-118th-Congress-Legislative-Scorecard.pdf",
+      "archive_url": null,
+      "first_known_year": 2023,
+      "last_known_year": 2024,
+      "congresses_available": [
+        118
+      ],
+      "chamber_scope": "unknown",
+      "source_format": [
+        "pdf"
+      ],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "member_office_directory",
+          "url": "https://cohen.house.gov/about/vote-ratings",
+          "capture_id": "cohen-directory"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": "2026-10-03T17:38:25.028275+00:00",
+      "discovery_status": "profiled",
+      "rights_status": "unreviewed",
+      "notes": "Historical lead from a member-office directory; original scorecard, federal scope, independent scoring and archive still require verification. Congress/lifetime numbers have percent-labelled headers. N/A excludes missed/present/no-opportunity actions. Leadership sponsorship choices remain displayed but uncounted. HTML search-index numbers differed from captured PDF for some rows; editions/captures must stay distinct.",
+      "verification_capture_ids": [
+        "census-fp4a-118-pdf"
+      ],
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_discovery_outcome": {
+        "outcome": "profile_added",
+        "capture_ids": [
+          "census-fp4a-118-pdf",
+          "census-votesmart-root"
+        ],
+        "notes": "Profile and readiness assessment added."
+      }
+    },
+    {
+      "source_id": "frc_action:federal",
+      "publisher_id": "frc_action",
+      "publisher_name": "FRC Action",
+      "publisher_aliases": [],
+      "homepage_url": "https://www.frcaction.org/",
+      "scorecard_name": "Vote Scorecard",
+      "scorecard_index_url": "https://www.frcaction.org/scorecard",
+      "archive_url": null,
+      "first_known_year": 2026,
+      "last_known_year": 2026,
+      "congresses_available": [
+        119
+      ],
+      "chamber_scope": "both",
+      "source_format": [
+        "html"
+      ],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "web_search",
+          "url": "https://www.frcaction.org/scorecard"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": "2026-10-03T16:36:32.961593+00:00",
+      "discovery_status": "profiled",
+      "rights_status": "unreviewed",
+      "notes": "Page heading and chamber subheading disagree about session; preserve both pending edition review. Introduction names 2026 second session, but an internal Senate heading says first session. Preserve both source labels and named 2026 vote dates; do not silently repair. The sample exposes supported/opposed motions, bill and amendment references, and separate Speaker/absence/present legend states.",
+      "verification_capture_ids": [
+        "frc-index"
+      ],
+      "scope_status": "federal_scorecard_confirmed",
+      "latest_discovery_outcome": {
+        "outcome": "profile_added",
+        "capture_ids": [
+          "frc-index"
+        ],
+        "notes": "Profile and readiness assessment added."
+      }
+    },
+    {
+      "source_id": "freedomworks:federal",
+      "publisher_id": "freedomworks",
+      "publisher_name": "FreedomWorks",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "Congressional Scorecard",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "member_office_release",
+          "url": "https://wittman.house.gov/news/documentsingle.aspx?DocumentID=1418"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Historical discovery only. Locate publisher originals in an archive; no retirement or redistribution conclusion from current access.",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_discovery_outcome": {
+        "outcome": "access_or_content_block",
+        "capture_ids": [
+          "census-freedomworks-route",
+          "census-votesmart-root"
+        ],
+        "notes": "Original scorecard route failed transport. Historic directory evidence is not a retirement decision."
+      }
+    },
+    {
+      "source_id": "global_solutions:federal",
+      "publisher_id": "global_solutions",
+      "publisher_name": "Citizens for Global Solutions",
+      "publisher_aliases": [],
+      "homepage_url": "https://globalsolutions.org/",
+      "scorecard_name": "Congressional Report Card",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "member_office_directory",
+          "url": "https://cohen.house.gov/about/vote-ratings",
+          "capture_id": "cohen-directory"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Historical lead from a member-office directory; original scorecard, federal scope, independent scoring and archive still require verification.",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_discovery_outcome": {
+        "outcome": "unverified_after_bounded_search",
+        "capture_ids": [
+          "census-votesmart-root"
+        ],
+        "notes": "Bounded publisher-name/domain scorecard search and directory comparison did not establish a captured original edition. No inference of retirement or nonexistence."
+      }
+    },
+    {
+      "source_id": "goa:federal",
+      "publisher_id": "goa",
+      "publisher_name": "Gun Owners of America",
+      "publisher_aliases": [],
+      "homepage_url": "https://www.gunowners.org/",
+      "scorecard_name": "Congressional Voter Guide",
+      "scorecard_index_url": "https://www.gunowners.org/grades/",
+      "archive_url": null,
+      "first_known_year": 2024,
+      "last_known_year": 2024,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "web_search",
+          "url": "https://www.gunowners.org/grades/"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": "2026-10-03T16:34:57.680260+00:00",
+      "discovery_status": "verified",
+      "rights_status": "unreviewed",
+      "notes": "Candidate guide overlaps federal incumbent ratings; isolate incumbents before admission.",
+      "verification_capture_ids": [
+        "goa-index"
+      ],
+      "scope_status": "mixed_candidates_requires_incumbent_filter",
+      "latest_discovery_outcome": {
+        "outcome": "unverified_after_bounded_search",
+        "capture_ids": [
+          "goa-index"
+        ],
+        "notes": "2024 voter guide mixes incumbent and challenger grades; original distinct congressional scorecard route is an unloaded application. Keep guide separate from source-defined congressional scorecard."
+      }
+    },
+    {
+      "source_id": "heritage_action:federal",
+      "publisher_id": "heritage_action",
+      "publisher_name": "Heritage Action for America",
+      "publisher_aliases": [],
+      "homepage_url": "https://heritageaction.com/",
+      "scorecard_name": "Scorecard",
+      "scorecard_index_url": "https://heritageaction.com/scorecard",
+      "archive_url": null,
+      "first_known_year": 2017,
+      "last_known_year": 2024,
+      "congresses_available": [
+        115,
+        118
+      ],
+      "chamber_scope": "both",
+      "source_format": [
+        "html",
+        "json"
+      ],
+      "machine_readable": "acquired_structured_source",
+      "discovered_via": [
+        {
+          "kind": "web_search",
+          "url": "https://heritageaction.com/scorecard/118"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": "2026-10-03T17:07:33.794647+00:00",
+      "discovery_status": "profiled",
+      "rights_status": "unreviewed",
+      "notes": "HTML shells load a public JSON API. One cosponsorship response acquired; no complete edition or vote-page qualification.",
+      "verification_capture_ids": [
+        "heritage-index",
+        "heritage-cosponsorship",
+        "heritage-cosponsorship-api",
+        "heritage-119-members",
+        "heritage-119-votes"
+      ],
+      "scope_status": "federal_scorecard_confirmed"
+    },
+    {
+      "source_id": "hrc:federal",
+      "publisher_id": "hrc",
+      "publisher_name": "Human Rights Campaign",
+      "publisher_aliases": [],
+      "homepage_url": "https://www.hrc.org/",
+      "scorecard_name": "Congressional Scorecard",
+      "scorecard_index_url": "https://www.hrc.org/resources/congressional-scorecard",
+      "archive_url": "https://www.hrc.org/resources/congressional-scorecard",
+      "first_known_year": 2004,
+      "last_known_year": 2024,
+      "congresses_available": [
+        108,
+        109,
+        110,
+        111,
+        112,
+        113,
+        114,
+        115,
+        116,
+        117,
+        118
+      ],
+      "chamber_scope": "both",
+      "source_format": [
+        "html",
+        "pdf"
+      ],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "govtrack_directory",
+          "url": "https://www.hrc.org/resources/congressional-scorecard"
+        },
+        {
+          "kind": "govtrack_directory",
+          "url": "https://github.com/govtrack/advocacy-organization-scorecards",
+          "capture_id": "govtrack-directory"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": "2026-10-03T16:36:31.349403+00:00",
+      "discovery_status": "profiled",
+      "rights_status": "unreviewed",
+      "notes": "Index lists 108th–118th editions; only selected PDFs inspected. Old assets2 host failed; publisher now links S3 originals.",
+      "verification_capture_ids": [
+        "hrc-index",
+        "hrc-118-pdf",
+        "hrc-111-current-pdf"
+      ],
+      "scope_status": "federal_scorecard_confirmed"
+    },
+    {
+      "source_id": "humane_world_action:federal",
+      "publisher_id": "humane_world_action",
+      "publisher_name": "Humane World Action Fund",
+      "publisher_aliases": [
+        "Humane Society Legislative Fund",
+        "HSLF"
+      ],
+      "homepage_url": "https://humaneaction.org/",
+      "scorecard_name": "Humane Scorecard",
+      "scorecard_index_url": "https://humaneaction.org/past-scorecards",
+      "archive_url": "https://humaneaction.org/past-scorecards",
+      "first_known_year": 2014,
+      "last_known_year": 2025,
+      "congresses_available": [
+        113,
+        114,
+        115,
+        116,
+        117,
+        118,
+        119
+      ],
+      "chamber_scope": "both",
+      "source_format": [
+        "html",
+        "pdf"
+      ],
+      "machine_readable": "pdf_table_extraction_research_only",
+      "discovered_via": [
+        {
+          "kind": "web_search",
+          "url": "https://humaneaction.org/past-scorecards"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": "2026-10-03T16:36:31.349619+00:00",
+      "discovery_status": "profiled",
+      "rights_status": "unreviewed",
+      "notes": "Rebrand is one publisher identity; a 404 on /2025-scorecard does not retire the available PDF edition.",
+      "verification_capture_ids": [
+        "humane-archive",
+        "humane-method",
+        "humane-2025-pdf",
+        "humane-2024-pdf",
+        "humane-2025-final"
+      ],
+      "scope_status": "federal_scorecard_confirmed"
+    },
+    {
+      "source_id": "iava:federal",
+      "publisher_id": "iava",
+      "publisher_name": "Iraq and Afghanistan Veterans of America",
+      "publisher_aliases": [],
+      "homepage_url": "https://iava.org/",
+      "scorecard_name": "Congressional Report Card",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "member_office_directory",
+          "url": "https://cohen.house.gov/about/vote-ratings",
+          "capture_id": "cohen-directory"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Historical lead from a member-office directory; original scorecard, federal scope, independent scoring and archive still require verification.",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_discovery_outcome": {
+        "outcome": "original_series_verified_edition_unqualified",
+        "capture_ids": [
+          "census-iava-2008-history",
+          "census-votesmart-root"
+        ],
+        "notes": "Publisher annual report confirms 2008 report-card existence and old veteranreportcard.org hub. Actual rating edition not recovered."
+      }
+    },
+    {
+      "source_id": "ila:federal",
+      "publisher_id": "ila",
+      "publisher_name": "Institute for Legislative Analysis",
+      "publisher_aliases": [],
+      "homepage_url": "https://www.limitedgov.org/",
+      "scorecard_name": "Limited Government Index",
+      "scorecard_index_url": "https://www.limitedgov.org/just-announced-2026-limited-government-index-and-awardees/",
+      "archive_url": null,
+      "first_known_year": 2026,
+      "last_known_year": 2026,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [
+        "html"
+      ],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "web_search",
+          "url": "https://www.limitedgov.org/just-announced-2026-limited-government-index-and-awardees/"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": "2026-10-03T16:34:58.337914+00:00",
+      "discovery_status": "profiled",
+      "rights_status": "unreviewed",
+      "notes": "Publisher announcement verified; national index and policy sub-scores need sampling. Publisher states policy-category ratings and district-relative grading using Cook PVI and proprietary algorithms. Those inputs and transformations are not disclosed in this announcement; preserve reported grade/context without universal reproduction.",
+      "verification_capture_ids": [
+        "ila-index"
+      ],
+      "scope_status": "federal_scorecard_confirmed",
+      "latest_discovery_outcome": {
+        "outcome": "profile_added",
+        "capture_ids": [
+          "ila-index"
+        ],
+        "notes": "Profile and readiness assessment added."
+      }
+    },
+    {
+      "source_id": "lcv:federal",
+      "publisher_id": "lcv",
+      "publisher_name": "League of Conservation Voters",
+      "publisher_aliases": [],
+      "homepage_url": "https://www.lcv.org/",
+      "scorecard_name": "National Environmental Scorecard",
+      "scorecard_index_url": "https://www.lcv.org/congressional-scorecard/",
+      "archive_url": "https://www.lcv.org/congressional-scorecard/scorecard-archive/",
+      "first_known_year": 1970,
+      "last_known_year": 2025,
+      "congresses_available": [
+        95,
+        119
+      ],
+      "chamber_scope": "both",
+      "source_format": [
+        "csv",
+        "html",
+        "pdf"
+      ],
+      "machine_readable": "acquired_structured_source",
+      "discovered_via": [
+        {
+          "kind": "govtrack_directory",
+          "url": "https://www.lcv.org/congressional-scorecard/"
+        },
+        {
+          "kind": "govtrack_directory",
+          "url": "https://github.com/govtrack/advocacy-organization-scorecards",
+          "capture_id": "govtrack-directory"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": "2026-10-03T16:36:34.574623+00:00",
+      "discovery_status": "profiled",
+      "rights_status": "unreviewed",
+      "notes": "1970 is the publisher-stated start, not a verified continuous archive. CSV availability remains unverified on the redesigned site.",
+      "verification_capture_ids": [
+        "lcv-index",
+        "lcv-method",
+        "lcv-2025-pdf",
+        "lcv-1977-pdf",
+        "lcv-2025-senate-csv",
+        "lcv-2025-votes-csv"
+      ],
+      "scope_status": "federal_scorecard_confirmed"
+    },
+    {
+      "source_id": "leadership_conference:federal",
+      "publisher_id": "leadership_conference",
+      "publisher_name": "Leadership Conference on Civil and Human Rights",
+      "publisher_aliases": [],
+      "homepage_url": "https://civilrights.org/",
+      "scorecard_name": "Congressional Voting Record",
+      "scorecard_index_url": "https://civilrights.org/wp-content/uploads/2024/10/Voting-Record-118th-Congress.pdf",
+      "archive_url": null,
+      "first_known_year": 2023,
+      "last_known_year": 2024,
+      "congresses_available": [
+        118
+      ],
+      "chamber_scope": "unknown",
+      "source_format": [
+        "pdf"
+      ],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "member_office_directory",
+          "url": "https://cohen.house.gov/about/vote-ratings",
+          "capture_id": "cohen-directory"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": "2026-10-03T17:34:07.268009+00:00",
+      "discovery_status": "profiled",
+      "rights_status": "unreviewed",
+      "notes": "Historical lead from a member-office directory; original scorecard, federal scope, independent scoring and archive still require verification. PDF contains action descriptions and member summary percentages. Introduction says supplementary per-member vote charts are available upon request; do not reconstruct undisclosed source cells from official votes. Footnotes identify former members and successors.",
+      "verification_capture_ids": [
+        "census-leadership-118"
+      ],
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_discovery_outcome": {
+        "outcome": "profile_added",
+        "capture_ids": [
+          "census-leadership-118"
+        ],
+        "notes": "Profile and readiness assessment added."
+      }
+    },
+    {
+      "source_id": "lugar_mccourt:federal",
+      "publisher_id": "lugar_mccourt",
+      "publisher_name": "The Lugar Center and Georgetown McCourt School",
+      "publisher_aliases": [],
+      "homepage_url": "https://www.thelugarcenter.org/",
+      "scorecard_name": "Bipartisan Index",
+      "scorecard_index_url": "https://www.thelugarcenter.org/ourwork-41.html",
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [
+        113
+      ],
+      "chamber_scope": "senate",
+      "source_format": [
+        "html"
+      ],
+      "machine_readable": "html_table_observed",
+      "discovered_via": [
+        {
+          "kind": "web_search",
+          "url": "https://www.thelugarcenter.org/ourwork-41.html"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": "2026-10-03T16:36:33.856498+00:00",
+      "discovery_status": "profiled",
+      "rights_status": "unreviewed",
+      "notes": "Jointly published series, not separate duplicated publishers. Broader chamber/time coverage not enumerated.",
+      "verification_capture_ids": [
+        "lugar-senate-113"
+      ],
+      "scope_status": "federal_scorecard_confirmed"
+    },
+    {
+      "source_id": "naacp:federal",
+      "publisher_id": "naacp",
+      "publisher_name": "NAACP",
+      "publisher_aliases": [],
+      "homepage_url": "https://naacp.org/",
+      "scorecard_name": "Civil Rights Legislative Report Card",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "member_office_directory",
+          "url": "https://cohen.house.gov/about/vote-ratings",
+          "capture_id": "cohen-directory"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Historical lead from a member-office directory; original scorecard, federal scope, independent scoring and archive still require verification.",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_discovery_outcome": {
+        "outcome": "original_series_verified_edition_unqualified",
+        "capture_ids": [
+          "census-naacp-index",
+          "census-naacp-115"
+        ],
+        "notes": "Original site links 115th report PDF. All pages are image-based; OCR and member-cell validation deferred."
+      }
+    },
+    {
+      "source_id": "national_farmers_union:federal",
+      "publisher_id": "national_farmers_union",
+      "publisher_name": "National Farmers Union",
+      "publisher_aliases": [],
+      "homepage_url": "https://nfu.org/",
+      "scorecard_name": "Congressional Voting Record",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "member_office_directory",
+          "url": "https://cohen.house.gov/about/vote-ratings",
+          "capture_id": "cohen-directory"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Historical lead from a member-office directory; original scorecard, federal scope, independent scoring and archive still require verification.",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_discovery_outcome": {
+        "outcome": "original_series_verified_edition_unqualified",
+        "capture_ids": [
+          "census-nfu-2012-method",
+          "census-votesmart-root"
+        ],
+        "notes": "Publisher 2012 article identifies selected Farm Bill amendments and preferred actions; actual full rating edition remains unacquired."
+      }
+    },
+    {
+      "source_id": "national_parks_action:federal",
+      "publisher_id": "national_parks_action",
+      "publisher_name": "National Parks Action Fund",
+      "publisher_aliases": [],
+      "homepage_url": "https://nationalparksaction.org/",
+      "scorecard_name": "Congressional Scorecard",
+      "scorecard_index_url": "https://nationalparksaction.org/scorecard/",
+      "archive_url": null,
+      "first_known_year": 2024,
+      "last_known_year": 2024,
+      "congresses_available": [
+        118
+      ],
+      "chamber_scope": "unknown",
+      "source_format": [
+        "html",
+        "pdf_offered"
+      ],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "member_office_directory",
+          "url": "https://cohen.house.gov/about/vote-ratings",
+          "capture_id": "cohen-directory"
+        },
+        {
+          "kind": "platform_crosslink",
+          "url": "https://legislativescorecard.us/",
+          "note": "Platform example is a lead only."
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": "2026-10-03T17:34:07.268233+00:00",
+      "discovery_status": "profiled",
+      "rights_status": "unreviewed",
+      "notes": "Historical lead from a member-office directory; original scorecard, federal scope, independent scoring and archive still require verification. Original publisher explicitly excludes Senate because no park votes were scorable in this edition. This is an intentionally House-only source scope. The live platform and linked PDF were not completely parsed.",
+      "verification_capture_ids": [
+        "census-nationalparks-index"
+      ],
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_discovery_outcome": {
+        "outcome": "profile_added",
+        "capture_ids": [
+          "census-nationalparks-index"
+        ],
+        "notes": "Profile and readiness assessment added."
+      }
+    },
+    {
+      "source_id": "nea:federal",
+      "publisher_id": "nea",
+      "publisher_name": "National Education Association",
+      "publisher_aliases": [],
+      "homepage_url": "https://www.nea.org/",
+      "scorecard_name": "Legislative Report Card",
+      "scorecard_index_url": "https://www.nea.org/advocating-for-change/action-center/nea-in-congress/report-card",
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [
+        119
+      ],
+      "chamber_scope": "both",
+      "source_format": [
+        "html",
+        "pdf"
+      ],
+      "machine_readable": "acquired_structured_source",
+      "discovered_via": [
+        {
+          "kind": "web_search",
+          "url": "https://www.nea.org/advocating-for-change/action-center/nea-in-congress/report-card"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": "2026-10-03T16:34:55.285948+00:00",
+      "discovery_status": "profiled",
+      "rights_status": "unreviewed",
+      "notes": "",
+      "verification_capture_ids": [
+        "nea-report",
+        "nea-119-html",
+        "nea-119-pdf"
+      ],
+      "scope_status": "federal_scorecard_confirmed"
+    },
+    {
+      "source_id": "network:federal",
+      "publisher_id": "network",
+      "publisher_name": "NETWORK Lobby",
+      "publisher_aliases": [],
+      "homepage_url": "https://networklobby.org/",
+      "scorecard_name": "Voting Record",
+      "scorecard_index_url": "https://networklobby.org/2025-voting-record/",
+      "archive_url": null,
+      "first_known_year": 2025,
+      "last_known_year": 2025,
+      "congresses_available": [
+        119
+      ],
+      "chamber_scope": "unknown",
+      "source_format": [
+        "html",
+        "pdf"
+      ],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "web_search",
+          "url": "https://networklobby.org/2025-voting-record/"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": "2026-10-03T17:34:08.008595+00:00",
+      "discovery_status": "profiled",
+      "rights_status": "unreviewed",
+      "notes": " Separate House and Senate item sets report plus/minus actions and literal percentage scores. Exact bill/roll identifiers and publisher positions are printed with descriptions.",
+      "verification_capture_ids": [
+        "network-index",
+        "census-network-2025"
+      ],
+      "scope_status": "federal_scorecard_confirmed",
+      "latest_discovery_outcome": {
+        "outcome": "profile_added",
+        "capture_ids": [
+          "census-network-2025"
+        ],
+        "notes": "Profile and readiness assessment added."
+      }
+    },
+    {
+      "source_id": "new_american:federal",
+      "publisher_id": "new_american",
+      "publisher_name": "The New American",
+      "publisher_aliases": [],
+      "homepage_url": "https://thenewamerican.com/",
+      "scorecard_name": "Freedom Index",
+      "scorecard_index_url": "https://thenewamerican.com/freedom%20index/",
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [
+        118,
+        119
+      ],
+      "chamber_scope": "both",
+      "source_format": [
+        "html"
+      ],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "web_search",
+          "url": "https://thenewamerican.com/freedom%20index/"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": "2026-10-03T16:34:59.136746+00:00",
+      "discovery_status": "verified",
+      "rights_status": "unreviewed",
+      "notes": "John Birch Society distributes this scorecard; avoid double-counting the distributor as another rating source.",
+      "verification_capture_ids": [
+        "new-american-index"
+      ],
+      "scope_status": "federal_scorecard_confirmed",
+      "latest_discovery_outcome": {
+        "outcome": "unverified_after_bounded_search",
+        "capture_ids": [
+          "new-american-index"
+        ],
+        "notes": "Original archive links are enumerated, but no whole edition parsed in this bounded pass."
+      }
+    },
+    {
+      "source_id": "nfib:federal",
+      "publisher_id": "nfib",
+      "publisher_name": "National Federation of Independent Business",
+      "publisher_aliases": [],
+      "homepage_url": "https://www.nfib.com/",
+      "scorecard_name": "How Congress Voted",
+      "scorecard_index_url": "https://www.nfib.com/how-congress-voted/",
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "web_search",
+          "url": "https://www.nfib.com/how-congress-voted/"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": null,
+      "discovery_status": "blocked",
+      "rights_status": "unreviewed",
+      "notes": "Direct acquisition received HTTP 403. Search discovery identifies the series; access remains unqualified.",
+      "verification_capture_ids": [
+        "nfib-index"
+      ],
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_discovery_outcome": {
+        "outcome": "access_or_content_block",
+        "capture_ids": [
+          "census-nfib-119-release"
+        ],
+        "notes": "Bounded publisher-name/domain scorecard search and directory comparison did not establish a captured original edition. No inference of retirement or nonexistence."
+      }
+    },
+    {
+      "source_id": "niac_action:federal",
+      "publisher_id": "niac_action",
+      "publisher_name": "NIAC Action",
+      "publisher_aliases": [],
+      "homepage_url": "https://niacouncil.org/",
+      "scorecard_name": "Congressional Scorecard",
+      "scorecard_index_url": "https://niacouncil.org/congressional-scorecard-117th-congress/",
+      "archive_url": null,
+      "first_known_year": 2015,
+      "last_known_year": 2022,
+      "congresses_available": [
+        117
+      ],
+      "chamber_scope": "both",
+      "source_format": [
+        "html",
+        "spreadsheet_offered"
+      ],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "web_search",
+          "url": "https://niacouncil.org/congressional-scorecard-117th-congress/"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": "2026-10-03T16:34:56.829794+00:00",
+      "discovery_status": "profiled",
+      "rights_status": "unreviewed",
+      "notes": "Publisher embeds a Google Sheet; original sheet not acquired. Named 117th edition includes an earlier 2015 JCPOA vote and December2020 letter. House appropriations passage applies only to that committee. Public letters/statements are independent scoring items; spreadsheet member results were not captured.",
+      "verification_capture_ids": [
+        "niac-117"
+      ],
+      "scope_status": "federal_scorecard_confirmed",
+      "latest_discovery_outcome": {
+        "outcome": "profile_added",
+        "capture_ids": [
+          "niac-117"
+        ],
+        "notes": "Profile and readiness assessment added."
+      }
+    },
+    {
+      "source_id": "norml:federal",
+      "publisher_id": "norml",
+      "publisher_name": "National Organization for the Reform of Marijuana Laws",
+      "publisher_aliases": [],
+      "homepage_url": "https://norml.org/",
+      "scorecard_name": "Congressional Scorecard / Smoke the Vote",
+      "scorecard_index_url": "https://vote.norml.org/",
+      "archive_url": null,
+      "first_known_year": 2016,
+      "last_known_year": 2020,
+      "congresses_available": [
+        114
+      ],
+      "chamber_scope": "both",
+      "source_format": [
+        "html"
+      ],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "govtrack_directory",
+          "url": "https://vote.norml.org/about"
+        },
+        {
+          "kind": "govtrack_directory",
+          "url": "https://github.com/govtrack/advocacy-organization-scorecards",
+          "capture_id": "govtrack-directory"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": "2026-10-03T16:36:34.492177+00:00",
+      "discovery_status": "profiled",
+      "rights_status": "unreviewed",
+      "notes": "Only federal incumbent ratings are in scope; election candidates and state ratings need an explicit exclusion.",
+      "verification_capture_ids": [
+        "norml-method",
+        "norml-2016"
+      ],
+      "scope_status": "federal_scorecard_confirmed"
+    },
+    {
+      "source_id": "nra_pvf:federal",
+      "publisher_id": "nra_pvf",
+      "publisher_name": "NRA Political Victory Fund",
+      "publisher_aliases": [],
+      "homepage_url": "https://www.nrapvf.org/",
+      "scorecard_name": "Candidate Grades",
+      "scorecard_index_url": "https://www.nrapvf.org/grades/texas",
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "web_search",
+          "url": "https://www.nrapvf.org/grades/texas"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": "2026-10-03T16:34:58.254519+00:00",
+      "discovery_status": "verified",
+      "rights_status": "unreviewed",
+      "notes": "Sample is Texas only and mixes candidates with incumbents; federal-incumbent scope remains unqualified.",
+      "verification_capture_ids": [
+        "nra-index"
+      ],
+      "scope_status": "mixed_candidates_requires_incumbent_filter",
+      "latest_discovery_outcome": {
+        "outcome": "unverified_after_bounded_search",
+        "capture_ids": [
+          "nra-index"
+        ],
+        "notes": "Election candidate guide mixes federal/state offices and contains no qualified incumbent-only source snapshot. Exclude candidate-only portion from V1."
+      }
+    },
+    {
+      "source_id": "nrf:federal",
+      "publisher_id": "nrf",
+      "publisher_name": "National Retail Federation",
+      "publisher_aliases": [],
+      "homepage_url": "https://nrf.com/",
+      "scorecard_name": "Congressional Voting Scorecard",
+      "scorecard_index_url": "https://nrf.com/advocacy/action-center/congressional-voting-scorecard",
+      "archive_url": null,
+      "first_known_year": 2015,
+      "last_known_year": 2026,
+      "congresses_available": [
+        114,
+        115,
+        116,
+        117,
+        118,
+        119
+      ],
+      "chamber_scope": "both",
+      "source_format": [
+        "html"
+      ],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "web_search",
+          "url": "https://nrf.com/advocacy/action-center/congressional-voting-scorecard"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": "2026-10-03T17:34:08.231805+00:00",
+      "discovery_status": "profiled",
+      "rights_status": "unreviewed",
+      "notes": " One HTML table has member names and item columns but no aggregate score/rank column. Image alt strings carry the result. Blank means no data; absent is distinct. Do not invent an overall metric to store this grid. Proposal-0.2 permits item results without metrics. A bill-only column does not establish cosponsorship; retain the publisher description without inferring action type.",
+      "verification_capture_ids": [
+        "nrf-index",
+        "census-nrf-119-senate"
+      ],
+      "scope_status": "federal_scorecard_confirmed",
+      "latest_discovery_outcome": {
+        "outcome": "profile_added",
+        "capture_ids": [
+          "census-nrf-119-senate"
+        ],
+        "notes": "Profile and readiness assessment added."
+      }
+    },
+    {
+      "source_id": "ntu:federal",
+      "publisher_id": "ntu",
+      "publisher_name": "National Taxpayers Union",
+      "publisher_aliases": [],
+      "homepage_url": "https://www.ntu.org/",
+      "scorecard_name": "NTU Rates Congress",
+      "scorecard_index_url": "https://www.ntu.org/ratecongress",
+      "archive_url": null,
+      "first_known_year": 2011,
+      "last_known_year": 2025,
+      "congresses_available": [
+        118
+      ],
+      "chamber_scope": "both",
+      "source_format": [
+        "html",
+        "pdf"
+      ],
+      "machine_readable": "html_table_observed",
+      "discovered_via": [
+        {
+          "kind": "web_search",
+          "url": "https://www.ntu.org/ratecongress/legislator/andy-harris"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": "2026-10-03T16:34:54.565797+00:00",
+      "discovery_status": "profiled",
+      "rights_status": "unreviewed",
+      "notes": "",
+      "verification_capture_ids": [
+        "ntu-member",
+        "ntu-2024-pdf"
+      ],
+      "scope_status": "federal_scorecard_confirmed"
+    },
+    {
+      "source_id": "numbersusa:federal",
+      "publisher_id": "numbersusa",
+      "publisher_name": "NumbersUSA Action",
+      "publisher_aliases": [],
+      "homepage_url": "https://www.numbersusa.org/",
+      "scorecard_name": "Immigration-Reduction Grade Cards",
+      "scorecard_index_url": "https://www.numbersusa.org/grades/",
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "both",
+      "source_format": [
+        "html"
+      ],
+      "machine_readable": "html_table_observed",
+      "discovered_via": [
+        {
+          "kind": "web_search",
+          "url": "https://www.numbersusa.org/grades/"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": "2026-10-03T16:34:56.596464+00:00",
+      "discovery_status": "verified",
+      "rights_status": "unreviewed",
+      "notes": "Legacy member list is available; current landing response lacks the grade table. No schema profile yet.",
+      "verification_capture_ids": [
+        "numbersusa-method",
+        "numbersusa-members"
+      ],
+      "scope_status": "federal_scorecard_confirmed",
+      "latest_discovery_outcome": {
+        "outcome": "unverified_after_bounded_search",
+        "capture_ids": [
+          "numbersusa-method",
+          "numbersusa-members",
+          "census-votesmart-root"
+        ],
+        "notes": "Delivered page requests member lookup; member data and methodology remain unqualified."
+      }
+    },
+    {
+      "source_id": "peace_action:federal",
+      "publisher_id": "peace_action",
+      "publisher_name": "Peace Action",
+      "publisher_aliases": [],
+      "homepage_url": "https://www.peaceaction.org/",
+      "scorecard_name": "Congressional Scorecard",
+      "scorecard_index_url": "https://www.peaceaction.org/know-the-score/",
+      "archive_url": null,
+      "first_known_year": 2024,
+      "last_known_year": 2024,
+      "congresses_available": [],
+      "chamber_scope": "both",
+      "source_format": [
+        "html"
+      ],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "web_search",
+          "url": "https://www.peaceaction.org/know-the-score/"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": "2026-10-03T16:34:58.430517+00:00",
+      "discovery_status": "verified",
+      "rights_status": "unreviewed",
+      "notes": "Publisher states coverage only through summer 2024. Do not infer retirement.",
+      "verification_capture_ids": [
+        "peace-index"
+      ],
+      "scope_status": "federal_scorecard_confirmed",
+      "latest_discovery_outcome": {
+        "outcome": "unverified_after_bounded_search",
+        "capture_ids": [
+          "peace-index",
+          "census-votesmart-root"
+        ],
+        "notes": "Page explicitly stops at summer2024 and lists actions, but no complete member grade grid acquired."
+      }
+    },
+    {
+      "source_id": "planned_parenthood:federal",
+      "publisher_id": "planned_parenthood",
+      "publisher_name": "Planned Parenthood Action Fund",
+      "publisher_aliases": [],
+      "homepage_url": "https://www.plannedparenthoodaction.org/",
+      "scorecard_name": "Congressional Scorecard",
+      "scorecard_index_url": "https://www.plannedparenthoodaction.org/congressional-scorecard",
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [
+        "html"
+      ],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "member_office_directory",
+          "url": "https://cohen.house.gov/about/vote-ratings",
+          "capture_id": "cohen-directory"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": "2026-10-03T17:34:07.573754+00:00",
+      "discovery_status": "profiled",
+      "rights_status": "unreviewed",
+      "notes": "Historical lead from a member-office directory; original scorecard, federal scope, independent scoring and archive still require verification. Current cumulative score covers current and preceding six sessions, not entire career. Recorded bills, amendments, nominations, overrides and procedural votes qualify. Delivered page reports scorecard load failure; no member table completeness established.",
+      "verification_capture_ids": [
+        "census-plannedparenthood-index"
+      ],
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_discovery_outcome": {
+        "outcome": "profile_added",
+        "capture_ids": [
+          "census-plannedparenthood-index",
+          "census-votesmart-root"
+        ],
+        "notes": "Profile and readiness assessment added."
+      }
+    },
+    {
+      "source_id": "reproductive_freedom:federal",
+      "publisher_id": "reproductive_freedom",
+      "publisher_name": "NARAL Pro-Choice America",
+      "publisher_aliases": [],
+      "homepage_url": "https://www.prochoiceamerica.org/",
+      "scorecard_name": "Congressional Record on Reproductive Freedom",
+      "scorecard_index_url": "https://reproductivefreedomforall.org/lawmaker/ted-budd/",
+      "archive_url": null,
+      "first_known_year": 2025,
+      "last_known_year": 2025,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [
+        "html"
+      ],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "member_office_directory",
+          "url": "https://cohen.house.gov/about/vote-ratings",
+          "capture_id": "cohen-directory"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": "2026-10-03T17:34:07.696580+00:00",
+      "discovery_status": "profiled",
+      "rights_status": "unreviewed",
+      "notes": "Historical lead from a member-office directory; original scorecard, federal scope, independent scoring and archive still require verification. Member page keeps House and Senate service in one publisher profile, with annual results and historical action lists. Dash combines several absent/ineligible states; L and S are publisher explanations, not literal official votes. Preserve ambiguous dash meaning.",
+      "verification_capture_ids": [
+        "census-reproductive-budd"
+      ],
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_discovery_outcome": {
+        "outcome": "profile_added",
+        "capture_ids": [
+          "census-reproductive-budd",
+          "census-votesmart-root"
+        ],
+        "notes": "Profile and readiness assessment added."
+      }
+    },
+    {
+      "source_id": "sace_action:federal",
+      "publisher_id": "sace_action",
+      "publisher_name": "Southern Alliance for Clean Energy Action Fund",
+      "publisher_aliases": [],
+      "homepage_url": "https://www.cleanenergy.org/",
+      "scorecard_name": "Congressional Scorecard",
+      "scorecard_index_url": "https://www.cleanenergyactionfund.org/wp-content/uploads/2013/08/SACEAF2012scorecardfinal.pdf",
+      "archive_url": null,
+      "first_known_year": 2012,
+      "last_known_year": 2012,
+      "congresses_available": [
+        112
+      ],
+      "chamber_scope": "unknown",
+      "source_format": [
+        "pdf"
+      ],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "member_office_directory",
+          "url": "https://cohen.house.gov/about/vote-ratings",
+          "capture_id": "cohen-directory"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": "2026-10-03T17:40:03.430580+00:00",
+      "discovery_status": "profiled",
+      "rights_status": "unreviewed",
+      "notes": "Historical lead from a member-office directory; original scorecard, federal scope, independent scoring and archive still require verification. Regional federal delegation scorecard, not a national member roster. Separate no-vote and out-of-tenure markers. Current resource index preserves historical editions; missing recent editions does not prove retirement.",
+      "verification_capture_ids": [
+        "census-sace-2012"
+      ],
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_discovery_outcome": {
+        "outcome": "profile_added",
+        "capture_ids": [
+          "census-sace-2012",
+          "census-votesmart-root"
+        ],
+        "notes": "Profile and readiness assessment added."
+      }
+    },
+    {
+      "source_id": "sba:federal",
+      "publisher_id": "sba",
+      "publisher_name": "Susan B. Anthony Pro-Life America",
+      "publisher_aliases": [],
+      "homepage_url": "https://sbaprolife.org/",
+      "scorecard_name": "Congressional Scorecard",
+      "scorecard_index_url": "https://sbaprolife.org/scorecard",
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [
+        "html"
+      ],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "web_search",
+          "url": "https://sbaprolife.org/scorecard"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": "2026-10-03T16:36:32.934470+00:00",
+      "discovery_status": "verified",
+      "rights_status": "unreviewed",
+      "notes": "",
+      "verification_capture_ids": [
+        "sba-index"
+      ],
+      "scope_status": "federal_scorecard_confirmed",
+      "latest_discovery_outcome": {
+        "outcome": "unverified_after_bounded_search",
+        "capture_ids": [
+          "sba-index",
+          "census-votesmart-root"
+        ],
+        "notes": "Delivered landing page does not expose qualified member rows or the scoring formula."
+      }
+    },
+    {
+      "source_id": "shriver:federal",
+      "publisher_id": "shriver",
+      "publisher_name": "Sargent Shriver National Center on Poverty Law",
+      "publisher_aliases": [],
+      "homepage_url": "https://povertylaw.org/",
+      "scorecard_name": "Congressional Poverty Scorecard",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "member_office_directory",
+          "url": "https://cohen.house.gov/about/vote-ratings",
+          "capture_id": "cohen-directory"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Historical lead from a member-office directory; original scorecard, federal scope, independent scoring and archive still require verification.",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_discovery_outcome": {
+        "outcome": "unverified_after_bounded_search",
+        "capture_ids": [
+          "census-votesmart-root"
+        ],
+        "notes": "Bounded publisher-name/domain scorecard search and directory comparison did not establish a captured original edition. No inference of retirement or nonexistence."
+      }
+    },
+    {
+      "source_id": "us_chamber:federal",
+      "publisher_id": "us_chamber",
+      "publisher_name": "U.S. Chamber of Commerce",
+      "publisher_aliases": [],
+      "homepage_url": "https://www.uschamber.com/",
+      "scorecard_name": "How They Voted",
+      "scorecard_index_url": "https://www.uschamber.com/congressional-scorecard-and-legislative-leadership-list",
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [
+        116
+      ],
+      "chamber_scope": "both",
+      "source_format": [
+        "html"
+      ],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "govtrack_directory",
+          "url": "https://www.uschamber.com/congressional-scorecard-and-legislative-leadership-list"
+        },
+        {
+          "kind": "govtrack_directory",
+          "url": "https://github.com/govtrack/advocacy-organization-scorecards",
+          "capture_id": "govtrack-directory"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": "2026-10-03T16:34:54.415092+00:00",
+      "discovery_status": "profiled",
+      "rights_status": "unreviewed",
+      "notes": "Methodology verified; no complete edition/member table captured.",
+      "verification_capture_ids": [
+        "chamber-method"
+      ],
+      "scope_status": "federal_scorecard_confirmed"
+    },
+    {
+      "source_id": "wilberforce:federal",
+      "publisher_id": "wilberforce",
+      "publisher_name": "21Wilberforce",
+      "publisher_aliases": [],
+      "homepage_url": "https://www.21wilberforce.org/",
+      "scorecard_name": "International Religious Freedom Congressional Scorecard",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "member_office_directory",
+          "url": "https://cohen.house.gov/about/vote-ratings",
+          "capture_id": "cohen-directory"
+        }
+      ],
+      "discovered_at": "2026-10-03T16:34:53.160755+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Historical lead from a member-office directory; original scorecard, federal scope, independent scoring and archive still require verification.",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_discovery_outcome": {
+        "outcome": "access_or_content_block",
+        "capture_ids": [
+          "census-wilberforce-116",
+          "census-wilberforce-history",
+          "census-votesmart-root"
+        ],
+        "notes": "Old scorecard PDF domain returned unrelated gambling HTML. Current original publisher article request failed. Retain discovery evidence and block that acquisition route."
+      }
+    },
+    {
+      "source_id": "amalgamated_clothing_workers:historical_federal",
+      "publisher_id": "amalgamated_clothing_workers",
+      "publisher_name": "Amalgamated Clothing Workers of America",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "The Record of the Congress",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-1; physical PDF page 9",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "american_bakers:historical_federal",
+      "publisher_id": "american_bakers",
+      "publisher_name": "American Bakers Association",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "Congress Voting Record",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-2; physical PDF page 10",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "american_cause:historical_federal",
+      "publisher_id": "american_cause",
+      "publisher_name": "American Cause, Inc.",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "American Cause Rates the Members of Congress Based on Their Political Philosophy",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-2; physical PDF page 10",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "farm_bureau:historical_federal",
+      "publisher_id": "farm_bureau",
+      "publisher_name": "American Farm Bureau Federation",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "How Your Congressman/Senator Voted on Major Issues in the Congress",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-3; physical PDF page 11",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "afge:historical_federal",
+      "publisher_id": "afge",
+      "publisher_name": "American Federation of Government Employees",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "A Look at the Record",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-3; physical PDF page 11",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "aft:historical_federal",
+      "publisher_id": "aft",
+      "publisher_name": "American Federation of Teachers",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "Voting Record",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-3; physical PDF page 11",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "aia:historical_federal",
+      "publisher_id": "aia",
+      "publisher_name": "American Institute of Architects",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "Congressional Punch List",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-4; physical PDF page 12",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "american_parents:historical_federal",
+      "publisher_id": "american_parents",
+      "publisher_name": "American Parents Committee, Inc.",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "How Members of the U.S. Senate and House of Representatives Voted in (year) on Legislation Affecting Children",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-4; physical PDF page 12",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "american_security_council:historical_federal",
+      "publisher_id": "american_security_council",
+      "publisher_name": "American Security Council",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "National Security Voting Index",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-4; physical PDF page 12",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "americans_constitutional_action:historical_federal",
+      "publisher_id": "americans_constitutional_action",
+      "publisher_name": "Americans for Constitutional Action",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "The ACA Index",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-4; physical PDF page 12",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "agc:historical_federal",
+      "publisher_id": "agc",
+      "publisher_name": "Associated General Contractors of America",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "AGC Rates Congress",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-5; physical PDF page 13",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "atlantic_richfield:historical_federal",
+      "publisher_id": "atlantic_richfield",
+      "publisher_name": "Atlantic Richfield Civic Action Program",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "No established title",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-5; physical PDF page 13",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "bread_world:historical_federal",
+      "publisher_id": "bread_world",
+      "publisher_name": "Bread for the World",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "Congressional Votes on Hunger Related Issues",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-5; physical PDF page 13",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "railway_clerks:historical_federal",
+      "publisher_id": "railway_clerks",
+      "publisher_name": "Brotherhood of Railway, Airline and Steamship Clerks, Freight Handlers, Express and Station Employes",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "RCPL Voting Record",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-6; physical PDF page 14",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "bipac:historical_federal",
+      "publisher_id": "bipac",
+      "publisher_name": "Business-Industry Political Action Committee",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "Review of the Congress",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-6; physical PDF page 14",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "ccrkba:historical_federal",
+      "publisher_id": "ccrkba",
+      "publisher_name": "Citizens Committee for the Right to Keep and Bear Arms",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "CCRKBA Congressional Ratings",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-7; physical PDF page 15",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "coalition_foreign_military:historical_federal",
+      "publisher_id": "coalition_foreign_military",
+      "publisher_name": "Coalition for a New Foreign and Military Policy",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "Voting Record: Foreign & Military Policy",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-7; physical PDF page 15",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "committee_education_funding:historical_federal",
+      "publisher_id": "committee_education_funding",
+      "publisher_name": "Committee for Full Funding of Education Programs",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "The House-Senate Education Funding Voting Record",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-7; physical PDF page 15",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "free_congress_survival:historical_federal",
+      "publisher_id": "free_congress_survival",
+      "publisher_name": "Committee for the Survival of a Free Congress",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "C.S.F.C. Conservative Register",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-7; physical PDF page 15",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "common_cause:historical_federal",
+      "publisher_id": "common_cause",
+      "publisher_name": "Common Cause",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "Checklist of Votes in Congress on CC Issues",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-7; physical PDF page 15",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "communication_workers:historical_federal",
+      "publisher_id": "communication_workers",
+      "publisher_name": "Communication Workers of America",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "CWA Rates Congress",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-8; physical PDF page 16",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "congressional_quarterly:historical_federal",
+      "publisher_id": "congressional_quarterly",
+      "publisher_name": "Congressional Quarterly, Inc.",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "Group Ratings; Key Votes; Presidential Support and Opposition; Conservative Coalition; Party Unity and Party Opposition; Bipartisan Support and Opposition",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-8; physical PDF page 16",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "consumer_federation:historical_federal",
+      "publisher_id": "consumer_federation",
+      "publisher_name": "Consumer Federation of America",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "CFA Voting Record",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-8; physical PDF page 16",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "environmental_action:historical_federal",
+      "publisher_id": "environmental_action",
+      "publisher_name": "Environmental Action",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "Dirty Dozen",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "CRS describes a selected list of twelve lawmakers rather than an overall rating; preserve selection scope if source is later recovered. Locator: Printed CRS-9; physical PDF page 17",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "food_beverage_trades:historical_federal",
+      "publisher_id": "food_beverage_trades",
+      "publisher_name": "Food and Beverage Trades Department AFL-CIO",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "Voting Record (year)",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-9; physical PDF page 17",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "fcnl:historical_federal",
+      "publisher_id": "fcnl",
+      "publisher_name": "Friends Committee on National Legislation",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "Congressional Voting Record",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-9; physical PDF page 17",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "human_events:historical_federal",
+      "publisher_id": "human_events",
+      "publisher_name": "Human Events",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "Conservatives and Liberals Rate Congress",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-10; physical PDF page 18",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "ipaa:historical_federal",
+      "publisher_id": "ipaa",
+      "publisher_name": "Independent Petroleum Association of America",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "Senate/House Votes on Key Energy Legislation",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-10; physical PDF page 18",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "machinists:historical_federal",
+      "publisher_id": "machinists",
+      "publisher_name": "International Association of Machinists & Aerospace Workers",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "Report Card",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-10; physical PDF page 18",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "teamsters:historical_federal",
+      "publisher_id": "teamsters",
+      "publisher_name": "International Brotherhood of Teamsters",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "House/Senate Voting Records",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-11; physical PDF page 19",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "interreligious_food:historical_federal",
+      "publisher_id": "interreligious_food",
+      "publisher_name": "Interreligious Taskforce on US Food Policy",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "Hunger Issues in the Congress: How Members Voted",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-11; physical PDF page 19",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "john_birch_historical:historical_federal",
+      "publisher_id": "john_birch_historical",
+      "publisher_name": "John Birch Society",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "Conservative Index",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "CRS attributes Conservative Index in Review of the News to John Birch Society. Do not automatically merge this historical publication into a current distributor alias without continuity evidence. Locator: Printed CRS-11; physical PDF page 19",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "joint_center:historical_federal",
+      "publisher_id": "joint_center",
+      "publisher_name": "Joint Center for Political Studies",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "Congressional Votes on Issues of Importance to Blacks",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "CRS describes selected districts by demographic composition; never assume a national roster. Locator: Printed CRS-11; physical PDF page 19",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "league_women_voters:historical_federal",
+      "publisher_id": "league_women_voters",
+      "publisher_name": "League of Women Voters of the United States",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "Political Accountability Rating",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-12; physical PDF page 20",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "liberty_lobby:historical_federal",
+      "publisher_id": "liberty_lobby",
+      "publisher_name": "Liberty Lobby",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "Liberty Ledger",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-12; physical PDF page 20",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "march_for_life:historical_federal",
+      "publisher_id": "march_for_life",
+      "publisher_name": "March for Life, Inc.",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "Congressional Voting Records",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-13; physical PDF page 21",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "national_alliance_seniors:historical_federal",
+      "publisher_id": "national_alliance_seniors",
+      "publisher_name": "National Alliance of Senior Citizens",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "Golden Age Index",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-14; physical PDF page 22",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "national_associated_businessmen:historical_federal",
+      "publisher_id": "national_associated_businessmen",
+      "publisher_name": "National Associated Businessmen, Inc.",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "Economy Voting Record",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-14; physical PDF page 22",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "life_underwriters:historical_federal",
+      "publisher_id": "life_underwriters",
+      "publisher_name": "National Association of Life Underwriters",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "Voting Report",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-14; physical PDF page 22",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "nam:historical_federal",
+      "publisher_id": "nam",
+      "publisher_name": "National Association of Manufacturers",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "Congress: Voting Record",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-14; physical PDF page 22",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "nasw:historical_federal",
+      "publisher_id": "nasw",
+      "publisher_name": "National Association of Social Workers",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "Senate/House Votes Compiled on Key Issues",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-14; physical PDF page 22",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "national_audiovisual:historical_federal",
+      "publisher_id": "national_audiovisual",
+      "publisher_name": "National Audio-Visual Association, Inc.",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "House-Senate Education Funding Voting Record",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-15; physical PDF page 23",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "national_council_seniors:historical_federal",
+      "publisher_id": "national_council_seniors",
+      "publisher_name": "National Council of Senior Citizens, Inc.",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "Voting Record Congress",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-15; physical PDF page 23",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "national_farmers_organization:historical_federal",
+      "publisher_id": "national_farmers_organization",
+      "publisher_name": "National Farmers Organization",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "NFO Voting Record",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-15; physical PDF page 23",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "now:historical_federal",
+      "publisher_id": "now",
+      "publisher_name": "National Organization for Women",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "House/Senate Voting Record",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-16; physical PDF page 24",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "national_womens_caucus:historical_federal",
+      "publisher_id": "national_womens_caucus",
+      "publisher_name": "National Women's Political Caucus",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "Voting Chart on Women's Issues",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-17; physical PDF page 25",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "write_congressman:historical_federal",
+      "publisher_id": "write_congressman",
+      "publisher_name": "National Write Your Congressman Club, Inc.",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "Voting Records of U.S. Representatives/Senators",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-17; physical PDF page 25",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "public_citizen:historical_federal",
+      "publisher_id": "public_citizen",
+      "publisher_name": "Public Citizen/Congress Watch",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "Congressional Voting Index",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-18; physical PDF page 26",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "retail_clerks:historical_federal",
+      "publisher_id": "retail_clerks",
+      "publisher_name": "Retail Clerks International Union",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "Voting Records of U.S. Senators and Representatives",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-18; physical PDF page 26",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "ripon_society:historical_federal",
+      "publisher_id": "ripon_society",
+      "publisher_name": "Ripon Society",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "Ripon Ratings",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-18; physical PDF page 26",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "sane_historical:historical_federal",
+      "publisher_id": "sane_historical",
+      "publisher_name": "SANE",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "Key (year) Military Votes in the House/Senate",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-18; physical PDF page 26",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "taxation_representation:historical_federal",
+      "publisher_id": "taxation_representation",
+      "publisher_name": "Taxation with Representation",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "House/Senate Rated",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-19; physical PDF page 27",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "us_student_association:historical_federal",
+      "publisher_id": "us_student_association",
+      "publisher_name": "US National Student Association",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "Legislative Scorecard",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-19; physical PDF page 27",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "uaw:historical_federal",
+      "publisher_id": "uaw",
+      "publisher_name": "United Auto Workers",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "Voting Record of the Congress",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-19; physical PDF page 27",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "carpenters:historical_federal",
+      "publisher_id": "carpenters",
+      "publisher_name": "United Brotherhood of Carpenters and Joiners of America",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "House/Senate Votes",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-20; physical PDF page 28",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "united_church_christ:historical_federal",
+      "publisher_id": "united_church_christ",
+      "publisher_name": "United Church of Christ",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "Voting Record",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-20; physical PDF page 28",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "united_mine_workers:historical_federal",
+      "publisher_id": "united_mine_workers",
+      "publisher_name": "United Mine Workers of America",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "The U.S. Congress: (year)",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-20; physical PDF page 28",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "united_transportation:historical_federal",
+      "publisher_id": "united_transportation",
+      "publisher_name": "United Transportation Union",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "UTU Washington Report",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-20; physical PDF page 28",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "woman_activist:historical_federal",
+      "publisher_id": "woman_activist",
+      "publisher_name": "The Woman Activist",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "Votes of Women Members of Congress on National Issues",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-21; physical PDF page 29",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "womens_lobby:historical_federal",
+      "publisher_id": "womens_lobby",
+      "publisher_name": "Women's Lobby",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "Women's Lobby Voting Chart",
+      "scorecard_index_url": null,
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "historical_crs_directory",
+          "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/m2/1/high_res_d/R78-254C_1976Jul01.pdf",
+          "capture_id": "census-crs-1978-pdf"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-21; physical PDF page 29",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "american_energy_alliance:federal",
+      "publisher_id": "american_energy_alliance",
+      "publisher_name": "American Energy Alliance",
+      "publisher_aliases": [],
+      "homepage_url": "https://www.americanenergyalliance.org/",
+      "scorecard_name": "American Energy Scorecard",
+      "scorecard_index_url": "https://www.americanenergyalliance.org/american-energy-scorecard/",
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [
+        119
+      ],
+      "chamber_scope": "both",
+      "source_format": [
+        "html"
+      ],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "publisher_web_search",
+          "url": "https://www.americanenergyalliance.org/american-energy-scorecard/",
+          "capture_id": "census-aea-current"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": "2026-10-03T17:48:51.414495+00:00",
+      "discovery_status": "profiled",
+      "rights_status": "unreviewed",
+      "notes": "Top performer examples and recent votes reviewed; no complete member snapshot qualified.",
+      "verification_capture_ids": [
+        "census-aea-current"
+      ],
+      "scope_status": "federal_congressional"
+    },
+    {
+      "source_id": "ijm:federal",
+      "publisher_id": "ijm",
+      "publisher_name": "International Justice Mission",
+      "publisher_aliases": [],
+      "homepage_url": "https://www.ijm.org/",
+      "scorecard_name": "Legislative Scorecard",
+      "scorecard_index_url": "https://scorecard.ijm.org/",
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "publisher_web_search",
+          "url": "https://scorecard.ijm.org/",
+          "capture_id": "census-ijm-current"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": null,
+      "discovery_status": "discovered",
+      "rights_status": "unreviewed",
+      "notes": "Public search index identifies action-qualified membership, but captured page is an unloaded application; full original content needs verification.",
+      "verification_capture_ids": [],
+      "scope_status": "candidate_needs_original_publisher_verification"
+    },
+    {
+      "source_id": "radical_middle:federal",
+      "publisher_id": "radical_middle",
+      "publisher_name": "Radical Middle",
+      "publisher_aliases": [],
+      "homepage_url": "https://radicalmiddle.com/",
+      "scorecard_name": "Radical Middle Congressional Scorecard and Voting Index",
+      "scorecard_index_url": "https://radicalmiddle.com/x_scorecard04.htm",
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "unknown",
+      "source_format": [
+        "html"
+      ],
+      "machine_readable": "unknown",
+      "discovered_via": [
+        {
+          "kind": "web_search",
+          "url": "https://radicalmiddle.com/x_scorecard04.htm",
+          "capture_id": "census-radicalmiddle-108"
+        }
+      ],
+      "discovered_at": "2026-10-03T17:48:51.414495+00:00",
+      "last_verified_at": "2026-10-03T17:48:51.414495+00:00",
+      "discovery_status": "verified",
+      "rights_status": "unreviewed",
+      "notes": "Original historical108th publisher page acquired but not shape-profiled in bounded pass.",
+      "verification_capture_ids": [
+        "census-radicalmiddle-108"
+      ],
+      "scope_status": "federal_congressional"
+    }
+  ]
+}

@@ -82,7 +82,7 @@ class ListingRun(Protocol):
 class PageEvidence(Protocol):
     """The one call this module makes of the rollup's ``CaptureEvidence``."""
 
-    def capture(self, capture: Any, *, stage: str) -> None: ...
+    def capture(self, capture: Any, *, stage: str) -> object: ...
 
 
 def listing_rows(run: ListingRun) -> tuple[list[dict], Counter[str]]:

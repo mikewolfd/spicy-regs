@@ -35,7 +35,8 @@ CONTRACT_NAMES = sorted(TABLE_CONTRACTS)
 #: 0.44.0 adds the typed attributes; 0.50.0 adds bill cosponsors and member party intervals
 #: (released 0.47.0, ``f549c16``, only adds ``bill_sections.congress``); 0.52.0 adds the two native legal-reference
 #: tables; 0.53.0 adds comment attributes and GAO recommendations; the candidate master adds fec_candidate_history.
-ADOPTED_CONTRACT_COUNT = 53
+#: The scorecard candidate adds the source tables; see reader_wheel.json for the adopted registry.
+ADOPTED_CONTRACT_COUNT = 64
 
 #: A contract here leaves the set when its owning rollup hosts it.
 UNHOSTED_CONTRACTS = frozenset()

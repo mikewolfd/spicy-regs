@@ -1,0 +1,26 @@
+{
+  "observed_at": "2026-10-03T17:54:53.652887+00:00",
+  "tool_versions": {
+    "parser": "scorecard-sample-research-v1"
+  },
+  "external_evidence_directory": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-2026-10-03-samples",
+  "original_reused_capture_directory": "/var/folders/g8/10vdwk2n07z85vqn_vlv2lfc0000gn/T/scorecard-research-rpe1enyi",
+  "measure_command": "uv run --frozen --no-sync python /Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-2026-10-03-samples/measure.py",
+  "measure_script_sha256": "c4a2ef889e8c608a538999c1aedd000e39aa4114c5bde97344661b41a8f1f988",
+  "capture_script_sha256": "57d609012e2669c4a001a24b0aaf5a1a69a5656ae518443d60344121a3e05741",
+  "checks": [
+    "All retained completed response byte sizes and SHA256 hashes recomputed.",
+    "All profile capture IDs resolve to capture_additions entries or explicit existing survey captures.",
+    "AFL XLSX ZIP integrity, closed dimensions, uniform row width, member tuple uniqueness and full cell inventory.",
+    "LCV full member URL set and score representation equality across CSV/HTML; explicit empty and na handling.",
+    "NEA every PDF row equals every HTML table row.",
+    "Humane entire bounded Senate chart extracted with100unique source rows and visual legend checks.",
+    "Heritage every listed detail captured, source119checked, per-item member keys unique, repeated catalogs stable and API scores mutually consistent.",
+    "C4IP full Senate Table4 consumed to its printed boundary; missing expected population not filled."
+  ],
+  "limitations": [
+    "No production parser, drift tests, published data or score reproduction.",
+    "Full raw bodies and parsed corpus remain outside Git and are not publicly redistributed.",
+    "Research helpers are retained in external receipts directory; their hashes identify the computation."
+  ]
+}

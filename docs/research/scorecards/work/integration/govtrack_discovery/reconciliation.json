@@ -1,0 +1,383 @@
+{
+  "schema_version": 1,
+  "dataset": "govtrack_scorecard_discovery_review",
+  "repository": "govtrack/advocacy-organization-scorecards",
+  "commit": "fa63a2b5326edd4b8835386082c2317627f058ce",
+  "imported_at": "2026-10-03T20:00:09.679391+00:00",
+  "authority": {
+    "ratings_imported": false,
+    "canonical_catalog_modified": false,
+    "production_status_modified": false,
+    "original_links_fetched": false
+  },
+  "counts": {
+    "matched": 7
+  },
+  "duplicate_lead_groups": [],
+  "results": [
+    {
+      "discovery": {
+        "discovery_id": "govtrack:scorecards/ACLU.yaml",
+        "repository": "govtrack/advocacy-organization-scorecards",
+        "commit": "fa63a2b5326edd4b8835386082c2317627f058ce",
+        "repository_path": "scorecards/ACLU.yaml",
+        "repository_blob_sha1": "023133e176a17030a457e9796c4e3c3ef1331146",
+        "capture_sha256": "sha256:6fef141e7a6f43eaf04e94c5deebc84cacd8b81235b168c5a71093764ba59023",
+        "metadata_sha256": "sha256:c674a768801dee0da981fd2b068d15768847f924fff0e85bf38b4b18b5ecc494",
+        "metadata_line_end": 7,
+        "observed_at": "2026-10-03T19:59:42.469336Z",
+        "name": "American Civil Liberties Union",
+        "abbreviation": "ACLU",
+        "homepage_url": "https://www.aclu.org/",
+        "original_scorecard_url": "https://www.aclu.org/scorecard/?filter=all",
+        "updated_text": "2021-01-07",
+        "period_text": "based on votes in the 116th Congress",
+        "rating_unit_text": "percent",
+        "discovered_via": "https://github.com/govtrack/advocacy-organization-scorecards/blob/fa63a2b5326edd4b8835386082c2317627f058ce/scorecards/ACLU.yaml"
+      },
+      "imported_at": "2026-10-03T20:00:09.679391+00:00",
+      "reconciliation_status": "matched",
+      "candidate_publisher_ids": [
+        "aclu"
+      ],
+      "candidate_count": 1,
+      "publisher_id": "aclu",
+      "rule": "exact_name_or_literal_url",
+      "alias_reason": null,
+      "catalog_status_at_import": "verified",
+      "catalog_sources_at_import": [
+        {
+          "source_id": "aclu:federal",
+          "scorecard_name": "Congressional Scorecards",
+          "discovery_status": "verified"
+        }
+      ],
+      "proposed_addition": null,
+      "proposed_discovery_reference": {
+        "kind": "govtrack_pinned_metadata",
+        "url": "https://github.com/govtrack/advocacy-organization-scorecards/blob/fa63a2b5326edd4b8835386082c2317627f058ce/scorecards/ACLU.yaml",
+        "repository": "govtrack/advocacy-organization-scorecards",
+        "commit": "fa63a2b5326edd4b8835386082c2317627f058ce",
+        "path": "scorecards/ACLU.yaml",
+        "sha256": "sha256:6fef141e7a6f43eaf04e94c5deebc84cacd8b81235b168c5a71093764ba59023",
+        "observed_at": "2026-10-03T19:59:42.469336Z",
+        "imported_at": "2026-10-03T20:00:09.679391+00:00"
+      },
+      "updated_semantics": "upstream publication-or-import date; never promoted to publisher publication/verification time",
+      "original_publisher_verified_by_this_import": false
+    },
+    {
+      "discovery": {
+        "discovery_id": "govtrack:scorecards/ClubForGrowth.yaml",
+        "repository": "govtrack/advocacy-organization-scorecards",
+        "commit": "fa63a2b5326edd4b8835386082c2317627f058ce",
+        "repository_path": "scorecards/ClubForGrowth.yaml",
+        "repository_blob_sha1": "56ab56ed4cdd8c2b031c29acfea260d768ada323",
+        "capture_sha256": "sha256:594579dbd059ec75da01763916696a7a9bfd7172fd892358a84e0f567fce5f80",
+        "metadata_sha256": "sha256:e320694b3b04891b0d549cebd4fc10093cbe6679e034318a38dbc46ac83a2327",
+        "metadata_line_end": 7,
+        "observed_at": "2026-10-03T19:59:42.649144Z",
+        "name": "The Club for Growth",
+        "abbreviation": "Club for Growth",
+        "homepage_url": "http://www.clubforgrowth.org/",
+        "original_scorecard_url": "http://www.clubforgrowth.org/scorecards/",
+        "updated_text": "2020-01-11",
+        "period_text": "based on votes in the 116th Congress",
+        "rating_unit_text": "percent",
+        "discovered_via": "https://github.com/govtrack/advocacy-organization-scorecards/blob/fa63a2b5326edd4b8835386082c2317627f058ce/scorecards/ClubForGrowth.yaml"
+      },
+      "imported_at": "2026-10-03T20:00:09.679391+00:00",
+      "reconciliation_status": "matched",
+      "candidate_publisher_ids": [
+        "club_for_growth"
+      ],
+      "candidate_count": 1,
+      "publisher_id": "club_for_growth",
+      "rule": "explicit_alias_with_conflict_check",
+      "alias_reason": "Pinned GovTrack name The Club for Growth and its clubforgrowth.org scorecards link identify the source already cataloged under Club for Growth Foundation. This discovery association does not establish a legal-entity merger or transfer ratings between entities.",
+      "catalog_status_at_import": "profiled",
+      "catalog_sources_at_import": [
+        {
+          "source_id": "club_for_growth:federal",
+          "scorecard_name": "Congressional Scorecard",
+          "discovery_status": "profiled"
+        }
+      ],
+      "proposed_addition": null,
+      "proposed_discovery_reference": {
+        "kind": "govtrack_pinned_metadata",
+        "url": "https://github.com/govtrack/advocacy-organization-scorecards/blob/fa63a2b5326edd4b8835386082c2317627f058ce/scorecards/ClubForGrowth.yaml",
+        "repository": "govtrack/advocacy-organization-scorecards",
+        "commit": "fa63a2b5326edd4b8835386082c2317627f058ce",
+        "path": "scorecards/ClubForGrowth.yaml",
+        "sha256": "sha256:594579dbd059ec75da01763916696a7a9bfd7172fd892358a84e0f567fce5f80",
+        "observed_at": "2026-10-03T19:59:42.649144Z",
+        "imported_at": "2026-10-03T20:00:09.679391+00:00"
+      },
+      "updated_semantics": "upstream publication-or-import date; never promoted to publisher publication/verification time",
+      "original_publisher_verified_by_this_import": false
+    },
+    {
+      "discovery": {
+        "discovery_id": "govtrack:scorecards/HumanRightsCampaign.yaml",
+        "repository": "govtrack/advocacy-organization-scorecards",
+        "commit": "fa63a2b5326edd4b8835386082c2317627f058ce",
+        "repository_path": "scorecards/HumanRightsCampaign.yaml",
+        "repository_blob_sha1": "f5559c1f892354f225ca3f4b4e4893cd8e3f2ea3",
+        "capture_sha256": "sha256:f12f8451e0997387b13ad6382ee8b6508cef3bc69afde12b9c248e7b848994c7",
+        "metadata_sha256": "sha256:e86d04f231fbdb547d722d9e3754cbbb86389bcdf2f9f368059ee58cb2ccdc6f",
+        "metadata_line_end": 7,
+        "observed_at": "2026-10-03T19:59:42.853506Z",
+        "name": "Human Rights Campaign",
+        "abbreviation": "HRC",
+        "homepage_url": "http://www.hrc.org/",
+        "original_scorecard_url": "http://www.hrc.org/resources/congressional-scorecard",
+        "updated_text": "2021-01-17",
+        "period_text": "based on votes in the 116th Congress",
+        "rating_unit_text": "percent",
+        "discovered_via": "https://github.com/govtrack/advocacy-organization-scorecards/blob/fa63a2b5326edd4b8835386082c2317627f058ce/scorecards/HumanRightsCampaign.yaml"
+      },
+      "imported_at": "2026-10-03T20:00:09.679391+00:00",
+      "reconciliation_status": "matched",
+      "candidate_publisher_ids": [
+        "hrc"
+      ],
+      "candidate_count": 1,
+      "publisher_id": "hrc",
+      "rule": "exact_name_or_literal_url",
+      "alias_reason": null,
+      "catalog_status_at_import": "profiled",
+      "catalog_sources_at_import": [
+        {
+          "source_id": "hrc:federal",
+          "scorecard_name": "Congressional Scorecard",
+          "discovery_status": "profiled"
+        }
+      ],
+      "proposed_addition": null,
+      "proposed_discovery_reference": {
+        "kind": "govtrack_pinned_metadata",
+        "url": "https://github.com/govtrack/advocacy-organization-scorecards/blob/fa63a2b5326edd4b8835386082c2317627f058ce/scorecards/HumanRightsCampaign.yaml",
+        "repository": "govtrack/advocacy-organization-scorecards",
+        "commit": "fa63a2b5326edd4b8835386082c2317627f058ce",
+        "path": "scorecards/HumanRightsCampaign.yaml",
+        "sha256": "sha256:f12f8451e0997387b13ad6382ee8b6508cef3bc69afde12b9c248e7b848994c7",
+        "observed_at": "2026-10-03T19:59:42.853506Z",
+        "imported_at": "2026-10-03T20:00:09.679391+00:00"
+      },
+      "updated_semantics": "upstream publication-or-import date; never promoted to publisher publication/verification time",
+      "original_publisher_verified_by_this_import": false
+    },
+    {
+      "discovery": {
+        "discovery_id": "govtrack:scorecards/LeagueOfConservationVoters.yaml",
+        "repository": "govtrack/advocacy-organization-scorecards",
+        "commit": "fa63a2b5326edd4b8835386082c2317627f058ce",
+        "repository_path": "scorecards/LeagueOfConservationVoters.yaml",
+        "repository_blob_sha1": "229344b95a564956a6533b5e25124478e91a629e",
+        "capture_sha256": "sha256:75b1fd61df462938d79baa98b78e7d65d787cfd03250acb7803324517c3fa853",
+        "metadata_sha256": "sha256:8f243fe3bbd4249d1a4fc4326a4490c0aa6fd33258df58ac98e6f25e8ce3e218",
+        "metadata_line_end": 7,
+        "observed_at": "2026-10-03T19:59:43.110710Z",
+        "name": "League of Conservation Voters",
+        "abbreviation": "LCV",
+        "homepage_url": "https://www.lcv.org/",
+        "original_scorecard_url": "http://scorecard.lcv.org/",
+        "updated_text": "2021-01-18",
+        "period_text": "based on votes in the 116th Congress",
+        "rating_unit_text": "percent",
+        "discovered_via": "https://github.com/govtrack/advocacy-organization-scorecards/blob/fa63a2b5326edd4b8835386082c2317627f058ce/scorecards/LeagueOfConservationVoters.yaml"
+      },
+      "imported_at": "2026-10-03T20:00:09.679391+00:00",
+      "reconciliation_status": "matched",
+      "candidate_publisher_ids": [
+        "lcv"
+      ],
+      "candidate_count": 1,
+      "publisher_id": "lcv",
+      "rule": "exact_name_or_literal_url",
+      "alias_reason": null,
+      "catalog_status_at_import": "profiled",
+      "catalog_sources_at_import": [
+        {
+          "source_id": "lcv:federal",
+          "scorecard_name": "National Environmental Scorecard",
+          "discovery_status": "profiled"
+        }
+      ],
+      "proposed_addition": null,
+      "proposed_discovery_reference": {
+        "kind": "govtrack_pinned_metadata",
+        "url": "https://github.com/govtrack/advocacy-organization-scorecards/blob/fa63a2b5326edd4b8835386082c2317627f058ce/scorecards/LeagueOfConservationVoters.yaml",
+        "repository": "govtrack/advocacy-organization-scorecards",
+        "commit": "fa63a2b5326edd4b8835386082c2317627f058ce",
+        "path": "scorecards/LeagueOfConservationVoters.yaml",
+        "sha256": "sha256:75b1fd61df462938d79baa98b78e7d65d787cfd03250acb7803324517c3fa853",
+        "observed_at": "2026-10-03T19:59:43.110710Z",
+        "imported_at": "2026-10-03T20:00:09.679391+00:00"
+      },
+      "updated_semantics": "upstream publication-or-import date; never promoted to publisher publication/verification time",
+      "original_publisher_verified_by_this_import": false
+    },
+    {
+      "discovery": {
+        "discovery_id": "govtrack:scorecards/NORML.yaml",
+        "repository": "govtrack/advocacy-organization-scorecards",
+        "commit": "fa63a2b5326edd4b8835386082c2317627f058ce",
+        "repository_path": "scorecards/NORML.yaml",
+        "repository_blob_sha1": "775971f0539d6ab3db347786125c26c6bb6e5f58",
+        "capture_sha256": "sha256:3ede1588c276b1d2a01b2a25f6caa4107969f6a7aeaa8acdb9ea3753190afaca",
+        "metadata_sha256": "sha256:fa5ef23211747737e9f2789738671df9204611b79b724edff30bb6e437c6b967",
+        "metadata_line_end": 7,
+        "observed_at": "2026-10-03T19:59:43.253067Z",
+        "name": "The National Organization for the Reform of Marijuana Laws",
+        "abbreviation": "NORML",
+        "homepage_url": "http://norml.org/",
+        "original_scorecard_url": "http://norml.org/congressional-scorecard",
+        "updated_text": "2018-01-24",
+        "period_text": "based on votes of 114th Congress",
+        "rating_unit_text": "grade",
+        "discovered_via": "https://github.com/govtrack/advocacy-organization-scorecards/blob/fa63a2b5326edd4b8835386082c2317627f058ce/scorecards/NORML.yaml"
+      },
+      "imported_at": "2026-10-03T20:00:09.679391+00:00",
+      "reconciliation_status": "matched",
+      "candidate_publisher_ids": [
+        "norml"
+      ],
+      "candidate_count": 1,
+      "publisher_id": "norml",
+      "rule": "explicit_alias_with_conflict_check",
+      "alias_reason": "Pinned GovTrack full name includes The; catalog omits The. Original norml.org homepage and congressional-scorecard locator corroborate this explicit historical name alias.",
+      "catalog_status_at_import": "profiled",
+      "catalog_sources_at_import": [
+        {
+          "source_id": "norml:federal",
+          "scorecard_name": "Congressional Scorecard / Smoke the Vote",
+          "discovery_status": "profiled"
+        }
+      ],
+      "proposed_addition": null,
+      "proposed_discovery_reference": {
+        "kind": "govtrack_pinned_metadata",
+        "url": "https://github.com/govtrack/advocacy-organization-scorecards/blob/fa63a2b5326edd4b8835386082c2317627f058ce/scorecards/NORML.yaml",
+        "repository": "govtrack/advocacy-organization-scorecards",
+        "commit": "fa63a2b5326edd4b8835386082c2317627f058ce",
+        "path": "scorecards/NORML.yaml",
+        "sha256": "sha256:3ede1588c276b1d2a01b2a25f6caa4107969f6a7aeaa8acdb9ea3753190afaca",
+        "observed_at": "2026-10-03T19:59:43.253067Z",
+        "imported_at": "2026-10-03T20:00:09.679391+00:00"
+      },
+      "updated_semantics": "upstream publication-or-import date; never promoted to publisher publication/verification time",
+      "original_publisher_verified_by_this_import": false
+    },
+    {
+      "discovery": {
+        "discovery_id": "govtrack:scorecards/PlannedParenthood.yaml",
+        "repository": "govtrack/advocacy-organization-scorecards",
+        "commit": "fa63a2b5326edd4b8835386082c2317627f058ce",
+        "repository_path": "scorecards/PlannedParenthood.yaml",
+        "repository_blob_sha1": "26ee915861f5e25dfc7f82069f9af158182942aa",
+        "capture_sha256": "sha256:1fd081d64e7927e1c6b647b74cc9ca91f8c68a304e94a42a1c38ebe2de84876b",
+        "metadata_sha256": "sha256:7bcade313f4369a72cc63a091609130146a961dca1191413c91c4e61c26c24b1",
+        "metadata_line_end": 7,
+        "observed_at": "2026-10-03T19:59:43.474033Z",
+        "name": "Planned Parenthood Action Fund",
+        "abbreviation": "Planned Parenthood",
+        "homepage_url": "https://www.plannedparenthoodaction.org/",
+        "original_scorecard_url": "https://www.plannedparenthoodaction.org/congressional-scorecard",
+        "updated_text": "2019-08-15",
+        "period_text": "based on votes in the 116th Congress",
+        "rating_unit_text": "percent",
+        "discovered_via": "https://github.com/govtrack/advocacy-organization-scorecards/blob/fa63a2b5326edd4b8835386082c2317627f058ce/scorecards/PlannedParenthood.yaml"
+      },
+      "imported_at": "2026-10-03T20:00:09.679391+00:00",
+      "reconciliation_status": "matched",
+      "candidate_publisher_ids": [
+        "planned_parenthood"
+      ],
+      "candidate_count": 1,
+      "publisher_id": "planned_parenthood",
+      "rule": "exact_name_or_literal_url",
+      "alias_reason": null,
+      "catalog_status_at_import": "profiled",
+      "catalog_sources_at_import": [
+        {
+          "source_id": "planned_parenthood:federal",
+          "scorecard_name": "Congressional Scorecard",
+          "discovery_status": "profiled"
+        }
+      ],
+      "proposed_addition": null,
+      "proposed_discovery_reference": {
+        "kind": "govtrack_pinned_metadata",
+        "url": "https://github.com/govtrack/advocacy-organization-scorecards/blob/fa63a2b5326edd4b8835386082c2317627f058ce/scorecards/PlannedParenthood.yaml",
+        "repository": "govtrack/advocacy-organization-scorecards",
+        "commit": "fa63a2b5326edd4b8835386082c2317627f058ce",
+        "path": "scorecards/PlannedParenthood.yaml",
+        "sha256": "sha256:1fd081d64e7927e1c6b647b74cc9ca91f8c68a304e94a42a1c38ebe2de84876b",
+        "observed_at": "2026-10-03T19:59:43.474033Z",
+        "imported_at": "2026-10-03T20:00:09.679391+00:00"
+      },
+      "updated_semantics": "upstream publication-or-import date; never promoted to publisher publication/verification time",
+      "original_publisher_verified_by_this_import": false
+    },
+    {
+      "discovery": {
+        "discovery_id": "govtrack:scorecards/USChamberofCommerce.yaml",
+        "repository": "govtrack/advocacy-organization-scorecards",
+        "commit": "fa63a2b5326edd4b8835386082c2317627f058ce",
+        "repository_path": "scorecards/USChamberofCommerce.yaml",
+        "repository_blob_sha1": "90e8738998e9d432246285d0f94c10d2d44f494c",
+        "capture_sha256": "sha256:ef98cbd52c04dbc75bfd98aa8d0a0b61af8f4041e6064a36ccc9c4e42f4d25d3",
+        "metadata_sha256": "sha256:42b7fce9aeca4f387e90ba7d4b071d78e38ac9b4c80fd24d1c43775d676f8993",
+        "metadata_line_end": 7,
+        "observed_at": "2026-10-03T19:59:43.680796Z",
+        "name": "United States Chamber of Commerce",
+        "abbreviation": "U.S. Chamber of Commerce",
+        "homepage_url": "https://www.uschamber.com/",
+        "original_scorecard_url": "https://www.uschamber.com/how-they-voted/2018",
+        "updated_text": "2019-08-05",
+        "period_text": "based on votes in the 115th Congress",
+        "rating_unit_text": "percent",
+        "discovered_via": "https://github.com/govtrack/advocacy-organization-scorecards/blob/fa63a2b5326edd4b8835386082c2317627f058ce/scorecards/USChamberofCommerce.yaml"
+      },
+      "imported_at": "2026-10-03T20:00:09.679391+00:00",
+      "reconciliation_status": "matched",
+      "candidate_publisher_ids": [
+        "us_chamber"
+      ],
+      "candidate_count": 1,
+      "publisher_id": "us_chamber",
+      "rule": "explicit_alias_with_conflict_check",
+      "alias_reason": "Pinned GovTrack expands United States; catalog abbreviates U.S. Exact uschamber.com homepage corroborates this name alias. Historical edition URL remains a discovery observation.",
+      "catalog_status_at_import": "profiled",
+      "catalog_sources_at_import": [
+        {
+          "source_id": "us_chamber:federal",
+          "scorecard_name": "How They Voted",
+          "discovery_status": "profiled"
+        }
+      ],
+      "proposed_addition": null,
+      "proposed_discovery_reference": {
+        "kind": "govtrack_pinned_metadata",
+        "url": "https://github.com/govtrack/advocacy-organization-scorecards/blob/fa63a2b5326edd4b8835386082c2317627f058ce/scorecards/USChamberofCommerce.yaml",
+        "repository": "govtrack/advocacy-organization-scorecards",
+        "commit": "fa63a2b5326edd4b8835386082c2317627f058ce",
+        "path": "scorecards/USChamberofCommerce.yaml",
+        "sha256": "sha256:ef98cbd52c04dbc75bfd98aa8d0a0b61af8f4041e6064a36ccc9c4e42f4d25d3",
+        "observed_at": "2026-10-03T19:59:43.680796Z",
+        "imported_at": "2026-10-03T20:00:09.679391+00:00"
+      },
+      "updated_semantics": "upstream publication-or-import date; never promoted to publisher publication/verification time",
+      "original_publisher_verified_by_this_import": false
+    }
+  ],
+  "input_pins": {
+    "catalog_sha256": "727baa5d9ca48c54c53838475d4a628f233dc50c6b7fa3497d4be0c64343c6d6",
+    "aliases_sha256": "38c382f51ffaab7ae970b539a27c207f862fc67afeb3c5adae77ff6ce92fd834",
+    "manifest_sha256": "c89c94cb42bc6c1f7ad809cf712f4a0dd1999c88aff02b7df0d9239d3043e4ca",
+    "commit": "fa63a2b5326edd4b8835386082c2317627f058ce",
+    "capture_count": 9
+  }
+}

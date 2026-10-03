@@ -1,0 +1,295 @@
+{
+  "outcome_schema_version": "hrc-118-source-facts/2",
+  "source_sha256": "804c1157e71da53a00821fdcaf15a1790448c682eb49d44613a577cfce9cb855",
+  "schema_content": "Member source identities, period-keyed ratings, item-keyed results, scored items, notes, result definitions; no visual geometry.",
+  "member_scope": {
+    "physical_page": 6,
+    "crop_box": [
+      0,
+      0,
+      0.5,
+      1
+    ],
+    "status": "matched_reviewed_original_crop",
+    "compared": {
+      "identities": 20,
+      "ratings": 60,
+      "results": 300,
+      "member_footnote_sets": 20
+    },
+    "comparison_basis": "All member facts match the prior crop that coordinator and operations independently checked against the original rendered PDF. Current raw JSON also read directly.",
+    "notes_merged": false,
+    "extra_prompt": "Explicit examples request printed party delimiters (R), (D), (I)."
+  },
+  "item_scope": {
+    "physical_page": 3,
+    "item_keys": [
+      "A",
+      "B",
+      "C",
+      "D",
+      "E",
+      "F",
+      "G",
+      "H",
+      "I",
+      "J",
+      "K",
+      "L",
+      "M",
+      "N",
+      "O"
+    ],
+    "status": "bounded_source_fact_readback_passed",
+    "checks": [
+      "All item titles and source dates read against original render.",
+      "Ten roll/session identifiers match original item descriptions.",
+      "Five cosponsorship items preserve requested source action without inventing roll/session.",
+      "Amendment-to-amendment citation preserved."
+    ],
+    "full_prose_character_level_verification": false
+  },
+  "earlier_semantic_attempt": {
+    "scope": "Page6 crop",
+    "status": "refused_literal_party_loss",
+    "all_other_checked_member_facts_match": true
+  },
+  "house_scope": {
+    "physical_page": 10,
+    "status": "earlier_visual_schema_outputs_retained_not_joined_or_admitted",
+    "next_step": "Supply identity context and detail images to a semantic member/item outcome without asking for invented identities or output geometry."
+  },
+  "whole_edition_qualified": false,
+  "production_adapter_implemented": false,
+  "publication_rows_emitted": 0,
+  "artifact_hashes": [
+    {
+      "private_path": "gemini-page6-semantic/dns-receipt.json",
+      "sha256": "c3750813b622105eb7298146dde362d04673eaffd93d780e072128ee2e5da4ce",
+      "byte_size": 425,
+      "public_body_retention": false
+    },
+    {
+      "private_path": "gemini-page6-semantic/dns-response.json",
+      "sha256": "ab5613a5a3ea08cabb0f903256ce6537f85c7448833ade699de562a98a76c78f",
+      "byte_size": 848,
+      "public_body_retention": false
+    },
+    {
+      "private_path": "gemini-page6-semantic/input-crop.png",
+      "sha256": "39c934940ca3a6480e67bb6c6f5401a51dc86b0d1f6c0a672fc1c7de39288c5a",
+      "byte_size": 257325,
+      "public_body_retention": false
+    },
+    {
+      "private_path": "gemini-page6-semantic/observation.pickle",
+      "sha256": "02c466f929de24ce092326ecbb284a4944fb7485146b03ce410fa7b96d0e30da",
+      "byte_size": 650036,
+      "public_body_retention": false
+    },
+    {
+      "private_path": "gemini-page6-semantic/outcome.json",
+      "sha256": "f6000cedb9710dde5d517966dca2d6bef108d97659538a6474813b695b4da979",
+      "byte_size": 34253,
+      "public_body_retention": false
+    },
+    {
+      "private_path": "gemini-page6-semantic-literal/dns-receipt.json",
+      "sha256": "2f2424ab619b37d07552c50ad964913b931039c3072e38372191440f59ad00c4",
+      "byte_size": 425,
+      "public_body_retention": false
+    },
+    {
+      "private_path": "gemini-page6-semantic-literal/dns-response.json",
+      "sha256": "2e071afa31c5e5508c6c419fef5af888cce8d911fce1f4e310615e8bb240a464",
+      "byte_size": 848,
+      "public_body_retention": false
+    },
+    {
+      "private_path": "gemini-page6-semantic-literal/input-crop.png",
+      "sha256": "39c934940ca3a6480e67bb6c6f5401a51dc86b0d1f6c0a672fc1c7de39288c5a",
+      "byte_size": 257325,
+      "public_body_retention": false
+    },
+    {
+      "private_path": "gemini-page6-semantic-literal/observation.pickle",
+      "sha256": "43d8a2575ac612c74de242d702713cb6c392c7964d9a782aa335d6893af70149",
+      "byte_size": 651580,
+      "public_body_retention": false
+    },
+    {
+      "private_path": "gemini-page6-semantic-literal/outcome.json",
+      "sha256": "8f121a3c18c3f2e380f47d60b9431a1b55f52a1b4d0d10eba1229a69bb55e163",
+      "byte_size": 34293,
+      "public_body_retention": false
+    },
+    {
+      "private_path": "gemini-page6-semantic-literal/receipt.json",
+      "sha256": "358bab7c935282aa2897cd2ff10ca9bc35245759452a70d67bbeb12ee1ce834e",
+      "byte_size": 526,
+      "public_body_retention": false
+    },
+    {
+      "private_path": "gemini-page3-semantic/dns-receipt.json",
+      "sha256": "9860e4f9be1585c1fe89248e18fb6f49df3e28dd305916976bd1d8d48dbc4673",
+      "byte_size": 425,
+      "public_body_retention": false
+    },
+    {
+      "private_path": "gemini-page3-semantic/dns-response.json",
+      "sha256": "64dc5f7d5705876ec92aeef7b66130ab0e25c139f9cea51f3d1d9bf1242725af",
+      "byte_size": 889,
+      "public_body_retention": false
+    },
+    {
+      "private_path": "gemini-page3-semantic/page-3.json",
+      "sha256": "e5d25661655a882f089cb685de36687b6960a325f198197344ff0bd3ec8b9df5",
+      "byte_size": 15859,
+      "public_body_retention": false
+    },
+    {
+      "private_path": "gemini-page3-semantic/page-3.pickle",
+      "sha256": "7aa93a25e4dbd38f356a38a1d0d368f3fda3ba31f9e90c765e0b474cec751c77",
+      "byte_size": 2029376,
+      "public_body_retention": false
+    },
+    {
+      "private_path": "gemini-page3-semantic/receipt.json",
+      "sha256": "5b862b20c23bfa6bd593b79a154672d5b0bd6ad10a231625cec676f7697c31e7",
+      "byte_size": 381,
+      "public_body_retention": false
+    },
+    {
+      "private_path": "gemini-page10-left/dns-receipt.json",
+      "sha256": "fc2df6fd57e54ff8ad368e1cacbd97fe22f943fa97c0e75648b9ca4ec2a6865f",
+      "byte_size": 425,
+      "public_body_retention": false
+    },
+    {
+      "private_path": "gemini-page10-left/dns-response.json",
+      "sha256": "3dc0831864e73fb3df90dcc7800651bdf30ec3b503f5be1c9b86bdf12d6e9f9b",
+      "byte_size": 889,
+      "public_body_retention": false
+    },
+    {
+      "private_path": "gemini-page10-left/error.txt",
+      "sha256": "5c8bfa633153b73f693545e565360a9e15cdd556f9f1a86dbeab2a4180008600",
+      "byte_size": 15,
+      "public_body_retention": false
+    },
+    {
+      "private_path": "gemini-page10-left/failure.pickle",
+      "sha256": "05edfb762d32cda58ed2827e6aa7e834b116a3021116b6cec9fd4355912c8bd5",
+      "byte_size": 570025,
+      "public_body_retention": false
+    },
+    {
+      "private_path": "gemini-page10-left/input-crop.png",
+      "sha256": "55201cdbd46a0db773926a95e110d501562ce5ce06d1fc49940f3316d5484066",
+      "byte_size": 424299,
+      "public_body_retention": false
+    },
+    {
+      "private_path": "gemini-page10-right/dns-receipt.json",
+      "sha256": "4a7f6c723e25ee12b667bd427c79234625a014e7ff11699213259344fb9236d1",
+      "byte_size": 425,
+      "public_body_retention": false
+    },
+    {
+      "private_path": "gemini-page10-right/dns-response.json",
+      "sha256": "4520f3d43310cf5db6ea75f3b9d9a8d04089da8708c4bff59b2bb41c069e5f54",
+      "byte_size": 889,
+      "public_body_retention": false
+    },
+    {
+      "private_path": "gemini-page10-right/error.txt",
+      "sha256": "5c8bfa633153b73f693545e565360a9e15cdd556f9f1a86dbeab2a4180008600",
+      "byte_size": 15,
+      "public_body_retention": false
+    },
+    {
+      "private_path": "gemini-page10-right/failure.pickle",
+      "sha256": "d180780898ae4acbf41915ec6ce5250be51879bd4dce34065683f520a975efae",
+      "byte_size": 201465,
+      "public_body_retention": false
+    },
+    {
+      "private_path": "gemini-page10-right/input-crop.png",
+      "sha256": "3389e0610dd4d6574a91a4c4614ce81a4a000e59e2e5e8a4b54056c8a3519743",
+      "byte_size": 148395,
+      "public_body_retention": false
+    },
+    {
+      "private_path": "gemini-page10-left-b/dns-receipt.json",
+      "sha256": "235319a6dcca5386a9e2cc81e5e1682f4fec80a98d50a4fa0cf37dc65b21dd28",
+      "byte_size": 425,
+      "public_body_retention": false
+    },
+    {
+      "private_path": "gemini-page10-left-b/dns-response.json",
+      "sha256": "16d04c36b1b61634d378f208f5eb654b7af3b7468eb63242ef9ebe1c689127bf",
+      "byte_size": 848,
+      "public_body_retention": false
+    },
+    {
+      "private_path": "gemini-page10-left-b/input-crop.png",
+      "sha256": "55201cdbd46a0db773926a95e110d501562ce5ce06d1fc49940f3316d5484066",
+      "byte_size": 424299,
+      "public_body_retention": false
+    },
+    {
+      "private_path": "gemini-page10-left-b/observation.pickle",
+      "sha256": "3b1b304ca0ec7dcd9d2fdd33bc26a1c22ddd63092c1f733f4adb50c32f8597e7",
+      "byte_size": 1020917,
+      "public_body_retention": false
+    },
+    {
+      "private_path": "gemini-page10-left-b/outcome.json",
+      "sha256": "9dba7eab343f3cc1fa40d59378c53a13890a4de065420bdfd96cf21c15442298",
+      "byte_size": 15596,
+      "public_body_retention": false
+    },
+    {
+      "private_path": "gemini-page10-left-b/receipt.json",
+      "sha256": "f0e6f29f944cc8db6ee6fb830e239d461ecc87630044ae3dff88cb43685cf197",
+      "byte_size": 457,
+      "public_body_retention": false
+    },
+    {
+      "private_path": "gemini-page10-right-b/dns-receipt.json",
+      "sha256": "aa631c2c0497b68ca2d4a9835e773fb17bf746ff547f60ea74a2b65610c81ff2",
+      "byte_size": 425,
+      "public_body_retention": false
+    },
+    {
+      "private_path": "gemini-page10-right-b/dns-response.json",
+      "sha256": "a740311180c36d5189439095847dcfe67e084ac693ee9776b99b39cd11ec3f85",
+      "byte_size": 848,
+      "public_body_retention": false
+    },
+    {
+      "private_path": "gemini-page10-right-b/input-crop.png",
+      "sha256": "3389e0610dd4d6574a91a4c4614ce81a4a000e59e2e5e8a4b54056c8a3519743",
+      "byte_size": 148395,
+      "public_body_retention": false
+    },
+    {
+      "private_path": "gemini-page10-right-b/observation.pickle",
+      "sha256": "46625a7d73cab617da7e0dbea5ef67a17b5e492bbaa470f51df6b228e27529a1",
+      "byte_size": 363512,
+      "public_body_retention": false
+    },
+    {
+      "private_path": "gemini-page10-right-b/outcome.json",
+      "sha256": "f235640611e8ece3307863dfd816206501774b9b739a0c8afbf8ab8cd2b6635d",
+      "byte_size": 13558,
+      "public_body_retention": false
+    },
+    {
+      "private_path": "gemini-page10-right-b/receipt.json",
+      "sha256": "a3b20563add2e82342504960bf99abbeefbccc98f33a59775101aded660cf71a",
+      "byte_size": 457,
+      "public_body_retention": false
+    }
+  ]
+}

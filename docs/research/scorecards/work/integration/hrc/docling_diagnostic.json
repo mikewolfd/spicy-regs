@@ -1,0 +1,80 @@
+{
+  "source_sha256": "sha256:804c1157e71da53a00821fdcaf15a1790448c682eb49d44613a577cfce9cb855",
+  "page": 6,
+  "physical_page_count": 27,
+  "printed_pages": "10\u201311",
+  "qualification": "refused_source_fidelity",
+  "ovisocr2": {
+    "model": "mlx-community/OvisOCR2-8bit",
+    "revision": "703d23a97d7e6474c7b53e991d6606362d10773f",
+    "docling_version": "2.131.0",
+    "failure": "Party split into extra cell but same 19 columns; at most 14 of 15 source A\u2013O action cells retained, with unexpected nulls and glyph substitutions."
+  },
+  "default_docling": {
+    "model_identity_pinned": false,
+    "failure": "No tables; entire member grid omitted; endnote text corrupted."
+  },
+  "private_corpus_directory": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-hrc-2026-10-03",
+  "artifacts": [
+    {
+      "private_filename": "ovisocr2-6.pickle",
+      "sha256": "b4c8568caa2aa96ab1752b61e72a63b4ba394f1403ecf7380765fbfbdb7c3628",
+      "byte_size": 1914850,
+      "public_body_retained": false
+    },
+    {
+      "private_filename": "ovisocr2-6.txt",
+      "sha256": "53d6e4c94659ae7ed13f87e4410c7774c5fe0101577558141e2e04d0700e71ad",
+      "byte_size": 6858,
+      "public_body_retained": false
+    },
+    {
+      "private_filename": "ovisocr2-6-tables.json",
+      "sha256": "28384fad2679bf39e0c913e0c09b9a15566c5145b41ad57f3123f294339e08e1",
+      "byte_size": 7149,
+      "public_body_retained": false
+    },
+    {
+      "private_filename": "ovisocr2-configuration.json",
+      "sha256": "3c6270336f8a04d139d793d0a2c7d1bb86480b712345cccae5a1e5adc296897f",
+      "byte_size": 8561,
+      "public_body_retained": false
+    },
+    {
+      "private_filename": "ovisocr2-receipt.json",
+      "sha256": "1e04cb077a70997a6fb85ed5b8cde47517031ee4c0a0322bc78984afa21f6c4d",
+      "byte_size": 680,
+      "public_body_retained": false
+    },
+    {
+      "private_filename": "default-6.pickle",
+      "sha256": "bf6081881f8527d589a45b8a73dc720a6d6d23c4f7597128af515f2f78fb8e2a",
+      "byte_size": 773870,
+      "public_body_retained": false
+    },
+    {
+      "private_filename": "default-6.txt",
+      "sha256": "46ebf4290d27b7490485e37989d17563f8e84e93298a09d76e583eefdebb9d66",
+      "byte_size": 1210,
+      "public_body_retained": false
+    },
+    {
+      "private_filename": "default-6-tables.json",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "byte_size": 2,
+      "public_body_retained": false
+    },
+    {
+      "private_filename": "default-receipt.json",
+      "sha256": "4083698aab03c762c6cfa9cf4950bd30467ac511a54b898b31037a18586cf6c1",
+      "byte_size": 245,
+      "public_body_retained": false
+    },
+    {
+      "private_filename": "page-6.png",
+      "sha256": "8eb545dd6d39445edd88ecc4e3e99120f308f688cb3e84feacb5e6995c1de7d9",
+      "byte_size": 377344,
+      "public_body_retained": false
+    }
+  ]
+}

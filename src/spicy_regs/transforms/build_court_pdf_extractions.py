@@ -99,7 +99,9 @@ def prepare_captured_opinions(
     rows = []
     for opinion, capture in items:
         row = shape_captured_opinion(opinion, capture, parent=parent)
-        evidence.store.put_blob(row['source_sha256'], len(capture.body), [capture.body])
+        evidence.retain_bytes(capture.body, stage='opinion-pdf-retained-input',
+                              requested_url=capture.url, resolved_url=capture.resolved_url,
+                              observed_at=capture.observed_at, media_type=capture.media_type)
         evidence.event('opinion-pdf-capture', opinion=dict(opinion),
                        requested_url=capture.url, resolved_url=capture.resolved_url,
                        observed_at=capture.observed_at, media_type=capture.media_type,

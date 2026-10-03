@@ -7,8 +7,9 @@ so ``members`` keeps the identity and the *current* term's facts while
 ``member_terms`` keeps one row per term in the crosswalk's own order.
 
 Both rosters are captured — ``current`` and ``historical`` — because the
-identity crosswalk (bioguide to LIS, FEC, ICPSR, GovTrack, OpenSecrets,
-Wikidata) is exactly as useful for a member who has left. ``roster`` records
+identity crosswalk (bioguide to LIS, FEC, ICPSR, GovTrack, Vote Smart, OpenSecrets,
+Wikidata, previous Bioguide IDs and historical names) is useful for a member
+who has left. ``roster`` records
 which file a row came from. Row shapes come from
 ``spicy_docs.schemas.legislator_tables``; nothing here re-derives a column.
 

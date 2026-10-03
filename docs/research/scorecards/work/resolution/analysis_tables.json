@@ -1,0 +1,274 @@
+{
+  "family": "scorecard-analysis",
+  "rule_version": "scorecard-resolution-v1.3",
+  "input_tables": [
+    "scorecards",
+    "scorecard_members",
+    "scorecard_items",
+    "members",
+    "member_terms",
+    "congress_bills",
+    "amendments",
+    "roll_call_votes"
+  ],
+  "official_projection": {
+    "members": [
+      "bioguide_id",
+      "bioguide_previous_json",
+      "lis_id",
+      "fec_ids_json",
+      "icpsr_id",
+      "govtrack_id",
+      "votesmart_id",
+      "opensecrets_id",
+      "wikidata_id",
+      "name_first",
+      "name_last",
+      "other_names_json"
+    ],
+    "member_terms": [
+      "bioguide_id",
+      "term_index",
+      "term_type",
+      "term_start",
+      "term_end",
+      "term_state",
+      "term_district",
+      "term_party",
+      "observed_at"
+    ],
+    "congress_bills": [
+      "bill_id"
+    ],
+    "amendments": [
+      "amendment_id",
+      "amended_bill_id"
+    ],
+    "roll_call_votes": [
+      "vote_id",
+      "bill_id",
+      "vote_date"
+    ]
+  },
+  "tables": [
+    {
+      "name": "scorecard_member_links",
+      "primary_key": [
+        "scorecard_id",
+        "publisher_member_key"
+      ],
+      "columns": [
+        {
+          "name": "scorecard_id",
+          "type": "VARCHAR",
+          "description": "Unchanged source edition identity."
+        },
+        {
+          "name": "publisher_member_key",
+          "type": "VARCHAR",
+          "description": "Unchanged source member occurrence identity."
+        },
+        {
+          "name": "bioguide_id",
+          "type": "VARCHAR",
+          "description": "Exact selected Bioguide identity; null if unresolved, ambiguous or conflicting."
+        },
+        {
+          "name": "term_candidates_json",
+          "type": "VARCHAR",
+          "description": "Qualifying pinned historical term rows by candidate Bioguide."
+        },
+        {
+          "name": "override_version",
+          "type": "VARCHAR",
+          "description": "Applied explicit member override version; otherwise null."
+        },
+        {
+          "name": "source_snapshot_id",
+          "type": "VARCHAR",
+          "description": "Selected scorecard source snapshot, unchanged."
+        },
+        {
+          "name": "resolution_status",
+          "type": "VARCHAR",
+          "description": "resolved, unresolved, ambiguous or conflict; unresolved items may retain independently exact measure links."
+        },
+        {
+          "name": "resolution_rule",
+          "type": "VARCHAR",
+          "description": "Exact rule applied, or the reason no complete exact link was accepted."
+        },
+        {
+          "name": "rule_version",
+          "type": "VARCHAR",
+          "description": "Versioned resolver behavior."
+        },
+        {
+          "name": "candidate_count",
+          "type": "VARCHAR",
+          "description": "Retained distinct member identities or typed legislative target identifiers, including rejected candidates."
+        },
+        {
+          "name": "candidates_json",
+          "type": "VARCHAR",
+          "description": "Ordered candidate identities with matching rules/context for members; typed target identities for items."
+        },
+        {
+          "name": "reason",
+          "type": "VARCHAR",
+          "description": "Explicit context handling, unresolved identifiers or conflict explanation."
+        },
+        {
+          "name": "source_context_json",
+          "type": "VARCHAR",
+          "description": "Original source row, with individual item-reference context where applicable."
+        },
+        {
+          "name": "input_pins_json",
+          "type": "VARCHAR",
+          "description": "Complete verified immutable table and family pins; byteSize and nested metadata retain their JSON types."
+        },
+        {
+          "name": "capture_id",
+          "type": "VARCHAR",
+          "description": "Source capture identity."
+        },
+        {
+          "name": "source_url",
+          "type": "VARCHAR",
+          "description": "Original publisher source URL."
+        },
+        {
+          "name": "source_path",
+          "type": "VARCHAR",
+          "description": "Original source row or reference locator."
+        }
+      ]
+    },
+    {
+      "name": "scorecard_item_links",
+      "primary_key": [
+        "scorecard_id",
+        "item_id",
+        "reference_id"
+      ],
+      "columns": [
+        {
+          "name": "scorecard_id",
+          "type": "VARCHAR",
+          "description": "Unchanged source edition identity."
+        },
+        {
+          "name": "item_id",
+          "type": "VARCHAR",
+          "description": "Unchanged source item identity."
+        },
+        {
+          "name": "reference_id",
+          "type": "VARCHAR",
+          "description": "Namespaced direct-item or source reference occurrence identity."
+        },
+        {
+          "name": "source_reference_id",
+          "type": "VARCHAR",
+          "description": "Literal source occurrence_id; null for the direct item fields."
+        },
+        {
+          "name": "congress",
+          "type": "VARCHAR",
+          "description": "Congress stated by this item/reference or its exact natural identifier; never copied from the edition."
+        },
+        {
+          "name": "chamber",
+          "type": "VARCHAR",
+          "description": "Source chamber interpreted through an exact known alias."
+        },
+        {
+          "name": "session",
+          "type": "VARCHAR",
+          "description": "Source roll-call session; null for measure-only items."
+        },
+        {
+          "name": "roll_number",
+          "type": "VARCHAR",
+          "description": "Source roll number; null for measure-only items."
+        },
+        {
+          "name": "vote_id",
+          "type": "VARCHAR",
+          "description": "Exact existing floor-roll identity; never selected from a bill alone."
+        },
+        {
+          "name": "bill_id",
+          "type": "VARCHAR",
+          "description": "Exact existing bill identity from a source citation or a selected official vote."
+        },
+        {
+          "name": "amendment_id",
+          "type": "VARCHAR",
+          "description": "Exact existing amendment identity from a source citation."
+        },
+        {
+          "name": "source_snapshot_id",
+          "type": "VARCHAR",
+          "description": "Selected scorecard source snapshot, unchanged."
+        },
+        {
+          "name": "resolution_status",
+          "type": "VARCHAR",
+          "description": "resolved, unresolved, ambiguous or conflict; unresolved items may retain independently exact measure links."
+        },
+        {
+          "name": "resolution_rule",
+          "type": "VARCHAR",
+          "description": "Exact rule applied, or the reason no complete exact link was accepted."
+        },
+        {
+          "name": "rule_version",
+          "type": "VARCHAR",
+          "description": "Versioned resolver behavior."
+        },
+        {
+          "name": "candidate_count",
+          "type": "VARCHAR",
+          "description": "Retained distinct member identities or typed legislative target identifiers, including rejected candidates."
+        },
+        {
+          "name": "candidates_json",
+          "type": "VARCHAR",
+          "description": "Ordered candidate identities with matching rules/context for members; typed target identities for items."
+        },
+        {
+          "name": "reason",
+          "type": "VARCHAR",
+          "description": "Explicit context handling, unresolved identifiers or conflict explanation."
+        },
+        {
+          "name": "source_context_json",
+          "type": "VARCHAR",
+          "description": "Original source row, with individual item-reference context where applicable."
+        },
+        {
+          "name": "input_pins_json",
+          "type": "VARCHAR",
+          "description": "Complete verified immutable table and family pins; byteSize and nested metadata retain their JSON types."
+        },
+        {
+          "name": "capture_id",
+          "type": "VARCHAR",
+          "description": "Source capture identity."
+        },
+        {
+          "name": "source_url",
+          "type": "VARCHAR",
+          "description": "Original publisher source URL."
+        },
+        {
+          "name": "source_path",
+          "type": "VARCHAR",
+          "description": "Original source row or reference locator."
+        }
+      ]
+    }
+  ]
+}

@@ -55,9 +55,16 @@ def test_retained_file_uses_bounded_reads_and_preserves_bytes_and_receipt(tmp_pa
     assert result == expected
     assert len(reads) >= 2 * (size // _CHUNK + 1)
     event = events(evidence)[-1]
-    assert {key: value for key, value in event.items() if key != "recorded_at"} == {
-        "event": "retained-file", "stage": "local", "name": path.name, "source_scope": "retained", **expected,
+    assert {key: event[key] for key in ("event", "stage", "name", "source_scope", "sha256", "byte_size")} == {
+        "event": "retained-file",
+        "stage": "local",
+        "name": path.name,
+        "source_scope": "retained",
+        **expected,
     }
+    assert event["evidence_policy"] == "full" and event["body_retained"] is True
+    assert event["response_complete"] is True and len(event["capture_id"]) == 32
+    assert event["blob_member"] == "blobs/sha256/" + expected["sha256"].removeprefix("sha256:")
     assert (evidence.store.root / "sha256" / expected["sha256"].removeprefix("sha256:")).read_bytes() == raw
     artifact = evidence.seal(outcome="build-complete")
     assert verify_evidence(evidence.artifact_dir, expected_pin=artifact.pin).pin == artifact.pin
@@ -138,3 +145,84 @@ def test_unreadable_local_file_blocks_complete_sealing_and_sealed_file_is_not_op
     sealed.seal(outcome="build-complete")
     with pytest.raises(SourceEvidenceError, match="sealed"):
         sealed.retain_file(tmp_path / "missing", stage="local")
+
+
+@pytest.mark.parametrize("policy", ["full", "hash_only", "metadata_only"])
+@pytest.mark.parametrize("native_input", [False, True])
+def test_retained_bytes_use_admitted_local_receipts_and_respect_policy(tmp_path, policy, native_input):
+    body = b"PRIVATE-RETAINED-INPUT-CONTENT"
+    digest = hashlib.sha256(body).hexdigest()
+    evidence = CaptureEvidence(tmp_path, "test")
+    source = evidence.for_source("retained", policy, parser_version="fixture-v1", policy_decision_id="rights-v1")
+    if native_input:
+        from spicy_regs.transforms.native_legal_references import _retain
+
+        _retain(source, body, role="native-xml", source_locator=body.decode())
+    else:
+        receipt = source.retain_bytes(body, stage="retained-input", role="selected-text", source_locator=body.decode())
+        assert receipt["byte_size"] == len(body)
+    row = events(evidence)[-1]
+    assert row["event"] == "retained-file"
+    assert row["response_complete"] is True
+    assert row["body_retained"] is (policy == "full")
+    assert len(row["capture_id"]) == 32 and row["capture_id"] not in digest
+    artifact = evidence.seal(outcome="build-complete")
+    verify_evidence(evidence.artifact_dir, expected_pin=artifact.pin)
+    public_bytes = [p.read_bytes() for p in evidence.directory.rglob("*") if p.is_file()]
+    if policy == "full":
+        assert (evidence.store.root / "sha256" / digest).read_bytes() == body
+        assert row["source_locator"] == body.decode()
+    else:
+        assert "source_locator" not in row and "role" not in row
+        assert all(body not in data for data in public_bytes)
+    if policy == "metadata_only":
+        assert "sha256" not in row
+        assert all(digest.encode() not in data for data in public_bytes)
+    with pytest.raises(SourceEvidenceError, match="sealed"):
+        source.retain_bytes(body, stage="too-late")
+
+
+@pytest.mark.parametrize("policy", ["full", "hash_only", "metadata_only"])
+def test_retained_bytes_refuse_credentials_before_store_or_receipt(tmp_path, policy):
+    evidence = CaptureEvidence(tmp_path, "test")
+    evidence.credential = "retained-secret"
+    source = evidence.for_source("retained", policy, parser_version="fixture-v1", policy_decision_id="rights-v1")
+    with pytest.raises(CredentialRefusedError):
+        source.retain_bytes(b"prefix-retained-secret-suffix", stage="local")
+    assert not any(row["event"] == "retained-file" for row in events(evidence))
+    assert list((evidence.store.root / "sha256").iterdir()) == []
+
+
+def test_failed_retained_byte_write_cannot_seal_complete(tmp_path, monkeypatch):
+    evidence = CaptureEvidence(tmp_path, "test")
+
+    def fail(*_):
+        raise OSError("storage unavailable")
+
+    monkeypatch.setattr(evidence.store, "put_blob", fail)
+    with pytest.raises(SourceEvidenceError, match="Cannot retain"):
+        evidence.retain_bytes(b"private input", stage="local")
+    assert not any(row["event"] == "retained-file" for row in events(evidence))
+    with pytest.raises(SourceEvidenceError, match="cannot seal"):
+        evidence.seal(outcome="build-complete")
+
+
+def test_retained_bytes_receipt_identity_cannot_be_overridden_by_caller_fields(tmp_path):
+    evidence = CaptureEvidence(tmp_path, "test")
+    receipt = evidence.retain_bytes(
+        b"bounded input",
+        stage="local",
+        sha256="sha256:" + "0" * 64,
+        byte_size=999,
+        body_retained=False,
+        evidence_policy="metadata_only",
+        capture_id="0" * 64,
+        blob_member="unrelated",
+        response_complete=False,
+    )
+    assert receipt["sha256"] == "sha256:" + hashlib.sha256(b"bounded input").hexdigest()
+    assert receipt["byte_size"] == len(b"bounded input")
+    assert receipt["body_retained"] is True and receipt["response_complete"] is True
+    assert receipt["evidence_policy"] == "full" and len(receipt["capture_id"]) == 32
+    artifact = evidence.seal(outcome="build-complete")
+    verify_evidence(evidence.artifact_dir, expected_pin=artifact.pin)

@@ -1,0 +1,221 @@
+{
+  "version": 1,
+  "key_policy": "Research-local example IDs; no stable production keys are asserted. Field fragments exercise observed shapes and are not complete table rows.",
+  "examples": [
+    {
+      "example_id": "lcv-csv-britt",
+      "sample_id": "lcv:2025:published_export",
+      "proposed_table": "scorecard_member_ratings",
+      "capture_id": "lcv-2025-senate-csv",
+      "source_path": "CSV physical record4, Year Score",
+      "fields": {
+        "member_name": "Katie Britt",
+        "value_text": "0",
+        "publisher_member_id": "https://www.lcv.org/moc/katie-britt/",
+        "metric": "annual"
+      },
+      "notes": "Preserve bare CSV string; percent unit can come from source context. HTML same member shows0%.",
+      "production_ready": false
+    },
+    {
+      "example_id": "lcv-csv-armstrong",
+      "sample_id": "lcv:2025:published_export",
+      "proposed_table": "scorecard_members",
+      "capture_id": "lcv-2025-senate-csv",
+      "source_path": "CSV record111",
+      "fields": {
+        "member_name": "Alan Armstrong",
+        "chamber_text": "Senate",
+        "year_score_cell": "",
+        "lifetime_score_cell": "na"
+      },
+      "notes": "Empty annual field does not become zero or an annual rating. Source member row remains.",
+      "production_ready": false
+    },
+    {
+      "example_id": "afl-begich",
+      "sample_id": "afl_cio:2025:workbooks",
+      "proposed_table": "scorecard_member_ratings",
+      "capture_id": "afl-house-2025-xlsx",
+      "source_path": "Worksheet!A2:F2",
+      "fields": {
+        "member_name": "Rep. Nicholas J. Begich III",
+        "state": "AK",
+        "district": "0",
+        "party": "Republican",
+        "value_text": "0%",
+        "lifetime_value_text": "0%"
+      },
+      "notes": "Preserve district0; downstream may resolve at-large term.",
+      "production_ready": false
+    },
+    {
+      "example_id": "afl-letter-glyph",
+      "sample_id": "afl_cio:2025:workbooks",
+      "proposed_table": "scorecard_member_item_results",
+      "capture_id": "afl-house-2025-xlsx",
+      "source_path": "Worksheet!G2",
+      "fields": {
+        "member_name": "Rep. Nicholas J. Begich III",
+        "item_column": "G",
+        "result_text": "◯"
+      },
+      "notes": "Item heading is a letter, not a roll call. No automatic meaning is assigned to circle.",
+      "production_ready": false
+    },
+    {
+      "example_id": "afl-duplicate-bill",
+      "sample_id": "afl_cio:2025:workbooks",
+      "proposed_table": "scorecard_items",
+      "capture_id": "afl-house-2025-xlsx",
+      "source_path": "Worksheet!M1 and P1",
+      "fields": {
+        "item1_source_path": "Worksheet!M1",
+        "item2_source_path": "Worksheet!P1",
+        "bill_citation_text": "H.R. 4"
+      },
+      "notes": "Distinct item URLs and dates in item07 June12 and item04 July18 identify separate actions on the same bill.",
+      "production_ready": false
+    },
+    {
+      "example_id": "afl-letter-encoding",
+      "sample_id": "afl_cio:2025:workbooks",
+      "proposed_table": "scorecard_methodologies",
+      "capture_id": "afl2025-house-item-12",
+      "source_path": "Article note immediately after position description",
+      "fields": {
+        "item_kind": "letter",
+        "source_action_text": "no"
+      },
+      "notes": "Publisher explicitly maps no to signed letter in its vote-oriented UI; ignore the passed/failed template for analysis of this letter. Preserve raw source text and reason.",
+      "production_ready": false
+    },
+    {
+      "example_id": "nea-ricketts",
+      "sample_id": "nea:119:2025",
+      "proposed_table": "scorecard_member_ratings",
+      "capture_id": "nea-119-html",
+      "source_path": "U.S. Senate Report Card / Pete Ricketts row",
+      "fields": {
+        "member_name": "Pete Ricketts",
+        "state": "NES",
+        "value_text": "F"
+      },
+      "notes": "Confirmed in officialPDF; do not autocorrect publisher state.",
+      "production_ready": false
+    },
+    {
+      "example_id": "nea-amendment-chain",
+      "sample_id": "nea:119:2025",
+      "proposed_table": "scorecard_items",
+      "capture_id": "nea-119-votes-pdf",
+      "source_path": "Physical page2 / On the Amendment No.2382 paragraph",
+      "fields": {
+        "amendment_citation_text": "S.Amdt. 2382 to S.Amdt. 2360 to H.R. 1",
+        "roll_number_text": "1-\n358"
+      },
+      "notes": "Keep all source references and the literal wrapped roll citation; normalized matching is downstream.",
+      "production_ready": false
+    },
+    {
+      "example_id": "humane-gallego",
+      "sample_id": "humane:2025:senate",
+      "proposed_table": "scorecard_member_ratings",
+      "capture_id": "humane-2025-final",
+      "source_path": "Physical page6 / Arizona / Gallego / Score",
+      "fields": {
+        "member_name": "Gallego, Ruben (D)",
+        "value_text": "100+"
+      },
+      "notes": "No conversion to100; extra-credit suffix is source data.",
+      "production_ready": false
+    },
+    {
+      "example_id": "humane-leader",
+      "sample_id": "humane:2025:senate",
+      "proposed_table": "scorecard_member_item_results",
+      "capture_id": "humane-2025-final",
+      "source_path": "Physical page7 / Kennedy / Leader",
+      "fields": {
+        "member_name": "Kennedy, John (R)",
+        "raw_pdf_text": "ê",
+        "rendered_symbol": "★",
+        "item_title": "Leader"
+      },
+      "notes": "Font encoding differs from visible glyph; retain extraction token and checked rendering meaning. No numeric bonus inferred.",
+      "production_ready": false
+    },
+    {
+      "example_id": "humane-exclusion",
+      "sample_id": "humane:2025:senate",
+      "proposed_table": "scorecard_member_ratings",
+      "capture_id": "humane-2025-final",
+      "source_path": "Physical page7 / Schumer / Score and Senate chart key",
+      "fields": {
+        "member_name": "Schumer, Chuck (D)",
+        "value_text": "••"
+      },
+      "notes": "Publisher legend states party leaders have no numerical score; preserve eligibility reason separately.",
+      "production_ready": false
+    },
+    {
+      "example_id": "heritage-current-member",
+      "sample_id": "heritage_action:119:observed",
+      "proposed_table": "scorecard_members",
+      "capture_id": "heritage-119-members",
+      "source_path": "members-search-results :members[0]",
+      "fields": {
+        "member_name": "Alma Adams",
+        "publisher_member_id": "A000370",
+        "state": "NC",
+        "district": "12",
+        "party": "D",
+        "chamber_text": "House"
+      },
+      "notes": "congId is publisher spelling of member ID; exact crosswalk resolution remains downstream.",
+      "production_ready": false
+    },
+    {
+      "example_id": "heritage-cosponsor",
+      "sample_id": "heritage_action:119:observed",
+      "proposed_table": "scorecard_items",
+      "capture_id": "heritage-119-cosponsorships",
+      "source_path": "data[0]",
+      "fields": {
+        "item_id": "s382-119",
+        "item_kind": "cosponsorship",
+        "congress_text": "119",
+        "chamber_text": "senate"
+      },
+      "notes": "Member result is determined by the explicit sponsors/nonSponsors group, not by attached overall score.",
+      "production_ready": false
+    },
+    {
+      "example_id": "c4ip-grade",
+      "sample_id": "c4ip:2024:grades",
+      "proposed_table": "scorecard_member_ratings",
+      "capture_id": "c4ip-2024-pdf",
+      "source_path": "Physical page28 / Table4 / Christopher Coons",
+      "fields": {
+        "member_name": "Christopher Coons",
+        "state": "DE",
+        "party": "Democrat",
+        "value_text": "A+"
+      },
+      "notes": "Do not derive a numeric score from grade; method spans116th–118th.",
+      "production_ready": false
+    },
+    {
+      "example_id": "c4ip-method-signed",
+      "sample_id": "c4ip:2024:grades",
+      "proposed_table": "scorecard_methodologies",
+      "capture_id": "c4ip-2024-pdf",
+      "source_path": "Physical page21 / Table2 / category2 negative contribution",
+      "fields": {
+        "contribution_text": "-0.75"
+      },
+      "notes": "Method-level contribution example; it is not an observed member adjustment or negative weight.",
+      "production_ready": false
+    }
+  ]
+}

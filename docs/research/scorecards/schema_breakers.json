@@ -1,0 +1,239 @@
+{
+  "schema_version": 1,
+  "unsupported_shapes": [
+    {
+      "id": "U01",
+      "shape": "Historical scanned or glyph-dependent member grid",
+      "preserve": "Edition, capture identity and independently checked literal observations.",
+      "unsupported": "Complete tabular extraction until the historical layout has visual fixtures and reconciliation.",
+      "next_evidence": "Review every grid page, symbols and footnotes; establish source-defined membership.",
+      "dimension": "acquisition"
+    },
+    {
+      "id": "U02",
+      "shape": "Peer-relative or incompletely specified composite scoring",
+      "preserve": "Published metrics, component relationships, stated weights and methodology version.",
+      "unsupported": "Reproduction without the reference population, all inputs and exact transformation rules.",
+      "next_evidence": "Acquire the edition's complete component/member data and the peer comparison rule.",
+      "dimension": "analysis"
+    },
+    {
+      "id": "U03",
+      "shape": "Weighted grades with participation exclusions",
+      "preserve": "Score, grade, rank and exclusion notes as separate source facts.",
+      "unsupported": "Reproduction from the sampled final ratings without the complete item-weight and participation inputs.",
+      "next_evidence": "Acquire the edition's vote list, weights, grade thresholds and member eligibility.",
+      "dimension": "analysis"
+    },
+    {
+      "id": "U04",
+      "shape": "Qualitative grades using undisclosed member-level inputs",
+      "preserve": "Literal published grade and stated criteria; permit an edition with no disclosed items.",
+      "unsupported": "Inventing an item ledger, point conversion or official-action comparison for inaccessible activity.",
+      "next_evidence": "Only add item facts if the publisher supplies them; otherwise retain a published-rating-only source.",
+      "dimension": "analysis"
+    },
+    {
+      "id": "U05",
+      "shape": "Signed contributions, multiple periods and cohort-specific grades",
+      "preserve": "Literal contributions, edition periods, methodology scope and final values.",
+      "unsupported": "Reproduction until the underlying member-item data, cohort assignments and complete rules are acquired.",
+      "next_evidence": "Acquire the publisher's Data Annex or equivalent item/member ledger.",
+      "dimension": "analysis"
+    },
+    {
+      "id": "U06",
+      "shape": "Dynamic embedded member grid with mutable chamber-specific methodology",
+      "preserve": "Methodology snapshots, literal tier boundaries, weights and publisher-designated actions.",
+      "unsupported": "Complete rating ingestion from a shell response; repairing tier ranges or inferring missing rows.",
+      "next_evidence": "Capture the publisher-authorized embedded dataset with a coherent snapshot and proven end condition.",
+      "dimension": "acquisition"
+    },
+    {
+      "id": "U07",
+      "shape": "Aggregate index result without an inspected methodology or item ledger",
+      "preserve": "Signed decimals and ranks exactly as printed.",
+      "unsupported": "Preferred-action inference, cross-publisher numeric comparisons and score reproduction.",
+      "next_evidence": "Inspect the original methodology and its edition-specific inputs.",
+      "dimension": "analysis"
+    },
+    {
+      "id": "C-U01",
+      "shape": "ADA 1947 scanned member grid without checked cells",
+      "dimension": "acquisition",
+      "preserve": "Edition identity, source capture and observed scanned layout.",
+      "unsupported": "Full historical table extraction until visual row/cell fixtures and source counts qualify.",
+      "next_evidence": "Inspect all historical member-grid pages and reconcile glyphs, footnotes and membership."
+    },
+    {
+      "id": "U08",
+      "shape": "Repeated source column labels without an established action crosswalk",
+      "dimension": "acquisition",
+      "preserve": "Distinct literal workbook columns and independently identified dated item pages.",
+      "unsupported": "Assigning duplicated H.R.4 workbook result columns to dated item URLs without direct linkage or a uniquely verified complete outcome crosswalk.",
+      "next_evidence": "Establish exact source-backed column-to-item mapping, then version and test its ambiguity refusal."
+    }
+  ],
+  "hunt": [
+    {
+      "shape": "bills_without_roll_call",
+      "status": "observed",
+      "profiles": [
+        "heritage_action:115_cosponsorship"
+      ],
+      "decision": "A bill citation does not require a roll-call link."
+    },
+    {
+      "shape": "sponsorship_and_cosponsorship",
+      "status": "observed",
+      "profiles": [
+        "humane_world_action:2025",
+        "c4ip:2024"
+      ],
+      "decision": "Preserve distinct action types and sponsorship multipliers."
+    },
+    {
+      "shape": "committee_votes",
+      "status": "publisher_stated_not_item_sampled",
+      "profiles": [
+        "nea:119"
+      ],
+      "decision": "Retain the stated criterion; no committee roll call is fabricated from a floor-vote table."
+    },
+    {
+      "shape": "multiple_actions_on_one_bill",
+      "status": "observed",
+      "profiles": [
+        "hrc:118"
+      ],
+      "decision": "H.R. 2670 appears in several amendment items and final passage. Key by publisher item, never by bill alone."
+    },
+    {
+      "shape": "procedural_actions",
+      "status": "observed",
+      "profiles": [
+        "hrc:118",
+        "afl_cio:2025"
+      ],
+      "decision": "The action and target apply to the particular motion; supporting a bill need not mean supporting every motion."
+    },
+    {
+      "shape": "attendance_or_missed_votes",
+      "status": "observed",
+      "profiles": [
+        "lcv:2025",
+        "ntu:2024"
+      ],
+      "decision": "Keep publisher absence/exclusion rules and source glyphs separately from official voting status."
+    },
+    {
+      "shape": "leadership_activity",
+      "status": "observed",
+      "profiles": [
+        "humane_world_action:2025",
+        "c4ip:2024"
+      ],
+      "decision": "Allow non-vote actions and source-attributed leadership marks."
+    },
+    {
+      "shape": "bonus_points",
+      "status": "observed",
+      "profiles": [
+        "humane_world_action:2025"
+      ],
+      "decision": "Preserve 100+ and leader symbols; no invented numeric total."
+    },
+    {
+      "shape": "penalty_or_negative_points",
+      "status": "observed",
+      "profiles": [
+        "ajp_action:2026",
+        "c4ip:2024"
+      ],
+      "decision": "Keep signed contributions; they are not automatically negative weights."
+    },
+    {
+      "shape": "negative_weights",
+      "status": "not_established",
+      "profiles": [
+        "ajp_action:2026",
+        "c4ip:2024"
+      ],
+      "decision": "Keep this hunt open. Signed contributions do not prove a negative multiplier."
+    },
+    {
+      "shape": "score_adjustments",
+      "status": "observed",
+      "profiles": [
+        "hrc:118"
+      ],
+      "decision": "Printed pages 10–11 credit a procedural no vote according to HRC's explanation; preserve publisher judgment separately from the official no."
+    },
+    {
+      "shape": "multiple_subscores",
+      "status": "observed",
+      "profiles": [
+        "us_chamber:116_method",
+        "c4ip:2024"
+      ],
+      "decision": "Represent metric-to-metric components; an item-to-metric table alone is insufficient."
+    },
+    {
+      "shape": "grades_instead_of_numbers",
+      "status": "observed",
+      "profiles": [
+        "nea:119",
+        "norml:2016_2020"
+      ],
+      "decision": "Store the grade as text with a grade unit; no numeric conversion."
+    },
+    {
+      "shape": "annual_congressional_lifetime",
+      "status": "observed_across_samples",
+      "profiles": [
+        "lcv:2025",
+        "afl_cio:2025",
+        "hrc:118"
+      ],
+      "decision": "Give each metric its period; the survey does not establish one edition with all three forms."
+    },
+    {
+      "shape": "different_chamber_methodologies",
+      "status": "observed",
+      "profiles": [
+        "ffrf_action:2026_house",
+        "ffrf_action:2026_senate",
+        "ntu:2024"
+      ],
+      "decision": "Methodology scope includes chamber and member cohort."
+    },
+    {
+      "shape": "member_specific_exclusions",
+      "status": "observed",
+      "profiles": [
+        "lcv:2025",
+        "humane_world_action:2025",
+        "hrc:118",
+        "ajp_action:2026"
+      ],
+      "decision": "Eligibility belongs at member/item/metric scope, with a source-stated reason."
+    },
+    {
+      "shape": "final_score_without_item_methodology",
+      "status": "observed_in_sample",
+      "profiles": [
+        "nea:119",
+        "lugar_mccourt:113_senate"
+      ],
+      "decision": "Final ratings remain usable source facts; detailed analysis stays explicitly unsupported."
+    },
+    {
+      "shape": "metric_free_item_grid",
+      "profiles": [
+        "nrf:119-senate-grid"
+      ],
+      "observed": true,
+      "disposition": "Represent item targets and member-item results without a metric; proposal-0.2 resolves C-M01."
+    }
+  ]
+}

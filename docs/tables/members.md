@@ -6,7 +6,7 @@
 
 One row per legislator in one capture of the community crosswalk. Split from `member_terms` because one row cannot hold a chamber switch. All columns are stored as VARCHAR.
 
-**Coverage.** Sampled. The fork selection covers both complete community crosswalk files captured September 22, 2026 UTC: current and historical legislators. Every declared field was checked against the retained originals, and all earlier retained identities and native values survive. The source supplies 1,738 distinct FEC candidate IDs and 328 LIS IDs across both files; absent IDs remain absent. This qualifies the captured community files, not an independently complete official roster. Receipts: fork-execution-2026-09-21/members-qualification/. *(measured 2026-09-22)*
+**Coverage.** Sampled. The fork selection covers both complete community crosswalk files captured September 22, 2026 UTC: current and historical legislators. Every field declared at that qualification was checked against the retained originals, and all earlier retained identities and native values survive. The source supplies 1,738 distinct FEC candidate IDs and 328 LIS IDs across both files; absent IDs remain absent. This qualifies the captured community files, not an independently complete official roster. Receipts: fork-execution-2026-09-21/members-qualification/. The later votesmart_id, bioguide_previous_json and other_names_json additions are adopted in the local reader and pass parsing, resolution and member-pipeline tests. A rebuilt members generation still needs qualification and publication before hosted queries can use these fields. *(measured 2026-09-22)*
 
 - **Parquet file:** `members.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -16,14 +16,17 @@ One row per legislator in one capture of the community crosswalk. Split from `me
 | Column | Type | Description |
 | --- | --- | --- |
 | `bioguide_id` | `VARCHAR` | The Biographical Directory id, which is this crosswalk's primary identifier. |
+| `bioguide_previous_json` | `VARCHAR` | The source list of previous Bioguide ids in its order, as JSON; absent is NULL. |
 | `lis_id` | `VARCHAR` | The Senate LIS id, which only senators carry. |
 | `fec_ids_json` | `VARCHAR` | Every FEC candidate id for this person, as a JSON array in the publisher's order. |
 | `icpsr_id` | `VARCHAR` | The ICPSR id used by roll-call research datasets. |
 | `govtrack_id` | `VARCHAR` | The GovTrack id. |
+| `votesmart_id` | `VARCHAR` | The Vote Smart person id from the community crosswalk; absent when unstated. |
 | `opensecrets_id` | `VARCHAR` | The OpenSecrets id. |
 | `wikidata_id` | `VARCHAR` | The Wikidata item id. |
 | `name_first` | `VARCHAR` | The person's first name as the crosswalk spells it. |
 | `name_last` | `VARCHAR` | The person's last name as the crosswalk spells it. |
+| `other_names_json` | `VARCHAR` | Source other_names patches in order, with literal date bounds and nulls; absent is NULL. |
 | `term_count` | `VARCHAR` | How many terms the crosswalk lists; the member_terms row count for this person. |
 | `first_term_start` | `VARCHAR` | Start date of the earliest term listed. |
 | `last_term_end` | `VARCHAR` | End date of the latest term listed. |

@@ -1,0 +1,43 @@
+{
+  "status": "approved_after_correction",
+  "scope": "Exact literal item-year resolution v1.3 against LCV2025; independent review of coordinator change.",
+  "rule_version": "scorecard-resolution-v1.3",
+  "source_sha256": "sha256:f87daed52336ef0cfabaf7f9bc90399f32d4f547d713570a1d09ece2d9aaddee",
+  "observations": [
+    "Calendar candidates derive only from canonical official vote IDs and valid actual official vote dates.",
+    "No edition-year fallback or Congress/session arithmetic supplies a missing source fact.",
+    "Committee, bill and sponsorship actions cannot become floor votes from item year alone.",
+    "Every actual LCV item resolved uniquely against pinned official rows; source item Year remained literal."
+  ],
+  "finding_closed": {
+    "description": "Contradictory typed upstream vote year and item year previously retained an unresolved tentative vote in one direction.",
+    "correction": "Explicit differing years now add contradictory_source_vote_years; conflict clears targets and preserves candidates.",
+    "tests": "Both contradiction directions plus historical/date/ambiguity tests pass; 80 resolver tests."
+  },
+  "traces": [
+    {
+      "function": "_Items.__init__",
+      "file": "src/spicy_regs/scorecards/resolution.py:594",
+      "behavior": "Indexes valid official date and canonical chamber/session/roll."
+    },
+    {
+      "function": "_Items.resolve",
+      "file": "src/spicy_regs/scorecards/resolution.py:611",
+      "behavior": "Checks source year/context, exact candidates, action guards and conflict clearing."
+    },
+    {
+      "function": "resolve_scorecard_links",
+      "file": "src/spicy_regs/scorecards/resolution.py:793",
+      "behavior": "Preserves source snapshot, reference occurrences and immutable input pins."
+    },
+    {
+      "function": "build_scorecard_analysis",
+      "file": "src/spicy_regs/transforms/build_scorecard_analysis.py:67",
+      "behavior": "Requires all pinned input tables, reads required columns and validates source/output rows."
+    }
+  ],
+  "limits": [
+    "No score reproduction or official member-action comparison is qualified by this review.",
+    "Member-name normalization was not broadened; unresolved rows remain explicit."
+  ]
+}

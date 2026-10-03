@@ -892,7 +892,18 @@ def _body_shapes(events: Sequence[Mapping], members: set[str] | None, run: _Run)
     A page requested as HTML (the Clerk's ``index.asp`` beside its XML roll calls) is judged as HTML and never
     sets or splits its stage's kind.
     """
-    captures = [e for e in events if e.get("event") == "capture" and isinstance(e.get("sha256"), str)]
+    observed_captures = [e for e in events if e.get("event") == "capture"]
+    policies = Counter(e.get("evidence_policy", "full") for e in observed_captures)
+    not_assessed = {policy: count for policy, count in policies.items() if policy != "full"}
+    if not_assessed:
+        run.limits.append(
+            f"Source retention policy withholds bodies for {not_assessed}; body shape, byte-level "
+            "credentials, authenticity and replay are not assessed. Public metadata and table cells "
+            "remain subject to credential checks."
+        )
+    captures = [
+        e for e in observed_captures if e.get("evidence_policy", "full") == "full" and isinstance(e.get("sha256"), str)
+    ]
     stated = [(e, expected_kind(str(e.get("requested_url") or ""), e.get("content_type"))) for e in captures]
     by_stage: dict[object, set[str]] = {}
     for event, kind in stated:
@@ -904,7 +915,9 @@ def _body_shapes(events: Sequence[Mapping], members: set[str] | None, run: _Run)
     for event, expected in stated:
         key = "blobs/sha256/" + event["sha256"].removeprefix("sha256:")
         if members is not None and key not in members:
-            run.finding("fail", "evidence", "capture-body-not-a-member", stage=event.get("stage"), sha256=event["sha256"])
+            run.finding(
+                "fail", "evidence", "capture-body-not-a-member", stage=event.get("stage"), sha256=event["sha256"]
+            )
         scan = run.scans.get("evidence:" + key)
         observed = scan.kind if scan else None
         unread += observed is None
@@ -920,20 +933,39 @@ def _body_shapes(events: Sequence[Mapping], members: set[str] | None, run: _Run)
         if expected is None:
             unjudged += 1
         elif observed is not None and observed != expected:
-            unexpected.append({"stage": event.get("stage"), "requested_url": event.get("requested_url"),
-                               "status_code": status, "content_type": event.get("content_type"),
-                               "sha256": event["sha256"], "expected": expected, "expected_from": source,
-                               "observed": observed})
+            unexpected.append(
+                {
+                    "stage": event.get("stage"),
+                    "requested_url": event.get("requested_url"),
+                    "status_code": status,
+                    "content_type": event.get("content_type"),
+                    "sha256": event["sha256"],
+                    "expected": expected,
+                    "expected_from": source,
+                    "observed": observed,
+                }
+            )
     if unread:
-        run.limits.append(f"{unread} captures' bodies were not read (admission stopped early or the body is not a "
-                          "member); their shapes and credentials are unchecked.")
+        run.limits.append(
+            f"{unread} captures' bodies were not read (admission stopped early or the body is not a "
+            "member); their shapes and credentials are unchecked."
+        )
     if unjudged:
-        run.limits.append(f"{unjudged} 2xx captures state no expected kind (format parameter, path suffix, JSON/XML "
-                          "media type or their stage's); their sniffed kinds are counted, not judged.")
+        run.limits.append(
+            f"{unjudged} 2xx captures state no expected kind (format parameter, path suffix, JSON/XML "
+            "media type or their stage's); their sniffed kinds are counted, not judged."
+        )
     if encodings:
-        run.limits.append(f"Captures declaring content encodings other than gzip ({dict(encodings)}) were scanned and "
-                          "sniffed as stored bytes; an encoded key or HTML body inside them is invisible.")
-    return {"expected_to_observed": dict(sorted(kinds.items())), "unexpected_2xx": unexpected}
+        run.limits.append(
+            f"Captures declaring content encodings other than gzip ({dict(encodings)}) were scanned and "
+            "sniffed as stored bytes; an encoded key or HTML body inside them is invisible."
+        )
+    return {
+        "expected_to_observed": dict(sorted(kinds.items())),
+        "unexpected_2xx": unexpected,
+        "captures_by_policy": dict(sorted(policies.items())),
+        "not_assessed_by_policy": not_assessed,
+    }
 
 
 def _cited(con, base: PublicBase, entry: Mapping, infos: Mapping[str, dict], digests: Sequence[str]) -> dict:

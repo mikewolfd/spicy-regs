@@ -1,0 +1,21 @@
+{
+  "observed_at": "2026-10-03T17:48:51.414495+00:00",
+  "captures_attempted": 53,
+  "http_200": 44,
+  "captured_expected_pdf": 17,
+  "new_shape_profiles": 21,
+  "historical_directory_entries": 76,
+  "votesmart_unique_directory_ids": 683,
+  "votesmart_rating_leads": 376,
+  "candidate_outcomes": 48,
+  "source_model_blockers": [],
+  "source_fixture_deferrals": [
+    "C-U01"
+  ],
+  "production_supported": 0,
+  "resolved_source_model_issues": [
+    "C-M01"
+  ],
+  "new_catalog_candidates": 63,
+  "schema_example_cases": 21
+}

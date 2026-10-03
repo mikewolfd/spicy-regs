@@ -1,0 +1,86 @@
+{
+  "status": "accepted",
+  "schema_frozen": true,
+  "implementation_authorized_by_gate": true,
+  "candidate_decisions": [
+    {
+      "topic": "physical_types",
+      "decision": "Use VARCHAR public columns in V1, including exact decimal text and nullable boolean spellings; preserve literal fields separately. Do not introduce DOUBLE rounding or percentage conversion.",
+      "basis": [
+        "spicy-docs/src/spicy_docs/schemas/tables.py:TableContract",
+        "proposed_schema.json:physical_types"
+      ],
+      "pending": null,
+      "status": "accepted_see_freeze_receipt"
+    },
+    {
+      "topic": "periods_and_references",
+      "decision": "Retain ordered JSON arrays for repeated periods and legislative references in V1; preserve raw publisher strings and per-reference locators. Downstream links identify the reference occurrence.",
+      "basis": [
+        "proposed_schema.json:unresolved_design_choices",
+        "shape_profiles.json:hrc:118",
+        "shape_profiles.json:ajp_action:2026"
+      ],
+      "pending": null,
+      "status": "accepted_see_freeze_receipt"
+    },
+    {
+      "topic": "identity",
+      "decision": "Publisher IDs retain their raw names. Adapters version deterministic local keys derived from full source identity context; duplicate or ambiguous keys refuse an update. Row position alone is not stable identity.",
+      "basis": [
+        "../../../../scorecard-integration.md:Invariants to settle before freezing V1"
+      ],
+      "pending": null,
+      "status": "accepted_see_freeze_receipt"
+    },
+    {
+      "topic": "support_dimensions",
+      "decision": "Record source-model fit, acquisition completeness, parser qualification and score-reproduction readiness separately. An opaque rating may be publishable without a reconstructable calculation.",
+      "basis": [
+        "schema_breakers.json:U02-U07"
+      ],
+      "pending": null,
+      "status": "accepted_see_freeze_receipt"
+    },
+    {
+      "topic": "replacement_scope",
+      "decision": "Replace only complete publisher-defined editions or explicitly separate complete chamber editions; preserve failed and absent historical scopes. A publisher-declared House-only scope is valid; a failed Senate read is not.",
+      "basis": [
+        "../../../../scorecard-integration.md:Acquisition, evidence and publication"
+      ],
+      "pending": null,
+      "status": "accepted_see_freeze_receipt"
+    },
+    {
+      "topic": "package_boundary",
+      "decision": "Keep SpicyDocs source facts and table definitions distinct from SpicyRegs resolution and publication. Test the actual pinned wheel integration before qualification; exclude unrelated local changes from any new package.",
+      "basis": [
+        "spicy-docs/docs/source-workflows.md",
+        "spicy-regs/pyproject.toml:source-readers"
+      ],
+      "pending": null,
+      "status": "accepted_see_freeze_receipt"
+    }
+  ],
+  "required_before_freeze": [],
+  "schema_version": "scorecards-v1",
+  "accepted_design_rules": [
+    "Keys contain nonempty strings; identities are unique before merge and versioned per adapter. Row offset alone is not durable identity.",
+    "Exactly one accepted snapshot per edition in a family generation, every fact snapshot matches its edition, every fact capture belongs to its snapshot, and all references stay within the selected snapshot.",
+    "Member-item metric_id and participation_id are both null or both nonempty. No metric is created merely to store an item result.",
+    "Item-level targets require source-stated context and locator. Metric-specific targets live on metric participation; do not infer one from the other.",
+    "Metric components form an acyclic directed graph. Primary metrics are scoped by chamber/cohort/period.",
+    "Selected source rendition and identity rules are recorded per snapshot. Literal display values are not converted to agree with corroborating captures.",
+    "Source action labels never imply an official action. Preserve publisher-specific semantic rules, including AFL-CIO no-means-signed letter encoding.",
+    "Schema fit, acquisition completeness, parser qualification and reproduction readiness are independent statuses.",
+    "Rolling editions use a source-defined live edition identity; refresh changes snapshot. Relative windows remain literal until publisher endpoints are supplied."
+  ],
+  "review_findings": {
+    "F1": "closed_see_schema_closure",
+    "F2": "closed_see_schema_closure",
+    "F3": "closed_see_schema_closure",
+    "F4": "closed_see_schema_closure",
+    "F5": "closed_see_schema_closure"
+  },
+  "freeze_receipt": "freeze_receipt.json"
+}

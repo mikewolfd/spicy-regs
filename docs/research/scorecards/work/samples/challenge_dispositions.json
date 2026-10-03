@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "challenges": [
+    {
+      "profile_id": "hrc:118",
+      "capture_ids": [
+        "hrc-118-pdf",
+        "hrc-index"
+      ],
+      "model_fit": "source_ratings_and_rules_fit",
+      "acquisition_completeness": "sample_only",
+      "reproduction_support": "unsupported",
+      "disposition": "Preserve existing checked observation. Whole member/action extraction remains outside the initial qualified scope.",
+      "specific_gap": "PDF spread layout, member-specific credit/endnotes and previous-Congress score columns need full cell qualification."
+    },
+    {
+      "profile_id": "ntu:2024",
+      "capture_ids": [
+        "ntu-2024-pdf",
+        "ntu-member"
+      ],
+      "model_fit": "source_ratings_and_rules_fit",
+      "acquisition_completeness": "sample_only",
+      "reproduction_support": "unsupported",
+      "disposition": "Preserve existing checked observation. Whole member/action extraction remains outside the initial qualified scope.",
+      "specific_gap": "Complete item-weight ledger not acquired; score/grade/rank can be preserved independently."
+    },
+    {
+      "profile_id": "ajp_action:2026",
+      "capture_ids": [
+        "ajp-2026"
+      ],
+      "model_fit": "source_ratings_and_rules_fit",
+      "acquisition_completeness": "sample_only",
+      "reproduction_support": "unsupported",
+      "disposition": "Preserve existing checked observation. Whole member/action extraction remains outside the initial qualified scope.",
+      "specific_gap": "Member-item dataset not acquired; signed contributions and cohort/chamber grade rules preserved as method observations."
+    },
+    {
+      "profile_id": "ffrf_action:2026_house",
+      "capture_ids": [
+        "ffrf-house",
+        "ffrf-house-method"
+      ],
+      "model_fit": "source_ratings_and_rules_fit",
+      "acquisition_completeness": "sample_only",
+      "reproduction_support": "unsupported",
+      "disposition": "Preserve existing checked observation. Whole member/action extraction remains outside the initial qualified scope.",
+      "specific_gap": "Embedded member grid not acquired; live method revisions and tier bounds remain method observations."
+    },
+    {
+      "profile_id": "ffrf_action:2026_senate",
+      "capture_ids": [
+        "ffrf-senate",
+        "ffrf-senate-method"
+      ],
+      "model_fit": "source_ratings_and_rules_fit",
+      "acquisition_completeness": "sample_only",
+      "reproduction_support": "unsupported",
+      "disposition": "Preserve existing checked observation. Whole member/action extraction remains outside the initial qualified scope.",
+      "specific_gap": "Embedded member grid not acquired; nomination/chamber rules remain method observations."
+    }
+  ]
+}

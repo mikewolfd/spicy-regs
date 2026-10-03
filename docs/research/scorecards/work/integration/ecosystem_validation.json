@@ -1,0 +1,92 @@
+{
+  "checked_at": "2026-10-03T20:09:31.322714+00:00",
+  "task": "ss-o0el",
+  "status": "passed",
+  "delivery": "local_uncommitted",
+  "provider_version": "0.53.0+scorecards.d030db4a182c",
+  "provider_wheel_sha256": "b354315561929d56a07a62397a7e4ed9c560728551ee2b07ade724c7fb94f7e9",
+  "provider_build_receipt": "reader_wheel.json",
+  "checks": {
+    "provider_full_gate": {
+      "command": "./scripts/check",
+      "result": "11491 passed, 4 skipped, 50 deselected, 14 warnings in 90.67s (0:01:30)",
+      "log_sha256": "3dbc21ef24495198412d4ae870207645f0c19a0cd10fb8756e6f070f858a6690"
+    },
+    "candidate_archive": {
+      "command": "Explicit overlay archive: provider schema, source, identity and documentation tests",
+      "result": "1811 passed, 1 deselected in 5.74s",
+      "log_sha256": "60c92728511f481b32cb189fa7b9fdcf02b0249a233156b59fbd839dbaba1dec"
+    },
+    "installed_candidate": {
+      "command": "uv run --frozen --no-sync pytest -q tests/test_contract_tables.py tests/test_scorecard_resolution.py tests/test_scorecard_analysis.py tests/test_govtrack_discovery.py tests/test_source_evidence.py::test_both_roster_originals_reach_member_and_term_outputs",
+      "result": "297 passed in 4.66s",
+      "log_sha256": "35fa0233b250b0fc04e3f6c51774b48db26222af28e06b9f8785695cd7ad191e"
+    },
+    "consumer_full_suite": {
+      "command": "uv run --frozen --no-sync pytest -q",
+      "result": "4835 passed, 2 skipped, 14 deselected, 5 warnings in 128.17s (0:02:08)",
+      "log_sha256": "f437e7a39272546e5de175933c60fc84dae1fe7f1f9d62bf3556d2df33d77935"
+    },
+    "consumer_lint": {
+      "command": "uv run --frozen --no-sync ruff check .",
+      "result": "passed"
+    },
+    "consumer_types": {
+      "command": "uv run --frozen --no-sync ty check",
+      "result": "passed"
+    },
+    "dictionary": {
+      "command": "uv run --frozen --no-sync spicy-regs-dict check",
+      "result": "passed; repeat generation byte-identical"
+    },
+    "research_gate": {
+      "command": "uv run --frozen --no-sync python scripts/build_scorecard_survey.py --check",
+      "result": "passed"
+    },
+    "workspace_filemap": {
+      "command": "python3 scripts/generate-filemap.py",
+      "result": "passed"
+    }
+  },
+  "discovery_replay": {
+    "receipt": "govtrack_discovery/verification.json",
+    "final_candidate_byte_identical": true
+  },
+  "dictionary": {
+    "check": "passed",
+    "repeat_generation": "byte_identical",
+    "existing_metadata_changes": [
+      "members"
+    ],
+    "new_tables": "source scorecards and derived identity links"
+  },
+  "independent_review": {
+    "discovery": "../resolution/govtrack_independent_review.md",
+    "historical_identity": "../resolution/validation_receipt.json",
+    "package_and_action_semantics": "approved; build environment pin and docs index corrected",
+    "retained_bytes": "approved for shared policy helper and existing full-retention callers"
+  },
+  "scope_boundaries": [
+    "No duplicate federal ingestion",
+    "No source registry enablement or scheduled refresh",
+    "No production publication",
+    "Hosted resolution requires rebuilt members with the new crosswalk fields",
+    "All-publisher adapter backlog remains separate",
+    "PDF source fidelity qualification remains publisher-specific"
+  ],
+  "source_files": {
+    "src/spicy_regs/scorecards/resolution.py": "3386f0697217b3c1e6cb2676b34f3473cbc6d37b9c6cac28669490e58f93dc51",
+    "src/spicy_regs/scorecards/govtrack_discovery.py": "df0f690f5a8bfe509a0af83c8a5edfb758e3bc752b5a7325a8aba1e1737b68c2",
+    "src/spicy_regs/source_evidence.py": "bd042e5253af23c92efeaecbefce311f448645f93f6c945506b4784472cd8365",
+    "src/spicy_regs/transforms/build_members.py": "c078d910f5d5509e1aaa7d579da4756552991988c8410dcf34675175d69dff88",
+    "src/spicy_regs/transforms/build_scorecard_analysis.py": "404938ac263285765a1ecd9765a5c0c0b87151f46c363175378581f2f557b4ca",
+    "src/spicy_regs/pipelines/rollups/scorecard_analysis.py": "e4da0a1503425cad350f3fbfb8f1aba5dad3bb5b7ba8534e5f2f51367ca253e4",
+    "tests/test_scorecard_analysis.py": "c86e9da95685772f1912d83184cefdfa387c1212585821fd69a02a5d1c1d59d7",
+    "tests/test_source_evidence.py": "2ed64417751d1588a303cc3a591586a256f18a515b87fc7837aeafe8c01859c9",
+    "tests/test_source_evidence_files.py": "d3e7894734935d95b9920f2cf6eae0170da5c4d0fa74cc2d53aef944d27c6018",
+    "tests/test_contract_tables.py": "07cad16e469e9160e57348fa047af7e9b12a27a30186cabe0c8f7cbfa44b9c3e",
+    "docs/research/scorecards/work/integration/build_reader_wheel.py": "742ae4d6c80b0f807902d2450c2663de4cf17ba20535479c6f4ebdf431888514",
+    "pyproject.toml": "357d6a09c6d7b82962876c7fbea3ad0340b04c59d7db217426d4840dce9e288a",
+    "uv.lock": "e68d62692fd3d136305caa6af74255b0ed512e87f3a04cedce7572a562f1d6cd"
+  }
+}

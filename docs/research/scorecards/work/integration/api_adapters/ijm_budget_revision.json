@@ -1,0 +1,16 @@
+{
+  "changed_at": "2026-10-03T20:51:29.309423+00:00",
+  "previous_campaign_ceiling": 1200,
+  "new_campaign_ceiling": 2400,
+  "reason": "Explicit renewed user authorization to keep trying IJM; three browserHtml probes succeeded, with two exact native/rendered JSON comparisons. Expanded finite budget permits remaining first-pass source scope and full repeated pass with retained retries.",
+  "conservative_interrupted_call_reserve": 64,
+  "concurrency": 4,
+  "timeout_seconds": 180,
+  "representation": "browserHtml for original API URLs; earlier successful native captures remain source evidence",
+  "concurrency_adjustment": {
+    "observed_at": "2026-10-03T20:54:09.433871+00:00",
+    "from": 4,
+    "to": 8,
+    "reason": "94 new rendered detail responses succeeded without a recorded failure;8 stays below earlier32-worker raw-response campaign."
+  }
+}

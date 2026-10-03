@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "repository_path": "scorecards/ClubForGrowth.yaml",
+      "publisher_id": "club_for_growth",
+      "reason": "Pinned GovTrack name The Club for Growth and its clubforgrowth.org scorecards link identify the source already cataloged under Club for Growth Foundation. This discovery association does not establish a legal-entity merger or transfer ratings between entities."
+    },
+    {
+      "repository_path": "scorecards/NORML.yaml",
+      "publisher_id": "norml",
+      "reason": "Pinned GovTrack full name includes The; catalog omits The. Original norml.org homepage and congressional-scorecard locator corroborate this explicit historical name alias."
+    },
+    {
+      "repository_path": "scorecards/USChamberofCommerce.yaml",
+      "publisher_id": "us_chamber",
+      "reason": "Pinned GovTrack expands United States; catalog abbreviates U.S. Exact uschamber.com homepage corroborates this name alias. Historical edition URL remains a discovery observation."
+    }
+  ]
+}

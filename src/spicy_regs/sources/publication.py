@@ -23,6 +23,7 @@ from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
 from copy import deepcopy
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, BinaryIO, Callable, NamedTuple
 
@@ -59,6 +60,10 @@ _BLOB_KEY = re.compile(r"blobs/sha256/([0-9a-f]{64})\Z")
 _POINTER_ATTEMPTS = 8
 _NAME = re.compile(r"[a-z][a-z0-9_-]*\Z")
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
+_PUBLISHED_AT = re.compile(
+    r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]+)?"
+    r"(?:Z|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9])\Z"
+)
 _PARTITION_VALUE = re.compile(r"[A-Za-z0-9_.-]+\Z")
 _PART = re.compile(r"part-\d{6}\.parquet\Z")
 _MEMBER_PATH = re.compile(r"generations/[a-z][a-z0-9_-]*/[0-9a-f]{64}/(.+)\Z")
@@ -171,6 +176,7 @@ def parse_index(raw: bytes) -> dict:
     """Validate the small mutable pointer without claiming payload verification.
 
     Version 1 lists only single-file tables. Version 2 may also list split tables, each with its members.
+    A family's optional ``publishedAt`` is preserved as stated and must include a valid date, time and timezone.
     """
     if len(raw) > INDEX_LIMIT:
         raise PublicationError("Publication index exceeds its byte limit")
@@ -186,8 +192,15 @@ def parse_index(raw: bytes) -> dict:
             raise ValueError("invalid publication index")
         seen = set()
         for family, entry in value["families"].items():
-            if not _NAME.fullmatch(family) or set(entry) != {"prefix", "logicalId", "artifactDigest", "tables"}:
+            if not _NAME.fullmatch(family) or set(entry) - {"publishedAt"} != {"prefix", "logicalId", "artifactDigest", "tables"}:
                 raise ValueError("invalid family")
+            if "publishedAt" in entry:
+                published_at = entry["publishedAt"]
+                if not isinstance(published_at, str) or not _PUBLISHED_AT.fullmatch(published_at):
+                    raise ValueError("invalid publication timestamp")
+                # Validate calendar and timezone ranges without replacing the
+                # original timestamp or treating it as an artifact identity.
+                datetime.fromisoformat(published_at)
             digest = entry["artifactDigest"]
             if not isinstance(digest, str) or not _DIGEST.fullmatch(digest):
                 raise ValueError("invalid artifact pin")
@@ -503,6 +516,28 @@ def table_descriptor(index: Mapping, key: str) -> dict | None:
     """The index's descriptor for table ``key`` (rows, bytes, columns and, when split, members), or ``None``."""
     owner = table_owner(index, key)
     return None if owner is None else owner[1]["tables"][key]
+
+
+def table_pin(index: Mapping, key: str) -> dict:
+    """Pin a managed table, including every member of a partitioned table.
+
+    Single-file tables retain their byte digest. A split table has no single
+    byte stream: ``tableDescriptorDigest`` hashes its complete UTF-8 JSON
+    descriptor with sorted keys, compact separators and unescaped Unicode.
+    The descriptor contains each member's path, byte digest, size and partition.
+    """
+    owner = table_owner(index, key)
+    if owner is None:
+        raise PublicationError(f"Cannot pin an unmanaged table: {key}")
+    descriptor = owner[1]["tables"][key]
+    if "members" in descriptor:
+        raw = json.dumps(descriptor, sort_keys=True, separators=(",", ":"),
+                         ensure_ascii=False, allow_nan=False).encode("utf-8")
+        digest = {"tableDescriptorDigest": "sha256:" + hashlib.sha256(raw).hexdigest()}
+    else:
+        digest = {"sha256": descriptor["sha256"]}
+    return {**digest, "byteSize": descriptor["byteSize"], "family": owner[0],
+            "artifactDigest": owner[1]["artifactDigest"]}
 
 
 def single_member(index: Mapping, key: str) -> Member:

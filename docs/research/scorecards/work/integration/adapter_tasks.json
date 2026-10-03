@@ -1,0 +1,881 @@
+{
+  "scope": "All 125 candidates explicitly requested by user; runtime support requires original-source qualification.",
+  "research_gate": "ss-nhee",
+  "adapters": [
+    {
+      "publisher_id": "aauw",
+      "publisher_name": "American Association of University Women",
+      "task_id": "ss-5k94",
+      "source_id": "aauw:federal",
+      "discovery_status_at_expansion": "profiled"
+    },
+    {
+      "publisher_id": "acec",
+      "publisher_name": "American Council of Engineering Companies",
+      "task_id": "ss-5ibd",
+      "source_id": "acec:federal",
+      "discovery_status_at_expansion": "profiled"
+    },
+    {
+      "publisher_id": "aclu",
+      "publisher_name": "American Civil Liberties Union",
+      "task_id": "ss-zeen",
+      "source_id": "aclu:federal",
+      "discovery_status_at_expansion": "verified"
+    },
+    {
+      "publisher_id": "ada",
+      "publisher_name": "Americans for Democratic Action",
+      "task_id": "ss-wi08",
+      "source_id": "ada:federal",
+      "discovery_status_at_expansion": "profiled"
+    },
+    {
+      "publisher_id": "afl_cio",
+      "publisher_name": "AFL-CIO",
+      "task_id": "ss-loj4",
+      "source_id": "afl_cio:federal",
+      "discovery_status_at_expansion": "profiled"
+    },
+    {
+      "publisher_id": "afp",
+      "publisher_name": "Americans for Prosperity",
+      "task_id": "ss-onbt",
+      "source_id": "afp:federal",
+      "discovery_status_at_expansion": "verified"
+    },
+    {
+      "publisher_id": "afscme",
+      "publisher_name": "American Federation of State, County and Municipal Employees",
+      "task_id": "ss-h993",
+      "source_id": "afscme:federal",
+      "discovery_status_at_expansion": "verified"
+    },
+    {
+      "publisher_id": "ajp_action",
+      "publisher_name": "Americans for Justice in Palestine Action",
+      "task_id": "ss-7xp4",
+      "source_id": "ajp_action:federal",
+      "discovery_status_at_expansion": "profiled"
+    },
+    {
+      "publisher_id": "alaska_wilderness_action",
+      "publisher_name": "Alaska Wilderness Action",
+      "task_id": "ss-kwza",
+      "source_id": "alaska_wilderness_action:federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "animal_welfare_institute",
+      "publisher_name": "Animal Welfare Institute",
+      "task_id": "ss-6a2y",
+      "source_id": "animal_welfare_institute:federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "ara",
+      "publisher_name": "Alliance for Retired Americans",
+      "task_id": "ss-6xl5",
+      "source_id": "ara:federal",
+      "discovery_status_at_expansion": "profiled"
+    },
+    {
+      "publisher_id": "arts_action",
+      "publisher_name": "Americans for the Arts Action Fund",
+      "task_id": "ss-jqjb",
+      "source_id": "arts_action:federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "boilermakers",
+      "publisher_name": "International Brotherhood of Boilermakers",
+      "task_id": "ss-hsa2",
+      "source_id": "boilermakers:federal",
+      "discovery_status_at_expansion": "profiled"
+    },
+    {
+      "publisher_id": "c4ip",
+      "publisher_name": "Council for Innovation Promotion",
+      "task_id": "ss-o7zz",
+      "source_id": "c4ip:federal",
+      "discovery_status_at_expansion": "profiled"
+    },
+    {
+      "publisher_id": "childrens_defense",
+      "publisher_name": "Children's Defense Fund",
+      "task_id": "ss-lbl4",
+      "source_id": "childrens_defense:federal",
+      "discovery_status_at_expansion": "profiled"
+    },
+    {
+      "publisher_id": "club_for_growth",
+      "publisher_name": "Club for Growth Foundation",
+      "task_id": "ss-g095",
+      "source_id": "club_for_growth:federal",
+      "discovery_status_at_expansion": "profiled"
+    },
+    {
+      "publisher_id": "cpac",
+      "publisher_name": "CPAC Foundation",
+      "task_id": "ss-dycq",
+      "source_id": "cpac:federal",
+      "discovery_status_at_expansion": "profiled"
+    },
+    {
+      "publisher_id": "dav",
+      "publisher_name": "Disabled American Veterans",
+      "task_id": "ss-2nn4",
+      "source_id": "dav:federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "defenders_action",
+      "publisher_name": "Defenders of Wildlife Action Fund",
+      "task_id": "ss-8b7o",
+      "source_id": "defenders_action:federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "drug_policy_action",
+      "publisher_name": "Drug Policy Action",
+      "task_id": "ss-1eyy",
+      "source_id": "drug_policy_action:federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "drum_major",
+      "publisher_name": "Drum Major Institute for Public Policy",
+      "task_id": "ss-1vy4",
+      "source_id": "drum_major:federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "end_citizens_united",
+      "publisher_name": "End Citizens United",
+      "task_id": "ss-spx2",
+      "source_id": "end_citizens_united:federal",
+      "discovery_status_at_expansion": "profiled"
+    },
+    {
+      "publisher_id": "environment_america",
+      "publisher_name": "Environment America",
+      "task_id": "ss-j0hf",
+      "source_id": "environment_america:federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "few",
+      "publisher_name": "Federally Employed Women",
+      "task_id": "ss-d6x3",
+      "source_id": "few:federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "ffrf_action",
+      "publisher_name": "FFRF Action Fund",
+      "task_id": "ss-z4wf",
+      "source_id": "ffrf_action:federal",
+      "discovery_status_at_expansion": "profiled"
+    },
+    {
+      "publisher_id": "first_focus",
+      "publisher_name": "First Focus Campaign for Children",
+      "task_id": "ss-wjwd",
+      "source_id": "first_focus:federal",
+      "discovery_status_at_expansion": "blocked"
+    },
+    {
+      "publisher_id": "flyersrights",
+      "publisher_name": "FlyersRights.org",
+      "task_id": "ss-ir9q",
+      "source_id": "flyersrights:federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "food_policy_action",
+      "publisher_name": "Food Policy Action",
+      "task_id": "ss-ir67",
+      "source_id": "food_policy_action:federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "foreign_policy_america",
+      "publisher_name": "Foreign Policy for America",
+      "task_id": "ss-migi",
+      "source_id": "foreign_policy_america:federal",
+      "discovery_status_at_expansion": "profiled"
+    },
+    {
+      "publisher_id": "frc_action",
+      "publisher_name": "FRC Action",
+      "task_id": "ss-p1n0",
+      "source_id": "frc_action:federal",
+      "discovery_status_at_expansion": "profiled"
+    },
+    {
+      "publisher_id": "freedomworks",
+      "publisher_name": "FreedomWorks",
+      "task_id": "ss-nyt2",
+      "source_id": "freedomworks:federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "global_solutions",
+      "publisher_name": "Citizens for Global Solutions",
+      "task_id": "ss-sbsd",
+      "source_id": "global_solutions:federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "goa",
+      "publisher_name": "Gun Owners of America",
+      "task_id": "ss-iaw7",
+      "source_id": "goa:federal",
+      "discovery_status_at_expansion": "verified"
+    },
+    {
+      "publisher_id": "heritage_action",
+      "publisher_name": "Heritage Action for America",
+      "task_id": "ss-ngac",
+      "source_id": "heritage_action:federal",
+      "discovery_status_at_expansion": "profiled"
+    },
+    {
+      "publisher_id": "hrc",
+      "publisher_name": "Human Rights Campaign",
+      "task_id": "ss-s50y",
+      "source_id": "hrc:federal",
+      "discovery_status_at_expansion": "profiled"
+    },
+    {
+      "publisher_id": "humane_world_action",
+      "publisher_name": "Humane World Action Fund",
+      "task_id": "ss-p337",
+      "source_id": "humane_world_action:federal",
+      "discovery_status_at_expansion": "profiled"
+    },
+    {
+      "publisher_id": "iava",
+      "publisher_name": "Iraq and Afghanistan Veterans of America",
+      "task_id": "ss-l2kq",
+      "source_id": "iava:federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "ila",
+      "publisher_name": "Institute for Legislative Analysis",
+      "task_id": "ss-l797",
+      "source_id": "ila:federal",
+      "discovery_status_at_expansion": "profiled"
+    },
+    {
+      "publisher_id": "lcv",
+      "publisher_name": "League of Conservation Voters",
+      "task_id": "ss-dylz",
+      "source_id": "lcv:federal",
+      "discovery_status_at_expansion": "profiled"
+    },
+    {
+      "publisher_id": "leadership_conference",
+      "publisher_name": "Leadership Conference on Civil and Human Rights",
+      "task_id": "ss-0owh",
+      "source_id": "leadership_conference:federal",
+      "discovery_status_at_expansion": "profiled"
+    },
+    {
+      "publisher_id": "lugar_mccourt",
+      "publisher_name": "The Lugar Center and Georgetown McCourt School",
+      "task_id": "ss-pvj2",
+      "source_id": "lugar_mccourt:federal",
+      "discovery_status_at_expansion": "profiled"
+    },
+    {
+      "publisher_id": "naacp",
+      "publisher_name": "NAACP",
+      "task_id": "ss-urt0",
+      "source_id": "naacp:federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "national_farmers_union",
+      "publisher_name": "National Farmers Union",
+      "task_id": "ss-c5qy",
+      "source_id": "national_farmers_union:federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "national_parks_action",
+      "publisher_name": "National Parks Action Fund",
+      "task_id": "ss-z276",
+      "source_id": "national_parks_action:federal",
+      "discovery_status_at_expansion": "profiled"
+    },
+    {
+      "publisher_id": "nea",
+      "publisher_name": "National Education Association",
+      "task_id": "ss-0h08",
+      "source_id": "nea:federal",
+      "discovery_status_at_expansion": "profiled"
+    },
+    {
+      "publisher_id": "network",
+      "publisher_name": "NETWORK Lobby",
+      "task_id": "ss-6u83",
+      "source_id": "network:federal",
+      "discovery_status_at_expansion": "profiled"
+    },
+    {
+      "publisher_id": "new_american",
+      "publisher_name": "The New American",
+      "task_id": "ss-2gxg",
+      "source_id": "new_american:federal",
+      "discovery_status_at_expansion": "verified"
+    },
+    {
+      "publisher_id": "nfib",
+      "publisher_name": "National Federation of Independent Business",
+      "task_id": "ss-x5yz",
+      "source_id": "nfib:federal",
+      "discovery_status_at_expansion": "blocked"
+    },
+    {
+      "publisher_id": "niac_action",
+      "publisher_name": "NIAC Action",
+      "task_id": "ss-8ak8",
+      "source_id": "niac_action:federal",
+      "discovery_status_at_expansion": "profiled"
+    },
+    {
+      "publisher_id": "norml",
+      "publisher_name": "National Organization for the Reform of Marijuana Laws",
+      "task_id": "ss-06u8",
+      "source_id": "norml:federal",
+      "discovery_status_at_expansion": "profiled"
+    },
+    {
+      "publisher_id": "nra_pvf",
+      "publisher_name": "NRA Political Victory Fund",
+      "task_id": "ss-c07w",
+      "source_id": "nra_pvf:federal",
+      "discovery_status_at_expansion": "verified"
+    },
+    {
+      "publisher_id": "nrf",
+      "publisher_name": "National Retail Federation",
+      "task_id": "ss-20fa",
+      "source_id": "nrf:federal",
+      "discovery_status_at_expansion": "profiled"
+    },
+    {
+      "publisher_id": "ntu",
+      "publisher_name": "National Taxpayers Union",
+      "task_id": "ss-4oht",
+      "source_id": "ntu:federal",
+      "discovery_status_at_expansion": "profiled"
+    },
+    {
+      "publisher_id": "numbersusa",
+      "publisher_name": "NumbersUSA Action",
+      "task_id": "ss-0f2k",
+      "source_id": "numbersusa:federal",
+      "discovery_status_at_expansion": "verified"
+    },
+    {
+      "publisher_id": "peace_action",
+      "publisher_name": "Peace Action",
+      "task_id": "ss-fe5f",
+      "source_id": "peace_action:federal",
+      "discovery_status_at_expansion": "verified"
+    },
+    {
+      "publisher_id": "planned_parenthood",
+      "publisher_name": "Planned Parenthood Action Fund",
+      "task_id": "ss-iadh",
+      "source_id": "planned_parenthood:federal",
+      "discovery_status_at_expansion": "profiled"
+    },
+    {
+      "publisher_id": "reproductive_freedom",
+      "publisher_name": "NARAL Pro-Choice America",
+      "task_id": "ss-lbgh",
+      "source_id": "reproductive_freedom:federal",
+      "discovery_status_at_expansion": "profiled"
+    },
+    {
+      "publisher_id": "sace_action",
+      "publisher_name": "Southern Alliance for Clean Energy Action Fund",
+      "task_id": "ss-f4h7",
+      "source_id": "sace_action:federal",
+      "discovery_status_at_expansion": "profiled"
+    },
+    {
+      "publisher_id": "sba",
+      "publisher_name": "Susan B. Anthony Pro-Life America",
+      "task_id": "ss-1tcf",
+      "source_id": "sba:federal",
+      "discovery_status_at_expansion": "verified"
+    },
+    {
+      "publisher_id": "shriver",
+      "publisher_name": "Sargent Shriver National Center on Poverty Law",
+      "task_id": "ss-crhh",
+      "source_id": "shriver:federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "us_chamber",
+      "publisher_name": "U.S. Chamber of Commerce",
+      "task_id": "ss-f1u2",
+      "source_id": "us_chamber:federal",
+      "discovery_status_at_expansion": "profiled"
+    },
+    {
+      "publisher_id": "wilberforce",
+      "publisher_name": "21Wilberforce",
+      "task_id": "ss-f5j5",
+      "source_id": "wilberforce:federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "amalgamated_clothing_workers",
+      "publisher_name": "Amalgamated Clothing Workers of America",
+      "task_id": "ss-efbg",
+      "source_id": "amalgamated_clothing_workers:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "american_bakers",
+      "publisher_name": "American Bakers Association",
+      "task_id": "ss-s9o7",
+      "source_id": "american_bakers:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "american_cause",
+      "publisher_name": "American Cause, Inc.",
+      "task_id": "ss-apz3",
+      "source_id": "american_cause:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "farm_bureau",
+      "publisher_name": "American Farm Bureau Federation",
+      "task_id": "ss-rdez",
+      "source_id": "farm_bureau:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "afge",
+      "publisher_name": "American Federation of Government Employees",
+      "task_id": "ss-hp1g",
+      "source_id": "afge:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "aft",
+      "publisher_name": "American Federation of Teachers",
+      "task_id": "ss-4wgu",
+      "source_id": "aft:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "aia",
+      "publisher_name": "American Institute of Architects",
+      "task_id": "ss-7aoh",
+      "source_id": "aia:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "american_parents",
+      "publisher_name": "American Parents Committee, Inc.",
+      "task_id": "ss-hf7w",
+      "source_id": "american_parents:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "american_security_council",
+      "publisher_name": "American Security Council",
+      "task_id": "ss-uzdk",
+      "source_id": "american_security_council:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "americans_constitutional_action",
+      "publisher_name": "Americans for Constitutional Action",
+      "task_id": "ss-8oii",
+      "source_id": "americans_constitutional_action:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "agc",
+      "publisher_name": "Associated General Contractors of America",
+      "task_id": "ss-22nu",
+      "source_id": "agc:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "atlantic_richfield",
+      "publisher_name": "Atlantic Richfield Civic Action Program",
+      "task_id": "ss-2by5",
+      "source_id": "atlantic_richfield:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "bread_world",
+      "publisher_name": "Bread for the World",
+      "task_id": "ss-iktu",
+      "source_id": "bread_world:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "railway_clerks",
+      "publisher_name": "Brotherhood of Railway, Airline and Steamship Clerks, Freight Handlers, Express and Station Employes",
+      "task_id": "ss-8tdl",
+      "source_id": "railway_clerks:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "bipac",
+      "publisher_name": "Business-Industry Political Action Committee",
+      "task_id": "ss-vzyo",
+      "source_id": "bipac:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "ccrkba",
+      "publisher_name": "Citizens Committee for the Right to Keep and Bear Arms",
+      "task_id": "ss-bdfr",
+      "source_id": "ccrkba:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "coalition_foreign_military",
+      "publisher_name": "Coalition for a New Foreign and Military Policy",
+      "task_id": "ss-l6y0",
+      "source_id": "coalition_foreign_military:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "committee_education_funding",
+      "publisher_name": "Committee for Full Funding of Education Programs",
+      "task_id": "ss-xipa",
+      "source_id": "committee_education_funding:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "free_congress_survival",
+      "publisher_name": "Committee for the Survival of a Free Congress",
+      "task_id": "ss-jthe",
+      "source_id": "free_congress_survival:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "common_cause",
+      "publisher_name": "Common Cause",
+      "task_id": "ss-j1a7",
+      "source_id": "common_cause:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "communication_workers",
+      "publisher_name": "Communication Workers of America",
+      "task_id": "ss-nuez",
+      "source_id": "communication_workers:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "congressional_quarterly",
+      "publisher_name": "Congressional Quarterly, Inc.",
+      "task_id": "ss-8zgu",
+      "source_id": "congressional_quarterly:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "consumer_federation",
+      "publisher_name": "Consumer Federation of America",
+      "task_id": "ss-sra5",
+      "source_id": "consumer_federation:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "environmental_action",
+      "publisher_name": "Environmental Action",
+      "task_id": "ss-qd9d",
+      "source_id": "environmental_action:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "food_beverage_trades",
+      "publisher_name": "Food and Beverage Trades Department AFL-CIO",
+      "task_id": "ss-per7",
+      "source_id": "food_beverage_trades:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "fcnl",
+      "publisher_name": "Friends Committee on National Legislation",
+      "task_id": "ss-ldbc",
+      "source_id": "fcnl:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "human_events",
+      "publisher_name": "Human Events",
+      "task_id": "ss-mvjk",
+      "source_id": "human_events:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "ipaa",
+      "publisher_name": "Independent Petroleum Association of America",
+      "task_id": "ss-e2ra",
+      "source_id": "ipaa:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "machinists",
+      "publisher_name": "International Association of Machinists & Aerospace Workers",
+      "task_id": "ss-t12h",
+      "source_id": "machinists:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "teamsters",
+      "publisher_name": "International Brotherhood of Teamsters",
+      "task_id": "ss-gj1b",
+      "source_id": "teamsters:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "interreligious_food",
+      "publisher_name": "Interreligious Taskforce on US Food Policy",
+      "task_id": "ss-sqp9",
+      "source_id": "interreligious_food:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "john_birch_historical",
+      "publisher_name": "John Birch Society",
+      "task_id": "ss-t57j",
+      "source_id": "john_birch_historical:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "joint_center",
+      "publisher_name": "Joint Center for Political Studies",
+      "task_id": "ss-fy4q",
+      "source_id": "joint_center:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "league_women_voters",
+      "publisher_name": "League of Women Voters of the United States",
+      "task_id": "ss-eizy",
+      "source_id": "league_women_voters:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "liberty_lobby",
+      "publisher_name": "Liberty Lobby",
+      "task_id": "ss-y529",
+      "source_id": "liberty_lobby:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "march_for_life",
+      "publisher_name": "March for Life, Inc.",
+      "task_id": "ss-9l9v",
+      "source_id": "march_for_life:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "national_alliance_seniors",
+      "publisher_name": "National Alliance of Senior Citizens",
+      "task_id": "ss-r349",
+      "source_id": "national_alliance_seniors:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "national_associated_businessmen",
+      "publisher_name": "National Associated Businessmen, Inc.",
+      "task_id": "ss-vte5",
+      "source_id": "national_associated_businessmen:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "life_underwriters",
+      "publisher_name": "National Association of Life Underwriters",
+      "task_id": "ss-wcy0",
+      "source_id": "life_underwriters:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "nam",
+      "publisher_name": "National Association of Manufacturers",
+      "task_id": "ss-dk6h",
+      "source_id": "nam:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "nasw",
+      "publisher_name": "National Association of Social Workers",
+      "task_id": "ss-h3fc",
+      "source_id": "nasw:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "national_audiovisual",
+      "publisher_name": "National Audio-Visual Association, Inc.",
+      "task_id": "ss-r87q",
+      "source_id": "national_audiovisual:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "national_council_seniors",
+      "publisher_name": "National Council of Senior Citizens, Inc.",
+      "task_id": "ss-ddnv",
+      "source_id": "national_council_seniors:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "national_farmers_organization",
+      "publisher_name": "National Farmers Organization",
+      "task_id": "ss-vnzg",
+      "source_id": "national_farmers_organization:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "now",
+      "publisher_name": "National Organization for Women",
+      "task_id": "ss-vb7c",
+      "source_id": "now:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "national_womens_caucus",
+      "publisher_name": "National Women's Political Caucus",
+      "task_id": "ss-t8fq",
+      "source_id": "national_womens_caucus:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "write_congressman",
+      "publisher_name": "National Write Your Congressman Club, Inc.",
+      "task_id": "ss-qdfv",
+      "source_id": "write_congressman:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "public_citizen",
+      "publisher_name": "Public Citizen/Congress Watch",
+      "task_id": "ss-gh64",
+      "source_id": "public_citizen:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "retail_clerks",
+      "publisher_name": "Retail Clerks International Union",
+      "task_id": "ss-2dw2",
+      "source_id": "retail_clerks:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "ripon_society",
+      "publisher_name": "Ripon Society",
+      "task_id": "ss-dl7x",
+      "source_id": "ripon_society:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "sane_historical",
+      "publisher_name": "SANE",
+      "task_id": "ss-ep5r",
+      "source_id": "sane_historical:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "taxation_representation",
+      "publisher_name": "Taxation with Representation",
+      "task_id": "ss-wpaq",
+      "source_id": "taxation_representation:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "us_student_association",
+      "publisher_name": "US National Student Association",
+      "task_id": "ss-auyo",
+      "source_id": "us_student_association:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "uaw",
+      "publisher_name": "United Auto Workers",
+      "task_id": "ss-jros",
+      "source_id": "uaw:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "carpenters",
+      "publisher_name": "United Brotherhood of Carpenters and Joiners of America",
+      "task_id": "ss-nn2s",
+      "source_id": "carpenters:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "united_church_christ",
+      "publisher_name": "United Church of Christ",
+      "task_id": "ss-8dur",
+      "source_id": "united_church_christ:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "united_mine_workers",
+      "publisher_name": "United Mine Workers of America",
+      "task_id": "ss-7u7l",
+      "source_id": "united_mine_workers:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "united_transportation",
+      "publisher_name": "United Transportation Union",
+      "task_id": "ss-zhrk",
+      "source_id": "united_transportation:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "woman_activist",
+      "publisher_name": "The Woman Activist",
+      "task_id": "ss-inkm",
+      "source_id": "woman_activist:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "womens_lobby",
+      "publisher_name": "Women's Lobby",
+      "task_id": "ss-i55l",
+      "source_id": "womens_lobby:historical_federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "american_energy_alliance",
+      "publisher_name": "American Energy Alliance",
+      "task_id": "ss-yajm",
+      "source_id": "american_energy_alliance:federal",
+      "discovery_status_at_expansion": "profiled"
+    },
+    {
+      "publisher_id": "ijm",
+      "publisher_name": "International Justice Mission",
+      "task_id": "ss-1jkr",
+      "source_id": "ijm:federal",
+      "discovery_status_at_expansion": "discovered"
+    },
+    {
+      "publisher_id": "radical_middle",
+      "publisher_name": "Radical Middle",
+      "task_id": "ss-7ukv",
+      "source_id": "radical_middle:federal",
+      "discovery_status_at_expansion": "verified"
+    }
+  ]
+}

@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "inputs": [
+    {
+      "input": "GovTrack advocacy-organization-scorecards",
+      "url": "https://github.com/govtrack/advocacy-organization-scorecards",
+      "capture_id": "govtrack-directory",
+      "outcome": "Read current directory and metadata headers; ratings not imported."
+    },
+    {
+      "input": "LegislativeScorecard.us",
+      "url": "https://legislativescorecard.us/",
+      "capture_id": "legislativescorecard-cases",
+      "outcome": "Platform and case-study leads only; no platform ratings attributed to the platform."
+    },
+    {
+      "input": "Vote Smart",
+      "url": "https://votesmart.org/interest-groups",
+      "outcome": "Not enumerated in this pass; needs accessible directory/API and federal-only filtering."
+    },
+    {
+      "input": "Member-office historical directory",
+      "url": "https://cohen.house.gov/about/vote-ratings",
+      "capture_id": "cohen-directory",
+      "outcome": "Historical leads only; source explicitly warns that some groups no longer issue scorecards."
+    },
+    {
+      "input": "Academic/historical discovery",
+      "url": "https://digital.library.unt.edu/ark:/67531/metadc980612/",
+      "outcome": "Located 1978 CRS directory; full directory enumeration deferred."
+    },
+    {
+      "input": "Web search and original-publisher crosslinks",
+      "outcome": "Targeted searches for committee actions, signed contributions, grades, bonuses, chamber differences and non-vote actions; primary captures retained where available."
+    },
+    {
+      "input": "Vote Smart National directory",
+      "capture_ids": [
+        "census-votesmart-old",
+        "census-votesmart-national",
+        "census-votesmart-root",
+        "census-votesmart-national95"
+      ],
+      "outcome": "Root directory delivered all category tables. Old domain404, NA/0 route delivered no group rows, NA/95 route403. Extracted unique IDs from root table rows; no ratings imported. Category and endorsement-only entries retained as discovery metadata."
+    },
+    {
+      "input": "CRS historical directory",
+      "capture_ids": [
+        "census-crs-1978",
+        "census-crs-1978-manifest",
+        "census-crs-1978-pdf"
+      ],
+      "outcome": "Enumerated all full entries on printed CRS1-21; appendix repetitions excluded from the full-entry enumeration."
+    },
+    {
+      "input": "GovTrack and LegislativeScorecard.us",
+      "capture_ids": [
+        "govtrack-directory",
+        "legislativescorecard-cases"
+      ],
+      "outcome": "Existing baseline discovery inputs retained. New committee tracker lead for National Parks from platform requires original publisher verification."
+    }
+  ],
+  "excluded_or_merged": [
+    {
+      "name": "Utility Workers Union of America",
+      "reason": "Member-office directory explicitly refers readers to AFL-CIO ratings; not counted as an independent series."
+    },
+    {
+      "name": "Bakery, Confectionery, Tobacco Workers and Grain Millers",
+      "reason": "Directory uses AFL-CIO ratings; not counted separately."
+    },
+    {
+      "name": "Humane Society Legislative Fund",
+      "reason": "Publisher confirms rename to Humane World Action Fund; same census identity."
+    },
+    {
+      "name": "John Birch Society distributor",
+      "reason": "Freedom Index publisher retained as The New American; distribution alone is not a distinct scorecard."
+    }
+  ],
+  "remaining_searches": [
+    "Verify original federal-incumbent rating scope for unmatched Vote Smart rating leads; do not treat endorsements as ratings.",
+    "Locate original archived editions for historical CRS leads and reconcile organizational successors with evidence.",
+    "Complete blocked or client-rendered publisher acquisitions using supported public routes.",
+    "Qualify old scanned grids rather than applying current methods retroactively.",
+    "No explicit negative item weight verified; retain signed contributions distinctly."
+  ]
+}

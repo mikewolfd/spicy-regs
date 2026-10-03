@@ -199,7 +199,9 @@ def build_held_citations(
             encoded = text.encode()
             text_sha = "sha256:" + hashlib.sha256(encoded).hexdigest()
             if evidence is not None:
-                evidence.store.put_blob(text_sha, len(encoded), [encoded])
+                evidence.retain_bytes(encoded, stage="held-citation-field",
+                                      document_kind=selection.kind, document_key=selection.key,
+                                      source_table=spec.table, source_field=spec.field)
             receipt["text_sha256"] = text_sha
             identity = (selection.kind, selection.key, text_sha)
             state = {**receipt, "text_sha256": text_sha, "scope": "complete selected field only"}

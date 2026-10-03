@@ -1,0 +1,295 @@
+{
+  "format_version": 1,
+  "reviewed_at": "2026-10-03T17:46:19.472358+00:00",
+  "skill": "semi-formal-architecture-review",
+  "review_scope": "Pre-freeze source model and coordinator schema decisions; independent static architecture review with bounded source readback.",
+  "verdict": "RECONSIDER",
+  "confidence": "high for structural findings and sampled evidence; no whole-source qualification claim",
+  "inputs": [
+    {
+      "path": "/Users/mikewolfd/Work/spicy-stack/spicy-regs/docs/research/scorecards/proposed_schema.json",
+      "sha256": "6c31ff712b397f0c9f27089c76985bc5fec792ebd3de69c40ef0ea254e07a615"
+    },
+    {
+      "path": "/Users/mikewolfd/Work/spicy-stack/spicy-regs/docs/research/scorecards/work/gate/schema_decisions.json",
+      "sha256": "eb4605c691d4272ea9797b0206b627c10f74c91ecdb31be3b1660d4a02953b0d"
+    },
+    {
+      "path": "/Users/mikewolfd/Work/spicy-stack/spicy-regs/docs/research/scorecards/shape_profiles.json",
+      "sha256": "82101a231fdc2bd26727914932f0dbe87e5d0121e5c3fafa779938606b807f81"
+    },
+    {
+      "path": "/Users/mikewolfd/Work/spicy-stack/spicy-regs/docs/research/scorecards/schema_examples.json",
+      "sha256": "7c4f29035d00660db862099f7bec9121abf955352eb3440510276d8740833b39"
+    },
+    {
+      "path": "/Users/mikewolfd/Work/spicy-stack/spicy-regs/docs/scorecard-integration.md",
+      "sha256": "79355fcfa4b133eb1547adbf8fc0b576e2108146e9fb96f9a144ef64e72c0205"
+    },
+    {
+      "path": "/Users/mikewolfd/Work/spicy-stack/spicy-docs/src/spicy_docs/schemas/tables.py",
+      "sha256": "fe88fd68e8cfaf23222282000d0f8b1ad5e2e71cc92a4b8c9ce714f810d96352"
+    },
+    {
+      "path": "/Users/mikewolfd/Work/spicy-stack/spicy-docs/src/spicy_docs/schemas/__init__.py",
+      "sha256": "e87c1421ce70dbfdb8783d9b9f2736ceac8a418710417731ff583a1b515ecd48"
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E-NRF",
+      "capture": "census-nrf-119-senate",
+      "source_url": "https://nrf.com/advocacy/action-center/vv-congressional-scorecard/2391-1848/senate",
+      "files": [
+        {
+          "path": "/tmp/scorecard-census-20261003/census-nrf-119-senate.body",
+          "sha256": "9cdc56dc01e1fe924636a028a6d2355c2f8c42763763b8e053d305c17f4b34f4"
+        }
+      ],
+      "locators": [
+        "table thead: Name and item columns; no aggregate column",
+        "tbody first row, member /official/MD/68368, item #M-2391-12549, img@alt",
+        "item detail #M-2391-12549: publisher position",
+        "table legend: blank=no data"
+      ],
+      "finding_ids": [
+        "F1"
+      ]
+    },
+    {
+      "id": "E-AFL",
+      "capture": "afl-house-2025-xlsx and afl-senate-2025-xlsx",
+      "source_url": "https://aflcio.org/scorecard/export/2025/house?_format=xlsx",
+      "files": [
+        {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-2026-10-03-samples/afl-house-2025-xlsx.body",
+          "sha256": "ab9ceb25f1ae87d09e6c7c15608aece1b3c2b5318df9da8c9754803973cb8980"
+        },
+        {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-2026-10-03-samples/afl-senate-2025-xlsx.body",
+          "sha256": "2566095ec9efba77fb701866e9a1496deec94d60361c11c1dabdb9ac13b29327"
+        },
+        {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-2026-10-03-samples/afl-2025-votes.body",
+          "sha256": "2523bbc7c204757a448ce13e7c726a3d200d467bc145391a6e1061791d135f81"
+        }
+      ],
+      "locators": [
+        "House Worksheet M1 and P1: repeated H.R. 4 title",
+        "House Worksheet G1: letter",
+        "Senate Worksheet L1: nomination PN346-2",
+        "House Worksheet G2/I4; Senate Worksheet F19: circle/check/blank"
+      ],
+      "finding_ids": [
+        "F3"
+      ]
+    },
+    {
+      "id": "E-AFL-LETTER",
+      "capture": "afl2025-house-item-12",
+      "source_url": "https://aflcio.org/scorecard/votes/2025/house/letter-president-trump-demanding-reinstatement-nlrb-member-gwynn-wilcox",
+      "files": [
+        {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-2026-10-03-samples/afl2025-house-item-12.body",
+          "sha256": "1464a0a642e75772b70107efed8266e045f27d7121282841d6a3fd8ff7c85acb"
+        }
+      ],
+      "locators": [
+        "explanatory paragraph: vote-system no means signed letter; disregard passage label"
+      ],
+      "finding_ids": [
+        "F3"
+      ]
+    },
+    {
+      "id": "E-LCV",
+      "capture": "lcv-2025-senate-csv and lcv-2025-senate-html",
+      "source_url": "https://www.lcv.org/congressional-scorecard/members-of-congress/?export=true&sort=state-a-z&active_tab=&chamber=senate&street_address=&zip=&session_year=2025&state=&party=All&last_name=&include_former=1&export-type=moc-listing",
+      "files": [
+        {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-2026-10-03-samples/lcv-2025-senate-csv.body",
+          "sha256": "994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b"
+        },
+        {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-2026-10-03-samples/lcv-2025-senate-html.body",
+          "sha256": "a3634a93e75ece3dbd5a0bb16f7e212e11f5bd1ffdac82e23cf96a526a096d4c"
+        }
+      ],
+      "locators": [
+        "CSV row 4 Katie Britt Year Score 0 and Lifetime Score 2",
+        "HTML first .congress-item Katie Britt: 0% and 2%"
+      ],
+      "finding_ids": [
+        "F4"
+      ]
+    },
+    {
+      "id": "E-NEA",
+      "capture": "nea-119-html",
+      "source_url": "https://www.nea.org/advocating-for-change/action-center/nea-in-congress/report-card",
+      "files": [
+        {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-2026-10-03-samples/nea-119-html.body",
+          "sha256": "39e1922134c95d066223ca9ce77547844792b8b2299641bee83bb61dbfae4ad2"
+        }
+      ],
+      "locators": [
+        "Senate table row Pete Ricketts: literal state NES, grade F"
+      ],
+      "finding_ids": []
+    },
+    {
+      "id": "E-PP",
+      "capture": "census-plannedparenthood-index",
+      "files": [
+        {
+          "path": "/tmp/scorecard-census-20261003/census-plannedparenthood-index.body",
+          "sha256": "8c288989136129a303d2aba4c7cdc4aca773f4ec0658527271ece9ff4c1f0f51"
+        }
+      ],
+      "locators": [
+        "opening methodology paragraph: current and preceding six sessions; individual Congress score vs current cumulative profile score",
+        "loading-error message means embedded member results not acquired"
+      ],
+      "finding_ids": [
+        "F2",
+        "F5"
+      ]
+    },
+    {
+      "id": "E-NIAC",
+      "capture": "niac-117",
+      "files": [
+        {
+          "path": "/var/folders/g8/10vdwk2n07z85vqn_vlv2lfc0000gn/T/scorecard-research-rpe1enyi/niac-117.txt",
+          "sha256": "f7157c30f9c55ec96360e4982d0534a570398214da1c78fb263567a08bdc51ed"
+        }
+      ],
+      "locators": [
+        "117th edition / House Peace and Diplomacy / JCPOA 2015 Vote",
+        "House Equitable Immigration / Diversity Visa Relief / committee-only action"
+      ],
+      "finding_ids": [
+        "F3",
+        "F5"
+      ]
+    },
+    {
+      "id": "E-ILA",
+      "capture": "ila-index",
+      "files": [
+        {
+          "path": "/var/folders/g8/10vdwk2n07z85vqn_vlv2lfc0000gn/T/scorecard-research-rpe1enyi/ila-index.txt",
+          "sha256": "e5d83a7f3aba7e2bdd612c5471ed1879f1742239313375231907f9fe9c3000e7"
+        }
+      ],
+      "locators": [
+        "The First District-Based Grading System: constituency-relative comparison using source methodology"
+      ],
+      "finding_ids": []
+    },
+    {
+      "id": "E-PARKS",
+      "capture": "census-nationalparks-index",
+      "files": [
+        {
+          "path": "/tmp/scorecard-census-20261003/census-nationalparks-index.body",
+          "sha256": "2e3b84219c6a1dc2d6f5ee9324e7534435cb2394733389cff091d0b15ec528de"
+        }
+      ],
+      "locators": [
+        "opening paragraphs: 2024 scorecard House-only because no scorable Senate votes"
+      ],
+      "finding_ids": []
+    }
+  ],
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "BLOCKER",
+      "category": "intent-vs-shape",
+      "location": "proposed_schema.json:12-17",
+      "decision": "RESHAPE",
+      "summary": "Metric-free member-item observations and item targets must not require a fabricated metric.",
+      "closure_tests": [
+        "NRF bundle with no metrics/ratings retains member results and item targets.",
+        "Nullable metric context follows conditional reference validation.",
+        "Image alt literals and source blank/no-data meaning preserved."
+      ]
+    },
+    {
+      "id": "F2",
+      "severity": "BLOCKER",
+      "category": "named-seam",
+      "location": "proposed_schema.json:5,8-18",
+      "decision": "RESHAPE",
+      "summary": "Make one current accepted snapshot per edition explicit, expand physical source fields and validate bundle equality.",
+      "closure_tests": [
+        "At most and exactly one selected snapshot for each edition.",
+        "Every edition fact snapshot equals selected edition snapshot and referenced-row snapshot.",
+        "A valid item/metric key from wrong snapshot refuses.",
+        "Fact capture IDs resolve in declared snapshot capture set.",
+        "Publisher rows exempt from edition snapshots."
+      ]
+    },
+    {
+      "id": "F3",
+      "severity": "CONCERN",
+      "category": "unstated-assumption",
+      "location": "work/gate/schema_decisions.json:identity and periods_and_references",
+      "decision": "RESHAPE",
+      "summary": "Version distinct action and reference-occurrence identities; no title/citation-only collapse or inherited edition Congress.",
+      "closure_tests": [
+        "AFL M1/P1 repeated bill title produces separate items with proven mapping or explicit unsupported identity status.",
+        "Letters/nominations need no bill/roll identity.",
+        "Publisher-specific no-means-signed rule does not become official no vote.",
+        "Repeated references retain occurrences; links include snapshot and occurrence identity.",
+        "NIAC 2015 action retains its own period inside 117th edition."
+      ]
+    },
+    {
+      "id": "F4",
+      "severity": "CONCERN",
+      "category": "unstated-assumption",
+      "location": "proposed_schema.json:16",
+      "decision": "KEEP_WITH_SELECTION_RULE",
+      "summary": "Choose one declared rating rendition per field group before uniqueness checks.",
+      "closure_tests": [
+        "LCV CSV raw2 remains2; HTML2% is corroboration, not silently rewritten source value.",
+        "Snapshot names capture roles and selection rule.",
+        "Conflicting selected values get explicit refusal or conflict disposition.",
+        "Observed response body establishes scope, not URL query alone."
+      ]
+    },
+    {
+      "id": "F5",
+      "severity": "CONCERN",
+      "category": "scope",
+      "location": "work/gate/schema_decisions.json:periods_and_references",
+      "decision": "RESHAPE",
+      "summary": "Specify relative-period and rolling-edition identity semantics or explicitly exclude that acquisition shape.",
+      "closure_tests": [
+        "Literal current/prior-six-session rule retained without invented date set.",
+        "Congress-specific and cumulative values are distinct metrics.",
+        "Refreshing live edition changes snapshot, not invented publisher edition identity."
+      ]
+    }
+  ],
+  "coordinator_responses": {
+    "F1": "Direction accepted; implementation and frozen schema readback pending.",
+    "F2": "One current accepted snapshot per edition chosen; physical fields and bundle checks pending.",
+    "F4": "CSV rating value selected with HTML membership corroboration; capture-role implementation pending."
+  },
+  "operational_context": {
+    "receipt": {
+      "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-execution-2026-10-03/operational-prerequisites.json",
+      "sha256": "c9c2b877e7edaa08d547fc4e2f307f8305924ea59c671d1bb29f4ccb59fa37e2"
+    },
+    "meaning": "Existing congressional table pins available; configured dev hostname matched custom-domain index at observation. Does not qualify schema or authorize release."
+  },
+  "limitations": [
+    "Census and sample handoffs still in progress.",
+    "No production parser, complete-scope qualification or source-model tests were executed in this review.",
+    "Source files retained by research workers outside repository; review stores identifiers and hashes, not source bodies."
+  ]
+}

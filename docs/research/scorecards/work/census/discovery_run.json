@@ -1,0 +1,40 @@
+{
+  "observed_at": "2026-10-03T17:48:51.414495+00:00",
+  "inputs": [
+    {
+      "input": "Vote Smart National directory",
+      "capture_ids": [
+        "census-votesmart-old",
+        "census-votesmart-national",
+        "census-votesmart-root",
+        "census-votesmart-national95"
+      ],
+      "outcome": "Root directory delivered all category tables. Old domain404, NA/0 route delivered no group rows, NA/95 route403. Extracted unique IDs from root table rows; no ratings imported. Category and endorsement-only entries retained as discovery metadata."
+    },
+    {
+      "input": "CRS historical directory",
+      "capture_ids": [
+        "census-crs-1978",
+        "census-crs-1978-manifest",
+        "census-crs-1978-pdf"
+      ],
+      "outcome": "Enumerated all full entries on printed CRS1-21; appendix repetitions excluded from the full-entry enumeration."
+    },
+    {
+      "input": "GovTrack and LegislativeScorecard.us",
+      "capture_ids": [
+        "govtrack-directory",
+        "legislativescorecard-cases"
+      ],
+      "outcome": "Existing baseline discovery inputs retained. New committee tracker lead for National Parks from platform requires original publisher verification."
+    }
+  ],
+  "remaining_searches": [
+    "Verify original federal-incumbent rating scope for unmatched Vote Smart rating leads; do not treat endorsements as ratings.",
+    "Locate original archived editions for historical CRS leads and reconcile organizational successors with evidence.",
+    "Complete blocked or client-rendered publisher acquisitions using supported public routes.",
+    "Qualify old scanned grids rather than applying current methods retroactively.",
+    "No explicit negative item weight verified; retain signed contributions distinctly."
+  ],
+  "discovery_not_rating_authority": true
+}

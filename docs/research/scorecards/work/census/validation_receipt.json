@@ -1,0 +1,21 @@
+{
+  "validated_at": "2026-10-03T18:01:02.442750+00:00",
+  "status": "passed",
+  "scope": "Census handoff packet only; not production parser qualification",
+  "checks": [
+    "All JSON readable",
+    "Source IDs unique across baseline and additions",
+    "All profiles reference catalog sources and known captures",
+    "Every profile has exactly one schema example case",
+    "All literal samples have exact value and capture bindings",
+    "Example fields exist in proposal-0.2",
+    "New captures retain no public bodies and use hash_only",
+    "Available temporary response bodies match recorded length and SHA-256"
+  ],
+  "temporary_body_hashes_rechecked": 50,
+  "profiles_checked": 21,
+  "unsupported_without_cell_fixture": [
+    "ada:1947-format"
+  ],
+  "complete_source_snapshots_asserted": 0
+}

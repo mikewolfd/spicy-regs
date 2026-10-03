@@ -1,0 +1,82 @@
+{
+  "format_version": 1,
+  "task_id": "ss-vbf9",
+  "observed_at": "2026-10-03T17:37:06.627732+00:00",
+  "work_performed": "Read-only code inspection and design; no runtime tests, live state checks, publishing, deployment or scheduling.",
+  "repositories": {
+    "spicy-regs": {
+      "head": "8412b0cac0fc6285ef1315ee868013e4ab429a2c",
+      "files": [
+        {
+          "path": "src/spicy_regs/source_evidence.py",
+          "sha256": "3f3eda7481068fb28ae0d89554f15f3366dc8da151695ed6362dc6c6a4dcfb51"
+        },
+        {
+          "path": "src/spicy_regs/generations.py",
+          "sha256": "fb98483541d31ab54877e2e1ba12ffaca9b514bcb064021393969fd2a11abdd3"
+        },
+        {
+          "path": "src/spicy_regs/generation_audit.py",
+          "sha256": "897761429657b5020800595192c9bf7d8c241267680efd595743e7cfb1dd92bc"
+        },
+        {
+          "path": "src/spicy_regs/pipelines/rollups/base.py",
+          "sha256": "ab653f5c8fb60cc056e7b1943cb4fe25a8e5535c0d604259d1067b4d93a17219"
+        },
+        {
+          "path": "src/spicy_regs/sources/publication.py",
+          "sha256": "8fc0bc28df28517007f30911f0204673a10a85f53787c005d09108d04686a85a"
+        },
+        {
+          "path": "src/spicy_regs/sources/retained.py",
+          "sha256": "45218e44347dc669803f001abe5c728b52416c5bbd4f446a7b3f0f32200e5c69"
+        },
+        {
+          "path": "src/spicy_regs/transforms/table_merge.py",
+          "sha256": "c039835a4d802e36c2cea0b5037b109a1d90666ec7bcc46f69b5460e677f57c6"
+        },
+        {
+          "path": "src/spicy_regs/data_dictionary.py",
+          "sha256": "ea82cf63f2aaf8a0af16248942869087f1ff56160cb7e0ccec650b50ec9774a5"
+        },
+        {
+          "path": ".github/workflows/_rollup.yml",
+          "sha256": "97c22411962660a3e8adcd703cc96a099d22eb4a9a2b86836b262b840c69493b"
+        },
+        {
+          "path": ".github/workflows/refresh-congress-vote-terms.yml",
+          "sha256": "67de46a1207394dfeddc41122ad7d02994e6533f59a8361390d16d98d2f8f1f1"
+        },
+        {
+          "path": "vendor/README.md",
+          "sha256": "dfea7664150eccac767a6bcebaed1d8f7b2e53fdc007302f42489ab13f405ec9"
+        },
+        {
+          "path": "pyproject.toml",
+          "sha256": "9c1c747cd8412c58097f02082d33731f07c9f4ebc70720d939d07562ebb9aa3c"
+        },
+        {
+          "path": "deploy/fork-setup.md",
+          "sha256": "491d8cc39efe7848c7e35cf83cbf3d35d487fab67b7473559b755d1fde3799bb"
+        }
+      ]
+    },
+    "spicy-docs": {
+      "head": "34a8d595e3d6cf19e67b8ca0b749b3fcc6043ffa",
+      "files": [
+        {
+          "path": "AGENTS.md",
+          "sha256": "283b159e59010b5d35c7ef708594c7dff9278969597971f109f9bcc8ff6aaf86"
+        },
+        {
+          "path": "docs/source-workflows.md",
+          "sha256": "c45d432cf426a218c1ad74f5d2d0cb7176c9bbc1b6a9003f43d4b266a93f83e9"
+        },
+        {
+          "path": "src/spicy_docs/transport/captured.py",
+          "sha256": "a5b2e4f3c182ed0a26a76e6338ce154fd6012c62d6189e80d5b1da069a291212"
+        }
+      ]
+    }
+  }
+}

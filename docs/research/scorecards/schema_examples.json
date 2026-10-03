@@ -1,0 +1,2446 @@
+{
+  "schema_version": "scorecards-v1",
+  "scope": "Hand-checked partial logical row examples. This is neither a full schema fixture nor a production snapshot. Fields omitted here remain unspecified; no scorecard_snapshots row is asserted.",
+  "key_policy": "example: keys and short metric keys are research-local author assignments, not publisher IDs or qualified stable-key rules. Explicit publisher IDs retain their source labels.",
+  "cases": [
+    {
+      "profile_id": "lcv:2025",
+      "kind": "bounded_row_fragments",
+      "production_ready": false,
+      "rows": {
+        "scorecard_publishers": [
+          {
+            "publisher_id": "lcv"
+          }
+        ],
+        "scorecards": [
+          {
+            "scorecard_id": "example:lcv:2025",
+            "publisher_id": "lcv",
+            "capture_id": "lcv-method",
+            "source_url": "https://www.lcv.org/congressional-scorecard/about-the-scorecard/",
+            "source_path": "FAQ / How does LCV calculate scores?"
+          }
+        ],
+        "scorecard_methodologies": [
+          {
+            "scorecard_id": "example:lcv:2025",
+            "methodology_id": "example-method:rubric",
+            "methodology_text": "E",
+            "disclosure_status": "explicit",
+            "capture_id": "lcv-method",
+            "source_url": "https://www.lcv.org/congressional-scorecard/about-the-scorecard/",
+            "source_path": "FAQ / How does LCV calculate scores?"
+          }
+        ]
+      },
+      "sample_bindings": [
+        {
+          "sample_index": 0,
+          "table": "scorecard_methodologies",
+          "row_index": 0,
+          "field": "methodology_text"
+        }
+      ],
+      "limits": [
+        "This fragment preserves one source rule token; its interpretation is recorded in the profile literal example. It does not invent a member, scoring item, or numerical member contribution."
+      ]
+    },
+    {
+      "profile_id": "lcv:1977_1978",
+      "kind": "unsupported_without_cell_fixture",
+      "production_ready": false,
+      "rows": {},
+      "sample_bindings": [],
+      "limits": [
+        "No independently checked member-cell transcription is included for this historical grid."
+      ],
+      "unsupported_shapes": [
+        "U01"
+      ]
+    },
+    {
+      "profile_id": "afl_cio:2025",
+      "kind": "bounded_row_fragments",
+      "production_ready": false,
+      "rows": {
+        "scorecard_publishers": [
+          {
+            "publisher_id": "afl_cio"
+          }
+        ],
+        "scorecards": [
+          {
+            "scorecard_id": "example:afl_cio:2025",
+            "publisher_id": "afl_cio",
+            "capture_id": "afl-cio-index",
+            "source_url": "https://aflcio.org/scorecard",
+            "source_path": "Legislators / House / Gilbert Cisneros"
+          }
+        ],
+        "scorecard_members": [
+          {
+            "scorecard_id": "example:afl_cio:2025",
+            "publisher_member_key": "example-member:1",
+            "member_name": "Gilbert Cisneros",
+            "capture_id": "afl-cio-index",
+            "source_url": "https://aflcio.org/scorecard",
+            "source_path": "Legislators / House / Gilbert Cisneros"
+          }
+        ],
+        "scorecard_metrics": [
+          {
+            "scorecard_id": "example:afl_cio:2025",
+            "metric_id": "example-metric:1",
+            "name": "Lifetime Score",
+            "capture_id": "afl-cio-index",
+            "source_url": "https://aflcio.org/scorecard",
+            "source_path": "Legislators / House / Gilbert Cisneros",
+            "period_text": "Lifetime"
+          }
+        ],
+        "scorecard_member_ratings": [
+          {
+            "scorecard_id": "example:afl_cio:2025",
+            "metric_id": "example-metric:1",
+            "publisher_member_key": "example-member:1",
+            "value_text": "100%",
+            "value_number": null,
+            "rank_text": null,
+            "capture_id": "afl-cio-index",
+            "source_url": "https://aflcio.org/scorecard",
+            "source_path": "Legislators / House / Gilbert Cisneros"
+          }
+        ]
+      },
+      "sample_bindings": [
+        {
+          "sample_index": 0,
+          "table": "scorecard_member_ratings",
+          "row_index": 0,
+          "field": "value_text"
+        }
+      ],
+      "limits": [
+        "Only the named cells are transcribed. Null numeric values deliberately avoid asserting a numeric conversion or physical storage type. No table completeness or stable member-key rule is established."
+      ]
+    },
+    {
+      "profile_id": "heritage_action:115_cosponsorship",
+      "kind": "bounded_row_fragments",
+      "production_ready": false,
+      "rows": {
+        "scorecard_publishers": [
+          {
+            "publisher_id": "heritage_action"
+          }
+        ],
+        "scorecards": [
+          {
+            "scorecard_id": "example:heritage_action:115_cosponsorship",
+            "publisher_id": "heritage_action",
+            "capture_id": "heritage-cosponsorship-api",
+            "source_url": "https://heritageaction.com/api/scorecard/cosponsorship?identifier=hr4274-115",
+            "source_path": "$.data.sponsor_position"
+          }
+        ],
+        "scorecard_metrics": [
+          {
+            "scorecard_id": "example:heritage_action:115_cosponsorship",
+            "metric_id": "example-metric:overall",
+            "capture_id": "heritage-cosponsorship-api",
+            "source_url": "https://heritageaction.com/api/scorecard/cosponsorship?identifier=hr4274-115",
+            "source_path": "$.data.sponsor_position"
+          }
+        ],
+        "scorecard_items": [
+          {
+            "scorecard_id": "example:heritage_action:115_cosponsorship",
+            "item_id": "hr4274-115",
+            "publisher_item_id": "hr4274-115",
+            "item_kind_text": "cosponsorship",
+            "title": "HERO Act",
+            "bill_citation_text": "hr4274",
+            "chamber_text": "house",
+            "capture_id": "heritage-cosponsorship-api",
+            "source_url": "https://heritageaction.com/api/scorecard/cosponsorship?identifier=hr4274-115",
+            "source_path": "$.data.sponsor_position"
+          }
+        ],
+        "scorecard_metric_items": [
+          {
+            "scorecard_id": "example:heritage_action:115_cosponsorship",
+            "metric_id": "example-metric:overall",
+            "item_id": "hr4274-115",
+            "participation_id": "example-participation:cosponsorship",
+            "publisher_position_text": "Yes",
+            "position_basis": "explicit",
+            "counts_toward_metric": null,
+            "weight_text": null,
+            "capture_id": "heritage-cosponsorship-api",
+            "source_url": "https://heritageaction.com/api/scorecard/cosponsorship?identifier=hr4274-115",
+            "source_path": "$.data.sponsor_position"
+          }
+        ],
+        "scorecard_members": [
+          {
+            "scorecard_id": "example:heritage_action:115_cosponsorship",
+            "publisher_member_key": "A000375",
+            "publisher_member_id": "A000375",
+            "identifiers_json": [
+              {
+                "field": "cong_id",
+                "value": "A000375"
+              }
+            ],
+            "member_name": "Jodey Arrington",
+            "chamber_text": "House",
+            "state": "TX",
+            "district": "19",
+            "party": "R",
+            "capture_id": "heritage-cosponsorship-api",
+            "source_url": "https://heritageaction.com/api/scorecard/cosponsorship?identifier=hr4274-115",
+            "source_path": "$.data.sponsors.data[0]"
+          }
+        ],
+        "scorecard_member_item_results": [
+          {
+            "scorecard_id": "example:heritage_action:115_cosponsorship",
+            "metric_id": "example-metric:overall",
+            "item_id": "hr4274-115",
+            "participation_id": "example-participation:cosponsorship",
+            "publisher_member_key": "A000375",
+            "result_text": "sponsors",
+            "contribution_text": null,
+            "contribution_number": null,
+            "counts_toward_metric": null,
+            "capture_id": "heritage-cosponsorship-api",
+            "source_url": "https://heritageaction.com/api/scorecard/cosponsorship?identifier=hr4274-115",
+            "source_path": "$.data.sponsors.data[0]",
+            "result_id": "example-participation:cosponsorship"
+          }
+        ]
+      },
+      "sample_bindings": [
+        {
+          "sample_index": 0,
+          "table": "scorecard_metric_items",
+          "row_index": 0,
+          "field": "publisher_position_text"
+        }
+      ],
+      "limits": [
+        "The result preserves JSON group membership, not an official congressional action. The member score field is not copied into a bill contribution. Metric scope, participation weights, stable key rules and complete edition remain unqualified."
+      ]
+    },
+    {
+      "profile_id": "us_chamber:116_method",
+      "kind": "bounded_row_fragments",
+      "production_ready": false,
+      "rows": {
+        "scorecard_publishers": [
+          {
+            "publisher_id": "us_chamber"
+          }
+        ],
+        "scorecards": [
+          {
+            "scorecard_id": "example:us_chamber:116_method",
+            "publisher_id": "us_chamber",
+            "capture_id": "chamber-method",
+            "source_url": "https://www.uschamber.com/congressional-scorecard-and-legislative-leadership-list",
+            "source_path": "The How They Voted scorecard is made up of three components"
+          }
+        ],
+        "scorecard_methodologies": [
+          {
+            "scorecard_id": "example:us_chamber:116_method",
+            "methodology_id": "example-method:116",
+            "disclosure_status": "partial",
+            "capture_id": "chamber-method",
+            "source_url": "https://www.uschamber.com/congressional-scorecard-and-legislative-leadership-list",
+            "source_path": "The How They Voted scorecard is made up of three components"
+          }
+        ],
+        "scorecard_metrics": [
+          {
+            "scorecard_id": "example:us_chamber:116_method",
+            "metric_id": "overall",
+            "name": "How They Voted",
+            "methodology_id": "example-method:116",
+            "capture_id": "chamber-method",
+            "source_url": "https://www.uschamber.com/congressional-scorecard-and-legislative-leadership-list",
+            "source_path": "The How They Voted scorecard is made up of three components"
+          },
+          {
+            "scorecard_id": "example:us_chamber:116_method",
+            "metric_id": "vote",
+            "name": "Legislative Vote Score",
+            "methodology_id": "example-method:116",
+            "capture_id": "chamber-method",
+            "source_url": "https://www.uschamber.com/congressional-scorecard-and-legislative-leadership-list",
+            "source_path": "The How They Voted scorecard is made up of three components"
+          },
+          {
+            "scorecard_id": "example:us_chamber:116_method",
+            "metric_id": "leadership",
+            "name": "Legislative Leadership Score",
+            "methodology_id": "example-method:116",
+            "capture_id": "chamber-method",
+            "source_url": "https://www.uschamber.com/congressional-scorecard-and-legislative-leadership-list",
+            "source_path": "The How They Voted scorecard is made up of three components"
+          },
+          {
+            "scorecard_id": "example:us_chamber:116_method",
+            "metric_id": "bipartisan",
+            "name": "Bipartisan Engagement Score",
+            "methodology_id": "example-method:116",
+            "capture_id": "chamber-method",
+            "source_url": "https://www.uschamber.com/congressional-scorecard-and-legislative-leadership-list",
+            "source_path": "The How They Voted scorecard is made up of three components"
+          }
+        ],
+        "scorecard_metric_components": [
+          {
+            "scorecard_id": "example:us_chamber:116_method",
+            "parent_metric_id": "overall",
+            "component_metric_id": "vote",
+            "weight_text": "80%",
+            "weight_number": null,
+            "capture_id": "chamber-method",
+            "source_url": "https://www.uschamber.com/congressional-scorecard-and-legislative-leadership-list",
+            "source_path": "The How They Voted scorecard is made up of three components"
+          },
+          {
+            "scorecard_id": "example:us_chamber:116_method",
+            "parent_metric_id": "overall",
+            "component_metric_id": "leadership",
+            "weight_text": "10%",
+            "weight_number": null,
+            "capture_id": "chamber-method",
+            "source_url": "https://www.uschamber.com/congressional-scorecard-and-legislative-leadership-list",
+            "source_path": "The How They Voted scorecard is made up of three components"
+          },
+          {
+            "scorecard_id": "example:us_chamber:116_method",
+            "parent_metric_id": "overall",
+            "component_metric_id": "bipartisan",
+            "weight_text": "10%",
+            "weight_number": null,
+            "capture_id": "chamber-method",
+            "source_url": "https://www.uschamber.com/congressional-scorecard-and-legislative-leadership-list",
+            "source_path": "The How They Voted scorecard is made up of three components"
+          }
+        ]
+      },
+      "sample_bindings": [
+        {
+          "sample_index": 0,
+          "table": "scorecard_metric_components",
+          "row_index": 0,
+          "field": "weight_text"
+        }
+      ],
+      "limits": [
+        "Component relationships do not supply the member inputs, peer population or executable combination formula."
+      ]
+    },
+    {
+      "profile_id": "hrc:118",
+      "kind": "bounded_row_fragments",
+      "production_ready": false,
+      "rows": {
+        "scorecard_publishers": [
+          {
+            "publisher_id": "hrc"
+          }
+        ],
+        "scorecards": [
+          {
+            "scorecard_id": "example:hrc:118",
+            "publisher_id": "hrc",
+            "capture_id": "hrc-118-pdf",
+            "source_url": "https://hrc-prod-requests.s3-us-west-2.amazonaws.com/files/documents/118th-Congressional-Scorecard-HRC-2024-Final.pdf",
+            "source_path": "PDF physical page 6, printed page 10, Vermont / Sanders / 118th SCORE"
+          }
+        ],
+        "scorecard_members": [
+          {
+            "scorecard_id": "example:hrc:118",
+            "publisher_member_key": "example-member:1",
+            "member_name": "Sanders, Bernard",
+            "capture_id": "hrc-118-pdf",
+            "source_url": "https://hrc-prod-requests.s3-us-west-2.amazonaws.com/files/documents/118th-Congressional-Scorecard-HRC-2024-Final.pdf",
+            "source_path": "PDF physical page 6, printed page 10, Vermont / Sanders / 118th SCORE"
+          }
+        ],
+        "scorecard_metrics": [
+          {
+            "scorecard_id": "example:hrc:118",
+            "metric_id": "example-metric:1",
+            "name": "118th SCORE",
+            "capture_id": "hrc-118-pdf",
+            "source_url": "https://hrc-prod-requests.s3-us-west-2.amazonaws.com/files/documents/118th-Congressional-Scorecard-HRC-2024-Final.pdf",
+            "source_path": "PDF physical page 6, printed page 10, Vermont / Sanders / 118th SCORE"
+          }
+        ],
+        "scorecard_member_ratings": [
+          {
+            "scorecard_id": "example:hrc:118",
+            "metric_id": "example-metric:1",
+            "publisher_member_key": "example-member:1",
+            "value_text": "100",
+            "value_number": null,
+            "rank_text": null,
+            "capture_id": "hrc-118-pdf",
+            "source_url": "https://hrc-prod-requests.s3-us-west-2.amazonaws.com/files/documents/118th-Congressional-Scorecard-HRC-2024-Final.pdf",
+            "source_path": "PDF physical page 6, printed page 10, Vermont / Sanders / 118th SCORE"
+          }
+        ]
+      },
+      "sample_bindings": [
+        {
+          "sample_index": 0,
+          "table": "scorecard_member_ratings",
+          "row_index": 0,
+          "field": "value_text"
+        }
+      ],
+      "limits": [
+        "Only the named cells are transcribed. Null numeric values deliberately avoid asserting a numeric conversion or physical storage type. No table completeness or stable member-key rule is established."
+      ]
+    },
+    {
+      "profile_id": "hrc:111",
+      "kind": "unsupported_without_cell_fixture",
+      "production_ready": false,
+      "rows": {},
+      "sample_bindings": [],
+      "limits": [
+        "No independently checked member-cell transcription is included for this historical grid."
+      ],
+      "unsupported_shapes": [
+        "U01"
+      ]
+    },
+    {
+      "profile_id": "ntu:2024",
+      "kind": "bounded_row_fragments",
+      "production_ready": false,
+      "rows": {
+        "scorecard_publishers": [
+          {
+            "publisher_id": "ntu"
+          }
+        ],
+        "scorecards": [
+          {
+            "scorecard_id": "example:ntu:2024",
+            "publisher_id": "ntu",
+            "capture_id": "ntu-member",
+            "source_url": "https://www.ntu.org/ratecongress/legislator/andy-harris",
+            "source_path": "Year table / 2024 / Score"
+          }
+        ],
+        "scorecard_members": [
+          {
+            "scorecard_id": "example:ntu:2024",
+            "publisher_member_key": "example-member:1",
+            "member_name": "Andrew Harris",
+            "capture_id": "ntu-member",
+            "source_url": "https://www.ntu.org/ratecongress/legislator/andy-harris",
+            "source_path": "Year table / 2024 / Score"
+          }
+        ],
+        "scorecard_metrics": [
+          {
+            "scorecard_id": "example:ntu:2024",
+            "metric_id": "example-metric:1",
+            "name": "Score",
+            "capture_id": "ntu-member",
+            "source_url": "https://www.ntu.org/ratecongress/legislator/andy-harris",
+            "source_path": "Year table / 2024 / Score"
+          },
+          {
+            "scorecard_id": "example:ntu:2024",
+            "metric_id": "example-metric:2",
+            "name": "Grade",
+            "capture_id": "ntu-member",
+            "source_url": "https://www.ntu.org/ratecongress/legislator/andy-harris",
+            "source_path": "Year table / 2024 / Grade"
+          }
+        ],
+        "scorecard_member_ratings": [
+          {
+            "scorecard_id": "example:ntu:2024",
+            "metric_id": "example-metric:1",
+            "publisher_member_key": "example-member:1",
+            "value_text": "79%",
+            "value_number": null,
+            "rank_text": "17",
+            "capture_id": "ntu-member",
+            "source_url": "https://www.ntu.org/ratecongress/legislator/andy-harris",
+            "source_path": "Year table / 2024 / Score"
+          },
+          {
+            "scorecard_id": "example:ntu:2024",
+            "metric_id": "example-metric:2",
+            "publisher_member_key": "example-member:1",
+            "value_text": "B",
+            "value_number": null,
+            "rank_text": null,
+            "capture_id": "ntu-member",
+            "source_url": "https://www.ntu.org/ratecongress/legislator/andy-harris",
+            "source_path": "Year table / 2024 / Grade"
+          }
+        ]
+      },
+      "sample_bindings": [
+        {
+          "sample_index": 0,
+          "table": "scorecard_member_ratings",
+          "row_index": 0,
+          "field": "value_text"
+        },
+        {
+          "sample_index": 1,
+          "table": "scorecard_member_ratings",
+          "row_index": 1,
+          "field": "value_text"
+        }
+      ],
+      "limits": [
+        "Only the named cells are transcribed. Null numeric values deliberately avoid asserting a numeric conversion or physical storage type. No table completeness or stable member-key rule is established."
+      ]
+    },
+    {
+      "profile_id": "norml:2016_2020",
+      "kind": "bounded_row_fragments",
+      "production_ready": false,
+      "rows": {
+        "scorecard_publishers": [
+          {
+            "publisher_id": "norml"
+          }
+        ],
+        "scorecards": [
+          {
+            "scorecard_id": "example:norml:2016_2020",
+            "publisher_id": "norml",
+            "capture_id": "norml-method",
+            "source_url": "https://vote.norml.org/about",
+            "source_path": "For Federal Incumbents, they are graded as"
+          }
+        ],
+        "scorecard_methodologies": [
+          {
+            "scorecard_id": "example:norml:2016_2020",
+            "methodology_id": "example-method:rubric",
+            "methodology_text": "A",
+            "disclosure_status": "partial",
+            "capture_id": "norml-method",
+            "source_url": "https://vote.norml.org/about",
+            "source_path": "For Federal Incumbents, they are graded as"
+          }
+        ]
+      },
+      "sample_bindings": [
+        {
+          "sample_index": 0,
+          "table": "scorecard_methodologies",
+          "row_index": 0,
+          "field": "methodology_text"
+        }
+      ],
+      "limits": [
+        "This fragment preserves one source rule token; its interpretation is recorded in the profile literal example. It does not invent a member, scoring item, or numerical member contribution."
+      ]
+    },
+    {
+      "profile_id": "humane_world_action:2025",
+      "kind": "bounded_row_fragments",
+      "production_ready": false,
+      "rows": {
+        "scorecard_publishers": [
+          {
+            "publisher_id": "humane_world_action"
+          }
+        ],
+        "scorecards": [
+          {
+            "scorecard_id": "example:humane_world_action:2025",
+            "publisher_id": "humane_world_action",
+            "capture_id": "humane-2025-pdf",
+            "source_url": "https://humaneaction.org/sites/default/files/2026-02/FINAL%20humane-scorecard-2025.pdf",
+            "source_path": "PDF page 6 / Arizona / Gallego / Score"
+          }
+        ],
+        "scorecard_members": [
+          {
+            "scorecard_id": "example:humane_world_action:2025",
+            "publisher_member_key": "example-member:1",
+            "member_name": "Gallego, Ruben (D)",
+            "capture_id": "humane-2025-pdf",
+            "source_url": "https://humaneaction.org/sites/default/files/2026-02/FINAL%20humane-scorecard-2025.pdf",
+            "source_path": "PDF page 6 / Arizona / Gallego / Score"
+          }
+        ],
+        "scorecard_metrics": [
+          {
+            "scorecard_id": "example:humane_world_action:2025",
+            "metric_id": "example-metric:1",
+            "name": "Score",
+            "capture_id": "humane-2025-pdf",
+            "source_url": "https://humaneaction.org/sites/default/files/2026-02/FINAL%20humane-scorecard-2025.pdf",
+            "source_path": "PDF page 6 / Arizona / Gallego / Score"
+          }
+        ],
+        "scorecard_member_ratings": [
+          {
+            "scorecard_id": "example:humane_world_action:2025",
+            "metric_id": "example-metric:1",
+            "publisher_member_key": "example-member:1",
+            "value_text": "100+",
+            "value_number": null,
+            "rank_text": null,
+            "capture_id": "humane-2025-pdf",
+            "source_url": "https://humaneaction.org/sites/default/files/2026-02/FINAL%20humane-scorecard-2025.pdf",
+            "source_path": "PDF page 6 / Arizona / Gallego / Score"
+          }
+        ]
+      },
+      "sample_bindings": [
+        {
+          "sample_index": 0,
+          "table": "scorecard_member_ratings",
+          "row_index": 0,
+          "field": "value_text"
+        }
+      ],
+      "limits": [
+        "Only the named cells are transcribed. Null numeric values deliberately avoid asserting a numeric conversion or physical storage type. No table completeness or stable member-key rule is established."
+      ]
+    },
+    {
+      "profile_id": "nea:119",
+      "kind": "bounded_row_fragments",
+      "production_ready": false,
+      "rows": {
+        "scorecard_publishers": [
+          {
+            "publisher_id": "nea"
+          }
+        ],
+        "scorecards": [
+          {
+            "scorecard_id": "example:nea:119",
+            "publisher_id": "nea",
+            "capture_id": "nea-report",
+            "source_url": "https://www.nea.org/advocating-for-change/action-center/nea-in-congress/report-card",
+            "source_path": "U.S. Senate Report Card / AK / Lisa Murkowski"
+          }
+        ],
+        "scorecard_members": [
+          {
+            "scorecard_id": "example:nea:119",
+            "publisher_member_key": "example-member:1",
+            "member_name": "Lisa Murkowski",
+            "capture_id": "nea-report",
+            "source_url": "https://www.nea.org/advocating-for-change/action-center/nea-in-congress/report-card",
+            "source_path": "U.S. Senate Report Card / AK / Lisa Murkowski"
+          }
+        ],
+        "scorecard_metrics": [
+          {
+            "scorecard_id": "example:nea:119",
+            "metric_id": "example-metric:1",
+            "name": "119th Congressional Grade",
+            "capture_id": "nea-report",
+            "source_url": "https://www.nea.org/advocating-for-change/action-center/nea-in-congress/report-card",
+            "source_path": "U.S. Senate Report Card / AK / Lisa Murkowski"
+          }
+        ],
+        "scorecard_member_ratings": [
+          {
+            "scorecard_id": "example:nea:119",
+            "metric_id": "example-metric:1",
+            "publisher_member_key": "example-member:1",
+            "value_text": "D",
+            "value_number": null,
+            "rank_text": null,
+            "capture_id": "nea-report",
+            "source_url": "https://www.nea.org/advocating-for-change/action-center/nea-in-congress/report-card",
+            "source_path": "U.S. Senate Report Card / AK / Lisa Murkowski"
+          }
+        ]
+      },
+      "sample_bindings": [
+        {
+          "sample_index": 0,
+          "table": "scorecard_member_ratings",
+          "row_index": 0,
+          "field": "value_text"
+        }
+      ],
+      "limits": [
+        "Only the named cells are transcribed. Null numeric values deliberately avoid asserting a numeric conversion or physical storage type. No table completeness or stable member-key rule is established."
+      ]
+    },
+    {
+      "profile_id": "ajp_action:2026",
+      "kind": "bounded_row_fragments",
+      "production_ready": false,
+      "rows": {
+        "scorecard_publishers": [
+          {
+            "publisher_id": "ajp_action"
+          }
+        ],
+        "scorecards": [
+          {
+            "scorecard_id": "example:ajp_action:2026",
+            "publisher_id": "ajp_action",
+            "capture_id": "ajp-2026",
+            "source_url": "https://ajpaction.org/scorecard2026/",
+            "source_path": "Scoring System"
+          }
+        ],
+        "scorecard_methodologies": [
+          {
+            "scorecard_id": "example:ajp_action:2026",
+            "methodology_id": "example-method:rubric",
+            "methodology_text": "−3",
+            "disclosure_status": "explicit",
+            "capture_id": "ajp-2026",
+            "source_url": "https://ajpaction.org/scorecard2026/",
+            "source_path": "Scoring System"
+          }
+        ]
+      },
+      "sample_bindings": [
+        {
+          "sample_index": 0,
+          "table": "scorecard_methodologies",
+          "row_index": 0,
+          "field": "methodology_text"
+        }
+      ],
+      "limits": [
+        "This fragment preserves one source rule token; its interpretation is recorded in the profile literal example. It does not invent a member, scoring item, or numerical member contribution."
+      ]
+    },
+    {
+      "profile_id": "c4ip:2024",
+      "kind": "bounded_row_fragments",
+      "production_ready": false,
+      "rows": {
+        "scorecard_publishers": [
+          {
+            "publisher_id": "c4ip"
+          }
+        ],
+        "scorecards": [
+          {
+            "scorecard_id": "example:c4ip:2024",
+            "publisher_id": "c4ip",
+            "capture_id": "c4ip-2024-pdf",
+            "source_url": "https://c4ip.org/wp-content/uploads/2024/03/2024-Congressional-Innovation-Scorecard.pdf",
+            "source_path": "PDF page 21 / Table 2"
+          }
+        ],
+        "scorecard_methodologies": [
+          {
+            "scorecard_id": "example:c4ip:2024",
+            "methodology_id": "example-method:rubric",
+            "methodology_text": "-0.75",
+            "disclosure_status": "partial",
+            "capture_id": "c4ip-2024-pdf",
+            "source_url": "https://c4ip.org/wp-content/uploads/2024/03/2024-Congressional-Innovation-Scorecard.pdf",
+            "source_path": "PDF page 21 / Table 2"
+          }
+        ]
+      },
+      "sample_bindings": [
+        {
+          "sample_index": 0,
+          "table": "scorecard_methodologies",
+          "row_index": 0,
+          "field": "methodology_text"
+        }
+      ],
+      "limits": [
+        "This fragment preserves one source rule token; its interpretation is recorded in the profile literal example. It does not invent a member, scoring item, or numerical member contribution."
+      ]
+    },
+    {
+      "profile_id": "ffrf_action:2026_house",
+      "kind": "bounded_row_fragments",
+      "production_ready": false,
+      "rows": {
+        "scorecard_publishers": [
+          {
+            "publisher_id": "ffrf_action"
+          }
+        ],
+        "scorecards": [
+          {
+            "scorecard_id": "example:ffrf_action:2026_house",
+            "publisher_id": "ffrf_action",
+            "capture_id": "ffrf-house-method",
+            "source_url": "https://ffrfaction.org/scorecard-calculations/",
+            "source_path": "Scores are divided by these color-coded categories"
+          }
+        ],
+        "scorecard_methodologies": [
+          {
+            "scorecard_id": "example:ffrf_action:2026_house",
+            "chamber_text": "House",
+            "capture_id": "ffrf-house-method",
+            "source_url": "https://ffrfaction.org/scorecard-calculations/",
+            "source_path": "Scores are divided by these color-coded categories",
+            "methodology_id": "example-method:tier",
+            "methodology_text": "60–40"
+          }
+        ]
+      },
+      "sample_bindings": [
+        {
+          "sample_index": 0,
+          "table": "scorecard_methodologies",
+          "row_index": 0,
+          "field": "methodology_text"
+        }
+      ],
+      "limits": [
+        "This is a rubric-category fragment, not a rating. The published range remains unchanged; its apparent gaps are not repaired. Whether tier categories merit a child table is still open."
+      ]
+    },
+    {
+      "profile_id": "ffrf_action:2026_senate",
+      "kind": "bounded_row_fragments",
+      "production_ready": false,
+      "rows": {
+        "scorecard_publishers": [
+          {
+            "publisher_id": "ffrf_action"
+          }
+        ],
+        "scorecards": [
+          {
+            "scorecard_id": "example:ffrf_action:2026_senate",
+            "publisher_id": "ffrf_action",
+            "capture_id": "ffrf-senate-method",
+            "source_url": "https://ffrfaction.org/senate-scorecard-calculations/",
+            "source_path": "Voting Nay on Trump Nominees"
+          }
+        ],
+        "scorecard_metrics": [
+          {
+            "scorecard_id": "example:ffrf_action:2026_senate",
+            "metric_id": "overall",
+            "chamber_text": "Senate",
+            "period_text": "As of August 4, 2026",
+            "capture_id": "ffrf-senate-method",
+            "source_url": "https://ffrfaction.org/senate-scorecard-calculations/",
+            "source_path": "Voting Nay on Trump Nominees"
+          }
+        ],
+        "scorecard_items": [
+          {
+            "scorecard_id": "example:ffrf_action:2026_senate",
+            "item_id": "example-item:bove",
+            "item_kind_text": "nomination",
+            "title": "Emil Bove",
+            "bill_citation_text": null,
+            "roll_number_text": null,
+            "capture_id": "ffrf-senate-method",
+            "source_url": "https://ffrfaction.org/senate-scorecard-calculations/",
+            "source_path": "Voting Nay on Trump Nominees"
+          }
+        ],
+        "scorecard_metric_items": [
+          {
+            "scorecard_id": "example:ffrf_action:2026_senate",
+            "metric_id": "overall",
+            "item_id": "example-item:bove",
+            "participation_id": "example-participation:bove",
+            "publisher_position_text": "Nay",
+            "position_basis": "explicit",
+            "weight_text": "15%",
+            "weight_number": null,
+            "capture_id": "ffrf-senate-method",
+            "source_url": "https://ffrfaction.org/senate-scorecard-calculations/",
+            "source_path": "Voting Nay on Trump Nominees"
+          }
+        ]
+      },
+      "sample_bindings": [
+        {
+          "sample_index": 0,
+          "table": "scorecard_metric_items",
+          "row_index": 0,
+          "field": "weight_text"
+        }
+      ],
+      "limits": [
+        "The publisher supplies a nomination target and weight. No roll-call number or member result is invented."
+      ]
+    },
+    {
+      "profile_id": "lugar_mccourt:113_senate",
+      "kind": "bounded_row_fragments",
+      "production_ready": false,
+      "rows": {
+        "scorecard_publishers": [
+          {
+            "publisher_id": "lugar_mccourt"
+          }
+        ],
+        "scorecards": [
+          {
+            "scorecard_id": "example:lugar_mccourt:113_senate",
+            "publisher_id": "lugar_mccourt",
+            "capture_id": "lugar-senate-113",
+            "source_url": "https://www.thelugarcenter.org/ourwork-41.html",
+            "source_path": "Senator by score / rank 1 / Score"
+          }
+        ],
+        "scorecard_members": [
+          {
+            "scorecard_id": "example:lugar_mccourt:113_senate",
+            "publisher_member_key": "example-member:1",
+            "member_name": "Susan Collins",
+            "capture_id": "lugar-senate-113",
+            "source_url": "https://www.thelugarcenter.org/ourwork-41.html",
+            "source_path": "Senator by score / rank 1 / Score"
+          },
+          {
+            "scorecard_id": "example:lugar_mccourt:113_senate",
+            "publisher_member_key": "example-member:2",
+            "member_name": "Lamar Alexander",
+            "capture_id": "lugar-senate-113",
+            "source_url": "https://www.thelugarcenter.org/ourwork-41.html",
+            "source_path": "Senator alphabetical / Alexander / Score"
+          }
+        ],
+        "scorecard_metrics": [
+          {
+            "scorecard_id": "example:lugar_mccourt:113_senate",
+            "metric_id": "example-metric:1",
+            "name": "Score",
+            "capture_id": "lugar-senate-113",
+            "source_url": "https://www.thelugarcenter.org/ourwork-41.html",
+            "source_path": "Senator by score / rank 1 / Score"
+          }
+        ],
+        "scorecard_member_ratings": [
+          {
+            "scorecard_id": "example:lugar_mccourt:113_senate",
+            "metric_id": "example-metric:1",
+            "publisher_member_key": "example-member:1",
+            "value_text": "2.116206",
+            "value_number": null,
+            "rank_text": "1",
+            "capture_id": "lugar-senate-113",
+            "source_url": "https://www.thelugarcenter.org/ourwork-41.html",
+            "source_path": "Senator by score / rank 1 / Score"
+          },
+          {
+            "scorecard_id": "example:lugar_mccourt:113_senate",
+            "metric_id": "example-metric:1",
+            "publisher_member_key": "example-member:2",
+            "value_text": "-0.05804",
+            "value_number": null,
+            "rank_text": null,
+            "capture_id": "lugar-senate-113",
+            "source_url": "https://www.thelugarcenter.org/ourwork-41.html",
+            "source_path": "Senator alphabetical / Alexander / Score"
+          }
+        ]
+      },
+      "sample_bindings": [
+        {
+          "sample_index": 0,
+          "table": "scorecard_member_ratings",
+          "row_index": 0,
+          "field": "value_text"
+        },
+        {
+          "sample_index": 1,
+          "table": "scorecard_member_ratings",
+          "row_index": 1,
+          "field": "value_text"
+        }
+      ],
+      "limits": [
+        "Only the named cells are transcribed. Null numeric values deliberately avoid asserting a numeric conversion or physical storage type. No table completeness or stable member-key rule is established."
+      ]
+    },
+    {
+      "profile_id": "club_for_growth:2025_house",
+      "kind": "bounded_row_fragments",
+      "production_ready": false,
+      "rows": {
+        "scorecard_publishers": [
+          {
+            "publisher_id": "club_for_growth"
+          }
+        ],
+        "scorecards": [
+          {
+            "scorecard_id": "example:club_for_growth:2025_house",
+            "publisher_id": "club_for_growth",
+            "capture_id": "club-2025-house",
+            "source_url": "https://www.clubforgrowth.org/scorecards/app/?party=all&chamber=H&yr=2025&state=all&rep",
+            "source_path": "House grid / TN 07 / Matt Van Epps / Score"
+          }
+        ],
+        "scorecard_members": [
+          {
+            "scorecard_id": "example:club_for_growth:2025_house",
+            "publisher_member_key": "example-member:1",
+            "member_name": "Matt Van Epps",
+            "capture_id": "club-2025-house",
+            "source_url": "https://www.clubforgrowth.org/scorecards/app/?party=all&chamber=H&yr=2025&state=all&rep",
+            "source_path": "House grid / TN 07 / Matt Van Epps / Score"
+          },
+          {
+            "scorecard_id": "example:club_for_growth:2025_house",
+            "publisher_member_key": "example-member:2",
+            "member_name": "Alexandria Ocasio-Cortez",
+            "capture_id": "club-2025-house",
+            "source_url": "https://www.clubforgrowth.org/scorecards/app/?party=all&chamber=H&yr=2025&state=all&rep",
+            "source_path": "House grid / NY 14 / Alexandria Ocasio-Cortez / Score"
+          }
+        ],
+        "scorecard_metrics": [
+          {
+            "scorecard_id": "example:club_for_growth:2025_house",
+            "metric_id": "example-metric:1",
+            "name": "Score",
+            "capture_id": "club-2025-house",
+            "source_url": "https://www.clubforgrowth.org/scorecards/app/?party=all&chamber=H&yr=2025&state=all&rep",
+            "source_path": "House grid / TN 07 / Matt Van Epps / Score"
+          }
+        ],
+        "scorecard_member_ratings": [
+          {
+            "scorecard_id": "example:club_for_growth:2025_house",
+            "metric_id": "example-metric:1",
+            "publisher_member_key": "example-member:1",
+            "value_text": "n.a.",
+            "value_number": null,
+            "rank_text": "0",
+            "capture_id": "club-2025-house",
+            "source_url": "https://www.clubforgrowth.org/scorecards/app/?party=all&chamber=H&yr=2025&state=all&rep",
+            "source_path": "House grid / TN 07 / Matt Van Epps / Score"
+          },
+          {
+            "scorecard_id": "example:club_for_growth:2025_house",
+            "metric_id": "example-metric:1",
+            "publisher_member_key": "example-member:2",
+            "value_text": "0%",
+            "value_number": null,
+            "rank_text": "355",
+            "capture_id": "club-2025-house",
+            "source_url": "https://www.clubforgrowth.org/scorecards/app/?party=all&chamber=H&yr=2025&state=all&rep",
+            "source_path": "House grid / NY 14 / Alexandria Ocasio-Cortez / Score"
+          }
+        ]
+      },
+      "sample_bindings": [
+        {
+          "sample_index": 0,
+          "table": "scorecard_member_ratings",
+          "row_index": 0,
+          "field": "value_text"
+        },
+        {
+          "sample_index": 1,
+          "table": "scorecard_member_ratings",
+          "row_index": 1,
+          "field": "value_text"
+        }
+      ],
+      "limits": [
+        "Only the named cells are transcribed. Null numeric values deliberately avoid asserting a numeric conversion or physical storage type. No table completeness or stable member-key rule is established."
+      ]
+    },
+    {
+      "profile_id": "acec:116-senate",
+      "kind": "bounded_row_fragments",
+      "production_ready": false,
+      "rows": {
+        "scorecard_publishers": [
+          {
+            "publisher_id": "acec"
+          }
+        ],
+        "scorecards": [
+          {
+            "scorecard_id": "example:acec:116-senate",
+            "publisher_id": "acec",
+            "capture_id": "census-acec-116-pdf",
+            "source_url": "https://www.acec.org/wp-content/uploads/2023/03/116th_Senate_Score_Card.pdf",
+            "source_path": "Named sections, page numbers and row labels in notes/examples"
+          }
+        ],
+        "scorecard_members": [
+          {
+            "scorecard_id": "example:acec:116-senate",
+            "publisher_member_key": "example-member:0",
+            "member_name": "Harris",
+            "state": "California",
+            "party": "D",
+            "capture_id": "census-acec-116-pdf",
+            "source_url": "https://www.acec.org/wp-content/uploads/2023/03/116th_Senate_Score_Card.pdf",
+            "source_path": "Physical page 1 / California / Harris / % with ACEC"
+          }
+        ],
+        "scorecard_metrics": [
+          {
+            "scorecard_id": "example:acec:116-senate",
+            "metric_id": "example-metric:0",
+            "name": "% with ACEC",
+            "capture_id": "census-acec-116-pdf",
+            "source_url": "https://www.acec.org/wp-content/uploads/2023/03/116th_Senate_Score_Card.pdf",
+            "source_path": "Physical page 1 / California / Harris / % with ACEC"
+          }
+        ],
+        "scorecard_member_ratings": [
+          {
+            "scorecard_id": "example:acec:116-senate",
+            "metric_id": "example-metric:0",
+            "publisher_member_key": "example-member:0",
+            "value_text": "50%",
+            "capture_id": "census-acec-116-pdf",
+            "source_url": "https://www.acec.org/wp-content/uploads/2023/03/116th_Senate_Score_Card.pdf",
+            "source_path": "Physical page 1 / California / Harris / % with ACEC"
+          }
+        ],
+        "scorecard_items": [
+          {
+            "scorecard_id": "example:acec:116-senate",
+            "item_id": "example-item:0",
+            "title": "H.R. 8337 - VOTE 197 FY21 Continuing Resolution",
+            "bill_citation_text": "H.R. 8337",
+            "roll_number_text": "197",
+            "capture_id": "census-acec-116-pdf",
+            "source_url": "https://www.acec.org/wp-content/uploads/2023/03/116th_Senate_Score_Card.pdf",
+            "source_path": "Physical page 1 / California / Harris / H.R.8337 VOTE197"
+          }
+        ],
+        "scorecard_member_item_results": [
+          {
+            "scorecard_id": "example:acec:116-senate",
+            "result_id": "example-result:0",
+            "item_id": "example-item:0",
+            "publisher_member_key": "example-member:0",
+            "metric_id": null,
+            "participation_id": null,
+            "action_text": "Not Voting",
+            "capture_id": "census-acec-116-pdf",
+            "source_url": "https://www.acec.org/wp-content/uploads/2023/03/116th_Senate_Score_Card.pdf",
+            "source_path": "Physical page 1 / California / Harris / H.R.8337 VOTE197"
+          }
+        ]
+      },
+      "sample_bindings": [
+        {
+          "sample_index": 0,
+          "table": "scorecard_member_ratings",
+          "row_index": 0,
+          "field": "value_text"
+        },
+        {
+          "sample_index": 1,
+          "table": "scorecard_member_item_results",
+          "row_index": 0,
+          "field": "action_text"
+        }
+      ],
+      "limits": [
+        "Partial source facts only. No accepted scorecard_snapshots row or complete member roster is asserted.",
+        "No metric participation or weight is inferred from the source grid; only the source action and published rating are retained."
+      ]
+    },
+    {
+      "profile_id": "ada:2023",
+      "kind": "bounded_row_fragments",
+      "production_ready": false,
+      "rows": {
+        "scorecard_publishers": [
+          {
+            "publisher_id": "ada"
+          }
+        ],
+        "scorecards": [
+          {
+            "scorecard_id": "example:ada:2023",
+            "publisher_id": "ada",
+            "capture_id": "ada-index",
+            "source_url": "https://adaction.org/voting-records/",
+            "source_path": "Named sections, page numbers and row labels in notes/examples"
+          }
+        ],
+        "scorecard_methodologies": [
+          {
+            "scorecard_id": "example:ada:2023",
+            "methodology_id": "example-method:0",
+            "methodology_text": "95%",
+            "capture_id": "census-ada-2023",
+            "source_url": "https://adaction.org/wp-content/uploads/2024/09/2023.pdf",
+            "source_path": "Physical page 2 / Notes"
+          }
+        ]
+      },
+      "sample_bindings": [
+        {
+          "sample_index": 0,
+          "table": "scorecard_methodologies",
+          "row_index": 0,
+          "field": "methodology_text"
+        }
+      ],
+      "limits": [
+        "Partial source facts only. No accepted scorecard_snapshots row or complete member roster is asserted.",
+        "These are source rule/legend fragments, not member rating cells. Their meanings are recorded in the profile; no hypothetical members are created."
+      ]
+    },
+    {
+      "profile_id": "ada:1947-format",
+      "kind": "unsupported_without_cell_fixture",
+      "production_ready": false,
+      "rows": {},
+      "sample_bindings": [],
+      "limits": [
+        "Historic scanned report; no independently checked member or item cell, so source-model admission is deferred."
+      ],
+      "unsupported_shapes": [
+        "C-U01"
+      ]
+    },
+    {
+      "profile_id": "ara:2025",
+      "kind": "bounded_row_fragments",
+      "production_ready": false,
+      "rows": {
+        "scorecard_publishers": [
+          {
+            "publisher_id": "ara"
+          }
+        ],
+        "scorecards": [
+          {
+            "scorecard_id": "example:ara:2025",
+            "publisher_id": "ara",
+            "capture_id": "ara-index",
+            "source_url": "https://retiredamericans.org/voting-record/",
+            "source_path": "Named sections, page numbers and row labels in notes/examples"
+          }
+        ],
+        "scorecard_members": [
+          {
+            "scorecard_id": "example:ara:2025",
+            "publisher_member_key": "example-member:0",
+            "member_name": "Hawley",
+            "state": "Missouri",
+            "party": "R",
+            "capture_id": "census-ara-2025",
+            "source_url": "https://retiredamericans.org/wp-content/uploads/2026/03/2025-Congressional-Voting-Record.pdf",
+            "source_path": "Physical page 5 / Missouri / Hawley / Lifetime Score"
+          }
+        ],
+        "scorecard_metrics": [
+          {
+            "scorecard_id": "example:ara:2025",
+            "metric_id": "example-metric:0",
+            "name": "Lifetime Score",
+            "capture_id": "census-ara-2025",
+            "source_url": "https://retiredamericans.org/wp-content/uploads/2026/03/2025-Congressional-Voting-Record.pdf",
+            "source_path": "Physical page 5 / Missouri / Hawley / Lifetime Score"
+          }
+        ],
+        "scorecard_member_ratings": [
+          {
+            "scorecard_id": "example:ara:2025",
+            "metric_id": "example-metric:0",
+            "publisher_member_key": "example-member:0",
+            "value_text": "19",
+            "capture_id": "census-ara-2025",
+            "source_url": "https://retiredamericans.org/wp-content/uploads/2026/03/2025-Congressional-Voting-Record.pdf",
+            "source_path": "Physical page 5 / Missouri / Hawley / Lifetime Score"
+          }
+        ]
+      },
+      "sample_bindings": [
+        {
+          "sample_index": 0,
+          "table": "scorecard_member_ratings",
+          "row_index": 0,
+          "field": "value_text"
+        }
+      ],
+      "limits": [
+        "Partial source facts only. No accepted scorecard_snapshots row or complete member roster is asserted."
+      ]
+    },
+    {
+      "profile_id": "frc_action:2026-live",
+      "kind": "bounded_row_fragments",
+      "production_ready": false,
+      "rows": {
+        "scorecard_publishers": [
+          {
+            "publisher_id": "frc_action"
+          }
+        ],
+        "scorecards": [
+          {
+            "scorecard_id": "example:frc_action:2026-live",
+            "publisher_id": "frc_action",
+            "capture_id": "frc-index",
+            "source_url": "https://www.frcaction.org/scorecard",
+            "source_path": "Named sections, page numbers and row labels in notes/examples"
+          }
+        ],
+        "scorecard_methodologies": [
+          {
+            "scorecard_id": "example:frc_action:2026-live",
+            "methodology_id": "example-method:0",
+            "methodology_text": "Not Voting",
+            "capture_id": "frc-index",
+            "source_url": "https://www.frcaction.org/scorecard",
+            "source_path": "End of delivered page / legend"
+          }
+        ]
+      },
+      "sample_bindings": [
+        {
+          "sample_index": 0,
+          "table": "scorecard_methodologies",
+          "row_index": 0,
+          "field": "methodology_text"
+        }
+      ],
+      "limits": [
+        "Partial source facts only. No accepted scorecard_snapshots row or complete member roster is asserted.",
+        "These are source rule/legend fragments, not member rating cells. Their meanings are recorded in the profile; no hypothetical members are created."
+      ]
+    },
+    {
+      "profile_id": "ila:2026-method",
+      "kind": "bounded_row_fragments",
+      "production_ready": false,
+      "rows": {
+        "scorecard_publishers": [
+          {
+            "publisher_id": "ila"
+          }
+        ],
+        "scorecards": [
+          {
+            "scorecard_id": "example:ila:2026-method",
+            "publisher_id": "ila",
+            "capture_id": "ila-index",
+            "source_url": "https://www.limitedgov.org/just-announced-2026-limited-government-index-and-awardees/",
+            "source_path": "Named sections, page numbers and row labels in notes/examples"
+          }
+        ],
+        "scorecard_methodologies": [
+          {
+            "scorecard_id": "example:ila:2026-method",
+            "methodology_id": "example-method:0",
+            "methodology_text": "Cook PVI election data and ILA’s proprietary algorithms",
+            "capture_id": "ila-index",
+            "source_url": "https://www.limitedgov.org/just-announced-2026-limited-government-index-and-awardees/",
+            "source_path": "The First District-Based Grading System"
+          }
+        ]
+      },
+      "sample_bindings": [],
+      "limits": [
+        "Partial source facts only. No accepted scorecard_snapshots row or complete member roster is asserted.",
+        "These are source rule/legend fragments, not member rating cells. Their meanings are recorded in the profile; no hypothetical members are created.",
+        "District-relative method retained as disclosed text. No weights, grade values, or constituency transforms were published in this captured announcement."
+      ]
+    },
+    {
+      "profile_id": "network:2025",
+      "kind": "bounded_row_fragments",
+      "production_ready": false,
+      "rows": {
+        "scorecard_publishers": [
+          {
+            "publisher_id": "network"
+          }
+        ],
+        "scorecards": [
+          {
+            "scorecard_id": "example:network:2025",
+            "publisher_id": "network",
+            "capture_id": "census-network-2025",
+            "source_url": "https://media.networklobby.org/uploads/2026/01/2025-NETWORK-Voting-Record.pdf",
+            "source_path": "Named sections, page numbers and row labels in notes/examples"
+          }
+        ],
+        "scorecard_members": [
+          {
+            "scorecard_id": "example:network:2025",
+            "publisher_member_key": "example-member:0",
+            "member_name": "Wicker",
+            "state": "Mississippi",
+            "party": "R",
+            "capture_id": "census-network-2025",
+            "source_url": "https://media.networklobby.org/uploads/2026/01/2025-NETWORK-Voting-Record.pdf",
+            "source_path": "Physical page 3 / Mississippi / Wicker"
+          }
+        ],
+        "scorecard_metrics": [
+          {
+            "scorecard_id": "example:network:2025",
+            "metric_id": "example-metric:0",
+            "name": "%",
+            "capture_id": "census-network-2025",
+            "source_url": "https://media.networklobby.org/uploads/2026/01/2025-NETWORK-Voting-Record.pdf",
+            "source_path": "Physical page 3 / Mississippi / Wicker"
+          }
+        ],
+        "scorecard_member_ratings": [
+          {
+            "scorecard_id": "example:network:2025",
+            "metric_id": "example-metric:0",
+            "publisher_member_key": "example-member:0",
+            "value_text": "14%",
+            "capture_id": "census-network-2025",
+            "source_url": "https://media.networklobby.org/uploads/2026/01/2025-NETWORK-Voting-Record.pdf",
+            "source_path": "Physical page 3 / Mississippi / Wicker"
+          }
+        ],
+        "scorecard_items": [
+          {
+            "scorecard_id": "example:network:2025",
+            "item_id": "example-item:0",
+            "title": "Laken Riley Act (S.5) - Vote #23",
+            "chamber_text": "HOUSE",
+            "bill_citation_text": "S.5",
+            "roll_number_text": "23",
+            "publisher_position_text": "Nay",
+            "position_basis": "explicit",
+            "position_source_path": "Physical page 4 / Laken Riley Act / NETWORK position",
+            "capture_id": "census-network-2025",
+            "source_url": "https://media.networklobby.org/uploads/2026/01/2025-NETWORK-Voting-Record.pdf",
+            "source_path": "Physical page 4 / Laken Riley Act"
+          }
+        ]
+      },
+      "sample_bindings": [
+        {
+          "sample_index": 0,
+          "table": "scorecard_member_ratings",
+          "row_index": 0,
+          "field": "value_text"
+        },
+        {
+          "sample_index": 1,
+          "table": "scorecard_items",
+          "row_index": 0,
+          "field": "publisher_position_text"
+        }
+      ],
+      "limits": [
+        "Partial source facts only. No accepted scorecard_snapshots row or complete member roster is asserted."
+      ]
+    },
+    {
+      "profile_id": "niac_action:117-method",
+      "kind": "bounded_row_fragments",
+      "production_ready": false,
+      "rows": {
+        "scorecard_publishers": [
+          {
+            "publisher_id": "niac_action"
+          }
+        ],
+        "scorecards": [
+          {
+            "scorecard_id": "example:niac_action:117-method",
+            "publisher_id": "niac_action",
+            "capture_id": "niac-117",
+            "source_url": "https://niacouncil.org/congressional-scorecard-117th-congress/",
+            "source_path": "Named sections, page numbers and row labels in notes/examples",
+            "congress_text": "117th"
+          }
+        ],
+        "scorecard_items": [
+          {
+            "scorecard_id": "example:niac_action:117-method",
+            "item_id": "example-item:0",
+            "title": "JCPOA 2015 Vote",
+            "item_date_text": "2015",
+            "capture_id": "niac-117",
+            "source_url": "https://niacouncil.org/congressional-scorecard-117th-congress/",
+            "source_path": "House / Peace and Diplomacy"
+          }
+        ]
+      },
+      "sample_bindings": [
+        {
+          "sample_index": 0,
+          "table": "scorecard_items",
+          "row_index": 0,
+          "field": "title"
+        }
+      ],
+      "limits": [
+        "Partial source facts only. No accepted scorecard_snapshots row or complete member roster is asserted.",
+        "117th labels the edition; 2015 labels this item. Do not narrow item resolution to the edition Congress or invent a lifetime period."
+      ]
+    },
+    {
+      "profile_id": "nrf:119-senate-grid",
+      "kind": "bounded_row_fragments",
+      "production_ready": false,
+      "rows": {
+        "scorecard_publishers": [
+          {
+            "publisher_id": "nrf"
+          }
+        ],
+        "scorecards": [
+          {
+            "scorecard_id": "example:nrf:119-senate-grid",
+            "publisher_id": "nrf",
+            "capture_id": "census-nrf-119-senate",
+            "source_url": "https://nrf.com/advocacy/action-center/vv-congressional-scorecard/2391-1848/senate",
+            "source_path": "One delivered HTML table; columns Name,H.R.1,H.Con.Res.14,H.R.5371,S.1404,S.3623,S.844"
+          }
+        ],
+        "scorecard_members": [
+          {
+            "scorecard_id": "example:nrf:119-senate-grid",
+            "publisher_member_key": "example-member:0",
+            "member_name": "Alsobrooks, Angela",
+            "publisher_member_id": "68368",
+            "state": "Maryland",
+            "party": "D",
+            "capture_id": "census-nrf-119-senate",
+            "source_url": "https://nrf.com/advocacy/action-center/vv-congressional-scorecard/2391-1848/senate",
+            "source_path": "table / Alsobrooks, Angela (D-Maryland) / member URL MD/68368"
+          }
+        ],
+        "scorecard_items": [
+          {
+            "scorecard_id": "example:nrf:119-senate-grid",
+            "item_id": "example-item:0",
+            "title": "S. 1404",
+            "bill_citation_text": "S. 1404",
+            "publisher_position_text": "SUPPORT",
+            "position_basis": "explicit",
+            "position_source_path": "S.1404 issue description / NRF POSITION: SUPPORT",
+            "capture_id": "census-nrf-119-senate",
+            "source_url": "https://nrf.com/advocacy/action-center/vv-congressional-scorecard/2391-1848/senate",
+            "source_path": "table header / S. 1404"
+          },
+          {
+            "scorecard_id": "example:nrf:119-senate-grid",
+            "item_id": "example-item:1",
+            "title": "S. 3623",
+            "bill_citation_text": "S. 3623",
+            "capture_id": "census-nrf-119-senate",
+            "source_url": "https://nrf.com/advocacy/action-center/vv-congressional-scorecard/2391-1848/senate",
+            "source_path": "table header / S. 3623"
+          }
+        ],
+        "scorecard_member_item_results": [
+          {
+            "scorecard_id": "example:nrf:119-senate-grid",
+            "result_id": "example-result:0",
+            "item_id": "example-item:0",
+            "publisher_member_key": "example-member:0",
+            "metric_id": null,
+            "participation_id": null,
+            "result_text": "supports nrf's position",
+            "capture_id": "census-nrf-119-senate",
+            "source_url": "https://nrf.com/advocacy/action-center/vv-congressional-scorecard/2391-1848/senate",
+            "source_path": "Table / Alsobrooks, Angela (D-Maryland) / S.1404 / img @alt"
+          },
+          {
+            "scorecard_id": "example:nrf:119-senate-grid",
+            "result_id": "example-result:1",
+            "item_id": "example-item:1",
+            "publisher_member_key": "example-member:0",
+            "metric_id": null,
+            "participation_id": null,
+            "result_text": "absent",
+            "capture_id": "census-nrf-119-senate",
+            "source_url": "https://nrf.com/advocacy/action-center/vv-congressional-scorecard/2391-1848/senate",
+            "source_path": "Same row / S.3623 / img @alt"
+          }
+        ],
+        "scorecard_methodologies": [
+          {
+            "scorecard_id": "example:nrf:119-senate-grid",
+            "methodology_id": "example-method:0",
+            "methodology_text": "blank = no data",
+            "capture_id": "census-nrf-119-senate",
+            "source_url": "https://nrf.com/advocacy/action-center/vv-congressional-scorecard/2391-1848/senate",
+            "source_path": "Legend above table"
+          }
+        ]
+      },
+      "sample_bindings": [
+        {
+          "sample_index": 0,
+          "table": "scorecard_member_item_results",
+          "row_index": 0,
+          "field": "result_text"
+        },
+        {
+          "sample_index": 1,
+          "table": "scorecard_member_item_results",
+          "row_index": 1,
+          "field": "result_text"
+        },
+        {
+          "sample_index": 2,
+          "table": "scorecard_methodologies",
+          "row_index": 0,
+          "field": "methodology_text"
+        }
+      ],
+      "limits": [
+        "Partial source facts only. No accepted scorecard_snapshots row or complete member roster is asserted.",
+        "No scorecard_metrics, scorecard_metric_items or scorecard_member_ratings rows. Null metric and participation are intentional; agreement image alt is not an official congressional action."
+      ]
+    },
+    {
+      "profile_id": "aauw:118",
+      "kind": "bounded_row_fragments",
+      "production_ready": false,
+      "rows": {
+        "scorecard_publishers": [
+          {
+            "publisher_id": "aauw"
+          }
+        ],
+        "scorecards": [
+          {
+            "scorecard_id": "example:aauw:118",
+            "publisher_id": "aauw",
+            "capture_id": "census-aauw-118",
+            "source_url": "https://www.aauwaction.org/wp-content/uploads/2024/10/CVR-2024-FINAL-VERSION-2.pdf",
+            "source_path": "Named sections, page numbers and row labels in notes/examples"
+          }
+        ],
+        "scorecard_methodologies": [
+          {
+            "scorecard_id": "example:aauw:118",
+            "methodology_id": "example-method:0",
+            "methodology_text": "NV",
+            "capture_id": "census-aauw-118",
+            "source_url": "https://www.aauwaction.org/wp-content/uploads/2024/10/CVR-2024-FINAL-VERSION-2.pdf",
+            "source_path": "Member-table legend"
+          },
+          {
+            "scorecard_id": "example:aauw:118",
+            "methodology_id": "example-method:1",
+            "methodology_text": "N/A",
+            "capture_id": "census-aauw-118",
+            "source_url": "https://www.aauwaction.org/wp-content/uploads/2024/10/CVR-2024-FINAL-VERSION-2.pdf",
+            "source_path": "Member tables / prior Congress columns"
+          }
+        ]
+      },
+      "sample_bindings": [
+        {
+          "sample_index": 0,
+          "table": "scorecard_methodologies",
+          "row_index": 0,
+          "field": "methodology_text"
+        },
+        {
+          "sample_index": 1,
+          "table": "scorecard_methodologies",
+          "row_index": 1,
+          "field": "methodology_text"
+        }
+      ],
+      "limits": [
+        "Partial source facts only. No accepted scorecard_snapshots row or complete member roster is asserted.",
+        "These are source rule/legend fragments, not member rating cells. Their meanings are recorded in the profile; no hypothetical members are created."
+      ]
+    },
+    {
+      "profile_id": "boilermakers:1999",
+      "kind": "bounded_row_fragments",
+      "production_ready": false,
+      "rows": {
+        "scorecard_publishers": [
+          {
+            "publisher_id": "boilermakers"
+          }
+        ],
+        "scorecards": [
+          {
+            "scorecard_id": "example:boilermakers:1999",
+            "publisher_id": "boilermakers",
+            "capture_id": "census-boilermakers-1999",
+            "source_url": "https://boilermakers.org/sites/default/files/reporter/V39N2_0.pdf",
+            "source_path": "Named sections, page numbers and row labels in notes/examples"
+          }
+        ],
+        "scorecard_metrics": [
+          {
+            "scorecard_id": "example:boilermakers:1999",
+            "metric_id": "example-metric:0",
+            "name": "99%",
+            "capture_id": "census-boilermakers-1999",
+            "source_url": "https://boilermakers.org/sites/default/files/reporter/V39N2_0.pdf",
+            "source_path": "Physical page 7 / Key to Senate Votes"
+          },
+          {
+            "scorecard_id": "example:boilermakers:1999",
+            "metric_id": "example-metric:1",
+            "name": "Life%",
+            "capture_id": "census-boilermakers-1999",
+            "source_url": "https://boilermakers.org/sites/default/files/reporter/V39N2_0.pdf",
+            "source_path": "Physical page 7 / Key to Senate Votes"
+          }
+        ],
+        "scorecard_methodologies": [
+          {
+            "scorecard_id": "example:boilermakers:1999",
+            "methodology_id": "example-method:0",
+            "methodology_text": "W",
+            "capture_id": "census-boilermakers-1999",
+            "source_url": "https://boilermakers.org/sites/default/files/reporter/V39N2_0.pdf",
+            "source_path": "Physical page 7 / Key to Senate Votes"
+          }
+        ]
+      },
+      "sample_bindings": [
+        {
+          "sample_index": 0,
+          "table": "scorecard_metrics",
+          "row_index": 0,
+          "field": "name"
+        },
+        {
+          "sample_index": 1,
+          "table": "scorecard_metrics",
+          "row_index": 1,
+          "field": "name"
+        },
+        {
+          "sample_index": 2,
+          "table": "scorecard_methodologies",
+          "row_index": 0,
+          "field": "methodology_text"
+        }
+      ],
+      "limits": [
+        "Partial source facts only. No accepted scorecard_snapshots row or complete member roster is asserted."
+      ]
+    },
+    {
+      "profile_id": "childrens_defense:117-announcement",
+      "kind": "bounded_row_fragments",
+      "production_ready": false,
+      "rows": {
+        "scorecard_publishers": [
+          {
+            "publisher_id": "childrens_defense"
+          }
+        ],
+        "scorecards": [
+          {
+            "scorecard_id": "example:childrens_defense:117-announcement",
+            "publisher_id": "childrens_defense",
+            "capture_id": "census-cdf-117",
+            "source_url": "https://www.childrensdefense.org/cdf-action-council-releases-report/",
+            "source_path": "Named sections, page numbers and row labels in notes/examples"
+          }
+        ],
+        "scorecard_methodologies": [
+          {
+            "scorecard_id": "example:childrens_defense:117-announcement",
+            "methodology_id": "example-method:0",
+            "methodology_text": "updated quarterly",
+            "capture_id": "census-cdf-117",
+            "source_url": "https://www.childrensdefense.org/cdf-action-council-releases-report/",
+            "source_path": "Legislative Report Card announcement / methodology paragraph"
+          }
+        ]
+      },
+      "sample_bindings": [],
+      "limits": [
+        "Partial source facts only. No accepted scorecard_snapshots row or complete member roster is asserted.",
+        "These are source rule/legend fragments, not member rating cells. Their meanings are recorded in the profile; no hypothetical members are created.",
+        "Only announcement and method shape are admitted; member rows and calculation are not acquired."
+      ]
+    },
+    {
+      "profile_id": "end_citizens_united:119",
+      "kind": "bounded_row_fragments",
+      "production_ready": false,
+      "rows": {
+        "scorecard_publishers": [
+          {
+            "publisher_id": "end_citizens_united"
+          }
+        ],
+        "scorecards": [
+          {
+            "scorecard_id": "example:end_citizens_united:119",
+            "publisher_id": "end_citizens_united",
+            "capture_id": "census-ecu-119",
+            "source_url": "https://www.endcitizensunited.org/end-citizens-united-scorecard",
+            "source_path": "Named sections, page numbers and row labels in notes/examples",
+            "title": "2026 ECU Anti-COrruption ScoreCaRD"
+          }
+        ],
+        "scorecard_members": [
+          {
+            "scorecard_id": "example:end_citizens_united:119",
+            "publisher_member_key": "example-member:0",
+            "member_name": "Michael Bennet",
+            "state": "CO",
+            "party": "D",
+            "capture_id": "census-ecu-119",
+            "source_url": "https://www.endcitizensunited.org/end-citizens-united-scorecard",
+            "source_path": "U.S. SENATE / Michael Bennet"
+          },
+          {
+            "scorecard_id": "example:end_citizens_united:119",
+            "publisher_member_key": "example-member:1",
+            "member_name": "Jim Banks",
+            "state": "IN",
+            "party": "R",
+            "capture_id": "census-ecu-119",
+            "source_url": "https://www.endcitizensunited.org/end-citizens-united-scorecard",
+            "source_path": "U.S. SENATE / Jim Banks"
+          }
+        ],
+        "scorecard_metrics": [
+          {
+            "scorecard_id": "example:end_citizens_united:119",
+            "metric_id": "example-metric:0",
+            "capture_id": "census-ecu-119",
+            "source_url": "https://www.endcitizensunited.org/end-citizens-united-scorecard",
+            "source_path": "U.S. SENATE / Michael Bennet"
+          }
+        ],
+        "scorecard_member_ratings": [
+          {
+            "scorecard_id": "example:end_citizens_united:119",
+            "metric_id": "example-metric:0",
+            "publisher_member_key": "example-member:0",
+            "value_text": "A+",
+            "capture_id": "census-ecu-119",
+            "source_url": "https://www.endcitizensunited.org/end-citizens-united-scorecard",
+            "source_path": "U.S. SENATE / Michael Bennet"
+          },
+          {
+            "scorecard_id": "example:end_citizens_united:119",
+            "metric_id": "example-metric:0",
+            "publisher_member_key": "example-member:1",
+            "value_text": "F",
+            "capture_id": "census-ecu-119",
+            "source_url": "https://www.endcitizensunited.org/end-citizens-united-scorecard",
+            "source_path": "U.S. SENATE / Jim Banks"
+          }
+        ]
+      },
+      "sample_bindings": [
+        {
+          "sample_index": 0,
+          "table": "scorecard_member_ratings",
+          "row_index": 0,
+          "field": "value_text"
+        },
+        {
+          "sample_index": 1,
+          "table": "scorecard_member_ratings",
+          "row_index": 1,
+          "field": "value_text"
+        }
+      ],
+      "limits": [
+        "Partial source facts only. No accepted scorecard_snapshots row or complete member roster is asserted.",
+        "The named scorecard supplies the grade measurement; no numeric conversion or undisclosed calculation is asserted."
+      ]
+    },
+    {
+      "profile_id": "leadership_conference:118",
+      "kind": "bounded_row_fragments",
+      "production_ready": false,
+      "rows": {
+        "scorecard_publishers": [
+          {
+            "publisher_id": "leadership_conference"
+          }
+        ],
+        "scorecards": [
+          {
+            "scorecard_id": "example:leadership_conference:118",
+            "publisher_id": "leadership_conference",
+            "capture_id": "census-leadership-118",
+            "source_url": "https://civilrights.org/wp-content/uploads/2024/10/Voting-Record-118th-Congress.pdf",
+            "source_path": "Named sections, page numbers and row labels in notes/examples"
+          }
+        ],
+        "scorecard_members": [
+          {
+            "scorecard_id": "example:leadership_conference:118",
+            "publisher_member_key": "example-member:0",
+            "member_name": "Massie Thomas",
+            "state": "KENTUCKY",
+            "party": "R",
+            "district": "4",
+            "capture_id": "census-leadership-118",
+            "source_url": "https://civilrights.org/wp-content/uploads/2024/10/Voting-Record-118th-Congress.pdf",
+            "source_path": "House scorecard / Kentucky / Massie Thomas"
+          }
+        ],
+        "scorecard_metrics": [
+          {
+            "scorecard_id": "example:leadership_conference:118",
+            "metric_id": "example-metric:0",
+            "name": "SCORE",
+            "capture_id": "census-leadership-118",
+            "source_url": "https://civilrights.org/wp-content/uploads/2024/10/Voting-Record-118th-Congress.pdf",
+            "source_path": "House scorecard / Kentucky / Massie Thomas"
+          }
+        ],
+        "scorecard_member_ratings": [
+          {
+            "scorecard_id": "example:leadership_conference:118",
+            "metric_id": "example-metric:0",
+            "publisher_member_key": "example-member:0",
+            "value_text": "12%",
+            "capture_id": "census-leadership-118",
+            "source_url": "https://civilrights.org/wp-content/uploads/2024/10/Voting-Record-118th-Congress.pdf",
+            "source_path": "House scorecard / Kentucky / Massie Thomas"
+          }
+        ]
+      },
+      "sample_bindings": [
+        {
+          "sample_index": 0,
+          "table": "scorecard_member_ratings",
+          "row_index": 0,
+          "field": "value_text"
+        }
+      ],
+      "limits": [
+        "Partial source facts only. No accepted scorecard_snapshots row or complete member roster is asserted."
+      ]
+    },
+    {
+      "profile_id": "planned_parenthood:current-method",
+      "kind": "bounded_row_fragments",
+      "production_ready": false,
+      "rows": {
+        "scorecard_publishers": [
+          {
+            "publisher_id": "planned_parenthood"
+          }
+        ],
+        "scorecards": [
+          {
+            "scorecard_id": "example:planned_parenthood:current-method",
+            "publisher_id": "planned_parenthood",
+            "capture_id": "census-plannedparenthood-index",
+            "source_url": "https://www.plannedparenthoodaction.org/congressional-scorecard",
+            "source_path": "Named sections, page numbers and row labels in notes/examples"
+          }
+        ],
+        "scorecard_methodologies": [
+          {
+            "scorecard_id": "example:planned_parenthood:current-method",
+            "methodology_id": "example-method:0",
+            "methodology_text": "━",
+            "capture_id": "census-plannedparenthood-index",
+            "source_url": "https://www.plannedparenthoodaction.org/congressional-scorecard",
+            "source_path": "Scorecard Key"
+          }
+        ],
+        "scorecard_metrics": [
+          {
+            "scorecard_id": "example:planned_parenthood:current-method",
+            "metric_id": "example-metric:0",
+            "capture_id": "census-plannedparenthood-index",
+            "source_url": "https://www.plannedparenthoodaction.org/congressional-scorecard",
+            "source_path": "Introductory cumulative-score methodology",
+            "period_text": "current and preceding six sessions of Congress"
+          }
+        ]
+      },
+      "sample_bindings": [
+        {
+          "sample_index": 0,
+          "table": "scorecard_methodologies",
+          "row_index": 0,
+          "field": "methodology_text"
+        }
+      ],
+      "limits": [
+        "Partial source facts only. No accepted scorecard_snapshots row or complete member roster is asserted.",
+        "These are source rule/legend fragments, not member rating cells. Their meanings are recorded in the profile; no hypothetical members are created.",
+        "Relative rolling window remains literal. No concrete dates or Congress list is inferred from observation date; delivered member-table load error prevents snapshot qualification."
+      ]
+    },
+    {
+      "profile_id": "reproductive_freedom:2025-budd",
+      "kind": "bounded_row_fragments",
+      "production_ready": false,
+      "rows": {
+        "scorecard_publishers": [
+          {
+            "publisher_id": "reproductive_freedom"
+          }
+        ],
+        "scorecards": [
+          {
+            "scorecard_id": "example:reproductive_freedom:2025-budd",
+            "publisher_id": "reproductive_freedom",
+            "capture_id": "census-reproductive-budd",
+            "source_url": "https://reproductivefreedomforall.org/lawmaker/ted-budd/",
+            "source_path": "Named sections, page numbers and row labels in notes/examples"
+          }
+        ],
+        "scorecard_members": [
+          {
+            "scorecard_id": "example:reproductive_freedom:2025-budd",
+            "publisher_member_key": "example-member:0",
+            "member_name": "Ted Budd",
+            "state": "North Carolina",
+            "capture_id": "census-reproductive-budd",
+            "source_url": "https://reproductivefreedomforall.org/lawmaker/ted-budd/",
+            "source_path": "Member header / 2025 Score"
+          }
+        ],
+        "scorecard_metrics": [
+          {
+            "scorecard_id": "example:reproductive_freedom:2025-budd",
+            "metric_id": "example-metric:0",
+            "name": "2025 Score",
+            "capture_id": "census-reproductive-budd",
+            "source_url": "https://reproductivefreedomforall.org/lawmaker/ted-budd/",
+            "source_path": "Member header / 2025 Score"
+          }
+        ],
+        "scorecard_member_ratings": [
+          {
+            "scorecard_id": "example:reproductive_freedom:2025-budd",
+            "metric_id": "example-metric:0",
+            "publisher_member_key": "example-member:0",
+            "value_text": "0%",
+            "capture_id": "census-reproductive-budd",
+            "source_url": "https://reproductivefreedomforall.org/lawmaker/ted-budd/",
+            "source_path": "Member header / 2025 Score"
+          }
+        ],
+        "scorecard_methodologies": [
+          {
+            "scorecard_id": "example:reproductive_freedom:2025-budd",
+            "methodology_id": "example-method:0",
+            "methodology_text": "L",
+            "capture_id": "census-reproductive-budd",
+            "source_url": "https://reproductivefreedomforall.org/lawmaker/ted-budd/",
+            "source_path": "How They Voted legend"
+          },
+          {
+            "scorecard_id": "example:reproductive_freedom:2025-budd",
+            "methodology_id": "example-method:1",
+            "methodology_text": "S",
+            "capture_id": "census-reproductive-budd",
+            "source_url": "https://reproductivefreedomforall.org/lawmaker/ted-budd/",
+            "source_path": "How They Voted legend"
+          }
+        ]
+      },
+      "sample_bindings": [
+        {
+          "sample_index": 0,
+          "table": "scorecard_member_ratings",
+          "row_index": 0,
+          "field": "value_text"
+        },
+        {
+          "sample_index": 1,
+          "table": "scorecard_methodologies",
+          "row_index": 0,
+          "field": "methodology_text"
+        },
+        {
+          "sample_index": 2,
+          "table": "scorecard_methodologies",
+          "row_index": 1,
+          "field": "methodology_text"
+        }
+      ],
+      "limits": [
+        "Partial source facts only. No accepted scorecard_snapshots row or complete member roster is asserted."
+      ]
+    },
+    {
+      "profile_id": "national_parks_action:118-scope",
+      "kind": "bounded_row_fragments",
+      "production_ready": false,
+      "rows": {
+        "scorecard_publishers": [
+          {
+            "publisher_id": "national_parks_action"
+          }
+        ],
+        "scorecards": [
+          {
+            "scorecard_id": "example:national_parks_action:118-scope",
+            "publisher_id": "national_parks_action",
+            "capture_id": "census-nationalparks-index",
+            "source_url": "https://nationalparksaction.org/scorecard/",
+            "source_path": "Named sections, page numbers and row labels in notes/examples",
+            "chamber_scope_text": "House of Representatives",
+            "congress_text": "118th Congress",
+            "edition_label_text": "2024"
+          }
+        ],
+        "scorecard_methodologies": [
+          {
+            "scorecard_id": "example:national_parks_action:118-scope",
+            "methodology_id": "example-method:0",
+            "methodology_text": "the Senate did not take any votes on parks that can be scored",
+            "capture_id": "census-nationalparks-index",
+            "source_url": "https://nationalparksaction.org/scorecard/",
+            "source_path": "2024 Congressional Scorecard introduction"
+          }
+        ]
+      },
+      "sample_bindings": [],
+      "limits": [
+        "Partial source facts only. No accepted scorecard_snapshots row or complete member roster is asserted.",
+        "These are source rule/legend fragments, not member rating cells. Their meanings are recorded in the profile; no hypothetical members are created.",
+        "House-only scope comes from an explicit publisher statement; it must not be inferred from a failed or empty Senate read."
+      ]
+    },
+    {
+      "profile_id": "foreign_policy_america:118",
+      "kind": "bounded_row_fragments",
+      "production_ready": false,
+      "rows": {
+        "scorecard_publishers": [
+          {
+            "publisher_id": "foreign_policy_america"
+          }
+        ],
+        "scorecards": [
+          {
+            "scorecard_id": "example:foreign_policy_america:118",
+            "publisher_id": "foreign_policy_america",
+            "capture_id": "census-fp4a-118-pdf",
+            "source_url": "https://www.fp4america.org/wp-content/uploads/2025/04/FP4A-118th-Congress-Legislative-Scorecard.pdf",
+            "source_path": "Named sections, page numbers and row labels in notes/examples"
+          }
+        ],
+        "scorecard_members": [
+          {
+            "scorecard_id": "example:foreign_policy_america:118",
+            "publisher_member_key": "example-member:0",
+            "member_name": "Britt, Katie",
+            "state": "ALABAMA",
+            "party": "R",
+            "capture_id": "census-fp4a-118-pdf",
+            "source_url": "https://www.fp4america.org/wp-content/uploads/2025/04/FP4A-118th-Congress-Legislative-Scorecard.pdf",
+            "source_path": "Physical page11 / Alabama / Britt / 118th Congress (%)"
+          }
+        ],
+        "scorecard_metrics": [
+          {
+            "scorecard_id": "example:foreign_policy_america:118",
+            "metric_id": "example-metric:0",
+            "name": "118th Congress (%)",
+            "capture_id": "census-fp4a-118-pdf",
+            "source_url": "https://www.fp4america.org/wp-content/uploads/2025/04/FP4A-118th-Congress-Legislative-Scorecard.pdf",
+            "source_path": "Physical page11 / Alabama / Britt / 118th Congress (%)",
+            "value_unit_text": "%"
+          }
+        ],
+        "scorecard_member_ratings": [
+          {
+            "scorecard_id": "example:foreign_policy_america:118",
+            "metric_id": "example-metric:0",
+            "publisher_member_key": "example-member:0",
+            "value_text": "11",
+            "capture_id": "census-fp4a-118-pdf",
+            "source_url": "https://www.fp4america.org/wp-content/uploads/2025/04/FP4A-118th-Congress-Legislative-Scorecard.pdf",
+            "source_path": "Physical page11 / Alabama / Britt / 118th Congress (%)"
+          }
+        ],
+        "scorecard_methodologies": [
+          {
+            "scorecard_id": "example:foreign_policy_america:118",
+            "methodology_id": "example-method:0",
+            "methodology_text": "N/A",
+            "capture_id": "census-fp4a-118-pdf",
+            "source_url": "https://www.fp4america.org/wp-content/uploads/2025/04/FP4A-118th-Congress-Legislative-Scorecard.pdf",
+            "source_path": "Physical page11 / KEY"
+          }
+        ]
+      },
+      "sample_bindings": [
+        {
+          "sample_index": 0,
+          "table": "scorecard_member_ratings",
+          "row_index": 0,
+          "field": "value_text"
+        },
+        {
+          "sample_index": 1,
+          "table": "scorecard_methodologies",
+          "row_index": 0,
+          "field": "methodology_text"
+        }
+      ],
+      "limits": [
+        "Partial source facts only. No accepted scorecard_snapshots row or complete member roster is asserted."
+      ]
+    },
+    {
+      "profile_id": "sace_action:2012",
+      "kind": "bounded_row_fragments",
+      "production_ready": false,
+      "rows": {
+        "scorecard_publishers": [
+          {
+            "publisher_id": "sace_action"
+          }
+        ],
+        "scorecards": [
+          {
+            "scorecard_id": "example:sace_action:2012",
+            "publisher_id": "sace_action",
+            "capture_id": "census-sace-2012",
+            "source_url": "https://www.cleanenergyactionfund.org/wp-content/uploads/2013/08/SACEAF2012scorecardfinal.pdf",
+            "source_path": "Named sections, page numbers and row labels in notes/examples"
+          }
+        ],
+        "scorecard_members": [
+          {
+            "scorecard_id": "example:sace_action:2012",
+            "publisher_member_key": "example-member:0",
+            "member_name": "Cohen",
+            "state": "TN",
+            "party": "D",
+            "district": "TN09",
+            "capture_id": "census-sace-2012",
+            "source_url": "https://www.cleanenergyactionfund.org/wp-content/uploads/2013/08/SACEAF2012scorecardfinal.pdf",
+            "source_path": "Physical page11 / Tennessee / Cohen"
+          },
+          {
+            "scorecard_id": "example:sace_action:2012",
+            "publisher_member_key": "example-member:1",
+            "member_name": "Duncan",
+            "district": "TN02",
+            "party": "R",
+            "capture_id": "census-sace-2012",
+            "source_url": "https://www.cleanenergyactionfund.org/wp-content/uploads/2013/08/SACEAF2012scorecardfinal.pdf",
+            "source_path": "Physical page11 / Tennessee / Duncan"
+          }
+        ],
+        "scorecard_metrics": [
+          {
+            "scorecard_id": "example:sace_action:2012",
+            "metric_id": "example-metric:0",
+            "name": "4 key votes in 2012",
+            "capture_id": "census-sace-2012",
+            "source_url": "https://www.cleanenergyactionfund.org/wp-content/uploads/2013/08/SACEAF2012scorecardfinal.pdf",
+            "source_path": "Physical page11 / Tennessee / Cohen"
+          }
+        ],
+        "scorecard_member_ratings": [
+          {
+            "scorecard_id": "example:sace_action:2012",
+            "metric_id": "example-metric:0",
+            "publisher_member_key": "example-member:0",
+            "value_text": "100%",
+            "capture_id": "census-sace-2012",
+            "source_url": "https://www.cleanenergyactionfund.org/wp-content/uploads/2013/08/SACEAF2012scorecardfinal.pdf",
+            "source_path": "Physical page11 / Tennessee / Cohen"
+          }
+        ],
+        "scorecard_items": [
+          {
+            "scorecard_id": "example:sace_action:2012",
+            "item_id": "example-item:0",
+            "title": "Vote #3: Inadequate Coal Ash Regulations",
+            "capture_id": "census-sace-2012",
+            "source_url": "https://www.cleanenergyactionfund.org/wp-content/uploads/2013/08/SACEAF2012scorecardfinal.pdf",
+            "source_path": "Physical page11 / Tennessee / Vote #3 column"
+          }
+        ],
+        "scorecard_member_item_results": [
+          {
+            "scorecard_id": "example:sace_action:2012",
+            "result_id": "example-result:0",
+            "item_id": "example-item:0",
+            "publisher_member_key": "example-member:1",
+            "metric_id": null,
+            "participation_id": null,
+            "action_text": "no vote",
+            "capture_id": "census-sace-2012",
+            "source_url": "https://www.cleanenergyactionfund.org/wp-content/uploads/2013/08/SACEAF2012scorecardfinal.pdf",
+            "source_path": "Physical page11 / Tennessee / Duncan"
+          }
+        ]
+      },
+      "sample_bindings": [
+        {
+          "sample_index": 0,
+          "table": "scorecard_member_ratings",
+          "row_index": 0,
+          "field": "value_text"
+        },
+        {
+          "sample_index": 1,
+          "table": "scorecard_member_item_results",
+          "row_index": 0,
+          "field": "action_text"
+        }
+      ],
+      "limits": [
+        "Partial source facts only. No accepted scorecard_snapshots row or complete member roster is asserted."
+      ]
+    },
+    {
+      "profile_id": "cpac:2025-report",
+      "kind": "bounded_row_fragments",
+      "production_ready": false,
+      "rows": {
+        "scorecard_publishers": [
+          {
+            "publisher_id": "cpac"
+          }
+        ],
+        "scorecards": [
+          {
+            "scorecard_id": "example:cpac:2025-report",
+            "publisher_id": "cpac",
+            "capture_id": "census-cpac-2025-pdf",
+            "source_url": "https://dea0d469-c1d7-4068-bddd-0a3895cc096b.usrfiles.com/ugd/dea0d4_1fbfb19d94774b4a889fd895daf6b73c.pdf",
+            "source_path": "Named sections, page numbers and row labels in notes/examples",
+            "edition_label_text": "2025",
+            "year_text": "2024"
+          }
+        ],
+        "scorecard_members": [
+          {
+            "scorecard_id": "example:cpac:2025-report",
+            "publisher_member_key": "example-member:0",
+            "member_name": "Dan Bishop",
+            "capture_id": "census-cpac-2025-pdf",
+            "source_url": "https://dea0d469-c1d7-4068-bddd-0a3895cc096b.usrfiles.com/ugd/dea0d4_1fbfb19d94774b4a889fd895daf6b73c.pdf",
+            "source_path": "Physical page14 / Conservative Excellence - House"
+          }
+        ],
+        "scorecard_metrics": [
+          {
+            "scorecard_id": "example:cpac:2025-report",
+            "metric_id": "example-metric:0",
+            "capture_id": "census-cpac-2025-pdf",
+            "source_url": "https://dea0d469-c1d7-4068-bddd-0a3895cc096b.usrfiles.com/ugd/dea0d4_1fbfb19d94774b4a889fd895daf6b73c.pdf",
+            "source_path": "Physical page14 / Conservative Excellence - House"
+          }
+        ],
+        "scorecard_member_ratings": [
+          {
+            "scorecard_id": "example:cpac:2025-report",
+            "metric_id": "example-metric:0",
+            "publisher_member_key": "example-member:0",
+            "value_text": "100%",
+            "capture_id": "census-cpac-2025-pdf",
+            "source_url": "https://dea0d469-c1d7-4068-bddd-0a3895cc096b.usrfiles.com/ugd/dea0d4_1fbfb19d94774b4a889fd895daf6b73c.pdf",
+            "source_path": "Physical page14 / Conservative Excellence - House"
+          }
+        ]
+      },
+      "sample_bindings": [
+        {
+          "sample_index": 0,
+          "table": "scorecard_member_ratings",
+          "row_index": 0,
+          "field": "value_text"
+        }
+      ],
+      "limits": [
+        "Partial source facts only. No accepted scorecard_snapshots row or complete member roster is asserted.",
+        "Score is in the Conservative Excellence award list. The PDF edition label and scored session differ; the award list does not establish complete roster coverage."
+      ]
+    },
+    {
+      "profile_id": "american_energy_alliance:119-live",
+      "kind": "bounded_row_fragments",
+      "production_ready": false,
+      "rows": {
+        "scorecard_publishers": [
+          {
+            "publisher_id": "american_energy_alliance"
+          }
+        ],
+        "scorecards": [
+          {
+            "scorecard_id": "example:american_energy_alliance:119-live",
+            "publisher_id": "american_energy_alliance",
+            "capture_id": "census-aea-current",
+            "source_url": "https://www.americanenergyalliance.org/american-energy-scorecard/",
+            "source_path": "Named sections, page numbers and row labels in notes/examples"
+          }
+        ],
+        "scorecard_members": [
+          {
+            "scorecard_id": "example:american_energy_alliance:119-live",
+            "publisher_member_key": "example-member:0",
+            "member_name": "Brian Babin",
+            "state": "TX",
+            "capture_id": "census-aea-current",
+            "source_url": "https://www.americanenergyalliance.org/american-energy-scorecard/",
+            "source_path": "Top Performers / House / TX / Brian Babin"
+          }
+        ],
+        "scorecard_metrics": [
+          {
+            "scorecard_id": "example:american_energy_alliance:119-live",
+            "metric_id": "example-metric:0",
+            "name": "Current Congress Score",
+            "capture_id": "census-aea-current",
+            "source_url": "https://www.americanenergyalliance.org/american-energy-scorecard/",
+            "source_path": "Top Performers / House / TX / Brian Babin"
+          }
+        ],
+        "scorecard_member_ratings": [
+          {
+            "scorecard_id": "example:american_energy_alliance:119-live",
+            "metric_id": "example-metric:0",
+            "publisher_member_key": "example-member:0",
+            "value_text": "100%",
+            "capture_id": "census-aea-current",
+            "source_url": "https://www.americanenergyalliance.org/american-energy-scorecard/",
+            "source_path": "Top Performers / House / TX / Brian Babin"
+          }
+        ]
+      },
+      "sample_bindings": [
+        {
+          "sample_index": 0,
+          "table": "scorecard_member_ratings",
+          "row_index": 0,
+          "field": "value_text"
+        }
+      ],
+      "limits": [
+        "Partial source facts only. No accepted scorecard_snapshots row or complete member roster is asserted."
+      ]
+    }
+  ]
+}

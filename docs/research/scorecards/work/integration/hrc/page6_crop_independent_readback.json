@@ -1,0 +1,33 @@
+{
+  "reviewed_at": "2026-10-03",
+  "scope": "independent direct visual readback of physical page6 left crop only",
+  "source_pdf_sha256": "804c1157e71da53a00821fdcaf15a1790448c682eb49d44613a577cfce9cb855",
+  "input_crop_sha256": "39c934940ca3a6480e67bb6c6f5401a51dc86b0d1f6c0a672fc1c7de39288c5a",
+  "outcome_sha256": "60c5fc9fe40b648afc0a7b4ef1e533be10b93252b40652cf5d17c72614816b88",
+  "private_run": "scorecards-hrc-2026-10-03/gemini-page6-left",
+  "model": "gemini-3.8-flash",
+  "generation": {
+    "maxOutputTokens": 32768,
+    "thinkingConfig": {
+      "thinkingLevel": "medium"
+    },
+    "temperature": 0,
+    "mediaResolution": "MEDIA_RESOLUTION_HIGH",
+    "responseMimeType": "application/json"
+  },
+  "reviewed_source_fields": {
+    "member_names": 20,
+    "party_literals": 20,
+    "score_literals": 60,
+    "action_glyphs": 300,
+    "member_endnote_marker": "Manchin7"
+  },
+  "observed_mismatches_in_reviewed_fields": [],
+  "previous_action_counterexamples_corrected": 11,
+  "previous_party_punctuation_losses_corrected": 20,
+  "whole_page": false,
+  "right_side_endnotes_reviewed_or_merged": false,
+  "complete_edition": false,
+  "production_admission": false,
+  "interpretation": "Cropped pilot passed these visible fields; no full-page or whole-edition qualification follows."
+}

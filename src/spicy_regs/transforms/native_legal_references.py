@@ -32,7 +32,7 @@ from spicy_docs.sources.cfr.authority import scan_ecfr_authority_notes
 from spicy_docs.sources.uscode.references import scan_uscode_references
 
 from spicy_regs.citation_resolution import ROUTES, resolve_citations
-from spicy_regs.source_evidence import CaptureEvidence
+from spicy_regs.source_evidence import CaptureEvidence, SourceEvidenceContext
 from spicy_regs.transforms.table_merge import merge_contract_table, prior_scratch_path
 
 #: The two tables, as spicy-docs contracts them: columns, identities and the rule their rows name.
@@ -59,11 +59,9 @@ def _pinned(spec: dict, base: Path, maximum: int) -> bytes:
     return body
 
 
-def _retain(evidence: CaptureEvidence, body: bytes, **fields: Any) -> None:
-    # A retained input is not a newly observed HTTP response. Use the shared
-    # store and journal with an honest event kind; artifact admission verifies bytes.
-    evidence.store.put_blob(_digest(body), len(body), [body])
-    evidence.event("retained-input", sha256=_digest(body), byte_size=len(body), **fields)
+def _retain(evidence: CaptureEvidence | SourceEvidenceContext, body: bytes, **fields: Any) -> None:
+    # Retained inputs are local observations, not newly observed HTTP responses.
+    evidence.retain_bytes(body, stage="native-legal-references-retained-input", **fields)
 
 
 def build_native_legal_references(

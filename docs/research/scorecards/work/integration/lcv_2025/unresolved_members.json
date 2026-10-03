@@ -1,0 +1,3656 @@
+{
+  "status": "completed_read_only_audit",
+  "scope": "All LCV2025 member rows unresolved under scorecard-resolution-v1.3; existing source and analysis artifacts unchanged.",
+  "counts": {
+    "term_outside_2025": 4,
+    "explicit_retained_name_omitted": 31,
+    "name_component_difference": 5,
+    "accent_difference": 7,
+    "name_variant_not_explicit_in_retained_fields": 12,
+    "explicit_parenthetical_name": 2,
+    "source_name_discrepancy": 1
+  },
+  "total": 62,
+  "source_member_csv": {
+    "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-2026-10-03-samples/lcv-2025-senate-csv.body",
+    "sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b"
+  },
+  "source_member_html": {
+    "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-2026-10-03-samples/lcv-members-exact-html.body",
+    "sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df"
+  },
+  "retained_member_json_sources": [
+    {
+      "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+      "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+      "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-members-2026-10-03/source-evidence/13f799931140422b9115af288529868e/artifact/blobs/sha256/ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c"
+    },
+    {
+      "url": "https://unitedstates.github.io/congress-legislators/legislators-historical.json",
+      "sha256": "sha256:25187633f3215a096fe9d14d8a40db1fb0841ab1d24c6da52da3a80c93698cbc",
+      "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-members-2026-10-03/source-evidence/13f799931140422b9115af288529868e/artifact/blobs/sha256/25187633f3215a096fe9d14d8a40db1fb0841ab1d24c6da52da3a80c93698cbc"
+    }
+  ],
+  "input_pins": {
+    "members": {
+      "sha256": "sha256:96c11c55ce3254491aa1fec9534398bf21f3c450d885cd93b700bf32a48045bb",
+      "byteSize": 283698,
+      "family": "members",
+      "artifactDigest": "sha256:253ae5371141f436d7787608c7da3258b1a05a64b93c26822f227fe3754b251e"
+    },
+    "member_terms": {
+      "sha256": "sha256:8810be48c3ed1a5508ee15243602c02d7ff46eee023ad7eb596206f24f2262f8",
+      "byteSize": 183149,
+      "family": "members",
+      "artifactDigest": "sha256:253ae5371141f436d7787608c7da3258b1a05a64b93c26822f227fe3754b251e"
+    }
+  },
+  "unresolved_artifact": {
+    "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-lcv-2026-10-03/integration-run-1/unresolved.private.json",
+    "sha256": "sha256:d13540f8d274c7679ecda0f0c4b85ed2a3055a416683f383bc4190ce85361e8c"
+  },
+  "notes": [
+    "Raw congressional identity records are the retained unitedstates/congress-legislators community source, not a new federal agency acquisition.",
+    "Every source name and context was reread from original CSV and corroborated against original HTML. Candidate name fields were read from original JSON and compared with pinned Parquet.",
+    "District/surname-based diagnostic candidates are evidence for explaining a failed exact match, not verified identity links. No fuzzy matcher, override or resolver change was applied.",
+    "No row is classified as an ambiguous exact match: existing resolver candidate_count is zero for 58 and one rejected historical candidate for four. Absence from the exact-name index does not mean the person is absent from congressional data."
+  ],
+  "members": [
+    {
+      "publisher_member_key": "alan-armstrong",
+      "source_name": "Alan Armstrong",
+      "category": "term_outside_2025",
+      "reason": "Exact-name candidate's first retained term starts 2026-03-24; no retained term overlaps 2025.",
+      "source": {
+        "row_number": 111,
+        "first": "Alan",
+        "last": "Armstrong",
+        "party": "R",
+        "district": "",
+        "annual": "",
+        "lifetime": "na",
+        "url": "https://www.lcv.org/moc/alan-armstrong/",
+        "chamber": "Senate",
+        "state": "Oklahoma",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Armstrong, Alan",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/alan-armstrong/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "A000383",
+        "primary_indexed_name": "Alan Armstrong",
+        "retained_name_fields": {
+          "first": "Alan",
+          "last": "Armstrong",
+          "official_full": "Alan Armstrong"
+        },
+        "selection_basis": "Existing exact-name candidate retained by resolver; historical term checked independently.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/532"
+        },
+        "terms_overlapping_2025": [],
+        "first_term_start": "2026-03-24"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "1",
+      "resolver_reason": "no_exact_member_match",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "alex-padilla",
+      "source_name": "Alex Padilla",
+      "category": "explicit_retained_name_omitted",
+      "reason": "LCV matches retained upstream official_full='Alex Padilla', nickname + last='Alex Padilla'; current member index only uses primary first/last 'Alejandro Padilla'.",
+      "source": {
+        "row_number": 16,
+        "first": "Alex",
+        "last": "Padilla",
+        "party": "D",
+        "district": "",
+        "annual": "97",
+        "lifetime": "96",
+        "url": "https://www.lcv.org/moc/alex-padilla/",
+        "chamber": "Senate",
+        "state": "California",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Padilla, Alex",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/alex-padilla/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "P000145",
+        "primary_indexed_name": "Alejandro Padilla",
+        "retained_name_fields": {
+          "first": "Alejandro",
+          "nickname": "Alex",
+          "last": "Padilla",
+          "official_full": "Alex Padilla"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/362"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2029-01-03",
+            "term_state": "CA",
+            "term_type": "sen",
+            "term_district": null
+          }
+        ],
+        "first_term_start": "2021-01-20"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "no_exact_member_match",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "amata-coleman-radewagen",
+      "source_name": "Amata Radewagen",
+      "category": "name_component_difference",
+      "reason": "LCV name 'Amata Radewagen' uses different or fewer name components than primary 'Aumua Amata Radewagen'; retained full name is 'Aumua Amata Coleman Radewagen'. No complete exact alias is currently indexed.",
+      "source": {
+        "row_number": 170,
+        "first": "Amata",
+        "last": "Radewagen",
+        "party": "R",
+        "district": "AL",
+        "annual": "0",
+        "lifetime": "7",
+        "url": "https://www.lcv.org/moc/amata-coleman-radewagen/",
+        "chamber": "House",
+        "state": "American Samoa",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Radewagen, Amata",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/amata-coleman-radewagen/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "R000600",
+        "primary_indexed_name": "Aumua Amata Radewagen",
+        "retained_name_fields": {
+          "first": "Aumua Amata",
+          "last": "Radewagen",
+          "middle": "Coleman",
+          "official_full": "Aumua Amata Coleman Radewagen"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/205"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2025-01-03",
+            "term_state": "AS",
+            "term_type": "rep",
+            "term_district": "0"
+          },
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "AS",
+            "term_type": "rep",
+            "term_district": "0"
+          }
+        ],
+        "first_term_start": "2015-01-06"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "no_exact_member_match",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "analilia-mejia",
+      "source_name": "Analilia Mejia",
+      "category": "term_outside_2025",
+      "reason": "Exact-name candidate's first retained term starts 2026-04-20; no retained term overlaps 2025.",
+      "source": {
+        "row_number": 450,
+        "first": "Analilia",
+        "last": "Mejia",
+        "party": "D",
+        "district": "NJ-11",
+        "annual": "",
+        "lifetime": "na",
+        "url": "https://www.lcv.org/moc/analilia-mejia/",
+        "chamber": "House",
+        "state": "New Jersey",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Mejia, Analilia",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/analilia-mejia/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "M001246",
+        "primary_indexed_name": "Analilia Mejia",
+        "retained_name_fields": {
+          "first": "Analilia",
+          "last": "Mejia",
+          "official_full": "Analilia Mejia"
+        },
+        "selection_basis": "Existing exact-name candidate retained by resolver; historical term checked independently.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/534"
+        },
+        "terms_overlapping_2025": [],
+        "first_term_start": "2026-04-20"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "1",
+      "resolver_reason": "unknown_district_literal_ignored:NJ-11",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "andre-carson",
+      "source_name": "Andre Carson",
+      "category": "accent_difference",
+      "reason": "LCV 'Andre Carson' differs from retained primary name 'André Carson' by diacritics; whitespace is already normalized.",
+      "source": {
+        "row_number": 338,
+        "first": "Andre",
+        "last": "Carson",
+        "party": "D",
+        "district": "IN-07",
+        "annual": "100",
+        "lifetime": "95",
+        "url": "https://www.lcv.org/moc/andre-carson/",
+        "chamber": "House",
+        "state": "Indiana",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Carson, Andre",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/andre-carson/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "C001072",
+        "primary_indexed_name": "André Carson",
+        "retained_name_fields": {
+          "first": "André",
+          "last": "Carson",
+          "official_full": "André Carson"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/28"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2025-01-03",
+            "term_state": "IN",
+            "term_type": "rep",
+            "term_district": "7"
+          },
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "IN",
+            "term_type": "rep",
+            "term_district": "7"
+          }
+        ],
+        "first_term_start": "2008-03-13"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "unknown_district_literal_ignored:IN-07",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "anna-paulina-luna",
+      "source_name": "Anna Paulina Luna",
+      "category": "explicit_retained_name_omitted",
+      "reason": "LCV matches retained upstream official_full='Anna Paulina Luna'; current member index only uses primary first/last 'Anna Luna'.",
+      "source": {
+        "row_number": 273,
+        "first": "Anna Paulina",
+        "last": "Luna",
+        "party": "R",
+        "district": "FL-13",
+        "annual": "0",
+        "lifetime": "0",
+        "url": "https://www.lcv.org/moc/anna-paulina-luna/",
+        "chamber": "House",
+        "state": "Florida",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Luna, Anna Paulina",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/anna-paulina-luna/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "L000596",
+        "primary_indexed_name": "Anna Luna",
+        "retained_name_fields": {
+          "first": "Anna",
+          "middle": "Paulina",
+          "last": "Luna",
+          "official_full": "Anna Paulina Luna"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/391"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2025-01-03",
+            "term_state": "FL",
+            "term_type": "rep",
+            "term_district": "13"
+          },
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "FL",
+            "term_type": "rep",
+            "term_district": "13"
+          }
+        ],
+        "first_term_start": "2023-01-03"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "unknown_district_literal_ignored:FL-13",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "ben-ray-lujan",
+      "source_name": "Ben Ray Luján",
+      "category": "explicit_retained_name_omitted",
+      "reason": "LCV matches retained upstream official_full='Ben Ray Luján'; current member index only uses primary first/last 'Ben Luján'.",
+      "source": {
+        "row_number": 96,
+        "first": "Ben Ray",
+        "last": "Luján",
+        "party": "D",
+        "district": "",
+        "annual": "94",
+        "lifetime": "97",
+        "url": "https://www.lcv.org/moc/ben-ray-lujan/",
+        "chamber": "Senate",
+        "state": "New Mexico",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Luján, Ben Ray",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/ben-ray-lujan/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "L000570",
+        "primary_indexed_name": "Ben Luján",
+        "retained_name_fields": {
+          "first": "Ben",
+          "middle": "Ray",
+          "last": "Luján",
+          "official_full": "Ben Ray Luján"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/78"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2021-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "NM",
+            "term_type": "sen",
+            "term_district": null
+          }
+        ],
+        "first_term_start": "2009-01-06"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "no_exact_member_match",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "bernie-sanders",
+      "source_name": "Bernie Sanders",
+      "category": "explicit_retained_name_omitted",
+      "reason": "LCV matches retained upstream nickname + last='Bernie Sanders'; current member index only uses primary first/last 'Bernard Sanders'.",
+      "source": {
+        "row_number": 139,
+        "first": "Bernie",
+        "last": "Sanders",
+        "party": "I",
+        "district": "",
+        "annual": "94",
+        "lifetime": "92",
+        "url": "https://www.lcv.org/moc/bernie-sanders/",
+        "chamber": "Senate",
+        "state": "Vermont",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Sanders, Bernie",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/bernie-sanders/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "S000033",
+        "primary_indexed_name": "Bernard Sanders",
+        "retained_name_fields": {
+          "first": "Bernard",
+          "last": "Sanders",
+          "nickname": "Bernie",
+          "official_full": "Bernard Sanders"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/2"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2019-01-03",
+            "term_end": "2025-01-03",
+            "term_state": "VT",
+            "term_type": "sen",
+            "term_district": null
+          },
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2031-01-03",
+            "term_state": "VT",
+            "term_type": "sen",
+            "term_district": null
+          }
+        ],
+        "first_term_start": "1991-01-03"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "no_exact_member_match",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "bill-keating",
+      "source_name": "Bill Keating",
+      "category": "name_variant_not_explicit_in_retained_fields",
+      "reason": "LCV given name differs from primary 'William Keating'; no complete matching official_full or nickname-plus-last form occurs in the retained upstream name fields. Candidate needs additional exact alias evidence.",
+      "source": {
+        "row_number": 386,
+        "first": "Bill",
+        "last": "Keating",
+        "party": "D",
+        "district": "MA-09",
+        "annual": "100",
+        "lifetime": "96",
+        "url": "https://www.lcv.org/moc/bill-keating/",
+        "chamber": "House",
+        "state": "Massachusetts",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Keating, Bill",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/bill-keating/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "K000375",
+        "primary_indexed_name": "William Keating",
+        "retained_name_fields": {
+          "first": "William",
+          "last": "Keating",
+          "official_full": "William R. Keating",
+          "middle": "R."
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/69"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2025-01-03",
+            "term_state": "MA",
+            "term_type": "rep",
+            "term_district": "9"
+          },
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "MA",
+            "term_type": "rep",
+            "term_district": "9"
+          }
+        ],
+        "first_term_start": "2011-01-05"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "unknown_district_literal_ignored:MA-09",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "bob-latta",
+      "source_name": "Bob Latta",
+      "category": "name_variant_not_explicit_in_retained_fields",
+      "reason": "LCV given name differs from primary 'Robert Latta'; no complete matching official_full or nickname-plus-last form occurs in the retained upstream name fields. Candidate needs additional exact alias evidence.",
+      "source": {
+        "row_number": 508,
+        "first": "Bob",
+        "last": "Latta",
+        "party": "R",
+        "district": "OH-05",
+        "annual": "0",
+        "lifetime": "3",
+        "url": "https://www.lcv.org/moc/bob-latta/",
+        "chamber": "House",
+        "state": "Ohio",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Latta, Bob",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/bob-latta/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "L000566",
+        "primary_indexed_name": "Robert Latta",
+        "retained_name_fields": {
+          "first": "Robert",
+          "middle": "E.",
+          "last": "Latta",
+          "official_full": "Robert E. Latta"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/74"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2025-01-03",
+            "term_state": "OH",
+            "term_type": "rep",
+            "term_district": "5"
+          },
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "OH",
+            "term_type": "rep",
+            "term_district": "5"
+          }
+        ],
+        "first_term_start": "2007-12-13"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "unknown_district_literal_ignored:OH-05",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "brad-schneider",
+      "source_name": "Brad Schneider",
+      "category": "explicit_retained_name_omitted",
+      "reason": "LCV matches retained upstream nickname + last='Brad Schneider'; current member index only uses primary first/last 'Bradley Schneider'.",
+      "source": {
+        "row_number": 323,
+        "first": "Brad",
+        "last": "Schneider",
+        "party": "D",
+        "district": "IL-10",
+        "annual": "97",
+        "lifetime": "96",
+        "url": "https://www.lcv.org/moc/brad-schneider/",
+        "chamber": "House",
+        "state": "Illinois",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Schneider, Brad",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/brad-schneider/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "S001190",
+        "primary_indexed_name": "Bradley Schneider",
+        "retained_name_fields": {
+          "first": "Bradley",
+          "last": "Schneider",
+          "middle": "Scott",
+          "official_full": "Bradley Scott Schneider",
+          "nickname": "Brad"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/218"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2025-01-03",
+            "term_state": "IL",
+            "term_type": "rep",
+            "term_district": "10"
+          },
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "IL",
+            "term_type": "rep",
+            "term_district": "10"
+          }
+        ],
+        "first_term_start": "2013-01-03"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "unknown_district_literal_ignored:IL-10",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "buddy-carter",
+      "source_name": "Buddy Carter",
+      "category": "explicit_retained_name_omitted",
+      "reason": "LCV matches retained upstream nickname + last='Buddy Carter'; current member index only uses primary first/last 'Earl Carter'.",
+      "source": {
+        "row_number": 290,
+        "first": "Buddy",
+        "last": "Carter",
+        "party": "R",
+        "district": "GA-01",
+        "annual": "0",
+        "lifetime": "4",
+        "url": "https://www.lcv.org/moc/buddy-carter/",
+        "chamber": "House",
+        "state": "Georgia",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Carter, Buddy",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/buddy-carter/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "C001103",
+        "primary_indexed_name": "Earl Carter",
+        "retained_name_fields": {
+          "first": "Earl",
+          "middle": "L.",
+          "nickname": "Buddy",
+          "last": "Carter",
+          "official_full": "Earl L. \"Buddy\" Carter"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/188"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2025-01-03",
+            "term_state": "GA",
+            "term_type": "rep",
+            "term_district": "1"
+          },
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "GA",
+            "term_type": "rep",
+            "term_district": "1"
+          }
+        ],
+        "first_term_start": "2015-01-06"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "unknown_district_literal_ignored:GA-01",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "burgess-owens",
+      "source_name": "Burgess Owens",
+      "category": "explicit_retained_name_omitted",
+      "reason": "LCV matches retained upstream official_full='Burgess Owens', nickname + last='Burgess Owens'; current member index only uses primary first/last 'Clarence Owens'.",
+      "source": {
+        "row_number": 620,
+        "first": "Burgess",
+        "last": "Owens",
+        "party": "R",
+        "district": "UT-04",
+        "annual": "0",
+        "lifetime": "4",
+        "url": "https://www.lcv.org/moc/burgess-owens/",
+        "chamber": "House",
+        "state": "Utah",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Owens, Burgess",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/burgess-owens/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "O000086",
+        "primary_indexed_name": "Clarence Owens",
+        "retained_name_fields": {
+          "first": "Clarence",
+          "nickname": "Burgess",
+          "last": "Owens",
+          "official_full": "Burgess Owens"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/359"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2025-01-03",
+            "term_state": "UT",
+            "term_type": "rep",
+            "term_district": "4"
+          },
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "UT",
+            "term_type": "rep",
+            "term_district": "4"
+          }
+        ],
+        "first_term_start": "2021-01-03"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "unknown_district_literal_ignored:UT-04",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "carlos-gimenez",
+      "source_name": "Carlos Giménez",
+      "category": "accent_difference",
+      "reason": "LCV 'Carlos Giménez' differs from retained primary name 'Carlos Gimenez' by diacritics; whitespace is already normalized.",
+      "source": {
+        "row_number": 288,
+        "first": "Carlos",
+        "last": "Giménez",
+        "party": "R",
+        "district": "FL-28",
+        "annual": "0",
+        "lifetime": "6",
+        "url": "https://www.lcv.org/moc/carlos-gimenez/",
+        "chamber": "House",
+        "state": "Florida",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Giménez, Carlos",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/carlos-gimenez/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "G000593",
+        "primary_indexed_name": "Carlos Gimenez",
+        "retained_name_fields": {
+          "first": "Carlos",
+          "middle": "A.",
+          "last": "Gimenez",
+          "official_full": "Carlos A. Gimenez"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/330"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2025-01-03",
+            "term_state": "FL",
+            "term_type": "rep",
+            "term_district": "28"
+          },
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "FL",
+            "term_type": "rep",
+            "term_district": "28"
+          }
+        ],
+        "first_term_start": "2021-01-03"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "unknown_district_literal_ignored:FL-28",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "chris-coons",
+      "source_name": "Chris Coons",
+      "category": "name_variant_not_explicit_in_retained_fields",
+      "reason": "LCV given name differs from primary 'Christopher Coons'; no complete matching official_full or nickname-plus-last form occurs in the retained upstream name fields. Candidate needs additional exact alias evidence.",
+      "source": {
+        "row_number": 26,
+        "first": "Chris",
+        "last": "Coons",
+        "party": "D",
+        "district": "",
+        "annual": "100",
+        "lifetime": "95",
+        "url": "https://www.lcv.org/moc/chris-coons/",
+        "chamber": "Senate",
+        "state": "Delaware",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Coons, Chris",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/chris-coons/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "C001088",
+        "primary_indexed_name": "Christopher Coons",
+        "retained_name_fields": {
+          "first": "Christopher",
+          "middle": "Andrew",
+          "last": "Coons",
+          "official_full": "Christopher A. Coons"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/16"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2021-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "DE",
+            "term_type": "sen",
+            "term_district": null
+          }
+        ],
+        "first_term_start": "2010-11-15"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "no_exact_member_match",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "chris-s-murphy",
+      "source_name": "Chris Murphy",
+      "category": "name_variant_not_explicit_in_retained_fields",
+      "reason": "LCV given name differs from primary 'Christopher Murphy'; no complete matching official_full or nickname-plus-last form occurs in the retained upstream name fields. Candidate needs additional exact alias evidence.",
+      "source": {
+        "row_number": 23,
+        "first": "Chris",
+        "last": "Murphy",
+        "party": "D",
+        "district": "",
+        "annual": "97",
+        "lifetime": "97",
+        "url": "https://www.lcv.org/moc/chris-s-murphy/",
+        "chamber": "Senate",
+        "state": "Connecticut",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Murphy, Chris",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/chris-s-murphy/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "M001169",
+        "primary_indexed_name": "Christopher Murphy",
+        "retained_name_fields": {
+          "first": "Christopher",
+          "middle": "S.",
+          "last": "Murphy",
+          "official_full": "Christopher Murphy"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/90"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2019-01-03",
+            "term_end": "2025-01-03",
+            "term_state": "CT",
+            "term_type": "sen",
+            "term_district": null
+          },
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2031-01-03",
+            "term_state": "CT",
+            "term_type": "sen",
+            "term_district": null
+          }
+        ],
+        "first_term_start": "2007-01-04"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "no_exact_member_match",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "christian-menefee",
+      "source_name": "Christian Menefee",
+      "category": "term_outside_2025",
+      "reason": "Exact-name candidate's first retained term starts 2026-02-02; no retained term overlaps 2025.",
+      "source": {
+        "row_number": 594,
+        "first": "Christian",
+        "last": "Menefee",
+        "party": "D",
+        "district": "TX-18",
+        "annual": "na",
+        "lifetime": "na",
+        "url": "https://www.lcv.org/moc/christian-menefee/",
+        "chamber": "House",
+        "state": "Texas",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Menefee, Christian",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/christian-menefee/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "M001245",
+        "primary_indexed_name": "Christian Menefee",
+        "retained_name_fields": {
+          "first": "Christian",
+          "middle": "Dashaun",
+          "last": "Menefee",
+          "official_full": "Christian D. Menefee"
+        },
+        "selection_basis": "Existing exact-name candidate retained by resolver; historical term checked independently.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/531"
+        },
+        "terms_overlapping_2025": [],
+        "first_term_start": "2026-02-02"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "1",
+      "resolver_reason": "unknown_district_literal_ignored:TX-18",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "chuck-e-grassley",
+      "source_name": "Chuck Grassley",
+      "category": "explicit_retained_name_omitted",
+      "reason": "LCV matches retained upstream official_full='Chuck Grassley', nickname + last='Chuck Grassley'; current member index only uses primary first/last 'Charles Grassley'.",
+      "source": {
+        "row_number": 48,
+        "first": "Chuck",
+        "last": "Grassley",
+        "party": "R",
+        "district": "",
+        "annual": "0",
+        "lifetime": "17",
+        "url": "https://www.lcv.org/moc/chuck-e-grassley/",
+        "chamber": "Senate",
+        "state": "Iowa",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Grassley, Chuck",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/chuck-e-grassley/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "G000386",
+        "primary_indexed_name": "Charles Grassley",
+        "retained_name_fields": {
+          "first": "Charles",
+          "middle": "E.",
+          "last": "Grassley",
+          "nickname": "Chuck",
+          "official_full": "Chuck Grassley"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/53"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2029-01-03",
+            "term_state": "IA",
+            "term_type": "sen",
+            "term_district": null
+          }
+        ],
+        "first_term_start": "1975-01-14"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "no_exact_member_match",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "chuck-edwards",
+      "source_name": "Chuck Edwards",
+      "category": "explicit_retained_name_omitted",
+      "reason": "LCV matches retained upstream official_full='Chuck Edwards'; current member index only uses primary first/last 'Charles (Chuck) Edwards'.",
+      "source": {
+        "row_number": 495,
+        "first": "Chuck",
+        "last": "Edwards",
+        "party": "R",
+        "district": "NC-11",
+        "annual": "3",
+        "lifetime": "5",
+        "url": "https://www.lcv.org/moc/chuck-edwards/",
+        "chamber": "House",
+        "state": "North Carolina",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Edwards, Chuck",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/chuck-edwards/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "E000246",
+        "primary_indexed_name": "Charles (Chuck) Edwards",
+        "retained_name_fields": {
+          "first": "Charles (Chuck)",
+          "middle": "Marion",
+          "last": "Edwards",
+          "official_full": "Chuck Edwards"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/414"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2025-01-03",
+            "term_state": "NC",
+            "term_type": "rep",
+            "term_district": "11"
+          },
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "NC",
+            "term_type": "rep",
+            "term_district": "11"
+          }
+        ],
+        "first_term_start": "2023-01-03"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "unknown_district_literal_ignored:NC-11",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "chuck-fleischmann",
+      "source_name": "Chuck Fleischmann",
+      "category": "explicit_retained_name_omitted",
+      "reason": "LCV matches retained upstream nickname + last='Chuck Fleischmann'; current member index only uses primary first/last 'Charles Fleischmann'.",
+      "source": {
+        "row_number": 568,
+        "first": "Chuck",
+        "last": "Fleischmann",
+        "party": "R",
+        "district": "TN-03",
+        "annual": "0",
+        "lifetime": "5",
+        "url": "https://www.lcv.org/moc/chuck-fleischmann/",
+        "chamber": "House",
+        "state": "Tennessee",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Fleischmann, Chuck",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/chuck-fleischmann/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "F000459",
+        "primary_indexed_name": "Charles Fleischmann",
+        "retained_name_fields": {
+          "first": "Charles",
+          "last": "Fleischmann",
+          "official_full": "Charles J. \"Chuck\" Fleischmann",
+          "middle": "J.",
+          "nickname": "Chuck"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/49"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2025-01-03",
+            "term_state": "TN",
+            "term_type": "rep",
+            "term_district": "3"
+          },
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "TN",
+            "term_type": "rep",
+            "term_district": "3"
+          }
+        ],
+        "first_term_start": "2011-01-05"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "unknown_district_literal_ignored:TN-03",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "chuck-schumer",
+      "source_name": "Chuck Schumer",
+      "category": "explicit_retained_name_omitted",
+      "reason": "LCV matches retained upstream nickname + last='Chuck Schumer'; current member index only uses primary first/last 'Charles Schumer'.",
+      "source": {
+        "row_number": 99,
+        "first": "Chuck",
+        "last": "Schumer",
+        "party": "D",
+        "district": "",
+        "annual": "100",
+        "lifetime": "93",
+        "url": "https://www.lcv.org/moc/chuck-schumer/",
+        "chamber": "Senate",
+        "state": "New York",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Schumer, Chuck",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/chuck-schumer/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "S000148",
+        "primary_indexed_name": "Charles Schumer",
+        "retained_name_fields": {
+          "first": "Charles",
+          "middle": "E.",
+          "nickname": "Chuck",
+          "last": "Schumer",
+          "official_full": "Charles E. Schumer"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/106"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2029-01-03",
+            "term_state": "NY",
+            "term_type": "sen",
+            "term_district": null
+          }
+        ],
+        "first_term_start": "1981-01-05"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "no_exact_member_match",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "clay-fuller",
+      "source_name": "Clay Fuller",
+      "category": "term_outside_2025",
+      "reason": "Exact-name candidate's first retained term starts 2026-04-14; no retained term overlaps 2025.",
+      "source": {
+        "row_number": 303,
+        "first": "Clay",
+        "last": "Fuller",
+        "party": "R",
+        "district": "GA-14",
+        "annual": "",
+        "lifetime": "na",
+        "url": "https://www.lcv.org/moc/clay-fuller/",
+        "chamber": "House",
+        "state": "Georgia",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Fuller, Clay",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/clay-fuller/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "F000485",
+        "primary_indexed_name": "Clay Fuller",
+        "retained_name_fields": {
+          "first": "Clay",
+          "last": "Fuller",
+          "official_full": "Clay Fuller"
+        },
+        "selection_basis": "Existing exact-name candidate retained by resolver; historical term checked independently.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/533"
+        },
+        "terms_overlapping_2025": [],
+        "first_term_start": "2026-04-14"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "1",
+      "resolver_reason": "unknown_district_literal_ignored:GA-14",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "david-mccormick",
+      "source_name": "David McCormick",
+      "category": "explicit_retained_name_omitted",
+      "reason": "LCV matches retained upstream official_full='David McCormick'; current member index only uses primary first/last 'Dave McCormick'.",
+      "source": {
+        "row_number": 119,
+        "first": "David",
+        "last": "McCormick",
+        "party": "R",
+        "district": "",
+        "annual": "0",
+        "lifetime": "0",
+        "url": "https://www.lcv.org/moc/david-mccormick/",
+        "chamber": "Senate",
+        "state": "Pennsylvania",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "McCormick, David",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/david-mccormick/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "M001243",
+        "primary_indexed_name": "Dave McCormick",
+        "retained_name_fields": {
+          "first": "Dave",
+          "middle": "Harold",
+          "last": "McCormick",
+          "official_full": "David McCormick"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/461"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2031-01-03",
+            "term_state": "PA",
+            "term_type": "sen",
+            "term_district": null
+          }
+        ],
+        "first_term_start": "2025-01-03"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "no_exact_member_match",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "dick-durbin",
+      "source_name": "Dick Durbin",
+      "category": "name_variant_not_explicit_in_retained_fields",
+      "reason": "LCV given name differs from primary 'Richard Durbin'; no complete matching official_full or nickname-plus-last form occurs in the retained upstream name fields. Candidate needs additional exact alias evidence.",
+      "source": {
+        "row_number": 42,
+        "first": "Dick",
+        "last": "Durbin",
+        "party": "D",
+        "district": "",
+        "annual": "97",
+        "lifetime": "90",
+        "url": "https://www.lcv.org/moc/dick-durbin/",
+        "chamber": "Senate",
+        "state": "Illinois",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Durbin, Dick",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/dick-durbin/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "D000563",
+        "primary_indexed_name": "Richard Durbin",
+        "retained_name_fields": {
+          "first": "Richard",
+          "middle": "J.",
+          "last": "Durbin",
+          "official_full": "Richard J. Durbin"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/8"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2021-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "IL",
+            "term_type": "sen",
+            "term_district": null
+          }
+        ],
+        "first_term_start": "1983-01-03"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "no_exact_member_match",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "ed-markey",
+      "source_name": "Ed Markey",
+      "category": "explicit_retained_name_omitted",
+      "reason": "LCV matches retained upstream nickname + last='Ed Markey'; current member index only uses primary first/last 'Edward Markey'.",
+      "source": {
+        "row_number": 65,
+        "first": "Ed",
+        "last": "Markey",
+        "party": "D",
+        "district": "",
+        "annual": "100",
+        "lifetime": "95",
+        "url": "https://www.lcv.org/moc/ed-markey/",
+        "chamber": "Senate",
+        "state": "Massachusetts",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Markey, Ed",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/ed-markey/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "M000133",
+        "primary_indexed_name": "Edward Markey",
+        "retained_name_fields": {
+          "first": "Edward",
+          "middle": "J.",
+          "last": "Markey",
+          "nickname": "Ed",
+          "official_full": "Edward J. Markey"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/80"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2021-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "MA",
+            "term_type": "sen",
+            "term_district": null
+          }
+        ],
+        "first_term_start": "1975-01-14"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "no_exact_member_match",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "french-hill",
+      "source_name": "French Hill",
+      "category": "name_component_difference",
+      "reason": "LCV name 'French Hill' uses different or fewer name components than primary 'J. Hill'; retained full name is 'J. French Hill'. No complete exact alias is currently indexed.",
+      "source": {
+        "row_number": 184,
+        "first": "French",
+        "last": "Hill",
+        "party": "R",
+        "district": "AR-02",
+        "annual": "0",
+        "lifetime": "7",
+        "url": "https://www.lcv.org/moc/french-hill/",
+        "chamber": "House",
+        "state": "Arkansas",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Hill, French",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/french-hill/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "H001072",
+        "primary_indexed_name": "J. Hill",
+        "retained_name_fields": {
+          "first": "J.",
+          "middle": "French",
+          "last": "Hill",
+          "official_full": "J. French Hill"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/181"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2025-01-03",
+            "term_state": "AR",
+            "term_type": "rep",
+            "term_district": "2"
+          },
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "AR",
+            "term_type": "rep",
+            "term_district": "2"
+          }
+        ],
+        "first_term_start": "2015-01-06"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "unknown_district_literal_ignored:AR-02",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "gabe-vasquez",
+      "source_name": "Gabe Vasquez",
+      "category": "explicit_retained_name_omitted",
+      "reason": "LCV matches retained upstream official_full='Gabe Vasquez'; current member index only uses primary first/last 'Gabriel (Gabe) Vasquez'.",
+      "source": {
+        "row_number": 455,
+        "first": "Gabe",
+        "last": "Vasquez",
+        "party": "D",
+        "district": "NM-02",
+        "annual": "79",
+        "lifetime": "88",
+        "url": "https://www.lcv.org/moc/gabe-vasquez/",
+        "chamber": "House",
+        "state": "New Mexico",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Vasquez, Gabe",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/gabe-vasquez/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "V000136",
+        "primary_indexed_name": "Gabriel (Gabe) Vasquez",
+        "retained_name_fields": {
+          "first": "Gabriel (Gabe)",
+          "last": "Vasquez",
+          "official_full": "Gabe Vasquez"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/417"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2025-01-03",
+            "term_state": "NM",
+            "term_type": "rep",
+            "term_district": "2"
+          },
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "NM",
+            "term_type": "rep",
+            "term_district": "2"
+          }
+        ],
+        "first_term_start": "2023-01-03"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "unknown_district_literal_ignored:NM-02",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "greg-casar",
+      "source_name": "Greg Casar",
+      "category": "explicit_retained_name_omitted",
+      "reason": "LCV matches retained upstream official_full='Greg Casar'; current member index only uses primary first/last 'Gregorio Casar'.",
+      "source": {
+        "row_number": 612,
+        "first": "Greg",
+        "last": "Casar",
+        "party": "D",
+        "district": "TX-35",
+        "annual": "100",
+        "lifetime": "98",
+        "url": "https://www.lcv.org/moc/greg-casar/",
+        "chamber": "House",
+        "state": "Texas",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Casar, Greg",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/greg-casar/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "C001131",
+        "primary_indexed_name": "Gregorio Casar",
+        "retained_name_fields": {
+          "first": "Gregorio",
+          "middle": "Eduardo",
+          "last": "Casar",
+          "official_full": "Greg Casar"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/438"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2025-01-03",
+            "term_state": "TX",
+            "term_type": "rep",
+            "term_district": "35"
+          },
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "TX",
+            "term_type": "rep",
+            "term_district": "35"
+          }
+        ],
+        "first_term_start": "2023-01-03"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "unknown_district_literal_ignored:TX-35",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "greg-murphy",
+      "source_name": "Greg Murphy",
+      "category": "name_variant_not_explicit_in_retained_fields",
+      "reason": "LCV given name differs from primary 'Gregory Murphy'; no complete matching official_full or nickname-plus-last form occurs in the retained upstream name fields. Candidate needs additional exact alias evidence.",
+      "source": {
+        "row_number": 487,
+        "first": "Greg",
+        "last": "Murphy",
+        "party": "R",
+        "district": "NC-03",
+        "annual": "0",
+        "lifetime": "6",
+        "url": "https://www.lcv.org/moc/greg-murphy/",
+        "chamber": "House",
+        "state": "North Carolina",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Murphy, Greg",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/greg-murphy/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "M001210",
+        "primary_indexed_name": "Gregory Murphy",
+        "retained_name_fields": {
+          "first": "Gregory",
+          "middle": "Francis",
+          "last": "Murphy",
+          "official_full": "Gregory F. Murphy"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/311"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2025-01-03",
+            "term_state": "NC",
+            "term_type": "rep",
+            "term_district": "3"
+          },
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "NC",
+            "term_type": "rep",
+            "term_district": "3"
+          }
+        ],
+        "first_term_start": "2019-09-17"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "unknown_district_literal_ignored:NC-03",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "greg-steube",
+      "source_name": "Greg Steube",
+      "category": "name_variant_not_explicit_in_retained_fields",
+      "reason": "LCV given name differs from primary 'W. Steube'; no complete matching official_full or nickname-plus-last form occurs in the retained upstream name fields. Candidate needs additional exact alias evidence.",
+      "source": {
+        "row_number": 277,
+        "first": "Greg",
+        "last": "Steube",
+        "party": "R",
+        "district": "FL-17",
+        "annual": "0",
+        "lifetime": "1",
+        "url": "https://www.lcv.org/moc/greg-steube/",
+        "chamber": "House",
+        "state": "Florida",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Steube, Greg",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/greg-steube/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "S001214",
+        "primary_indexed_name": "W. Steube",
+        "retained_name_fields": {
+          "first": "W.",
+          "middle": "Gregory",
+          "last": "Steube",
+          "official_full": "W. Gregory Steube"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/267"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2025-01-03",
+            "term_state": "FL",
+            "term_type": "rep",
+            "term_district": "17"
+          },
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "FL",
+            "term_type": "rep",
+            "term_district": "17"
+          }
+        ],
+        "first_term_start": "2019-01-03"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "unknown_district_literal_ignored:FL-17",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "hank-johnson",
+      "source_name": "Hank Johnson",
+      "category": "explicit_retained_name_omitted",
+      "reason": "LCV matches retained upstream nickname + last='Hank Johnson'; current member index only uses primary first/last 'Henry Johnson'.",
+      "source": {
+        "row_number": 293,
+        "first": "Hank",
+        "last": "Johnson",
+        "party": "D",
+        "district": "GA-04",
+        "annual": "100",
+        "lifetime": "97",
+        "url": "https://www.lcv.org/moc/hank-johnson/",
+        "chamber": "House",
+        "state": "Georgia",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Johnson, Hank",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/hank-johnson/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "J000288",
+        "primary_indexed_name": "Henry Johnson",
+        "retained_name_fields": {
+          "first": "Henry",
+          "middle": "C.",
+          "last": "Johnson",
+          "suffix": "Jr.",
+          "nickname": "Hank",
+          "official_full": "Henry C. \"Hank\" Johnson, Jr."
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/65"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2025-01-03",
+            "term_state": "GA",
+            "term_type": "rep",
+            "term_district": "4"
+          },
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "GA",
+            "term_type": "rep",
+            "term_district": "4"
+          }
+        ],
+        "first_term_start": "2007-01-04"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "unknown_district_literal_ignored:GA-04",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "j-d-vance",
+      "source_name": "J.D. Vance",
+      "category": "explicit_retained_name_omitted",
+      "reason": "LCV matches retained upstream official_full='J.D. Vance', nickname + last='J.D. Vance'; current member index only uses primary first/last 'James David Vance'.",
+      "source": {
+        "row_number": 109,
+        "first": "J.D.",
+        "last": "Vance",
+        "party": "R",
+        "district": "",
+        "annual": "na",
+        "lifetime": "0",
+        "url": "https://www.lcv.org/moc/j-d-vance/",
+        "chamber": "Senate",
+        "state": "Ohio",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Vance, J.D.",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/j-d-vance/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "V000137",
+        "primary_indexed_name": "James David Vance",
+        "retained_name_fields": {
+          "first": "James David",
+          "nickname": "J.D.",
+          "last": "Vance",
+          "official_full": "J.D. Vance"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:25187633f3215a096fe9d14d8a40db1fb0841ab1d24c6da52da3a80c93698cbc",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-historical.json",
+          "json_pointer": "/12215"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2025-01-09",
+            "term_state": "OH",
+            "term_type": "sen",
+            "term_district": null
+          }
+        ],
+        "first_term_start": "2023-01-03"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "no_exact_member_match",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "jack-reed",
+      "source_name": "Jack Reed",
+      "category": "explicit_retained_name_omitted",
+      "reason": "LCV matches retained upstream official_full='Jack Reed', nickname + last='Jack Reed'; current member index only uses primary first/last 'John Reed'.",
+      "source": {
+        "row_number": 121,
+        "first": "Jack",
+        "last": "Reed",
+        "party": "D",
+        "district": "",
+        "annual": "100",
+        "lifetime": "97",
+        "url": "https://www.lcv.org/moc/jack-reed/",
+        "chamber": "Senate",
+        "state": "Rhode Island",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Reed, Jack",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/jack-reed/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "R000122",
+        "primary_indexed_name": "John Reed",
+        "retained_name_fields": {
+          "first": "John",
+          "middle": "F.",
+          "last": "Reed",
+          "nickname": "Jack",
+          "official_full": "Jack Reed"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/11"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2021-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "RI",
+            "term_type": "sen",
+            "term_district": null
+          }
+        ],
+        "first_term_start": "1991-01-03"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "no_exact_member_match",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "james-c-justice",
+      "source_name": "James Justice",
+      "category": "name_component_difference",
+      "reason": "LCV name 'James Justice' uses different or fewer name components than primary 'Jim Justice'; retained full name is 'James C. Justice'. No complete exact alias is currently indexed.",
+      "source": {
+        "row_number": 149,
+        "first": "James",
+        "last": "Justice",
+        "party": "R",
+        "district": "",
+        "annual": "3",
+        "lifetime": "3",
+        "url": "https://www.lcv.org/moc/james-c-justice/",
+        "chamber": "Senate",
+        "state": "West Virginia",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Justice, James",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/james-c-justice/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "J000312",
+        "primary_indexed_name": "Jim Justice",
+        "retained_name_fields": {
+          "first": "Jim",
+          "middle": "Conley",
+          "last": "Justice",
+          "suffix": "II",
+          "official_full": "James C. Justice"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/523"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2025-01-14",
+            "term_end": "2031-01-03",
+            "term_state": "WV",
+            "term_type": "sen",
+            "term_district": null
+          }
+        ],
+        "first_term_start": "2025-01-14"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "no_exact_member_match",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "jan-schakowsky",
+      "source_name": "Jan Schakowsky",
+      "category": "explicit_retained_name_omitted",
+      "reason": "LCV matches retained upstream nickname + last='Jan Schakowsky'; current member index only uses primary first/last 'Janice Schakowsky'.",
+      "source": {
+        "row_number": 322,
+        "first": "Jan",
+        "last": "Schakowsky",
+        "party": "D",
+        "district": "IL-09",
+        "annual": "100",
+        "lifetime": "97",
+        "url": "https://www.lcv.org/moc/jan-schakowsky/",
+        "chamber": "House",
+        "state": "Illinois",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Schakowsky, Jan",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/jan-schakowsky/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "S001145",
+        "primary_indexed_name": "Janice Schakowsky",
+        "retained_name_fields": {
+          "first": "Janice",
+          "middle": "D.",
+          "last": "Schakowsky",
+          "nickname": "Jan",
+          "official_full": "Janice D. Schakowsky"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/104"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2025-01-03",
+            "term_state": "IL",
+            "term_type": "rep",
+            "term_district": "9"
+          },
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "IL",
+            "term_type": "rep",
+            "term_district": "9"
+          }
+        ],
+        "first_term_start": "1999-01-06"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "unknown_district_literal_ignored:IL-09",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "jim-himes",
+      "source_name": "Jim Himes",
+      "category": "explicit_retained_name_omitted",
+      "reason": "LCV matches retained upstream nickname + last='Jim Himes'; current member index only uses primary first/last 'James Himes'.",
+      "source": {
+        "row_number": 253,
+        "first": "Jim",
+        "last": "Himes",
+        "party": "D",
+        "district": "CT-04",
+        "annual": "97",
+        "lifetime": "96",
+        "url": "https://www.lcv.org/moc/jim-himes/",
+        "chamber": "House",
+        "state": "Connecticut",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Himes, Jim",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/jim-himes/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "H001047",
+        "primary_indexed_name": "James Himes",
+        "retained_name_fields": {
+          "first": "James",
+          "nickname": "Jim",
+          "middle": "A.",
+          "last": "Himes",
+          "official_full": "James A. Himes"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/60"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2025-01-03",
+            "term_state": "CT",
+            "term_type": "rep",
+            "term_district": "4"
+          },
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "CT",
+            "term_type": "rep",
+            "term_district": "4"
+          }
+        ],
+        "first_term_start": "2009-01-06"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "unknown_district_literal_ignored:CT-04",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "jim-mcgovern",
+      "source_name": "Jim McGovern",
+      "category": "explicit_retained_name_omitted",
+      "reason": "LCV matches retained upstream nickname + last='Jim McGovern'; current member index only uses primary first/last 'James McGovern'.",
+      "source": {
+        "row_number": 379,
+        "first": "Jim",
+        "last": "McGovern",
+        "party": "D",
+        "district": "MA-02",
+        "annual": "100",
+        "lifetime": "99",
+        "url": "https://www.lcv.org/moc/jim-mcgovern/",
+        "chamber": "House",
+        "state": "Massachusetts",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "McGovern, Jim",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/jim-mcgovern/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "M000312",
+        "primary_indexed_name": "James McGovern",
+        "retained_name_fields": {
+          "first": "James",
+          "middle": "P.",
+          "last": "McGovern",
+          "nickname": "Jim",
+          "official_full": "James P. McGovern"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/85"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2025-01-03",
+            "term_state": "MA",
+            "term_type": "rep",
+            "term_district": "2"
+          },
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "MA",
+            "term_type": "rep",
+            "term_district": "2"
+          }
+        ],
+        "first_term_start": "1997-01-07"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "unknown_district_literal_ignored:MA-02",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "jim-moylan",
+      "source_name": "Jim Moylan",
+      "category": "explicit_parenthetical_name",
+      "reason": "Retained first name 'James (Jim)' explicitly contains the LCV given name in parentheses; resolver does not index that form.",
+      "source": {
+        "row_number": 306,
+        "first": "Jim",
+        "last": "Moylan",
+        "party": "R",
+        "district": "AL",
+        "annual": "67",
+        "lifetime": "10",
+        "url": "https://www.lcv.org/moc/jim-moylan/",
+        "chamber": "House",
+        "state": "Guam",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Moylan, Jim",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/jim-moylan/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "M001219",
+        "primary_indexed_name": "James (Jim) Moylan",
+        "retained_name_fields": {
+          "first": "James (Jim)",
+          "middle": "Camacho",
+          "last": "Moylan",
+          "official_full": "James C. Moylan"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/396"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2025-01-03",
+            "term_state": "GU",
+            "term_type": "rep",
+            "term_district": "0"
+          },
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "GU",
+            "term_type": "rep",
+            "term_district": "0"
+          }
+        ],
+        "first_term_start": "2023-01-03"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "no_exact_member_match",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "jim-risch",
+      "source_name": "Jim Risch",
+      "category": "name_variant_not_explicit_in_retained_fields",
+      "reason": "LCV given name differs from primary 'James Risch'; no complete matching official_full or nickname-plus-last form occurs in the retained upstream name fields. Candidate needs additional exact alias evidence.",
+      "source": {
+        "row_number": 39,
+        "first": "Jim",
+        "last": "Risch",
+        "party": "R",
+        "district": "",
+        "annual": "3",
+        "lifetime": "8",
+        "url": "https://www.lcv.org/moc/jim-risch/",
+        "chamber": "Senate",
+        "state": "Idaho",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Risch, Jim",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/jim-risch/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "R000584",
+        "primary_indexed_name": "James Risch",
+        "retained_name_fields": {
+          "first": "James",
+          "middle": "E.",
+          "last": "Risch",
+          "official_full": "James E. Risch"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/12"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2021-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "ID",
+            "term_type": "sen",
+            "term_district": null
+          }
+        ],
+        "first_term_start": "2009-01-06"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "no_exact_member_match",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "joe-morelle",
+      "source_name": "Joe Morelle",
+      "category": "name_variant_not_explicit_in_retained_fields",
+      "reason": "LCV given name differs from primary 'Joseph Morelle'; no complete matching official_full or nickname-plus-last form occurs in the retained upstream name fields. Candidate needs additional exact alias evidence.",
+      "source": {
+        "row_number": 482,
+        "first": "Joe",
+        "last": "Morelle",
+        "party": "D",
+        "district": "NY-25",
+        "annual": "91",
+        "lifetime": "96",
+        "url": "https://www.lcv.org/moc/joe-morelle/",
+        "chamber": "House",
+        "state": "New York",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Morelle, Joe",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/joe-morelle/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "M001206",
+        "primary_indexed_name": "Joseph Morelle",
+        "retained_name_fields": {
+          "first": "Joseph",
+          "middle": "D.",
+          "last": "Morelle",
+          "official_full": "Joseph D. Morelle"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/257"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2025-01-03",
+            "term_state": "NY",
+            "term_type": "rep",
+            "term_district": "25"
+          },
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "NY",
+            "term_type": "rep",
+            "term_district": "25"
+          }
+        ],
+        "first_term_start": "2018-11-13"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "unknown_district_literal_ignored:NY-25",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "kat-cammack",
+      "source_name": "Kat Cammack",
+      "category": "explicit_retained_name_omitted",
+      "reason": "LCV matches retained upstream official_full='Kat Cammack', nickname + last='Kat Cammack'; current member index only uses primary first/last 'Katherine Cammack'.",
+      "source": {
+        "row_number": 262,
+        "first": "Kat",
+        "last": "Cammack",
+        "party": "R",
+        "district": "FL-03",
+        "annual": "0",
+        "lifetime": "1",
+        "url": "https://www.lcv.org/moc/kat-cammack/",
+        "chamber": "House",
+        "state": "Florida",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Cammack, Kat",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/kat-cammack/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "C001039",
+        "primary_indexed_name": "Katherine Cammack",
+        "retained_name_fields": {
+          "first": "Katherine",
+          "nickname": "Kat",
+          "last": "Cammack",
+          "official_full": "Kat Cammack"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/327"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2025-01-03",
+            "term_state": "FL",
+            "term_type": "rep",
+            "term_district": "3"
+          },
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "FL",
+            "term_type": "rep",
+            "term_district": "3"
+          }
+        ],
+        "first_term_start": "2021-01-03"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "unknown_district_literal_ignored:FL-03",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "linda-sanchez",
+      "source_name": "Linda Sanchez",
+      "category": "accent_difference",
+      "reason": "LCV 'Linda Sanchez' differs from retained primary name 'Linda Sánchez' by diacritics; whitespace is already normalized.",
+      "source": {
+        "row_number": 225,
+        "first": "Linda",
+        "last": "Sanchez",
+        "party": "D",
+        "district": "CA-38",
+        "annual": "100",
+        "lifetime": "95",
+        "url": "https://www.lcv.org/moc/linda-sanchez/",
+        "chamber": "House",
+        "state": "California",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Sanchez, Linda",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/linda-sanchez/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "S001156",
+        "primary_indexed_name": "Linda Sánchez",
+        "retained_name_fields": {
+          "first": "Linda",
+          "middle": "T.",
+          "last": "Sánchez",
+          "official_full": "Linda T. Sánchez"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/117"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2025-01-03",
+            "term_state": "CA",
+            "term_type": "rep",
+            "term_district": "38"
+          },
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "CA",
+            "term_type": "rep",
+            "term_district": "38"
+          }
+        ],
+        "first_term_start": "2003-01-07"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "unknown_district_literal_ignored:CA-38",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "maria-elvira-salazar",
+      "source_name": "María  Salazar",
+      "category": "accent_difference",
+      "reason": "LCV 'María  Salazar' differs from retained primary name 'Maria Salazar' by diacritics; whitespace is already normalized.",
+      "source": {
+        "row_number": 287,
+        "first": "María ",
+        "last": "Salazar",
+        "party": "R",
+        "district": "FL-27",
+        "annual": "0",
+        "lifetime": "11",
+        "url": "https://www.lcv.org/moc/maria-elvira-salazar/",
+        "chamber": "House",
+        "state": "Florida",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Salazar, María",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/maria-elvira-salazar/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "S000168",
+        "primary_indexed_name": "Maria Salazar",
+        "retained_name_fields": {
+          "first": "Maria",
+          "middle": "Elvira",
+          "last": "Salazar",
+          "official_full": "Maria Elvira Salazar"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/331"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2025-01-03",
+            "term_state": "FL",
+            "term_type": "rep",
+            "term_district": "27"
+          },
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "FL",
+            "term_type": "rep",
+            "term_district": "27"
+          }
+        ],
+        "first_term_start": "2021-01-03"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "unknown_district_literal_ignored:FL-27",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "mario-diaz-balart",
+      "source_name": "Mario Díaz-Balart",
+      "category": "accent_difference",
+      "reason": "LCV 'Mario Díaz-Balart' differs from retained primary name 'Mario Diaz-Balart' by diacritics; whitespace is already normalized.",
+      "source": {
+        "row_number": 286,
+        "first": "Mario",
+        "last": "Díaz-Balart",
+        "party": "R",
+        "district": "FL-26",
+        "annual": "0",
+        "lifetime": "12",
+        "url": "https://www.lcv.org/moc/mario-diaz-balart/",
+        "chamber": "House",
+        "state": "Florida",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Díaz-Balart, Mario",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/mario-diaz-balart/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "D000600",
+        "primary_indexed_name": "Mario Diaz-Balart",
+        "retained_name_fields": {
+          "first": "Mario",
+          "last": "Diaz-Balart",
+          "official_full": "Mario Diaz-Balart"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/47"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2025-01-03",
+            "term_state": "FL",
+            "term_type": "rep",
+            "term_district": "26"
+          },
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "FL",
+            "term_type": "rep",
+            "term_district": "26"
+          }
+        ],
+        "first_term_start": "2003-01-07"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "unknown_district_literal_ignored:FL-26",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "mike-simpson",
+      "source_name": "Mike Simpson",
+      "category": "explicit_retained_name_omitted",
+      "reason": "LCV matches retained upstream nickname + last='Mike Simpson'; current member index only uses primary first/last 'Michael Simpson'.",
+      "source": {
+        "row_number": 312,
+        "first": "Mike",
+        "last": "Simpson",
+        "party": "R",
+        "district": "ID-02",
+        "annual": "3",
+        "lifetime": "10",
+        "url": "https://www.lcv.org/moc/mike-simpson/",
+        "chamber": "House",
+        "state": "Idaho",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Simpson, Mike",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/mike-simpson/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "S001148",
+        "primary_indexed_name": "Michael Simpson",
+        "retained_name_fields": {
+          "first": "Michael",
+          "middle": "K.",
+          "last": "Simpson",
+          "nickname": "Mike",
+          "official_full": "Michael K. Simpson"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/113"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2025-01-03",
+            "term_state": "ID",
+            "term_type": "rep",
+            "term_district": "2"
+          },
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "ID",
+            "term_type": "rep",
+            "term_district": "2"
+          }
+        ],
+        "first_term_start": "1999-01-06"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "unknown_district_literal_ignored:ID-02",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "morgan-griffith",
+      "source_name": "Morgan Griffith",
+      "category": "name_component_difference",
+      "reason": "LCV name 'Morgan Griffith' uses different or fewer name components than primary 'H. Griffith'; retained full name is 'H. Morgan Griffith'. No complete exact alias is currently indexed.",
+      "source": {
+        "row_number": 634,
+        "first": "Morgan",
+        "last": "Griffith",
+        "party": "R",
+        "district": "VA-09",
+        "annual": "3",
+        "lifetime": "6",
+        "url": "https://www.lcv.org/moc/morgan-griffith/",
+        "chamber": "House",
+        "state": "Virginia",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Griffith, Morgan",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/morgan-griffith/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "G000568",
+        "primary_indexed_name": "H. Griffith",
+        "retained_name_fields": {
+          "first": "H.",
+          "middle": "Morgan",
+          "last": "Griffith",
+          "official_full": "H. Morgan Griffith"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/56"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2025-01-03",
+            "term_state": "VA",
+            "term_type": "rep",
+            "term_district": "9"
+          },
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "VA",
+            "term_type": "rep",
+            "term_district": "9"
+          }
+        ],
+        "first_term_start": "2011-01-05"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "unknown_district_literal_ignored:VA-09",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "nick-lalota",
+      "source_name": "Nick LaLota",
+      "category": "explicit_retained_name_omitted",
+      "reason": "LCV matches retained upstream official_full='Nick LaLota'; current member index only uses primary first/last 'Nicolas LaLota'.",
+      "source": {
+        "row_number": 458,
+        "first": "Nick",
+        "last": "LaLota",
+        "party": "R",
+        "district": "NY-01",
+        "annual": "12",
+        "lifetime": "13",
+        "url": "https://www.lcv.org/moc/nick-lalota/",
+        "chamber": "House",
+        "state": "New York",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "LaLota, Nick",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/nick-lalota/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "L000598",
+        "primary_indexed_name": "Nicolas LaLota",
+        "retained_name_fields": {
+          "first": "Nicolas",
+          "middle": "Joseph",
+          "last": "LaLota",
+          "official_full": "Nick LaLota"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/418"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2025-01-03",
+            "term_state": "NY",
+            "term_type": "rep",
+            "term_district": "1"
+          },
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "NY",
+            "term_type": "rep",
+            "term_district": "1"
+          }
+        ],
+        "first_term_start": "2023-01-03"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "unknown_district_literal_ignored:NY-01",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "nick-langworthy",
+      "source_name": "Nick Langworthy",
+      "category": "name_variant_not_explicit_in_retained_fields",
+      "reason": "LCV given name differs from primary 'Nicholas Langworthy'; no complete matching official_full or nickname-plus-last form occurs in the retained upstream name fields. Candidate needs additional exact alias evidence.",
+      "source": {
+        "row_number": 480,
+        "first": "Nick",
+        "last": "Langworthy",
+        "party": "R",
+        "district": "NY-23",
+        "annual": "0",
+        "lifetime": "2",
+        "url": "https://www.lcv.org/moc/nick-langworthy/",
+        "chamber": "House",
+        "state": "New York",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Langworthy, Nick",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/nick-langworthy/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "L000600",
+        "primary_indexed_name": "Nicholas Langworthy",
+        "retained_name_fields": {
+          "first": "Nicholas",
+          "middle": "A.",
+          "last": "Langworthy",
+          "official_full": "Nicholas A. Langworthy"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/421"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2025-01-03",
+            "term_state": "NY",
+            "term_type": "rep",
+            "term_district": "23"
+          },
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "NY",
+            "term_type": "rep",
+            "term_district": "23"
+          }
+        ],
+        "first_term_start": "2023-01-03"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "unknown_district_literal_ignored:NY-23",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "nikki-budzinski",
+      "source_name": "Nikki Budzinski",
+      "category": "explicit_retained_name_omitted",
+      "reason": "LCV matches retained upstream official_full='Nikki Budzinski'; current member index only uses primary first/last 'Nicole (Nikki) Budzinski'.",
+      "source": {
+        "row_number": 326,
+        "first": "Nikki",
+        "last": "Budzinski",
+        "party": "D",
+        "district": "IL-13",
+        "annual": "94",
+        "lifetime": "96",
+        "url": "https://www.lcv.org/moc/nikki-budzinski/",
+        "chamber": "House",
+        "state": "Illinois",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Budzinski, Nikki",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/nikki-budzinski/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "B001315",
+        "primary_indexed_name": "Nicole (Nikki) Budzinski",
+        "retained_name_fields": {
+          "first": "Nicole (Nikki)",
+          "middle": "Jai",
+          "last": "Budzinski",
+          "official_full": "Nikki Budzinski"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/401"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2025-01-03",
+            "term_state": "IL",
+            "term_type": "rep",
+            "term_district": "13"
+          },
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "IL",
+            "term_type": "rep",
+            "term_district": "13"
+          }
+        ],
+        "first_term_start": "2023-01-03"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "unknown_district_literal_ignored:IL-13",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "pablo-jose-hernandez",
+      "source_name": "Pablo Hernández",
+      "category": "name_component_difference",
+      "reason": "LCV name 'Pablo Hernández' uses different or fewer name components than primary 'Pablo José Hernández Rivera'; retained full name is 'Pablo José Hernández'. No complete exact alias is currently indexed.",
+      "source": {
+        "row_number": 551,
+        "first": "Pablo",
+        "last": "Hernández",
+        "party": "D",
+        "district": "AL",
+        "annual": "100",
+        "lifetime": "100",
+        "url": "https://www.lcv.org/moc/pablo-jose-hernandez/",
+        "chamber": "House",
+        "state": "Puerto Rico",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Hernández, Pablo",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/pablo-jose-hernandez/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "H001103",
+        "primary_indexed_name": "Pablo José Hernández Rivera",
+        "retained_name_fields": {
+          "first": "Pablo José",
+          "last": "Hernández Rivera",
+          "official_full": "Pablo José Hernández"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/511"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "PR",
+            "term_type": "rep",
+            "term_district": "0"
+          }
+        ],
+        "first_term_start": "2025-01-03"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "no_exact_member_match",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "pat-fallon",
+      "source_name": "Pat Fallon",
+      "category": "explicit_retained_name_omitted",
+      "reason": "LCV matches retained upstream official_full='Pat Fallon', nickname + last='Pat Fallon'; current member index only uses primary first/last 'Patrick Fallon'.",
+      "source": {
+        "row_number": 580,
+        "first": "Pat",
+        "last": "Fallon",
+        "party": "R",
+        "district": "TX-04",
+        "annual": "0",
+        "lifetime": "1",
+        "url": "https://www.lcv.org/moc/pat-fallon/",
+        "chamber": "House",
+        "state": "Texas",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Fallon, Pat",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/pat-fallon/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "F000246",
+        "primary_indexed_name": "Patrick Fallon",
+        "retained_name_fields": {
+          "first": "Patrick",
+          "middle": "Edward",
+          "nickname": "Pat",
+          "last": "Fallon",
+          "official_full": "Pat Fallon"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/353"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2025-01-03",
+            "term_state": "TX",
+            "term_type": "rep",
+            "term_district": "4"
+          },
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "TX",
+            "term_type": "rep",
+            "term_district": "4"
+          }
+        ],
+        "first_term_start": "2021-01-03"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "unknown_district_literal_ignored:TX-04",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "randy-fine",
+      "source_name": "Randy Fine",
+      "category": "explicit_retained_name_omitted",
+      "reason": "LCV matches retained upstream official_full='Randy Fine', nickname + last='Randy Fine'; current member index only uses primary first/last 'Randall Fine'.",
+      "source": {
+        "row_number": 265,
+        "first": "Randy",
+        "last": "Fine",
+        "party": "R",
+        "district": "FL-06",
+        "annual": "4",
+        "lifetime": "4",
+        "url": "https://www.lcv.org/moc/randy-fine/",
+        "chamber": "House",
+        "state": "Florida",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Fine, Randy",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/randy-fine/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "F000484",
+        "primary_indexed_name": "Randall Fine",
+        "retained_name_fields": {
+          "first": "Randall",
+          "middle": "Adam",
+          "nickname": "Randy",
+          "last": "Fine",
+          "official_full": "Randy Fine"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/527"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2025-04-02",
+            "term_end": "2027-01-03",
+            "term_state": "FL",
+            "term_type": "rep",
+            "term_district": "6"
+          }
+        ],
+        "first_term_start": "2025-04-02"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "unknown_district_literal_ignored:FL-06",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "raul-grijalva",
+      "source_name": "Raul Grijalva",
+      "category": "accent_difference",
+      "reason": "LCV 'Raul Grijalva' differs from retained primary name 'Raúl Grijalva' by diacritics; whitespace is already normalized.",
+      "source": {
+        "row_number": 179,
+        "first": "Raul",
+        "last": "Grijalva",
+        "party": "D",
+        "district": "AZ-07",
+        "annual": "na",
+        "lifetime": "97",
+        "url": "https://www.lcv.org/moc/raul-grijalva/",
+        "chamber": "House",
+        "state": "Arizona",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Grijalva, Raul",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/raul-grijalva/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "G000551",
+        "primary_indexed_name": "Raúl Grijalva",
+        "retained_name_fields": {
+          "first": "Raúl",
+          "middle": "M.",
+          "last": "Grijalva",
+          "official_full": "Raúl M. Grijalva"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:25187633f3215a096fe9d14d8a40db1fb0841ab1d24c6da52da3a80c93698cbc",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-historical.json",
+          "json_pointer": "/12219"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2025-01-03",
+            "term_state": "AZ",
+            "term_type": "rep",
+            "term_district": "7"
+          },
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2025-03-13",
+            "term_state": "AZ",
+            "term_type": "rep",
+            "term_district": "7"
+          }
+        ],
+        "first_term_start": "2003-01-07"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "unknown_district_literal_ignored:AZ-07",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "rick-crawford",
+      "source_name": "Rick Crawford",
+      "category": "explicit_retained_name_omitted",
+      "reason": "LCV matches retained upstream nickname + last='Rick Crawford'; current member index only uses primary first/last 'Eric Crawford'.",
+      "source": {
+        "row_number": 183,
+        "first": "Rick",
+        "last": "Crawford",
+        "party": "R",
+        "district": "AR-01",
+        "annual": "0",
+        "lifetime": "4",
+        "url": "https://www.lcv.org/moc/rick-crawford/",
+        "chamber": "House",
+        "state": "Arkansas",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Crawford, Rick",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/rick-crawford/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "C001087",
+        "primary_indexed_name": "Eric Crawford",
+        "retained_name_fields": {
+          "first": "Eric",
+          "middle": "A.",
+          "last": "Crawford",
+          "official_full": "Eric A. \"Rick\" Crawford",
+          "nickname": "Rick"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/41"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2025-01-03",
+            "term_state": "AR",
+            "term_type": "rep",
+            "term_district": "1"
+          },
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "AR",
+            "term_type": "rep",
+            "term_district": "1"
+          }
+        ],
+        "first_term_start": "2011-01-05"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "unknown_district_literal_ignored:AR-01",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "rob-wittman",
+      "source_name": "Rob Wittman",
+      "category": "name_variant_not_explicit_in_retained_fields",
+      "reason": "LCV given name differs from primary 'Robert Wittman'; no complete matching official_full or nickname-plus-last form occurs in the retained upstream name fields. Candidate needs additional exact alias evidence.",
+      "source": {
+        "row_number": 626,
+        "first": "Rob",
+        "last": "Wittman",
+        "party": "R",
+        "district": "VA-01",
+        "annual": "3",
+        "lifetime": "9",
+        "url": "https://www.lcv.org/moc/rob-wittman/",
+        "chamber": "House",
+        "state": "Virginia",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Wittman, Rob",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/rob-wittman/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "W000804",
+        "primary_indexed_name": "Robert Wittman",
+        "retained_name_fields": {
+          "first": "Robert",
+          "middle": "J.",
+          "last": "Wittman",
+          "official_full": "Robert J. Wittman"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/133"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2025-01-03",
+            "term_state": "VA",
+            "term_type": "rep",
+            "term_district": "1"
+          },
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "VA",
+            "term_type": "rep",
+            "term_district": "1"
+          }
+        ],
+        "first_term_start": "2007-12-13"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "unknown_district_literal_ignored:VA-01",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "scott-franklin",
+      "source_name": "Scott Franklin",
+      "category": "explicit_retained_name_omitted",
+      "reason": "LCV matches retained upstream official_full='Scott Franklin'; current member index only uses primary first/last 'C. Franklin'.",
+      "source": {
+        "row_number": 278,
+        "first": "Scott",
+        "last": "Franklin",
+        "party": "R",
+        "district": "FL-18",
+        "annual": "0",
+        "lifetime": "1",
+        "url": "https://www.lcv.org/moc/scott-franklin/",
+        "chamber": "House",
+        "state": "Florida",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Franklin, Scott",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/scott-franklin/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "F000472",
+        "primary_indexed_name": "C. Franklin",
+        "retained_name_fields": {
+          "first": "C.",
+          "middle": "Scott",
+          "last": "Franklin",
+          "official_full": "Scott Franklin"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/328"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2025-01-03",
+            "term_state": "FL",
+            "term_type": "rep",
+            "term_district": "18"
+          },
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "FL",
+            "term_type": "rep",
+            "term_district": "18"
+          }
+        ],
+        "first_term_start": "2021-01-03"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "unknown_district_literal_ignored:FL-18",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "shelley-moore-capito",
+      "source_name": "Shelley Moore Capito",
+      "category": "explicit_retained_name_omitted",
+      "reason": "LCV matches retained upstream official_full='Shelley Moore Capito'; current member index only uses primary first/last 'Shelley Capito'.",
+      "source": {
+        "row_number": 148,
+        "first": "Shelley Moore",
+        "last": "Capito",
+        "party": "R",
+        "district": "",
+        "annual": "3",
+        "lifetime": "16",
+        "url": "https://www.lcv.org/moc/shelley-moore-capito/",
+        "chamber": "Senate",
+        "state": "West Virginia",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Capito, Shelley Moore",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/shelley-moore-capito/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "C001047",
+        "primary_indexed_name": "Shelley Capito",
+        "retained_name_fields": {
+          "first": "Shelley",
+          "middle": "Moore",
+          "last": "Capito",
+          "official_full": "Shelley Moore Capito"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/27"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2021-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "WV",
+            "term_type": "sen",
+            "term_district": null
+          }
+        ],
+        "first_term_start": "2001-01-03"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "no_exact_member_match",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "teresa-leger-fernandez",
+      "source_name": "Teresa Leger Fernández",
+      "category": "accent_difference",
+      "reason": "LCV 'Teresa Leger Fernández' differs from retained primary name 'Teresa Leger Fernandez' by diacritics; whitespace is already normalized.",
+      "source": {
+        "row_number": 456,
+        "first": "Teresa",
+        "last": "Leger Fernández",
+        "party": "D",
+        "district": "NM-03",
+        "annual": "100",
+        "lifetime": "99",
+        "url": "https://www.lcv.org/moc/teresa-leger-fernandez/",
+        "chamber": "House",
+        "state": "New Mexico",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Leger Fernández, Teresa",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/teresa-leger-fernandez/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "L000273",
+        "primary_indexed_name": "Teresa Leger Fernandez",
+        "retained_name_fields": {
+          "first": "Teresa",
+          "last": "Leger Fernandez",
+          "official_full": "Teresa Leger Fernandez"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/345"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2025-01-03",
+            "term_state": "NM",
+            "term_type": "rep",
+            "term_district": "3"
+          },
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "NM",
+            "term_type": "rep",
+            "term_district": "3"
+          }
+        ],
+        "first_term_start": "2021-01-03"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "unknown_district_literal_ignored:NM-03",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "tom-tiffany",
+      "source_name": "Tom Tiffany",
+      "category": "name_variant_not_explicit_in_retained_fields",
+      "reason": "LCV given name differs from primary 'Thomas Tiffany'; no complete matching official_full or nickname-plus-last form occurs in the retained upstream name fields. Candidate needs additional exact alias evidence.",
+      "source": {
+        "row_number": 659,
+        "first": "Tom",
+        "last": "Tiffany",
+        "party": "R",
+        "district": "WI-07",
+        "annual": "0",
+        "lifetime": "1",
+        "url": "https://www.lcv.org/moc/tom-tiffany/",
+        "chamber": "House",
+        "state": "Wisconsin",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Tiffany, Tom",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/tom-tiffany/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "T000165",
+        "primary_indexed_name": "Thomas Tiffany",
+        "retained_name_fields": {
+          "first": "Thomas",
+          "middle": "P.",
+          "last": "Tiffany",
+          "official_full": "Thomas P. Tiffany"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/313"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2025-01-03",
+            "term_state": "WI",
+            "term_type": "rep",
+            "term_district": "7"
+          },
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "WI",
+            "term_type": "rep",
+            "term_district": "7"
+          }
+        ],
+        "first_term_start": "2020-05-19"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "unknown_district_literal_ignored:WI-07",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "tony-gonzales",
+      "source_name": "Tony Gonzales",
+      "category": "explicit_retained_name_omitted",
+      "reason": "LCV matches retained upstream official_full='Tony Gonzales', nickname + last='Tony Gonzales'; current member index only uses primary first/last 'Ernest Gonzales'.",
+      "source": {
+        "row_number": 600,
+        "first": "Tony",
+        "last": "Gonzales",
+        "party": "R",
+        "district": "TX-23",
+        "annual": "0",
+        "lifetime": "7",
+        "url": "https://www.lcv.org/moc/tony-gonzales/",
+        "chamber": "House",
+        "state": "Texas",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Gonzales, Tony",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/tony-gonzales/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "G000594",
+        "primary_indexed_name": "Ernest Gonzales",
+        "retained_name_fields": {
+          "first": "Ernest",
+          "middle": "Anthony",
+          "nickname": "Tony",
+          "last": "Gonzales",
+          "official_full": "Tony Gonzales"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:25187633f3215a096fe9d14d8a40db1fb0841ab1d24c6da52da3a80c93698cbc",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-historical.json",
+          "json_pointer": "/12227"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2025-01-03",
+            "term_state": "TX",
+            "term_type": "rep",
+            "term_district": "23"
+          },
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2026-04-14",
+            "term_state": "TX",
+            "term_type": "rep",
+            "term_district": "23"
+          }
+        ],
+        "first_term_start": "2021-01-03"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "unknown_district_literal_ignored:TX-23",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "william-ogles",
+      "source_name": "William Ogles",
+      "category": "source_name_discrepancy",
+      "reason": "LCV CSV and HTML both say William Ogles; the retained TN-05 candidate is Andrew Ogles, with no William alias in retained name fields. District occupancy does not prove identity.",
+      "source": {
+        "row_number": 570,
+        "first": "William",
+        "last": "Ogles",
+        "party": "R",
+        "district": "TN-05",
+        "annual": "0",
+        "lifetime": "1",
+        "url": "https://www.lcv.org/moc/william-ogles/",
+        "chamber": "House",
+        "state": "Tennessee",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Ogles, William",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/william-ogles/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "O000175",
+        "primary_indexed_name": "Andrew Ogles",
+        "retained_name_fields": {
+          "first": "Andrew",
+          "last": "Ogles",
+          "suffix": "IV",
+          "official_full": "Andrew Ogles"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/432"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2025-01-03",
+            "term_state": "TN",
+            "term_type": "rep",
+            "term_district": "5"
+          },
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "TN",
+            "term_type": "rep",
+            "term_district": "5"
+          }
+        ],
+        "first_term_start": "2023-01-03"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "unknown_district_literal_ignored:TN-05",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    },
+    {
+      "publisher_member_key": "zach-nunn",
+      "source_name": "Zach Nunn",
+      "category": "explicit_parenthetical_name",
+      "reason": "Retained first name 'Zachary (Zach)' explicitly contains the LCV given name in parentheses; resolver does not index that form.",
+      "source": {
+        "row_number": 344,
+        "first": "Zach",
+        "last": "Nunn",
+        "party": "R",
+        "district": "IA-03",
+        "annual": "3",
+        "lifetime": "6",
+        "url": "https://www.lcv.org/moc/zach-nunn/",
+        "chamber": "House",
+        "state": "Iowa",
+        "csv_sha256": "sha256:994f729eed577ea388935f47610d687549424eb5ed83843e967a33fd6cb68f0b",
+        "html_sha256": "sha256:1bab9179fca778ced27fd6fe8d1f6bedaa11037a9674197968c73be1a50670df",
+        "html_name": "Nunn, Zach",
+        "html_locator": "a.card-link[href=\"https://www.lcv.org/moc/zach-nunn/\"] / parent .congress-item / .congress-name"
+      },
+      "candidate": {
+        "bioguide_id": "N000193",
+        "primary_indexed_name": "Zachary (Zach) Nunn",
+        "retained_name_fields": {
+          "first": "Zachary (Zach)",
+          "middle": "Martin",
+          "last": "Nunn",
+          "official_full": "Zachary Nunn"
+        },
+        "selection_basis": "Diagnostic candidate from retained state/chamber/2025 term and explicit district, with surname filtering where needed; not an admitted identity link.",
+        "upstream_locator": {
+          "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+          "url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+          "json_pointer": "/398"
+        },
+        "terms_overlapping_2025": [
+          {
+            "term_start": "2023-01-03",
+            "term_end": "2025-01-03",
+            "term_state": "IA",
+            "term_type": "rep",
+            "term_district": "3"
+          },
+          {
+            "term_start": "2025-01-03",
+            "term_end": "2027-01-03",
+            "term_state": "IA",
+            "term_type": "rep",
+            "term_district": "3"
+          }
+        ],
+        "first_term_start": "2023-01-03"
+      },
+      "resolver_status": "unresolved",
+      "resolver_candidate_count": "0",
+      "resolver_reason": "unknown_district_literal_ignored:IA-03",
+      "diagnostic_candidate_only": true,
+      "source_link_unchanged": true
+    }
+  ],
+  "proposed_improvements": [
+    {
+      "proposal": "Preserve primary name.middle, name.nickname and name.official_full from the already retained congressional identity source; index exact source-stated forms with historical term context and collision refusal.",
+      "observed_group_count": 31,
+      "limit": "A proposal, not an applied change. Names and raw observations must remain source-faithful; never generate common nickname dictionaries."
+    },
+    {
+      "proposal": "Consider explicit source-specific parsing of parenthetical name forms for Jim Moylan and Zach Nunn, with literal source fields retained.",
+      "observed_group_count": 2,
+      "limit": "Do not strip arbitrary parenthetical text or infer unrelated aliases."
+    },
+    {
+      "proposal": "Evaluate a versioned diacritic-folded exact comparison over the full pinned name corpus, requiring unique historical context and preserving the original accented values.",
+      "observed_group_count": 7,
+      "limit": "Measure candidate collisions before admission. This diagnostic group does not authorize automatic matching."
+    },
+    {
+      "proposal": "Parse a state-prefixed district only when the prefix exactly agrees with the independently stated source state; preserve the literal district.",
+      "limit": "43 unresolved rows carry this diagnostic, but name or term failures coexist. No claim that parsing districts alone resolves 43 people."
+    },
+    {
+      "proposal": "Keep the four 2026-only members unresolved for the 2025 edition; investigate publisher roster-versus-rating period semantics before changing the temporal rule.",
+      "observed_group_count": 4,
+      "limit": "Do not assign a 2025 historical term to a later member."
+    },
+    {
+      "proposal": "For remaining name-component, unstated-name-variant and Ogles discrepancies, obtain explicit identifier or publisher-backed alias evidence before considering a versioned override.",
+      "observed_group_count": 18,
+      "limit": "A shared district or plausible nickname is not sufficient identity evidence."
+    }
+  ]
+}

@@ -186,3 +186,19 @@ def test_run_byte_budget_applies_in_selection_order(monkeypatch):
     assert [status for _, status, _ in reads] == [
         "complete_field", "field_byte_cap", "complete_field", "complete_field", "run_byte_cap",
     ]
+
+
+def test_retained_held_field_bytes_have_claimed_evidence_members(tmp_path):
+    from spicy_regs.source_evidence import CaptureEvidence, verify_evidence
+
+    evidence = CaptureEvidence(tmp_path, "held-citations")
+    with connection() as con:
+        con.execute("INSERT INTO comments VALUES ('a', 'See 5 U.S.C. 552.')")
+        run(con, tmp_path, ["a"], evidence=evidence)
+    artifact = evidence.seal(outcome="build-complete")
+    verify_evidence(evidence.artifact_dir, expected_pin=artifact.pin)
+    journal = [json.loads(line) for line in (evidence.artifact_dir / "journal.jsonl").read_text().splitlines()]
+    retained = next(row for row in journal if row["event"] == "retained-file")
+    assert retained["stage"] == "held-citation-field"
+    assert retained["source_field"] == "comment"
+    assert any(row["event"] == "held-citation-read" for row in journal)

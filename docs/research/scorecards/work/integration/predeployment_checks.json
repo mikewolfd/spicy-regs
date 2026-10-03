@@ -1,0 +1,32 @@
+{
+  "provider_commit": "784e231545bda0525d852a8e2019507fe20408ff",
+  "reader_version": "0.53.0+scorecards.9916a2fc8473",
+  "reader_wheel_sha256": "e0123d4e093354d8c0781fd0a5cbdef700c01c89198692d205505388d2778f51",
+  "tests": {
+    "provider_full": {
+      "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-predeployment-provider-check.log",
+      "sha256": "8a20ff6165032d52635e7d84842f026b61f362c99443c400ff3e5ffa31245f29",
+      "result": "11600 passed, 4 skipped, 50 deselected, 14 warnings in 83.55s (0:01:23)"
+    },
+    "consumer_full": {
+      "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-predeployment-consumer-check.log",
+      "sha256": "f6e39a154d69c0b588fb8cf1a766de5242383eaa96a50704ba83c4db3ac4d84a",
+      "result": "4893 passed, 2 skipped, 14 deselected, 5 warnings in 136.53s (0:02:16)"
+    },
+    "reader_archive": {
+      "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-semantic-archive-check.log",
+      "sha256": "a14c50f50a18f8ee28e39beb076918cf1ca0907e433c6289f2b51ce342d400d2",
+      "result": "2106 passed, 3 skipped, 2 deselected, 9 warnings in 13.27s"
+    },
+    "consumer_installed_reader": {
+      "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-semantic-consumer-check.log",
+      "sha256": "3d8138db8984543a7111d82580c72e4404559de300762ba2be4cc597de7065fe",
+      "result": "228 passed in 4.14s"
+    }
+  },
+  "lint": {
+    "provider": "ruff check and format check passed",
+    "consumer": "ruff check passed; whole-repository format check has pre-existing drift, not applied globally"
+  },
+  "scope": "Offline implementation and package checks. Source qualification and public deployment have separate receipts."
+}

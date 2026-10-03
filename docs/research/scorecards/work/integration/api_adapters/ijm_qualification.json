@@ -1,0 +1,167 @@
+{
+  "qualification_id": "ijm-3995-current-api-zyte-2026-10-03",
+  "created_at": "2026-10-03T20:44:13.859823+00:00",
+  "publisher_id": "ijm",
+  "scorecard_id": "ijm:3995",
+  "status": "incomplete_source_capture_via_zyte",
+  "production_enabled": false,
+  "published_remotely": false,
+  "installed_provider": "spicy-docs==0.53.0+scorecards.6faacdb84390",
+  "parser_version": "ijm-rds-bt50-current-api/2",
+  "schema_version": "scorecards-v1",
+  "earlier_direct_access_refusal": {
+    "capture_id": "ijm-index",
+    "requested_url": "https://scorecard.ijm.org/",
+    "resolved_url": "https://scorecard.ijm.org/",
+    "observed_at": "2026-10-03T20:13:01.379664+00:00",
+    "http_status": 403,
+    "content_type": "text/html; charset=UTF-8",
+    "byte_size": 5408,
+    "sha256": "934fa22d896fc277ca0ff4399c7c456a590d5cacbc2e35e327c8c8721c7c491f"
+  },
+  "transport": {
+    "provider": "zyte",
+    "implementation": "existing spicy_docs.sources.zyte.ZyteHttpFetcher and spicy_docs.transport.zyte.ZyteTransport",
+    "mode": "httpResponseBody",
+    "body_semantics": "Original publisher response bytes delivered to Zyte client; not a direct capture and not browserHtml",
+    "credential_use": "existing configured ZYTE_TOKEN via read_api_key; secret not recorded",
+    "bounded_concurrency_stages": [
+      2,
+      8,
+      32
+    ],
+    "max_response_bytes": 20971520,
+    "initial_timeout_seconds": 60,
+    "longer_timeout_probe_seconds": 180,
+    "planned_provider_call_ceiling": 1200,
+    "terminal_probe": {
+      "capture_id": "ijm-extended-probe-20777",
+      "requested_url": "https://scorecard.ijm.org/wp-json/rds-bt50-scorecard/v1/legislators/detail/?legislatorId=20777&scorecardId=3995",
+      "observed_at": "2026-10-03T20:40:56.028794+00:00",
+      "provider": "zyte",
+      "provider_outcome": "refused_or_failed",
+      "provider_http_status": 520,
+      "source_http_status": null,
+      "representation": "httpResponseBody",
+      "reason": "ZyteTransportError: Zyte acquisition failed with HTTP 520 (/download/website-ban)"
+    }
+  },
+  "recovered_source_shapes": {
+    "original_index": "source200 through Zyte; logged-out public app",
+    "edition_id": 3995,
+    "grade_configuration": [
+      {
+        "scorecardId": null,
+        "rangeSplits": [
+          -1,
+          1,
+          3,
+          5
+        ],
+        "rangeColors": [
+          "#6dcab8",
+          "#6dcab8",
+          "#6dcab8",
+          "#6dcab8",
+          "#6dcab8"
+        ],
+        "dispayRangeLettergrades": true,
+        "lettergrades": [
+          "F",
+          "D",
+          "C",
+          "B",
+          "A"
+        ]
+      }
+    ],
+    "grade_source_path": "$.rangeConfigurations",
+    "retention": "Exact source thresholds/labels retained as methodology JSON; no individual grades computed",
+    "API_numeric_rendition": [
+      "score",
+      "vote_index",
+      "presence_score",
+      "possible_score"
+    ],
+    "ungraded_roster_observations": [
+      {
+        "id": 17546,
+        "first_name": "Tammy",
+        "last_name": "Duckworth",
+        "score_set_ids": [
+          3292
+        ]
+      },
+      {
+        "id": 30632,
+        "first_name": "Matt",
+        "last_name": "Van Epps",
+        "score_set_ids": []
+      }
+    ]
+  },
+  "capture_result": {
+    "retained_attempt_receipts": 246,
+    "valid_target_200_responses": 146,
+    "valid_member_detail_urls": 140,
+    "publisher_http_status_counts": {
+      "200": 146,
+      "None": 90,
+      "500": 10
+    },
+    "provider_error_http_status_counts": {
+      "None": 86,
+      "520": 3,
+      "521": 1
+    },
+    "source_roster_members": 480,
+    "source_current_rated_members": 478,
+    "source_ungraded_members": 2,
+    "declared_rated_bills": 16,
+    "catalog_bills": 16,
+    "receipt_body_hash_mismatches": [],
+    "runtime_partial_corpus_refusal": "Scorecard transport failed at scorecards:ijm:legislators/detail/?legislatorId=29643&scorecardId=3995"
+  },
+  "disposition": "Stopped after systemic provider no-response and520/521 website-download failures plus publisher500 responses. Isolated180s probe returned actual520 /download/website-ban. Initial access recovery does not establish a complete current edition. No accepted snapshot was emitted.",
+  "checks": {
+    "synthetic_suite": "50 AFP/IJM tests passed; AFP no-grade guard retained",
+    "ruff": "passed",
+    "installed_source_shape_validation": "catalog, members and grade configuration passed",
+    "installed_partial_corpus_acquisition": "refused without emitting a snapshot",
+    "AFP_installed_regression": "full retained AFP replay and every raw-locator verification passed unchanged"
+  },
+  "remaining_requirements": [
+    "Successful complete current member-detail acquisition for every published roster row",
+    "A second stable full detail/catalog/style pass",
+    "Installed-package full snapshot validation and independent raw-locator comparison"
+  ],
+  "rights_status": "unknown",
+  "evidence_policy": "hash_only",
+  "historical_support": false,
+  "capture_manifest": "ijm_zyte_capture_manifest.json",
+  "private_campaign": "scorecards-ijm-zyte-2026-10-03",
+  "private_script_sha256": {
+    "replay_ijm.py": "a1a592a95df704c8733b76874c9ce2ed118fb5442ea671c6655513679ba997a5",
+    "capture_zyte.py": "a1f35e6a138853b67bd743581ad9023ec5a14efd90ff324953b50a3482bf3477",
+    "crawl_ijm_resume.py": "03249acdd6820d8b6466e3a85e0d5ab3d81d7302767c34b741fabcaed47a1e3c",
+    "verify_ijm.py": "7486b20062297865692a8c0f8de63af0e62fb147fb8891c4aece9be56f2ffff4",
+    "crawl_ijm.py": "6b4d46f3b88e4ab0088e906e82034b330e032c7c6bef0eed7de42ce13623ae1a"
+  },
+  "commands": [
+    "uv run --frozen --no-sync python <private_campaign>/capture_zyte.py",
+    "uv run --frozen --no-sync python <private_campaign>/crawl_ijm.py"
+  ],
+  "source_code_sha256": {
+    "ijm.py": "92b60f06de5433ff14c8d179bfab220227808717b2f3513d24a340c777ebd0aa",
+    "rds_bt50.py": "cedff8bc1c0cf17932e4c959e4c9619c70f92627ce4dba672f892dc7020fd08b"
+  },
+  "observed_campaign_rate": {
+    "measurement": "retained completed attempts per elapsed minute, not account capacity or all billed/in-flight calls",
+    "first_observed_at": "2026-10-03T20:32:55.008532+00:00",
+    "last_receipt_written_at": "2026-10-03T20:42:27.737271+00:00",
+    "elapsed_minutes": 9.55,
+    "retained_completed_attempts": 246,
+    "retained_completed_attempts_per_minute": 25.77,
+    "stated_capacity_tested": false
+  }
+}

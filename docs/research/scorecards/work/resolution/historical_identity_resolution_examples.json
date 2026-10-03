@@ -1,0 +1,62 @@
+{
+  "scope": "Synthetic scorecard identities against actual pinned historical crosswalk rows; fixture pins only, no publication.",
+  "input_sha256": "9641615f336b3113d6f89152e3441128cbdc3f61ccf87c65da3a015076c78c91",
+  "results": [
+    {
+      "bioguide_id": "F000247",
+      "kind": "previous_bioguide",
+      "resolution_status": "resolved",
+      "resolution_rule": "explicit_bioguide",
+      "candidate_count": "1"
+    },
+    {
+      "bioguide_id": "R000184",
+      "kind": "previous_bioguide",
+      "resolution_status": "resolved",
+      "resolution_rule": "explicit_bioguide",
+      "candidate_count": "1"
+    },
+    {
+      "bioguide_id": "Y000061",
+      "kind": "previous_bioguide",
+      "resolution_status": "resolved",
+      "resolution_rule": "explicit_bioguide",
+      "candidate_count": "2"
+    },
+    {
+      "bioguide_id": "Y000061",
+      "kind": "dated_name",
+      "resolution_status": "resolved",
+      "resolution_rule": "unique_normalized_name_historical_term",
+      "candidate_count": "2"
+    },
+    {
+      "bioguide_id": "L000420",
+      "kind": "dated_name",
+      "resolution_status": "resolved",
+      "resolution_rule": "exact_historical_name_context",
+      "candidate_count": "1"
+    },
+    {
+      "bioguide_id": "G000408",
+      "kind": "previous_bioguide",
+      "resolution_status": "resolved",
+      "resolution_rule": "explicit_bioguide",
+      "candidate_count": "1"
+    },
+    {
+      "bioguide_id": "L000035",
+      "kind": "dated_name",
+      "resolution_status": "resolved",
+      "resolution_rule": "exact_historical_name_context",
+      "candidate_count": "1"
+    },
+    {
+      "bioguide_id": "B001228",
+      "kind": "dated_name",
+      "resolution_status": "resolved",
+      "resolution_rule": "exact_historical_name_context",
+      "candidate_count": "1"
+    }
+  ]
+}

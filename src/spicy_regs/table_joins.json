@@ -1634,6 +1634,572 @@
       "floor_pct": 100.0,
       "expected_cardinality": "unspecified",
       "measurement": null
+    },
+    {
+      "child": "scorecards",
+      "child_columns": [
+        "publisher_id"
+      ],
+      "parent": "scorecard_publishers",
+      "parent_columns": [
+        "publisher_id"
+      ],
+      "kind": "empty",
+      "reason": "Scorecard source relationship; no live baseline has been measured.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
+      "child": "scorecards",
+      "child_columns": [
+        "snapshot_id"
+      ],
+      "parent": "scorecard_snapshots",
+      "parent_columns": [
+        "snapshot_id"
+      ],
+      "kind": "empty",
+      "reason": "Scorecard source relationship; no live baseline has been measured.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
+      "child": "scorecard_snapshots",
+      "child_columns": [
+        "scorecard_id"
+      ],
+      "parent": "scorecards",
+      "parent_columns": [
+        "scorecard_id"
+      ],
+      "kind": "empty",
+      "reason": "Scorecard source relationship; no live baseline has been measured.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
+      "child": "scorecard_methodologies",
+      "child_columns": [
+        "scorecard_id"
+      ],
+      "parent": "scorecards",
+      "parent_columns": [
+        "scorecard_id"
+      ],
+      "kind": "empty",
+      "reason": "Scorecard source relationship; no live baseline has been measured.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
+      "child": "scorecard_methodologies",
+      "child_columns": [
+        "snapshot_id"
+      ],
+      "parent": "scorecard_snapshots",
+      "parent_columns": [
+        "snapshot_id"
+      ],
+      "kind": "empty",
+      "reason": "Scorecard source relationship; no live baseline has been measured.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
+      "child": "scorecard_metrics",
+      "child_columns": [
+        "scorecard_id"
+      ],
+      "parent": "scorecards",
+      "parent_columns": [
+        "scorecard_id"
+      ],
+      "kind": "empty",
+      "reason": "Scorecard source relationship; no live baseline has been measured.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
+      "child": "scorecard_metrics",
+      "child_columns": [
+        "snapshot_id"
+      ],
+      "parent": "scorecard_snapshots",
+      "parent_columns": [
+        "snapshot_id"
+      ],
+      "kind": "empty",
+      "reason": "Scorecard source relationship; no live baseline has been measured.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
+      "child": "scorecard_metrics",
+      "child_columns": [
+        "scorecard_id",
+        "methodology_id"
+      ],
+      "parent": "scorecard_methodologies",
+      "parent_columns": [
+        "scorecard_id",
+        "methodology_id"
+      ],
+      "kind": "empty",
+      "reason": "Scorecard source relationship; no live baseline has been measured.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
+      "child": "scorecard_items",
+      "child_columns": [
+        "scorecard_id"
+      ],
+      "parent": "scorecards",
+      "parent_columns": [
+        "scorecard_id"
+      ],
+      "kind": "empty",
+      "reason": "Scorecard source relationship; no live baseline has been measured.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
+      "child": "scorecard_items",
+      "child_columns": [
+        "snapshot_id"
+      ],
+      "parent": "scorecard_snapshots",
+      "parent_columns": [
+        "snapshot_id"
+      ],
+      "kind": "empty",
+      "reason": "Scorecard source relationship; no live baseline has been measured.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
+      "child": "scorecard_metric_items",
+      "child_columns": [
+        "scorecard_id"
+      ],
+      "parent": "scorecards",
+      "parent_columns": [
+        "scorecard_id"
+      ],
+      "kind": "empty",
+      "reason": "Scorecard source relationship; no live baseline has been measured.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
+      "child": "scorecard_metric_items",
+      "child_columns": [
+        "snapshot_id"
+      ],
+      "parent": "scorecard_snapshots",
+      "parent_columns": [
+        "snapshot_id"
+      ],
+      "kind": "empty",
+      "reason": "Scorecard source relationship; no live baseline has been measured.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
+      "child": "scorecard_metric_items",
+      "child_columns": [
+        "scorecard_id",
+        "metric_id"
+      ],
+      "parent": "scorecard_metrics",
+      "parent_columns": [
+        "scorecard_id",
+        "metric_id"
+      ],
+      "kind": "empty",
+      "reason": "Scorecard source relationship; no live baseline has been measured.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
+      "child": "scorecard_metric_items",
+      "child_columns": [
+        "scorecard_id",
+        "item_id"
+      ],
+      "parent": "scorecard_items",
+      "parent_columns": [
+        "scorecard_id",
+        "item_id"
+      ],
+      "kind": "empty",
+      "reason": "Scorecard source relationship; no live baseline has been measured.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
+      "child": "scorecard_metric_items",
+      "child_columns": [
+        "scorecard_id",
+        "methodology_id"
+      ],
+      "parent": "scorecard_methodologies",
+      "parent_columns": [
+        "scorecard_id",
+        "methodology_id"
+      ],
+      "kind": "empty",
+      "reason": "Scorecard source relationship; no live baseline has been measured.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
+      "child": "scorecard_metric_components",
+      "child_columns": [
+        "scorecard_id"
+      ],
+      "parent": "scorecards",
+      "parent_columns": [
+        "scorecard_id"
+      ],
+      "kind": "empty",
+      "reason": "Scorecard source relationship; no live baseline has been measured.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
+      "child": "scorecard_metric_components",
+      "child_columns": [
+        "snapshot_id"
+      ],
+      "parent": "scorecard_snapshots",
+      "parent_columns": [
+        "snapshot_id"
+      ],
+      "kind": "empty",
+      "reason": "Scorecard source relationship; no live baseline has been measured.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
+      "child": "scorecard_metric_components",
+      "child_columns": [
+        "scorecard_id",
+        "parent_metric_id"
+      ],
+      "parent": "scorecard_metrics",
+      "parent_columns": [
+        "scorecard_id",
+        "metric_id"
+      ],
+      "kind": "empty",
+      "reason": "Scorecard source relationship; no live baseline has been measured.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
+      "child": "scorecard_metric_components",
+      "child_columns": [
+        "scorecard_id",
+        "component_metric_id"
+      ],
+      "parent": "scorecard_metrics",
+      "parent_columns": [
+        "scorecard_id",
+        "metric_id"
+      ],
+      "kind": "empty",
+      "reason": "Scorecard source relationship; no live baseline has been measured.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
+      "child": "scorecard_members",
+      "child_columns": [
+        "scorecard_id"
+      ],
+      "parent": "scorecards",
+      "parent_columns": [
+        "scorecard_id"
+      ],
+      "kind": "empty",
+      "reason": "Scorecard source relationship; no live baseline has been measured.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
+      "child": "scorecard_members",
+      "child_columns": [
+        "snapshot_id"
+      ],
+      "parent": "scorecard_snapshots",
+      "parent_columns": [
+        "snapshot_id"
+      ],
+      "kind": "empty",
+      "reason": "Scorecard source relationship; no live baseline has been measured.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
+      "child": "scorecard_member_ratings",
+      "child_columns": [
+        "scorecard_id"
+      ],
+      "parent": "scorecards",
+      "parent_columns": [
+        "scorecard_id"
+      ],
+      "kind": "empty",
+      "reason": "Scorecard source relationship; no live baseline has been measured.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
+      "child": "scorecard_member_ratings",
+      "child_columns": [
+        "snapshot_id"
+      ],
+      "parent": "scorecard_snapshots",
+      "parent_columns": [
+        "snapshot_id"
+      ],
+      "kind": "empty",
+      "reason": "Scorecard source relationship; no live baseline has been measured.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
+      "child": "scorecard_member_ratings",
+      "child_columns": [
+        "scorecard_id",
+        "metric_id"
+      ],
+      "parent": "scorecard_metrics",
+      "parent_columns": [
+        "scorecard_id",
+        "metric_id"
+      ],
+      "kind": "empty",
+      "reason": "Scorecard source relationship; no live baseline has been measured.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
+      "child": "scorecard_member_ratings",
+      "child_columns": [
+        "scorecard_id",
+        "publisher_member_key"
+      ],
+      "parent": "scorecard_members",
+      "parent_columns": [
+        "scorecard_id",
+        "publisher_member_key"
+      ],
+      "kind": "empty",
+      "reason": "Scorecard source relationship; no live baseline has been measured.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
+      "child": "scorecard_member_item_results",
+      "child_columns": [
+        "scorecard_id"
+      ],
+      "parent": "scorecards",
+      "parent_columns": [
+        "scorecard_id"
+      ],
+      "kind": "empty",
+      "reason": "Scorecard source relationship; no live baseline has been measured.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
+      "child": "scorecard_member_item_results",
+      "child_columns": [
+        "snapshot_id"
+      ],
+      "parent": "scorecard_snapshots",
+      "parent_columns": [
+        "snapshot_id"
+      ],
+      "kind": "empty",
+      "reason": "Scorecard source relationship; no live baseline has been measured.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
+      "child": "scorecard_member_item_results",
+      "child_columns": [
+        "scorecard_id",
+        "publisher_member_key"
+      ],
+      "parent": "scorecard_members",
+      "parent_columns": [
+        "scorecard_id",
+        "publisher_member_key"
+      ],
+      "kind": "empty",
+      "reason": "Scorecard source relationship; no live baseline has been measured.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
+      "child": "scorecard_member_item_results",
+      "child_columns": [
+        "scorecard_id",
+        "item_id"
+      ],
+      "parent": "scorecard_items",
+      "parent_columns": [
+        "scorecard_id",
+        "item_id"
+      ],
+      "kind": "empty",
+      "reason": "Scorecard source relationship; no live baseline has been measured.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
+      "child": "scorecard_member_item_results",
+      "child_columns": [
+        "scorecard_id",
+        "metric_id",
+        "item_id",
+        "participation_id"
+      ],
+      "parent": "scorecard_metric_items",
+      "parent_columns": [
+        "scorecard_id",
+        "metric_id",
+        "item_id",
+        "participation_id"
+      ],
+      "kind": "empty",
+      "reason": "Scorecard source relationship; no live baseline has been measured.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "unspecified",
+      "measurement": null
     }
   ],
   "references": {
@@ -2473,6 +3039,322 @@
         "parent_table": "native_legal_reference_reads",
         "parent_columns": [
           "scope_id"
+        ]
+      }
+    ],
+    "scorecards": [
+      {
+        "child_columns": [
+          "publisher_id"
+        ],
+        "parent_table": "scorecard_publishers",
+        "parent_columns": [
+          "publisher_id"
+        ]
+      },
+      {
+        "child_columns": [
+          "snapshot_id"
+        ],
+        "parent_table": "scorecard_snapshots",
+        "parent_columns": [
+          "snapshot_id"
+        ]
+      }
+    ],
+    "scorecard_snapshots": [
+      {
+        "child_columns": [
+          "scorecard_id"
+        ],
+        "parent_table": "scorecards",
+        "parent_columns": [
+          "scorecard_id"
+        ]
+      }
+    ],
+    "scorecard_methodologies": [
+      {
+        "child_columns": [
+          "scorecard_id"
+        ],
+        "parent_table": "scorecards",
+        "parent_columns": [
+          "scorecard_id"
+        ]
+      },
+      {
+        "child_columns": [
+          "snapshot_id"
+        ],
+        "parent_table": "scorecard_snapshots",
+        "parent_columns": [
+          "snapshot_id"
+        ]
+      }
+    ],
+    "scorecard_metrics": [
+      {
+        "child_columns": [
+          "scorecard_id"
+        ],
+        "parent_table": "scorecards",
+        "parent_columns": [
+          "scorecard_id"
+        ]
+      },
+      {
+        "child_columns": [
+          "snapshot_id"
+        ],
+        "parent_table": "scorecard_snapshots",
+        "parent_columns": [
+          "snapshot_id"
+        ]
+      },
+      {
+        "child_columns": [
+          "scorecard_id",
+          "methodology_id"
+        ],
+        "parent_table": "scorecard_methodologies",
+        "parent_columns": [
+          "scorecard_id",
+          "methodology_id"
+        ]
+      }
+    ],
+    "scorecard_items": [
+      {
+        "child_columns": [
+          "scorecard_id"
+        ],
+        "parent_table": "scorecards",
+        "parent_columns": [
+          "scorecard_id"
+        ]
+      },
+      {
+        "child_columns": [
+          "snapshot_id"
+        ],
+        "parent_table": "scorecard_snapshots",
+        "parent_columns": [
+          "snapshot_id"
+        ]
+      }
+    ],
+    "scorecard_metric_items": [
+      {
+        "child_columns": [
+          "scorecard_id"
+        ],
+        "parent_table": "scorecards",
+        "parent_columns": [
+          "scorecard_id"
+        ]
+      },
+      {
+        "child_columns": [
+          "snapshot_id"
+        ],
+        "parent_table": "scorecard_snapshots",
+        "parent_columns": [
+          "snapshot_id"
+        ]
+      },
+      {
+        "child_columns": [
+          "scorecard_id",
+          "metric_id"
+        ],
+        "parent_table": "scorecard_metrics",
+        "parent_columns": [
+          "scorecard_id",
+          "metric_id"
+        ]
+      },
+      {
+        "child_columns": [
+          "scorecard_id",
+          "item_id"
+        ],
+        "parent_table": "scorecard_items",
+        "parent_columns": [
+          "scorecard_id",
+          "item_id"
+        ]
+      },
+      {
+        "child_columns": [
+          "scorecard_id",
+          "methodology_id"
+        ],
+        "parent_table": "scorecard_methodologies",
+        "parent_columns": [
+          "scorecard_id",
+          "methodology_id"
+        ]
+      }
+    ],
+    "scorecard_metric_components": [
+      {
+        "child_columns": [
+          "scorecard_id"
+        ],
+        "parent_table": "scorecards",
+        "parent_columns": [
+          "scorecard_id"
+        ]
+      },
+      {
+        "child_columns": [
+          "snapshot_id"
+        ],
+        "parent_table": "scorecard_snapshots",
+        "parent_columns": [
+          "snapshot_id"
+        ]
+      },
+      {
+        "child_columns": [
+          "scorecard_id",
+          "parent_metric_id"
+        ],
+        "parent_table": "scorecard_metrics",
+        "parent_columns": [
+          "scorecard_id",
+          "metric_id"
+        ]
+      },
+      {
+        "child_columns": [
+          "scorecard_id",
+          "component_metric_id"
+        ],
+        "parent_table": "scorecard_metrics",
+        "parent_columns": [
+          "scorecard_id",
+          "metric_id"
+        ]
+      }
+    ],
+    "scorecard_members": [
+      {
+        "child_columns": [
+          "scorecard_id"
+        ],
+        "parent_table": "scorecards",
+        "parent_columns": [
+          "scorecard_id"
+        ]
+      },
+      {
+        "child_columns": [
+          "snapshot_id"
+        ],
+        "parent_table": "scorecard_snapshots",
+        "parent_columns": [
+          "snapshot_id"
+        ]
+      }
+    ],
+    "scorecard_member_ratings": [
+      {
+        "child_columns": [
+          "scorecard_id"
+        ],
+        "parent_table": "scorecards",
+        "parent_columns": [
+          "scorecard_id"
+        ]
+      },
+      {
+        "child_columns": [
+          "snapshot_id"
+        ],
+        "parent_table": "scorecard_snapshots",
+        "parent_columns": [
+          "snapshot_id"
+        ]
+      },
+      {
+        "child_columns": [
+          "scorecard_id",
+          "metric_id"
+        ],
+        "parent_table": "scorecard_metrics",
+        "parent_columns": [
+          "scorecard_id",
+          "metric_id"
+        ]
+      },
+      {
+        "child_columns": [
+          "scorecard_id",
+          "publisher_member_key"
+        ],
+        "parent_table": "scorecard_members",
+        "parent_columns": [
+          "scorecard_id",
+          "publisher_member_key"
+        ]
+      }
+    ],
+    "scorecard_member_item_results": [
+      {
+        "child_columns": [
+          "scorecard_id"
+        ],
+        "parent_table": "scorecards",
+        "parent_columns": [
+          "scorecard_id"
+        ]
+      },
+      {
+        "child_columns": [
+          "snapshot_id"
+        ],
+        "parent_table": "scorecard_snapshots",
+        "parent_columns": [
+          "snapshot_id"
+        ]
+      },
+      {
+        "child_columns": [
+          "scorecard_id",
+          "publisher_member_key"
+        ],
+        "parent_table": "scorecard_members",
+        "parent_columns": [
+          "scorecard_id",
+          "publisher_member_key"
+        ]
+      },
+      {
+        "child_columns": [
+          "scorecard_id",
+          "item_id"
+        ],
+        "parent_table": "scorecard_items",
+        "parent_columns": [
+          "scorecard_id",
+          "item_id"
+        ]
+      },
+      {
+        "child_columns": [
+          "scorecard_id",
+          "metric_id",
+          "item_id",
+          "participation_id"
+        ],
+        "parent_table": "scorecard_metric_items",
+        "parent_columns": [
+          "scorecard_id",
+          "metric_id",
+          "item_id",
+          "participation_id"
         ]
       }
     ]

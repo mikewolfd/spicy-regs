@@ -134,7 +134,23 @@ DEFAULT_R2_BASE_URL = "https://data.spicy-regs.dev"
 #: is adopted — it is never restated in this repository. ``congress_bills`` is
 #: in this list and is also the one table that predates it: the contract keeps
 #: its first ten columns in their published order and appends the rest.
+SCORECARD_TABLES: tuple[str, ...] = (
+    "scorecard_publishers",
+    "scorecards",
+    "scorecard_snapshots",
+    "scorecard_methodologies",
+    "scorecard_metrics",
+    "scorecard_items",
+    "scorecard_metric_items",
+    "scorecard_metric_components",
+    "scorecard_members",
+    "scorecard_member_ratings",
+    "scorecard_member_item_results",
+)
+
+
 CONTRACT_TABLES: tuple[str, ...] = (
+    *SCORECARD_TABLES,
     "congress_bills",
     "bill_actions",
     "bill_committees",
@@ -318,6 +334,8 @@ TABLES: tuple[str, ...] = (
     "court_opinions",
     "court_opinion_pdf_extractions",
     "member_vote_terms",
+    "scorecard_member_links",
+    "scorecard_item_links",
     "usaspending_recipients",
     "fcc_proceedings",
     "fcc_filings",
@@ -388,6 +406,8 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "bill_family_backfill_walks",
         "committee_report_reads",
         "member_vote_terms",
+    "scorecard_member_links",
+    "scorecard_item_links",
         *RULEMAKING_TABLES,
         *CONTRACT_TABLES,
     }
@@ -817,6 +837,7 @@ def expected_schemas() -> dict[str, list[tuple[str, str]]]:
     from spicy_regs.transforms.build_courtlistener import PUBLISHED_COLUMNS as COURT_DOCKET_COLUMNS
     from spicy_regs.transforms.build_court_bulk_tables import CITATION_MAP, CITATIONS, OPINIONS, PARENTHETICALS
     from spicy_regs.transforms.build_court_pdf_extractions import COLUMNS as COURT_PDF_COLUMNS
+    from spicy_regs.scorecards.resolution import LINK_COLUMNS as SCORECARD_LINK_COLUMNS
     from spicy_regs.transforms.build_member_vote_terms import COLUMNS as MEMBER_VOTE_TERM_COLUMNS
     from spicy_regs.transforms.build_sam_entities import COLUMNS as SAM_COLUMNS
     from spicy_regs.transforms.build_lobbying_filings import (
@@ -826,6 +847,7 @@ def expected_schemas() -> dict[str, list[tuple[str, str]]]:
     )
 
     builder_columns = {
+        **SCORECARD_LINK_COLUMNS,
         "fec_source_catalog": FEC_CATALOG_COLUMNS,
         "fec_collections": COLLECTION_COLUMNS,
         "fec_source_records": RECORD_COLUMNS,

@@ -17303,6 +17303,239 @@
       "member_key"
     ]
   },
+  "scorecard_member_links": {
+    "table": "scorecard_member_links",
+    "label": "Scorecard member links",
+    "summary": "One resolution disposition per publisher member.",
+    "coverage": "Derived exact identity links over pinned scorecard and congressional tables. Historical context constrains member matches; unresolved and ambiguous identities remain visible. No fuzzy matching or score conversion is applied.",
+    "kind": "derived",
+    "measured_on": "2026-10-03",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "scorecard_id",
+        "column_type": "VARCHAR",
+        "description": "Stable publisher edition identifier; join within the recorded source snapshot."
+      },
+      {
+        "column_name": "publisher_member_key",
+        "column_type": "VARCHAR",
+        "description": "Unchanged publisher member key within the edition."
+      },
+      {
+        "column_name": "bioguide_id",
+        "column_type": "VARCHAR",
+        "description": "Exact resolved congressional member identifier; NULL when unresolved or ambiguous."
+      },
+      {
+        "column_name": "term_candidates_json",
+        "column_type": "VARCHAR",
+        "description": "JSON array recording the historical terms considered for the member match."
+      },
+      {
+        "column_name": "override_version",
+        "column_type": "VARCHAR",
+        "description": "Version of an explicit member override, when used."
+      },
+      {
+        "column_name": "source_snapshot_id",
+        "column_type": "VARCHAR",
+        "description": "Source snapshot used for resolution; require equality when joining to refreshed source facts."
+      },
+      {
+        "column_name": "resolution_status",
+        "column_type": "VARCHAR",
+        "description": "Resolution outcome, including resolved, unresolved, ambiguous or conflicting source identifiers."
+      },
+      {
+        "column_name": "resolution_rule",
+        "column_type": "VARCHAR",
+        "description": "Exact matching rule that produced this disposition."
+      },
+      {
+        "column_name": "rule_version",
+        "column_type": "VARCHAR",
+        "description": "Version of the deterministic resolver rules."
+      },
+      {
+        "column_name": "candidate_count",
+        "column_type": "VARCHAR",
+        "description": "Number of candidates, retained as decimal text."
+      },
+      {
+        "column_name": "candidates_json",
+        "column_type": "VARCHAR",
+        "description": "JSON array of candidate identifiers retained for review."
+      },
+      {
+        "column_name": "reason",
+        "column_type": "VARCHAR",
+        "description": "Explanation of the resolution outcome or refusal."
+      },
+      {
+        "column_name": "source_context_json",
+        "column_type": "VARCHAR",
+        "description": "Source identity and period context used by the resolver, retained as JSON."
+      },
+      {
+        "column_name": "input_pins_json",
+        "column_type": "VARCHAR",
+        "description": "Immutable input family and artifact pins; sha256 binds a single file and tableDescriptorDigest binds all members of a partitioned table."
+      },
+      {
+        "column_name": "capture_id",
+        "column_type": "VARCHAR",
+        "description": "Source capture identifier carried through from the publisher fact."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Original publisher URL for the source fact."
+      },
+      {
+        "column_name": "source_path",
+        "column_type": "VARCHAR",
+        "description": "Location of the source fact or reference within the captured document."
+      }
+    ],
+    "grain": null,
+    "identity_columns": [
+      "scorecard_id",
+      "publisher_member_key"
+    ]
+  },
+  "scorecard_item_links": {
+    "table": "scorecard_item_links",
+    "label": "Scorecard item links",
+    "summary": "One resolution disposition per source item reference occurrence; a bill action does not imply a roll call.",
+    "coverage": "Derived exact identity links over pinned scorecard and congressional tables. Historical context constrains member matches; unresolved and ambiguous identities remain visible. No fuzzy matching or score conversion is applied.",
+    "kind": "derived",
+    "measured_on": "2026-10-03",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "scorecard_id",
+        "column_type": "VARCHAR",
+        "description": "Stable publisher edition identifier; join within the recorded source snapshot."
+      },
+      {
+        "column_name": "item_id",
+        "column_type": "VARCHAR",
+        "description": "Unchanged publisher scoring-item key within the edition."
+      },
+      {
+        "column_name": "reference_id",
+        "column_type": "VARCHAR",
+        "description": "Derived occurrence key: item:direct or reference: followed by the source occurrence identifier."
+      },
+      {
+        "column_name": "source_reference_id",
+        "column_type": "VARCHAR",
+        "description": "Literal source reference occurrence identifier; NULL for direct item fields."
+      },
+      {
+        "column_name": "congress",
+        "column_type": "VARCHAR",
+        "description": "Exactly resolved Congress number; NULL when not established."
+      },
+      {
+        "column_name": "chamber",
+        "column_type": "VARCHAR",
+        "description": "Exactly resolved chamber; NULL when not established."
+      },
+      {
+        "column_name": "session",
+        "column_type": "VARCHAR",
+        "description": "Exactly resolved congressional session; NULL when not established."
+      },
+      {
+        "column_name": "roll_number",
+        "column_type": "VARCHAR",
+        "description": "Exactly resolved roll-call number; never fabricated for sponsorship or cosponsorship."
+      },
+      {
+        "column_name": "vote_id",
+        "column_type": "VARCHAR",
+        "description": "Exact identifier in the pinned roll_call_votes input; NULL when no roll call resolves."
+      },
+      {
+        "column_name": "bill_id",
+        "column_type": "VARCHAR",
+        "description": "Exact identifier in the pinned congress_bills input; NULL when no bill resolves."
+      },
+      {
+        "column_name": "amendment_id",
+        "column_type": "VARCHAR",
+        "description": "Exact identifier in the pinned amendments input; NULL when no amendment resolves."
+      },
+      {
+        "column_name": "source_snapshot_id",
+        "column_type": "VARCHAR",
+        "description": "Source snapshot used for resolution; require equality when joining to refreshed source facts."
+      },
+      {
+        "column_name": "resolution_status",
+        "column_type": "VARCHAR",
+        "description": "Resolution outcome, including resolved, unresolved, ambiguous or conflicting source identifiers."
+      },
+      {
+        "column_name": "resolution_rule",
+        "column_type": "VARCHAR",
+        "description": "Exact matching rule that produced this disposition."
+      },
+      {
+        "column_name": "rule_version",
+        "column_type": "VARCHAR",
+        "description": "Version of the deterministic resolver rules."
+      },
+      {
+        "column_name": "candidate_count",
+        "column_type": "VARCHAR",
+        "description": "Number of candidates, retained as decimal text."
+      },
+      {
+        "column_name": "candidates_json",
+        "column_type": "VARCHAR",
+        "description": "JSON array of candidate identifiers retained for review."
+      },
+      {
+        "column_name": "reason",
+        "column_type": "VARCHAR",
+        "description": "Explanation of the resolution outcome or refusal."
+      },
+      {
+        "column_name": "source_context_json",
+        "column_type": "VARCHAR",
+        "description": "Source identity and period context used by the resolver, retained as JSON."
+      },
+      {
+        "column_name": "input_pins_json",
+        "column_type": "VARCHAR",
+        "description": "Immutable input family and artifact pins; sha256 binds a single file and tableDescriptorDigest binds all members of a partitioned table."
+      },
+      {
+        "column_name": "capture_id",
+        "column_type": "VARCHAR",
+        "description": "Source capture identifier carried through from the publisher fact."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Original publisher URL for the source fact."
+      },
+      {
+        "column_name": "source_path",
+        "column_type": "VARCHAR",
+        "description": "Location of the source fact or reference within the captured document."
+      }
+    ],
+    "grain": null,
+    "identity_columns": [
+      "scorecard_id",
+      "item_id",
+      "reference_id"
+    ]
+  },
   "usaspending_recipients": {
     "table": "usaspending_recipients",
     "label": "Federal award recipients",
@@ -17561,6 +17794,1020 @@
     "grain": null,
     "identity_columns": [
       "id_submission"
+    ]
+  },
+  "scorecard_publishers": {
+    "table": "scorecard_publishers",
+    "label": "Scorecard publishers",
+    "summary": "One stable publisher identity; historical names remain on edition observations. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy.",
+    "coverage": "Sampled publisher editions selected by the scorecard source registry. Complete edition reads replace that edition; failed or incomplete reads preserve prior observations. Coverage varies by publisher and historical source format.",
+    "kind": "sampled",
+    "measured_on": "2026-10-03",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "publisher_id",
+        "column_type": "VARCHAR",
+        "description": "Stable source-layer publisher id; no downstream identity resolution."
+      },
+      {
+        "column_name": "name",
+        "column_type": "VARCHAR",
+        "description": "Source-stated name, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "abbreviation",
+        "column_type": "VARCHAR",
+        "description": "Source-stated abbreviation, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "aliases_json",
+        "column_type": "VARCHAR",
+        "description": "JSON array of publisher name aliases as stated by the source."
+      },
+      {
+        "column_name": "homepage_url",
+        "column_type": "VARCHAR",
+        "description": "Source-stated homepage url, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "scorecard_index_url",
+        "column_type": "VARCHAR",
+        "description": "Source-stated scorecard index url, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "UTC instant at which the supporting source response was observed."
+      },
+      {
+        "column_name": "capture_id",
+        "column_type": "VARCHAR",
+        "description": "Opaque caller-issued identity of the source observation supporting this row."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Original publisher URL supporting this observation."
+      },
+      {
+        "column_name": "source_path",
+        "column_type": "VARCHAR",
+        "description": "Source locator within the captured response, such as cell, JSON path or PDF page."
+      }
+    ],
+    "grain": "One stable publisher identity; historical names remain on edition observations.",
+    "identity_columns": [
+      "publisher_id"
+    ]
+  },
+  "scorecards": {
+    "table": "scorecards",
+    "label": "Scorecards",
+    "summary": "One publisher-defined edition, with a series_id for continuity; a live series is not itself an edition. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy.",
+    "coverage": "Sampled publisher editions selected by the scorecard source registry. Complete edition reads replace that edition; failed or incomplete reads preserve prior observations. Coverage varies by publisher and historical source format.",
+    "kind": "sampled",
+    "measured_on": "2026-10-03",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "scorecard_id",
+        "column_type": "VARCHAR",
+        "description": "Stable source-layer scorecard id; no downstream identity resolution."
+      },
+      {
+        "column_name": "publisher_id",
+        "column_type": "VARCHAR",
+        "description": "Stable source-layer publisher id; no downstream identity resolution."
+      },
+      {
+        "column_name": "series_id",
+        "column_type": "VARCHAR",
+        "description": "Stable source-layer series id; no downstream identity resolution."
+      },
+      {
+        "column_name": "publisher_edition_key",
+        "column_type": "VARCHAR",
+        "description": "Source-stated publisher edition key, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "publisher_name_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated publisher name, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "title",
+        "column_type": "VARCHAR",
+        "description": "Source-stated title, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "edition_label_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated edition label, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "chamber_scope_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated chamber scope, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "year_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated year, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "congress_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated congress, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "session_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated session, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "timespan_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated timespan, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "periods_json",
+        "column_type": "VARCHAR",
+        "description": "Ordered explicit or relative source periods with occurrence_id, period_text, kind and source_path."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Original publisher URL supporting this observation."
+      },
+      {
+        "column_name": "methodology_url",
+        "column_type": "VARCHAR",
+        "description": "Source-stated methodology url, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "published_at_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated published at, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "updated_at_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated updated at, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "UTC instant at which the supporting source response was observed."
+      },
+      {
+        "column_name": "snapshot_id",
+        "column_type": "VARCHAR",
+        "description": "Opaque identity of the complete accepted edition capture and parse."
+      },
+      {
+        "column_name": "capture_id",
+        "column_type": "VARCHAR",
+        "description": "Opaque caller-issued identity of the source observation supporting this row."
+      },
+      {
+        "column_name": "source_path",
+        "column_type": "VARCHAR",
+        "description": "Source locator within the captured response, such as cell, JSON path or PDF page."
+      }
+    ],
+    "grain": "One publisher-defined edition, with a series_id for continuity; a live series is not itself an edition.",
+    "identity_columns": [
+      "scorecard_id"
+    ]
+  },
+  "scorecard_snapshots": {
+    "table": "scorecard_snapshots",
+    "label": "Scorecard snapshots",
+    "summary": "One complete accepted edition capture and parse; unsuccessful attempts remain in the run journal. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy.",
+    "coverage": "Sampled publisher editions selected by the scorecard source registry. Complete edition reads replace that edition; failed or incomplete reads preserve prior observations. Coverage varies by publisher and historical source format.",
+    "kind": "sampled",
+    "measured_on": "2026-10-03",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "snapshot_id",
+        "column_type": "VARCHAR",
+        "description": "Opaque identity of the complete accepted edition capture and parse."
+      },
+      {
+        "column_name": "scorecard_id",
+        "column_type": "VARCHAR",
+        "description": "Stable source-layer scorecard id; no downstream identity resolution."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "UTC instant at which the supporting source response was observed."
+      },
+      {
+        "column_name": "capture_ids_json",
+        "column_type": "VARCHAR",
+        "description": "JSON array of opaque capture identifiers selected for this accepted snapshot."
+      },
+      {
+        "column_name": "parser_version",
+        "column_type": "VARCHAR",
+        "description": "Version of the publisher-specific reader used for this snapshot."
+      },
+      {
+        "column_name": "methodology_digest",
+        "column_type": "VARCHAR",
+        "description": "Optional permitted digest of the source methodology; NULL when retention policy forbids it."
+      },
+      {
+        "column_name": "completeness_status",
+        "column_type": "VARCHAR",
+        "description": "Complete for an accepted snapshot; failed attempts produce no source table rows."
+      },
+      {
+        "column_name": "completeness_rule",
+        "column_type": "VARCHAR",
+        "description": "Publisher-specific proof that every required edition source and record was captured."
+      },
+      {
+        "column_name": "source_declared_counts_json",
+        "column_type": "VARCHAR",
+        "description": "JSON object of counts explicitly stated by the publisher, not expected official roster sizes."
+      },
+      {
+        "column_name": "parsed_counts_json",
+        "column_type": "VARCHAR",
+        "description": "JSON object of parsed table counts within this edition."
+      },
+      {
+        "column_name": "evidence_policy",
+        "column_type": "VARCHAR",
+        "description": "Caller-selected public evidence policy: full, hash_only or metadata_only."
+      },
+      {
+        "column_name": "capture_roles_json",
+        "column_type": "VARCHAR",
+        "description": "Capture attribution by field group: exactly one primary source per group, plus corroborations."
+      },
+      {
+        "column_name": "rendition_selection_rule",
+        "column_type": "VARCHAR",
+        "description": "Versioned field-level selection of authoritative sources where alternate renditions differ."
+      },
+      {
+        "column_name": "identity_rule_version",
+        "column_type": "VARCHAR",
+        "description": "Versioned rule assigning stable source member, item and edition keys."
+      },
+      {
+        "column_name": "capture_id",
+        "column_type": "VARCHAR",
+        "description": "Opaque caller-issued identity of the source observation supporting this row."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Original publisher URL supporting this observation."
+      },
+      {
+        "column_name": "source_path",
+        "column_type": "VARCHAR",
+        "description": "Source locator within the captured response, such as cell, JSON path or PDF page."
+      }
+    ],
+    "grain": "One complete accepted edition capture and parse; unsuccessful attempts remain in the run journal.",
+    "identity_columns": [
+      "snapshot_id"
+    ]
+  },
+  "scorecard_methodologies": {
+    "table": "scorecard_methodologies",
+    "label": "Scorecard methodologies",
+    "summary": "One source-stated rule set in an edition, scoped to chamber and cohort as stated. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy.",
+    "coverage": "Sampled publisher editions selected by the scorecard source registry. Complete edition reads replace that edition; failed or incomplete reads preserve prior observations. Coverage varies by publisher and historical source format.",
+    "kind": "sampled",
+    "measured_on": "2026-10-03",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "scorecard_id",
+        "column_type": "VARCHAR",
+        "description": "Stable source-layer scorecard id; no downstream identity resolution."
+      },
+      {
+        "column_name": "methodology_id",
+        "column_type": "VARCHAR",
+        "description": "Stable source-layer methodology id; no downstream identity resolution."
+      },
+      {
+        "column_name": "chamber_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated chamber, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "cohort_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated cohort, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "effective_at_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated effective at, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "methodology_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated methodology, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "methodology_url",
+        "column_type": "VARCHAR",
+        "description": "Source-stated methodology url, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "disclosure_status",
+        "column_type": "VARCHAR",
+        "description": "Source-stated disclosure status, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "capture_id",
+        "column_type": "VARCHAR",
+        "description": "Opaque caller-issued identity of the source observation supporting this row."
+      },
+      {
+        "column_name": "source_path",
+        "column_type": "VARCHAR",
+        "description": "Source locator within the captured response, such as cell, JSON path or PDF page."
+      },
+      {
+        "column_name": "snapshot_id",
+        "column_type": "VARCHAR",
+        "description": "Opaque identity of the complete accepted edition capture and parse."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Original publisher URL supporting this observation."
+      }
+    ],
+    "grain": "One source-stated rule set in an edition, scoped to chamber and cohort as stated.",
+    "identity_columns": [
+      "scorecard_id",
+      "methodology_id"
+    ]
+  },
+  "scorecard_metrics": {
+    "table": "scorecard_metrics",
+    "label": "Scorecard metrics",
+    "summary": "One publisher measurement for an explicit chamber, cohort and period in an edition. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy.",
+    "coverage": "Sampled publisher editions selected by the scorecard source registry. Complete edition reads replace that edition; failed or incomplete reads preserve prior observations. Coverage varies by publisher and historical source format.",
+    "kind": "sampled",
+    "measured_on": "2026-10-03",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "scorecard_id",
+        "column_type": "VARCHAR",
+        "description": "Stable source-layer scorecard id; no downstream identity resolution."
+      },
+      {
+        "column_name": "metric_id",
+        "column_type": "VARCHAR",
+        "description": "Stable source-layer metric id; no downstream identity resolution."
+      },
+      {
+        "column_name": "methodology_id",
+        "column_type": "VARCHAR",
+        "description": "Stable source-layer methodology id; no downstream identity resolution."
+      },
+      {
+        "column_name": "name",
+        "column_type": "VARCHAR",
+        "description": "Source-stated name, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "value_unit_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated value unit, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "chamber_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated chamber, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "cohort_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated cohort, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "period_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated period, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "periods_json",
+        "column_type": "VARCHAR",
+        "description": "Ordered explicit or relative source periods with occurrence_id, period_text, kind and source_path."
+      },
+      {
+        "column_name": "is_primary",
+        "column_type": "VARCHAR",
+        "description": "Publisher primary-measure designation as true or false, or NULL when unstated."
+      },
+      {
+        "column_name": "scale_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated scale, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "rank_population_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated rank population, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "snapshot_id",
+        "column_type": "VARCHAR",
+        "description": "Opaque identity of the complete accepted edition capture and parse."
+      },
+      {
+        "column_name": "capture_id",
+        "column_type": "VARCHAR",
+        "description": "Opaque caller-issued identity of the source observation supporting this row."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Original publisher URL supporting this observation."
+      },
+      {
+        "column_name": "source_path",
+        "column_type": "VARCHAR",
+        "description": "Source locator within the captured response, such as cell, JSON path or PDF page."
+      }
+    ],
+    "grain": "One publisher measurement for an explicit chamber, cohort and period in an edition.",
+    "identity_columns": [
+      "scorecard_id",
+      "metric_id"
+    ]
+  },
+  "scorecard_items": {
+    "table": "scorecard_items",
+    "label": "Scorecard items",
+    "summary": "One publisher-identified action or scoring item; multiple actions on one bill remain separate. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy.",
+    "coverage": "Sampled publisher editions selected by the scorecard source registry. Complete edition reads replace that edition; failed or incomplete reads preserve prior observations. Coverage varies by publisher and historical source format.",
+    "kind": "sampled",
+    "measured_on": "2026-10-03",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "scorecard_id",
+        "column_type": "VARCHAR",
+        "description": "Stable source-layer scorecard id; no downstream identity resolution."
+      },
+      {
+        "column_name": "item_id",
+        "column_type": "VARCHAR",
+        "description": "Stable source-layer item id; no downstream identity resolution."
+      },
+      {
+        "column_name": "publisher_item_id",
+        "column_type": "VARCHAR",
+        "description": "Stable source-layer publisher item id; no downstream identity resolution."
+      },
+      {
+        "column_name": "item_kind_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated item kind, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "title",
+        "column_type": "VARCHAR",
+        "description": "Source-stated title, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "item_date_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated item date, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "congress_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated congress, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "chamber_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated chamber, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "session_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated session, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "roll_number_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated roll number, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "bill_citation_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated bill citation, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "amendment_citation_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated amendment citation, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "references_json",
+        "column_type": "VARCHAR",
+        "description": "Ordered source citation occurrences with occurrence_id, citation_text, kind and source_path."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Original publisher URL supporting this observation."
+      },
+      {
+        "column_name": "source_path",
+        "column_type": "VARCHAR",
+        "description": "Source locator within the captured response, such as cell, JSON path or PDF page."
+      },
+      {
+        "column_name": "publisher_position_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated publisher position, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "position_basis",
+        "column_type": "VARCHAR",
+        "description": "Whether a publisher position is explicit, inferred by its presentation, or absent."
+      },
+      {
+        "column_name": "position_source_path",
+        "column_type": "VARCHAR",
+        "description": "Exact source locator supporting the publisher position."
+      },
+      {
+        "column_name": "snapshot_id",
+        "column_type": "VARCHAR",
+        "description": "Opaque identity of the complete accepted edition capture and parse."
+      },
+      {
+        "column_name": "capture_id",
+        "column_type": "VARCHAR",
+        "description": "Opaque caller-issued identity of the source observation supporting this row."
+      }
+    ],
+    "grain": "One publisher-identified action or scoring item; multiple actions on one bill remain separate.",
+    "identity_columns": [
+      "scorecard_id",
+      "item_id"
+    ]
+  },
+  "scorecard_metric_items": {
+    "table": "scorecard_metric_items",
+    "label": "Scorecard metric items",
+    "summary": "One item's participation in a metric under a particular source rule. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy.",
+    "coverage": "Sampled publisher editions selected by the scorecard source registry. Complete edition reads replace that edition; failed or incomplete reads preserve prior observations. Coverage varies by publisher and historical source format.",
+    "kind": "sampled",
+    "measured_on": "2026-10-03",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "scorecard_id",
+        "column_type": "VARCHAR",
+        "description": "Stable source-layer scorecard id; no downstream identity resolution."
+      },
+      {
+        "column_name": "metric_id",
+        "column_type": "VARCHAR",
+        "description": "Stable source-layer metric id; no downstream identity resolution."
+      },
+      {
+        "column_name": "item_id",
+        "column_type": "VARCHAR",
+        "description": "Stable source-layer item id; no downstream identity resolution."
+      },
+      {
+        "column_name": "participation_id",
+        "column_type": "VARCHAR",
+        "description": "Stable source-layer participation id; no downstream identity resolution."
+      },
+      {
+        "column_name": "methodology_id",
+        "column_type": "VARCHAR",
+        "description": "Stable source-layer methodology id; no downstream identity resolution."
+      },
+      {
+        "column_name": "publisher_position_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated publisher position, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "position_basis",
+        "column_type": "VARCHAR",
+        "description": "Whether a publisher position is explicit, inferred by its presentation, or absent."
+      },
+      {
+        "column_name": "weight_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated weight, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "weight_number",
+        "column_type": "VARCHAR",
+        "description": "Optional exact decimal text for a source-stated weight; no inferred normalization."
+      },
+      {
+        "column_name": "contribution_rule_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated contribution rule, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "counts_toward_metric",
+        "column_type": "VARCHAR",
+        "description": "Source-stated participation as true or false, or NULL when unstated."
+      },
+      {
+        "column_name": "snapshot_id",
+        "column_type": "VARCHAR",
+        "description": "Opaque identity of the complete accepted edition capture and parse."
+      },
+      {
+        "column_name": "capture_id",
+        "column_type": "VARCHAR",
+        "description": "Opaque caller-issued identity of the source observation supporting this row."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Original publisher URL supporting this observation."
+      },
+      {
+        "column_name": "source_path",
+        "column_type": "VARCHAR",
+        "description": "Source locator within the captured response, such as cell, JSON path or PDF page."
+      }
+    ],
+    "grain": "One item's participation in a metric under a particular source rule.",
+    "identity_columns": [
+      "scorecard_id",
+      "metric_id",
+      "item_id",
+      "participation_id"
+    ]
+  },
+  "scorecard_metric_components": {
+    "table": "scorecard_metric_components",
+    "label": "Scorecard metric components",
+    "summary": "One source-stated relationship between a component metric and its parent metric. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy.",
+    "coverage": "Sampled publisher editions selected by the scorecard source registry. Complete edition reads replace that edition; failed or incomplete reads preserve prior observations. Coverage varies by publisher and historical source format.",
+    "kind": "sampled",
+    "measured_on": "2026-10-03",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "scorecard_id",
+        "column_type": "VARCHAR",
+        "description": "Stable source-layer scorecard id; no downstream identity resolution."
+      },
+      {
+        "column_name": "parent_metric_id",
+        "column_type": "VARCHAR",
+        "description": "Stable source-layer parent metric id; no downstream identity resolution."
+      },
+      {
+        "column_name": "component_metric_id",
+        "column_type": "VARCHAR",
+        "description": "Stable source-layer component metric id; no downstream identity resolution."
+      },
+      {
+        "column_name": "weight_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated weight, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "weight_number",
+        "column_type": "VARCHAR",
+        "description": "Optional exact decimal text for a source-stated weight; no inferred normalization."
+      },
+      {
+        "column_name": "combination_rule_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated combination rule, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "snapshot_id",
+        "column_type": "VARCHAR",
+        "description": "Opaque identity of the complete accepted edition capture and parse."
+      },
+      {
+        "column_name": "capture_id",
+        "column_type": "VARCHAR",
+        "description": "Opaque caller-issued identity of the source observation supporting this row."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Original publisher URL supporting this observation."
+      },
+      {
+        "column_name": "source_path",
+        "column_type": "VARCHAR",
+        "description": "Source locator within the captured response, such as cell, JSON path or PDF page."
+      }
+    ],
+    "grain": "One source-stated relationship between a component metric and its parent metric.",
+    "identity_columns": [
+      "scorecard_id",
+      "parent_metric_id",
+      "component_metric_id"
+    ]
+  },
+  "scorecard_members": {
+    "table": "scorecard_members",
+    "label": "Scorecard members",
+    "summary": "One source member occurrence/context in the edition, including ungraded or excluded members. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy.",
+    "coverage": "Sampled publisher editions selected by the scorecard source registry. Complete edition reads replace that edition; failed or incomplete reads preserve prior observations. Coverage varies by publisher and historical source format.",
+    "kind": "sampled",
+    "measured_on": "2026-10-03",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "scorecard_id",
+        "column_type": "VARCHAR",
+        "description": "Stable source-layer scorecard id; no downstream identity resolution."
+      },
+      {
+        "column_name": "publisher_member_key",
+        "column_type": "VARCHAR",
+        "description": "Versioned reader key for this source member context; not a resolved official identifier."
+      },
+      {
+        "column_name": "publisher_member_id",
+        "column_type": "VARCHAR",
+        "description": "Stable source-layer publisher member id; no downstream identity resolution."
+      },
+      {
+        "column_name": "identifiers_json",
+        "column_type": "VARCHAR",
+        "description": "Ordered source-supplied member identifiers, each with scheme and value."
+      },
+      {
+        "column_name": "member_name",
+        "column_type": "VARCHAR",
+        "description": "Source-stated member name, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "chamber_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated chamber, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "state",
+        "column_type": "VARCHAR",
+        "description": "Source-stated state, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "district",
+        "column_type": "VARCHAR",
+        "description": "Source-stated district, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "party",
+        "column_type": "VARCHAR",
+        "description": "Source-stated party, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "period_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated period, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "eligibility_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated eligibility, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "notes_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated notes, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "snapshot_id",
+        "column_type": "VARCHAR",
+        "description": "Opaque identity of the complete accepted edition capture and parse."
+      },
+      {
+        "column_name": "capture_id",
+        "column_type": "VARCHAR",
+        "description": "Opaque caller-issued identity of the source observation supporting this row."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Original publisher URL supporting this observation."
+      },
+      {
+        "column_name": "source_path",
+        "column_type": "VARCHAR",
+        "description": "Source locator within the captured response, such as cell, JSON path or PDF page."
+      }
+    ],
+    "grain": "One source member occurrence/context in the edition, including ungraded or excluded members.",
+    "identity_columns": [
+      "scorecard_id",
+      "publisher_member_key"
+    ]
+  },
+  "scorecard_member_ratings": {
+    "table": "scorecard_member_ratings",
+    "label": "Scorecard member ratings",
+    "summary": "One source-reported metric value for a member; different grades, ranks and scores remain distinct measurements. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy.",
+    "coverage": "Sampled publisher editions selected by the scorecard source registry. Complete edition reads replace that edition; failed or incomplete reads preserve prior observations. Coverage varies by publisher and historical source format.",
+    "kind": "sampled",
+    "measured_on": "2026-10-03",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "scorecard_id",
+        "column_type": "VARCHAR",
+        "description": "Stable source-layer scorecard id; no downstream identity resolution."
+      },
+      {
+        "column_name": "metric_id",
+        "column_type": "VARCHAR",
+        "description": "Stable source-layer metric id; no downstream identity resolution."
+      },
+      {
+        "column_name": "publisher_member_key",
+        "column_type": "VARCHAR",
+        "description": "Versioned reader key for this source member context; not a resolved official identifier."
+      },
+      {
+        "column_name": "value_text",
+        "column_type": "VARCHAR",
+        "description": "The publisher-reported rating exactly as displayed, including units, suffixes and exclusions."
+      },
+      {
+        "column_name": "value_number",
+        "column_type": "VARCHAR",
+        "description": "Optional exact decimal text read from an unambiguous numerical value; never a grade conversion."
+      },
+      {
+        "column_name": "value_status_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated value status, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "rank_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated rank, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "notes_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated notes, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Original publisher URL supporting this observation."
+      },
+      {
+        "column_name": "source_path",
+        "column_type": "VARCHAR",
+        "description": "Source locator within the captured response, such as cell, JSON path or PDF page."
+      },
+      {
+        "column_name": "snapshot_id",
+        "column_type": "VARCHAR",
+        "description": "Opaque identity of the complete accepted edition capture and parse."
+      },
+      {
+        "column_name": "capture_id",
+        "column_type": "VARCHAR",
+        "description": "Opaque caller-issued identity of the source observation supporting this row."
+      }
+    ],
+    "grain": "One source-reported metric value for a member; different grades, ranks and scores remain distinct measurements.",
+    "identity_columns": [
+      "scorecard_id",
+      "metric_id",
+      "publisher_member_key"
+    ]
+  },
+  "scorecard_member_item_results": {
+    "table": "scorecard_member_item_results",
+    "label": "Scorecard member item results",
+    "summary": "One publisher-reported member result for an item, with optional source-stated metric participation. Metric-free grids require no fabricated measurement. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy.",
+    "coverage": "Sampled publisher editions selected by the scorecard source registry. Complete edition reads replace that edition; failed or incomplete reads preserve prior observations. Coverage varies by publisher and historical source format.",
+    "kind": "sampled",
+    "measured_on": "2026-10-03",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "scorecard_id",
+        "column_type": "VARCHAR",
+        "description": "Stable source-layer scorecard id; no downstream identity resolution."
+      },
+      {
+        "column_name": "result_id",
+        "column_type": "VARCHAR",
+        "description": "Stable source-layer result id; no downstream identity resolution."
+      },
+      {
+        "column_name": "metric_id",
+        "column_type": "VARCHAR",
+        "description": "Stable source-layer metric id; no downstream identity resolution."
+      },
+      {
+        "column_name": "item_id",
+        "column_type": "VARCHAR",
+        "description": "Stable source-layer item id; no downstream identity resolution."
+      },
+      {
+        "column_name": "participation_id",
+        "column_type": "VARCHAR",
+        "description": "Stable source-layer participation id; no downstream identity resolution."
+      },
+      {
+        "column_name": "publisher_member_key",
+        "column_type": "VARCHAR",
+        "description": "Versioned reader key for this source member context; not a resolved official identifier."
+      },
+      {
+        "column_name": "action_text",
+        "column_type": "VARCHAR",
+        "description": "Action as reported by the publisher, without substituting an official legislative record."
+      },
+      {
+        "column_name": "result_text",
+        "column_type": "VARCHAR",
+        "description": "Publisher result glyph or text, preserving display decoding without inferring an official action."
+      },
+      {
+        "column_name": "contribution_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated contribution, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "contribution_number",
+        "column_type": "VARCHAR",
+        "description": "Optional exact decimal text for a source-stated contribution."
+      },
+      {
+        "column_name": "eligibility_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated eligibility, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "counts_toward_metric",
+        "column_type": "VARCHAR",
+        "description": "Source-stated participation as true or false, or NULL when unstated."
+      },
+      {
+        "column_name": "adjustment_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated adjustment, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "reason_text",
+        "column_type": "VARCHAR",
+        "description": "Source-stated reason, preserved as text; NULL when unstated."
+      },
+      {
+        "column_name": "snapshot_id",
+        "column_type": "VARCHAR",
+        "description": "Opaque identity of the complete accepted edition capture and parse."
+      },
+      {
+        "column_name": "capture_id",
+        "column_type": "VARCHAR",
+        "description": "Opaque caller-issued identity of the source observation supporting this row."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Original publisher URL supporting this observation."
+      },
+      {
+        "column_name": "source_path",
+        "column_type": "VARCHAR",
+        "description": "Source locator within the captured response, such as cell, JSON path or PDF page."
+      }
+    ],
+    "grain": "One publisher-reported member result for an item, with optional source-stated metric participation. Metric-free grids require no fabricated measurement.",
+    "identity_columns": [
+      "scorecard_id",
+      "item_id",
+      "publisher_member_key",
+      "result_id"
     ]
   },
   "bill_actions": {
@@ -19400,7 +20647,7 @@
     "table": "members",
     "label": "Legislators",
     "summary": "One row per legislator in one capture of the community crosswalk. Split from `member_terms` because one row cannot hold a chamber switch. All columns are stored as VARCHAR.",
-    "coverage": "Sampled. The fork selection covers both complete community crosswalk files captured September 22, 2026 UTC: current and historical legislators. Every declared field was checked against the retained originals, and all earlier retained identities and native values survive. The source supplies 1,738 distinct FEC candidate IDs and 328 LIS IDs across both files; absent IDs remain absent. This qualifies the captured community files, not an independently complete official roster. Receipts: fork-execution-2026-09-21/members-qualification/.",
+    "coverage": "Sampled. The fork selection covers both complete community crosswalk files captured September 22, 2026 UTC: current and historical legislators. Every field declared at that qualification was checked against the retained originals, and all earlier retained identities and native values survive. The source supplies 1,738 distinct FEC candidate IDs and 328 LIS IDs across both files; absent IDs remain absent. This qualifies the captured community files, not an independently complete official roster. Receipts: fork-execution-2026-09-21/members-qualification/. The later votesmart_id, bioguide_previous_json and other_names_json additions are adopted in the local reader and pass parsing, resolution and member-pipeline tests. A rebuilt members generation still needs qualification and publication before hosted queries can use these fields.",
     "kind": "sampled",
     "measured_on": "2026-09-22",
     "data_quality": null,
@@ -19409,6 +20656,11 @@
         "column_name": "bioguide_id",
         "column_type": "VARCHAR",
         "description": "The Biographical Directory id, which is this crosswalk's primary identifier."
+      },
+      {
+        "column_name": "bioguide_previous_json",
+        "column_type": "VARCHAR",
+        "description": "The source list of previous Bioguide ids in its order, as JSON; absent is NULL."
       },
       {
         "column_name": "lis_id",
@@ -19431,6 +20683,11 @@
         "description": "The GovTrack id."
       },
       {
+        "column_name": "votesmart_id",
+        "column_type": "VARCHAR",
+        "description": "The Vote Smart person id from the community crosswalk; absent when unstated."
+      },
+      {
         "column_name": "opensecrets_id",
         "column_type": "VARCHAR",
         "description": "The OpenSecrets id."
@@ -19449,6 +20706,11 @@
         "column_name": "name_last",
         "column_type": "VARCHAR",
         "description": "The person's last name as the crosswalk spells it."
+      },
+      {
+        "column_name": "other_names_json",
+        "column_type": "VARCHAR",
+        "description": "Source other_names patches in order, with literal date bounds and nulls; absent is NULL."
       },
       {
         "column_name": "term_count",

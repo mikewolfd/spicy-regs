@@ -178,6 +178,20 @@ TABLES = (
     "member_terms",
     "member_party_affiliations",
     "member_vote_terms",
+    "scorecard_publishers",
+    "scorecards",
+    "scorecard_snapshots",
+    "scorecard_methodologies",
+    "scorecard_metrics",
+    "scorecard_items",
+    "scorecard_metric_items",
+    "scorecard_metric_components",
+    "scorecard_members",
+    "scorecard_member_ratings",
+    "scorecard_member_item_results",
+    "scorecard_member_links",
+    "scorecard_item_links",
+
     "committee_reports",
     "report_sections",
     "hearing_transcripts",
@@ -255,7 +269,7 @@ def _parse_timeout_seconds(raw: str) -> float | None:
 STATEMENT_TIMEOUT_SECONDS = _parse_timeout_seconds(STATEMENT_TIMEOUT)
 
 INSTRUCTIONS = (
-    "Query Spicy Regs public datasets across government sources. Use list_sources "
+    "Query Spicy Regs public datasets across government and attributed third-party sources. Use list_sources "
     "to discover available tables and declared outputs, describe_table for actual "
     "schemas, field meanings, identifiers and coverage caveats, and query_sql for "
     "read-only queries and joins. A declared output or coverage measurement does "
@@ -263,6 +277,9 @@ INSTRUCTIONS = (
     "ledger's audit disposition for its own pin beside the live pin; it is not a "
     "verification flag for the live generation. Always LIMIT exploratory results. "
     "Cite source identifiers, evidence locators and dates from returned rows. "
+    "When reporting scorecard ratings or preferred actions, name the publisher, edition and metric, "
+    "preserve the literal value, and distinguish publisher observations from official congressional records. "
+    "Join scorecard analysis to source rows only when source_snapshot_id matches snapshot_id. "
     "Derived relationship views retain source occurrences separately from distinct pairs. "
     "Use resolve_document_citations for bounded target lookups; a normalized citation key alone does not prove existence."
 )

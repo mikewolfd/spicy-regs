@@ -1,0 +1,168 @@
+{
+  "status": "qualified-local",
+  "publication": false,
+  "ticket": "ss-kvli",
+  "provider": "0.53.0+scorecards.d030db4a182c",
+  "generation_path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-members-2026-10-03/generations/253ae5371141f436d7787608c7da3258b1a05a64b93c26822f227fe3754b251e",
+  "generation_pin": {
+    "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:4bdb763eefb72e89003f58cba32c18c2e233f36a16b214c97f4d3427b7b891fb",
+    "artifactDigest": "sha256:253ae5371141f436d7787608c7da3258b1a05a64b93c26822f227fe3754b251e"
+  },
+  "evidence_path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-members-2026-10-03/source-evidence/13f799931140422b9115af288529868e/artifact",
+  "evidence_pin": {
+    "logicalId": "urn:spicy:artifact:spicy-regs-source-evidence:95152c11e3cd0454410a08d23b020bd93a91f9e25ba5b32853390d9cd79ba649",
+    "artifactDigest": "sha256:9696428fee16b48ded88534be8aa1748618c6c4c040e8efe333cc4c317d004f8"
+  },
+  "source_selection": "Fresh existing community current/historical JSON routes; no prior merge or extra congressional feed.",
+  "capture_accounting": "One GET per roster; acquired and used journal receipts refer to the same retained body.",
+  "completeness": "Both bounded HTTP bodies reached EOF and parsed as complete arrays; every member, term and nested affiliation reconciles to the outputs.",
+  "source_declared_totals": null,
+  "source_reports": [
+    {
+      "requested_url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+      "resolved_url": "https://unitedstates.github.io/congress-legislators/legislators-current.json",
+      "observed_at": "2026-10-03T20:12:48.038161Z",
+      "sha256": "sha256:ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+      "byte_size": 1469059,
+      "status_code": 200,
+      "content_type": "application/json; charset=utf-8",
+      "response_complete": true,
+      "evidence_policy": "full",
+      "capture_id": "a4b7667d4b6d45fc915c2f0b3d6d9085",
+      "roster": "current",
+      "source_body_path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-members-2026-10-03/source-evidence/13f799931140422b9115af288529868e/artifact/blobs/sha256/ae8cb9477c48715df71a7d860854229d799dc90a254d61badc1efb770f892b2c",
+      "records": 539
+    },
+    {
+      "requested_url": "https://unitedstates.github.io/congress-legislators/legislators-historical.json",
+      "resolved_url": "https://unitedstates.github.io/congress-legislators/legislators-historical.json",
+      "observed_at": "2026-10-03T20:12:48.955567Z",
+      "sha256": "sha256:25187633f3215a096fe9d14d8a40db1fb0841ab1d24c6da52da3a80c93698cbc",
+      "byte_size": 13483039,
+      "status_code": 200,
+      "content_type": "application/json; charset=utf-8",
+      "response_complete": true,
+      "evidence_policy": "full",
+      "capture_id": "1e6440c4e89f4e0bbffd076b66f9ac9d",
+      "roster": "historical",
+      "source_body_path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-members-2026-10-03/source-evidence/13f799931140422b9115af288529868e/artifact/blobs/sha256/25187633f3215a096fe9d14d8a40db1fb0841ab1d24c6da52da3a80c93698cbc",
+      "records": 12231
+    }
+  ],
+  "rows": {
+    "members": 12770,
+    "member_terms": 45535,
+    "member_party_affiliations": 59
+  },
+  "field_coverage": {
+    "current": {
+      "bioguide_id": 539,
+      "lis_id": 100,
+      "icpsr_id": 319,
+      "govtrack_id": 539,
+      "votesmart_id": 519,
+      "opensecrets_id": 523,
+      "wikidata_id": 538,
+      "affiliations_state:absent": 2785,
+      "affiliations_state:populated": 2
+    },
+    "historical": {
+      "bioguide_id": 12231,
+      "icpsr_id": 11979,
+      "govtrack_id": 12231,
+      "wikidata_id": 12231,
+      "affiliations_state:absent": 42721,
+      "bioguide_previous_json": 4,
+      "other_names_json": 5,
+      "affiliations_state:populated": 27,
+      "votesmart_id": 826,
+      "lis_id": 228,
+      "opensecrets_id": 919
+    }
+  },
+  "null_identity_fields": {
+    "bioguide_id": 0,
+    "lis_id": 12442,
+    "icpsr_id": 472,
+    "govtrack_id": 0,
+    "votesmart_id": 11425,
+    "opensecrets_id": 11328,
+    "wikidata_id": 1
+  },
+  "identifier_collisions": {
+    "bioguide_id": {
+      "F000246": [
+        "F000246",
+        "F000247"
+      ],
+      "W000790": [
+        "G000408",
+        "W000790"
+      ],
+      "L000266": [
+        "L000266",
+        "Y000061"
+      ]
+    },
+    "lis_id": {},
+    "icpsr_id": {},
+    "govtrack_id": {},
+    "votesmart_id": {},
+    "opensecrets_id": {},
+    "wikidata_id": {},
+    "fec_id": {}
+  },
+  "input_pins": {
+    "member_party_affiliations": {
+      "sha256": "sha256:3d860e29b1874fb0f30ba9e8cc07a53542ff73cdc15f8d86f34d716a955938e2",
+      "byteSize": 5233,
+      "family": "members",
+      "artifactDigest": "sha256:253ae5371141f436d7787608c7da3258b1a05a64b93c26822f227fe3754b251e"
+    },
+    "member_terms": {
+      "sha256": "sha256:8810be48c3ed1a5508ee15243602c02d7ff46eee023ad7eb596206f24f2262f8",
+      "byteSize": 183149,
+      "family": "members",
+      "artifactDigest": "sha256:253ae5371141f436d7787608c7da3258b1a05a64b93c26822f227fe3754b251e"
+    },
+    "members": {
+      "sha256": "sha256:96c11c55ce3254491aa1fec9534398bf21f3c450d885cd93b700bf32a48045bb",
+      "byteSize": 283698,
+      "family": "members",
+      "artifactDigest": "sha256:253ae5371141f436d7787608c7da3258b1a05a64b93c26822f227fe3754b251e"
+    }
+  },
+  "paths": {
+    "member_party_affiliations": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-members-2026-10-03/generations/253ae5371141f436d7787608c7da3258b1a05a64b93c26822f227fe3754b251e/member_party_affiliations.parquet",
+    "member_terms": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-members-2026-10-03/generations/253ae5371141f436d7787608c7da3258b1a05a64b93c26822f227fe3754b251e/member_terms.parquet",
+    "members": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-members-2026-10-03/generations/253ae5371141f436d7787608c7da3258b1a05a64b93c26822f227fe3754b251e/members.parquet"
+  },
+  "checks": [
+    "generation and evidence admission",
+    "all-VARCHAR schemas and unique non-null primary keys",
+    "all retained raw JSON members and terms equal output literals",
+    "historical JSON absence/null/order preserved",
+    "every affiliation source JSON, literal dates, ordinal and pointer preserved",
+    "exact source membership and foreign keys"
+  ],
+  "limitations": [
+    "Observed community crosswalk completeness is not a claim that the source lists every historical person or identifier.",
+    "Unstated IDs remain NULL; identity collisions remain explicit and are not deduplicated.",
+    "The upstream JSON routes do not expose a repository commit pin; retained body hashes bind the actual observations."
+  ],
+  "qualification_script_sha256": "sha256:9ee7b84dfe467aa14fb3a1dcd034513063fa86f1807f5d9a21d61e0c774e3186",
+  "supplemental_artifacts": {
+    "identity_diagnostics.json": {
+      "sha256": "sha256:c55c4676382ff44908b8e1128a91220aa5b7f2dd2270136db64ac6b1ff17c6cf",
+      "byteSize": 606905
+    },
+    "historical_identity_raw_examples.json": {
+      "sha256": "sha256:d923f4bffa4a6d301daf1dc3193906f657cb133f49addd34c48d515a79f2a59e",
+      "byteSize": 1665
+    },
+    "analysis_inputs.json": {
+      "sha256": "sha256:2a8289e10494b213003b34fc69ef196543e1242be4009aee468acab1ab8057d6",
+      "byteSize": 1501
+    }
+  }
+}

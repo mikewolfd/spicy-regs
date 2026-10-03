@@ -1,0 +1,104 @@
+{
+  "reviewed_at": "2026-10-03T19:27:15.507956+00:00",
+  "task": "ss-nhee",
+  "integration_target_task": "ss-wshn",
+  "status": "research_complete",
+  "report_files": {
+    "reuse_review.md": "f2d24b9e2387b4c4153e731b1f90cb96e61bc4a0b8941fe60b08455a85c88c93",
+    "work/reuse/congress_ecosystem.md": "bb6e9ab65a5773faae2c0254307bd8b86f8164e1f2b5dad2bd2827b45b8c7246",
+    "work/reuse/official_apis.md": "eb4e426cfbd1ed7bf58d4534c65f802719bc932ab9fe0eb9ffaf0d6952a1bbbd",
+    "work/reuse/civic_platforms.md": "9f71121817864ef8eb13ed8b1241979b7fcc0e95fc9c4c7686ea0622aedda13d"
+  },
+  "checks": {
+    "six_columns_each_project": true,
+    "local_links_exist": true,
+    "all_requested_projects_present": true,
+    "all_census_tasks_unique": true
+  },
+  "independent_review": "Ecosystem worker checked pinned code paths, schema recommendations and implementation status; corrections applied.",
+  "implementation_changes": "See work/integration/ecosystem_takeaways.md for local GovTrack discovery, retained historical crosswalk fields, exact identifier resolution, independent-action semantics, and provider package adoption.",
+  "limits": [
+    "Authenticated API behavior not tested",
+    "No third-party runtime dependency adopted",
+    "No production publication or scheduled refresh",
+    "Source-specific adapter qualification remains open"
+  ],
+  "public_evidence": "metadata and hashes; no third-party source bodies",
+  "endpoint_observations": [
+    {
+      "url": "https://civitas-research.org/api/public/v1/openapi.json",
+      "observed_at": "2026-10-03T19:12:35.233158+00:00",
+      "status": 200,
+      "content_type": "application/json",
+      "url_resolved": "https://civitas-research.org/api/public/v1/openapi.json",
+      "byte_size": 37358,
+      "sha256": "6321dc7257ba761ed35640a8bfd7482d0810440ebb0893e105957ccbff02a6fa",
+      "title": "Civitas Public API",
+      "paths": [
+        "/api/public/v1/",
+        "/api/public/v1/states",
+        "/api/public/v1/senators",
+        "/api/public/v1/senators/{senator_id}",
+        "/api/public/v1/senators/{senator_id}/history",
+        "/api/public/v1/representatives",
+        "/api/public/v1/representatives/{rep_id}",
+        "/api/public/v1/representatives/{rep_id}/history",
+        "/api/public/v1/search"
+      ]
+    },
+    {
+      "url": "https://civdotiq.org/openapi.json",
+      "observed_at": "2026-10-03T19:12:35.615047+00:00",
+      "status": 200,
+      "content_type": "application/json; charset=utf-8",
+      "url_resolved": "https://civdotiq.org/openapi.json",
+      "byte_size": 120006,
+      "sha256": "37b89da725c8b2ac7a77682f8e555741917698a3fbecc6bdce4cca4e2bdd5b56",
+      "title": "CIV.IQ Public API",
+      "paths": [
+        "/v1/",
+        "/v1/analytics",
+        "/v1/representatives",
+        "/v1/representatives/{bioguideId}",
+        "/v1/bills",
+        "/v1/bills/{billId}",
+        "/v1/bills/{billId}/summary",
+        "/v1/votes/{voteId}",
+        "/v1/districts/{districtId}",
+        "/v1/committees",
+        "/v1/committees/{committeeId}",
+        "/v1/changelog",
+        "/mcp",
+        "/intelligence/representative/{bioguideId}/vote-prediction",
+        "/intelligence/representative/{bioguideId}/influence-chain"
+      ]
+    }
+  ],
+  "pinned_repositories": [
+    {
+      "repository": "CapitolTrace/capitoltrace-ui",
+      "commit": "0cbb91bedb85e58f2987c8ac86e4115ff705bc97",
+      "metadata_sha256": "efb482f5a7596463966aeee72540e2a41bdb8b7bf5627806ada7ed99989eb4d3"
+    },
+    {
+      "repository": "CapitolTrace/congress-api",
+      "commit": "62e7b6a963e5ab1369eaca263e76c43efec0cdbb",
+      "metadata_sha256": "5e06047b54dde255fcf2b35477267e5418d868eeead71165de6d9f8bbd96dd78"
+    },
+    {
+      "repository": "Sentinel-Intelligence/sentinel-public",
+      "commit": "9c56267387ef5d0978dac6f70afcede9ad71b08a",
+      "metadata_sha256": "b407989d2feea6420e25a00c5f6d25e7520b93fd0e04b90c6b9f8d6e1edde0b6"
+    },
+    {
+      "repository": "civdotiq/civ.iq",
+      "commit": "d1c70cf23341bf43d610730fb591349fe3dda29f",
+      "metadata_sha256": "5753b7a874039f86205fc445c1beea361d2ad34391864e7f21ccfdadc745bf06"
+    },
+    {
+      "repository": "kamoras/civitas",
+      "commit": "3747dcc51f404ef85f0096583a44f520056342c5",
+      "metadata_sha256": "56e8b1c718264eb9e88efef4945dd32874fa306ffcf9feceb8b13784fa67d083"
+    }
+  ]
+}
