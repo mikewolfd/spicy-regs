@@ -430,6 +430,10 @@ Writer`, wired by a `Pipeline`. The
 explains the contract, and `tests/test_example_pipeline.py` is a runnable
 reference for adding your own.
 
+The public [explorer metadata bundle](docs/explorer-metadata.md) publishes
+descriptions, original sources, derived inputs and declared joins alongside
+the data index. It refreshes independently of website deployments.
+
 ## License
 
 [MIT](LICENSE) © Civic Tech DC.

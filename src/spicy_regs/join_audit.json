@@ -1,0 +1,2031 @@
+{
+  "agency_monthly_volume": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/transforms/build_agency_monthly_volume.py"
+    ],
+    "relationships": [
+      "agency_monthly_volume.agency_code -> agency_stats.agency_code"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "agency_stats": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/transforms/build_agency_monthly_volume.py",
+      "src/spicy_regs/transforms/build_discovery_signals.py"
+    ],
+    "relationships": [
+      "agency_monthly_volume.agency_code -> agency_stats.agency_code",
+      "discovery_signals.agency_code -> agency_stats.agency_code"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "amendments": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "amendments.sponsor_bioguide_id -> members.bioguide_id",
+      "scorecard_item_links.amendment_id -> amendments.amendment_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "bill_actions": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "bill_actions.bill_id -> congress_bills.bill_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "bill_committee_actions": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "bill_committee_actions.bill_id -> congress_bills.bill_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "bill_committee_activities": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "bill_committee_activities.bill_id -> congress_bills.bill_id",
+      "bill_committee_activities.bill_id+system_code -> bill_committees.bill_id+system_code"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "bill_committees": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "bill_committees.bill_id -> congress_bills.bill_id",
+      "bill_committee_activities.bill_id+system_code -> bill_committees.bill_id+system_code",
+      "bill_committees.system_code -> committees.system_code"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "bill_cosponsors": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "bill_cosponsors.bill_id -> congress_bills.bill_id",
+      "bill_cosponsors.bioguide_id -> members.bioguide_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "bill_family_archives": {
+    "status": "standalone",
+    "reason": "Processing checkpoints describe bulk folders, not individual bills. Congress and bill type name a folder; they do not prove which read supplied a given bill.",
+    "evidence": [
+      "src/spicy_regs/table_metadata.json:bill_family_archives"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "bill_family_backfill_walks": {
+    "status": "standalone",
+    "reason": "Processing totals describe an API walk by Congress and bill type. They are not individual bill or source-record identities; the current output has no rows.",
+    "evidence": [
+      "src/spicy_regs/table_metadata.json:bill_family_backfill_walks"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "bill_family_backfills": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_metadata.json:bill_family_backfills"
+    ],
+    "relationships": [
+      "bill_family_backfills.congress+bill_type+number -> congress_bills.congress+bill_type+bill_number"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "bill_publisher_summaries": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "bill_publisher_summaries.bill_id -> congress_bills.bill_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "bill_sections": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "bill_sections.bill_id -> congress_bills.bill_id",
+      "bill_sections.bill_id+version_code+source -> bill_versions.bill_id+version_code+source"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "bill_subjects": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "bill_subjects.bill_id -> congress_bills.bill_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "bill_summaries": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "bill_summaries.bill_id -> congress_bills.bill_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "bill_versions": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "bill_versions.bill_id -> congress_bills.bill_id",
+      "bill_sections.bill_id+version_code+source -> bill_versions.bill_id+version_code+source",
+      "section_diffs.bill_id+from_version_code+from_source -> bill_versions.bill_id+version_code+source",
+      "section_diffs.bill_id+to_version_code+to_source -> bill_versions.bill_id+version_code+source"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "bill_vote_references": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "bill_vote_references.bill_id -> congress_bills.bill_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "budget_volumes": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/transforms/build_print_citations.py:build_print_citations"
+    ],
+    "relationships": [
+      "document_citations.document_key+text_sha256 -> budget_volumes.package_id+text_sha256"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "cbo_cost_estimates": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_metadata.json:cbo_feed_items",
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "cbo_cost_estimates.bill_id -> congress_bills.bill_id",
+      "cbo_cost_estimates.publication_id -> cbo_feed_items.publication_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "cbo_feed_items": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_metadata.json:cbo_feed_items"
+    ],
+    "relationships": [
+      "cbo_cost_estimates.publication_id -> cbo_feed_items.publication_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "cfr_sections": {
+    "status": "special-handling",
+    "reason": "A declared title/part connection to rule_targets exists, but rule_targets is absent from this publication index. CFR editions and structural rows must remain explicit; matching section labels alone is unsafe.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "comment_attributes": {
+    "status": "special-handling",
+    "reason": "The declared comment_id connection points to comments, which is absent from this publication index. This table retains the attributes; it does not supply the missing comment-body endpoint.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "committee_assignments": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "committee_assignments.bioguide_id -> members.bioguide_id",
+      "committee_assignments.system_code -> committees.system_code"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "committee_meetings": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "committee_meetings.committee_system_code -> committees.system_code",
+      "hearing_transcripts.congress+chamber+event_id -> committee_meetings.congress+chamber+event_id",
+      "hearing_transcripts.congress+chamber+mods_event_id -> committee_meetings.congress+chamber+event_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "committee_report_reads": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_metadata.json:committee_report_reads"
+    ],
+    "relationships": [
+      "committee_reports.package_id -> committee_report_reads.package_id",
+      "hearing_transcripts.package_id -> committee_report_reads.package_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "committee_reports": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_metadata.json:committee_report_reads",
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "committee_reports.bill_id -> congress_bills.bill_id",
+      "report_sections.package_id+part_id -> committee_reports.package_id+part_id",
+      "committee_reports.package_id -> committee_report_reads.package_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "committees": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_metadata.json:house_activity_reports",
+      "src/spicy_regs/table_metadata.json:house_communications",
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "committee_assignments.system_code -> committees.system_code",
+      "bill_committees.system_code -> committees.system_code",
+      "committee_meetings.committee_system_code -> committees.system_code",
+      "hearing_bill_links.committee_system_code -> committees.system_code",
+      "house_activity_reports.committee_system_code -> committees.system_code",
+      "house_communications.referral_system_code -> committees.system_code"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "congress_bills": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_metadata.json:bill_family_backfills",
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "bill_actions.bill_id -> congress_bills.bill_id",
+      "bill_cosponsors.bill_id -> congress_bills.bill_id",
+      "bill_committee_actions.bill_id -> congress_bills.bill_id",
+      "bill_committees.bill_id -> congress_bills.bill_id",
+      "bill_committee_activities.bill_id -> congress_bills.bill_id",
+      "bill_publisher_summaries.bill_id -> congress_bills.bill_id",
+      "bill_sections.bill_id -> congress_bills.bill_id",
+      "bill_subjects.bill_id -> congress_bills.bill_id",
+      "bill_summaries.bill_id -> congress_bills.bill_id",
+      "bill_versions.bill_id -> congress_bills.bill_id",
+      "bill_vote_references.bill_id -> congress_bills.bill_id",
+      "cbo_cost_estimates.bill_id -> congress_bills.bill_id",
+      "committee_reports.bill_id -> congress_bills.bill_id",
+      "diff_summaries.bill_id -> congress_bills.bill_id",
+      "financial_changes.bill_id -> congress_bills.bill_id",
+      "hearing_bill_links.bill_id -> congress_bills.bill_id",
+      "hearing_transcripts.bill_id -> congress_bills.bill_id",
+      "laws.bill_id -> congress_bills.bill_id",
+      "press_releases.bill_id -> congress_bills.bill_id",
+      "public_activity_events.bill_id -> congress_bills.bill_id",
+      "roll_call_votes.bill_id -> congress_bills.bill_id",
+      "section_classifications.bill_id -> congress_bills.bill_id",
+      "section_diff_items.bill_id -> congress_bills.bill_id",
+      "section_diffs.bill_id -> congress_bills.bill_id",
+      "congress_bills.sponsor_bioguide_id -> members.bioguide_id",
+      "scorecard_item_links.bill_id -> congress_bills.bill_id",
+      "bill_family_backfills.congress+bill_type+number -> congress_bills.congress+bill_type+bill_number"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "court_citation_map": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_metadata.json:court_citation_map"
+    ],
+    "relationships": [
+      "court_citation_map.citing_opinion_id+dump_date -> court_opinions.opinion_id+dump_date",
+      "court_citation_map.cited_opinion_id+dump_date -> court_opinions.opinion_id+dump_date"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "court_citations": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "court_citations.cluster_id -> court_opinion_clusters.cluster_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "court_docket_groups": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/transforms/build_court_docket_groups.py"
+    ],
+    "relationships": [
+      "court_docket_groups.cl_docket_id -> court_dockets.cl_docket_id",
+      "court_docket_groups.parent_cl_docket_id -> court_dockets.cl_docket_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "court_dockets": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/transforms/build_court_docket_groups.py",
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "court_dockets.cl_docket_id -> court_opinion_clusters.cl_docket_id",
+      "court_docket_groups.cl_docket_id -> court_dockets.cl_docket_id",
+      "court_docket_groups.parent_cl_docket_id -> court_dockets.cl_docket_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "court_opinion_clusters": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "court_opinions.cluster_id -> court_opinion_clusters.cluster_id",
+      "court_citations.cluster_id -> court_opinion_clusters.cluster_id",
+      "court_dockets.cl_docket_id -> court_opinion_clusters.cl_docket_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "court_opinion_pdf_extractions": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_metadata.json:court_opinion_pdf_extractions"
+    ],
+    "relationships": [
+      "court_opinion_pdf_extractions.opinion_id+native_sha1 -> court_opinions.opinion_id+sha1"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "court_opinions": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_metadata.json:court_citation_map",
+      "src/spicy_regs/table_metadata.json:court_opinion_pdf_extractions",
+      "src/spicy_regs/table_metadata.json:court_parentheticals",
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "court_opinions.cluster_id -> court_opinion_clusters.cluster_id",
+      "court_opinion_pdf_extractions.opinion_id+native_sha1 -> court_opinions.opinion_id+sha1",
+      "court_citation_map.citing_opinion_id+dump_date -> court_opinions.opinion_id+dump_date",
+      "court_citation_map.cited_opinion_id+dump_date -> court_opinions.opinion_id+dump_date",
+      "court_parentheticals.described_opinion_id+dump_date -> court_opinions.opinion_id+dump_date",
+      "court_parentheticals.describing_opinion_id+dump_date -> court_opinions.opinion_id+dump_date"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "court_parentheticals": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_metadata.json:court_parentheticals"
+    ],
+    "relationships": [
+      "court_parentheticals.described_opinion_id+dump_date -> court_opinions.opinion_id+dump_date",
+      "court_parentheticals.describing_opinion_id+dump_date -> court_opinions.opinion_id+dump_date"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "crs_reports": {
+    "status": "standalone",
+    "reason": "The published list contains report identities and links but no bill or regulation reference keys. Shared subjects or report titles do not establish row relationships.",
+    "evidence": [
+      "src/spicy_regs/table_metadata.json:crs_reports"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "diff_summaries": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "diff_summaries.bill_id -> congress_bills.bill_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "discovery_signals": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/transforms/build_discovery_signals.py"
+    ],
+    "relationships": [
+      "discovery_signals.agency_code -> agency_stats.agency_code"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "docket_attributes": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "docket_attributes.docket_id -> dockets.docket_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "dockets": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/transforms/build_feed_summary.py:build_feed_summary",
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "documents.docket_id -> dockets.docket_id",
+      "fr_docket_links.docket_id -> dockets.docket_id",
+      "dockets.rin -> unified_agenda.rin",
+      "docket_attributes.docket_id -> dockets.docket_id",
+      "feed_summary.docket_id -> dockets.docket_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "document_attributes": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "document_attributes.document_id -> documents.document_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "document_citation_reads": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/transforms/held_citations.py:write_citation_reads"
+    ],
+    "relationships": [
+      "document_citations.document_kind+document_key+text_sha256 -> document_citation_reads.document_kind+document_key+text_sha256"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "document_citations": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/transforms/build_print_citations.py:build_print_citations",
+      "src/spicy_regs/transforms/held_citations.py:write_citation_reads"
+    ],
+    "relationships": [
+      "document_citations.document_kind+document_key+text_sha256 -> document_citation_reads.document_kind+document_key+text_sha256",
+      "document_citations.document_key+text_sha256 -> budget_volumes.package_id+text_sha256",
+      "document_citations.document_key+text_sha256 -> house_activity_reports.package_id+text_sha256"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "documents": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "documents.docket_id -> dockets.docket_id",
+      "documents.fr_doc_num -> federal_register.document_number",
+      "document_attributes.document_id -> documents.document_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fcc_filings": {
+    "status": "special-handling",
+    "reason": "Each filing can name several proceedings in proceeding_names_json. Connecting it requires explicit JSON-array expansion; a scalar or title match would drop or invent relationships.",
+    "evidence": [
+      "src/spicy_regs/relationship_views/fcc_native.py"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fcc_proceedings": {
+    "status": "special-handling",
+    "reason": "Filing memberships are held in the filings proceeding_names_json array. Array expansion and source-stated names are required before reverse navigation can be complete.",
+    "evidence": [
+      "src/spicy_regs/relationship_views/fcc_native.py"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_account_transfers": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/relationship_views/fec_typed.py:filing_record_evidence",
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_account_transfers.collection_id -> fec_collections.collection_id",
+      "fec_account_transfers.definition_set_id -> fec_filing_definitions.record_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_agency_mapping_dispositions": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_agency_mapping_dispositions.collection_id -> fec_collections.collection_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_agency_report_documents": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_agency_report_documents.collection_id -> fec_collections.collection_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_agency_report_text": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_agency_report_text.collection_id -> fec_collections.collection_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_agency_reports": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_agency_reports.collection_id -> fec_collections.collection_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_allocated_disbursements": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/relationship_views/fec_typed.py:filing_record_evidence",
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_allocated_disbursements.collection_id -> fec_collections.collection_id",
+      "fec_allocated_disbursements.definition_set_id -> fec_filing_definitions.record_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_allocation_bases": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/relationship_views/fec_typed.py:filing_record_evidence",
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_allocation_bases.collection_id -> fec_collections.collection_id",
+      "fec_allocation_bases.definition_set_id -> fec_filing_definitions.record_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_api_response_controls": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_api_response_controls.collection_id -> fec_collections.collection_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_audit_findings": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_audit_findings.collection_id -> fec_collections.collection_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_bundled_contributions": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/relationship_views/fec_typed.py:filing_record_evidence",
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_bundled_contributions.collection_id -> fec_collections.collection_id",
+      "fec_bundled_contributions.definition_set_id -> fec_filing_definitions.record_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_candidate_api_observations": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_candidate_api_observations.collection_id -> fec_collections.collection_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_candidate_history": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_reported_financial_summaries.candidate_native_id -> fec_candidate_history.candidate_id",
+      "fec_contribution_aggregates.candidate_native_id -> fec_candidate_history.candidate_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_collection_selection": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_collection_selection.collection_id -> fec_collections.collection_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_collections": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/transforms/build_fec_source_catalog.py:COVERAGE_NOTE",
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_source_records.collection_id -> fec_collections.collection_id",
+      "fec_account_transfers.collection_id -> fec_collections.collection_id",
+      "fec_agency_mapping_dispositions.collection_id -> fec_collections.collection_id",
+      "fec_agency_report_documents.collection_id -> fec_collections.collection_id",
+      "fec_agency_report_text.collection_id -> fec_collections.collection_id",
+      "fec_agency_reports.collection_id -> fec_collections.collection_id",
+      "fec_allocated_disbursements.collection_id -> fec_collections.collection_id",
+      "fec_allocation_bases.collection_id -> fec_collections.collection_id",
+      "fec_api_response_controls.collection_id -> fec_collections.collection_id",
+      "fec_audit_findings.collection_id -> fec_collections.collection_id",
+      "fec_bundled_contributions.collection_id -> fec_collections.collection_id",
+      "fec_candidate_api_observations.collection_id -> fec_collections.collection_id",
+      "fec_collection_selection.collection_id -> fec_collections.collection_id",
+      "fec_committee_master_observations.collection_id -> fec_collections.collection_id",
+      "fec_committee_observations.collection_id -> fec_collections.collection_id",
+      "fec_communication_costs.collection_id -> fec_collections.collection_id",
+      "fec_contribution_aggregates.collection_id -> fec_collections.collection_id",
+      "fec_coordinated_party_expenditures.collection_id -> fec_collections.collection_id",
+      "fec_debts.collection_id -> fec_collections.collection_id",
+      "fec_disbursements.collection_id -> fec_collections.collection_id",
+      "fec_electioneering_communications.collection_id -> fec_collections.collection_id",
+      "fec_filing_definition_evidence.collection_id -> fec_collections.collection_id",
+      "fec_filing_header_associations.collection_id -> fec_collections.collection_id",
+      "fec_filing_links.collection_id -> fec_collections.collection_id",
+      "fec_filing_report_observations.collection_id -> fec_collections.collection_id",
+      "fec_filing_text_observations.collection_id -> fec_collections.collection_id",
+      "fec_filings.collection_id -> fec_collections.collection_id",
+      "fec_historical_ie_statistics.collection_id -> fec_collections.collection_id",
+      "fec_inaugural_donations.collection_id -> fec_collections.collection_id",
+      "fec_independent_expenditures.collection_id -> fec_collections.collection_id",
+      "fec_intercommittee_transactions.collection_id -> fec_collections.collection_id",
+      "fec_legal_documents.collection_id -> fec_collections.collection_id",
+      "fec_legal_events.collection_id -> fec_collections.collection_id",
+      "fec_legal_matters.collection_id -> fec_collections.collection_id",
+      "fec_legal_parties.collection_id -> fec_collections.collection_id",
+      "fec_loan_guarantors.collection_id -> fec_collections.collection_id",
+      "fec_loan_terms.collection_id -> fec_collections.collection_id",
+      "fec_loans.collection_id -> fec_collections.collection_id",
+      "fec_lobbyist_registrations.collection_id -> fec_collections.collection_id",
+      "fec_oversight_recommendations.collection_id -> fec_collections.collection_id",
+      "fec_postgres_committee_history_observations.collection_id -> fec_collections.collection_id",
+      "fec_quality_notices.collection_id -> fec_collections.collection_id",
+      "fec_receipts.collection_id -> fec_collections.collection_id",
+      "fec_record_evidence.collection_id -> fec_collections.collection_id",
+      "fec_registration_statements.collection_id -> fec_collections.collection_id",
+      "fec_report_metrics.collection_id -> fec_collections.collection_id",
+      "fec_reported_financial_summaries.collection_id -> fec_collections.collection_id",
+      "fec_research_context_dispositions.collection_id -> fec_collections.collection_id",
+      "fec_research_document_observations.collection_id -> fec_collections.collection_id",
+      "fec_research_filing_feed_items.collection_id -> fec_collections.collection_id",
+      "fec_research_meeting_observations.collection_id -> fec_collections.collection_id",
+      "fec_research_response_outcomes.collection_id -> fec_collections.collection_id",
+      "fec_research_source_pages.collection_id -> fec_collections.collection_id",
+      "fec_retained_csv_observations.collection_id -> fec_collections.collection_id",
+      "fec_collections.source_family -> fec_source_catalog.source_family"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_committee_history": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_committee_history.committee_id -> fec_committees.committee_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_committee_master_observations": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_committee_master_observations.collection_id -> fec_collections.collection_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_committee_observations": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_committee_observations.collection_id -> fec_collections.collection_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_committees": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "org_committee_links.committee_id -> fec_committees.committee_id",
+      "fec_committee_history.committee_id -> fec_committees.committee_id",
+      "fec_reported_financial_summaries.committee_native_id -> fec_committees.committee_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_communication_costs": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_communication_costs.collection_id -> fec_collections.collection_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_contribution_aggregates": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_contribution_aggregates.collection_id -> fec_collections.collection_id",
+      "fec_contribution_aggregates.candidate_native_id -> fec_candidate_history.candidate_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_coordinated_party_expenditures": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/relationship_views/fec_typed.py:filing_record_evidence",
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_coordinated_party_expenditures.collection_id -> fec_collections.collection_id",
+      "fec_coordinated_party_expenditures.definition_set_id -> fec_filing_definitions.record_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_debts": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/relationship_views/fec_typed.py:filing_record_evidence",
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_debts.collection_id -> fec_collections.collection_id",
+      "fec_debts.definition_set_id -> fec_filing_definitions.record_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_disbursements": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/relationship_views/fec_typed.py:filing_record_evidence",
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_disbursements.collection_id -> fec_collections.collection_id",
+      "fec_disbursements.definition_set_id -> fec_filing_definitions.record_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_electioneering_communications": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_electioneering_communications.collection_id -> fec_collections.collection_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_filing_definition_evidence": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/transforms/fec_filing_definitions.py:bind_definition",
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_filing_definition_evidence.collection_id -> fec_collections.collection_id",
+      "fec_filing_definition_evidence.target_record_id -> fec_filing_definitions.record_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_filing_definitions": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/relationship_views/fec_typed.py:filing_record_evidence",
+      "src/spicy_regs/transforms/fec_filing_definitions.py:bind_definition"
+    ],
+    "relationships": [
+      "fec_account_transfers.definition_set_id -> fec_filing_definitions.record_id",
+      "fec_allocated_disbursements.definition_set_id -> fec_filing_definitions.record_id",
+      "fec_allocation_bases.definition_set_id -> fec_filing_definitions.record_id",
+      "fec_bundled_contributions.definition_set_id -> fec_filing_definitions.record_id",
+      "fec_coordinated_party_expenditures.definition_set_id -> fec_filing_definitions.record_id",
+      "fec_debts.definition_set_id -> fec_filing_definitions.record_id",
+      "fec_disbursements.definition_set_id -> fec_filing_definitions.record_id",
+      "fec_filing_report_observations.definition_set_id -> fec_filing_definitions.record_id",
+      "fec_filing_text_observations.definition_set_id -> fec_filing_definitions.record_id",
+      "fec_inaugural_donations.definition_set_id -> fec_filing_definitions.record_id",
+      "fec_independent_expenditures.definition_set_id -> fec_filing_definitions.record_id",
+      "fec_loan_guarantors.definition_set_id -> fec_filing_definitions.record_id",
+      "fec_loan_terms.definition_set_id -> fec_filing_definitions.record_id",
+      "fec_loans.definition_set_id -> fec_filing_definitions.record_id",
+      "fec_receipts.definition_set_id -> fec_filing_definitions.record_id",
+      "fec_filing_definition_evidence.target_record_id -> fec_filing_definitions.record_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_filing_header_associations": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_filing_header_associations.collection_id -> fec_collections.collection_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_filing_links": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_filing_links.collection_id -> fec_collections.collection_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_filing_report_observations": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/relationship_views/fec_typed.py:filing_record_evidence",
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_filing_report_observations.collection_id -> fec_collections.collection_id",
+      "fec_independent_expenditures.collection_id -> fec_filing_report_observations.collection_id",
+      "fec_filing_report_observations.definition_set_id -> fec_filing_definitions.record_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_filing_text_observations": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/relationship_views/fec_typed.py:filing_record_evidence",
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_filing_text_observations.collection_id -> fec_collections.collection_id",
+      "fec_filing_text_observations.definition_set_id -> fec_filing_definitions.record_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_filings": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_filings.collection_id -> fec_collections.collection_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_historical_ie_statistics": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_historical_ie_statistics.collection_id -> fec_collections.collection_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_inaugural_donations": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/relationship_views/fec_typed.py:filing_record_evidence",
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_inaugural_donations.collection_id -> fec_collections.collection_id",
+      "fec_inaugural_donations.definition_set_id -> fec_filing_definitions.record_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_independent_expenditures": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/relationship_views/fec_typed.py:filing_record_evidence",
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_independent_expenditures.collection_id -> fec_collections.collection_id",
+      "fec_independent_expenditures.collection_id -> fec_filing_report_observations.collection_id",
+      "fec_independent_expenditures.definition_set_id -> fec_filing_definitions.record_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_intercommittee_transactions": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_intercommittee_transactions.collection_id -> fec_collections.collection_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_legal_documents": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_legal_documents.collection_id -> fec_collections.collection_id",
+      "fec_legal_documents.matter_record_id -> fec_legal_matters.record_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_legal_events": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_legal_events.collection_id -> fec_collections.collection_id",
+      "fec_legal_events.matter_record_id -> fec_legal_matters.record_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_legal_matters": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_legal_matters.collection_id -> fec_collections.collection_id",
+      "fec_legal_parties.matter_record_id -> fec_legal_matters.record_id",
+      "fec_legal_events.matter_record_id -> fec_legal_matters.record_id",
+      "fec_legal_documents.matter_record_id -> fec_legal_matters.record_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_legal_parties": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_legal_parties.collection_id -> fec_collections.collection_id",
+      "fec_legal_parties.matter_record_id -> fec_legal_matters.record_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_loan_guarantors": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/relationship_views/fec_typed.py:filing_record_evidence",
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_loan_guarantors.collection_id -> fec_collections.collection_id",
+      "fec_loan_guarantors.collection_id+back_reference_transaction_id -> fec_loans.collection_id+transaction_id",
+      "fec_loan_guarantors.definition_set_id -> fec_filing_definitions.record_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_loan_terms": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/relationship_views/fec_typed.py:filing_record_evidence",
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_loan_terms.collection_id -> fec_collections.collection_id",
+      "fec_loan_terms.definition_set_id -> fec_filing_definitions.record_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_loans": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/relationship_views/fec_typed.py:filing_record_evidence",
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_loans.collection_id -> fec_collections.collection_id",
+      "fec_loan_guarantors.collection_id+back_reference_transaction_id -> fec_loans.collection_id+transaction_id",
+      "fec_loans.definition_set_id -> fec_filing_definitions.record_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_lobbyist_registrations": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_lobbyist_registrations.collection_id -> fec_collections.collection_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_oversight_recommendations": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_oversight_recommendations.collection_id -> fec_collections.collection_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_postgres_committee_history_observations": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_postgres_committee_history_observations.collection_id -> fec_collections.collection_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_quality_notices": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_quality_notices.collection_id -> fec_collections.collection_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_receipts": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/relationship_views/fec_typed.py:filing_record_evidence",
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_receipts.collection_id -> fec_collections.collection_id",
+      "fec_receipts.definition_set_id -> fec_filing_definitions.record_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_record_evidence": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_record_evidence.collection_id -> fec_collections.collection_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_registration_statements": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_registration_statements.collection_id -> fec_collections.collection_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_relationships": {
+    "status": "special-handling",
+    "reason": "Subject/object IDs are polymorphic and include missing, empty and reported-none observations. Positive edges require value_status, ID status and entity-type guards; collection/source-record keys require JSON extraction. A raw subject_id/object_id equality join is unsafe.",
+    "evidence": [
+      "src/spicy_regs/relationship_views/fec.py"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_report_metrics": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_report_metrics.collection_id -> fec_collections.collection_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_reported_financial_summaries": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_reported_financial_summaries.collection_id -> fec_collections.collection_id",
+      "fec_reported_financial_summaries.committee_native_id -> fec_committees.committee_id",
+      "fec_reported_financial_summaries.candidate_native_id -> fec_candidate_history.candidate_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_research_context_dispositions": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_research_context_dispositions.collection_id -> fec_collections.collection_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_research_document_observations": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_research_document_observations.collection_id -> fec_collections.collection_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_research_filing_feed_items": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_research_filing_feed_items.collection_id -> fec_collections.collection_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_research_meeting_observations": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_research_meeting_observations.collection_id -> fec_collections.collection_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_research_response_outcomes": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_research_response_outcomes.collection_id -> fec_collections.collection_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_research_source_pages": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_research_source_pages.collection_id -> fec_collections.collection_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_retained_csv_observations": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_retained_csv_observations.collection_id -> fec_collections.collection_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_source_catalog": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/transforms/build_fec_source_catalog.py:COVERAGE_NOTE"
+    ],
+    "relationships": [
+      "fec_collections.source_family -> fec_source_catalog.source_family"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fec_source_records": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fec_source_records.collection_id -> fec_collections.collection_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "federal_register": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fr_docket_links.document_number+publication_date -> federal_register.document_number+publication_date",
+      "documents.fr_doc_num -> federal_register.document_number",
+      "federal_register.rin -> unified_agenda.rin"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "feed_summary": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/transforms/build_feed_summary.py:build_feed_summary"
+    ],
+    "relationships": [
+      "feed_summary.docket_id -> dockets.docket_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "financial_changes": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "financial_changes.bill_id -> congress_bills.bill_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "fr_docket_links": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "fr_docket_links.docket_id -> dockets.docket_id",
+      "fr_docket_links.document_number+publication_date -> federal_register.document_number+publication_date"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "gao_decisions": {
+    "status": "standalone",
+    "reason": "GAO legal-decision pages have their own identity. A B-number can occur on multiple pages; matching that number or a title to reports would not establish a unique input or report relation.",
+    "evidence": [
+      "src/spicy_regs/table_metadata.json:gao_decisions"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "gao_recommendations": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "gao_recommendations.report_id -> gao_reports.report_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "gao_reports": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "gao_recommendations.report_id -> gao_reports.report_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "hearing_bill_links": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "hearing_bill_links.bill_id -> congress_bills.bill_id",
+      "hearing_bill_links.committee_system_code -> committees.system_code",
+      "hearing_bill_links.package_id -> hearing_transcripts.package_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "hearing_transcripts": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_metadata.json:committee_report_reads",
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "hearing_transcripts.bill_id -> congress_bills.bill_id",
+      "hearing_bill_links.package_id -> hearing_transcripts.package_id",
+      "hearing_transcripts.congress+chamber+event_id -> committee_meetings.congress+chamber+event_id",
+      "hearing_transcripts.congress+chamber+mods_event_id -> committee_meetings.congress+chamber+event_id",
+      "hearing_transcripts.package_id -> committee_report_reads.package_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "house_activity_reports": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_metadata.json:house_activity_reports",
+      "src/spicy_regs/transforms/build_print_citations.py:build_print_citations"
+    ],
+    "relationships": [
+      "document_citations.document_key+text_sha256 -> house_activity_reports.package_id+text_sha256",
+      "house_activity_reports.committee_system_code -> committees.system_code",
+      "house_activity_reports.submitted_by_bioguide_id -> members.bioguide_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "house_communications": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_metadata.json:house_communications"
+    ],
+    "relationships": [
+      "house_communications.referral_system_code -> committees.system_code",
+      "house_communications.record_package_id -> record_issues.package_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "law_code_sections": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "law_code_sections.law_id -> laws.law_id",
+      "law_code_sections.law_number+usc_title+usc_section_key+usc_place -> table3_records.act_key+usc_title+usc_section_key+usc_place"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "law_sections": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "law_sections.law_id -> laws.law_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "laws": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "laws.bill_id -> congress_bills.bill_id",
+      "law_sections.law_id -> laws.law_id",
+      "law_code_sections.law_id -> laws.law_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "lobbying_activities": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "lobbying_activities.filing_uuid -> lobbying_filings.filing_uuid",
+      "lobbying_activity_lobbyists.filing_uuid+activity_index -> lobbying_activities.filing_uuid+activity_index"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "lobbying_activity_lobbyists": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "lobbying_activity_lobbyists.filing_uuid+activity_index -> lobbying_activities.filing_uuid+activity_index",
+      "lobbying_activity_lobbyists.filing_uuid -> lobbying_filings.filing_uuid"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "lobbying_filings": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "lobbying_activities.filing_uuid -> lobbying_filings.filing_uuid",
+      "lobbying_activity_lobbyists.filing_uuid -> lobbying_filings.filing_uuid"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "member_party_affiliations": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "member_party_affiliations.bioguide_id+term_index -> member_terms.bioguide_id+term_index"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "member_terms": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/transforms/build_member_vote_terms.py:_MATCH_SQL",
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "member_terms.bioguide_id -> members.bioguide_id",
+      "member_party_affiliations.bioguide_id+term_index -> member_terms.bioguide_id+term_index",
+      "member_vote_terms.bioguide_id+term_index -> member_terms.bioguide_id+term_index"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "member_vote_terms": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/transforms/build_member_vote_terms.py:_MATCH_SQL"
+    ],
+    "relationships": [
+      "member_vote_terms.vote_id+member_key -> member_votes.vote_id+member_key",
+      "member_vote_terms.bioguide_id+term_index -> member_terms.bioguide_id+term_index"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "member_votes": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/transforms/build_member_vote_terms.py:_MATCH_SQL",
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "member_votes.bioguide_id -> members.bioguide_id",
+      "member_votes.vote_id -> roll_call_votes.vote_id",
+      "member_vote_terms.vote_id+member_key -> member_votes.vote_id+member_key"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "members": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_metadata.json:house_activity_reports",
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "bill_cosponsors.bioguide_id -> members.bioguide_id",
+      "amendments.sponsor_bioguide_id -> members.bioguide_id",
+      "congress_bills.sponsor_bioguide_id -> members.bioguide_id",
+      "member_terms.bioguide_id -> members.bioguide_id",
+      "member_votes.bioguide_id -> members.bioguide_id",
+      "committee_assignments.bioguide_id -> members.bioguide_id",
+      "scorecard_member_links.bioguide_id -> members.bioguide_id",
+      "house_activity_reports.submitted_by_bioguide_id -> members.bioguide_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "native_legal_reference_reads": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "native_legal_references.scope_id -> native_legal_reference_reads.scope_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "native_legal_references": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "native_legal_references.scope_id -> native_legal_reference_reads.scope_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "nominations": {
+    "status": "standalone",
+    "reason": "This publication is a nomination-list index keyed by Congress and citation. It supplies no structured nominee/member identities or committee-reference rows to join.",
+    "evidence": [
+      "src/spicy_regs/table_metadata.json:nominations"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "org_committee_links": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "org_committee_links.committee_id -> fec_committees.committee_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "press_releases": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "press_releases.bill_id -> congress_bills.bill_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "public_activity_events": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "public_activity_events.bill_id -> congress_bills.bill_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "record_issues": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_metadata.json:house_communications"
+    ],
+    "relationships": [
+      "house_communications.record_package_id -> record_issues.package_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "report_sections": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "report_sections.package_id+part_id -> committee_reports.package_id+part_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "roll_call_votes": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "roll_call_votes.bill_id -> congress_bills.bill_id",
+      "member_votes.vote_id -> roll_call_votes.vote_id",
+      "scorecard_item_links.vote_id -> roll_call_votes.vote_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "sam_entities": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "usaspending_recipients.uei -> sam_entities.uei"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "scorecard_item_links": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/explorer_supplemental.json"
+    ],
+    "relationships": [
+      "scorecard_item_links.scorecard_id+item_id+source_snapshot_id -> scorecard_items.scorecard_id+item_id+snapshot_id",
+      "scorecard_item_links.bill_id -> congress_bills.bill_id",
+      "scorecard_item_links.vote_id -> roll_call_votes.vote_id",
+      "scorecard_item_links.amendment_id -> amendments.amendment_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "scorecard_items": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/explorer_supplemental.json"
+    ],
+    "relationships": [
+      "scorecard_items.scorecard_id -> scorecards.scorecard_id",
+      "scorecard_items.snapshot_id -> scorecard_snapshots.snapshot_id",
+      "scorecard_metric_items.scorecard_id+item_id -> scorecard_items.scorecard_id+item_id",
+      "scorecard_member_item_results.scorecard_id+item_id -> scorecard_items.scorecard_id+item_id",
+      "scorecard_item_links.scorecard_id+item_id+source_snapshot_id -> scorecard_items.scorecard_id+item_id+snapshot_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "scorecard_member_item_results": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/explorer_supplemental.json"
+    ],
+    "relationships": [
+      "scorecard_member_item_results.scorecard_id -> scorecards.scorecard_id",
+      "scorecard_member_item_results.snapshot_id -> scorecard_snapshots.snapshot_id",
+      "scorecard_member_item_results.scorecard_id+publisher_member_key -> scorecard_members.scorecard_id+publisher_member_key",
+      "scorecard_member_item_results.scorecard_id+item_id -> scorecard_items.scorecard_id+item_id",
+      "scorecard_member_item_results.scorecard_id+metric_id+item_id+participation_id -> scorecard_metric_items.scorecard_id+metric_id+item_id+participation_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "scorecard_member_links": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/explorer_supplemental.json"
+    ],
+    "relationships": [
+      "scorecard_member_links.scorecard_id+publisher_member_key+source_snapshot_id -> scorecard_members.scorecard_id+publisher_member_key+snapshot_id",
+      "scorecard_member_links.bioguide_id -> members.bioguide_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "scorecard_member_ratings": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/explorer_supplemental.json"
+    ],
+    "relationships": [
+      "scorecard_member_ratings.scorecard_id -> scorecards.scorecard_id",
+      "scorecard_member_ratings.snapshot_id -> scorecard_snapshots.snapshot_id",
+      "scorecard_member_ratings.scorecard_id+metric_id -> scorecard_metrics.scorecard_id+metric_id",
+      "scorecard_member_ratings.scorecard_id+publisher_member_key -> scorecard_members.scorecard_id+publisher_member_key"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "scorecard_members": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/explorer_supplemental.json"
+    ],
+    "relationships": [
+      "scorecard_members.scorecard_id -> scorecards.scorecard_id",
+      "scorecard_members.snapshot_id -> scorecard_snapshots.snapshot_id",
+      "scorecard_member_ratings.scorecard_id+publisher_member_key -> scorecard_members.scorecard_id+publisher_member_key",
+      "scorecard_member_item_results.scorecard_id+publisher_member_key -> scorecard_members.scorecard_id+publisher_member_key",
+      "scorecard_member_links.scorecard_id+publisher_member_key+source_snapshot_id -> scorecard_members.scorecard_id+publisher_member_key+snapshot_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "scorecard_methodologies": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/explorer_supplemental.json"
+    ],
+    "relationships": [
+      "scorecard_methodologies.scorecard_id -> scorecards.scorecard_id",
+      "scorecard_methodologies.snapshot_id -> scorecard_snapshots.snapshot_id",
+      "scorecard_metrics.scorecard_id+methodology_id -> scorecard_methodologies.scorecard_id+methodology_id",
+      "scorecard_metric_items.scorecard_id+methodology_id -> scorecard_methodologies.scorecard_id+methodology_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "scorecard_metric_components": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/explorer_supplemental.json"
+    ],
+    "relationships": [
+      "scorecard_metric_components.scorecard_id -> scorecards.scorecard_id",
+      "scorecard_metric_components.snapshot_id -> scorecard_snapshots.snapshot_id",
+      "scorecard_metric_components.scorecard_id+parent_metric_id -> scorecard_metrics.scorecard_id+metric_id",
+      "scorecard_metric_components.scorecard_id+component_metric_id -> scorecard_metrics.scorecard_id+metric_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "scorecard_metric_items": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/explorer_supplemental.json"
+    ],
+    "relationships": [
+      "scorecard_metric_items.scorecard_id -> scorecards.scorecard_id",
+      "scorecard_metric_items.snapshot_id -> scorecard_snapshots.snapshot_id",
+      "scorecard_metric_items.scorecard_id+metric_id -> scorecard_metrics.scorecard_id+metric_id",
+      "scorecard_metric_items.scorecard_id+item_id -> scorecard_items.scorecard_id+item_id",
+      "scorecard_metric_items.scorecard_id+methodology_id -> scorecard_methodologies.scorecard_id+methodology_id",
+      "scorecard_member_item_results.scorecard_id+metric_id+item_id+participation_id -> scorecard_metric_items.scorecard_id+metric_id+item_id+participation_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "scorecard_metrics": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/explorer_supplemental.json"
+    ],
+    "relationships": [
+      "scorecard_metrics.scorecard_id -> scorecards.scorecard_id",
+      "scorecard_metrics.snapshot_id -> scorecard_snapshots.snapshot_id",
+      "scorecard_metrics.scorecard_id+methodology_id -> scorecard_methodologies.scorecard_id+methodology_id",
+      "scorecard_metric_items.scorecard_id+metric_id -> scorecard_metrics.scorecard_id+metric_id",
+      "scorecard_metric_components.scorecard_id+parent_metric_id -> scorecard_metrics.scorecard_id+metric_id",
+      "scorecard_metric_components.scorecard_id+component_metric_id -> scorecard_metrics.scorecard_id+metric_id",
+      "scorecard_member_ratings.scorecard_id+metric_id -> scorecard_metrics.scorecard_id+metric_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "scorecard_publishers": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/explorer_supplemental.json"
+    ],
+    "relationships": [
+      "scorecards.publisher_id -> scorecard_publishers.publisher_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "scorecard_snapshots": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/explorer_supplemental.json"
+    ],
+    "relationships": [
+      "scorecards.snapshot_id -> scorecard_snapshots.snapshot_id",
+      "scorecard_snapshots.scorecard_id -> scorecards.scorecard_id",
+      "scorecard_methodologies.snapshot_id -> scorecard_snapshots.snapshot_id",
+      "scorecard_metrics.snapshot_id -> scorecard_snapshots.snapshot_id",
+      "scorecard_items.snapshot_id -> scorecard_snapshots.snapshot_id",
+      "scorecard_metric_items.snapshot_id -> scorecard_snapshots.snapshot_id",
+      "scorecard_metric_components.snapshot_id -> scorecard_snapshots.snapshot_id",
+      "scorecard_members.snapshot_id -> scorecard_snapshots.snapshot_id",
+      "scorecard_member_ratings.snapshot_id -> scorecard_snapshots.snapshot_id",
+      "scorecard_member_item_results.snapshot_id -> scorecard_snapshots.snapshot_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "scorecards": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/explorer_supplemental.json"
+    ],
+    "relationships": [
+      "scorecards.publisher_id -> scorecard_publishers.publisher_id",
+      "scorecards.snapshot_id -> scorecard_snapshots.snapshot_id",
+      "scorecard_snapshots.scorecard_id -> scorecards.scorecard_id",
+      "scorecard_methodologies.scorecard_id -> scorecards.scorecard_id",
+      "scorecard_metrics.scorecard_id -> scorecards.scorecard_id",
+      "scorecard_items.scorecard_id -> scorecards.scorecard_id",
+      "scorecard_metric_items.scorecard_id -> scorecards.scorecard_id",
+      "scorecard_metric_components.scorecard_id -> scorecards.scorecard_id",
+      "scorecard_members.scorecard_id -> scorecards.scorecard_id",
+      "scorecard_member_ratings.scorecard_id -> scorecards.scorecard_id",
+      "scorecard_member_item_results.scorecard_id -> scorecards.scorecard_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "section_classifications": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "section_classifications.bill_id -> congress_bills.bill_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "section_diff_items": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "section_diff_items.bill_id -> congress_bills.bill_id"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "section_diffs": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "section_diffs.bill_id -> congress_bills.bill_id",
+      "section_diffs.bill_id+from_version_code+from_source -> bill_versions.bill_id+version_code+source",
+      "section_diffs.bill_id+to_version_code+to_source -> bill_versions.bill_id+version_code+source"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "senate_expenditures": {
+    "status": "standalone",
+    "reason": "Rows are scoped to package, file, page, table, row and text digest. The published tables have no matching source-body parent; office names are not member identities and repeated summary pages must not be combined by package alone.",
+    "evidence": [
+      "src/spicy_regs/table_metadata.json:senate_expenditures"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "table3_records": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "law_code_sections.law_number+usc_title+usc_section_key+usc_place -> table3_records.act_key+usc_title+usc_section_key+usc_place"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "treaties": {
+    "status": "standalone",
+    "reason": "The published treaty index has no held structured parent or reference table. Its derived GovInfo package ID is a source locator; names, countries and free text do not establish entity joins.",
+    "evidence": [
+      "src/spicy_regs/table_metadata.json:treaties"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "unified_agenda": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "dockets.rin -> unified_agenda.rin",
+      "federal_register.rin -> unified_agenda.rin"
+    ],
+    "reviewedOn": "2026-10-03"
+  },
+  "usaspending_recipients": {
+    "status": "connected",
+    "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
+    "evidence": [
+      "src/spicy_regs/table_joins.py:JOINS"
+    ],
+    "relationships": [
+      "usaspending_recipients.uei -> sam_entities.uei"
+    ],
+    "reviewedOn": "2026-10-03"
+  }
+}
