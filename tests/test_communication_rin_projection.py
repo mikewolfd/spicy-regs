@@ -2,7 +2,12 @@ import json
 
 import pyarrow as pa
 
-from spicy_regs.transforms.build_congress_index import RIN_COLUMNS, _repair_rin, _shape_communication
+from spicy_regs.transforms.build_congress_index import RIN_COLUMNS, _read_flags, _repair_rin, _shape_communication
+
+
+def _repaired(table: pa.Table) -> pa.Table:
+    """The RIN repair over each row as the run reads it: read where its detail was (here, by the old marker)."""
+    return _repair_rin(table, _read_flags(table, "committees_json"))
 
 
 def test_consumer_extracts_all_rins_and_marks_unread():
@@ -18,12 +23,12 @@ def test_consumer_extracts_all_rins_and_marks_unread():
 def test_retained_repair_handles_old_schema_without_fetching_or_false_empty():
     old = pa.table({"report_nature": ["(RIN: 3235-AK79; 3235-AK80)", None, None],
                     "committees_json": ["[]", "[]", None]})
-    repaired = _repair_rin(old)
+    repaired = _repaired(old)
     values = repaired["rin_occurrences_json"].to_pylist()
     assert len(json.loads(values[0])) == 2
     assert values[1:] == ["[]", None]
     assert repaired["rin_rule"].to_pylist() == ["report_nature_rin_label/2", "unmatched", None]
-    assert _repair_rin(repaired).equals(repaired)
+    assert _repaired(repaired).equals(repaired)
 
 
 def test_a_held_row_is_re_derived_as_the_shaper_derives_it_from_the_same_field():
@@ -37,7 +42,7 @@ def test_a_held_row_is_re_derived_as_the_shaper_derives_it_from_the_same_field()
         "rin_rule": ["report_nature_rin_label", "unmatched", "report_nature_rin_label"],
         "rin_matched_text": ["RIN: 0648-XE36", None, "RIN: 3133-AF97"],
     })
-    repaired = _repair_rin(held).to_pylist()
+    repaired = _repaired(held).to_pylist()
     shaped = [
         _shape_communication(detail, detail)
         for detail in ({"congress": 119, "number": n, "communicationType": {"code": "EC"}, "reportNature": field}

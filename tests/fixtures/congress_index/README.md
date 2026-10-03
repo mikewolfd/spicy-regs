@@ -43,3 +43,11 @@ row at its unchanged timestamp and then verifies that its detail is held.
 | `treaty-119-2.json` | GET https://api.congress.gov/v3/treaty/119/2?format=json&limit=1 | 2,288 / `dd485a871156da2b7131ef433dafda7712dd56998e0e74cfe57023b6fa69dcef` | whole |
 | `treaty-119.json` | GET https://api.congress.gov/v3/treaty/119?format=json&limit=250 | 978 / `d1b33e8cbb8f7575f7e42bc53349bdde59672e4214016552c6dac0e22cdd9995` | 2 of the declared 2 records (the 2 whose details are here, from any of the unit's 1 retained pages, and no others); `pagination.next` dropped |
 | `nomination-119.json` | GET https://api.congress.gov/v3/nomination/119?format=json&limit=250 | 187,566 / `1b85d77a963cc49d2e99aa1b12282ac05208928c1900e0135762ebfddf20bec6` | 2 of the declared 2,208 records (no detail here; the first 2 records of page 1); `pagination.next` dropped |
+
+`published-2026-10-03.json` holds published rows, not responses: the rows of the five
+tables' generations live at 16:20Z on 2026-10-03 (each table's `source` entry names its
+immutable file URL and the filter), read through `published_urls`. They are the held
+rows the 0.54.0 adoption left as they were: `detail_read` NULL on every row of the four
+detail tables, the Senate and NoChamber meetings' unstated lists spelled `[]`, and the
+two military nominations the list no longer names (PN1189, PN1266) with `is_civilian`
+NULL. Every row but the nominations sits at its list fixture's stamp, so a run holds it.
