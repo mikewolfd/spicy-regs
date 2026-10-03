@@ -1609,10 +1609,16 @@ tables:
       or agency identifier on a court docket: the defendant agency appears only
       as text in `case_name` and `parties_json`, so a name search finds
       candidates, not confirmed links, and `cause` names the statute invoked.
-      Primary / dedup key is `cl_docket_id`. All columns are stored as VARCHAR;
-      array fields are JSON strings.
+      Primary / dedup key is `cl_docket_id`, a CourtListener docket object, not
+      a case: CourtListener keeps more than one docket object for some cases (a
+      criminal case's per-defendant dockets, or duplicate records of one filing,
+      among them an older object reused for a new case), so one case can be
+      several rows. Count cases on (`court_id`, `docket_number`) rather than
+      rows, bearing in mind that a court can reuse a number for a different
+      case, and see `court_docket_groups` for which rows are records of one
+      case. All columns are stored as VARCHAR; array fields are JSON strings.
     columns:
-      cl_docket_id: "CourtListener docket id (e.g. `73613631`). Primary key / dedup key. Distinct from the regulations.gov `docket_id`."
+      cl_docket_id: "CourtListener docket id (e.g. `73613631`). Primary key / dedup key of a docket object, not of a case: one case can be several rows (`court_docket_groups`). Distinct from the regulations.gov `docket_id`."
       case_name: "Short case name (e.g. `HENNEPIN COUNTY, MINNESOTA v. U.S. DEPARTMENT OF HEALTH AND HUMAN SERVICES`). Names the defendant agency as text, not as an identifier. For decisions in cases missing here, including appeals of agency orders, search `court_opinion_clusters.case_name`."
       case_name_full: "Full case caption when available; often blank."
       court_id: "CourtListener court identifier (e.g. `dcd` D.D.C., `cadc` D.C. Circuit, `akd` D. Alaska)."
@@ -1632,7 +1638,7 @@ tables:
       parties_json: "JSON array of party names on the docket (plaintiffs and defendants, including the defendant agency). `[]` when the publisher names none; NULL when the docket came from the bulk edition and its names have not been read yet."
       attorneys_json: "JSON array of attorney names appearing on the docket."
       firms_json: "JSON array of law-firm / legal-organization names appearing on the docket."
-      pacer_case_id: "PACER case id for the docket in its court's CM/ECF system."
+      pacer_case_id: "PACER case id for the docket in its court's CM/ECF system, as CourtListener states it. Not always the court's own number for the case: CourtListener writes 10–15-digit values on some dockets (73 rows, mostly txwd and nysd, measured 2026-10-03) and keeps an older docket object's id when it reuses that object for a new case (`16` on three objects created 2020-12-22 for cases filed 2024 and 2025); some rows have none."
       date_created: "Timestamp CourtListener first indexed the docket (ISO 8601 string, from the search-result `meta.date_created`)."
       absolute_url: "Absolute URL of the docket page on courtlistener.com."
   court_docket_groups:
@@ -1641,30 +1647,45 @@ tables:
     identity_columns: [cl_docket_id]
     coverage: >-
       Not a range. A derived mapping over the published `court_dockets`
-      selection, computed from the 2026-06-30 bulk edition. The edition leaves
-      its own parent_docket_id blank in every row, so the parent is inferred
-      from the publisher's PACER mechanics (one main case created first, plus
-      per-defendant sub-dockets: the documented doppeldocket problem, FLP wiki /
-      GitHub issue #2185): group by (court_id, docket_number) with a single
-      caption among published members, parent = lowest pacer_case_id in the
-      group. confidence_tier separates tight-pacer doppeldockets from
-      wide-spread refilings of one case. Groups with multiple captions
-      (docket-number reuse) or no pacer ids stay ungrouped and have no row.
-    measured_on: "2026-09-22"
+      selection, computed from CourtListener's bulk docket edition named in
+      `edition`. The grouping evaluates every published row whose court and
+      docket number hold two or more published rows and which that edition
+      holds. Such a row has no group when the rows under its number show no
+      sign of one case (different captions: a court reusing a number) or none
+      has a numeric PACER case id; a row published after the edition has no
+      group until the grouping is recomputed.
+    measured_on: "2026-10-03"
     summary: >-
-      Same-case record groups for the APA litigation dockets: which published
-      docket rows are alternative records of one case, and which row is the
-      group's parent. Join on cl_docket_id; the parent row carries
-      parent_cl_docket_id equal to cl_docket_id. This is an inferred mapping,
-      not publisher data; it is edition-scoped (2026-06-30) and does not cover
-      dockets published after the edition until recomputed.
+      Which published `court_dockets` rows are records of one case, with one
+      representative row per group. CourtListener can hold one case as several
+      docket objects and leaves its own parent link blank in its bulk editions,
+      so the grouping is inferred from the records: rows under one court and
+      docket number are one case when their captions read the same (ignoring
+      case and punctuation, with U.S. and Dept. spelled out), or when they were
+      filed the same day and one caption is contained in the other (`v. Trump`
+      within `City of New York v. Trump`). Count each group once.
+      `confidence_tier` says what the rows are: `per_defendant_dockets`, a
+      criminal case's dockets for its several defendants, which PACER opens
+      together with consecutive case ids; or `duplicate_records`, several
+      CourtListener records of one filing (RECAP copies carrying 14–15-digit
+      ids, an id-less record beside a RECAP one, an older docket object reused
+      for the case). The representative row is the member whose PACER case id
+      is the lowest of those in its court's sequence, meaning within 10% of the
+      median id of the same court's dockets numbered within five of it. Where
+      no such neighbour exists, as for appellate numbers, it is the lowest
+      numeric id, which can be an older object reused for the case. It is a
+      row to show for the group; the publisher marks no main case. Join on
+      `cl_docket_id`; the representative's own row has `parent_cl_docket_id`
+      equal to `cl_docket_id`. This is an inferred mapping, not publisher data,
+      and edition-scoped.
     columns:
       cl_docket_id: "CourtListener docket id of a grouped row in `court_dockets`. Primary key."
-      parent_cl_docket_id: "The group's parent docket id (lowest pacer_case_id among published group members). Equal to cl_docket_id on the parent's own row."
-      confidence_tier: "`doppeldocket` when the group's pacer ids are contiguous (spread <= 5), `refiled` when the same case was refiled across a wider pacer spread."
+      parent_cl_docket_id: "The group's representative row: the member with the lowest PACER case id in its court's sequence, else the lowest numeric id (see the summary). Equal to cl_docket_id on the representative's own row. Not a main case the publisher marks; it marks none."
+      confidence_tier: "What the group's rows are: `per_defendant_dockets` (a criminal case's per-defendant dockets: the ids the representative was chosen from run consecutively with at most four missing, or a member carries CourtListener's defendant number) or `duplicate_records` (several records of one filing). Says nothing about refiling: a refiled case gets a new docket number, which this grouping cannot see."
       group_size: "Number of published court_dockets rows in the same-case group."
       edition: "The CourtListener bulk edition the grouping was computed from (`2026-06-30`)."
-      rule_version: "Version of the grouping rule (1: single-caption group, parent = lowest pacer_case_id)."
+      rule_version: "Version of the grouping rule: `2`, the same-case test, the representative in its court's sequence, and the tier by what the rows are. Rule 1 (2026-09-22) grouped identical captions only, took the lowest PACER id as the parent and called a wide id spread `refiled`."
+      match_basis: "What showed the rows are one case: `same_caption` (every member's caption reads the same, ignoring case and punctuation, with U.S. and Dept. spelled out) or `same_date_contained_caption` (filed the same day, with one member's caption contained in another's)."
   court_opinion_clusters:
     label: "Court decisions and their opinion groups"
     grain: "One CourtListener decision cluster per cluster_id; multiple opinion bodies can belong to it."
