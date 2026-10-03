@@ -199,6 +199,59 @@ def data_quality_prose_errors(table: str, data_quality: str) -> list[str]:
     return errors
 
 
+#: A data-quality note that stands in for a fix in the vendored spicy-docs wheel ends "(interim until
+#: spicy-docs > <version>)". spicy-regs cannot override one contract column's sentence, so such a note
+#: corrects it from the table level, and without an expiry it outlives the release that fixes the sentence
+#: (round 4, 2026-10-03: three contract sentences the data contradicted, and the margin-note reader, were
+#: fixed only on an unreleased spicy-docs branch). Once the installed wheel is past the stated version the
+#: check refuses the note: delete it if the wheel fixed what it covers, or restate the marker if not.
+INTERIM_MARKER = re.compile(r"\(interim until spicy-docs > ([^\s()]+)\)")
+_INTERIM_WORDS = re.compile(r"\binterim until\b", re.IGNORECASE)
+
+
+def installed_spicy_docs() -> str:
+    """The spicy-docs version this environment installed, which ``uv run --frozen`` takes from the lock."""
+    from importlib.metadata import version
+
+    return version("spicy-docs")
+
+
+def _wheel_past(installed: str, stated: str) -> bool:
+    """Whether ``installed`` is a later spicy-docs than ``stated``.
+
+    A local label names a branch build, not an order (``+laws.…`` and ``+billslane.…`` do not compare), so
+    another local build of the same release counts as later, and a plain release does not.
+    """
+    from packaging.version import Version
+
+    have, want = Version(installed), Version(stated)
+    if have.public != want.public:
+        return Version(have.public) > Version(want.public)
+    return have.local is not None and have.local != want.local
+
+
+def interim_note_errors(table: str, data_quality: str, installed: str) -> list[str]:
+    """Refuse an interim note the installed wheel has moved past, and one whose expiry cannot be read."""
+    from packaging.version import InvalidVersion
+
+    text = " ".join(data_quality.split())
+    stated = INTERIM_MARKER.findall(text)
+    errors = []
+    if len(stated) != len(_INTERIM_WORDS.findall(text)):
+        errors.append(f"[{table}] data_quality has an interim note whose expiry does not read "
+                      "'(interim until spicy-docs > <version>)'")
+    for version in stated:
+        try:
+            past = _wheel_past(installed, version)
+        except InvalidVersion:
+            errors.append(f"[{table}] data_quality interim note names no valid spicy-docs version ({version!r})")
+            continue
+        if past:
+            errors.append(f"[{table}] data_quality interim note expired: spicy-docs {installed} is installed, past "
+                          f"{version}; delete the note if the wheel fixed it, or restate its marker")
+    return errors
+
+
 DEFAULT_R2_BASE_URL = "https://data.spicy-regs.dev"
 
 #: The tables hosted from spicy-docs' table contracts. Their columns and their
@@ -1070,6 +1123,7 @@ def check_descriptions(
 ) -> list[str]:
     """Reconcile a schema map against the curated descriptions. Returns errors."""
     errors: list[str] = []
+    installed = installed_spicy_docs()
     schema_tables = set(schemas)
     desc_tables = set(descriptions)
     for table in sorted(schema_tables - desc_tables):
@@ -1091,6 +1145,7 @@ def check_descriptions(
         measured_on = str(entry.get("measured_on") or "").strip()
         errors.extend(coverage_prose_errors(table, entry.get("coverage") or "", measured_on))
         errors.extend(data_quality_prose_errors(table, entry.get("data_quality") or ""))
+        errors.extend(interim_note_errors(table, entry.get("data_quality") or "", installed))
         if not measured_on:
             errors.append(f"[{table}] missing 'measured_on' beside its coverage statement")
         else:
