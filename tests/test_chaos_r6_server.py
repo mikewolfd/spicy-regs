@@ -66,6 +66,11 @@ def test_a_misspelled_argument_is_refused_naming_the_arguments(monkeypatch):
                        "query_sql takes max_cell_chars, max_rows, sql.")
 
 
+def test_a_tool_with_no_arguments_says_it_takes_none(monkeypatch):
+    message = _refusal(monkeypatch, "list_sources", {"detail": True})
+    assert message == "Error executing tool list_sources: detail is not an argument. list_sources takes no arguments."
+
+
 def test_a_bound_is_stated_in_plain_words(monkeypatch):
     message = _refusal(monkeypatch, "query_sql", {"sql": "SELECT 1", "max_rows": 501})
     assert message == ("Error executing tool query_sql: max_rows: Input should be less than or equal to 500. "

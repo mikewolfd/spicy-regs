@@ -1661,7 +1661,7 @@ class _StrictTool(Tool):
             problems += [_argument_problem(e) for e in error.errors(include_url=False, include_input=False)]
         if problems:
             raise ToolError(f"Error executing tool {self.name}: {'; '.join(problems)}. "
-                            f"{self.name} takes {', '.join(names)}.") from cause
+                            f"{self.name} takes {', '.join(names) or 'no arguments'}.") from cause
         return await super().run(arguments, context, convert_result)
 
     @classmethod
