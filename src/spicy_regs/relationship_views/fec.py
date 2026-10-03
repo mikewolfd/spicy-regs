@@ -65,7 +65,13 @@ FEC_VIEWS = (
        'to fec_source_records to filter records by cycle. cycle is NULL (cycle_status not_stated) for API, legal, '
        'data-dictionary and other files outside a year directory, and for a collection whose captures span two '
        'cycles (ambiguous); no cycle is read from a file name or a query parameter.',
-       ('collection_id',), rule_version='fec-collection-cycle/1'),
+       ('collection_id',), rule_version='fec-collection-cycle/1',
+       column_descriptions={
+           'cycle': "The even election year from the publisher's bulk-downloads/<year>/ directory; NULL unless exactly "
+                    'one directory year appears in the captured URLs.',
+           'cycle_status': 'bulk_directory when one year directory appears, not_stated when none, ambiguous when the '
+                           'captures span two.',
+       }),
     SQLView('fec_relationship_evidence', {
         'fec_relationships': ('source_locator_json','source_sha256','source_fields_json','relationship_type'),
         'fec_source_records': ('collection_id','source_record_id','source_sha256'),
@@ -76,5 +82,16 @@ FEC_VIEWS = (
        'embedded in candidate arrays, allowing serving queries to avoid reading those large columns. '
        'Explicit empty relationship states remain '
        'observations, not edges. Matching recorded digests is not verification of retained bytes.',
-       ('source_locator_json','source_fields_json','relationship_type'), rule_version='fec-companion-location-v2'),
+       ('source_locator_json','source_fields_json','relationship_type'), rule_version='fec-companion-location-v2',
+       column_descriptions={
+           'collection_id': 'The companion collection named in source_locator_json; NULL when the locator is unsupported.',
+           'source_record_id': 'The companion record named in source_locator_json; NULL when the locator is unsupported.',
+           'locator_status': 'valid when source_locator_json names a non-empty collection_id and source_record_id, '
+                             'else unsupported.',
+           'companion_candidates_json': 'JSON list of every fec_source_records digest under the locator coordinates; '
+                                        'repeated and null digests retained.',
+           'recorded_digest_status': 'matches or mismatch of the recorded source_sha256 against the single companion; '
+                                     'unavailable when either digest is NULL; not_checked unless exactly one companion.',
+           'source_bytes_status': 'Always not_checked: recorded digests are compared, retained bytes never are.',
+       }),
 )

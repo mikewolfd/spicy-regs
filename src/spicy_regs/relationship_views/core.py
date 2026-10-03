@@ -4,6 +4,8 @@ from dataclasses import dataclass
 import json
 from typing import Any, Iterable, Mapping
 
+from .lineage import column_lineage, table_columns, view_columns_from
+
 
 def quoted(value: str) -> str:
     """Quote a trusted SQL identifier (including unusual names in a source schema)."""
@@ -19,7 +21,9 @@ class ArrayRelationship:
     """One independently expanded array and its deliberately narrower pair view.
 
     Expressions refer to `s` (source row) and `e` (json_each element). They are
-    application constants, never SQL supplied by a client.
+    application constants, never SQL supplied by a client. ``details`` adds
+    (column, expression, meaning) triples to the occurrence view; the meaning is
+    what ``describe_table`` states for that column.
     """
 
     name: str
@@ -31,7 +35,7 @@ class ArrayRelationship:
     valid_expression: str
     meaning: str
     context_columns: tuple[str, ...] = ()
-    details: tuple[tuple[str, str], ...] = ()
+    details: tuple[tuple[str, str, str], ...] = ()
     rule_version: str = "held-array-v1"
     target_kind_expression: str | None = None
 
@@ -44,8 +48,9 @@ class ArrayRelationship:
         return (*self.source_keys, self.source_field, *self.context_columns)
 
 
-def _statements(spec: ArrayRelationship, pin: object) -> tuple[str, str, str]:
-    occurrences, pairs, states = map(quoted, spec.names)
+def _selects(spec: ArrayRelationship, pin: object) -> tuple[str, str, str]:
+    """The occurrence, pair and field-state SELECTs, in that order; pairs read the occurrence view."""
+    occurrences = quoted(spec.names[0])
     source = quoted(spec.source_table)
     field = f"s.{quoted(spec.source_field)}"
     parsed = f"TRY_CAST({field} AS JSON)"
@@ -61,9 +66,8 @@ def _statements(spec: ArrayRelationship, pin: object) -> tuple[str, str, str]:
     # Guard every derived key with the same validation as its disposition. Raw
     # malformed/null elements still get an occurrence and retain their position.
     valid = f"COALESCE(({spec.valid_expression}), FALSE)"
-    details = "".join(f", {expr} AS {quoted(name)}" for name, expr in spec.details)
-    occurrence_sql = f"""CREATE OR REPLACE VIEW {occurrences} AS
-        SELECT {source_columns}, CAST(e.key AS BIGINT) AS source_ordinal,
+    details = "".join(f", {expr} AS {quoted(name)}" for name, expr, _ in spec.details)
+    occurrence_sql = f"""SELECT {source_columns}, CAST(e.key AS BIGINT) AS source_ordinal,
             CAST(e.value AS VARCHAR) AS raw_value_json,
             {literal('/' + spec.source_field + '/')} || e.key AS source_pointer,
             CASE WHEN e.type = 'NULL' THEN 'null_element'
@@ -74,12 +78,10 @@ def _statements(spec: ArrayRelationship, pin: object) -> tuple[str, str, str]:
                  THEN 'not_checked' ELSE 'unsupported' END AS target_status,
             {provenance}{details}
         FROM {source} s, json_each({array}) e"""
-    pair_sql = f"""CREATE OR REPLACE VIEW {pairs} AS
-        SELECT DISTINCT {identity}, target_kind, target_key, target_status,
+    pair_sql = f"""SELECT DISTINCT {identity}, target_kind, target_key, target_status,
             source_table, source_field, source_publication_json, rule_version
         FROM {occurrences} WHERE parsing_status = 'valid' AND target_key IS NOT NULL"""
-    state_sql = f"""CREATE OR REPLACE VIEW {states} AS
-        SELECT {source_columns}, {field} AS raw_field_value,
+    state_sql = f"""SELECT {source_columns}, {field} AS raw_field_value,
             CASE WHEN {field} IS NULL THEN 'sql_null'
                  WHEN {parsed} IS NULL THEN 'malformed_json'
                  WHEN json_type({parsed}) = 'NULL' THEN 'json_null'
@@ -107,23 +109,28 @@ def install_arrays(
     """
     available = set(available_tables)
     publication = publication or {}
-    schemas: dict[str, set[str]] = {}
+    schemas: dict[str, list[str]] = {}
     result: dict[str, dict[str, Any]] = {}
     for spec in specs:
         if spec.source_table in available and spec.source_table not in schemas:
-            schemas[spec.source_table] = {
+            schemas[spec.source_table] = [
                 row[0] for row in connection.execute(f"DESCRIBE {quoted(spec.source_table)}").fetchall()
-            }
-        missing = sorted(set(spec.required_columns) - schemas.get(spec.source_table, set()))
+            ]
+        missing = sorted(set(spec.required_columns) - set(schemas.get(spec.source_table, [])))
         status = "available"
         reason = None
         if spec.source_table not in available:
             status, reason = "unavailable", "Source table is not loaded"
         elif missing:
             status, reason = "unsupported", "Missing source columns: " + ", ".join(missing)
+        lineages: dict[str, dict[str, list[str]]] = {}
         if status == "available":
-            for sql in _statements(spec, publication.get(spec.source_table)):
-                connection.execute(sql)
+            relations = {spec.source_table: table_columns(spec.source_table, schemas[spec.source_table])}
+            for name, select in zip(spec.names, _selects(spec, publication.get(spec.source_table)), strict=True):
+                connection.execute(f"CREATE OR REPLACE VIEW {quoted(name)} AS {select}")
+                lineages[name] = column_lineage(connection, select, relations)
+                # The pair view reads the occurrence view; its columns keep the source table's lineage.
+                relations[name] = view_columns_from(lineages[name])
         for name, kind in zip(spec.names, ("occurrences", "pairs", "field_states"), strict=True):
             result[name] = {
                 "status": status,
@@ -144,6 +151,9 @@ def install_arrays(
                     "coverage": "Bounded by the loaded source selection. Target existence is not checked. "
                     "SQL NULL describes the held field, not the absent/null state of the original publisher field. "
                     "Pairs deduplicate navigation keys; occurrences preserve repeated source elements.",
+                    **({"column_descriptions": {name: meaning for name, _, meaning in spec.details}}
+                       if kind == "occurrences" and spec.details else {}),
+                    **({"column_lineage": lineages[name]} if name in lineages else {}),
                 },
             }
     return result

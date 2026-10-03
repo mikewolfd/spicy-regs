@@ -20,13 +20,20 @@ from spicy_regs.fec_versions import INDIVIDUAL_SNAPSHOT_POLICY
 from .core import literal
 from .fec_filing_associations import (
     FILE_NUMBER_FILER_FIELDS,
+    HEADER_ASSOCIATION_COLUMNS,
+    NUMBER_ASSOCIATION_COLUMNS,
     POLICY_VERSION as ASSOCIATION_POLICY,
     financial_header_association_sql,
     financial_number_association_sql,
 )
 from .fec_financial_meaning import financial_rule_sql
 from .fec_typed import (
+    EVIDENCE_COLUMNS,
     FILING_REFERENCE_POLICY,
+    INCLUSION_COLUMNS,
+    RESOLUTION_COLUMNS,
+    SPENDING_TARGET_COLUMNS,
+    SUMMARY_MEASURE_COLUMNS,
     filing_record_evidence,
     filing_reference_resolution,
     individual_snapshot_inclusion,
@@ -276,6 +283,7 @@ def fec_query_views(
             ),
             "fec-typed-evidence-routes/1",
             "relationship_views/fec_typed.py",
+            column_descriptions=EVIDENCE_COLUMNS,
         )
         if filing:
             add(
@@ -297,6 +305,7 @@ def fec_query_views(
                 ("target_table", "target_record_id"),
                 ASSOCIATION_POLICY,
                 "relationship_views/fec_filing_associations.py",
+                column_descriptions=HEADER_ASSOCIATION_COLUMNS,
             )
 
     for table in (
@@ -316,6 +325,7 @@ def fec_query_views(
             ("target_table", "target_record_id"),
             ASSOCIATION_POLICY,
             "relationship_views/fec_filing_associations.py",
+            column_descriptions=NUMBER_ASSOCIATION_COLUMNS,
         )
 
     add(
@@ -337,6 +347,7 @@ def fec_query_views(
         ("record_id",),
         FILING_REFERENCE_POLICY,
         "relationship_views/fec_typed.py",
+        column_descriptions=RESOLUTION_COLUMNS,
     )
     add(
         "fec_individual_snapshot_inclusion",
@@ -361,6 +372,7 @@ def fec_query_views(
         INDIVIDUAL_SNAPSHOT_POLICY,
         "relationship_views/fec_typed.py",
         definitions=("fec_versions.py",),
+        column_descriptions=INCLUSION_COLUMNS,
     )
     summary_columns = (
         "record_id",
@@ -392,6 +404,7 @@ def fec_query_views(
         "fec-summary-measure/1",
         "relationship_views/fec_typed.py",
         identity_version="fec-summary-measure/1",
+        column_descriptions=SUMMARY_MEASURE_COLUMNS,
     )
     for table in (
         "fec_independent_expenditures",
@@ -428,6 +441,7 @@ def fec_query_views(
             "fec-spending-target/1",
             "relationship_views/fec_typed.py",
             identity_version="fec-spending-target/1",
+            column_descriptions=SPENDING_TARGET_COLUMNS,
         )
 
     def rule(table, suffix, query, *, field=None, fields=("total_amount",)):

@@ -29,7 +29,9 @@ def spec(name, source, source_keys, roles, extras=()):
     return SQLView(name, required, endpoint_query(source, roles),
                    'Native CourtListener endpoints and exact target-row counts in the selected publications. '
                    'Endpoint kinds are distinct; missing rows do not imply nonexistent cases. No case-name match, '
-                   'opinion-body acquisition or Supreme Court crosswalk is inferred.', (*source_keys, 'endpoint_role'))
+                   'opinion-body acquisition or Supreme Court crosswalk is inferred.', (*source_keys, 'endpoint_role'),
+                   column_descriptions={'endpoint_role': 'Which end of the source edge this row looks up ('
+                                        + ', '.join(role for role, *_ in roles) + '); each role is its own row of the same edge.'})
 
 
 COURT_VIEWS = (

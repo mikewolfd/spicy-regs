@@ -61,7 +61,8 @@ CONGRESS_RELATIONSHIPS = (
         related_key, related_valid,
         "Directed publisher-listed related bills. Complete relationship details stay with each occurrence; "
         "neither reciprocal links nor text equivalence is inferred.",
-        details=(("relationship_details_json", "CAST(json_extract(e.value, '$.relationship_details') AS VARCHAR)"),),
+        details=(("relationship_details_json", "CAST(json_extract(e.value, '$.relationship_details') AS VARCHAR)",
+                  "JSON list of the publisher's relationship details (type, identifiedBy) for this related bill."),),
     ),
     ArrayRelationship(
         "member_fec_ids", "members", ("bioguide_id",), "fec_ids_json", "fec_candidate", SCALAR,
@@ -98,8 +99,10 @@ CONGRESS_RELATIONSHIPS = (
         "No positional relationship to amendment blocks, default Congress, or motion interpretation is inferred.",
         rule_version="vote-native-routing/2",
         context_columns=("question", "source_url"),
-        details=(("native_congress", VOTE_CONGRESS), ("native_type", VOTE_TYPE),
-                 ("native_number", VOTE_NUMBER), ("native_name", value("name"))),
+        details=(("native_congress", VOTE_CONGRESS, "The Congress stated inside the document block, as held."),
+                 ("native_type", VOTE_TYPE, "The document type as held: PN, Treaty Doc., or a bill type."),
+                 ("native_number", VOTE_NUMBER, "The document number as held, including a PN suffix."),
+                 ("native_name", value("name"), "The document name as held.")),
         target_kind_expression=f"CASE WHEN {VOTE_VALID} THEN {VOTE_KIND} ELSE 'unsupported_vote_document' END",
     ),
     ArrayRelationship(

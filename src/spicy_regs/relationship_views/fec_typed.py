@@ -213,3 +213,71 @@ def individual_snapshot_inclusion(source_generation_pin: str) -> str:
         FROM fec_receipts t LEFT JOIN checked p
           ON t.collection_id = p.collection_id AND t.source_sha256 = p.source_sha256
         WHERE t.source_namespace = 'fec-bulk-individual-contributions'"""
+
+
+TARGET_COLUMNS = {
+    "target_table": "The typed FEC table whose observation this row is about.",
+    "target_record_id": "That observation's record_id; with target_table, the row's key.",
+    "target_generation_scope": "Always self: the target lives in the same selected generation as this view.",
+}
+EVIDENCE_COLUMNS = {
+    **TARGET_COLUMNS,
+    "witness_generation_scope": "Always external: the witness is bound to the source generation in witness_generation_pin.",
+    "witness_generation_pin": "The selected source-generation digest this witness is bound to.",
+    "role": "What the witness is: primary (the source record), field_definition (the layout or dictionary) or "
+            "filing_header (the filing's header record).",
+    "endpoint_kind": "source_record for a record witness, collection_context for a collection-level definition witness.",
+    "collection_id": "The witness's collection: the record's own for a primary or filing_header witness, the definitions "
+                     "collection for a field_definition witness.",
+    "source_record_id": "The witness's record id within its collection; NULL for a collection-level witness.",
+    "context_column": "The collection column holding the context witness; NULL for a record witness.",
+    "context_pointer": "JSON pointer to the witness inside context_column; NULL for a record witness.",
+    "witness_sha256": "The witness's recorded digest; recorded, not re-verified here.",
+    "witness_locator_json": "JSON locator of the witness (collection, record or table) as recorded.",
+}
+RESOLUTION_COLUMNS = {
+    "resolution_policy_version": "Version of the filing-reference resolution rule applied here.",
+    "target_observation_count": "Number of fec_filings observations under the referenced filing key; 0 when none is retained.",
+    "target_resolution_status": "resolved_native_filing_key, or the unresolved_* reason: source observation absent or "
+                                "ambiguous, source identity mismatch, no file number, target not retained, target "
+                                "observations ambiguous or conflicting.",
+}
+INCLUSION_COLUMNS = {
+    **TARGET_COLUMNS,
+    "target_table": "Always fec_receipts.",
+    "selection_status": "included or duplicate from the single supported policy row; unresolved otherwise.",
+    "selection_reason": "The policy row's reason when supported; else ambiguous-collection-policy, "
+                        "unsupported-policy-version, unsupported-policy-status or "
+                        "no-qualified-representation-or-correction-applicability.",
+    "policy_record_id": "The single fec_collection_selection row applied; NULL when none or several.",
+    "policy_version": "That policy row's version; NULL when none or several.",
+    "evidence_sha256": "That policy row's equivalence evidence digest; NULL when none or several.",
+    "selected_collection_id": "The collection the supported policy selects as the representation; NULL otherwise.",
+    "current_record_status": "Always unqualified: no current-record selection is made.",
+    "purpose": "Always retained-reported-individual-contribution-snapshot: the policy purpose this view applies.",
+}
+SUMMARY_MEASURE_COLUMNS = {
+    "record_id": "'sha256:' digest of the summary record_id and the native measure name: this measure row's own key.",
+    "identity_version": "Always fec-summary-measure/1.",
+    "summary_record_id": "The fec_reported_financial_summaries record_id the measure belongs to.",
+    "summary_generation_scope": "Always self: the summary lives in this selected generation.",
+    "native_measure_name": "The publisher's own measure field name; names are not equated across summary types.",
+    "amount": "Exact decimal value of the measure; NULL when blank or unconvertible.",
+    "amount_raw": "The measure text as filed.",
+    "amount_status": "Conversion state of the measure value, separate from NULL.",
+    "unit": "The measure unit as recorded.",
+}
+SPENDING_TARGET_COLUMNS = {
+    "record_id": "'sha256:' digest keyed on the spending table and its record_id: this association's own key, not the "
+                 "source observation's.",
+    "identity_version": "Always fec-spending-target/1.",
+    "spending_table": "The typed spending table the association comes from.",
+    "spending_record_id": "That spending observation's record_id.",
+    "spending_generation_scope": "Always self.",
+    "support_oppose_code": "The publisher's support/oppose code as the source row states it; NULL for tables that report none.",
+    "target_status": "native_identifier_unresolved when a candidate_id is reported, name_only when only a name, "
+                     "attributes_only otherwise; no candidate identity is resolved.",
+    "allocated_amount": "The publisher's own candidate share for electioneering communications; NULL elsewhere, never an "
+                        "inferred division of the full amount.",
+    "allocated_amount_status": "Conversion state of allocated_amount; not_reported where the source states no share.",
+}
