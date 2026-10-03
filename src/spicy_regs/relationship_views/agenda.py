@@ -30,5 +30,7 @@ AGENDA_VIEWS = (
     }, editions, 'One regulatory agenda item may occur in many native Agenda editions. Each exact RIN/edition/URL '
        'target remains separate, with duplicate target-row counts. Edition membership does not merge rulemaking '
        'actions and an older edition is never replaced by a chosen latest row.',
-       ('agenda_item_id','rin','agenda_edition','agenda_url')),
+       ('agenda_item_id','rin','agenda_edition','agenda_url'),
+       column_descriptions={'expected_cardinality': 'Always many_editions: one agenda item may match several native '
+                                                    'editions, so a row count is not an item count.'}),
 )

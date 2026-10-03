@@ -164,7 +164,7 @@ def test_financial_columns_explain_actual_decision_and_do_not_override_other_sta
     view = SQLView("unrelated_status", {}, lambda _: "SELECT 'open' AS status", "Non-financial", ("status",))
     entry = install_sql_views(con, [], [view])[view.name]
     other = view_columns(con.execute("DESCRIBE unrelated_status").fetchall(), entry["metadata"].get("column_descriptions"))
-    assert "eligible" not in other[0]["description"]
+    assert other[0]["description"] is None  # undeclared, so undescribed: no financial text leaks into another view
 
 
 @pytest.mark.parametrize(("purpose", "memo", "status", "value"), [

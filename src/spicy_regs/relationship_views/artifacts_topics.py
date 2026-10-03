@@ -12,8 +12,10 @@ def artifact(name, table, keys, field, url_field):
         f"e.type = 'OBJECT' AND regexp_full_match({url}, 'https?://.+')",
         'Offered source artifact references with original roles, formats and sizes retained in raw JSON. '
         'No URL fetch or body acquisition is implied. Acquisition status is not checked by this view.',
-        details=(('acquisition_status', "'not_checked'"), ('retained_digest', 'NULL::VARCHAR'),
-                 ('artifact_role', "'document_content'" if table == 'documents' else "'filing_document'")),
+        details=(('acquisition_status', "'not_checked'", 'Always not_checked: this view fetches no URL.'),
+                 ('retained_digest', 'NULL::VARCHAR', 'Always NULL: no retained bytes are recorded for the offered artifact.'),
+                 ('artifact_role', "'document_content'" if table == 'documents' else "'filing_document'",
+                  'document_content for a Regulations.gov document attachment, filing_document for an FCC filing document.')),
     )
 
 
@@ -25,7 +27,8 @@ def vocabulary(name, table, keys, field, namespace, object_id=None, label=None):
         name, table, keys, field, namespace, key, valid,
         'Native vocabulary occurrences in the stated provider namespace. Labels do not establish equality '
         'across providers; no RefSpec mapping is fabricated. Publication metadata pins the source selection.',
-        details=(('source_namespace', f"'{namespace}'"), ('native_label', value(label) if label else SCALAR)),
+        details=(('source_namespace', f"'{namespace}'", 'The provider vocabulary this value belongs to; labels are not equal across providers.'),
+                 ('native_label', value(label) if label else SCALAR, 'The provider label as held; a display string, not an identifier.')),
     )
 
 
@@ -34,8 +37,11 @@ ARTIFACT_TOPIC_RELATIONSHIPS = (
         'document_attachment_records', 'documents', ('document_id',), 'attachment_records_json',
         'attachment', value('id'), "e.type='OBJECT' AND json_extract_string(e.value,'$.type')='attachments' AND length(json_extract_string(e.value,'$.id'))>0",
         'Explicitly read attachment records; NULL field means unread, empty array means read empty. Restricted records remain present without URLs.',
-        details=(('role', "'attachment'"), ('restriction', "json_extract_string(e.value,'$.attributes.restrictReasonType')"),
-                 ('formats_json', "CAST(json_extract(e.value,'$.attributes.fileFormats') AS VARCHAR)")),
+        details=(('role', "'attachment'", 'Always attachment.'),
+                 ('restriction', "json_extract_string(e.value,'$.attributes.restrictReasonType')",
+                  "The publisher's restrictReasonType when the attachment is restricted; NULL when open."),
+                 ('formats_json', "CAST(json_extract(e.value,'$.attributes.fileFormats') AS VARCHAR)",
+                  'JSON list of the offered file formats (fileUrl, format, size) as the publisher lists them.')),
     ),
     artifact('document_artifacts', 'documents', ('document_id',), 'attachments_json', 'url'),
     artifact('fcc_filing_artifacts', 'fcc_filings', ('id_submission',), 'documents_json', 'src'),
@@ -68,8 +74,22 @@ def attachment_renditions(publication):
                        THEN json_extract(r.value,'$.attributes.fileFormats') ELSE '[]'::JSON END) f"""
 
 
+_RENDITION_COLUMNS = {
+    'attachment_ordinal': 'Zero-based position of the attachment record in attachment_records_json.',
+    'attachment_id': "The publisher's attachment id.",
+    'format_ordinal': "Zero-based position of the format within the attachment's fileFormats.",
+    'artifact_role': 'Always attachment.',
+    'offered_url': 'The fileUrl the publisher offers for this rendition; not fetched.',
+    'format': "The publisher's format label (pdf, docx, ...).",
+    'source_size': "The publisher's stated size, as text.",
+    'raw_attachment_json': 'The complete attachment record JSON.',
+    'raw_format_json': 'The complete format entry JSON.',
+    'acquisition_status': 'Always not_checked: this view fetches no URL.',
+    'retained_digest': 'Always NULL: no retained bytes are recorded.',
+}
+
 ARTIFACT_SQL_VIEWS = (
     SQLView('document_attachment_renditions', {'documents': ('document_id','attachment_records_json')},
             attachment_renditions, 'Every offered attachment format in source order, independent of document content URLs. No acquisition is implied.',
-            ('document_id','attachment_ordinal','format_ordinal')),
+            ('document_id','attachment_ordinal','format_ordinal'), column_descriptions=_RENDITION_COLUMNS),
 )

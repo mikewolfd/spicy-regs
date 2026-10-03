@@ -241,7 +241,7 @@ def test_mcp_legal_join_discovery_uses_the_generated_registry(monkeypatch):
     expected = {"fec_legal_parties", "fec_legal_events", "fec_legal_documents"}
     assert {join["child"] for join in parent["incoming"]} == expected
     for child in expected:
-        result = _tool_data(server, "describe_table", {"table": child})
+        result = _tool_data(server, "describe_table", {"table": child, "detail": True})
         assert result["available"] is False
         assert result["qualification"]["status"] != "recorded"
         assert result["joins"]["outgoing"] == table_joins.joins_for(child)["outgoing"]

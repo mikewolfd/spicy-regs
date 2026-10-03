@@ -29,11 +29,27 @@ def candidates(p):
         FROM org_committee_links"""
 
 
+COLUMNS = {
+    'candidate_id': "Stable candidate key: 'org_candidate_' plus a digest of the pinned source publication, "
+                    'organization, name_source and committee_id; NULL when the source is unpinned.',
+    'candidate_id_status': 'publication_scoped when candidate_id is bound to a pinned source digest, '
+                           'unversioned_source when none is available.',
+    'target_namespace': 'Always fec_committee: the identifier space of candidate_target_id.',
+    'decision': 'Always pending: no acceptance, rejection or revocation workflow exists in this view.',
+    'acting_role': 'Always unknown: no role (filer, funder, affiliate) is asserted.',
+    'matcher_evidence_json': 'JSON of the recorded matcher features: match_method, confidence, normalized and core '
+                             'names, committee_name.',
+    'competing_candidates_json': 'JSON of committee_match_count and whether more than one committee name matched.',
+    'accepted_identity_evidence': 'Always NULL: no identity has been accepted.',
+    'decision_at': 'Always NULL: no decision has been recorded.',
+}
+
 IDENTITY_VIEWS = (
     SQLView('org_identity_candidates', {SOURCE: FIELDS}, candidates,
             'Existing organization-name matches are pending candidates. Matching names, confidence labels and '
             'multiple alternatives are recorded features, not adjudicated positive/conflicting identity evidence. '
             'Original comment date bounds are not validity dates. No common person/organization, affiliate network '
             'or funds attribution is established. Candidate IDs require a pinned source publication; no qualified '
-            'acceptance, rejection or revocation workflow is implemented by this view.', ('candidate_id',)),
+            'acceptance, rejection or revocation workflow is implemented by this view.', ('candidate_id',),
+            column_descriptions=COLUMNS),
 )

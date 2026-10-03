@@ -4,6 +4,7 @@ import json
 from typing import Any, Iterable, Mapping
 
 from .core import literal
+from .lineage import column_lineage, table_columns, view_columns_from
 
 RULE_VERSION = "comment-native-reference-v1"
 NAMES = (
@@ -29,6 +30,7 @@ def install_comment_references(
         if missing:
             status, reason = "unsupported", "Missing source columns: " + ", ".join(sorted(missing))
     pin = (publication or {}).get("comments")
+    lineages: dict[str, dict[str, list[str]]] = {}
     if status == "available":
         provenance = (
             f"{literal(json.dumps(pin, sort_keys=True))} AS source_publication_json, "
@@ -44,8 +46,8 @@ def install_comment_references(
         ))
         value = "json_extract(c.raw, '$.' || f.source_field)"
         scalar = "json_extract_string(c.raw, '$.' || f.source_field)"
-        connection.execute(f"""CREATE OR REPLACE VIEW comment_reference_field_states AS
-            SELECT c.comment_id, c.docket_id, c.comment_reference_values_json AS raw_field_value,
+        selects = {}
+        selects["comment_reference_field_states"] = f"""SELECT c.comment_id, c.docket_id, c.comment_reference_values_json AS raw_field_value,
                 f.source_field, '/data/attributes/' || f.source_field AS source_pointer,
                 0::BIGINT AS source_ordinal, CAST({value} AS VARCHAR) AS raw_value_json,
                 f.target_kind,
@@ -61,18 +63,21 @@ def install_comment_references(
                      ELSE 'valid' END AS parsing_status, {provenance}
             FROM (SELECT comment_id, docket_id, comment_reference_values_json,
                          TRY_CAST(comment_reference_values_json AS JSON) AS raw FROM comments) c
-            CROSS JOIN (VALUES {fields}) AS f(source_field, target_kind)""")
-        connection.execute("""CREATE OR REPLACE VIEW comment_native_references AS
-            SELECT *, CASE WHEN parsing_status = 'valid' AND target_kind = 'regulations_document'
+            CROSS JOIN (VALUES {fields}) AS f(source_field, target_kind)"""
+        selects["comment_native_references"] = """SELECT *, CASE WHEN parsing_status = 'valid' AND target_kind = 'regulations_document'
                            THEN 'not_checked' ELSE 'unsupported' END AS target_status
             FROM comment_reference_field_states
-            WHERE parsing_status NOT IN ('unread', 'absent')""")
-        connection.execute("""CREATE OR REPLACE VIEW comment_document_references AS
-            SELECT * FROM comment_native_references WHERE source_field = 'commentOnDocumentId'""")
-        connection.execute("""CREATE OR REPLACE VIEW comment_document_references_pairs AS
-            SELECT DISTINCT comment_id, target_kind, target_key, target_status, source_table,
+            WHERE parsing_status NOT IN ('unread', 'absent')"""
+        selects["comment_document_references"] = """SELECT * FROM comment_native_references WHERE source_field = 'commentOnDocumentId'"""
+        selects["comment_document_references_pairs"] = """SELECT DISTINCT comment_id, target_kind, target_key, target_status, source_table,
                 source_field, source_publication_json, rule_version
-            FROM comment_document_references WHERE parsing_status = 'valid'""")
+            FROM comment_document_references WHERE parsing_status = 'valid'"""
+        relations = {"comments": table_columns("comments", sorted(columns))}
+        # Each view reads the one before it, so lineage threads back to the comments table.
+        for name, select in selects.items():
+            connection.execute(f'CREATE OR REPLACE VIEW "{name}" AS {select}')
+            lineages[name] = column_lineage(connection, select, relations)
+            relations[name] = view_columns_from(lineages[name])
     return {name: {
         "status": status, "reason": reason, "dependencies": ["comments"],
         "metadata": {
@@ -84,5 +89,6 @@ def install_comment_references(
             "remain different namespaces. Docket NULL is preserved; no prefix inference or target lookup.",
             "coverage": "Only rows retaining the raw-field map distinguish absent, null and empty values. "
             "Legacy SQL NULL is unread. Non-document namespaces are unsupported for target resolution.",
+            **({"column_lineage": lineages[name]} if name in lineages else {}),
         },
     } for name in NAMES}

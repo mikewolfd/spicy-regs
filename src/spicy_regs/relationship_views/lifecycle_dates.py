@@ -32,5 +32,7 @@ LIFECYCLE_DATE_VIEWS = (
     },date_evidence,'Date evidence routes by dated_by, independently of the source that typed the stage. '
        'A Register key includes the native publication date; posting dates never manufacture that key. '
        'Counts report selected target existence, not date accuracy or legal applicability.',
-       ('proceeding_id','document_id'),rule_version='lifecycle-date-source/1'),
+       ('proceeding_id','document_id'),rule_version='lifecycle-date-source/1',
+       column_descriptions={'target_table': 'The table dated_by routes the lookup to: documents, federal_register or '
+                                            'regulatory_agenda_items; NULL for an unsupported dated_by.'}),
 )

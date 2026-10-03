@@ -5,10 +5,22 @@ from .sql_views import SQLView, pin
 _FIELDS = "(VALUES ('proceedings'),('filers'),('authors'),('lawfirms'),('bureaus'),('documents'))"
 _REQUIRED = {'fcc_filings': ('id_submission', 'native_fields_json', 'native_fields_sha256')}
 _RULE = 'fcc-native-fields/1'
-_PROCEEDING_COLUMNS = {
+_NATIVE_COLUMNS = {
+    'raw_field_json': "The native field's complete JSON as held; NULL when unread or absent.",
+    'observation_kind': 'fcc_proceeding for the proceedings field, offered_artifact for documents, participant_role '
+                        'for filers, authors, lawfirms and bureaus.',
+    'participant_role': 'The native role field this participant came from (filers, authors, lawfirms, bureaus); '
+                        'NULL for other fields.',
+    'observed_name': "The element's name as the publisher states it; not resolved to a person or organization.",
     'native_proceeding_id': "Publisher numeric proceeding ID, which can be reused across observed names. "
                             "Match BOTH observed_name and native_proceeding_id to fcc_proceedings.name AND "
                             "id_proceeding; the numeric ID alone is not a unique proceeding key.",
+    'identifier_namespace': 'fcc_ecfs_proceeding_id for a proceeding element; NULL otherwise.',
+    'offered_url': 'The document src URL the publisher offers; not fetched.',
+    'filename': "The publisher's filename for a document element.",
+    'description': "The publisher's description of a document element.",
+    'acquisition_status': 'not_checked for a document element: no URL was fetched; NULL otherwise.',
+    'retained_digest': 'Always NULL: no retained bytes are recorded.',
 }
 
 
@@ -68,14 +80,14 @@ FCC_NATIVE_VIEWS = (
     SQLView('fcc_native_field_states', _REQUIRED, field_states,
         'Literal native field states; legacy SQL null is unread. native_fields_sha256 hashes canonical selected-field '
         'JSON, not response bytes. Source capture qualification requires the separately retained publication evidence.',
-        ('id_submission','source_field'), rule_version=_RULE),
+        ('id_submission','source_field'), rule_version=_RULE, column_descriptions=_NATIVE_COLUMNS),
     SQLView('fcc_native_observations', _REQUIRED, observations,
         'Every native array element retains role, ordinal and raw JSON. Names do not resolve people; proceeding IDs '
         'are FCC-only. Offered artifact URLs do not establish acquisition, format, size, redirect or retained bytes. '
         'Those unsupported fields remain in raw JSON when supplied; retained_digest stays null.',
-        ('id_submission','source_field','source_ordinal'), rule_version=_RULE, column_descriptions=_PROCEEDING_COLUMNS),
+        ('id_submission','source_field','source_ordinal'), rule_version=_RULE, column_descriptions=_NATIVE_COLUMNS),
     SQLView('fcc_native_proceeding_links', {**_REQUIRED,'fcc_proceedings': ('name','id_proceeding')}, proceeding_links,
         'Native FCC name and proceeding ID must both match the selected proceeding population. All source occurrences '
         'remain, duplicate target identities are ambiguous, and no other docket namespace is searched.',
-        ('id_submission','source_field','source_ordinal'), rule_version=_RULE, column_descriptions=_PROCEEDING_COLUMNS),
+        ('id_submission','source_field','source_ordinal'), rule_version=_RULE, column_descriptions=_NATIVE_COLUMNS),
 )

@@ -205,3 +205,44 @@ def financial_header_association_sql(table, source_generation_pin):
         FROM {quoted(table)} t LEFT JOIN checked h
           ON t.collection_id = h.collection_id AND t.source_sha256 = h.source_sha256
           AND t.source_authority = h.source_authority AND t.filing_header_record_id = h.header_record_id"""
+
+
+_SHARED_COLUMNS = {
+    "target_table": "The typed FEC table whose observation this row is about.",
+    "target_record_id": "That observation's record_id; with target_table, the row's key.",
+    "replacement_mode": "Always unknown: amendment replacement is not inferred.",
+    "membership_completeness": "Always unqualified.",
+    "current_record_status": "Always unqualified: no current-record selection is made.",
+}
+HEADER_ASSOCIATION_COLUMNS = {
+    **_SHARED_COLUMNS,
+    "association_policy_version": "Version of the header association rule applied here.",
+    "association_record_id": "The single fec_filing_header_associations row applied; NULL when none or several.",
+    "header_association_policy_version": "That row's own policy version; NULL when none or several.",
+    "header_association_status": "That row's own association status; NULL when none or several.",
+    "filing_key": "The header row's resolved filing key, kept only when that single row is supported and its locator "
+                  "matches the observation's; NULL otherwise.",
+    "association_status": "resolved_native_filing_key, or the unresolved_* reason: header association absent or "
+                          "ambiguous, header policy version or semantics, locator mismatch, or the header row's own "
+                          "unresolved status.",
+}
+NUMBER_ASSOCIATION_COLUMNS = {
+    **_SHARED_COLUMNS,
+    "policy_version": "Version of the native-file-number association rule.",
+    "source_generation_pin": "The selected source-generation digest this association is bound to.",
+    "association_basis": "Always native-file-number.",
+    "association_status": "resolved_native_filing_key, or the unresolved_* reason the rule stopped at (source authority, "
+                          "namespace, namespace evidence, file number, target retained, ambiguous or conflicting target, "
+                          "filer identity).",
+    "referenced_filing_key": "The filing key the file number names (urn:fec:filing:...), before resolution.",
+    "filing_key": "referenced_filing_key when association_status is resolved_native_filing_key; NULL otherwise.",
+    "namespace_evidence_sha256": "The namespace definition witness digest bound for this source namespace; NULL when "
+                                 "none was supplied.",
+    "report_number_raw": "The file number as filed in the source row.",
+    "header_record_id": "Always NULL here: header associations are the *_filing_associations views.",
+    "header_locator_json": "Always NULL here.",
+    "request_url": "Always NULL here: the file-number route uses no API URL witness.",
+    "resolved_url": "Always NULL here.",
+    "filing_observation_count": "Number of fec_filings observations under the referenced key; 0 when none.",
+    "filing_observation_ids": "record_ids of those observations, sorted.",
+}

@@ -40,14 +40,25 @@ def registrations(p):
 ENTITY_VIEWS = (
     SQLView('uei_identifiers', {'sam_entities': SAM_REQUIRED, 'usaspending_recipients': RECIPIENT_REQUIRED},
             identifiers, 'Distinct literal UEIs per source namespace. Shape checks do not establish identity; '
-            'the source remains visible rather than merging provider observations.', ('source_namespace', 'uei')),
+            'the source remains visible rather than merging provider observations.', ('source_namespace', 'uei'),
+            column_descriptions={
+                'uei': 'Literal 12-character UEI as the named source spells it; one row per source namespace holding it.',
+                'source_namespace': 'Which source holds the UEI: sam or usaspending.',
+            }),
     SQLView('recipient_sam_entities', {'sam_entities': SAM_REQUIRED, 'usaspending_recipients': RECIPIENT_REQUIRED},
             recipient_entities, 'One row per held spending recipient, enriched only with the count of matching SAM '
             'registrations. Amounts, provider IDs, levels, DUNS and observation dates stay on the original recipient '
             'row. No first registration is selected and parent/child amounts must not be summed as disjoint.',
-            ('recipient_id',)),
+            ('recipient_id',),
+            column_descriptions={
+                'entity_status': 'found when at least one SAM registration carries the recipient UEI, missing when none, '
+                                 'unsupported when the UEI is not 12 alphanumerics.',
+                'registration_count': 'Number of sam_entities rows with this UEI; NULL when none.',
+            }),
     SQLView('sam_uei_registrations', {'sam_entities': SAM_REQUIRED}, registrations,
             'Literal UEI to native EFT registration key. Multiple registrations remain separate; NULL EFT is not '
             'rewritten to an empty identifier. Join monetary rows to recipient_sam_entities instead.',
-            ('uei', 'entity_eft_indicator')),
+            ('uei', 'entity_eft_indicator'),
+            column_descriptions={'identifier_status': 'valid_shape when the UEI is 12 alphanumerics, else unsupported; '
+                                                      'a shape check, not registration validity.'}),
 )

@@ -47,18 +47,33 @@ def version_endpoints(p):
     return ' UNION ALL '.join(parts)
 
 
+_ENDPOINT_COLUMNS = {
+    'endpoint_side': 'Which end of the diff this row resolves: from (the earlier printing) or to (the later); both '
+                     'ends of one diff are separate rows.',
+    'endpoint_version_code': "This end's version code, copied from from_version_code or to_version_code.",
+    'endpoint_source': "This end's provider source (govinfo or congress), copied from from_source or to_source.",
+}
+
 DIFF_VIEWS = (
     SQLView('section_diff_version_endpoints', {
         'section_diffs': (*DIFF_KEYS,'engine_name','engine_version','engine_revision','computed_at'),
         'bill_versions': ('bill_id','version_code','source','sha256','resolved_url','observed_at'),
     }, version_endpoints, 'Both complete provider-specific version endpoints, with the original diff engine '
        'name/version/revision and every matching version digest and source URL. Duplicates remain ambiguous; '
-       'recorded digest presence does not verify retained bytes.', (*DIFF_KEYS,'endpoint_side')),
+       'recorded digest presence does not verify retained bytes.', (*DIFF_KEYS,'endpoint_side'),
+       column_descriptions={**_ENDPOINT_COLUMNS,
+           'candidate_versions_json': 'JSON list of every bill_versions row matching this end (sha256, resolved_url, '
+                                      'observed_at); more than one means ambiguous.'}),
 
     SQLView('section_diff_endpoints', {
         'section_diff_items': (*DIFF_KEYS,'seq','from_element_id','to_element_id','from_text_sha256','to_text_sha256'),
         'bill_sections': ('bill_id','version_code','source','element_id','body_sha256'),
     }, endpoints, 'Each diff item has independent from/to endpoints on bill, version code, provider source and '
        'element ID. Added/removed missing endpoints remain unsupported, not invented sections. Target existence '
-       'and exact body-digest agreement are separate; repeated parent keys are ambiguous.', (*DIFF_KEYS,'seq','endpoint_side')),
+       'and exact body-digest agreement are separate; repeated parent keys are ambiguous.', (*DIFF_KEYS,'seq','endpoint_side'),
+       column_descriptions={**_ENDPOINT_COLUMNS,
+           'endpoint_element_id': "This end's section element id; NULL on an added or removed side.",
+           'endpoint_text_sha256': 'The text digest the diff recorded for this end.',
+           'text_digest_status': 'matches or mismatch when exactly one target section exists and both digests are '
+                                 'present; ambiguous for repeated targets; unavailable otherwise.'}),
 )

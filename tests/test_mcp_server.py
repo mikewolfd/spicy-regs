@@ -89,7 +89,7 @@ def test_discovery_reports_actual_parquet_schema_and_dictionary_caveats(tmp_path
     sources = _tool_data(server, "list_sources", {})
     declared = mcp_server._table_metadata()["org_committee_links"]
     assert sources["tables"] == [
-        {"table": "org_committee_links", "label": declared["label"], "coverage": declared["kind"]}
+        {"table": "org_committee_links", "label": declared["label"], "coverage": declared["kind"], "rows": None}
     ]
     assert "fec_committees" in sources["unavailable_tables"]
 

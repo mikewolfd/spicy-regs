@@ -39,12 +39,26 @@ def dated_parties(p):
         ) m ON TRUE"""
 
 
+COLUMNS = {
+    'source_affiliation_count': 'Number of member_party_affiliations intervals held for this member and term, usable or not.',
+    'unusable_interval_count': 'Intervals with an absent, invalid or inverted start or end date; they never match a vote day.',
+    'dated_party': 'The party of the single interval containing vote_day (start <= vote_day < end); NULL when none or several match.',
+    'party_status': 'source_interval when exactly one interval states a party, ambiguous when several match, unknown '
+                    'when no interval covers the day.',
+    'affiliation_candidates_json': 'JSON list of every matching interval with its capture digest, positions, dates, '
+                                   'source path and observed_at.',
+}
+
 AFFILIATION_VIEWS = (
     SQLView('member_vote_party_affiliations', {
         'member_vote_terms': ('vote_id','member_key','bioguide_id','term_index','vote_day'),
         'member_party_affiliations': AFFILIATION_FIELDS,
     }, dated_parties, 'One row per held vote/member position. Native party intervals use start <= vote_day < end; '
        'missing/invalid end dates never mean open-ended. Gaps stay unknown, overlaps or multiple captures stay '
-       'ambiguous, and no latest-capture or term-level party fallback is chosen. Candidate JSON retains capture '
-       'digests and source occurrence positions.', ('vote_id','member_key')),
+       'ambiguous, and no latest-capture or term-level party fallback is chosen. The crosswalk records an interval '
+       'only for a member whose party changed within a term, so most positions read unknown/missing here. For the '
+       'party the roll-call file states on the vote day, join member_votes.party on (vote_id, member_key): the '
+       "publisher's own statement, not an inference; members.current_term_party is the latest term's party, undated. "
+       'Candidate JSON retains capture digests and source occurrence positions.', ('vote_id','member_key'),
+       column_descriptions=COLUMNS),
 )

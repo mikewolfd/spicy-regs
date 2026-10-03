@@ -52,7 +52,10 @@ def test_selected_description_carries_evidence_once_without_changing_pinned_stat
         expected = relationships[name]
         description = _tool_data(mcp, "describe_table", {"table": name})
         assert description["available"] is available
-        assert description["metadata"] == expected["metadata"]
+        # Per-column meanings and lineage feed the column list, not the metadata block.
+        assert description["metadata"] == {
+            k: v for k, v in expected["metadata"].items() if k not in ("column_descriptions", "column_lineage")
+        }
         assert "metadata" not in description["relationship"]
         assert description["relationship"]["status"] == expected["status"]
         assert description["relationship"]["reason"] == expected["reason"]
