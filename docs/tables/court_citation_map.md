@@ -6,9 +6,9 @@
 
 Which court opinion cites which, and how often, as CourtListener's citator resolved it. Both ids are opinion ids, not decision ids: join each to court_opinions.opinion_id, then court_opinions.cluster_id to court_opinion_clusters, to ask what cites a decision or which decisions are cited most. Rebuilt whole from each quarterly export. All columns are VARCHAR.
 
-**Coverage.** Not a range. The complete 2026-06-30 CourtListener citation-map export: citing/cited opinion pairs, each unique as the publisher's schema requires, with no NULL depth. Only the publisher's surrogate row id is dropped. Through court_opinions of the same edition, all but 3,758 citing ids and one cited id resolved on 2026-09-22. *(measured 2026-09-22)*
+**Coverage.** Not a range. The complete 2026-06-30 CourtListener citation-map export: citing/cited opinion pairs, each unique as the publisher's schema requires, with no NULL depth. Only the publisher's surrogate row id is dropped. Citing and cited ids resolve through court_opinions of the same edition except a small residue (see data_quality). *(measured 2026-09-22)*
 
-**Data quality.** The edges are the publisher's automated citation resolution, not a reviewed citator: citations it could not resolve are absent, and depth counts mentions, not treatment (followed, distinguished or overruled are not recorded). Several opinions of one decision each carry their own edges, so count distinct clusters, not rows, when ranking decisions.
+**Data quality.** On 2026-09-22 all but 3,758 citing ids and one cited id resolved through court_opinions of the same edition. The edges are the publisher's automated citation resolution, not a reviewed citator: citations it could not resolve are absent, and depth counts mentions, not treatment (followed, distinguished or overruled are not recorded). Several opinions of one decision each carry their own edges, so count distinct clusters, not rows, when ranking decisions.
 
 - **Parquet file:** `court_citation_map.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.

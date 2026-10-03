@@ -4,9 +4,9 @@
 
 **Court decisions and their opinion groups**
 
-Decision metadata from CourtListener opinion-clusters bulk data and opinion-search catch-up. cluster_id joins court_opinions.cluster_id (and through it the citation map and parentheticals); cl_docket_id joins court_dockets.cl_docket_id where that separately scoped docket table contains the case. Court identity comes from a bulk docket map or a search result; jurisdiction classification uses CourtListener's court reference data. This table does not hold individual opinion bodies. All columns are VARCHAR; native numeric and boolean spellings are strings.
+Decision metadata from CourtListener opinion-clusters bulk data and opinion-search catch-up. cluster_id joins court_opinions.cluster_id (and through it the citation map and parentheticals); cl_docket_id joins court_dockets.cl_docket_id only where both tables hold the same publisher docket object: an appellate decision can name a scraper-created docket while court_dockets holds the RECAP one, so match on the docket number when the id does not join. Court identity comes from a bulk docket map or a search result; jurisdiction classification uses CourtListener's court reference data. This table does not hold individual opinion bodies. All columns are VARCHAR; native numeric and boolean spellings are strings.
 
-**Coverage.** Not a range. The complete 2026-06-30 CourtListener opinion-clusters export, every mapped source field checked against the original export; the court fields agree with the same-edition docket map and court reference data. A search catch-up adds every cluster whose id is above the export's highest, whatever its filing date; a correction to an exported cluster arrives with the next export. Opinion bodies and broader historical coverage are separate. See docs/research/fork-output-ledger-2026-09-21.md and receipt join-gaps-2026-09-26/i/. *(measured 2026-09-22)*
+**Coverage.** Not a range. The complete 2026-06-30 CourtListener opinion-clusters export, every mapped source field checked against the original export; the court fields agree with the same-edition docket map and court reference data. A search catch-up adds every cluster whose id is above the export's highest, whatever its filing date; a correction to an exported cluster arrives with the next export. Opinion bodies and broader historical coverage are separate. Per-court gaps are the publisher's: cadc has no unpublished cluster between 2001-04 and 2020-07. See docs/research/fork-output-ledger-2026-09-21.md and receipt join-gaps-2026-09-26/i/. *(measured 2026-09-22)*
 
 **Data quality.** Bulk and search records expose different fields. ingest_source identifies the selected row's route; unavailable fields are NULL and metadata empty strings are normalized to NULL. A search row never replaces a bulk row of the same export, whose ids it lies above, and a later export's bulk row replaces it. Opinion search does not index RECAP trial-court clusters, so one created after the export arrives only with the next export. Missing court scope is unknown, not proof of a non-federal court. court_dockets is a narrower selection, so unmatched docket IDs are expected. Names, judge strings and citations do not establish cross-source identity.
 
@@ -18,7 +18,7 @@ Decision metadata from CourtListener opinion-clusters bulk data and opinion-sear
 | Column | Type | Description |
 | --- | --- | --- |
 | `cluster_id` | `VARCHAR` | CourtListener opinion-cluster ID, the decision-level primary/dedup key. Join to court_opinions.cluster_id and court_citations.cluster_id; not an opinion_id. |
-| `cl_docket_id` | `VARCHAR` | CourtListener docket ID, renamed from docket_id. Join to court_dockets.cl_docket_id where present; unrelated to regulations.gov docket_id. |
+| `cl_docket_id` | `VARCHAR` | CourtListener docket ID, renamed from docket_id. Joins court_dockets.cl_docket_id only where both tables hold the same publisher docket object (an appellate case often has two: the court-website scraper's, named here, and RECAP's, held there), so match on the docket number when the id does not join; unrelated to regulations.gov docket_id. |
 | `court_id` | `VARCHAR` | CourtListener court identifier from the docket map or search record; NULL when unresolved. |
 | `court_jurisdiction` | `VARCHAR` | CourtListener jurisdiction code from the court reference lookup; NULL when unavailable. |
 | `court_is_federal` | `VARCHAR` | Derived federal classification from court jurisdiction: t or f as a string; NULL when the classification is unavailable. |
@@ -30,7 +30,7 @@ Decision metadata from CourtListener opinion-clusters bulk data and opinion-sear
 | `judges` | `VARCHAR` | Source judge text; names are not normalized person identifiers. |
 | `nature_of_suit` | `VARCHAR` | Source nature-of-suit text when supplied; this cluster table is not limited to the docket rollup's 899 query. |
 | `precedential_status` | `VARCHAR` | CourtListener's source precedential-status value; this table does not independently assess legal authority. |
-| `citation_count` | `VARCHAR` | Source citation-count value at observation time, stored as a string. |
+| `citation_count` | `VARCHAR` | The publisher's count of citing opinions at observation time, as a string: opinions, not decisions, and only decisions carrying a reporter citation are ever cited. |
 | `scdb_id` | `VARCHAR` | Supreme Court Database identifier as supplied by CourtListener, when available. |
 | `scdb_decision_direction` | `VARCHAR` | Source Supreme Court Database decision-direction code; retained without interpretation. |
 | `scdb_votes_majority` | `VARCHAR` | Source Supreme Court Database majority-vote count, stored as a string. |

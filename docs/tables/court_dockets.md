@@ -6,7 +6,7 @@
 
 One row per court docket of a suit challenging federal agency action under the Administrative Procedure Act (nature of suit 899), mostly in district courts, from CourtListener (`courtlistener.com`: its v4 search API and its bulk docket edition) by `build_courtlistener`. It is the litigation counterpart to the rulemakings in `dockets`/`documents`, not all federal litigation: petitions straight to a court of appeals, such as challenges to FCC orders under the Hobbs Act, are largely absent. For court decisions, including appeals and Supreme Court cases, search `court_opinion_clusters` by `case_name`. There is no RIN, Federal Register or agency identifier on a court docket: the defendant agency appears only as text in `case_name` and `parties_json`, so a name search finds candidates, not confirmed links, and `cause` names the statute invoked. Primary / dedup key is `cl_docket_id`. All columns are stored as VARCHAR; array fields are JSON strings.
 
-**Coverage.** True range with a density caveat: dockets filed from 1992 on, but only the nature-of-suit 899 (Administrative Procedure Act) selection, not the full docket record. Party names of dockets from the bulk edition are read a bounded slice per run; until read, parties_json is NULL. *(measured 2026-09-28)*
+**Coverage.** True range with a density caveat: dockets filed from 1992 on, but only the nature-of-suit 899 (Administrative Procedure Act) selection, not the full docket record. Party names of dockets from the bulk edition are read a bounded slice per run; until read, parties_json is NULL. Recall against the publisher's nature-of-suit coding is unmeasured. *(measured 2026-09-28)*
 
 - **Parquet file:** `court_dockets.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.

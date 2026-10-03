@@ -26,7 +26,7 @@ Every CourtListener opinion's decision, type and author, without its text. It is
 | `joined_by_str` | `VARCHAR` | Judges joining the opinion, as the publisher's source text names them. |
 | `page_count` | `VARCHAR` | Page count of the original document when known, as text. |
 | `sha1` | `VARCHAR` | Publisher's SHA-1 of the original document; not a SpicyRegs capture digest. |
-| `download_url` | `VARCHAR` | Where the publisher obtained the original document, when recorded; no current accessibility claim. |
+| `download_url` | `VARCHAR` | Where the publisher obtained the original document, when recorded; no current accessibility claim. For court-website opinions the file name usually carries the lead docket number (a consolidated case lists two), the fallback key to court_dockets.docket_number. |
 | `local_path` | `VARCHAR` | Path of the original document in CourtListener's storage, not a SpicyRegs file. |
 | `extracted_by_ocr` | `VARCHAR` | Publisher flag for text extracted by OCR (`t` or `f`). |
 | `date_created` | `VARCHAR` | Timestamp the publisher created the opinion record. |
