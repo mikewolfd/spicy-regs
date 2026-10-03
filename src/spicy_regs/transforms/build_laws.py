@@ -45,7 +45,9 @@ outcome (``unavailable`` only for a ``404``/``410`` from the exact locator),
 except that a failed attempt never replaces a validated prior row; a law the
 cap does not reach keeps its prior row, or gets its list row with
 ``not_requested``. A classification page read this run replaces every prior
-row for its Congress and session. Table III keeps one checkpoint per Congress:
+row for its Congress and session; one the reader refuses, or OLRC answers
+``401``/``403``, keeps them, and the run journals it as
+:data:`CLASSIFICATION_REFUSED`. Table III keeps one checkpoint per Congress:
 the derivation rule, the bulk member's digest and release point, and each act's
 shaped-row digest. OLRC states no ``Last-Modified``, ``ETag`` or
 ``Content-Length`` for the zip, on ``GET`` or ``HEAD``, so only its bytes can
@@ -57,12 +59,13 @@ the retirement guard or the reader refuses, publishes nothing for Table III and
 keeps every checkpoint, while ``laws`` and ``law_code_sections`` publish as
 usual; a refusal is journaled, and the nightly
 ``scripts/check_source_refusals.py`` fails on it. A ``401``/``403`` from the
-list or PLAW route aborts the run. Table III's is a journaled refusal with
-reason :data:`ACCESS_REFUSED` (the route is keyless, so it is the publisher
-blocking the read, as Akamai did on 2026-10-02 and -03), after which the laws
-rollup publishes the family and then fails the run
-(:func:`table3_access_refused`). Needs an api.data.gov key for the list route;
-the PLAW and OLRC routes are keyless.
+list or PLAW route aborts the run. OLRC's is a journaled refusal with reason
+:data:`ACCESS_REFUSED` (the routes are keyless, so it is the publisher blocking
+the read, as Akamai did for the Table III zip on 2026-10-02 and -03); when it
+blocks Table III, or leaves no classification table read, the laws rollup
+publishes the family and then fails the run (:func:`olrc_access_refused`).
+Needs an api.data.gov key for the list route; the PLAW and OLRC routes are
+keyless.
 """
 
 from __future__ import annotations
@@ -70,6 +73,8 @@ from __future__ import annotations
 import re
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping
+from datetime import UTC, datetime
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple, Protocol
 
@@ -94,6 +99,7 @@ from spicy_docs.sources.govinfo.uslm_acquisition import (
 )
 from spicy_docs.sources.uscode import Table3Page, Table3Record, UsCodeSourceError, iter_table3_acts
 from spicy_docs.sources.uscode.acquisition import UsCodeAcquirer, UsCodeAcquisitionBudget
+from spicy_docs.sources.uscode.classification import CLASSIFICATION_INDEX_URL
 from spicy_docs.transport.captured import attached_capture
 from spicy_docs.transport.credentials import CredentialRefusedError, scrub_credential
 
@@ -172,9 +178,13 @@ CAPTURED = "captured"
 VALIDATED = ("captured", "captured_partial")
 #: The one classification order read; see the module docstring.
 TABLE_ORDER = "public-law"
-#: The ``table3-bulk-refused`` reason for a 401/403 from the keyless OLRC route: a blocked read, which the laws
-#: rollup fails the run on after publishing (:func:`table3_access_refused`).
+#: The ``table3-bulk-refused`` and ``classification-refused`` reason for a 401/403 from a keyless OLRC route: a
+#: blocked read, which the laws rollup fails the run on after publishing (:func:`olrc_access_refused`).
 ACCESS_REFUSED = "access-refused"
+#: The journal event naming each classification request refused this run, beside the session tables read.
+CLASSIFICATION_REFUSED = "classification-refused"
+#: The OLRC reads a 401/403 can block, by the journal event that records each, as the failed run names them.
+OLRC_READS = {CLASSIFICATION_REFUSED: "the classification tables", "table3-bulk-refused": "Table III"}
 
 
 class HeldLaw(NamedTuple):
@@ -451,35 +461,45 @@ def _law_rows(
 
 def _classification_rows(olrc: OlrcSource, congresses: tuple[int, ...],
                          evidence: CaptureEvidence | None = None, evaluated: set | None = None) -> list[dict]:
-    """Every line of each public-law-order session table the index links for a scoped Congress."""
-    try:
-        acquired_index = olrc.acquire_classification_index()
-        if evidence:
-            evidence.capture(acquired_index.capture, stage="classification:index")
-        index = acquired_index.result
-    except (UsCodeSourceError, httpx.HTTPError, ConnectionError) as error:
-        if evidence:
-            evidence.refusal(error, stage="classification:index")
-        logger.warning(
-            "Laws: classification index not established — no session table read this run: {}", _transport_error(error)
-        )
-        return []
-    linked = [link for link in index.tables if link.order == TABLE_ORDER and link.congress in congresses]
-    unlinked = sorted(set(congresses) - {link.congress for link in linked})
-    if unlinked:
-        logger.info("Laws: the classification index links no table for Congress {}", unlinked)
-    rows: list[dict] = []
-    for link in linked:
+    """Every line of each public-law-order session table the index links for a scoped Congress.
+
+    A request the reader refuses (``page-refused``: OLRC answered its classification pages with a maintenance
+    page and status 200 on 2026-10-02 and -03) or OLRC answers 401/403 (:data:`ACCESS_REFUSED`)
+    reads nothing, so every row of its session stands; the run journals one :data:`CLASSIFICATION_REFUSED`
+    event naming each refused request beside the tables it did read. A transport failure is only logged, and
+    the next run retries it.
+    """
+    read: list[str] = []
+    refused: list[dict[str, object]] = []
+
+    def acquire(request: Callable[[], Any], url: str, stage: str) -> Any | None:
         try:
-            acquired = olrc.acquire_classification_table(link.congress, link.session, order=TABLE_ORDER)
-        except (UsCodeSourceError, httpx.HTTPError, ConnectionError) as error:
+            acquired = request()
+        except (UsCodeSourceError, CredentialRefusedError, httpx.HTTPError, ConnectionError) as error:
             if evidence:
-                evidence.refusal(error, stage="classification:" + link.href)
-            logger.warning("Laws: classification table {} not established: {}", link.href, _transport_error(error))
-            continue
-        table = acquired.result
+                evidence.refusal(error, stage=stage)
+            logger.warning("Laws: classification {} not established, its rows stand: {}", url, _transport_error(error))
+            if isinstance(error, (UsCodeSourceError, CredentialRefusedError)):
+                refused.append(_refused_request(url, error))
+            return None
         if evidence:
-            evidence.capture(acquired.capture, stage="classification:" + link.href)
+            evidence.capture(acquired.capture, stage=stage)
+        return acquired
+
+    rows: list[dict] = []
+    linked = []
+    index = acquire(olrc.acquire_classification_index, CLASSIFICATION_INDEX_URL, "classification:index")
+    if index is not None:
+        linked = [link for link in index.result.tables if link.order == TABLE_ORDER and link.congress in congresses]
+        if unlinked := sorted(set(congresses) - {link.congress for link in linked}):
+            logger.info("Laws: the classification index links no table for Congress {}", unlinked)
+    for link in linked:
+        acquired = acquire(partial(olrc.acquire_classification_table, link.congress, link.session, order=TABLE_ORDER),
+                           link.url, "classification:" + link.href)
+        if acquired is None:
+            continue
+        read.append(link.url)
+        table = acquired.result
         if evaluated is not None:
             evaluated.add((str(table.congress), str(table.session)))
         observed_at = acquired.capture.observed_at
@@ -491,7 +511,20 @@ def _classification_rows(olrc: OlrcSource, congresses: tuple[int, ...],
             table.stated_laws,
             table.prepared_date,
         )
+    if refused and evidence:
+        evidence.event(CLASSIFICATION_REFUSED, congresses=list(congresses), read=read, refused=refused)
     return rows
+
+
+def _refused_request(url: str, error: Exception) -> dict[str, object]:
+    """One refused classification request as journaled: URL, reason, the reader's or transport's own words, and
+    the status, time and digest of the response the reader refused. A 401/403 keeps no response (its status is
+    in the transport's message), so its time is when the refusal was caught."""
+    capture = attached_capture(error)
+    answered = ({"status_code": capture.status_code, "observed_at": capture.observed_at, "sha256": capture.sha256}
+                if capture else {"observed_at": datetime.now(UTC).isoformat()})
+    return {"url": url, "reason": ACCESS_REFUSED if isinstance(error, CredentialRefusedError) else "page-refused",
+            **answered, "error_type": type(error).__name__, "message": _transport_error(error)[:500]}
 
 
 def _public_law(key: str | None) -> tuple[int, int] | None:
@@ -603,7 +636,7 @@ def _table3_rows(
     except CredentialRefusedError as error:
         # This route is keyless, so a 401/403 is the publisher blocking the read (Akamai, 2026-10-02 and -03),
         # not a revoked credential: nothing is published as absence, the laws family publishes, and the rollup
-        # fails the run after publishing (:func:`table3_access_refused`) so the block is not hidden.
+        # fails the run after publishing (:func:`olrc_access_refused`) so the block is not hidden.
         if evidence:
             evidence.refusal(error, stage="table3:bulk")
         return refuse(ACCESS_REFUSED, error_type=type(error).__name__, message=_transport_error(error)[:500])
@@ -669,11 +702,13 @@ def _table3_rows(
     return Table3Read(rows, retiring, bulk.release_point)
 
 
-def table3_access_refused(evidence: CaptureEvidence) -> bool:
-    """Whether this run journaled its Table III read as :data:`ACCESS_REFUSED`.
+def olrc_access_refused(evidence: CaptureEvidence) -> list[str]:
+    """The OLRC reads this run's 401/403 blocked, named as in :data:`OLRC_READS`, in the order the run made them.
 
-    Read from the run's own journal so the rollup can publish the family first and fail the run after: an exception
-    from the build would publish nothing, which is what hid the 2026-10-02 and -03 blocks behind a red run.
+    Table III is blocked when its one request was :data:`ACCESS_REFUSED`; the classification tables when that left
+    no session table read, so a refusal on only some of them is that session's gap, journaled but not failing the
+    run. Read from the run's own journal so the rollup can publish the family first and fail the run after: an
+    exception from the build would publish nothing, which is what hid the 2026-10-02 and -03 blocks behind a red run.
     """
     import json
 
@@ -681,11 +716,16 @@ def table3_access_refused(evidence: CaptureEvidence) -> bool:
 
     journal = evidence.artifact_dir / JOURNAL
     if not journal.exists():
-        return False
-    return any(
-        event.get("event") == "table3-bulk-refused" and event.get("reason") == ACCESS_REFUSED
-        for event in map(json.loads, journal.read_text().splitlines())
-    )
+        return []
+    return [OLRC_READS[event["event"]] for event in map(json.loads, journal.read_text().splitlines())
+            if event.get("event") in OLRC_READS and _blocked(event)]
+
+
+def _blocked(refusal: Mapping[str, Any]) -> bool:
+    """Whether a journaled OLRC refusal is a 401/403 that left its read with nothing."""
+    if refusal["event"] == CLASSIFICATION_REFUSED:
+        return not refusal["read"] and any(request["reason"] == ACCESS_REFUSED for request in refusal["refused"])
+    return refusal.get("reason") == ACCESS_REFUSED
 
 
 def _journal_retired(prior_file: Path | None, read: Table3Read, scratch_dir: Path,

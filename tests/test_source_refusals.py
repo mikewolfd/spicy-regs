@@ -1,4 +1,4 @@
-"""A refused Table III bulk read is loud: the laws family still publishes, and the nightly check fails on it.
+"""A refused OLRC read is loud: the laws family still publishes, and the nightly check fails on it.
 
 End to end over the real pieces: ``build_laws`` journals the refusal, the rollup's
 generation and its source evidence are published into an in-memory bucket, and
@@ -11,6 +11,7 @@ from __future__ import annotations
 import httpx
 import pyarrow.parquet as pq
 import pytest
+from spicy_docs.transport.credentials import CredentialRefusedError
 
 from scripts import check_source_refusals as check
 from spicy_regs.data_dictionary import expected_schemas
@@ -19,7 +20,16 @@ from spicy_regs.source_evidence import CaptureEvidence
 from spicy_regs.sources import publication as pub
 from tests.generation_fakes import Store
 from tests.test_incremental_rollups import no_download
-from tests.test_laws import LISTED_119, MOVED, StubListingReader, StubOlrc, StubUslm, _without
+from tests.test_laws import (
+    ACCESS_REFUSAL,
+    LISTED_119,
+    MOVED,
+    StubListingReader,
+    StubOlrc,
+    StubUslm,
+    _maintenance_refusal,
+    _without,
+)
 
 BASE = "https://data.test"
 
@@ -91,6 +101,21 @@ def test_a_refused_bulk_read_fails_the_nightly_check_and_blocks_nothing_else(tmp
             assert "is not a fulldump file" in out, "the reader's own reason reaches the alert"
     else:
         assert "OK: laws generation" in out and "No current generation journals a refused source read." in out
+
+
+@pytest.mark.parametrize(
+    ("error", "reason"),
+    [(_maintenance_refusal, "page-refused"), (lambda: CredentialRefusedError(ACCESS_REFUSAL), "access-refused")],
+    ids=["maintenance-page", "access-refused"],
+)
+def test_a_refused_classification_read_fails_the_nightly_check(tmp_path, monkeypatch, capsys, error, reason):
+    """law_code_sections keeps its rows when OLRC's index is refused, and the check names the refused URL."""
+    rows = _published(tmp_path, monkeypatch, StubOlrc(index_error=error()), after=StubOlrc())
+    assert rows["law_code_sections.parquet"] == 9, "the held rows stand"
+    assert check.main(["--base-url", BASE]) == 1
+    out = capsys.readouterr().out
+    assert "laws: classification-refused at" in out and f'"reason": "{reason}"' in out
+    assert '"url": "https://uscode.house.gov/classification/tables.shtml"' in out
 
 
 def test_a_transport_failure_is_retried_next_run_not_alerted(tmp_path, monkeypatch, capsys):

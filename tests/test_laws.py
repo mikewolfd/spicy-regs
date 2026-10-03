@@ -31,7 +31,11 @@ from spicy_docs.sources.govinfo.uslm import (
 )
 from spicy_docs.sources.govinfo.uslm_acquisition import UslmSourceUnavailableError
 from spicy_docs.sources.uscode import UsCodeSourceError, parse_table3_page, read_table3_bulk_archive
-from spicy_docs.sources.uscode.classification import parse_classification_index, parse_classification_table
+from spicy_docs.sources.uscode.classification import (
+    CLASSIFICATION_INDEX_URL,
+    parse_classification_index,
+    parse_classification_table,
+)
 from spicy_docs.transport.captured import CapturedBodyResponse, attach_capture
 from spicy_docs.transport.credentials import CredentialRefusedError
 
@@ -63,6 +67,10 @@ BULK_EXCERPT = (FIXTURES / "table3-bulk-119-73-excerpt.xml").read_bytes()
 OBSERVED_AT = "2026-09-19T00:00:00Z"
 #: The three listed rows plus the one law the USLM fixture states, as one page.
 LISTED_119 = [*LIST_PAGE["bills"], LAW_119_1]
+#: The public-law-order session tables the index fixture links, in its order: 119-2, then 119-1.
+PUBLIC_LAW_TABLES = [link.url for link in parse_classification_index(INDEX_BYTES).tables if link.order == "public-law"]
+#: What OLRC's keyless routes raise on a 401/403 (the transport's own wording).
+ACCESS_REFUSAL = "Body source answered HTTP 403; stopping acquisition"
 
 
 def _Capture(body: bytes, observed_at: str = OBSERVED_AT) -> CapturedBodyResponse:
@@ -132,15 +140,18 @@ class StubOlrc:
     """Serves the classification fixtures and one Table III bulk zip, read through the wheel's own bulk reader.
 
     ``bulk`` is the zip's member, or an exception every bulk read raises; ``member_name`` renames the member.
+    ``table_errors`` maps a ``(congress, session)`` to what its table read raises; only 119-2 has a fixture, so
+    any other session table is a transport failure, which journals nothing, unless mapped.
     """
 
     def __init__(self, *, bulk: bytes | Exception = BULK_EXCERPT, release_point="119-73", observed_at=OBSERVED_AT,
-                 index_error=None, member_name=None):
+                 index_error=None, table_errors=None, member_name=None):
         self.bulk = bulk
         self.release_point = release_point
         self.member_name = member_name
         self.observed_at = observed_at
         self.index_error = index_error
+        self.table_errors = table_errors or {}
         self.tables: list[tuple[int, int, str]] = []
         self.bulk_reads = 0
 
@@ -151,8 +162,10 @@ class StubOlrc:
 
     def acquire_classification_table(self, congress, session, *, order="public-law", max_bytes=None, max_rows=65536):
         self.tables.append((congress, session, order))
+        if (congress, session) in self.table_errors:
+            raise self.table_errors[congress, session]
         if (congress, session) != (119, 2):
-            raise UsCodeSourceError("stub: not captured")
+            raise ConnectionError("stub: not captured")
         table = parse_classification_table(TABLE_BYTES, congress=congress, session=session, order=order)
         return SimpleNamespace(result=table, capture=_Capture(TABLE_BYTES))
 
@@ -212,7 +225,7 @@ def test_the_classification_leg_reads_the_public_law_order_the_index_links(tmp_p
     _, sections, _, _ = _build(tmp_path, olrc=olrc)
 
     # The index links both sessions of the 119th in both orders; only the
-    # public-law order is asked for, and the 1st session's refusal is that
+    # public-law order is asked for, and the 1st session's failure is that
     # table's gap, not the run's.
     assert olrc.tables == [(119, 2, "public-law"), (119, 1, "public-law")]
     rows = _rows(sections)
@@ -665,27 +678,173 @@ def test_an_access_refusal_on_table_iii_publishes_the_rest_and_journals_it(tmp_p
     assert refusal["credential_refused"] is True
 
 
-def test_the_laws_rollup_publishes_then_fails_the_run_on_a_table_iii_access_refusal(tmp_path, scoped, monkeypatch):
-    """The predicate reads the run's own journal, and the rollup raises only after ``run`` has published."""
+#: law_code_sections as the last clean read left it: both sessions, stamped 2026-09-30.
+HELD_SECTIONS = [{"congress": "119", "session": session, "seq": str(seq), "observed_at": "2026-09-30T01:34:14Z"}
+                 for session in ("1", "2") for seq in range(2)]
+
+
+#: What uscode.house.gov answered with status 200 on 2026-10-02 and -03, for the classification index and (by the
+#: 07:35Z audit) a session table: house.gov's "Under Maintenance" page, cut to its title, heading and notice (run
+#: 37105584505 retained the whole page as ``bd7439d9…``).
+MAINTENANCE_PAGE = (
+    b'<html lang="en" dir="ltr" class=" js"><head>\n    <meta charset="utf-8">\n    <title>Under Maintenance</title>\n'
+    b"  </head>\n  <body>\n  <div><h1>Site is currently under maintenance</h1>\n"
+    b"\t\t<p>The  site you requested is currently unavailable.</p>\n</div>\n</body></html>\n"
+)
+
+
+def _maintenance_refusal() -> UsCodeSourceError:
+    """The reader refusing the maintenance page served for the index, its capture attached as the acquirer does."""
+    page = CapturedBodyResponse(CLASSIFICATION_INDEX_URL, CLASSIFICATION_INDEX_URL, 200, "text/html; charset=utf-8",
+                                "2026-10-03T07:12:52.671902Z", MAINTENANCE_PAGE)
+    try:
+        parse_classification_index(page.body)
+    except UsCodeSourceError as error:
+        attach_capture(error, page)
+        return error
+    raise AssertionError("the reader read a maintenance page as the classification index")
+
+
+def _classification_run(tmp_path, olrc):
+    """Run ``olrc`` with evidence over a published law_code_sections holding both sessions: its rows and journal."""
+    from spicy_regs.source_evidence import CaptureEvidence
+
+    seed(tmp_path, "law_code_sections", HELD_SECTIONS)
+    evidence = CaptureEvidence(tmp_path, "laws")
+    _, sections, _, _ = _build(tmp_path, olrc=olrc, evidence=evidence)
+    return _rows(sections), _journal(evidence)
+
+
+def _held(rows, session="") -> set[tuple[str, str, str]]:
+    return {(r["session"], r["seq"], r["observed_at"]) for r in rows if r["session"].startswith(session)}
+
+
+@pytest.mark.parametrize(
+    ("index_error", "table_errors", "refused"),
+    [
+        (CredentialRefusedError(ACCESS_REFUSAL), None, [CLASSIFICATION_INDEX_URL]),
+        (None, {(119, 1): CredentialRefusedError(ACCESS_REFUSAL), (119, 2): CredentialRefusedError(ACCESS_REFUSAL)},
+         PUBLIC_LAW_TABLES),
+    ],
+    ids=["index", "every-session-table"],
+)
+def test_an_access_refusal_on_the_classification_leg_publishes_the_rest_and_journals_it(
+    tmp_path, scoped, index_error, table_errors, refused
+):
+    """The classification route is keyless like Table III's, so its 401/403 is a blocked read: every held
+    law_code_sections row stands, the family publishes, and each refused request is journaled by URL and time."""
+    rows, journal = _classification_run(tmp_path, StubOlrc(index_error=index_error, table_errors=table_errors))
+    assert _held(rows) == _held(HELD_SECTIONS), "every held row stands"
+    assert _by_law(tmp_path / "laws.parquet")["119-public-1"]["uslm_outcome"] == "captured"
+    (event,) = (e for e in journal if e["event"] == "classification-refused")
+    assert event["read"] == [] and [request["url"] for request in event["refused"]] == refused
+    for request in event["refused"]:
+        assert (request["reason"], request["error_type"]) == ("access-refused", "CredentialRefusedError")
+        assert request["message"] == ACCESS_REFUSAL and request["observed_at"]
+
+
+@pytest.mark.parametrize(
+    ("status", "index", "refused", "table3_reason", "blocked"),
+    [
+        (200, None, {CLASSIFICATION_INDEX_URL: "classification index does not state the expected title"},
+         "file-refused", []),
+        (200, INDEX_BYTES, dict.fromkeys(PUBLIC_LAW_TABLES, "classification table page states no table heading"),
+         "file-refused", []),
+        (403, None, {CLASSIFICATION_INDEX_URL: ACCESS_REFUSAL}, "access-refused", ["the classification tables",
+                                                                                   "Table III"]),
+    ],
+    ids=["maintenance-page-everywhere", "maintenance-page-for-the-session-tables", "403-everywhere"],
+)
+def test_olrc_s_maintenance_page_or_403_through_the_real_acquirer_is_refused_and_journaled(
+    tmp_path, scoped, status, index, refused, table3_reason, blocked
+):
+    """The publisher's states on 2026-10-02 and -03, through spicy-docs' own acquirer and readers: tables.shtml and
+    tbl119pl_2nd.htm answering 200 with a maintenance page (07:35Z audit), and the bulk zip answering 403.
+
+    A 200 that is not the page asked for is refused, never read as an empty table or a success: the classification
+    reader refuses it by its title or caption, so every held law_code_sections row stands and each refused request
+    is journaled with its URL, status, time and retained bytes, and the bulk leg refuses it by its media type. Only
+    the 403 is a blocked read that fails the run.
+    """
+    from spicy_regs.pipelines.rollups import laws as rollup
+    from spicy_regs.source_evidence import CaptureEvidence
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        if index is not None and str(request.url) == CLASSIFICATION_INDEX_URL:
+            return httpx.Response(200, headers={"Content-Type": "text/html"}, stream=httpx.ByteStream(index))
+        return httpx.Response(status, headers={"Content-Type": "text/html; charset=utf-8"},
+                              stream=httpx.ByteStream(MAINTENANCE_PAGE))
+
+    seed(tmp_path, "law_code_sections", HELD_SECTIONS)
+    evidence = CaptureEvidence(tmp_path, "laws")
+    unpaced = replace(OLRC_BUDGET, min_request_interval_seconds=0.0)
+    with olrc_acquirer(httpx.MockTransport(answer), budget=unpaced) as olrc:
+        _, sections, _, _ = _build(tmp_path, olrc=olrc, evidence=evidence)
+    assert _held(_rows(sections)) == _held(HELD_SECTIONS), "every held row stands"
+    journal = _journal(evidence)
+    (event,) = (e for e in journal if e["event"] == "classification-refused")
+    assert event["read"] == [] and {r["url"]: r["message"] for r in event["refused"]} == refused
+    for request in event["refused"]:
+        assert request["observed_at"]
+        if status == 200:
+            assert (request["reason"], request["status_code"]) == ("page-refused", 200)
+            assert request["sha256"] == "sha256:" + hashlib.sha256(MAINTENANCE_PAGE).hexdigest()
+        else:
+            assert request["reason"] == "access-refused" and "status_code" not in request
+    (bulk,) = (e for e in journal if e["event"] == "table3-bulk-refused")
+    assert bulk["reason"] == table3_reason
+    assert rollup.olrc_access_refused(evidence) == blocked
+
+
+def test_an_access_refusal_on_some_classification_requests_keeps_the_rest_of_the_leg(tmp_path, scoped):
+    """A 401/403 on one session table is that session's gap: the other session is read and replaced, the refused
+    one's rows stand, and the journal says which was which."""
+    rows, journal = _classification_run(
+        tmp_path, StubOlrc(table_errors={(119, 1): CredentialRefusedError(ACCESS_REFUSAL)})
+    )
+    assert _held(rows, "1") == _held(HELD_SECTIONS, "1"), "the refused session's rows stand"
+    assert {r["observed_at"] for r in rows if r["session"] == "2"} == {OBSERVED_AT}, "the read session is replaced"
+    (event,) = (e for e in journal if e["event"] == "classification-refused")
+    assert event["read"] == PUBLIC_LAW_TABLES[:1]
+    assert [(r["url"], r["reason"]) for r in event["refused"]] == [(PUBLIC_LAW_TABLES[1], "access-refused")]
+
+
+@pytest.mark.parametrize(
+    ("olrc", "blocked"),
+    [
+        (lambda: StubOlrc(bulk=CredentialRefusedError(ACCESS_REFUSAL)), ["Table III"]),
+        (lambda: StubOlrc(index_error=CredentialRefusedError(ACCESS_REFUSAL)), ["the classification tables"]),
+        (lambda: StubOlrc(index_error=CredentialRefusedError(ACCESS_REFUSAL),
+                          bulk=CredentialRefusedError(ACCESS_REFUSAL)), ["the classification tables", "Table III"]),
+        (lambda: StubOlrc(table_errors={(119, 1): CredentialRefusedError(ACCESS_REFUSAL)}), []),
+        (lambda: StubOlrc(index_error=_maintenance_refusal()), []),
+        (StubOlrc, []),
+    ],
+    ids=["table-iii", "classification", "both", "some-classification-requests", "maintenance-page", "clean"],
+)
+def test_the_laws_rollup_publishes_then_fails_the_run_on_an_olrc_access_refusal(
+    tmp_path, scoped, monkeypatch, olrc, blocked
+):
+    """The predicate reads the run's own journal, and the rollup raises only after ``run`` has published. A read the
+    publisher blocked fails the run; a refusal on only some classification requests, or a page the reader refused,
+    is journaled for the nightly check and does not."""
     from spicy_regs.pipelines.rollups import laws as rollup
     from spicy_regs.source_evidence import CaptureEvidence
 
     evidence = CaptureEvidence(tmp_path, "laws")
-    _build(tmp_path, olrc=StubOlrc(bulk=CredentialRefusedError("stub: 403")), evidence=evidence)
-    assert rollup.table3_access_refused(evidence) is True
-    clean = CaptureEvidence(tmp_path / "clean", "laws")
-    _build(tmp_path / "clean", evidence=clean)
-    assert rollup.table3_access_refused(clean) is False
+    _build(tmp_path, olrc=olrc(), evidence=evidence)
+    assert rollup.olrc_access_refused(evidence) == blocked
 
     published = []
     monkeypatch.setattr(rollup.RollupPipeline, "run", lambda self: published.append(self.name))
     pipeline = rollup.LawsRollup(output_dir=tmp_path, skip_upload=True)
     pipeline.source_evidence = evidence
-    with pytest.raises(RuntimeError, match="Table III"):
+    if blocked:
+        with pytest.raises(RuntimeError, match=" and ".join(blocked)):
+            pipeline.run()
+    else:
         pipeline.run()
     assert published == ["laws"], "the family went out before the run failed"
-    pipeline.source_evidence = clean
-    pipeline.run()
 
 
 def test_the_published_shapes_are_the_contracts(tmp_path, scoped):

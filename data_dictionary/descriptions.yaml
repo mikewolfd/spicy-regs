@@ -2882,8 +2882,17 @@ tables:
       A row is its position on the page (`seq`), because one line can repeat;
       a page read this run replaces every prior row for its Congress and
       session, so a line the publisher removed does not linger under a position
-      it no longer holds. Only the public-law order is read: the code-order twin
-      holds the same lines under positions that would collide with these. A
+      it no longer holds. A session not read keeps its rows, and `observed_at`
+      says when they were read. On 2026-10-02 and -03 OLRC answered its
+      classification pages with a maintenance page and status 200, which the
+      reader refuses rather than reading as an empty table. A refused page, or
+      a 401/403, is journaled as `classification-refused` with its URL, status
+      and time, and the nightly `scripts/check_source_refusals.py` fails while
+      the current laws generation holds one; a 401/403 that leaves no session
+      table read also fails the laws run after it publishes. A transport
+      failure is only retried on the next run. Only the public-law order is
+      read: the code-order twin holds the same lines under positions that
+      would collide with these. A
       Congress the index does not link — every Congress but the current one —
       gets no rows here; `table3_records` is the historical view. `action` is
       the page's column 3 verbatim, NULL where the page left it blank, which
