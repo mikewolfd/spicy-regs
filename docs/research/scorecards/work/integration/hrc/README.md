@@ -13,6 +13,23 @@ probe preserves the reviewed identifiers and requested cosponsorship actions.
 Full prose transcription, the House spread, complete source-page coverage and
 historical layouts remain open qualification work.
 
+`house_semantic_qualification.json` records a refused House observation. Its
+schema and source-key coverage passed, and direct readback matched the member
+identities and published scores. Several action marks still differed from the
+original image. The raw response remains unchanged in the private corpus;
+the refusal prevents this observation from qualifying a source snapshot.
+`house_tight_crop_qualification.json` records a later bounded success using a
+tighter image at 300 dpi: the reviewed member data, published ratings and visible
+item results match the original. These observations preserve separate scopes;
+no continuation results or full House page have been joined or qualified.
+The controlled comparison returned identical, source-matching records at medium
+and high thinking with Gemini 3.8 Flash. Retained requests confirm that only the
+thinking setting changed between those two calls. The earlier broader crop used
+medium thinking too; these observations do not show that higher thinking was
+needed to recover the reviewed facts. Google's
+[thinking guide](https://ai.google.dev/gemini-api/docs/thinking/) documents the
+model's supported levels.
+
 `capture_manifest.json` records original HTTP captures. `advertised_editions.json`
 records the original index links. `docling_diagnostic.json`, `qualification.json`
 and the independent readback files retain earlier extraction experiments;
@@ -43,6 +60,12 @@ uv run --frozen --no-sync python /path/to/probe_gemini.py \
   --output /private/hrc/new-item-probe \
   --credentials /private/config.env \
   --pages 3 --media-resolution MEDIA_RESOLUTION_HIGH --thinking-level medium
+
+uv run --frozen --no-sync python /path/to/probe_gemini_house_crop.py \
+  --source /private/hrc/118-pdf.body \
+  --output /private/hrc/new-house-probe \
+  --credentials /private/config.env \
+  --scope arizona-context --thinking-level medium
 ```
 
 The credential file uses the existing `GEMINI_API_KEY` name. The member probe

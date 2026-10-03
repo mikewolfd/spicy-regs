@@ -42,8 +42,8 @@ uv run --frozen --no-sync python ~/Work/corpora/supply-2026-09-02/receipts/score
 uv run --frozen --no-sync python ~/Work/corpora/supply-2026-09-02/receipts/scorecards-ijm-zyte-2026-10-03/verify_ijm.py
 ```
 
-The first command validates the accepted tables against the frozen schema; the
-second independently follows emitted source locations and reconciles raw array
-membership and counts. Both read retained bytes, check their hashes and write
-only to the private campaign. Synthetic parser tests are in
+Each replay validates the accepted tables against the frozen schema; its
+companion verifier independently follows emitted source locations and reconciles
+raw array membership and counts. Both read retained bytes, check their hashes and
+write only to the private campaign. Synthetic parser tests are in
 `spicy-docs/tests/test_scorecards_afp.py` and `test_scorecards_ijm.py`.

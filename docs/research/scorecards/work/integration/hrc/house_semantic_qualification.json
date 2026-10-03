@@ -1,0 +1,93 @@
+{
+  "scope": "original HRC118 physical page10 left crop only; 26 members, published ratings, visible A–N item results",
+  "status": "refused_source_fidelity",
+  "provider_schema_version": "hrc-118-source-facts/2",
+  "source_sha256": "804c1157e71da53a00821fdcaf15a1790448c682eb49d44613a577cfce9cb855",
+  "private_receipt_directory": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-hrc-2026-10-03/gemini-page10-semantic-left",
+  "schema_and_source_key_coverage_passed": true,
+  "direct_visual_readback": {
+    "all_members_inspected": 26,
+    "member_identity_context_and_party_fields_match": true,
+    "ratings_inspected": 78,
+    "ratings_match": 78,
+    "item_results_inspected": 364,
+    "item_results_match": 354,
+    "item_results_differ": 10,
+    "affected_members": 4,
+    "uncertainties_reported_by_model": 0,
+    "higher_resolution_review": "300 dpi original PDF rendering; all member groups reread"
+  },
+  "failure_locations": [
+    {
+      "member_name_text": "Gallego, Ruben",
+      "item_key": "E"
+    },
+    {
+      "member_name_text": "Gallego, Ruben",
+      "item_key": "K"
+    },
+    {
+      "member_name_text": "Gallego, Ruben",
+      "item_key": "L"
+    },
+    {
+      "member_name_text": "Gallego, Ruben",
+      "item_key": "N"
+    },
+    {
+      "member_name_text": "Biggs, Andy",
+      "item_key": "C"
+    },
+    {
+      "member_name_text": "Ciscomani, Juan",
+      "item_key": "M"
+    },
+    {
+      "member_name_text": "Grijalva, Raúl",
+      "item_key": "I"
+    },
+    {
+      "member_name_text": "Grijalva, Raúl",
+      "item_key": "J"
+    },
+    {
+      "member_name_text": "Grijalva, Raúl",
+      "item_key": "K"
+    },
+    {
+      "member_name_text": "Grijalva, Raúl",
+      "item_key": "L"
+    }
+  ],
+  "raw_artifacts": [
+    {
+      "name": "input-crop.png",
+      "sha256": "55201cdbd46a0db773926a95e110d501562ce5ce06d1fc49940f3316d5484066",
+      "bytes": 424299
+    },
+    {
+      "name": "outcome.json",
+      "sha256": "bbb27a257dd68d9614f6aa46e313ed6237ced15f3de0bcfc0af29f5c3ed76eb7",
+      "bytes": 42213
+    },
+    {
+      "name": "observation.pickle",
+      "sha256": "80f9bd7830d99870d029d58da4634d0def32839739763cc7e02d44126a347823",
+      "bytes": 1043648
+    },
+    {
+      "name": "receipt.json",
+      "sha256": "a7eeab2e0a90ec44cfe2c25b6e361814b0360fb919742f96cdc296508a41140f",
+      "bytes": 710
+    },
+    {
+      "name": "comparison-final.json",
+      "sha256": "0f190ae0dc036502f89f068e08927d9e2d547b80ccc9c730446f60ce08b6c5cc",
+      "bytes": 1842
+    }
+  ],
+  "no_continued_results_joined": true,
+  "full_page_qualified": false,
+  "full_edition_qualified": false,
+  "source_or_raw_model_bytes_in_repository": false
+}
