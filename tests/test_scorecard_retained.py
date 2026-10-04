@@ -76,6 +76,27 @@ def test_installed_reader_replays_and_reconciles_exact_native_value(tmp_path, mo
     selected.complete()
 
 
+@pytest.mark.parametrize("limit", [1, 0, -1, True, "1024"])
+def test_derived_reference_limit_cannot_be_ignored(tmp_path, monkeypatch, limit):
+    selected = batch(tmp_path, monkeypatch, reference_max_bytes=limit)
+    ctx = context(selected)
+    with pytest.raises(ValueError):
+        selected.for_edition(EDITION).acquire_scorecard(EDITION, ctx)
+    assert selected.checked == []
+
+
+def test_explicit_reference_limit_keeps_source_bounds_and_hash_check(tmp_path, monkeypatch):
+    selected = batch(tmp_path, monkeypatch, reference_max_bytes=1024)
+    assert selected.entries[EDITION.scorecard_id]["replay"].max_bytes == retained.MAX_BYTES
+    ctx = context(selected)
+    assert selected.for_edition(EDITION).acquire_scorecard(EDITION, ctx).tables["ratings"][0]["value_text"] == "94%"
+    selected.complete()
+    selected = batch(tmp_path, monkeypatch, reference_max_bytes=1024)
+    (tmp_path / "reference.json").write_text(json.dumps(rows("93%")))
+    with pytest.raises(ScorecardReplayError, match="pin"):
+        selected.for_edition(EDITION).acquire_scorecard(EDITION, context(selected))
+
+
 class NativeAPIReader:
     parser_version = "native-api/test"
 

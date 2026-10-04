@@ -109,6 +109,23 @@ def test_changed_private_semantic_asset_cannot_advance_coverage(tmp_path, monkey
         qualifications.build(*args, observed_at="2026-10-04T04:00:00Z")
 
 
+@pytest.mark.parametrize("limit", [1, 1024])
+def test_qualification_uses_and_records_explicit_reference_bound(tmp_path, monkeypatch, limit):
+    args = inputs(tmp_path, monkeypatch)
+    plan = json.loads(args[0].read_bytes())
+    plan["entries"][0]["reference_max_bytes"] = limit
+    args[0].write_text(json.dumps(plan))
+    pin = sha256(args[0].read_bytes()).hexdigest()
+    if limit == 1:
+        with pytest.raises(ValueError, match="bound"):
+            qualifications.build(args[0], pin, *args[2:], observed_at="2026-10-04T04:00:00Z")
+        assert not (args[-1] / "integration_qualifications.json").exists()
+    else:
+        ledger = qualifications.build(args[0], pin, *args[2:], observed_at="2026-10-04T04:00:00Z")
+        receipt = json.loads((args[-1] / ledger["editions"][0]["receipt"]).read_bytes())
+        assert receipt["reference_max_bytes"] == limit
+
+
 def test_publication_observation_merges_by_exact_edition_without_duplicates(tmp_path, monkeypatch):
     args = inputs(tmp_path, monkeypatch)
     initial = qualifications.build(*args, observed_at="2026-10-04T04:00:00Z")

@@ -13,7 +13,12 @@ from urllib.parse import quote
 
 from spicy_docs.sources.scorecards import ADAPTER_PUBLISHERS, ScorecardEdition, get_adapter
 
-from spicy_regs.scorecards.retained import pinned_bytes, qualified_reader_class, qualified_reader_inputs
+from spicy_regs.scorecards.retained import (
+    pinned_bytes,
+    qualified_reader_class,
+    qualified_reader_inputs,
+    qualified_reference,
+)
 
 
 def build(plan_path, plan_sha256, corpus, directory, *, observed_at, published_ledger=None):
@@ -40,7 +45,7 @@ def build(plan_path, plan_sha256, corpus, directory, *, observed_at, published_l
             pinned_bytes(private_path(entry["observations_file"]), entry["observations_sha256"])
         if entry.get("reader_inputs"):
             qualified_reader_inputs(entry, private_path)
-        reference = json.loads(pinned_bytes(private_path(entry["reference_file"]), entry["reference_sha256"]))
+        reference = qualified_reference(entry, private_path)
         qualification = json.loads(
             pinned_bytes(private_path(entry["qualification_file"]), entry["qualification_sha256"])
         )
@@ -89,6 +94,8 @@ def build(plan_path, plan_sha256, corpus, directory, *, observed_at, published_l
             ).hexdigest()
         if entry.get("extraction_pages"):
             receipt["retained_page_sha256"] = [page["sha256"] for page in entry["extraction_pages"]]
+        if "reference_max_bytes" in entry:
+            receipt["reference_max_bytes"] = entry["reference_max_bytes"]
         path = target / (quote(edition.publisher_id, safe="-_") + "--" + quote(edition.edition_id, safe="-_") + ".json")
         path.write_text(json.dumps(receipt, indent=2, ensure_ascii=False) + "\n")
         record = dict(

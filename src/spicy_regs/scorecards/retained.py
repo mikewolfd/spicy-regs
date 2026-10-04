@@ -11,13 +11,26 @@ from spicy_docs.sources.scorecards import ADAPTER_PUBLISHERS, ScorecardEdition, 
 from spicy_regs.scorecards.replay import RetainedScorecardSequence, ScorecardReplayError
 from spicy_regs.scorecards.acquisition import MAX_BYTES, MAX_REQUESTS, validate_limits
 
+QUALIFIED_INPUT_MAX_BYTES = 200 * 1024**2
 
-def pinned_bytes(path: Path, pin: str, *, max_bytes=200 * 1024**2):
+
+def pinned_bytes(path: Path, pin: str, *, max_bytes=QUALIFIED_INPUT_MAX_BYTES):
     with path.open("rb") as stream:
         body = stream.read(max_bytes + 1)
     if len(body) > max_bytes or sha256(body).hexdigest() != pin:
         raise ScorecardReplayError("Qualified input exceeds its bound or differs from its pin")
     return body
+
+
+def qualified_reference(entry, resolve_path):
+    """Read a pinned table reference under its own explicitly selected byte bound.
+
+    A complete derived table family can exceed any individual HTTP response.
+    Its plan-selected limit never changes source capture or request budgets.
+    """
+    limit = entry.get("reference_max_bytes", QUALIFIED_INPUT_MAX_BYTES)
+    validate_limits(limit, 1)
+    return json.loads(pinned_bytes(resolve_path(entry["reference_file"]), entry["reference_sha256"], max_bytes=limit))
 
 
 def qualified_reader_class(adapter, name):
@@ -226,7 +239,7 @@ class RetainedScorecardBatch:
             def acquire_scorecard(self, edition, context):
                 result = entry["reader"].acquire_scorecard(edition, context)
                 entry["replay"].complete()
-                reference = json.loads(pinned_bytes(batch.path(entry["reference_file"]), entry["reference_sha256"]))
+                reference = qualified_reference(entry, batch.path)
                 check_reference(result.tables, reference)
                 batch.checked.append(edition.scorecard_id)
                 for publisher in reference["scorecard_publishers"]:
