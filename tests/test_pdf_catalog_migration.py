@@ -5,7 +5,7 @@ import pytest
 
 from spicy_regs.schemas import COMMENT, DOCUMENT
 from spicy_regs.sources import iceberg
-from spicy_regs.sources.regulatory_catalog import processing_table, receipts_table
+from spicy_regs.sources.regulatory_catalog import initialized, processing_table, qualified, receipts_table
 
 FIELD = "pdf_extraction_results_json"
 
@@ -36,9 +36,13 @@ def test_missing_pdf_diagnostics_migrate_as_unread_with_paired_receipts(catalog,
     with iceberg._connect_for_table(record_type) as con:
         assert FIELD not in iceberg._column_types(con, record_type)
         assert con.execute(f"SELECT {FIELD} FROM {processing_table(con, record_type)}").fetchall() == [(None,)]
-        assert con.execute(f"SELECT count(*) FROM {receipts_table()}").fetchone()[0] == 1
+        assert con.execute(f"SELECT count(*) FROM {receipts_table()} WHERE outcome='accepted'").fetchone()[0] == 1
+        assert con.execute(f"SELECT count(*) FROM {receipts_table()} WHERE outcome='observed'").fetchone()[0] == 1
+        assert initialized(con, record_type.name)
     with iceberg._connect_for_table(record_type) as con:
-        assert con.execute(f"SELECT count(*) FROM {receipts_table()}").fetchone()[0] == 1
+        assert con.execute(f"SELECT count(*) FROM {receipts_table()} WHERE outcome='accepted'").fetchone()[0] == 1
+        assert con.execute(f"SELECT count(*) FROM {receipts_table()} WHERE outcome='observed'").fetchone()[0] == 1
+        assert initialized(con, record_type.name)
 
 
 @pytest.mark.parametrize("bad_type", ["INTEGER", "BOOLEAN"])
@@ -51,9 +55,10 @@ def test_wrong_legacy_diagnostic_type_refuses_without_migrating(catalog, bad_typ
         iceberg._connect_for_table(COMMENT)
     with catalog() as con:
         assert con.execute(f"SELECT comment_id FROM {iceberg._schema_ref()}.comments").fetchall() == [("kept",)]
-        assert not con.execute(
-            "SELECT table_name FROM information_schema.tables WHERE table_schema='default_native'"
-        ).fetchall()
+        assert con.execute(f"SELECT count(*) FROM {qualified(COMMENT)}").fetchone()[0] == 0
+        assert con.execute(f"SELECT count(*) FROM {receipts_table()}").fetchone()[0] == 0
+        assert not initialized(con, COMMENT.name)
+        assert iceberg._selected_catalog_namespace(con, COMMENT) == iceberg._namespace()
 
 
 def test_migration_transaction_refusal_keeps_old_rows(catalog, monkeypatch):
@@ -74,6 +79,7 @@ def test_migration_transaction_refusal_keeps_old_rows(catalog, monkeypatch):
         iceberg._connect_for_table(COMMENT)
     with catalog() as con:
         assert con.execute(f"SELECT * FROM {iceberg._schema_ref()}.comments").fetchall() == [("kept",)]
-        assert not con.execute(
-            "SELECT table_name FROM information_schema.tables WHERE table_schema='default_native'"
-        ).fetchall()
+        assert con.execute(f"SELECT count(*) FROM {qualified(COMMENT)}").fetchone()[0] == 0
+        assert con.execute(f"SELECT count(*) FROM {receipts_table()}").fetchone()[0] == 0
+        assert not initialized(con, COMMENT.name)
+        assert iceberg._selected_catalog_namespace(con, COMMENT) == iceberg._namespace()
