@@ -25,6 +25,7 @@ from spicy_regs.source_evidence import CaptureEvidence, SourceEvidenceError
 from spicy_regs.sources import r2
 from spicy_regs.scorecards.etl import (
     read_family,
+    read_indexed_family,
     write_family,
     verified_receipt_download,
     source_failure_receipts,
@@ -207,9 +208,7 @@ def _prior_tables(
         receipt = verified_receipt_download(
             snapshot, directory / "etl_receipts.parquet", public_url=receipt_public_url or getenv("R2_PUBLIC_URL")
         )
-        result = read_family(
-            directory, TABLE_NAMES, receipt_path=receipt, generation_id=prior["etlReceipts"]["generationId"]
-        )
+        result = read_indexed_family(directory, TABLE_NAMES, prior, receipt_path=receipt)
     return result, {name: True for name in contracts}, receipt
 
 

@@ -8,6 +8,7 @@ from collections.abc import Mapping
 import pyarrow as pa
 
 POLICY_VERSION = "scorecards-etl-v1"
+RATING_POLICY_VERSION = "scorecards-etl-ratings-v2"
 SOURCE_COLUMNS = {
     "scorecard_item_links": (
         "scorecard_id",
@@ -451,9 +452,13 @@ NATIVE_LISTS = {
 BOOLEAN_FIELDS = frozenset({"is_primary", "counts_toward_metric"})
 INTEGER_FIELDS = frozenset({"congress", "session", "roll_number"})
 DECIMAL_FIELDS = frozenset({"value_number", "weight_number", "contribution_number"})
-# Held ratings reach 15 fractional digits. This bound permits exact storage in
-# both Arrow and DuckDB. Larger values refuse; no numeric rounding is allowed.
+# Both types preserve exact source decimals in Arrow and DuckDB. The retained
+# ILA detail ratings require 19 fractional digits; ratings permit 19 integer
+# digits. Weights and contributions keep their original 18-digit scale.
+# See the pinned census in receipts/scorecards-expansion-20261004/etl-conversion-review/.
+# Values outside either declared bound refuse; no numeric rounding is allowed.
 DECIMAL_TYPE = pa.decimal128(38, 18)
+RATING_DECIMAL_TYPE = pa.decimal128(38, 19)
 
 
 def subject_schema(name: str) -> pa.Schema:
@@ -465,7 +470,7 @@ def subject_schema(name: str) -> pa.Schema:
         elif column in INTEGER_FIELDS:
             dtype = pa.int32()
         elif column in DECIMAL_FIELDS:
-            dtype = DECIMAL_TYPE
+            dtype = RATING_DECIMAL_TYPE if column == "value_number" else DECIMAL_TYPE
         fields.append(pa.field(target, dtype, nullable=column not in IDENTITIES[name]))
     return pa.schema(fields)
 

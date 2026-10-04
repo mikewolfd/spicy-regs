@@ -19,7 +19,7 @@ from rulespec_artifacts import LocalMemberSource, iter_member_descriptors
 import yaml
 
 from spicy_regs.generations import build_generation, implementation_id, verify_generation
-from spicy_regs.scorecards.etl import SOURCE_NAMES, generation_options, read_family
+from spicy_regs.scorecards.etl import SOURCE_NAMES, generation_options, read_family, read_indexed_family
 from spicy_regs.scorecards.registry import REGISTRY
 from spicy_regs.scorecards.acquisition import MAX_BYTES, MAX_REQUESTS, validate_limits
 from spicy_regs.scorecards.extraction_replay import PageObservationReplay, page_bytes, read_page
@@ -179,11 +179,7 @@ def prepare(args):
         if index["families"].get("scorecards", {}).get("etlReceipts"):
             if prior_directory is None:
                 raise ValueError("Prior source family was not retained before its receipt verification")
-            prior_rows = read_family(
-                prior_directory,
-                SOURCE_NAMES,
-                generation_id=index["families"]["scorecards"]["etlReceipts"]["generationId"],
-            )
+            prior_rows = read_indexed_family(prior_directory, SOURCE_NAMES, index["families"]["scorecards"])
         elif "scorecards" not in index["families"]:
             prior_rows = {name: [] for name in SOURCE_NAMES}
         editions = {key for batch in batches.values() for key in batch.entries}

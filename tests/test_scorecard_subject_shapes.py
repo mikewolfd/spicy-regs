@@ -5,6 +5,7 @@ import json
 
 import pyarrow as pa
 import pytest
+import duckdb
 from spicy_docs.schemas.scorecard_tables import SCORECARD_TABLES
 from spicy_regs.scorecards.resolution import LINK_COLUMNS
 from spicy_regs.scorecards.subject_shapes import (
@@ -74,7 +75,7 @@ def test_exact_numeric_and_status_facts():
     assert mapped["value_number"] == Decimal("97.123456789012345")
     assert mapped["value_status_text"] == "not graded"
     assert restore_source_row("scorecard_member_ratings", mapped) == before
-    assert subject_schema("scorecard_member_ratings").field("value_number").type == pa.decimal128(38, 18)
+    assert subject_schema("scorecard_member_ratings").field("value_number").type == pa.decimal128(38, 19)
     before = row("scorecard_metric_items", counts_toward_metric="false", weight_number="-2.00")
     mapped = map_source_row("scorecard_metric_items", before)
     assert mapped["counts_toward_metric"] is False
@@ -83,7 +84,21 @@ def test_exact_numeric_and_status_facts():
     assert "eligibility_text" in subject_schema("scorecard_members").names
 
 
-@pytest.mark.parametrize("value", ["NaN", "1e2", "0.0000000000000000001", "100000000000000000000"])
+@pytest.mark.parametrize("literal", ["0.0047169811320754715", "0.0070921985815602835", "-0.0047169811320754715"])
+def test_nineteen_digit_rating_survives_arrow_duckdb_and_exact_source_replay(literal):
+    before = row("scorecard_member_ratings", value_text=literal, value_number=literal)
+    mapped = map_source_row("scorecard_member_ratings", before)
+    table = pa.Table.from_pylist([mapped], schema=subject_schema("scorecard_member_ratings"))
+    with duckdb.connect() as connection:
+        connection.register("ratings", table)
+        found = connection.execute("SELECT value_number FROM ratings").fetchone()
+        assert found is not None
+        value = found[0]
+    assert value == Decimal(literal)
+    assert restore_source_row("scorecard_member_ratings", mapped) == before
+
+
+@pytest.mark.parametrize("value", ["NaN", "1e2", "0.00000000000000000001", "10000000000000000000"])
 def test_numeric_overflow_and_rounding_refuse(value):
     with pytest.raises((ValueError, pa.ArrowInvalid)):
         map_source_row("scorecard_member_ratings", row("scorecard_member_ratings", value_number=value))

@@ -2,6 +2,7 @@
 
 from copy import deepcopy
 import json
+from dataclasses import replace
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -124,7 +125,7 @@ def test_native_prior_reconstructs_validation_and_preserves_unselected_scope(tmp
 
 def test_conversion_failure_retains_raw_input_without_subject_generation(tmp_path):
     raw = tables(edition("2025"))
-    raw["scorecard_member_ratings"][0]["value_number"] = "0.0000000000000000001"
+    raw["scorecard_member_ratings"][0]["value_number"] = "0.00000000000000000001"
     with pytest.raises(ValueError, match="conversion refused"):
         write_family(tmp_path / "candidate", raw)
     assert not list((tmp_path / "candidate").glob("*.parquet"))
@@ -134,7 +135,7 @@ def test_conversion_failure_retains_raw_input_without_subject_generation(tmp_pat
 
     failed = [r for r in pq.read_table(receipts[0]).to_pylist() if r["outcome"] == "error"]
     assert len(failed) == 1
-    assert _unpack(json.loads(failed[0]["processing_json"]))["raw_source"]["value_number"] == "0.0000000000000000001"
+    assert _unpack(json.loads(failed[0]["processing_json"]))["raw_source"]["value_number"] == "0.00000000000000000001"
 
 
 def test_installed_scorecard_policy_refuses_receiptless_new_generation(tmp_path):
@@ -148,3 +149,98 @@ def test_installed_scorecard_policy_refuses_receiptless_new_generation(tmp_path)
         build_generation(
             tmp_path / "refused", family="scorecards", files=files, expected_keys=[p.name for p in files]
         )
+
+
+@pytest.mark.parametrize("numeric", [None, "+080.125"])
+def test_historical_rating_policy_is_validated_before_exact_current_rewrite(tmp_path, monkeypatch, numeric):
+    from spicy_regs.scorecards import etl
+    from spicy_regs.contract_types import described_schema
+    from spicy_regs import etl_policy_registry
+
+    before = tables(edition("2024"))
+    before["scorecard_member_ratings"][0]["value_number"] = numeric
+    first = tmp_path / "historical"
+    historical = dict(etl.POLICIES, scorecard_member_ratings=etl.LEGACY_RATING_POLICY)
+    with monkeypatch.context() as old_runtime:
+        old_runtime.setattr(etl, "POLICIES", historical)
+        old_runtime.setattr(etl_policy_registry, "installed_policies", lambda: historical)
+        files = etl.write_family(first, before)
+        artifact = build_generation(
+            tmp_path / "old-generation", family="scorecards", files=files,
+            expected_keys=[p.name for p in files], **etl.generation_options(first, SOURCE_NAMES),
+        )
+    selected = etl.admitted_read_policies(SOURCE_NAMES, descriptors=artifact.root["spec"]["etlReceipts"]["policies"])
+    assert selected["scorecard_member_ratings"].descriptor() == etl.LEGACY_RATING_POLICY.descriptor()
+    published_columns = {name: described_schema(p.subject_schema) for name, p in historical.items() if name in SOURCE_NAMES and not p.receipt_only}
+    assert etl.admitted_read_policies(SOURCE_NAMES, columns=published_columns) == selected
+    indexed = {
+        "tables": {name + ".parquet": {"columns": columns} for name, columns in published_columns.items()},
+        "etlReceipts": {"generationId": artifact.root["spec"]["etlReceipts"]["generationId"]},
+    }
+    assert etl.read_indexed_family(first, SOURCE_NAMES, indexed) == before
+    assert verify_generation(tmp_path / "old-generation").pin == artifact.pin
+    assert etl.read_source_generation(tmp_path / "old-generation") == before
+    with pytest.raises(ValueError, match="matching dataset policy"):
+        etl.read_family(first, SOURCE_NAMES)
+    restored = etl.read_family(first, SOURCE_NAMES, policies=selected)
+    assert restored == before
+    second = tmp_path / "current"
+    etl.write_family(second, restored, prior_receipts=first / "etl_receipts.parquet")
+    assert etl.read_family(second, SOURCE_NAMES) == before
+    indexed["tables"] = {
+        name + ".parquet": {"columns": described_schema(etl.POLICIES[name].subject_schema)}
+        for name in SOURCE_NAMES if not etl.POLICIES[name].receipt_only
+    }
+    indexed["etlReceipts"]["generationId"] = etl.generation_options(second, SOURCE_NAMES)["receipt_generation_id"]
+    assert etl.read_indexed_family(second, SOURCE_NAMES, indexed) == before
+    old = next(r for r in pq.read_table(first / "etl_receipts.parquet").to_pylist() if r["dataset"] == "scorecard_member_ratings")
+    new = next(r for r in pq.read_table(second / "etl_receipts.parquet").to_pylist() if r["dataset"] == "scorecard_member_ratings")
+    assert old["policy_version"] == "scorecards-etl-v1" and new["policy_version"] == "scorecards-etl-ratings-v2"
+    assert old["record_id"] == new["record_id"] and old["witnesses"] == new["witnesses"]
+    assert old["processing_json"] == new["processing_json"]
+    assert (old["subject_version"] == new["subject_version"]) is (numeric is None)
+    from spicy_regs.etl_receipts import _unpack
+
+    assert "carried_from" not in _unpack(json.loads(new["diagnostic_json"]))
+
+
+@pytest.mark.parametrize("change", ["version", "schema", "classification", "duplicate"])
+def test_historical_policy_selection_refuses_unknown_declarations(change):
+    from spicy_regs.scorecards import etl
+
+    descriptors = [p.descriptor() for name, p in etl.POLICIES.items() if name in SOURCE_NAMES]
+    rating = next(p for p in descriptors if p["dataset"] == "scorecard_member_ratings")
+    if change == "version":
+        rating["policy_version"] = "unreviewed"
+    elif change == "schema":
+        schema = etl.POLICIES["scorecard_member_ratings"].subject_schema
+        schema = schema.set(schema.get_field_index("value_number"), schema.field("value_number").with_type(pa.decimal128(38, 20)))
+        rating.update(replace(etl.POLICIES["scorecard_member_ratings"], subject_schema=schema).descriptor())
+    elif change == "classification":
+        rating["receipt_fields"].remove("raw_source")
+    else:
+        descriptors[-1] = descriptors[0]
+    with pytest.raises(ValueError, match="supported exact"):
+        etl.admitted_read_policies(SOURCE_NAMES, descriptors=descriptors)
+
+
+def test_exact_decimal_cast_cannot_reinterpret_historical_receipt_hashes(tmp_path, monkeypatch):
+    from spicy_regs.scorecards import etl
+    from spicy_regs.etl_receipts import validate_receipt_bundle
+
+    before = tables(edition("2024"))
+    before["scorecard_member_ratings"][0]["value_number"] = "80.125"
+    with monkeypatch.context() as old_runtime:
+        old_runtime.setattr(etl, "POLICIES", dict(etl.POLICIES, scorecard_member_ratings=etl.LEGACY_RATING_POLICY))
+        etl.write_family(tmp_path / "historical", before)
+    directory = tmp_path / "historical"
+    path = directory / "scorecard_member_ratings.parquet"
+    table = pq.read_table(path)
+    pq.write_table(table.cast(etl.POLICIES["scorecard_member_ratings"].subject_schema, safe=True), path)
+    subjects = {name: [] if etl.POLICIES[name].receipt_only else [directory / (name + ".parquet")] for name in SOURCE_NAMES}
+    # Keep the old receipt version, while demonstrating that even an exact
+    # numerical cast does not preserve the old scale-specific subject hash.
+    rating = replace(etl.POLICIES["scorecard_member_ratings"], policy_version="scorecards-etl-v1")
+    policies = [rating if name == "scorecard_member_ratings" else etl.POLICIES[name] for name in SOURCE_NAMES]
+    with pytest.raises(ValueError, match="Missing, ambiguous or reused subject receipt"):
+        validate_receipt_bundle(subjects, [directory / "etl_receipts.parquet"], policies)

@@ -13,11 +13,20 @@ distinct. Reference and period locators remain in receipt evidence, alongside th
 exact original JSON, so absent object properties remain distinguishable from
 explicit null properties during replay.
 
-Boolean flags retain unknown values as null. Exact numeric text becomes
-`DECIMAL(38,18)`; a value outside that bound refuses instead of rounding. Publisher
-display text remains independently available. Grade letters never become numbers.
+Boolean flags retain unknown values as null. Exact rating numbers become
+`DECIMAL(38,19)`, which permits nineteen integer digits and nineteen fractional
+digits. Weights and contributions retain `DECIMAL(38,18)`. A value outside its
+declared bound refuses instead of rounding. Publisher display text remains
+independently available. Grade letters never become numbers.
 The retained-row census and exact-roundtrip checks are in
 `/Users/mikewolfd/Work/corpora/spicy-regs-etl-split-20261003/scorecards-report.json`.
+The additional ILA precision census and exact Arrow/DuckDB comparisons are in
+`receipts/scorecards-expansion-20261004/etl-conversion-review/diagnosis.json`.
+Historical rating generations retain their pinned scale and receipt policy.
+Reads admit only the exact known historical or current declarations and verify
+the original schema, subject hashes and receipt joins before restoring source
+strings. A subsequent build generates current rating receipts from those exact
+source strings; it never reinterprets an old receipt under a different policy.
 
 Snapshot records describe capture, parsing, completeness and evidence policy.
 They belong entirely in receipts. Resolver receipts retain input pins, candidate
