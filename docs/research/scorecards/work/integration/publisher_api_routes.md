@@ -20,7 +20,10 @@ to each named edition and rendition, not an entire historical archive.
 | FRC Action | Public Quorum GET JSON at `https://www.quorum.us/api/sheet/{slug}/` and CSV with `format=csv` | Publisher-linked House and Senate sheets contain member and action caches. CSV exports preserve displayed final percentages where JSON formula caches are empty. | [Original route observations](publisher_api_route_additions.json); the [source guide](../../../../../../spicy-docs/docs/sources/scorecards-frc-action.md) defines the qualified current-sheet boundary |
 | FFRF Action Fund | Public Quorum GET JSON and CSV at the same sheet route | Publisher-linked House and Senate sheets expose vote, sponsorship, caucus and adjustment inputs; CSV exports retain the reported total score. | [Original route observations](publisher_api_route_additions.json); the [source guide](../../../../../../spicy-docs/docs/sources/scorecards-ffrf-action.md) defines the qualified current-sheet boundary |
 | National Federation of Independent Business | Public Quorum GET JSON and CSV at the same sheet route | Complete current House and Senate sheets; displayed score cells, hidden measurement caches and literal action cells. Continuously updated sheets and dated downloadable PDFs are separate renditions. | [Original route observations](publisher_api_route_additions.json); see the [source guide](../../../../../../spicy-docs/docs/sources/scorecards-nfib.md) for the qualified reader boundary |
-| Gun Owners of America | Publisher-linked VoterVoice GET JSON at `https://www.votervoice.net/Api/Scorecards`, `/Scorecards/{id}/Scorings` and `/Scorecards/Criteria/{id}` | Federal edition catalogs, member scores, scoring factors and criterion details. Requests use the ordinary public application's host-scoped bootstrap authorization. A source error on one historical criterion remains separate from complete aggregate data. | [Original route observations](publisher_api_route_additions.json); reader qualification continues |
+| Gun Owners of America | Publisher-linked VoterVoice GET JSON at `https://www.votervoice.net/Api/Scorecards`, `/Scorecards/{id}/Scorings` and `/Scorecards/Criteria/{id}` | Federal edition catalogs, member scores, scoring factors and criterion details. Requests use the ordinary public application's host-scoped bootstrap authorization. A source error on one historical criterion remains separate from complete aggregate data. | [Original route observations](publisher_api_route_additions.json); the [source guide](../../../../../../spicy-docs/docs/sources/scorecards-goa.md) defines qualified edition boundaries |
+| Planned Parenthood Action Fund | Publisher-linked VoterVoice GET JSON at the same scorecard routes; `/Governments/USA/Officials` and `/Scorecards/Politicians/{id}` supply current profiles | Per-Congress scores, criterion actions and current-office cumulative percentages. Current-office and politician-wide scores can differ; the source client selects the current office. | [Original route observations](publisher_api_route_additions.json); see the [edition guide](../../../../../../spicy-docs/docs/sources/scorecards-planned-parenthood.md) and [current-profile guide](../../../../../../spicy-docs/docs/sources/scorecards-planned-parenthood-current.md) |
+| Susan B. Anthony Pro-Life America | Form POST returning JSON at `https://sbaprolife.org/wp-admin/admin-ajax.php`, with `action=get_senator_data` or `action=get_representative_data` | Current and past term ratings, vote/activity subscores, source items and preferred positions. Requests use the public profile page's nonce and exact publisher member ID. Senate term spans can cross several Congresses. | [Original route observations](publisher_api_route_additions.json); full rendition qualification remains separate |
+| Institute for Legislative Analysis | GET JSON at `https://analysis.limitedgov.org/api/leaderboardPage/leaderboardData`, `/legislationPage/articles`, `/legislatorScorecard/categories` and `/lawmakerPage/personDetail` | Publisher organization, state and year selectors supply ratings, legislation, categories and member details. A native numeric score can coexist with a below-threshold display of `N/A`; both observations require retention. | [Original route observations](publisher_api_route_additions.json); the publisher's former scorecard host explicitly redirects to this application; full rendition qualification remains separate |
 
 ## Archived publisher JSON
 
@@ -29,7 +32,7 @@ files under `/sites/all/modules/custom/htv_vue/json/{year}/`. Archived copies of
 the original 2018 index, JavaScript and all selected files now establish a
 complete native rendition. Current original routes remain unavailable; archive
 custody and original publisher URLs stay distinct. The 2019 composite rendition
-is being qualified separately. See the [retained route observations](publisher_api_route_additions.json)
+has its own qualification and [source guide](../../../../../../spicy-docs/docs/sources/scorecards-us-chamber-2019.md). See the [retained route observations](publisher_api_route_additions.json)
 and [archived-source guide](../../../../../../spicy-docs/docs/sources/scorecards-us-chamber-archive.md).
 
 ## Related structured surfaces
@@ -55,6 +58,9 @@ and [archived-source guide](../../../../../../spicy-docs/docs/sources/scorecards
 - **NRA-PVF:** verified `Umbraco/api/PublicGradesApi` routes provide election
   state/year navigation. The observed responses contain no congressional grades;
   see the [discovery inventory](publisher_api_inventory.md).
+- **NIAC Action:** the original app fetches `/data/scores_wide.csv`,
+  `/data/scores_columns_meta.csv` and `/data/manual_scoring_meta.csv`. Its `/api/find-lawmakers` JSON endpoint supports
+  address lookup; score acquisition uses the CSV data rather than that lookup.
 
 The National Parks API's complete member-detail rendition has also been qualified
 for selected native periods; see its [detail-source guide](../../../../../../spicy-docs/docs/sources/scorecards-national-parks-action-api-details.md).
