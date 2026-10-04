@@ -21,9 +21,9 @@ from botocore.config import Config as BotoConfig
 from loguru import logger
 
 from spicy_docs.sources.mirrulations import download_and_parse
-from spicy_regs.transforms import merge_staging_files, write_staging
 from spicy_regs.schemas import DOCUMENT
-from tests.conftest import DOCUMENT_SCHEMA
+from spicy_regs.sources.parquet import StagingWriter
+from spicy_regs.transforms import merge_staging_files
 
 BUCKET = "mirrulations"
 
@@ -58,13 +58,14 @@ def test_real_document_attachment_metadata_through_transform(tmp_path):
     output = tmp_path / "output"
     output.mkdir()
 
+    # The pipeline's own writer and merge arguments: the record type's schema, not a test copy of it.
     logger.info("Writing staging Parquet under {}", staging)
-    write_staging("EPA", "documents", [record], staging, DOCUMENT_SCHEMA)
+    StagingWriter("EPA", DOCUMENT, staging).write([record])
     logger.info("Merging staging -> {}/documents.parquet", output)
     merge_staging_files(
         staging, output, ["documents"],
-        {"documents": DOCUMENT_SCHEMA},
-        {"documents": "document_id"},
+        {"documents": DOCUMENT.schema},
+        {"documents": DOCUMENT.dedup_key},
     )
 
     merged = pl.read_parquet(output / "documents.parquet")
