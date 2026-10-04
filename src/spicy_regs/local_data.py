@@ -9,7 +9,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from spicy_regs.sources.publication import empty_index, parse_index, table_descriptor, table_members
+from spicy_regs.sources.publication import empty_index, parse_index, receipt_members, table_descriptor, table_members
 
 _NAME = re.compile(r"[a-z][a-z0-9_-]*\Z")
 
@@ -27,6 +27,11 @@ class LocalSelection:
     is_download: bool
     split: dict[str, tuple[Path, ...]] = field(default_factory=dict)
 
+    @property
+    def receipts(self) -> dict[str, Path]:
+        return {member.path: self.directory / receipt_local_key(member)
+                for member in selected_receipt_members(self.publication, self.files)}
+
     def paths(self, name: str) -> tuple[Path, ...]:
         """Every local file of table ``name``: a split table's members in index order, else its one file."""
         return self.split.get(name) or (self.files[name][0],)
@@ -38,6 +43,18 @@ def selection_record(index: Mapping, name: str) -> dict:
     split = "members" in (table_descriptor(index, f"{name}.parquet") or {})
     return {"key": [member.path for member in members] if split else members[0].path,
             "status": "managed" if members[0].sha256 is not None else "legacy-unversioned"}
+
+
+def receipt_local_key(member) -> Path:
+    """Keep the family and generation in local shared-receipt paths."""
+    return Path(".etl-receipts") / member.path
+
+
+def selected_receipt_members(index: Mapping, selected) -> tuple:
+    prefixes = {entry["prefix"] for entry in index["families"].values()
+                if any(name + ".parquet" in entry["tables"] for name in selected)}
+    return tuple(member for member in receipt_members(index)
+                 if any(member.path.startswith(prefix + "/") for prefix in prefixes))
 
 
 def _unique_pairs(pairs):
@@ -137,6 +154,16 @@ def verify_local_members(selection: LocalSelection) -> dict[str, list[int]]:
             if file_signature(path) != before:
                 raise RuntimeError(f"Local download member changed during verification: {name}")
             signatures[str(path)] = before
+    for member in selected_receipt_members(selection.publication, selection.files):
+        path = selection.receipts[member.path]
+        before = file_signature(path)
+        with path.open("rb") as stream:
+            digest = "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest()
+        if before[2] != member.byte_size or digest != member.sha256:
+            raise RuntimeError("Local receipt member differs from its generation pin")
+        if file_signature(path) != before:
+            raise RuntimeError("Local receipt member changed during verification")
+        signatures[str(path)] = before
     return signatures
 
 

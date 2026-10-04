@@ -123,8 +123,8 @@ def cmd_download(args):
     for name in types_to_download:
         _table_name(name)
 
-    from spicy_regs.local_data import selection_record
-    from spicy_regs.sources.publication import snapshot
+    from spicy_regs.local_data import receipt_local_key, selected_receipt_members, selection_record
+    from spicy_regs.sources.publication import fetch_member, snapshot
 
     base_url = resolve_r2_base_url()
     with snapshot(base_url) as index:
@@ -153,6 +153,10 @@ def cmd_download(args):
             print(f"  {data_type}: {selected[data_type]['status']}")
             if download_file(data_type, destination, force=args.force, base_url=base_url) is None:
                 raise RuntimeError(f"Download incomplete: {data_type}")
+        for member in selected_receipt_members(index, selected):
+            receipt_path = destination / receipt_local_key(member)
+            receipt_path.parent.mkdir(parents=True, exist_ok=True)
+            fetch_member(base_url, member, receipt_path, member.path, headers=DEFAULT_HEADERS, timeout=60.0)
         if staged:
             metadata["status"] = "complete"
             (destination / "download.json").write_text(json.dumps(metadata, indent=2) + "\n")

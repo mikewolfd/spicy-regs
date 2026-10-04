@@ -84,6 +84,14 @@ job fails, but the families still publish whatever it served.
 
 ## Readers
 
+- A family can publish processing evidence in an optional `etlReceipts` member.
+  MCP exposes the selected families' immutable receipt files through the generic
+  `etl_receipts` SQL view and reports each family's generation and byte pin.
+  CLI downloads retain the selected families' receipt files alongside their
+  source tables; local MCP verifies their hashes and never fetches replacement
+  evidence remotely. A missing file or schema mismatch refuses the connection.
+  Deploy a reader that admits this field before advancing a publication pointer
+  that includes it. The derived v1 index omits receipts for older readers.
 - Rollup reads share one captured index. Managed download failures and digest
   mismatches abort; only an index 404 permits legacy resolution.
 - MCP captures one index per cached connection, creates managed views at immutable

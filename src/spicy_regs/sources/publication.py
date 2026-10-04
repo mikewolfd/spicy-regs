@@ -200,8 +200,9 @@ def parse_index(raw: bytes) -> dict:
         ):
             raise ValueError("invalid publication index")
         seen = set()
+        dataset_owners = set()
         for family, entry in value["families"].items():
-            if not _NAME.fullmatch(family) or not _FAMILY_KEYS <= set(entry) <= _FAMILY_KEYS | {"publishedAt"}:
+            if not _NAME.fullmatch(family) or not _FAMILY_KEYS <= set(entry) <= _FAMILY_KEYS | {"publishedAt", "etlReceipts"}:
                 raise ValueError("invalid family")
             if "publishedAt" in entry:
                 instant = entry["publishedAt"]
@@ -215,8 +216,27 @@ def parse_index(raw: bytes) -> dict:
                 raise ValueError("prefix differs from artifact identity")
             if not isinstance(entry["logicalId"], str) or not entry["logicalId"].startswith("urn:"):
                 raise ValueError("invalid logical identity")
-            if not isinstance(entry["tables"], dict) or not entry["tables"]:
+            if not isinstance(entry["tables"], dict) or (not entry["tables"] and "etlReceipts" not in entry):
                 raise ValueError("empty family")
+            if "etlReceipts" in entry:
+                receipt = entry["etlReceipts"]
+                if (set(receipt) != {"key", "sha256", "byteSize", "rows", "columns", "generationId", "datasets"}
+                        or receipt["key"] != "etl_receipts.parquet"
+                        or not _DIGEST.fullmatch(receipt["sha256"]) or not _counts(receipt)
+                        or not isinstance(receipt["generationId"], str) or not receipt["generationId"]
+                        or not isinstance(receipt["columns"], list) or not receipt["columns"]
+                        or any(not isinstance(c, list) or len(c) != 2
+                               or not all(isinstance(v, str) and v for v in c) for c in receipt["columns"])
+                        or len({c[0] for c in receipt["columns"]}) != len(receipt["columns"])
+                        or not isinstance(receipt["datasets"], list) or not receipt["datasets"]
+                        or any(not isinstance(name, str) or not _NAME.fullmatch(name) for name in receipt["datasets"])
+                        or len(set(receipt["datasets"])) != len(receipt["datasets"])):
+                    raise ValueError("invalid ETL receipt member")
+            datasets = {key.removesuffix(".parquet") for key in entry["tables"]}
+            datasets.update(entry.get("etlReceipts", {}).get("datasets", []))
+            if datasets & dataset_owners:
+                raise ValueError("multiply owned dataset")
+            dataset_owners.update(datasets)
             for key, table in entry["tables"].items():
                 if not key.endswith(".parquet") or not _NAME.fullmatch(key[:-8]) or key in seen:
                     raise ValueError("invalid or multiply owned table")
@@ -611,6 +631,18 @@ def single_member(index: Mapping, key: str) -> Member:
     return members[0]
 
 
+def receipt_members(index: Mapping) -> tuple[Member, ...]:
+    """Shared receipt members pinned by the same index as their source tables.
+
+    Receipts have no unversioned fallback. Multiple families share one query
+    view; each member retains its own immutable path, hash and row count.
+    """
+    return tuple(
+        Member(f"{entry['prefix']}/{receipt['key']}", receipt["sha256"], receipt["byteSize"], receipt["rows"])
+        for entry in index["families"].values() if (receipt := entry.get("etlReceipts"))
+    )
+
+
 def table_owner(index: Mapping, key: str) -> tuple[str, Mapping] | None:
     """The family publishing ``key`` in ``index`` and its entry, or ``None`` for a legacy table."""
     return next(((name, entry) for name, entry in index["families"].items() if key in entry["tables"]), None)
@@ -684,7 +716,7 @@ def derive_v1(index: Mapping) -> dict:
     for name, entry in index["families"].items():
         tables = {key: table for key, table in entry["tables"].items() if "members" not in table}
         if tables:
-            families[name] = {**{key: value for key, value in entry.items() if key != "publishedAt"}, "tables": tables}
+            families[name] = {**{key: value for key, value in entry.items() if key not in {"publishedAt", "etlReceipts"}}, "tables": tables}
     return {**empty_index(), "families": families}
 
 
