@@ -12,7 +12,7 @@ from uuid import uuid4
 from dotenv import load_dotenv
 
 from spicy_regs.scorecards.etl import LINK_NAMES, generation_options
-from spicy_regs.generations import build_generation, verify_generation
+from spicy_regs.generations import build_generation
 from spicy_regs.source_evidence import CaptureEvidence, verify_evidence
 from spicy_regs.scorecards.analysis_inputs import convert_published_official_input
 from spicy_regs.sources import publication, r2
@@ -120,7 +120,8 @@ def main():
         parents=parents,
         inputs=evidence.inputs(),
     )
-    verify_generation(args.output / "generation", expected_pin=artifact.pin)
+    # build_generation already returns the fully verified artifact. Preserve
+    # that result through preparation instead of repeating its receipt joins.
     verify_evidence(evidence.artifact_dir)
     qualification = json.loads((args.output / "scorecard-analysis-qualification.json").read_bytes())
     report = {

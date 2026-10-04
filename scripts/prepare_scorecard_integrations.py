@@ -17,7 +17,7 @@ from uuid import UUID, uuid4
 from rulespec_artifacts import LocalMemberSource, iter_member_descriptors
 import yaml
 
-from spicy_regs.generations import build_generation, implementation_id, verify_generation
+from spicy_regs.generations import build_generation, implementation_id
 from spicy_regs.scorecards.etl import SOURCE_NAMES, generation_options
 from spicy_regs.scorecards.registry import REGISTRY
 from spicy_regs.scorecards.acquisition import MAX_BYTES, MAX_REQUESTS, validate_limits
@@ -194,7 +194,9 @@ def prepare(args):
             read_snapshot=index,
             inputs=evidence.inputs(),
         )
-        verify_generation(args.output / "generation", expected_pin=generation.pin)
+        # build_generation returns only after full shared artifact, byte, schema
+        # and receipt-join verification. Reuse that admitted result; no member
+        # changes occur before recording its pin below.
         source_evidence = verify_evidence(evidence.artifact_dir)
         members = list(iter_member_descriptors(source_evidence, LocalMemberSource(evidence.artifact_dir)))
         if any(member.role not in {"journal", "lineage-metadata"} for member in members):
