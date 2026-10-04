@@ -8,7 +8,7 @@ One source-stated relationship between a component metric and its parent metric.
 
 Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='scorecard_metric_components'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
 
-**Coverage.** Empty in the currently published scorecard editions: no component-to-parent metric relationships are present. This does not establish that other publisher editions lack such relationships. *(measured 2026-10-03)*
+**Coverage.** Sampled publisher editions selected by the scorecard source registry, with rows only where an edition states how its metrics combine; most editions state no component-to-parent relationship. Complete edition reads replace that edition; failed or incomplete reads preserve prior observations. *(measured 2026-10-04)*
 
 - **Parquet file:** `scorecard_metric_components.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.

@@ -9649,10 +9649,11 @@ tables:
     subject: congress
     label: "Scorecard metric components"
     coverage: >-
-      Empty in the currently published scorecard editions: no
-      component-to-parent metric relationships are present. This does not establish
-      that other publisher editions lack such relationships.
-    measured_on: "2026-10-03"
+      Sampled publisher editions selected by the scorecard source registry, with rows
+      only where an edition states how its metrics combine; most editions state no
+      component-to-parent relationship. Complete edition reads replace that edition;
+      failed or incomplete reads preserve prior observations.
+    measured_on: "2026-10-04"
     summary: "One source-stated relationship between a component metric and its parent metric. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy."
     columns_from: spicy_docs
 
