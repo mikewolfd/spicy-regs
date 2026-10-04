@@ -1,0 +1,32 @@
+{
+  "format_version": "scorecard-integration-published-observation/1",
+  "publisher_id": "lcv",
+  "scorecard_id": "lcv:2025",
+  "parser_version": "lcv-2025-csv-html/2",
+  "source_qualification": "lcv_2025/source_qualification.json",
+  "source_qualification_sha256": "86cb3c57d579201bdcb2ecafdb856b587d953d13e71b8c64075db74363be25ec",
+  "qualification_counts_path": [
+    "counts"
+  ],
+  "public_readback": "deployment/independent_public_source_readback.json",
+  "public_readback_sha256": "bd3baa9ffca2b3c340fab83b61401b7295fc76b0c4f7b399590f793842c34cda",
+  "readback_rating_path": [
+    "ratings_by_scorecard",
+    "lcv:2025"
+  ],
+  "observed_source_generation": "sha256:7a8d9462a2c4711c4f5e2979bf1ff31c3daaacf09a570c3b3f9ff715551274eb",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 2,
+    "scorecard_metrics": 2,
+    "scorecard_items": 66,
+    "scorecard_metric_items": 66,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 551,
+    "scorecard_member_ratings": 1102,
+    "scorecard_member_item_results": 17255
+  },
+  "boundary": "Previously published named scope with independent public readback at its recorded generation; no claim of fresh publisher acquisition or scheduled refresh"
+}

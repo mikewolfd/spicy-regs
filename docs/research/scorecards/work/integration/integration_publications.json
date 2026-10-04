@@ -1,0 +1,39 @@
+{
+  "schema_version": "1",
+  "editions": [
+    {
+      "publisher_id": "afp",
+      "scorecard_id": "afp:3933",
+      "state": "published",
+      "receipt": "qualifications/afp--3933--published.json",
+      "receipt_sha256": "00a0d56d77bd5b23901d1ef4ec70b227d77ab98ac4708b4b62fcd12007fdd903"
+    },
+    {
+      "publisher_id": "ijm",
+      "scorecard_id": "ijm:3995",
+      "state": "published",
+      "receipt": "qualifications/ijm--3995--published.json",
+      "receipt_sha256": "e2bfed8690597140be2731c0003ea10a0a7eb275df1a8f093388c741da70fe22"
+    },
+    {
+      "publisher_id": "lcv",
+      "scorecard_id": "lcv:2025",
+      "state": "published",
+      "receipt": "qualifications/lcv--2025--published.json",
+      "receipt_sha256": "16044676b8ffeebbd4b255aed5e8a416ca7361c5b017e295727f0e8fe52e0b5e"
+    },
+    {
+      "publisher_id": "hrc",
+      "scorecard_id": "hrc:118-final",
+      "state": "published",
+      "receipt": "qualifications/hrc--118-final--published.json",
+      "receipt_sha256": "d4192174c1f484c100e70cbd5f31cbf31d43482480d598ed83c6ad70cc77c291"
+    }
+  ],
+  "readers": {
+    "afp": "afp",
+    "ijm": "ijm",
+    "lcv": "lcv",
+    "hrc": "hrc"
+  }
+}

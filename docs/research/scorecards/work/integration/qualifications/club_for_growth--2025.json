@@ -1,0 +1,32 @@
+{
+  "format_version": "scorecard-integration-qualified-scope/1",
+  "qualified": true,
+  "publisher_id": "club_for_growth",
+  "scorecard_id": "club_for_growth:2025",
+  "source_url": "https://www.clubforgrowth.org/scorecards/",
+  "parser_version": "club-for-growth-html-and-qualified-weights/1",
+  "reader_sha256": "468bcd17f038bb970bc18a8064dcddd9fff091d6455a2ca18bd0d36b975892ec",
+  "capture_manifest_sha256": "ee7dfc5a0256981b7d1750872c06e15218da20ea90c9ac63290347fdb26e5814",
+  "native_reference_sha256": "a8e667095c55f40118388741dda2ff075e0cdd647f32c2b25d7e3369cff121ab",
+  "native_reference_kind": "source_table_family",
+  "source_qualification_sha256": "6137cf7544bd006186a30cc8d271de3e2eb4223027da1daefd053487f8b73e5c",
+  "completeness_rule": "Complete unfiltered original HTML rosters and every linked current member action table reached document EOF; literal annual/lifetime/rank values retained; exact profile IDs and member item definitions reconcile; full item grids reconcile with methodology item counts; all source HTML facts agree on stable reread. Exact reviewed PDF weights and source-title crosswalk retained privately and bound to original PDF digests.",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 75,
+    "scorecard_metrics": 4,
+    "scorecard_items": 36,
+    "scorecard_metric_items": 36,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 538,
+    "scorecard_member_ratings": 1076,
+    "scorecard_member_item_results": 9907
+  },
+  "capture_count": 1086,
+  "evidence_policy": "hash_only",
+  "qualification_boundary": "Named source rendition; remaining editions and renditions stay in scope",
+  "published": false,
+  "qualified_reader_input_sha256": "8b0b67c627fd70cb121e3604ae3ce7036388c7dbbf476e4492bfd9a1720ec271"
+}

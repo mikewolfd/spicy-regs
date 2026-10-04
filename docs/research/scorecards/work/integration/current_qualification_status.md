@@ -1,5 +1,14 @@
 # Current scorecard qualification status
 
+See the generated [integration progress](integration_progress.md) and pinned
+[qualification ledger](integration_qualifications.json) for the current campaign
+scopes. They distinguish source qualification from installed-package adoption
+and public publication. The [reproduction guide](README.md) documents the shared
+wheel, replay, scoped replacement and publication process.
+
+The detail below records the earlier October 3 qualification and publication
+milestone. Its receipts remain evidence for those exact source observations.
+
 As of 2026-10-03, LCV 2025, AFP edition 3933 and IJM edition 3995 have complete,
 source-defined observations that pass their documented reader qualification.
 HRC’s final 118th Congress edition now passes its pinned source-reader

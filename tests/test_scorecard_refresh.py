@@ -153,6 +153,22 @@ def registry(tmp_path, *, historical=False):
     return path
 
 
+def test_registry_publisher_mapping_comes_from_installed_readers(tmp_path):
+    from spicy_docs.sources.scorecards import ADAPTER_PUBLISHERS
+
+    sources = load_registry()
+    assert {source.publisher_id for source in sources} == set(ADAPTER_PUBLISHERS.values())
+    assert all(ADAPTER_PUBLISHERS[source.adapter] == source.publisher_id for source in sources)
+    c4ip = next(source for source in sources if source.publisher_id == "c4ip")
+    assert c4ip.adapter == "c4ip_api"
+    path = registry(tmp_path)
+    document = yaml.safe_load(path.read_text())
+    document["sources"][0]["adapter"] = "c4ip_api"
+    path.write_text(yaml.safe_dump(document))
+    with pytest.raises(RegistryError, match="configuration"):
+        load_registry(path)
+
+
 def evidence(tmp_path):
     return CaptureEvidence(tmp_path / "output", "scorecards")
 
@@ -221,6 +237,35 @@ def test_pdf_host_injection_stays_outside_public_evidence(tmp_path):
     assert "pdf_extractor" not in public
     assert "retain_extraction" not in public
     assert "PRIVATE SOURCE PAYLOAD" not in public
+
+
+def test_edition_reader_records_its_own_parser_version(tmp_path):
+    selected = edition("2025")
+    p = provider([selected], {selected.scorecard_id: tables})
+    reader = p.get_adapter("lcv")
+    original = reader.acquire_scorecard
+
+    def acquire(selected, context):
+        result = original(selected, context)
+        result.tables["scorecard_snapshots"][0]["parser_version"] = "edition-v2"
+        return result
+
+    reader.acquire_scorecard = acquire
+    reader.parser_version = "edition-v2"
+    p.get_adapter = lambda name: SimpleNamespace(
+        parser_version="publisher-selector-v1",
+        list_scorecards=lambda context: [selected],
+        for_edition=lambda edition: reader,
+    )
+    e = evidence(tmp_path)
+    run(tmp_path, p, e, download_prior=lambda *args: False)
+    captures = [row for row in journal(e) if row["event"] == "capture"]
+    assert captures and {row["parser_version"] for row in captures} == {"publisher-selector-v1"}
+    selected_reader = next(row for row in journal(e) if row["event"] == "scorecard-edition-reader")
+    assert selected_reader["reader_parser_version"] == "edition-v2"
+    assert selected_reader["scorecard_id"] == selected.scorecard_id
+    current = read_family(tmp_path / "build", SOURCE_NAMES)
+    assert current["scorecard_snapshots"][0]["parser_version"] == "edition-v2"
 
 
 @pytest.mark.parametrize("options", [{"pdf_extractor": object()}, {"retain_extraction": lambda: None}])
@@ -383,7 +428,8 @@ def test_complete_local_generation_binds_every_table_and_one_evidence_artifact(t
         "expected_schemas",
         lambda: {
             name: described_schema(POLICIES[name].subject_schema)
-            for name in SOURCE_NAMES if not POLICIES[name].receipt_only
+            for name in SOURCE_NAMES
+            if not POLICIES[name].receipt_only
         },
     )
     a = edition("2025")

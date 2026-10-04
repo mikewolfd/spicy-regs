@@ -1,0 +1,640 @@
+{
+  "schema_version": "1",
+  "observed_at": "2026-10-04T05:18:30.437541+00:00",
+  "input_plan_sha256": "af21fde9e82e0bfe81798ac52ba0ab35e1d7b117fa16525bf8c1d118f946ce0a",
+  "readers": {
+    "heritage_action": "heritage_action",
+    "afl_cio": "afl_cio",
+    "c4ip": "c4ip_api",
+    "humane_world_action": "humane_world_action",
+    "end_citizens_united": "end_citizens_united",
+    "ajp_action": "ajp_action",
+    "afscme": "afscme",
+    "numbersusa": "numbersusa",
+    "cpac": "cpac",
+    "aauw": "aauw",
+    "ara": "ara",
+    "leadership_conference": "leadership_conference",
+    "american_energy_alliance": "american_energy_alliance",
+    "nea": "nea",
+    "ntu": "ntu",
+    "club_for_growth": "club_for_growth",
+    "foreign_policy_america": "foreign_policy_america",
+    "ada": "ada",
+    "norml": "norml",
+    "afp": "afp",
+    "ijm": "ijm",
+    "lcv": "lcv",
+    "hrc": "hrc"
+  },
+  "editions": [
+    {
+      "publisher_id": "heritage_action",
+      "scorecard_id": "heritage_action:119",
+      "state": "qualified",
+      "receipt": "qualifications/heritage_action--119.json",
+      "receipt_sha256": "75daa8dbd3b6db71a43ca10809bf960882db6fe30f35c9041949b6fe38af43e1"
+    },
+    {
+      "publisher_id": "afl_cio",
+      "scorecard_id": "afl_cio:2025",
+      "state": "qualified",
+      "receipt": "qualifications/afl_cio--2025.json",
+      "receipt_sha256": "488e5cd406c4f74a56a0a29d83f0382b75a12de8c9ddbf717bae3b610912ec7a"
+    },
+    {
+      "publisher_id": "c4ip",
+      "scorecard_id": "c4ip:2026-interactive",
+      "state": "qualified",
+      "receipt": "qualifications/c4ip--2026-interactive.json",
+      "receipt_sha256": "8385ef1b1de00b3571c2440ec0e870c3725df6f9076f858c585b455d3364425a"
+    },
+    {
+      "publisher_id": "c4ip",
+      "scorecard_id": "c4ip:2024-first-edition",
+      "state": "qualified",
+      "receipt": "qualifications/c4ip--2024-first-edition.json",
+      "receipt_sha256": "fe7bc5f57051bdde9a1d983937a11b1552227302aefa0a240dfc075217c75e78"
+    },
+    {
+      "publisher_id": "humane_world_action",
+      "scorecard_id": "humane_world_action:2025-final",
+      "state": "qualified",
+      "receipt": "qualifications/humane_world_action--2025-final.json",
+      "receipt_sha256": "cd3384e39c16fa7d05a8db97c99ef860ec5855dd44dbec4bd8f0b5336fc672d2"
+    },
+    {
+      "publisher_id": "end_citizens_united",
+      "scorecard_id": "end_citizens_united:2026",
+      "state": "qualified",
+      "receipt": "qualifications/end_citizens_united--2026.json",
+      "receipt_sha256": "53183e8840af050f503107e8667f02b04b0ade861fe75ad18ce408139549761b"
+    },
+    {
+      "publisher_id": "ajp_action",
+      "scorecard_id": "ajp_action:2026",
+      "state": "qualified",
+      "receipt": "qualifications/ajp_action--2026.json",
+      "receipt_sha256": "e3490fce7f105aa4eda3c4a9784441bf3599e810d9f096f8b49dddf1a44b588f"
+    },
+    {
+      "publisher_id": "afscme",
+      "scorecard_id": "afscme:2025-2026",
+      "state": "qualified",
+      "receipt": "qualifications/afscme--2025-2026.json",
+      "receipt_sha256": "21a9f092e7ef852dc059c2dce24f0baa4128481d11ae156d528a849c30d7ff46"
+    },
+    {
+      "publisher_id": "numbersusa",
+      "scorecard_id": "numbersusa:119",
+      "state": "qualified",
+      "receipt": "qualifications/numbersusa--119.json",
+      "receipt_sha256": "1c834c3cf9643e32277f0951feca651372ca02ad0074fef6ce353ebe273cf8d1"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:1971",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--1971.json",
+      "receipt_sha256": "1f5f99293809e0264a659158b4b4216d2ae6f3a16670b1ef4df75ee6a1baaafb"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:1972",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--1972.json",
+      "receipt_sha256": "68602dd13fb539d801718ac95395a94bd1ab2f3981cbeded87f448b39d14f1de"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:1973",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--1973.json",
+      "receipt_sha256": "13060e6f19d72b0e03f1935072841717cb71911d2251c6b1b17b4a606dc3e50d"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:1974",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--1974.json",
+      "receipt_sha256": "5a438a7288683e4fb4905a74ff1b30730372de6ea53d6d389353fcf6b7b8004b"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:1975",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--1975.json",
+      "receipt_sha256": "9064ef0d08d6d513a354fe5881f2c2397309706ac6ff47fa9ec262e607c7e08d"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:1976",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--1976.json",
+      "receipt_sha256": "5a21c3736de7d7984b6b326f46f22c20300cf5e07b9777c658352f8e1ca852cb"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:1977",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--1977.json",
+      "receipt_sha256": "e51ace3123d6e8407fcfbc0b6dea0e2ec730ba983ff38a033e01ead5e06315fc"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:1978",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--1978.json",
+      "receipt_sha256": "4dca22e4d327b06e23716c49181b2741d3a5a721488f06c66e28d5cbcf2248d5"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:1979",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--1979.json",
+      "receipt_sha256": "8d99bed6dd2c1a30c7445359cfd0d51d3146693314d7d753c5e9ddc3cf2ec889"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:1980",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--1980.json",
+      "receipt_sha256": "eb5f21c1bd13662acbfbfdeaf3c2085f0a664f29d5d783556d4e83ae082934f0"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:1981",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--1981.json",
+      "receipt_sha256": "9c3b6b8fb5fbacc81d08ef4c8abe33257f29a425ba9e7303bfdba0ba2cb9f59b"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:1982",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--1982.json",
+      "receipt_sha256": "dc9c4a46650512544bfaaf5db5bf9b7d722da1b55cfd472d96ce64436d56af83"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:1983",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--1983.json",
+      "receipt_sha256": "7c75aec2ddd8f2e2755a13549b9c38b006cb9f7af7a955b3451a7de28a339313"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:1984",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--1984.json",
+      "receipt_sha256": "24a60372195dc7225470686e60bc13b61be6fb95ab3a17c288233a3e4c64d070"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:1985",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--1985.json",
+      "receipt_sha256": "35a929dbcb19d2140e2ef3940c5e3efc4a5fac270a2fc138a8430b444edc5763"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:1986",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--1986.json",
+      "receipt_sha256": "0b9082556cf45e96eadb087cf7fc26fde97fe3ee0144a88675468cea1ca426e8"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:1987",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--1987.json",
+      "receipt_sha256": "cdb3fe02a08f4552ec1392aca94415db0c8393a781e7b4c9a801c4c36e616709"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:1988",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--1988.json",
+      "receipt_sha256": "87a373225b3453824c684ec74776e63ec150eccaea9dcbdb23636ecabddadff5"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:1989",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--1989.json",
+      "receipt_sha256": "9ce45be2e43f8bc6fb6aafc83a492097e03deb9cfb0312a35403dc432ebb76d3"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:1990",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--1990.json",
+      "receipt_sha256": "b97f66be1d221e5a5825ac9879213516d2e692e6c5e99b75d1d7c68fc1b24478"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:1991",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--1991.json",
+      "receipt_sha256": "1656a238a526971307f29559d3b86cfe616ad9c7985e0647609b830864966c8c"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:1992",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--1992.json",
+      "receipt_sha256": "a9a5272deb68b3d3cd84c650af782d810f7a2d736b09456dd626c7546c1dc0bc"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:1993",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--1993.json",
+      "receipt_sha256": "e6d08dbd5e3739ddd972249ea234b00899248e5df9f786d2f26df866ca4e957d"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:1994",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--1994.json",
+      "receipt_sha256": "0ea807a37d07ad8d8f916b8c7d7cc1dbd2565b67b4413b3dfef3373379bf5fb6"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:1995",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--1995.json",
+      "receipt_sha256": "4eb3481958b7c2c5413d1d6f78303551bd61e5a7458868d7470f6af20adf699b"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:1996",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--1996.json",
+      "receipt_sha256": "33890af34d9c259edd480c089b5ea19f09cf588c7216571ee9d2571dc931bc37"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:1997",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--1997.json",
+      "receipt_sha256": "811e49bdd2875e00c15ae0529ffcc01766a5d2ab1a28c36309f230a5f25fb717"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:1998",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--1998.json",
+      "receipt_sha256": "24270496019540a42702fe34bac70a32d56de30222e0f2d436a5875dfd9ef5a9"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:1999",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--1999.json",
+      "receipt_sha256": "7edeb25c642e02eb591c44eea9dc69119697c20723ec7951f7efc1b8676ac2fc"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:2000",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--2000.json",
+      "receipt_sha256": "300c2b0728f9d7dc51c2545c3aca38314e81f1aebccc8f860322021b0e024c28"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:2001",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--2001.json",
+      "receipt_sha256": "8c37ba26a783d9ea513ac0315d01e6ba274bd0df5b19577a0284add739612ab0"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:2002",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--2002.json",
+      "receipt_sha256": "064f87122b753c23f3a89bb376e54fdf0b92fd97875606f3dc471807c7beac08"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:2003",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--2003.json",
+      "receipt_sha256": "9b534043bac9b4e8232b333c3ca10dc5fc9a8faa058daa731e884f5a5fb98780"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:2004",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--2004.json",
+      "receipt_sha256": "33438345712ee17b7e2841c2f75c5da5c6151ac2614e9219446050de86afc6fb"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:2005",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--2005.json",
+      "receipt_sha256": "578019421af89ad57ad7193b6ac9590bde2a416e39c03e47ba3314dfad7330b3"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:2006",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--2006.json",
+      "receipt_sha256": "58f30b064ee1cb66a2bd7c848619b7cb88e88c57ab12fc4e54dcd4dec1495a21"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:2007",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--2007.json",
+      "receipt_sha256": "59257011afd4b8dd54e2519db241ddd979eab771294d3a24dfc8daaf5d61c5f0"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:2008",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--2008.json",
+      "receipt_sha256": "d35a4322f21aca06ca8e1b318181867e189a6476eceb3d3f63c242456042dfb6"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:2009",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--2009.json",
+      "receipt_sha256": "4b5e15c6e4c2e5ad7e6fc65ab1f1e7d297fcadfe71af0fdbe56b07ff49726d0f"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:2010",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--2010.json",
+      "receipt_sha256": "274ca8f2342b5191843907317f573c21c77c5cf99d401e8c7316c47132fabd26"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:2011",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--2011.json",
+      "receipt_sha256": "09fe3d76a50411896a531a78f16af36cde4da7246025761971b225ec0908ceb0"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:2012",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--2012.json",
+      "receipt_sha256": "42c15d81bacd486c59791686be49c1bd1f3397d95b1e7a102ac0bd7ad29b26e5"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:2013",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--2013.json",
+      "receipt_sha256": "ff45b6f488239fe6f6882c94d892dad953630b2f30353e36a5834108d7bc588e"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:2014",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--2014.json",
+      "receipt_sha256": "5db4e168f42b642ad370439718524d7b95a42a835dc2a1eea9cf72e0d2fd22e5"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:2015",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--2015.json",
+      "receipt_sha256": "27ab5cc6c0c7f4c5c4a61f1f3c4076577e7f2635b5aaa6310f454ab3c8379db7"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:2016",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--2016.json",
+      "receipt_sha256": "f68b46da3110a4a793f1518764bc344cbe5acc18723927f79978aa8285191f90"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:2017",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--2017.json",
+      "receipt_sha256": "1de2cbafe5c610e37064fe8e5780c51e34bf51e275de5771e1b8f7075599405d"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:2018",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--2018.json",
+      "receipt_sha256": "d03b9c5cee09520cf390dae890562cc67b11de815b438c8fe6fb7d1aa53669b1"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:2019",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--2019.json",
+      "receipt_sha256": "70c827588d9232613c15b2b1daebfa2304a3d488844a8fd2ca73087d78572ec3"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:2020",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--2020.json",
+      "receipt_sha256": "6ffe72a0775c1785a8f3f71abf44f9f86f2e75dbe8919750d0e5e075da21b9c9"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:2021",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--2021.json",
+      "receipt_sha256": "766d5cf2084bbafdb019476d9cf6d6534f5cd2a6ec8210201167777611807d02"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:2022",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--2022.json",
+      "receipt_sha256": "e19a0e5be07f92d035bd29a5810ab82630d7792bb2d1af92fccae0088c1faa6d"
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:2025",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--2025.json",
+      "receipt_sha256": "ccef2c4c18faf949dfd082c3bffb8a9b25ccf9cd8dc9b2a991de97e1129d8c3f"
+    },
+    {
+      "publisher_id": "aauw",
+      "scorecard_id": "aauw:118-final",
+      "state": "qualified",
+      "receipt": "qualifications/aauw--118-final.json",
+      "receipt_sha256": "97a8e759bd3be53ada698a08630a4ad823a6e69496e082394fa5f4bb43cc23cb"
+    },
+    {
+      "publisher_id": "ara",
+      "scorecard_id": "ara:119-2025",
+      "state": "qualified",
+      "receipt": "qualifications/ara--119-2025.json",
+      "receipt_sha256": "5fabae0de12669a551fe6a9df31f594ba33cec04800f467d3e196edae2d29b4e"
+    },
+    {
+      "publisher_id": "leadership_conference",
+      "scorecard_id": "leadership_conference:118",
+      "state": "qualified",
+      "receipt": "qualifications/leadership_conference--118.json",
+      "receipt_sha256": "e744a9cb53a04868570649bc54b8993ee7af157ccc2acb482c293cd336e282b7"
+    },
+    {
+      "publisher_id": "american_energy_alliance",
+      "scorecard_id": "american_energy_alliance:119",
+      "state": "qualified",
+      "receipt": "qualifications/american_energy_alliance--119.json",
+      "receipt_sha256": "0ec9756c4d0109b10f556b7ffa59599431b903228b79801822fbc107907632ca"
+    },
+    {
+      "publisher_id": "nea",
+      "scorecard_id": "nea:119-2025",
+      "state": "qualified",
+      "receipt": "qualifications/nea--119-2025.json",
+      "receipt_sha256": "3831a56a3b9f2f56931cb68361e954f1cdf71452d018127d069bfe9c3b97be6a"
+    },
+    {
+      "publisher_id": "numbersusa",
+      "scorecard_id": "numbersusa:118",
+      "state": "qualified",
+      "receipt": "qualifications/numbersusa--118.json",
+      "receipt_sha256": "4cbcb374f5cf74fcb59b7907072ebaa1119db391e89478f6e28a3eede51cd918"
+    },
+    {
+      "publisher_id": "ntu",
+      "scorecard_id": "ntu:2025",
+      "state": "qualified",
+      "receipt": "qualifications/ntu--2025.json",
+      "receipt_sha256": "2ccbf03284d6c43e6b78874525bfe0b5f609774265be0603629f3c24b3ee2949"
+    },
+    {
+      "publisher_id": "club_for_growth",
+      "scorecard_id": "club_for_growth:2025",
+      "state": "qualified",
+      "receipt": "qualifications/club_for_growth--2025.json",
+      "receipt_sha256": "d73db1af03b18c2e379d613708e446af1ad33c29eba4d2c1c5984929eb022294"
+    },
+    {
+      "publisher_id": "foreign_policy_america",
+      "scorecard_id": "foreign_policy_america:118",
+      "state": "qualified",
+      "receipt": "qualifications/foreign_policy_america--118.json",
+      "receipt_sha256": "e6dba4a81814eebe0252014382917e44b14f0ae150e66c77919dd5fbc47fb9ca"
+    },
+    {
+      "publisher_id": "ada",
+      "scorecard_id": "ada:2023",
+      "state": "qualified",
+      "receipt": "qualifications/ada--2023.json",
+      "receipt_sha256": "3500f5fefa7cb854c014aa4115d8a034d84d6011d07850d494a05f2aaed72729"
+    },
+    {
+      "publisher_id": "norml",
+      "scorecard_id": "norml:federal-incumbents",
+      "state": "qualified",
+      "receipt": "qualifications/norml--federal-incumbents.json",
+      "receipt_sha256": "7e58843fa16ecf3707de2f7061c8d91d59092487e3f2dbfa129a31752653e075"
+    },
+    {
+      "publisher_id": "afp",
+      "scorecard_id": "afp:3933",
+      "state": "published",
+      "receipt": "qualifications/afp--3933--published.json",
+      "receipt_sha256": "00a0d56d77bd5b23901d1ef4ec70b227d77ab98ac4708b4b62fcd12007fdd903"
+    },
+    {
+      "publisher_id": "ijm",
+      "scorecard_id": "ijm:3995",
+      "state": "published",
+      "receipt": "qualifications/ijm--3995--published.json",
+      "receipt_sha256": "e2bfed8690597140be2731c0003ea10a0a7eb275df1a8f093388c741da70fe22"
+    },
+    {
+      "publisher_id": "lcv",
+      "scorecard_id": "lcv:2025",
+      "state": "published",
+      "receipt": "qualifications/lcv--2025--published.json",
+      "receipt_sha256": "16044676b8ffeebbd4b255aed5e8a416ca7361c5b017e295727f0e8fe52e0b5e"
+    },
+    {
+      "publisher_id": "hrc",
+      "scorecard_id": "hrc:118-final",
+      "state": "published",
+      "receipt": "qualifications/hrc--118-final--published.json",
+      "receipt_sha256": "d4192174c1f484c100e70cbd5f31cbf31d43482480d598ed83c6ad70cc77c291"
+    }
+  ],
+  "api_observations": [
+    {
+      "publisher_id": "afl_cio",
+      "scorecard_id": "afl_cio:2025",
+      "state": "qualified",
+      "receipt": "qualifications/afl_cio--2025.json",
+      "receipt_sha256": "488e5cd406c4f74a56a0a29d83f0382b75a12de8c9ddbf717bae3b610912ec7a",
+      "endpoints": [
+        {
+          "method": "GET",
+          "url_template": "https://aflcio.org/views/ajax?view_name={view}&view_display_id={display}&_wrapper_format=drupal_ajax",
+          "purpose": "JSON containing member-list HTML fragments; complete rating rendition is the official workbook"
+        }
+      ]
+    },
+    {
+      "publisher_id": "c4ip",
+      "scorecard_id": "c4ip:2026-interactive",
+      "state": "qualified",
+      "receipt": "qualifications/c4ip--2026-interactive.json",
+      "receipt_sha256": "8385ef1b1de00b3571c2440ec0e870c3725df6f9076f858c585b455d3364425a",
+      "endpoints": [
+        {
+          "method": "GET",
+          "url_template": "https://cscp.c4ip.org/public/members/browse?skip={offset}&limit={limit}",
+          "purpose": "Member identities and grades"
+        },
+        {
+          "method": "GET",
+          "url_template": "https://cscp.c4ip.org/public/bills?skip={offset}&limit={limit}",
+          "purpose": "Bill catalog"
+        },
+        {
+          "method": "GET",
+          "url_template": "https://cscp.c4ip.org/public/members/{member_id}/complete",
+          "purpose": "Member grades and bill sponsorship facts"
+        }
+      ]
+    },
+    {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:2025",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--2025.json",
+      "receipt_sha256": "ccef2c4c18faf949dfd082c3bffb8a9b25ccf9cd8dc9b2a991de97e1129d8c3f",
+      "endpoints": [
+        {
+          "method": "POST",
+          "url_template": "https://www.cpac.org/_api/cloud-data/v2/items/query",
+          "purpose": "PeopleDatabase annual/lifetime ratings and BillDatabase scoring items; anonymous visitor bootstrap required"
+        }
+      ]
+    },
+    {
+      "publisher_id": "american_energy_alliance",
+      "scorecard_id": "american_energy_alliance:119",
+      "state": "qualified",
+      "receipt": "qualifications/american_energy_alliance--119.json",
+      "receipt_sha256": "0ec9756c4d0109b10f556b7ffa59599431b903228b79801822fbc107907632ca",
+      "endpoints": [
+        {
+          "method": "POST",
+          "url_template": "https://www.americanenergyalliance.org/wp-admin/admin-ajax.php",
+          "purpose": "action=aea_datatable_action; paginated chamber members, ratings, items and member actions"
+        }
+      ]
+    }
+  ],
+  "publication_observations_sha256": "d88c0da58a57aa64e76e3b6515e43eb317e079a9bdb9371208a500be8f3dae72"
+}

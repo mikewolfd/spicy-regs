@@ -102,6 +102,14 @@ def exact_json(value: Any) -> str:
     return json.dumps(_pack(value), ensure_ascii=False, separators=(",", ":"), allow_nan=False)
 
 
+def decode_exact_json(value: str) -> Any:
+    """Read the existing lossless evidence encoding and require its canonical form."""
+    decoded = _unpack(json.loads(value))
+    if exact_json(decoded) != value:
+        raise ValueError("Evidence differs from its canonical lossless encoding")
+    return decoded
+
+
 def _digest(value: Any) -> str:
     return "sha256:" + hashlib.sha256(exact_json(value).encode()).hexdigest()
 

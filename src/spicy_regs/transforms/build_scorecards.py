@@ -20,7 +20,7 @@ from spicy_docs.transport.captured import CapturedBodyResponse
 from spicy_docs.transport.credentials import CredentialRefusedError
 
 from spicy_regs.scorecards.registry import REGISTRY, load_registry, select_sources
-from spicy_regs.scorecards.acquisition import ScorecardTransportError
+from spicy_regs.scorecards.acquisition import MAX_BYTES, MAX_REQUESTS, ScorecardTransportError, validate_limits
 from spicy_regs.source_evidence import CaptureEvidence, SourceEvidenceError
 from spicy_regs.sources import r2
 from spicy_regs.scorecards.etl import (
@@ -46,8 +46,6 @@ TABLE_NAMES = (
     "scorecard_member_item_results",
 )
 OUTPUTS = tuple(name + ".parquet" for name in TABLE_NAMES if name != "scorecard_snapshots")
-MAX_BYTES = 20 * 1024 * 1024
-MAX_REQUESTS = 2000
 
 
 class NoScorecardsDue(RuntimeError):
@@ -85,8 +83,9 @@ def _fatal(error: BaseException) -> None:
 
 
 @contextmanager
-def bounded_fetch(source):
+def bounded_fetch(source, *, max_bytes=MAX_BYTES, max_requests=MAX_REQUESTS):
     """Bound exact HTTP payloads in memory, outside all workflow upload trees."""
+    validate_limits(max_bytes, max_requests)
     count = 0
     with httpx.Client(
         timeout=httpx.Timeout(30, connect=10),
@@ -94,30 +93,47 @@ def bounded_fetch(source):
         headers={"Accept-Encoding": "identity", "User-Agent": "SpicyRegs/scorecards"},
     ) as client:
 
-        def fetch(url):
+        def request(url, *, method="GET", content=None, request_headers=None):
             nonlocal count
+            if method not in {"GET", "POST"} or (content is not None) != (method == "POST"):
+                raise ScorecardRefreshError("Publisher request method and body disagree")
             requested, current = url, url
             host = urlsplit(url).hostname
+            # The CPAC publisher application explicitly configures this public
+            # GraphQL service over HTTP. The reader retains that source choice.
+            schemes = (
+                {"http", "https"}
+                if source.publisher_id == "cpac" and host == "production.data.conservative.org"
+                else {"https"}
+            )
             started = time.monotonic()
             for _ in range(6):
                 parsed = urlsplit(current)
                 if (
-                    parsed.scheme != "https"
+                    parsed.scheme not in schemes
                     or parsed.hostname not in {host, "www." + str(host), str(host).removeprefix("www.")}
                     or parsed.username
                     or parsed.password
                     or parsed.port
+                    or (request_headers and parsed.hostname != host)
                 ):
                     raise ScorecardRefreshError("Publisher redirect leaves the selected host")
-                if count >= MAX_REQUESTS:
+                if count >= max_requests:
                     raise ScorecardRefreshError("Scorecard HTTP request budget exhausted")
                 count += 1
                 observed = datetime.now(UTC).isoformat()
                 raw = bytearray()
                 try:
-                    with client.stream("GET", current) as response:
+                    headers = {"Content-Type": "application/json"} if method == "POST" else {}
+                    if request_headers:
+                        headers.update(request_headers)
+                    if source.publisher_id == "cpac" and host == "production.data.conservative.org":
+                        # Public role declarations used by the publisher app,
+                        # not credentials or an administrative role.
+                        headers.update({"X-Hasura-Role": "anonymous", "X-Hasura-User-Id": "-1"})
+                    with client.stream(method, current, content=content, headers=headers) as response:
                         for chunk in response.iter_raw():
-                            if len(raw) + len(chunk) > MAX_BYTES or time.monotonic() - started > 90:
+                            if len(raw) + len(chunk) > max_bytes or time.monotonic() - started > 90:
                                 raise ScorecardRefreshError("Source HTTP response exceeds its acquisition bound")
                             raw.extend(chunk)
                         capture = CapturedBodyResponse(
@@ -128,9 +144,13 @@ def bounded_fetch(source):
                             observed,
                             bytes(raw),
                             content_encoding=response.headers.get("content-encoding", "identity"),
+                            method=method,
+                            request_body=content,
                         )
                         if response.is_redirect:
                             source.capture(capture, stage="redirect")
+                            if method == "POST":
+                                raise ScorecardRefreshError("Publisher POST redirects require an explicit source rule")
                             location = response.headers.get("location")
                             if not location:
                                 raise ScorecardRefreshError("Publisher redirect has no location")
@@ -150,7 +170,9 @@ def bounded_fetch(source):
                     raise
             raise ScorecardRefreshError("Publisher redirect limit exceeded")
 
-        yield fetch
+        from spicy_regs.scorecards.acquisition import RequestFetcher
+
+        yield RequestFetcher(request)
 
 
 def _prior_tables(
@@ -278,6 +300,9 @@ def build_scorecards(
     download_prior_receipts: Callable | None = None,
     receipt_generation_id: str | None = None,
     now: datetime | None = None,
+    max_bytes: int = MAX_BYTES,
+    max_requests: int = MAX_REQUESTS,
+    validate_acquisitions: Callable | None = None,
 ) -> tuple[Path, ...]:
     """Acquire explicit selected scopes and construct one complete source family.
 
@@ -285,6 +310,7 @@ def build_scorecards(
     retention together. These objects never enter public evidence or table rows.
     The host owns the model choice and private storage outside publication trees.
     """
+    validate_limits(max_bytes, max_requests)
     if (pdf_extractor is None) != (retain_extraction is None):
         raise ScorecardRefreshError("PDF extraction requires both an extractor and private observation retention")
     now = now or datetime.now(UTC)
@@ -333,13 +359,18 @@ def build_scorecards(
             historical_backfill=historical_backfill,
         )
         try:
-            with fetch_factory(scope) as fetch:
+            fetch_manager = (
+                bounded_fetch(scope, max_bytes=max_bytes, max_requests=max_requests)
+                if fetch_factory is bounded_fetch
+                else fetch_factory(scope)
+            )
+            with fetch_manager as fetch:
                 context = provider.context(
                     fetch=fetch,
                     capture=record,
                     evidence_policy=source.evidence_policy,
-                    max_bytes=MAX_BYTES,
-                    max_requests=MAX_REQUESTS,
+                    max_bytes=max_bytes,
+                    max_requests=max_requests,
                     pdf_extractor=pdf_extractor,
                     retain_extraction=retain_extraction,
                 )
@@ -359,8 +390,15 @@ def build_scorecards(
                     if edition.publisher_id != source.publisher_id:
                         raise provider.refusal("Publisher listing escaped its selected identity")
                     try:
-                        acquired = adapter.acquire_scorecard(edition, context)
-                        _accept(acquired, edition, source, receipts, provider, adapter.parser_version)
+                        edition_adapter = adapter.for_edition(edition) if hasattr(adapter, "for_edition") else adapter
+                        if edition_adapter is not adapter:
+                            scope.event(
+                                "scorecard-edition-reader",
+                                scorecard_id=edition.scorecard_id,
+                                reader_parser_version=edition_adapter.parser_version,
+                            )
+                        acquired = edition_adapter.acquire_scorecard(edition, context)
+                        _accept(acquired, edition, source, receipts, provider, edition_adapter.parser_version)
                         if evidence.retention_failure:
                             raise SourceEvidenceError("Source evidence retention failed")
                         if acquired.scorecard_id in accepted:
@@ -403,6 +441,8 @@ def build_scorecards(
         evidence.event("scorecard-selection-missing", edition_ids=sorted(requested - selected_editions))
     if evidence.retention_failure:
         raise SourceEvidenceError("Source evidence retention failed")
+    if validate_acquisitions is not None:
+        validate_acquisitions()
     attempt_receipts = source_failure_receipts(failed_attempts, generation_id=generation_id, registry=registry)
     if not accepted:
         write_dataset(
@@ -447,7 +487,10 @@ def build_scorecards(
             )
     provider.validate(merged)  # Duplicates/orphans fail before the merge helper can deduplicate them.
     paths = write_family(
-        output_dir, merged, generation_id=generation_id, attempt_failures=attempt_receipts,
+        output_dir,
+        merged,
+        generation_id=generation_id,
+        attempt_failures=attempt_receipts,
         prior_receipts=prior_receipts,
     )
     readback = read_family(output_dir, TABLE_NAMES)
