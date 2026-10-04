@@ -1,20 +1,21 @@
 {
   "dataset": "scorecard_integration_progress",
   "schema_version": "1",
-  "observed_at": "2026-10-04T10:24:16.149290+00:00",
+  "observed_at": "2026-10-04T10:54:35.276699+00:00",
   "input_pins": {
     "adapter_inventory.json": "656a6a93f6b21733e61aae3ed54fc0a69e3dafcf900eaf44fa22cbf1f37c1b98",
     "publisher_api_inventory.json": "c776ad48df5fe970f812d16e8b7464a45a57c177d7c1cf2dde6049870104061a",
-    "integration_qualifications.json": "021831bd8d0cd770395ce36be3bd8c6ebcc2b5f5a6087faf78ca00e844d6a3a6"
+    "integration_qualifications.json": "175446ea5db4507a5f26c5d37b4848c5a8a95101a2931583b361495fe1b562b7"
   },
   "scope": "Every publisher candidate in both inventories; all available editions and renditions remain in scope",
   "states": {
     "blocked_authority": 1,
     "identity_review": 1,
     "published_scope": 39,
+    "qualified_scope": 5,
     "scope_filter_required": 1,
-    "unverified_lead": 72,
-    "verified_unimplemented": 11
+    "unverified_lead": 70,
+    "verified_unimplemented": 8
   },
   "publishers": [
     {
@@ -128,15 +129,7 @@
           "receipt_sha256": "8e3738b7b1790af8c7930ac1ee42997edc1d7625f2abe606180584331403d54b"
         }
       ],
-      "verified_api_endpoints": [
-        {
-          "method": "GET",
-          "url_template": "https://aflcio.org/views/ajax?view_name={view}&view_display_id={display}&_wrapper_format=drupal_ajax",
-          "purpose": "JSON containing member-list HTML fragments; complete rating rendition is the official workbook",
-          "qualification_receipt": "qualifications/afl_cio--2025.json",
-          "parser_version": "afl-cio-2025-workbooks/1"
-        }
-      ],
+      "verified_api_endpoints": [],
       "discovery_api_status": "export_only_observed",
       "discovery_support_status": "implemented_unqualified",
       "original_source_urls": [
@@ -251,9 +244,80 @@
       "publisher_id": "animal_welfare_institute",
       "publisher_name": "Animal Welfare Institute",
       "task_id": "ss-6a2y",
-      "state": "unverified_lead",
-      "reader": null,
-      "qualified_editions": [],
+      "state": "qualified_scope",
+      "reader": "awi",
+      "qualified_editions": [
+        {
+          "publisher_id": "animal_welfare_institute",
+          "scorecard_id": "animal_welfare_institute:115-House-aggregate",
+          "state": "qualified",
+          "receipt": "qualifications/animal_welfare_institute--115-House-aggregate.json",
+          "receipt_sha256": "0b2918fc77a0927e88bc09a37413bdeaac4aafd8646986fc9ff14de92f539f58"
+        },
+        {
+          "publisher_id": "animal_welfare_institute",
+          "scorecard_id": "animal_welfare_institute:115-Senate-aggregate",
+          "state": "qualified",
+          "receipt": "qualifications/animal_welfare_institute--115-Senate-aggregate.json",
+          "receipt_sha256": "6f33a015a5f3a40013dc24c92cc366599c9be6533859f472d3be87187d8739a5"
+        },
+        {
+          "publisher_id": "animal_welfare_institute",
+          "scorecard_id": "animal_welfare_institute:116-House-aggregate",
+          "state": "qualified",
+          "receipt": "qualifications/animal_welfare_institute--116-House-aggregate.json",
+          "receipt_sha256": "23fea20d28a468fd9b8fd2d174168bcefd29b220658ada25760dde1ad3049513"
+        },
+        {
+          "publisher_id": "animal_welfare_institute",
+          "scorecard_id": "animal_welfare_institute:116-Senate-aggregate",
+          "state": "qualified",
+          "receipt": "qualifications/animal_welfare_institute--116-Senate-aggregate.json",
+          "receipt_sha256": "e4fb76549fc33025a87f7787db72c3d92a1f764d399a3611f180513bfbdce18f"
+        },
+        {
+          "publisher_id": "animal_welfare_institute",
+          "scorecard_id": "animal_welfare_institute:117-House-aggregate",
+          "state": "qualified",
+          "receipt": "qualifications/animal_welfare_institute--117-House-aggregate.json",
+          "receipt_sha256": "70e2bdf8548e7f4829997d9b57b18e3a11d0074fdd43087b9573fc7df2cb5d07"
+        },
+        {
+          "publisher_id": "animal_welfare_institute",
+          "scorecard_id": "animal_welfare_institute:117-Senate-aggregate",
+          "state": "qualified",
+          "receipt": "qualifications/animal_welfare_institute--117-Senate-aggregate.json",
+          "receipt_sha256": "15d3b517dccb39686c8cc78f1125eab91514f2622184b0638ea206a8f0f8d71a"
+        },
+        {
+          "publisher_id": "animal_welfare_institute",
+          "scorecard_id": "animal_welfare_institute:118-House-aggregate",
+          "state": "qualified",
+          "receipt": "qualifications/animal_welfare_institute--118-House-aggregate.json",
+          "receipt_sha256": "bc0164d22792f4d4a7766ad9fe4719e9c6fd5888c05757c278110db33c68bce8"
+        },
+        {
+          "publisher_id": "animal_welfare_institute",
+          "scorecard_id": "animal_welfare_institute:118-Senate-aggregate",
+          "state": "qualified",
+          "receipt": "qualifications/animal_welfare_institute--118-Senate-aggregate.json",
+          "receipt_sha256": "17857031e37cfc61178332a73d2f308e4101d6c6650672b13a91fc2639362e65"
+        },
+        {
+          "publisher_id": "animal_welfare_institute",
+          "scorecard_id": "animal_welfare_institute:119-House-aggregate",
+          "state": "qualified",
+          "receipt": "qualifications/animal_welfare_institute--119-House-aggregate.json",
+          "receipt_sha256": "bc3a8dc9723ffef43a8a5e067c64cac704035c56e1b23df4f6c7187f43b6e404"
+        },
+        {
+          "publisher_id": "animal_welfare_institute",
+          "scorecard_id": "animal_welfare_institute:119-Senate-aggregate",
+          "state": "qualified",
+          "receipt": "qualifications/animal_welfare_institute--119-Senate-aggregate.json",
+          "receipt_sha256": "bd960aa5f16f10c53b07ea67f68569846a3e047b0b4f6bd59bbaa1f0bd2e33f1"
+        }
+      ],
       "verified_api_endpoints": [],
       "discovery_api_status": "blocked",
       "discovery_support_status": "unverified_lead",
@@ -261,7 +325,7 @@
         "https://awionline.org/sites/default/files/uploads/documents/AnimalWelfarePublicationsBrochure.pdf",
         "https://awionline.org/compassion-index"
       ],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Integrate remaining available editions and renditions"
     },
     {
       "publisher_id": "ara",
@@ -336,42 +400,20 @@
       "qualified_editions": [
         {
           "publisher_id": "c4ip",
-          "scorecard_id": "c4ip:2026-interactive",
-          "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/b4d26183fbae43b290d0499935e6a685c5cf474c4a3d799938ec0ae03dbaa438.json",
-          "receipt_sha256": "9ffcba52e3e954e502abf5fac7ea6097b3dfb33e3d07f696f54370fe642d4b0f"
-        },
-        {
-          "publisher_id": "c4ip",
           "scorecard_id": "c4ip:2024-first-edition",
           "state": "published",
           "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/6f79b0fb1922e3508b393e22dd46d035d9f70105a0f29af238d878f9f767c329.json",
           "receipt_sha256": "323700e7b55c65bfcf7ea0ee66521521d63a9a18961f42a15f51352520ec3dd9"
-        }
-      ],
-      "verified_api_endpoints": [
-        {
-          "method": "GET",
-          "url_template": "https://cscp.c4ip.org/public/members/browse?skip={offset}&limit={limit}",
-          "purpose": "Member identities and grades",
-          "qualification_receipt": "qualifications/c4ip--2026-interactive.json",
-          "parser_version": "c4ip-interactive-public-api/2"
         },
         {
-          "method": "GET",
-          "url_template": "https://cscp.c4ip.org/public/bills?skip={offset}&limit={limit}",
-          "purpose": "Bill catalog",
-          "qualification_receipt": "qualifications/c4ip--2026-interactive.json",
-          "parser_version": "c4ip-interactive-public-api/2"
-        },
-        {
-          "method": "GET",
-          "url_template": "https://cscp.c4ip.org/public/members/{member_id}/complete",
-          "purpose": "Member grades and bill sponsorship facts",
-          "qualification_receipt": "qualifications/c4ip--2026-interactive.json",
-          "parser_version": "c4ip-interactive-public-api/2"
+          "publisher_id": "c4ip",
+          "scorecard_id": "c4ip:2026-interactive",
+          "state": "published",
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/b4d26183fbae43b290d0499935e6a685c5cf474c4a3d799938ec0ae03dbaa438.json",
+          "receipt_sha256": "9ffcba52e3e954e502abf5fac7ea6097b3dfb33e3d07f696f54370fe642d4b0f"
         }
       ],
+      "verified_api_endpoints": [],
       "discovery_api_status": "html_pdf_only_observed",
       "discovery_support_status": "implemented_unqualified",
       "original_source_urls": [
@@ -800,17 +842,17 @@
         },
         {
           "publisher_id": "cpac",
-          "scorecard_id": "cpac:2025",
-          "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/acf36d894151e185793b44e0e611d977db4a6d228c7929ab9e071e54f06cfc56.json",
-          "receipt_sha256": "bc993b145baf95a565f6cb967035dd94b984b78f769729304ee916d62c3ec424"
-        },
-        {
-          "publisher_id": "cpac",
           "scorecard_id": "cpac:2023",
           "state": "published",
           "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/463e3aa7e977073be28b02b7752574547cfc09d21ef11468280cc63bbaa3651b.json",
           "receipt_sha256": "6dfeb1769f755faafb5767440e4c5fb84c3e776801d222e9ead498f0437ed354"
+        },
+        {
+          "publisher_id": "cpac",
+          "scorecard_id": "cpac:2025",
+          "state": "published",
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/acf36d894151e185793b44e0e611d977db4a6d228c7929ab9e071e54f06cfc56.json",
+          "receipt_sha256": "bc993b145baf95a565f6cb967035dd94b984b78f769729304ee916d62c3ec424"
         }
       ],
       "verified_api_endpoints": [
@@ -818,13 +860,6 @@
           "method": "POST",
           "url_template": "http://production.data.conservative.org/v1/graphql",
           "purpose": "Publisher ratings application GraphQL service"
-        },
-        {
-          "method": "POST",
-          "url_template": "https://www.cpac.org/_api/cloud-data/v2/items/query",
-          "purpose": "PeopleDatabase annual/lifetime ratings and BillDatabase scoring items; anonymous visitor bootstrap required",
-          "qualification_receipt": "qualifications/cpac--2025.json",
-          "parser_version": "cpac-current-federal-wix/1"
         }
       ],
       "discovery_api_status": "verified_api",
@@ -971,17 +1006,17 @@
       "qualified_editions": [
         {
           "publisher_id": "first_focus",
-          "scorecard_id": "first_focus:2026",
-          "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/fd016a77c5cca91eeeaadb7ba25b95e0b395602b695c410d71f99880227dc7f3.json",
-          "receipt_sha256": "e6986a5e8ff89f6b8be308750b989b92727d7d673bcd136387b61994d4887863"
-        },
-        {
-          "publisher_id": "first_focus",
           "scorecard_id": "first_focus:2025",
           "state": "published",
           "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/f6c816968958beb528b47a8f0a095c5bfb5f5ee57289c349b709db63ce9470a9.json",
           "receipt_sha256": "113aa87059ab9f43b7b7d3144a772cd932c0f51a9b2746cdecdfe568730100e7"
+        },
+        {
+          "publisher_id": "first_focus",
+          "scorecard_id": "first_focus:2026",
+          "state": "published",
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/fd016a77c5cca91eeeaadb7ba25b95e0b395602b695c410d71f99880227dc7f3.json",
+          "receipt_sha256": "e6986a5e8ff89f6b8be308750b989b92727d7d673bcd136387b61994d4887863"
         }
       ],
       "verified_api_endpoints": [],
@@ -1050,17 +1085,10 @@
       "qualified_editions": [
         {
           "publisher_id": "frc_action",
-          "scorecard_id": "frc_action:119-2-2026",
+          "scorecard_id": "frc_action:118-1-2023",
           "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/c0fcb900d52d909e05b2870c4878ddddea354ff913a30e747242af220803875a.json",
-          "receipt_sha256": "8ed013fcfc2e3d38733b82f0adbb74682509ce9b587917f77f8a71e1c3588bce"
-        },
-        {
-          "publisher_id": "frc_action",
-          "scorecard_id": "frc_action:119-1-2025",
-          "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/6c9b6b1fde82a10cc212c2cbbedc78f179dc4966c84d8f8e7dc932c6f33b69a9.json",
-          "receipt_sha256": "b0a726d7744e72634c4ec27efb8ad27002c7964cf13e9f1e4e4613edf17abf68"
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/9d383748cc1ac1fcabbd2f10adea87be9c417f41bf489ddaa6eed16c3bbe4617.json",
+          "receipt_sha256": "b69f77e5a78b7762a09f3c258f873489e542fa0bbd79dff1ddf3872a059efd62"
         },
         {
           "publisher_id": "frc_action",
@@ -1071,10 +1099,17 @@
         },
         {
           "publisher_id": "frc_action",
-          "scorecard_id": "frc_action:118-1-2023",
+          "scorecard_id": "frc_action:119-1-2025",
           "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/9d383748cc1ac1fcabbd2f10adea87be9c417f41bf489ddaa6eed16c3bbe4617.json",
-          "receipt_sha256": "b69f77e5a78b7762a09f3c258f873489e542fa0bbd79dff1ddf3872a059efd62"
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/6c9b6b1fde82a10cc212c2cbbedc78f179dc4966c84d8f8e7dc932c6f33b69a9.json",
+          "receipt_sha256": "b0a726d7744e72634c4ec27efb8ad27002c7964cf13e9f1e4e4613edf17abf68"
+        },
+        {
+          "publisher_id": "frc_action",
+          "scorecard_id": "frc_action:119-2-2026",
+          "state": "published",
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/c0fcb900d52d909e05b2870c4878ddddea354ff913a30e747242af220803875a.json",
+          "receipt_sha256": "8ed013fcfc2e3d38733b82f0adbb74682509ce9b587917f77f8a71e1c3588bce"
         }
       ],
       "verified_api_endpoints": [],
@@ -1123,17 +1158,10 @@
       "qualified_editions": [
         {
           "publisher_id": "goa",
-          "scorecard_id": "goa:4358-1848",
+          "scorecard_id": "goa:4358-1413",
           "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/7432a87536ec0964d4eba017801060b0cc817f9310d9aa114c5ef4f218137961.json",
-          "receipt_sha256": "4b88d57ae85608eb65de66d029a86129eed665ea23cc61b8155ad58835aa0fbe"
-        },
-        {
-          "publisher_id": "goa",
-          "scorecard_id": "goa:4358-1729",
-          "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/156aea3acab9ad2a5a5af40e9c6611045233abd3f7c864346b4a78b0a45e36a8.json",
-          "receipt_sha256": "e8fcef33b6cbc25b8eb9fb01d21ad02c42866ee9f55b7ac1a143db6a0b4d1638"
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/0e02c3f29900020cccd2ba165b37d6b9b771b6b5d33d54f6a0fd2de2eef0eed7.json",
+          "receipt_sha256": "ddd0f219a78fc99de5348e93a3efe0e2e949bac4fa3c31d24431a64781cafc11"
         },
         {
           "publisher_id": "goa",
@@ -1144,10 +1172,17 @@
         },
         {
           "publisher_id": "goa",
-          "scorecard_id": "goa:4358-1413",
+          "scorecard_id": "goa:4358-1729",
           "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/0e02c3f29900020cccd2ba165b37d6b9b771b6b5d33d54f6a0fd2de2eef0eed7.json",
-          "receipt_sha256": "ddd0f219a78fc99de5348e93a3efe0e2e949bac4fa3c31d24431a64781cafc11"
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/156aea3acab9ad2a5a5af40e9c6611045233abd3f7c864346b4a78b0a45e36a8.json",
+          "receipt_sha256": "e8fcef33b6cbc25b8eb9fb01d21ad02c42866ee9f55b7ac1a143db6a0b4d1638"
+        },
+        {
+          "publisher_id": "goa",
+          "scorecard_id": "goa:4358-1848",
+          "state": "published",
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/7432a87536ec0964d4eba017801060b0cc817f9310d9aa114c5ef4f218137961.json",
+          "receipt_sha256": "4b88d57ae85608eb65de66d029a86129eed665ea23cc61b8155ad58835aa0fbe"
         },
         {
           "publisher_id": "goa",
@@ -1278,16 +1313,59 @@
       "publisher_id": "ila",
       "publisher_name": "Institute for Legislative Analysis",
       "task_id": "ss-l797",
-      "state": "verified_unimplemented",
-      "reader": null,
-      "qualified_editions": [],
+      "state": "qualified_scope",
+      "reader": "ila_catalogue",
+      "qualified_editions": [
+        {
+          "publisher_id": "ila",
+          "scorecard_id": "ila:2025-api-catalogue",
+          "state": "qualified",
+          "receipt": "qualifications/ila--2025-api-catalogue.json",
+          "receipt_sha256": "6892bc0fa3d23c18c4004d41b2fadd5fb37cfc2ffce19d347085d545d55e133e"
+        },
+        {
+          "publisher_id": "ila",
+          "scorecard_id": "ila:2024-api-catalogue",
+          "state": "qualified",
+          "receipt": "qualifications/ila--2024-api-catalogue.json",
+          "receipt_sha256": "2d845547f73f0b56f9f9d66e1132213a0107abf95b9720e6a374926ca84c94e7"
+        },
+        {
+          "publisher_id": "ila",
+          "scorecard_id": "ila:2023-api-catalogue",
+          "state": "qualified",
+          "receipt": "qualifications/ila--2023-api-catalogue.json",
+          "receipt_sha256": "4e2d03cf8152436f84af557ae4dc6c82d58ab9074566f4e11466eb10a2f1dfef"
+        },
+        {
+          "publisher_id": "ila",
+          "scorecard_id": "ila:2022-api-catalogue",
+          "state": "qualified",
+          "receipt": "qualifications/ila--2022-api-catalogue.json",
+          "receipt_sha256": "681e0ae07c3fdc1f00bb6a71fb2dffe721a92a9908b0c6434e743ec87ecc16cb"
+        },
+        {
+          "publisher_id": "ila",
+          "scorecard_id": "ila:lifetime-api-catalogue",
+          "state": "qualified",
+          "receipt": "qualifications/ila--lifetime-api-catalogue.json",
+          "receipt_sha256": "e0450b9891c55f2ce6f960a0ec7f686a14daf4412b2b7a74dd3046969455bd13"
+        },
+        {
+          "publisher_id": "ila",
+          "scorecard_id": "ila:api-details",
+          "state": "qualified",
+          "receipt": "qualifications/ila--api-details.json",
+          "receipt_sha256": "2fd6a9855b6534b152bd9974725ed67ce85ece886cb7e4cf49d954a3aa9d6523"
+        }
+      ],
       "verified_api_endpoints": [],
       "discovery_api_status": "html_pdf_only_observed",
       "discovery_support_status": "verified_unimplemented",
       "original_source_urls": [
         "https://www.limitedgov.org/just-announced-2026-limited-government-index-and-awardees/"
       ],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Integrate remaining available editions and renditions"
     },
     {
       "publisher_id": "lcv",
@@ -1403,31 +1481,17 @@
       "qualified_editions": [
         {
           "publisher_id": "national_parks_action",
+          "scorecard_id": "national_parks_action:2020-pdf",
+          "state": "published",
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/8d5bdadd0c450aa6bf599c380fe307a32829754e5649132856f7a44dcd26bc78.json",
+          "receipt_sha256": "387cdaa5b4dacbcf9110246ce08aa1c34184d869ca8c5db86c2341748eeedb04"
+        },
+        {
+          "publisher_id": "national_parks_action",
           "scorecard_id": "national_parks_action:2024-pdf",
           "state": "published",
           "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/92231e5610227a0bc03c8907c01a41784c7aa1bf37e3876711f50161cb764026.json",
           "receipt_sha256": "c4648ca503cd69ecc0ba0e283646cd5beac7d4e2a82aa7f09f83eb95325ceb34"
-        },
-        {
-          "publisher_id": "national_parks_action",
-          "scorecard_id": "national_parks_action:api-catalogue%3A3260",
-          "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/fd5e55c1a8dd33310ce505888669a466c226b5188ef260f74797f2c85c77a94e.json",
-          "receipt_sha256": "b463152e116e759d477a0bc066060fda31bb014ef574f7500f128d3096f2a96e"
-        },
-        {
-          "publisher_id": "national_parks_action",
-          "scorecard_id": "national_parks_action:api-catalogue%3A2404",
-          "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/509aeda751f393ef2e1589e892f8185084b8806dfdc89a008594681a8bdd0c71.json",
-          "receipt_sha256": "019260e0fd37afc6179536c363b677f26ff033d1f16ab363869f7543e07771cb"
-        },
-        {
-          "publisher_id": "national_parks_action",
-          "scorecard_id": "national_parks_action:api-catalogue%3A2093",
-          "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/a6d5556342ebe504e92f95e5d8ce95da254ebb42ed0a21bbd0c9ced9922a531d.json",
-          "receipt_sha256": "2199544b4005e2e01129986d4bfcd4ec9f9f069784aac28ac561df829a0e6036"
         },
         {
           "publisher_id": "national_parks_action",
@@ -1438,24 +1502,31 @@
         },
         {
           "publisher_id": "national_parks_action",
-          "scorecard_id": "national_parks_action:2020-pdf",
+          "scorecard_id": "national_parks_action:api-catalogue%3A2093",
           "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/8d5bdadd0c450aa6bf599c380fe307a32829754e5649132856f7a44dcd26bc78.json",
-          "receipt_sha256": "387cdaa5b4dacbcf9110246ce08aa1c34184d869ca8c5db86c2341748eeedb04"
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/a6d5556342ebe504e92f95e5d8ce95da254ebb42ed0a21bbd0c9ced9922a531d.json",
+          "receipt_sha256": "2199544b4005e2e01129986d4bfcd4ec9f9f069784aac28ac561df829a0e6036"
         },
         {
           "publisher_id": "national_parks_action",
-          "scorecard_id": "national_parks_action:api-details%3A3260",
+          "scorecard_id": "national_parks_action:api-catalogue%3A2404",
           "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/1023cec33851d785a1e51453c7c64b7fc666829b0e04c0c1410587a58e82a373.json",
-          "receipt_sha256": "50c708d5d928e1effc2bf49d2446b30e1bab30dd8b649bed0cc2efd85ca46a24"
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/509aeda751f393ef2e1589e892f8185084b8806dfdc89a008594681a8bdd0c71.json",
+          "receipt_sha256": "019260e0fd37afc6179536c363b677f26ff033d1f16ab363869f7543e07771cb"
         },
         {
           "publisher_id": "national_parks_action",
-          "scorecard_id": "national_parks_action:api-details%3A2404",
+          "scorecard_id": "national_parks_action:api-catalogue%3A3260",
           "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/ebe7c856c0d60f9ae6b5cb82baecd8c082a701c168c1a888348fded6fbe1d1cb.json",
-          "receipt_sha256": "5fb5a0fd5122fbee57ee586d9788916654e39c43c626ee009fff81703669e38a"
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/fd5e55c1a8dd33310ce505888669a466c226b5188ef260f74797f2c85c77a94e.json",
+          "receipt_sha256": "b463152e116e759d477a0bc066060fda31bb014ef574f7500f128d3096f2a96e"
+        },
+        {
+          "publisher_id": "national_parks_action",
+          "scorecard_id": "national_parks_action:api-details%3A2090",
+          "state": "published",
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/9a2fe18588fd5db1782e0c0786411f76562d058bbdf2df49095e0506be206eea.json",
+          "receipt_sha256": "29a72adb2a102a889c54e018babba1dd01155b696b407b50692c0bc0ad607a60"
         },
         {
           "publisher_id": "national_parks_action",
@@ -1466,98 +1537,20 @@
         },
         {
           "publisher_id": "national_parks_action",
-          "scorecard_id": "national_parks_action:api-details%3A2090",
+          "scorecard_id": "national_parks_action:api-details%3A2404",
           "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/9a2fe18588fd5db1782e0c0786411f76562d058bbdf2df49095e0506be206eea.json",
-          "receipt_sha256": "29a72adb2a102a889c54e018babba1dd01155b696b407b50692c0bc0ad607a60"
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/ebe7c856c0d60f9ae6b5cb82baecd8c082a701c168c1a888348fded6fbe1d1cb.json",
+          "receipt_sha256": "5fb5a0fd5122fbee57ee586d9788916654e39c43c626ee009fff81703669e38a"
+        },
+        {
+          "publisher_id": "national_parks_action",
+          "scorecard_id": "national_parks_action:api-details%3A3260",
+          "state": "published",
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/1023cec33851d785a1e51453c7c64b7fc666829b0e04c0c1410587a58e82a373.json",
+          "receipt_sha256": "50c708d5d928e1effc2bf49d2446b30e1bab30dd8b649bed0cc2efd85ca46a24"
         }
       ],
-      "verified_api_endpoints": [
-        {
-          "method": "GET",
-          "url_template": "https://nationalparksaction.org/wp-json/rds-bt50-scorecard/v1/legislators/",
-          "purpose": "Native current directory and historical score-set fields",
-          "qualification_receipt": "qualifications/national_parks_action--api-catalogue%3A3260.json",
-          "parser_version": "national-parks-action-native-api/1"
-        },
-        {
-          "method": "GET",
-          "url_template": "https://nationalparksaction.org/wp-json/rds-bt50-scorecard/v1/bills/",
-          "purpose": "Native period and bill catalogue with declared bill counts",
-          "qualification_receipt": "qualifications/national_parks_action--api-catalogue%3A3260.json",
-          "parser_version": "national-parks-action-native-api/1"
-        },
-        {
-          "method": "GET",
-          "url_template": "https://nationalparksaction.org/wp-json/rds-bt50-scorecard/v1/styles/",
-          "purpose": "Publisher methodology and presentation settings",
-          "qualification_receipt": "qualifications/national_parks_action--api-catalogue%3A3260.json",
-          "parser_version": "national-parks-action-native-api/1"
-        },
-        {
-          "method": "GET",
-          "url_template": "https://nationalparksaction.org/wp-json/rds-bt50-scorecard/v1/legislators/",
-          "purpose": "Native current directory and historical score-set fields",
-          "qualification_receipt": "qualifications/national_parks_action--api-catalogue%3A2404.json",
-          "parser_version": "national-parks-action-native-api/1"
-        },
-        {
-          "method": "GET",
-          "url_template": "https://nationalparksaction.org/wp-json/rds-bt50-scorecard/v1/bills/",
-          "purpose": "Native period and bill catalogue with declared bill counts",
-          "qualification_receipt": "qualifications/national_parks_action--api-catalogue%3A2404.json",
-          "parser_version": "national-parks-action-native-api/1"
-        },
-        {
-          "method": "GET",
-          "url_template": "https://nationalparksaction.org/wp-json/rds-bt50-scorecard/v1/styles/",
-          "purpose": "Publisher methodology and presentation settings",
-          "qualification_receipt": "qualifications/national_parks_action--api-catalogue%3A2404.json",
-          "parser_version": "national-parks-action-native-api/1"
-        },
-        {
-          "method": "GET",
-          "url_template": "https://nationalparksaction.org/wp-json/rds-bt50-scorecard/v1/legislators/",
-          "purpose": "Native current directory and historical score-set fields",
-          "qualification_receipt": "qualifications/national_parks_action--api-catalogue%3A2093.json",
-          "parser_version": "national-parks-action-native-api/1"
-        },
-        {
-          "method": "GET",
-          "url_template": "https://nationalparksaction.org/wp-json/rds-bt50-scorecard/v1/bills/",
-          "purpose": "Native period and bill catalogue with declared bill counts",
-          "qualification_receipt": "qualifications/national_parks_action--api-catalogue%3A2093.json",
-          "parser_version": "national-parks-action-native-api/1"
-        },
-        {
-          "method": "GET",
-          "url_template": "https://nationalparksaction.org/wp-json/rds-bt50-scorecard/v1/styles/",
-          "purpose": "Publisher methodology and presentation settings",
-          "qualification_receipt": "qualifications/national_parks_action--api-catalogue%3A2093.json",
-          "parser_version": "national-parks-action-native-api/1"
-        },
-        {
-          "method": "GET",
-          "url_template": "https://nationalparksaction.org/wp-json/rds-bt50-scorecard/v1/legislators/",
-          "purpose": "Native current directory and historical score-set fields",
-          "qualification_receipt": "qualifications/national_parks_action--api-catalogue%3A2090.json",
-          "parser_version": "national-parks-action-native-api/1"
-        },
-        {
-          "method": "GET",
-          "url_template": "https://nationalparksaction.org/wp-json/rds-bt50-scorecard/v1/bills/",
-          "purpose": "Native period and bill catalogue with declared bill counts",
-          "qualification_receipt": "qualifications/national_parks_action--api-catalogue%3A2090.json",
-          "parser_version": "national-parks-action-native-api/1"
-        },
-        {
-          "method": "GET",
-          "url_template": "https://nationalparksaction.org/wp-json/rds-bt50-scorecard/v1/styles/",
-          "purpose": "Publisher methodology and presentation settings",
-          "qualification_receipt": "qualifications/national_parks_action--api-catalogue%3A2090.json",
-          "parser_version": "national-parks-action-native-api/1"
-        }
-      ],
+      "verified_api_endpoints": [],
       "discovery_api_status": "html_pdf_only_observed",
       "discovery_support_status": "verified_unimplemented",
       "original_source_urls": [
@@ -1623,108 +1616,10 @@
       "qualified_editions": [
         {
           "publisher_id": "new_american",
-          "scorecard_id": "new_american:report%3A255",
+          "scorecard_id": "new_american:report%3A1",
           "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/a4f4d6fffb03a3bc007cf65af2ccc0266a087015fa9ff2a36d86b8ca880bf556.json",
-          "receipt_sha256": "a3aeaf6750fe7ff933e4a551043df6fca99de445cac8a0ef77a04e9ef5d3cb27"
-        },
-        {
-          "publisher_id": "new_american",
-          "scorecard_id": "new_american:report%3A254",
-          "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/67fa9a7f3f39c71a91b27303628ad81d58117089417afd577db4077e7d041ee7.json",
-          "receipt_sha256": "a1b4abada5054ec19646b3be92a16dbbb837dd1152ce8ab8154892e8ed941cc0"
-        },
-        {
-          "publisher_id": "new_american",
-          "scorecard_id": "new_american:report%3A231",
-          "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/540a7fe123943469ee57d2812cbd522e8252d2bb1922ecc94d47ecfbfa7cb4e6.json",
-          "receipt_sha256": "4c6c4b1599ea6824094514872df336cb4b5f11dbd60e3c8d2c7907e792c6bba4"
-        },
-        {
-          "publisher_id": "new_american",
-          "scorecard_id": "new_american:report%3A230",
-          "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/33522b06cf97380ef97e47eaedb2ccf05916285fbec4ae146716fcd2a0d5eecc.json",
-          "receipt_sha256": "674b9706b1ccaee1f61e89d98064538a4d91fdf742a28407fcd0b77085c0da29"
-        },
-        {
-          "publisher_id": "new_american",
-          "scorecard_id": "new_american:report%3A37",
-          "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/111d829fa4bf154105a8aeaf46b1b6ba078b5db0e3328bc5bf15bace180b09dc.json",
-          "receipt_sha256": "af6c8cb4267658d30db7df9febf53b198726c2ca6af9b97a7a75a53ed0a82964"
-        },
-        {
-          "publisher_id": "new_american",
-          "scorecard_id": "new_american:report%3A36",
-          "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/6f413ca5ea02d5b6223560157c755a57c1e476d0eb8bfd6e01c2d9685d3c1eb7.json",
-          "receipt_sha256": "c4996fc82e2a4965babcc384f662d9519065ad37dfafd074259bf1304c31daa8"
-        },
-        {
-          "publisher_id": "new_american",
-          "scorecard_id": "new_american:report%3A35",
-          "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/af1a37d73a5f1287672e469048fc195d3e6f0562a2e89d25e8b1bdd9ac071776.json",
-          "receipt_sha256": "50a3a20de94e7de220d094bfb0406a0d29634b5aa54035d0377f30445171e7d1"
-        },
-        {
-          "publisher_id": "new_american",
-          "scorecard_id": "new_american:report%3A34",
-          "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/ec90846bd965c1d716e21558c32ec957c84fc5cc8c6913ac40fdf90674f8e92b.json",
-          "receipt_sha256": "776438a823ebae9cc5cd21e719f6852ff7662f6c0abcfc78fcc873f5883e359e"
-        },
-        {
-          "publisher_id": "new_american",
-          "scorecard_id": "new_american:report%3A33",
-          "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/1b94acfaa8c9638b8990fed46e24d951b53501fa84289bc6c7d5cdc9f8aef0af.json",
-          "receipt_sha256": "d3b780624aeee9075b75eae3b88135be5bc0a1ac6cf23804f1876e1dabdee78e"
-        },
-        {
-          "publisher_id": "new_american",
-          "scorecard_id": "new_american:report%3A32",
-          "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/39cfdc8463b634ee87867abdd6d16c795e2bdc0fb1b3943e74a5407f95217c39.json",
-          "receipt_sha256": "cb30a3cca04c0933da343967db824d2a7b5494776ebbd6b14d6603b2fa8f78a3"
-        },
-        {
-          "publisher_id": "new_american",
-          "scorecard_id": "new_american:report%3A31",
-          "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/bc89162bfd424cc363cba8f2e3bb4460eeadc65fb0b0a86945bb045a435f371f.json",
-          "receipt_sha256": "089ec212e93e06ec06743690e36309da02c5f535fc6587f8863dd3569b9cc7ea"
-        },
-        {
-          "publisher_id": "new_american",
-          "scorecard_id": "new_american:report%3A30",
-          "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/c58762f35f29a1039482a594eede48f56b2a431f42af85c64fc469f4aa8de55d.json",
-          "receipt_sha256": "c449a76dc25b7bfb3d1a2281e0681d09f388bc4a5c10c848542d0e415b52a17f"
-        },
-        {
-          "publisher_id": "new_american",
-          "scorecard_id": "new_american:report%3A29",
-          "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/85dbcf38d0e1565f4cc80b8e5477b5b2ed8b1696436eaf5fa730f1ea66c4db14.json",
-          "receipt_sha256": "db930c56981c861b8fa6857e9fd477cf0655188a3314adba72cbb9bca328e8d3"
-        },
-        {
-          "publisher_id": "new_american",
-          "scorecard_id": "new_american:report%3A28",
-          "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/924bee413cbf5f77512e1b5931c51cea5db290e0126afbccba860fc23cc2f71d.json",
-          "receipt_sha256": "0d33c1dec0c586a647af8c4c5672504112e212af89944f41d76d2c4dc509278e"
-        },
-        {
-          "publisher_id": "new_american",
-          "scorecard_id": "new_american:report%3A11",
-          "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/98cc122fdcc5e611ed39ae205a7b5165bf8ae26e5df2f3d74888ae1d4f5e40a3.json",
-          "receipt_sha256": "087e3710c1e3bee953bca9a12bf95ab1072838df50c0d5bb7cd1882d6e9516be"
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/cda5b61f7398bd99ababe21e8d6e12d64efb9c73a2d3268456d3837c666e433f.json",
+          "receipt_sha256": "06861178ea592dd645174f53cba276b68e502618bee2b46d654b1a4dedc22ea1"
         },
         {
           "publisher_id": "new_american",
@@ -1735,94 +1630,10 @@
         },
         {
           "publisher_id": "new_american",
-          "scorecard_id": "new_american:report%3A9",
+          "scorecard_id": "new_american:report%3A11",
           "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/be4b6661d8df0a562439e13e4bd5f96608e03bccd4cfb0e3f0a86bd64516c787.json",
-          "receipt_sha256": "934448da4dff08d0d6f1907f5a46adf7320ab8e5a5cfcd43059716b9b7521d8e"
-        },
-        {
-          "publisher_id": "new_american",
-          "scorecard_id": "new_american:report%3A8",
-          "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/9a36b502c020dde8f84cfb4e66b6c47cf6d9219efffd7f8a2951510847f72281.json",
-          "receipt_sha256": "2e73d7f98df415d1c616c07acdd91cae21b38fef2796103c72938b4f381b28e3"
-        },
-        {
-          "publisher_id": "new_american",
-          "scorecard_id": "new_american:report%3A6",
-          "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/96a7a2b10e9f191ea8e2eadc78bde3c7d806a1b3a928cad797bebfd48d3054d1.json",
-          "receipt_sha256": "47d33e1437243c39e224c1a6cf36eedb8eedc072aa41470c554982de7ad851e5"
-        },
-        {
-          "publisher_id": "new_american",
-          "scorecard_id": "new_american:report%3A5",
-          "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/bb18a630da97b1ac110f66df03bf5632b5b6f17a22936cbc871bed7b6280a5ad.json",
-          "receipt_sha256": "de1b748e033f01b7341b225a2e4c0ae289657451cee4b0221f5481196035f0e9"
-        },
-        {
-          "publisher_id": "new_american",
-          "scorecard_id": "new_american:report%3A2",
-          "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/2e61c5d4dbb3666bc89e6cb4fc6dadde8f2d87c1f216f3b3711b93475bd497da.json",
-          "receipt_sha256": "7fdabf0228fe399a5cc422c569dce86cd05da19a3f0108bc332bddb67db4773c"
-        },
-        {
-          "publisher_id": "new_american",
-          "scorecard_id": "new_american:report%3A1",
-          "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/cda5b61f7398bd99ababe21e8d6e12d64efb9c73a2d3268456d3837c666e433f.json",
-          "receipt_sha256": "06861178ea592dd645174f53cba276b68e502618bee2b46d654b1a4dedc22ea1"
-        },
-        {
-          "publisher_id": "new_american",
-          "scorecard_id": "new_american:report%3A3",
-          "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/937f1deba57592c3bfcdc8fbbe5854b9150bb37e0972a54f62705dd619de899e.json",
-          "receipt_sha256": "d3344a4d0404aa0e97df6ccf97618f2ee5ba6192576c783adf80898d412267f9"
-        },
-        {
-          "publisher_id": "new_american",
-          "scorecard_id": "new_american:report%3A23",
-          "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/3266a8099b14628f6e8afd1c1078ff4b83352c8187c3a41539a5ac57cbeb94cb.json",
-          "receipt_sha256": "ef7bc5f1ad45d1c07bc218e708e74ea51ae5b1250875d7e1beebfae51970429f"
-        },
-        {
-          "publisher_id": "new_american",
-          "scorecard_id": "new_american:report%3A22",
-          "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/fdbd91da5c02a8ae307761b1c78a64d4618d4df64bc8317baf35e935a8cffa71.json",
-          "receipt_sha256": "3b333aa84713a872dce2e98eed085e65455cc5385e66631d10766b861045ecd3"
-        },
-        {
-          "publisher_id": "new_american",
-          "scorecard_id": "new_american:report%3A19",
-          "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/5bf47dff5c327575f5ae61eccf6e48fa3fc05d98e15083dfc1b3d87887a638fe.json",
-          "receipt_sha256": "b76e4769e71428a32a51ffd023ef93412fa6071cd4e1772239489142c7c4f98a"
-        },
-        {
-          "publisher_id": "new_american",
-          "scorecard_id": "new_american:report%3A18",
-          "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/8cc9961d2ddefd3ca7efd1b474c8d219ea327eca21ec03db88ebcf6302c6be87.json",
-          "receipt_sha256": "9addb6d3f644ae40de3b87f3e2c7a3db56de33018379fdb63faa1a7906d46be5"
-        },
-        {
-          "publisher_id": "new_american",
-          "scorecard_id": "new_american:report%3A15",
-          "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/38292c002537080d8e586d4d8cf46f49c5b735a49de149dc7016ec28f6b3ad3a.json",
-          "receipt_sha256": "4aa290a6a2c3871366a76f564f10dd5995e07a9032de0c9ab40f6962f8f20835"
-        },
-        {
-          "publisher_id": "new_american",
-          "scorecard_id": "new_american:report%3A13",
-          "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/be6b4a2c6270175beb09088e9888690704ebdf92978f11ff8d31379d83829812.json",
-          "receipt_sha256": "43559bcd65e59d051132f12634c1947a38a505e35c5127e539440116af0e3d84"
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/98cc122fdcc5e611ed39ae205a7b5165bf8ae26e5df2f3d74888ae1d4f5e40a3.json",
+          "receipt_sha256": "087e3710c1e3bee953bca9a12bf95ab1072838df50c0d5bb7cd1882d6e9516be"
         },
         {
           "publisher_id": "new_american",
@@ -1833,31 +1644,24 @@
         },
         {
           "publisher_id": "new_american",
-          "scorecard_id": "new_american:report%3A7",
+          "scorecard_id": "new_american:report%3A13",
           "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/77af12d7c9c6b83611de6cd09ec1795e4f87932ea4137a3dd13c7443cb29f74c.json",
-          "receipt_sha256": "39a46732d01461bebbd226ee38d2052f9eac656dc8b4c66575c5185c14bbefe7"
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/be6b4a2c6270175beb09088e9888690704ebdf92978f11ff8d31379d83829812.json",
+          "receipt_sha256": "43559bcd65e59d051132f12634c1947a38a505e35c5127e539440116af0e3d84"
         },
         {
           "publisher_id": "new_american",
-          "scorecard_id": "new_american:report%3A21",
+          "scorecard_id": "new_american:report%3A14",
           "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/16def076231620d3de5f64c01306394e1bbdc599f87cf340bb3ac7d699b798bd.json",
-          "receipt_sha256": "d9093b0003a06a467cd7fbd5fe7c3dc5885f992a522dd1dbf5f6e65816727171"
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/e41916d1f988b229305c1b3f73f327fa11c9af5902dc7f710c164de3c3f9d283.json",
+          "receipt_sha256": "12870d37851dbaf7dabd4143c3f7067f56ae4bb69741051c588dcf760e72a31b"
         },
         {
           "publisher_id": "new_american",
-          "scorecard_id": "new_american:report%3A20",
+          "scorecard_id": "new_american:report%3A15",
           "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/89011107407768fa5bde01794de39a845cb5f3b749b05ef67b6f0fd48164be38.json",
-          "receipt_sha256": "9c92115112f7423b9395b38e40a48aef8d47e821cca21ac63ca3bdd32518b1fc"
-        },
-        {
-          "publisher_id": "new_american",
-          "scorecard_id": "new_american:report%3A17",
-          "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/e8b9b6b6362f64ddb477be077c778b0fdbc611f7b94d67baf64de0546beb3b6f.json",
-          "receipt_sha256": "57b16f1d271d27d8d59a3787d8ce723fd99d69a56f8990adc0c30a45b056264f"
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/38292c002537080d8e586d4d8cf46f49c5b735a49de149dc7016ec28f6b3ad3a.json",
+          "receipt_sha256": "4aa290a6a2c3871366a76f564f10dd5995e07a9032de0c9ab40f6962f8f20835"
         },
         {
           "publisher_id": "new_american",
@@ -1868,10 +1672,73 @@
         },
         {
           "publisher_id": "new_american",
-          "scorecard_id": "new_american:report%3A14",
+          "scorecard_id": "new_american:report%3A17",
           "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/e41916d1f988b229305c1b3f73f327fa11c9af5902dc7f710c164de3c3f9d283.json",
-          "receipt_sha256": "12870d37851dbaf7dabd4143c3f7067f56ae4bb69741051c588dcf760e72a31b"
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/e8b9b6b6362f64ddb477be077c778b0fdbc611f7b94d67baf64de0546beb3b6f.json",
+          "receipt_sha256": "57b16f1d271d27d8d59a3787d8ce723fd99d69a56f8990adc0c30a45b056264f"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A18",
+          "state": "published",
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/8cc9961d2ddefd3ca7efd1b474c8d219ea327eca21ec03db88ebcf6302c6be87.json",
+          "receipt_sha256": "9addb6d3f644ae40de3b87f3e2c7a3db56de33018379fdb63faa1a7906d46be5"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A19",
+          "state": "published",
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/5bf47dff5c327575f5ae61eccf6e48fa3fc05d98e15083dfc1b3d87887a638fe.json",
+          "receipt_sha256": "b76e4769e71428a32a51ffd023ef93412fa6071cd4e1772239489142c7c4f98a"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A2",
+          "state": "published",
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/2e61c5d4dbb3666bc89e6cb4fc6dadde8f2d87c1f216f3b3711b93475bd497da.json",
+          "receipt_sha256": "7fdabf0228fe399a5cc422c569dce86cd05da19a3f0108bc332bddb67db4773c"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A20",
+          "state": "published",
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/89011107407768fa5bde01794de39a845cb5f3b749b05ef67b6f0fd48164be38.json",
+          "receipt_sha256": "9c92115112f7423b9395b38e40a48aef8d47e821cca21ac63ca3bdd32518b1fc"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A21",
+          "state": "published",
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/16def076231620d3de5f64c01306394e1bbdc599f87cf340bb3ac7d699b798bd.json",
+          "receipt_sha256": "d9093b0003a06a467cd7fbd5fe7c3dc5885f992a522dd1dbf5f6e65816727171"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A22",
+          "state": "published",
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/fdbd91da5c02a8ae307761b1c78a64d4618d4df64bc8317baf35e935a8cffa71.json",
+          "receipt_sha256": "3b333aa84713a872dce2e98eed085e65455cc5385e66631d10766b861045ecd3"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A23",
+          "state": "published",
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/3266a8099b14628f6e8afd1c1078ff4b83352c8187c3a41539a5ac57cbeb94cb.json",
+          "receipt_sha256": "ef7bc5f1ad45d1c07bc218e708e74ea51ae5b1250875d7e1beebfae51970429f"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A230",
+          "state": "published",
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/33522b06cf97380ef97e47eaedb2ccf05916285fbec4ae146716fcd2a0d5eecc.json",
+          "receipt_sha256": "674b9706b1ccaee1f61e89d98064538a4d91fdf742a28407fcd0b77085c0da29"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A231",
+          "state": "published",
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/540a7fe123943469ee57d2812cbd522e8252d2bb1922ecc94d47ecfbfa7cb4e6.json",
+          "receipt_sha256": "4c6c4b1599ea6824094514872df336cb4b5f11dbd60e3c8d2c7907e792c6bba4"
         },
         {
           "publisher_id": "new_american",
@@ -1889,6 +1756,20 @@
         },
         {
           "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A254",
+          "state": "published",
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/67fa9a7f3f39c71a91b27303628ad81d58117089417afd577db4077e7d041ee7.json",
+          "receipt_sha256": "a1b4abada5054ec19646b3be92a16dbbb837dd1152ce8ab8154892e8ed941cc0"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A255",
+          "state": "published",
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/a4f4d6fffb03a3bc007cf65af2ccc0266a087015fa9ff2a36d86b8ca880bf556.json",
+          "receipt_sha256": "a3aeaf6750fe7ff933e4a551043df6fca99de445cac8a0ef77a04e9ef5d3cb27"
+        },
+        {
+          "publisher_id": "new_american",
           "scorecard_id": "new_american:report%3A26",
           "state": "published",
           "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/3e90d6cdede9c2980385d9260ec5819f9299e92a0936ea51b973e61d5d82bfd0.json",
@@ -1896,31 +1777,122 @@
         },
         {
           "publisher_id": "new_american",
-          "scorecard_id": "new_american:roster%3Asession%3A14",
+          "scorecard_id": "new_american:report%3A28",
           "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/0ec5f4e96c9e10cd6a51b4d58ab03a09af11f0ad4cb8a0870dbe9bdaeb687666.json",
-          "receipt_sha256": "508f1f1e5c3b5fb18c1f5850076306df34500979e7c798057a2811a565ed8d03"
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/924bee413cbf5f77512e1b5931c51cea5db290e0126afbccba860fc23cc2f71d.json",
+          "receipt_sha256": "0d33c1dec0c586a647af8c4c5672504112e212af89944f41d76d2c4dc509278e"
         },
         {
           "publisher_id": "new_american",
-          "scorecard_id": "new_american:roster%3Asession%3A13",
+          "scorecard_id": "new_american:report%3A29",
           "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/96bed104ab2e642f76f53cf45c9c03efc86385f54a07a03c6a4d12c94d2b2bb5.json",
-          "receipt_sha256": "501d5e38950684736f09ed33ec280d4c08b1d9219121d2db7e5614e1e365efe3"
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/85dbcf38d0e1565f4cc80b8e5477b5b2ed8b1696436eaf5fa730f1ea66c4db14.json",
+          "receipt_sha256": "db930c56981c861b8fa6857e9fd477cf0655188a3314adba72cbb9bca328e8d3"
         },
         {
           "publisher_id": "new_american",
-          "scorecard_id": "new_american:roster%3Asession%3A12",
+          "scorecard_id": "new_american:report%3A3",
           "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/cab0ea8027ea166a92e8fbf6502868ba31459e2d394c9d27e84f9fc47f6ac010.json",
-          "receipt_sha256": "c9f60f240066fb44cd8cd5a4b59a2e45eef669bea096a896050c1cc633ee0244"
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/937f1deba57592c3bfcdc8fbbe5854b9150bb37e0972a54f62705dd619de899e.json",
+          "receipt_sha256": "d3344a4d0404aa0e97df6ccf97618f2ee5ba6192576c783adf80898d412267f9"
         },
         {
           "publisher_id": "new_american",
-          "scorecard_id": "new_american:roster%3Asession%3A11",
+          "scorecard_id": "new_american:report%3A30",
           "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/0792c327fba18ed79593aff22a18b5f10e6070447b7ee8b5f493195222f54218.json",
-          "receipt_sha256": "17ddf4082f484c4e9f72ee10499c373bbbbf56d328c1977aba162349accc6bad"
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/c58762f35f29a1039482a594eede48f56b2a431f42af85c64fc469f4aa8de55d.json",
+          "receipt_sha256": "c449a76dc25b7bfb3d1a2281e0681d09f388bc4a5c10c848542d0e415b52a17f"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A31",
+          "state": "published",
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/bc89162bfd424cc363cba8f2e3bb4460eeadc65fb0b0a86945bb045a435f371f.json",
+          "receipt_sha256": "089ec212e93e06ec06743690e36309da02c5f535fc6587f8863dd3569b9cc7ea"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A32",
+          "state": "published",
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/39cfdc8463b634ee87867abdd6d16c795e2bdc0fb1b3943e74a5407f95217c39.json",
+          "receipt_sha256": "cb30a3cca04c0933da343967db824d2a7b5494776ebbd6b14d6603b2fa8f78a3"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A33",
+          "state": "published",
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/1b94acfaa8c9638b8990fed46e24d951b53501fa84289bc6c7d5cdc9f8aef0af.json",
+          "receipt_sha256": "d3b780624aeee9075b75eae3b88135be5bc0a1ac6cf23804f1876e1dabdee78e"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A34",
+          "state": "published",
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/ec90846bd965c1d716e21558c32ec957c84fc5cc8c6913ac40fdf90674f8e92b.json",
+          "receipt_sha256": "776438a823ebae9cc5cd21e719f6852ff7662f6c0abcfc78fcc873f5883e359e"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A35",
+          "state": "published",
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/af1a37d73a5f1287672e469048fc195d3e6f0562a2e89d25e8b1bdd9ac071776.json",
+          "receipt_sha256": "50a3a20de94e7de220d094bfb0406a0d29634b5aa54035d0377f30445171e7d1"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A36",
+          "state": "published",
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/6f413ca5ea02d5b6223560157c755a57c1e476d0eb8bfd6e01c2d9685d3c1eb7.json",
+          "receipt_sha256": "c4996fc82e2a4965babcc384f662d9519065ad37dfafd074259bf1304c31daa8"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A37",
+          "state": "published",
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/111d829fa4bf154105a8aeaf46b1b6ba078b5db0e3328bc5bf15bace180b09dc.json",
+          "receipt_sha256": "af6c8cb4267658d30db7df9febf53b198726c2ca6af9b97a7a75a53ed0a82964"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A5",
+          "state": "published",
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/bb18a630da97b1ac110f66df03bf5632b5b6f17a22936cbc871bed7b6280a5ad.json",
+          "receipt_sha256": "de1b748e033f01b7341b225a2e4c0ae289657451cee4b0221f5481196035f0e9"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A6",
+          "state": "published",
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/96a7a2b10e9f191ea8e2eadc78bde3c7d806a1b3a928cad797bebfd48d3054d1.json",
+          "receipt_sha256": "47d33e1437243c39e224c1a6cf36eedb8eedc072aa41470c554982de7ad851e5"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A7",
+          "state": "published",
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/77af12d7c9c6b83611de6cd09ec1795e4f87932ea4137a3dd13c7443cb29f74c.json",
+          "receipt_sha256": "39a46732d01461bebbd226ee38d2052f9eac656dc8b4c66575c5185c14bbefe7"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A8",
+          "state": "published",
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/9a36b502c020dde8f84cfb4e66b6c47cf6d9219efffd7f8a2951510847f72281.json",
+          "receipt_sha256": "2e73d7f98df415d1c616c07acdd91cae21b38fef2796103c72938b4f381b28e3"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A9",
+          "state": "published",
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/be4b6661d8df0a562439e13e4bd5f96608e03bccd4cfb0e3f0a86bd64516c787.json",
+          "receipt_sha256": "934448da4dff08d0d6f1907f5a46adf7320ab8e5a5cfcd43059716b9b7521d8e"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:roster%3Asession%3A1",
+          "state": "published",
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/ecccc311072152977a6ec62e843909a96a1e65cfc4479a8f7d7804d9990c27ec.json",
+          "receipt_sha256": "2b84a2cfa9c623e2c60d33d7cbd72b2903486d2eb3c5b5db8a50668acc5891c5"
         },
         {
           "publisher_id": "new_american",
@@ -1931,52 +1903,31 @@
         },
         {
           "publisher_id": "new_american",
-          "scorecard_id": "new_american:roster%3Asession%3A9",
+          "scorecard_id": "new_american:roster%3Asession%3A11",
           "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/6350d531021401a2d4cc3fdde6d51547340babea7d35fb1d91f15581b5648ac9.json",
-          "receipt_sha256": "a5ded8fa76a35c5491eafcd92612acce3233820200f1f5da0c369fb5b91f7078"
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/0792c327fba18ed79593aff22a18b5f10e6070447b7ee8b5f493195222f54218.json",
+          "receipt_sha256": "17ddf4082f484c4e9f72ee10499c373bbbbf56d328c1977aba162349accc6bad"
         },
         {
           "publisher_id": "new_american",
-          "scorecard_id": "new_american:roster%3Asession%3A8",
+          "scorecard_id": "new_american:roster%3Asession%3A12",
           "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/b8ed44e1b9f1e3f0386c3fe56f885c10a366e0df100d5f1b39ff49d156dabcd9.json",
-          "receipt_sha256": "910857c97c509014c5a1a3a52a7295c5879bb18fb6bfb7d14024eca80ed18c00"
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/cab0ea8027ea166a92e8fbf6502868ba31459e2d394c9d27e84f9fc47f6ac010.json",
+          "receipt_sha256": "c9f60f240066fb44cd8cd5a4b59a2e45eef669bea096a896050c1cc633ee0244"
         },
         {
           "publisher_id": "new_american",
-          "scorecard_id": "new_american:roster%3Asession%3A7",
+          "scorecard_id": "new_american:roster%3Asession%3A13",
           "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/f5a9abfcf091b1894dcb9b4eb8a9bcaa3711c5aa10af355d8b3d4dcf20bc1c54.json",
-          "receipt_sha256": "9296f893bbfa74c333fb778cf8230691f916e8302115917d0ead5b7da2efba5f"
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/96bed104ab2e642f76f53cf45c9c03efc86385f54a07a03c6a4d12c94d2b2bb5.json",
+          "receipt_sha256": "501d5e38950684736f09ed33ec280d4c08b1d9219121d2db7e5614e1e365efe3"
         },
         {
           "publisher_id": "new_american",
-          "scorecard_id": "new_american:roster%3Asession%3A6",
+          "scorecard_id": "new_american:roster%3Asession%3A14",
           "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/28f34433a05c3b707fb8a5cd640fe428a44e672eabad0807fec201bd852d834d.json",
-          "receipt_sha256": "8ffda32d5e77fdabea1ef50ab7163a0cdaef907f3cc3957c32a8a70d5b59c1d8"
-        },
-        {
-          "publisher_id": "new_american",
-          "scorecard_id": "new_american:roster%3Asession%3A5",
-          "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/531b7b0e8d4042ff54d361b070df48db5914b0fa6afea1610358ee21655540d3.json",
-          "receipt_sha256": "72c413018f80d4c1d463ec099b0206ac812437e5900731dcfbf08a741f21afbf"
-        },
-        {
-          "publisher_id": "new_american",
-          "scorecard_id": "new_american:roster%3Asession%3A4",
-          "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/6c9bae90903e38a1463a14ade49c2df5b41256268dd05ccc461f5f57dfff6aee.json",
-          "receipt_sha256": "2a007e459ddc83ef23bd884dfa2e534c448f3a1f95972d0504d8fa1c0251a1e1"
-        },
-        {
-          "publisher_id": "new_american",
-          "scorecard_id": "new_american:roster%3Asession%3A3",
-          "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/52cf9eb7249d24b3f4205c423e6094de601d8edda5c85edacaf2fb096015a530.json",
-          "receipt_sha256": "e7ee1f0c7e688c28017943fed79f051e967aab8f1bababd4007a259c7c86a1a0"
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/0ec5f4e96c9e10cd6a51b4d58ab03a09af11f0ad4cb8a0870dbe9bdaeb687666.json",
+          "receipt_sha256": "508f1f1e5c3b5fb18c1f5850076306df34500979e7c798057a2811a565ed8d03"
         },
         {
           "publisher_id": "new_american",
@@ -1987,10 +1938,52 @@
         },
         {
           "publisher_id": "new_american",
-          "scorecard_id": "new_american:roster%3Asession%3A1",
+          "scorecard_id": "new_american:roster%3Asession%3A3",
           "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/ecccc311072152977a6ec62e843909a96a1e65cfc4479a8f7d7804d9990c27ec.json",
-          "receipt_sha256": "2b84a2cfa9c623e2c60d33d7cbd72b2903486d2eb3c5b5db8a50668acc5891c5"
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/52cf9eb7249d24b3f4205c423e6094de601d8edda5c85edacaf2fb096015a530.json",
+          "receipt_sha256": "e7ee1f0c7e688c28017943fed79f051e967aab8f1bababd4007a259c7c86a1a0"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:roster%3Asession%3A4",
+          "state": "published",
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/6c9bae90903e38a1463a14ade49c2df5b41256268dd05ccc461f5f57dfff6aee.json",
+          "receipt_sha256": "2a007e459ddc83ef23bd884dfa2e534c448f3a1f95972d0504d8fa1c0251a1e1"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:roster%3Asession%3A5",
+          "state": "published",
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/531b7b0e8d4042ff54d361b070df48db5914b0fa6afea1610358ee21655540d3.json",
+          "receipt_sha256": "72c413018f80d4c1d463ec099b0206ac812437e5900731dcfbf08a741f21afbf"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:roster%3Asession%3A6",
+          "state": "published",
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/28f34433a05c3b707fb8a5cd640fe428a44e672eabad0807fec201bd852d834d.json",
+          "receipt_sha256": "8ffda32d5e77fdabea1ef50ab7163a0cdaef907f3cc3957c32a8a70d5b59c1d8"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:roster%3Asession%3A7",
+          "state": "published",
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/f5a9abfcf091b1894dcb9b4eb8a9bcaa3711c5aa10af355d8b3d4dcf20bc1c54.json",
+          "receipt_sha256": "9296f893bbfa74c333fb778cf8230691f916e8302115917d0ead5b7da2efba5f"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:roster%3Asession%3A8",
+          "state": "published",
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/b8ed44e1b9f1e3f0386c3fe56f885c10a366e0df100d5f1b39ff49d156dabcd9.json",
+          "receipt_sha256": "910857c97c509014c5a1a3a52a7295c5879bb18fb6bfb7d14024eca80ed18c00"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:roster%3Asession%3A9",
+          "state": "published",
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/6350d531021401a2d4cc3fdde6d51547340babea7d35fb1d91f15581b5648ac9.json",
+          "receipt_sha256": "a5ded8fa76a35c5491eafcd92612acce3233820200f1f5da0c369fb5b91f7078"
         }
       ],
       "verified_api_endpoints": [],
@@ -2010,6 +2003,13 @@
       "qualified_editions": [
         {
           "publisher_id": "nfib",
+          "scorecard_id": "nfib:118-final",
+          "state": "published",
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/d9d2dab69881e225aed0c7f206195dcf7b1f69d9fe50e695b93ef9df6877a86b.json",
+          "receipt_sha256": "81974c747d807ea5e445d14763e23a310937c1096443bea54a19a93f063b0a5e"
+        },
+        {
+          "publisher_id": "nfib",
           "scorecard_id": "nfib:119-current-quorum",
           "state": "published",
           "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/da0cdba19b9b48bc1d55f717f4f97cb4283334d8496b0248b77aafd7c2b8fe3c.json",
@@ -2021,13 +2021,6 @@
           "state": "published",
           "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/35f60f8de32cff0d6ecc3bce1a5ac7b9da09192190d7ab668f6c30515ac7497e.json",
           "receipt_sha256": "ca418eb28779cda19456fe960561f194954ad98f9feae09a4c1d2bb3e8ba8510"
-        },
-        {
-          "publisher_id": "nfib",
-          "scorecard_id": "nfib:118-final",
-          "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/d9d2dab69881e225aed0c7f206195dcf7b1f69d9fe50e695b93ef9df6877a86b.json",
-          "receipt_sha256": "81974c747d807ea5e445d14763e23a310937c1096443bea54a19a93f063b0a5e"
         }
       ],
       "verified_api_endpoints": [],
@@ -2042,16 +2035,31 @@
       "publisher_id": "niac_action",
       "publisher_name": "NIAC Action",
       "task_id": "ss-8ak8",
-      "state": "verified_unimplemented",
-      "reader": null,
-      "qualified_editions": [],
+      "state": "qualified_scope",
+      "reader": "niac_action",
+      "qualified_editions": [
+        {
+          "publisher_id": "niac_action",
+          "scorecard_id": "niac_action:current-csv",
+          "state": "qualified",
+          "receipt": "qualifications/niac_action--current-csv.json",
+          "receipt_sha256": "91fd0b76a8c8531011f3e1c35bc767cb9a0642c49b825c6bbeaf5315733f48e1"
+        },
+        {
+          "publisher_id": "niac_action",
+          "scorecard_id": "niac_action:117-published-sheet",
+          "state": "qualified",
+          "receipt": "qualifications/niac_action--117-published-sheet.json",
+          "receipt_sha256": "508123d8981fb2e515020c139a0d173f43fb1105a85ca8e25d8d9d0db71ce881"
+        }
+      ],
       "verified_api_endpoints": [],
       "discovery_api_status": "html_pdf_only_observed",
       "discovery_support_status": "verified_unimplemented",
       "original_source_urls": [
         "https://niacouncil.org/congressional-scorecard-117th-congress/"
       ],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Integrate remaining available editions and renditions"
     },
     {
       "publisher_id": "norml",
@@ -2177,6 +2185,48 @@
       "qualified_editions": [
         {
           "publisher_id": "ntu",
+          "scorecard_id": "ntu:2017-html-ratings-items",
+          "state": "qualified",
+          "receipt": "qualifications/ntu--2017-html-ratings-items.json",
+          "receipt_sha256": "5eb1d15780f0401295aca0964489ffc505d78c8b407ccf83151fd0a2b63e4c50"
+        },
+        {
+          "publisher_id": "ntu",
+          "scorecard_id": "ntu:2018-html-ratings-items",
+          "state": "qualified",
+          "receipt": "qualifications/ntu--2018-html-ratings-items.json",
+          "receipt_sha256": "b0df24894c3f7f1bc599c250bab183998f01ab721bc055e2c6e1d7e1c9be0039"
+        },
+        {
+          "publisher_id": "ntu",
+          "scorecard_id": "ntu:2019-html-ratings-items",
+          "state": "qualified",
+          "receipt": "qualifications/ntu--2019-html-ratings-items.json",
+          "receipt_sha256": "75a76988f54b7b85e3e8385221ee5f51f5a3e32fad8774796c3c2a15d411c74e"
+        },
+        {
+          "publisher_id": "ntu",
+          "scorecard_id": "ntu:2020-html-ratings-items",
+          "state": "qualified",
+          "receipt": "qualifications/ntu--2020-html-ratings-items.json",
+          "receipt_sha256": "eae177baff70b043c4951a0d1dfbdb6919d4f1ba0fe0d9ec05275aae55fcaee2"
+        },
+        {
+          "publisher_id": "ntu",
+          "scorecard_id": "ntu:2021-html-ratings-items",
+          "state": "qualified",
+          "receipt": "qualifications/ntu--2021-html-ratings-items.json",
+          "receipt_sha256": "970fa5b532e3db399a3179c4c62e49b8e28c2e520a37c823291afc04c9ecd461"
+        },
+        {
+          "publisher_id": "ntu",
+          "scorecard_id": "ntu:2022-html-ratings-items",
+          "state": "qualified",
+          "receipt": "qualifications/ntu--2022-html-ratings-items.json",
+          "receipt_sha256": "6557651a2501dac044fb3239e46b342f5ec9fd0201fa607037d7892d9465f6cc"
+        },
+        {
+          "publisher_id": "ntu",
           "scorecard_id": "ntu:2025",
           "state": "published",
           "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/c2ca610bf6a896d6ba7344f0a43e4f1dcab45ae228770dbfb158abdd0056a3ab.json",
@@ -2202,17 +2252,17 @@
       "qualified_editions": [
         {
           "publisher_id": "numbersusa",
-          "scorecard_id": "numbersusa:119",
-          "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/60972f15249e0cc57ac2b063bfb726b46e4d7e9d734470182b4ee490c9351ab4.json",
-          "receipt_sha256": "6efd35cea025d12e534eb8998ea7feae485892f0951febb69b1fc0c22b1b1ccb"
-        },
-        {
-          "publisher_id": "numbersusa",
           "scorecard_id": "numbersusa:118",
           "state": "published",
           "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/8ce1d3061bcafe985835cde4644d392ac954cca48dfe32b91e0d098657ca5b78.json",
           "receipt_sha256": "461a8cc9c20fe435007d2d1da6ac94b821076c951b4eb96be2e848d8e1510759"
+        },
+        {
+          "publisher_id": "numbersusa",
+          "scorecard_id": "numbersusa:119",
+          "state": "published",
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/60972f15249e0cc57ac2b063bfb726b46e4d7e9d734470182b4ee490c9351ab4.json",
+          "receipt_sha256": "6efd35cea025d12e534eb8998ea7feae485892f0951febb69b1fc0c22b1b1ccb"
         }
       ],
       "verified_api_endpoints": [
@@ -2269,17 +2319,17 @@
       "qualified_editions": [
         {
           "publisher_id": "planned_parenthood",
-          "scorecard_id": "planned_parenthood:4473-1848",
-          "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/71411c3c3fd551e8c09ab7006f198d88a748e7bc71febfefc4fad79df9522ef9.json",
-          "receipt_sha256": "936bf3d5c9989a242149aa0e0f14c641e24409ee96606f0f4d4b3936333e56b7"
+          "scorecard_id": "planned_parenthood:current-cumulative",
+          "state": "qualified",
+          "receipt": "qualifications/planned_parenthood--current-cumulative.json",
+          "receipt_sha256": "0e7f7a698f7a27f398d68c240393170817f91dc873d3a8ff7d82dc5b8032632f"
         },
         {
           "publisher_id": "planned_parenthood",
-          "scorecard_id": "planned_parenthood:4473-1729",
+          "scorecard_id": "planned_parenthood:4473-1413",
           "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/c548b09635d93b62b658ef35468350fb4bde7bb07c19e6e0f876d95d7c02fdf2.json",
-          "receipt_sha256": "592848be09c642d531d5a0182ceea6b7960fbb1e86e3b7b7198b590384369541"
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/f80596989c0598f5efb6c2de19f45edefc65d6e2a1a2b891353cb0b4fd7b75b9.json",
+          "receipt_sha256": "ab64af3496dbd0145b4146667325f9c542bb96ef143e430850514cecddb5491b"
         },
         {
           "publisher_id": "planned_parenthood",
@@ -2290,10 +2340,17 @@
         },
         {
           "publisher_id": "planned_parenthood",
-          "scorecard_id": "planned_parenthood:4473-1413",
+          "scorecard_id": "planned_parenthood:4473-1729",
           "state": "published",
-          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/f80596989c0598f5efb6c2de19f45edefc65d6e2a1a2b891353cb0b4fd7b75b9.json",
-          "receipt_sha256": "ab64af3496dbd0145b4146667325f9c542bb96ef143e430850514cecddb5491b"
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/c548b09635d93b62b658ef35468350fb4bde7bb07c19e6e0f876d95d7c02fdf2.json",
+          "receipt_sha256": "592848be09c642d531d5a0182ceea6b7960fbb1e86e3b7b7198b590384369541"
+        },
+        {
+          "publisher_id": "planned_parenthood",
+          "scorecard_id": "planned_parenthood:4473-1848",
+          "state": "published",
+          "receipt": "publications/4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a/71411c3c3fd551e8c09ab7006f198d88a748e7bc71febfefc4fad79df9522ef9.json",
+          "receipt_sha256": "936bf3d5c9989a242149aa0e0f14c641e24409ee96606f0f4d4b3936333e56b7"
         },
         {
           "publisher_id": "planned_parenthood",
@@ -2345,16 +2402,31 @@
       "publisher_id": "sba",
       "publisher_name": "Susan B. Anthony Pro-Life America",
       "task_id": "ss-1tcf",
-      "state": "verified_unimplemented",
-      "reader": null,
-      "qualified_editions": [],
+      "state": "qualified_scope",
+      "reader": "sba",
+      "qualified_editions": [
+        {
+          "publisher_id": "sba",
+          "scorecard_id": "sba:119-grade-catalog",
+          "state": "qualified",
+          "receipt": "qualifications/sba--119-grade-catalog.json",
+          "receipt_sha256": "b6aff34a1b5b8812da62f032aa5401c71d01ec9514c95a99b3c6b1778ec5c078"
+        },
+        {
+          "publisher_id": "sba",
+          "scorecard_id": "sba:119-profile-catalog",
+          "state": "qualified",
+          "receipt": "qualifications/sba--119-profile-catalog.json",
+          "receipt_sha256": "b4029856cde338998a2fbd5779f0eb47054684fcd84a2477536d616e9cf2216e"
+        }
+      ],
       "verified_api_endpoints": [],
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "verified_unimplemented",
       "original_source_urls": [
         "https://sbaprolife.org/scorecard"
       ],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Integrate remaining available editions and renditions"
     },
     {
       "publisher_id": "shriver",
@@ -2376,6 +2448,55 @@
       "state": "published_scope",
       "reader": "us_chamber_archive",
       "qualified_editions": [
+        {
+          "publisher_id": "us_chamber",
+          "scorecard_id": "us_chamber:2011",
+          "state": "qualified",
+          "receipt": "qualifications/us_chamber--2011.json",
+          "receipt_sha256": "efbf6db8598524f05b284ba1a822efb0d24408fe7e71763caad2c0512a420752"
+        },
+        {
+          "publisher_id": "us_chamber",
+          "scorecard_id": "us_chamber:2012",
+          "state": "qualified",
+          "receipt": "qualifications/us_chamber--2012.json",
+          "receipt_sha256": "432db7518f402239efbb939e1dae25260ba8943f62c8f222dcce03eac5bffab9"
+        },
+        {
+          "publisher_id": "us_chamber",
+          "scorecard_id": "us_chamber:2013",
+          "state": "qualified",
+          "receipt": "qualifications/us_chamber--2013.json",
+          "receipt_sha256": "6626747106c9cfbb609922a2243b11e068039b002091b69177d9286a75a8fccd"
+        },
+        {
+          "publisher_id": "us_chamber",
+          "scorecard_id": "us_chamber:2007",
+          "state": "qualified",
+          "receipt": "qualifications/us_chamber--2007.json",
+          "receipt_sha256": "f99e3c2aaeb892a99d45a635d17e1513a6eef29661cb599b2bcdfc824d4aec08"
+        },
+        {
+          "publisher_id": "us_chamber",
+          "scorecard_id": "us_chamber:2008",
+          "state": "qualified",
+          "receipt": "qualifications/us_chamber--2008.json",
+          "receipt_sha256": "3834aedc5bf801dc695697fbc9199ffd8f18f54340f78df0b7e551fb985570c2"
+        },
+        {
+          "publisher_id": "us_chamber",
+          "scorecard_id": "us_chamber:2009",
+          "state": "qualified",
+          "receipt": "qualifications/us_chamber--2009.json",
+          "receipt_sha256": "cf99c2c4657396013112ee2fd991405e3aded1186844ff43bcc0390b4d5e3dd0"
+        },
+        {
+          "publisher_id": "us_chamber",
+          "scorecard_id": "us_chamber:2010",
+          "state": "qualified",
+          "receipt": "qualifications/us_chamber--2010.json",
+          "receipt_sha256": "aa33de2cdb2549ed33455495ae70d6e0c87812a1cc43204e3dda4bed919f357b"
+        },
         {
           "publisher_id": "us_chamber",
           "scorecard_id": "us_chamber:2018",
@@ -2941,9 +3062,17 @@
       "publisher_id": "nam",
       "publisher_name": "National Association of Manufacturers",
       "task_id": "ss-dk6h",
-      "state": "unverified_lead",
-      "reader": null,
-      "qualified_editions": [],
+      "state": "qualified_scope",
+      "reader": "nam",
+      "qualified_editions": [
+        {
+          "publisher_id": "nam",
+          "scorecard_id": "nam:113-2014",
+          "state": "qualified",
+          "receipt": "qualifications/nam--113-2014.json",
+          "receipt_sha256": "faa6f6cda2f5b63d254c653bfa84a17587991e03103f6edbf25a3116135fcb46"
+        }
+      ],
       "verified_api_endpoints": [],
       "discovery_api_status": "blocked",
       "discovery_support_status": "unverified_lead",
@@ -2951,7 +3080,7 @@
         "https://nam.org/votingrecord",
         "https://www.nam.org/votingrecord"
       ],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Integrate remaining available editions and renditions"
     },
     {
       "publisher_id": "nasw",
@@ -3231,15 +3360,7 @@
           "receipt_sha256": "d2a788bd3c0e32530026cda6798085a3788e137c91d20a7a9c9807d83b405ffe"
         }
       ],
-      "verified_api_endpoints": [
-        {
-          "method": "POST",
-          "url_template": "https://www.americanenergyalliance.org/wp-admin/admin-ajax.php",
-          "purpose": "action=aea_datatable_action; paginated chamber members, ratings, items and member actions",
-          "qualification_receipt": "qualifications/american_energy_alliance--119.json",
-          "parser_version": "aea-original-datatables/1"
-        }
-      ],
+      "verified_api_endpoints": [],
       "discovery_api_status": "html_pdf_only_observed",
       "discovery_support_status": "verified_unimplemented",
       "original_source_urls": [
