@@ -1749,7 +1749,7 @@
     "status": "connected",
     "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
     "evidence": [
-      "src/spicy_regs/explorer_supplemental.json"
+      "src/spicy_regs/table_joins.py:JOINS"
     ],
     "relationships": [
       "scorecard_item_links.scorecard_id+item_id+source_snapshot_id -> scorecard_items.scorecard_id+item_id+snapshot_id",
@@ -1763,7 +1763,7 @@
     "status": "connected",
     "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
     "evidence": [
-      "src/spicy_regs/explorer_supplemental.json"
+      "src/spicy_regs/table_joins.py:JOINS"
     ],
     "relationships": [
       "scorecard_items.scorecard_id -> scorecards.scorecard_id",
@@ -1778,7 +1778,7 @@
     "status": "connected",
     "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
     "evidence": [
-      "src/spicy_regs/explorer_supplemental.json"
+      "src/spicy_regs/table_joins.py:JOINS"
     ],
     "relationships": [
       "scorecard_member_item_results.scorecard_id -> scorecards.scorecard_id",
@@ -1793,7 +1793,7 @@
     "status": "connected",
     "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
     "evidence": [
-      "src/spicy_regs/explorer_supplemental.json"
+      "src/spicy_regs/table_joins.py:JOINS"
     ],
     "relationships": [
       "scorecard_member_links.scorecard_id+publisher_member_key+source_snapshot_id -> scorecard_members.scorecard_id+publisher_member_key+snapshot_id",
@@ -1805,7 +1805,7 @@
     "status": "connected",
     "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
     "evidence": [
-      "src/spicy_regs/explorer_supplemental.json"
+      "src/spicy_regs/table_joins.py:JOINS"
     ],
     "relationships": [
       "scorecard_member_ratings.scorecard_id -> scorecards.scorecard_id",
@@ -1819,7 +1819,7 @@
     "status": "connected",
     "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
     "evidence": [
-      "src/spicy_regs/explorer_supplemental.json"
+      "src/spicy_regs/table_joins.py:JOINS"
     ],
     "relationships": [
       "scorecard_members.scorecard_id -> scorecards.scorecard_id",
@@ -1834,7 +1834,7 @@
     "status": "connected",
     "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
     "evidence": [
-      "src/spicy_regs/explorer_supplemental.json"
+      "src/spicy_regs/table_joins.py:JOINS"
     ],
     "relationships": [
       "scorecard_methodologies.scorecard_id -> scorecards.scorecard_id",
@@ -1848,7 +1848,7 @@
     "status": "connected",
     "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
     "evidence": [
-      "src/spicy_regs/explorer_supplemental.json"
+      "src/spicy_regs/table_joins.py:JOINS"
     ],
     "relationships": [
       "scorecard_metric_components.scorecard_id -> scorecards.scorecard_id",
@@ -1862,7 +1862,7 @@
     "status": "connected",
     "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
     "evidence": [
-      "src/spicy_regs/explorer_supplemental.json"
+      "src/spicy_regs/table_joins.py:JOINS"
     ],
     "relationships": [
       "scorecard_metric_items.scorecard_id -> scorecards.scorecard_id",
@@ -1878,7 +1878,7 @@
     "status": "connected",
     "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
     "evidence": [
-      "src/spicy_regs/explorer_supplemental.json"
+      "src/spicy_regs/table_joins.py:JOINS"
     ],
     "relationships": [
       "scorecard_metrics.scorecard_id -> scorecards.scorecard_id",
@@ -1895,7 +1895,7 @@
     "status": "connected",
     "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
     "evidence": [
-      "src/spicy_regs/explorer_supplemental.json"
+      "src/spicy_regs/table_joins.py:JOINS"
     ],
     "relationships": [
       "scorecards.publisher_id -> scorecard_publishers.publisher_id"
@@ -1906,7 +1906,7 @@
     "status": "connected",
     "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
     "evidence": [
-      "src/spicy_regs/explorer_supplemental.json"
+      "src/spicy_regs/table_joins.py:JOINS"
     ],
     "relationships": [
       "scorecards.snapshot_id -> scorecard_snapshots.snapshot_id",
@@ -1926,7 +1926,7 @@
     "status": "connected",
     "reason": "Declared navigation uses source-stated identities or documented derived keys. Connections show each complete key and its scope; a connection does not imply complete source coverage.",
     "evidence": [
-      "src/spicy_regs/explorer_supplemental.json"
+      "src/spicy_regs/table_joins.py:JOINS"
     ],
     "relationships": [
       "scorecards.publisher_id -> scorecard_publishers.publisher_id",

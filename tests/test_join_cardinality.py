@@ -49,6 +49,10 @@ def test_full_selected_receipts_cover_new_keys_and_populated_attributes():
         assert join.measurement is not None
         assert join.expected_cardinality=="one"
         assert join.measurement["scope"]=="full_selected_inputs"
-        assert join.baseline_keys>0 and join.kind=="complete"
-        assert join.measurement["max_parent_multiplicity"]==1
+        assert (join.baseline_keys, join.baseline_missing) == (
+            join.measurement["keys"], join.measurement["missing"])
+        assert 0 <= join.baseline_missing <= join.baseline_keys
+        assert join.kind in {"complete", "scope", "design", "empty"}
+        assert 0 <= join.measurement["max_parent_multiplicity"] <= 1
+        assert join.measurement["parent_duplicate_keys"] == 0
         assert all('/generations/' in url for key in ['child_urls','parent_urls'] for url in join.measurement[key])

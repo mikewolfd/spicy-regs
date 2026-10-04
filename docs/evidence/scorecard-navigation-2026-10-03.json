@@ -1,0 +1,323 @@
+{
+  "format": "spicygov-explorer-join-measurements",
+  "version": 1,
+  "measuredAt": "2026-10-04T00:05:22.019Z",
+  "publicationJsonSha256": "sha256:fee7c0f220ac49ea75a36f4ad84d956d5bfcc8cd96090cd6ab067182316512e6",
+  "scope": "All selected key columns from the recorded immutable publication files. Navigation checks do not set producer regression floors.",
+  "joins": [
+    {
+      "declaration": {
+        "child": "scorecard_member_links",
+        "child_columns": [
+          "scorecard_id",
+          "publisher_member_key",
+          "source_snapshot_id"
+        ],
+        "parent": "scorecard_members",
+        "parent_columns": [
+          "scorecard_id",
+          "publisher_member_key",
+          "snapshot_id"
+        ],
+        "kind": "scope",
+        "reason": "Matches the publisher identity and the exact source snapshot used for resolution. A newer source snapshot is not interchangeable.",
+        "evidence": [
+          "src/spicy_regs/scorecards/resolution.py",
+          "src/spicy_regs/transforms/build_scorecard_analysis.py"
+        ],
+        "provenance": {
+          "repository": "https://github.com/mikewolfd/spicygov",
+          "revision": "c74cb76fdcec4f9f244a9ea84a0eadcb71db4f7e",
+          "reason": "Previously shipped scorecard navigation; consolidated after primary dictionary integration."
+        },
+        "expected_cardinality": "one"
+      },
+      "measurement": {
+        "join": "scorecard_member_links.scorecard_id+publisher_member_key+source_snapshot_id -> scorecard_members.scorecard_id+publisher_member_key+snapshot_id",
+        "keys": 2102,
+        "missing": 0,
+        "resolved_pct": 100,
+        "examples": [],
+        "child_input_rows": 2102,
+        "child_nonnull_rows": 2102,
+        "parent_input_rows": 2102,
+        "parent_distinct_keys": 2102,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 2102,
+        "left_join_nonnull_rows": 2102,
+        "scope": "full_selected_inputs",
+        "child_urls": [
+          "https://data.spicygov.ai/generations/scorecard-analysis/4a99801a8a935e1dbe617ddaf219e959b32d46061fa196a36b693806121a8b46/scorecard_member_links.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_members.parquet"
+        ],
+        "measured_on": "2026-10-03",
+        "measured_expected_cardinality": "one",
+        "receipt": "docs/evidence/scorecard-navigation-2026-10-03.json",
+        "method": "Hyparquet 1.31.2 reads all rows of the named key columns; non-null ordered tuples are grouped with exact string equality. Parent multiplicity and unmatched distinct child tuples are counted."
+      }
+    },
+    {
+      "declaration": {
+        "child": "scorecard_item_links",
+        "child_columns": [
+          "scorecard_id",
+          "item_id",
+          "source_snapshot_id"
+        ],
+        "parent": "scorecard_items",
+        "parent_columns": [
+          "scorecard_id",
+          "item_id",
+          "snapshot_id"
+        ],
+        "kind": "scope",
+        "reason": "Matches the publisher identity and the exact source snapshot used for resolution. A newer source snapshot is not interchangeable.",
+        "evidence": [
+          "src/spicy_regs/scorecards/resolution.py",
+          "src/spicy_regs/transforms/build_scorecard_analysis.py"
+        ],
+        "provenance": {
+          "repository": "https://github.com/mikewolfd/spicygov",
+          "revision": "c74cb76fdcec4f9f244a9ea84a0eadcb71db4f7e",
+          "reason": "Previously shipped scorecard navigation; consolidated after primary dictionary integration."
+        },
+        "expected_cardinality": "one"
+      },
+      "measurement": {
+        "join": "scorecard_item_links.scorecard_id+item_id+source_snapshot_id -> scorecard_items.scorecard_id+item_id+snapshot_id",
+        "keys": 225,
+        "missing": 0,
+        "resolved_pct": 100,
+        "examples": [],
+        "child_input_rows": 406,
+        "child_nonnull_rows": 406,
+        "parent_input_rows": 225,
+        "parent_distinct_keys": 225,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 406,
+        "left_join_nonnull_rows": 406,
+        "scope": "full_selected_inputs",
+        "child_urls": [
+          "https://data.spicygov.ai/generations/scorecard-analysis/4a99801a8a935e1dbe617ddaf219e959b32d46061fa196a36b693806121a8b46/scorecard_item_links.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_items.parquet"
+        ],
+        "measured_on": "2026-10-03",
+        "measured_expected_cardinality": "one",
+        "receipt": "docs/evidence/scorecard-navigation-2026-10-03.json",
+        "method": "Hyparquet 1.31.2 reads all rows of the named key columns; non-null ordered tuples are grouped with exact string equality. Parent multiplicity and unmatched distinct child tuples are counted."
+      }
+    },
+    {
+      "declaration": {
+        "child": "scorecard_member_links",
+        "child_columns": [
+          "bioguide_id"
+        ],
+        "parent": "members",
+        "parent_columns": [
+          "bioguide_id"
+        ],
+        "kind": "scope",
+        "reason": "Exact identifier emitted by the scorecard resolver. Unresolved or ambiguous identifiers remain NULL. The explorer follows current published records; input_pins_json identifies the historical input used by the resolver.",
+        "evidence": [
+          "src/spicy_regs/scorecards/resolution.py",
+          "src/spicy_regs/transforms/build_scorecard_analysis.py"
+        ],
+        "provenance": {
+          "repository": "https://github.com/mikewolfd/spicygov",
+          "revision": "c74cb76fdcec4f9f244a9ea84a0eadcb71db4f7e",
+          "reason": "Previously shipped scorecard navigation; consolidated after primary dictionary integration."
+        },
+        "expected_cardinality": "one"
+      },
+      "measurement": {
+        "join": "scorecard_member_links.bioguide_id -> members.bioguide_id",
+        "keys": 565,
+        "missing": 0,
+        "resolved_pct": 100,
+        "examples": [],
+        "child_input_rows": 2102,
+        "child_nonnull_rows": 1782,
+        "parent_input_rows": 12770,
+        "parent_distinct_keys": 12770,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 1782,
+        "left_join_nonnull_rows": 1782,
+        "scope": "full_selected_inputs",
+        "child_urls": [
+          "https://data.spicygov.ai/generations/scorecard-analysis/4a99801a8a935e1dbe617ddaf219e959b32d46061fa196a36b693806121a8b46/scorecard_member_links.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/members/5d6bd2a29a3b0fa9b587ed4e787a9cf26e3534a74c96c0daebc56a8149115b0b/members.parquet"
+        ],
+        "measured_on": "2026-10-03",
+        "measured_expected_cardinality": "one",
+        "receipt": "docs/evidence/scorecard-navigation-2026-10-03.json",
+        "method": "Hyparquet 1.31.2 reads all rows of the named key columns; non-null ordered tuples are grouped with exact string equality. Parent multiplicity and unmatched distinct child tuples are counted."
+      }
+    },
+    {
+      "declaration": {
+        "child": "scorecard_item_links",
+        "child_columns": [
+          "bill_id"
+        ],
+        "parent": "congress_bills",
+        "parent_columns": [
+          "bill_id"
+        ],
+        "kind": "scope",
+        "reason": "Exact identifier emitted by the scorecard resolver. Unresolved or ambiguous identifiers remain NULL. The explorer follows current published records; input_pins_json identifies the historical input used by the resolver.",
+        "evidence": [
+          "src/spicy_regs/scorecards/resolution.py",
+          "src/spicy_regs/transforms/build_scorecard_analysis.py"
+        ],
+        "provenance": {
+          "repository": "https://github.com/mikewolfd/spicygov",
+          "revision": "c74cb76fdcec4f9f244a9ea84a0eadcb71db4f7e",
+          "reason": "Previously shipped scorecard navigation; consolidated after primary dictionary integration."
+        },
+        "expected_cardinality": "one"
+      },
+      "measurement": {
+        "join": "scorecard_item_links.bill_id -> congress_bills.bill_id",
+        "keys": 95,
+        "missing": 0,
+        "resolved_pct": 100,
+        "examples": [],
+        "child_input_rows": 406,
+        "child_nonnull_rows": 261,
+        "parent_input_rows": 421773,
+        "parent_distinct_keys": 421773,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 261,
+        "left_join_nonnull_rows": 261,
+        "scope": "full_selected_inputs",
+        "child_urls": [
+          "https://data.spicygov.ai/generations/scorecard-analysis/4a99801a8a935e1dbe617ddaf219e959b32d46061fa196a36b693806121a8b46/scorecard_item_links.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/bill-family/ff945e34ac1c7781f346a0dc14c18365df7281db236ecc7c3ab32529232cad21/congress_bills.parquet"
+        ],
+        "measured_on": "2026-10-03",
+        "measured_expected_cardinality": "one",
+        "receipt": "docs/evidence/scorecard-navigation-2026-10-03.json",
+        "method": "Hyparquet 1.31.2 reads all rows of the named key columns; non-null ordered tuples are grouped with exact string equality. Parent multiplicity and unmatched distinct child tuples are counted."
+      }
+    },
+    {
+      "declaration": {
+        "child": "scorecard_item_links",
+        "child_columns": [
+          "vote_id"
+        ],
+        "parent": "roll_call_votes",
+        "parent_columns": [
+          "vote_id"
+        ],
+        "kind": "scope",
+        "reason": "Exact identifier emitted by the scorecard resolver. Unresolved or ambiguous identifiers remain NULL. The explorer follows current published records; input_pins_json identifies the historical input used by the resolver.",
+        "evidence": [
+          "src/spicy_regs/scorecards/resolution.py",
+          "src/spicy_regs/transforms/build_scorecard_analysis.py"
+        ],
+        "provenance": {
+          "repository": "https://github.com/mikewolfd/spicygov",
+          "revision": "c74cb76fdcec4f9f244a9ea84a0eadcb71db4f7e",
+          "reason": "Previously shipped scorecard navigation; consolidated after primary dictionary integration."
+        },
+        "expected_cardinality": "one"
+      },
+      "measurement": {
+        "join": "scorecard_item_links.vote_id -> roll_call_votes.vote_id",
+        "keys": 112,
+        "missing": 0,
+        "resolved_pct": 100,
+        "examples": [],
+        "child_input_rows": 406,
+        "child_nonnull_rows": 112,
+        "parent_input_rows": 30702,
+        "parent_distinct_keys": 30702,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 112,
+        "left_join_nonnull_rows": 112,
+        "scope": "full_selected_inputs",
+        "child_urls": [
+          "https://data.spicygov.ai/generations/scorecard-analysis/4a99801a8a935e1dbe617ddaf219e959b32d46061fa196a36b693806121a8b46/scorecard_item_links.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/roll-call-votes/4dc318be76b2ecd16db02b5174aa59146a2c9acd7d2d9b4aed3ed7f4c7c6f030/roll_call_votes.parquet"
+        ],
+        "measured_on": "2026-10-03",
+        "measured_expected_cardinality": "one",
+        "receipt": "docs/evidence/scorecard-navigation-2026-10-03.json",
+        "method": "Hyparquet 1.31.2 reads all rows of the named key columns; non-null ordered tuples are grouped with exact string equality. Parent multiplicity and unmatched distinct child tuples are counted."
+      }
+    },
+    {
+      "declaration": {
+        "child": "scorecard_item_links",
+        "child_columns": [
+          "amendment_id"
+        ],
+        "parent": "amendments",
+        "parent_columns": [
+          "amendment_id"
+        ],
+        "kind": "empty",
+        "reason": "Exact identifier emitted by the scorecard resolver. Unresolved or ambiguous identifiers remain NULL. The explorer follows current published records; input_pins_json identifies the historical input used by the resolver.",
+        "evidence": [
+          "src/spicy_regs/scorecards/resolution.py",
+          "src/spicy_regs/transforms/build_scorecard_analysis.py"
+        ],
+        "provenance": {
+          "repository": "https://github.com/mikewolfd/spicygov",
+          "revision": "c74cb76fdcec4f9f244a9ea84a0eadcb71db4f7e",
+          "reason": "Previously shipped scorecard navigation; consolidated after primary dictionary integration."
+        },
+        "expected_cardinality": "one"
+      },
+      "measurement": {
+        "join": "scorecard_item_links.amendment_id -> amendments.amendment_id",
+        "keys": 0,
+        "missing": 0,
+        "resolved_pct": null,
+        "examples": [],
+        "child_input_rows": 406,
+        "child_nonnull_rows": 0,
+        "parent_input_rows": 7119,
+        "parent_distinct_keys": 7119,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 0,
+        "inner_join_rows": 0,
+        "left_join_nonnull_rows": 0,
+        "scope": "full_selected_inputs",
+        "child_urls": [
+          "https://data.spicygov.ai/generations/scorecard-analysis/4a99801a8a935e1dbe617ddaf219e959b32d46061fa196a36b693806121a8b46/scorecard_item_links.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/amendments/a1f7489c31fd5894d4b0a44d7fc6fac3063f70e210699f0b8570d9bcc1a7f622/amendments.parquet"
+        ],
+        "measured_on": "2026-10-03",
+        "measured_expected_cardinality": "one",
+        "receipt": "docs/evidence/scorecard-navigation-2026-10-03.json",
+        "method": "Hyparquet 1.31.2 reads all rows of the named key columns; non-null ordered tuples are grouped with exact string equality. Parent multiplicity and unmatched distinct child tuples are counted."
+      }
+    }
+  ]
+}

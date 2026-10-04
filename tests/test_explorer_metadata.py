@@ -41,7 +41,7 @@ def args():
             "registry": {"sources": {"original": {"id": "original", "name": "Publisher",
                                                    "url": "https://example.org/", "kind": "government"}},
                          "families": {}, "tables": {"child": {"sources": ["original"], "inputs": ["parent"]}}},
-            "join_record": {"joins": [join()]}, "supplemental": {}, "additions": {}, "audit": {},
+            "join_record": {"joins": [join()]}, "audit": {},
             "generated_at": "2026-10-03T00:00:00Z"}
 
 
@@ -90,13 +90,11 @@ def test_missing_live_parent_is_explicitly_omitted_but_input_is_preserved():
     assert result["tables"]["child"]["unavailableJoins"][0]["parent"] == "parent"
 
 
-def test_primary_dictionary_wins_and_join_supplements_deduplicate():
+def test_duplicate_canonical_join_is_rejected():
     options = args()
-    options["supplemental"] = {"tables": {"child": {"label": "Old"}}, "joins": [join()]}
-    options["additions"] = {"joins": [join()]}
-    result = build_bundle(index(), **options)
-    assert result["tables"]["child"]["label"] == "Child"
-    assert len(result["joins"]) == 1
+    options["join_record"]["joins"].append(join())
+    with pytest.raises(ValueError, match="Duplicate join declaration"):
+        build_bundle(index(), **options)
 
 
 def test_timer_does_not_refresh_freshness_but_data_or_metadata_change_does():
