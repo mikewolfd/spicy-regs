@@ -18,7 +18,7 @@ outside the repositories.
 | SpicyRegs ratings | Exact `DECIMAL(38,19)` ratings, explicit legacy/current policy admission and one shared indexed-family reader for prior publication inputs | Tested and pushed at `57693645a0354f4a0cebfdf04a8d33601676aca4` on `scorecards-integration-20261004` |
 | Publisher API inventory | Added original-client and archived FreedomWorks JSON observations | Discovery metadata only; leadership cards and party charts do not establish complete member coverage or a working current API |
 
-The [SpicyDocs source guides](../../../../../../spicy-docs/docs/README.md) describe
+The [SpicyDocs source guides](https://github.com/mikewolfd/spicy-docs/blob/6771af03c21ada118fc625c6a19ed7f670940e29/docs/README.md) describe
 the named source boundaries. AFGE keeps conflicting grid/prose roll numbers,
 member-specific credit and blanks. Reproductive Freedom keeps vacancies,
 historical context and undisclosed party values. National Farmers Union keeps
@@ -92,7 +92,7 @@ the machine-readable handoff; none of these candidates is production support.
    a comparable benchmark. The audit has a proposal, not an implementation or
    a measured performance gain. Do not remove generation admission checks.
 2. Run the pinned retained batch through
-   [`prepare_scorecard_integrations.py`](../../../../../scripts/prepare_scorecard_integrations.py)
+   [`prepare_scorecard_integrations.py`](https://github.com/mikewolfd/spicy-regs/blob/5bcd617240fb6caa90ebce24f103130ea6936888/scripts/prepare_scorecard_integrations.py)
    using a freshly read public index and fresh output/private-observation paths.
    Preserve every interrupted and failed attempt. Require successful exit,
    exact source references, complete scopes, prior-row preservation and a
