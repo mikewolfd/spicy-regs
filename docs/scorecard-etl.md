@@ -69,6 +69,11 @@ original congressional HTTP acquisition. Refused values stop preparation and
 retain their attempts. Existing native inputs use their selected receipts, and
 source scorecards always require their own receipts. The normal analysis rollup
 does not enable this conversion implicitly.
+Every original footer key/value must survive unchanged. Arrow may add its
+generated `ARROW:schema` entry after exact decoded-schema verification; the proof
+reports that addition separately as `generated_footer_keys_added`. Its
+`exact_schema_and_authored_footer` field establishes retained source metadata,
+without asserting byte-identical physical Parquet storage.
 
 The resolver's exact-match and conflict rules remain authoritative. Moving
 snapshot identifiers requires query integration to check that an analysis used the

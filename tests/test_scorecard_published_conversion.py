@@ -1,5 +1,6 @@
 """Published shaped inputs become exact native bundles, never alleged captures."""
 
+from base64 import b64decode
 from hashlib import sha256
 import importlib.util
 import json
@@ -69,6 +70,8 @@ def test_published_shaped_conversion_restores_every_field_schema_footer_and_hone
     assert proof["rows"] == 1
     assert proof["original_rows_sha256"] == proof["restored_rows_sha256"]
     assert proof["original_table_pin"] == publication.table_pin(index, path.name)
+    assert proof["exact_schema_and_authored_footer"] is True
+    assert proof["generated_footer_keys_added"] == []
     restored = selected.materialize("members", tmp_path / "again.parquet")
     assert pq.read_schema(restored).equals(pq.read_schema(path), check_metadata=True)
     assert pq.read_table(restored).to_pylist() == pq.read_table(path).to_pylist()
@@ -79,6 +82,35 @@ def test_published_shaped_conversion_restores_every_field_schema_footer_and_hone
     assert all(w["body_version"] is None for row in attempts for w in row["witnesses"])
     assert proof["source_acquisition_requests"] == 0
     assert all(w["source_uri"].startswith("https://data.example/generations/") for w in proof["witnesses"])
+
+
+def test_conversion_reports_added_generated_arrow_schema_without_asserting_identical_storage(tmp_path):
+    path, _ = published_shaped(tmp_path)
+    pq.write_table(pq.read_table(path), path, store_schema=False)
+    assert not pq.read_metadata(path).metadata
+    index = seed_shaped_index(Store(), [path])
+    _, proof = convert(tmp_path, path, index)
+    assert proof["exact_schema_and_authored_footer"] is True
+    assert proof["generated_footer_keys_added"] == ["ARROW:schema"]
+    assert "exact_schema_and_footer" not in proof
+
+
+def test_conversion_refuses_rewritten_original_footer_encoding_even_with_unchanged_decoded_schema(tmp_path):
+    path, _ = published_shaped(tmp_path)
+    expected_schema = pq.read_schema(path)
+    encoded = pq.read_metadata(path).metadata[b"ARROW:schema"]
+    assert encoded.endswith(b"=")
+    alphabet = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+    position = len(encoded.rstrip(b"=")) - 1
+    altered = encoded[:position] + bytes([alphabet[alphabet.index(encoded[position]) ^ 1]]) + encoded[position + 1:]
+    assert altered != encoded and b64decode(altered) == b64decode(encoded)
+    body = path.read_bytes()
+    assert body.count(encoded) == 1
+    path.write_bytes(body.replace(encoded, altered))
+    assert pq.read_schema(path).equals(expected_schema, check_metadata=True)
+    index = seed_shaped_index(Store(), [path])
+    with pytest.raises(ValueError, match="original footer"):
+        convert(tmp_path, path, index)
 
 
 @pytest.mark.parametrize("fault", ["pin", "population", "malformed-native-value"])

@@ -20,6 +20,20 @@ def _rows(paths):
                 yield from batch.to_pylist()
 
 
+def _authored_footer(original: Mapping[bytes, bytes], restored: Mapping[bytes, bytes]) -> list[str]:
+    """Preserve each original entry; report only the generated Arrow addition.
+
+    Decoded schema equality is checked separately. This does not assert an
+    identical physical Parquet encoding or permit rewriting an original entry.
+    """
+    if any(restored.get(key) != value for key, value in original.items()):
+        raise ValueError("Published official conversion changed an original footer entry")
+    added = set(restored) - set(original)
+    if added - {b"ARROW:schema"}:
+        raise ValueError("Published official conversion added unknown footer entries")
+    return sorted(key.decode() for key in added)
+
+
 def convert_published_official_input(
     snapshot: Mapping,
     name: str,
@@ -33,7 +47,7 @@ def convert_published_official_input(
 
     The original public pins remain analysis parents. These witnesses name
     published shaped data, never an original publisher HTTP response. Refused
-    conversions, incomplete populations, schema/footer changes and changed
+    conversions, incomplete populations, schema/authored-footer changes and changed
     values stop the preparation. Native published inputs use their own existing
     receipt path instead of this explicitly selected conversion.
     """
@@ -46,6 +60,7 @@ def convert_published_official_input(
     if not paths or len(paths) != len(members):
         raise ValueError("Published conversion requires every selected table member")
     schema = pq.read_schema(paths[0])
+    original_footer = pq.read_metadata(paths[0]).metadata or {}
     if set(OFFICIAL_COLUMNS[name]) - set(schema.names):
         raise ValueError("Published official input lacks required resolver fields: " + name)
     for path, member in zip(paths, members, strict=True):
@@ -55,6 +70,8 @@ def convert_published_official_input(
             raise ValueError("Published conversion input differs from its immutable pin")
         if not pq.read_schema(path).equals(schema, check_metadata=True):
             raise ValueError("Published input members have inconsistent source schemas or footers")
+        if (pq.read_metadata(path).metadata or {}) != original_footer:
+            raise ValueError("Published input members have inconsistent original footer entries")
     directory.mkdir(parents=True, exist_ok=False)
     subjects, receipts, witnesses = [], [], []
     for ordinal, (path, member) in enumerate(zip(paths, members, strict=True)):
@@ -76,7 +93,8 @@ def convert_published_official_input(
     selected = CongressInput(tuple(subjects), combined, generation_id)
     restored = selected.materialize(name, directory / "restored.parquet")
     if not pq.read_schema(restored).equals(schema, check_metadata=True):
-        raise ValueError("Published official conversion changed source schema or footer")
+        raise ValueError("Published official conversion changed source schema metadata")
+    generated_footer_keys = _authored_footer(original_footer, pq.read_metadata(restored).metadata or {})
     before, after, count = sha256(), sha256(), 0
     absent = object()
     for original, returned in zip_longest(_rows(paths), _rows([restored]), fillvalue=absent):
@@ -94,6 +112,7 @@ def convert_published_official_input(
     return selected, dict(dataset=name, generation_id=generation_id, rows=count,
                          original_table_pin=publication.table_pin(snapshot, name + ".parquet"),
                          original_rows_sha256=before.hexdigest(), restored_rows_sha256=after.hexdigest(),
-                         exact_schema_and_footer=True, required_resolver_columns=list(OFFICIAL_COLUMNS[name]),
+                         exact_schema_and_authored_footer=True, generated_footer_keys_added=generated_footer_keys,
+                         required_resolver_columns=list(OFFICIAL_COLUMNS[name]),
                          witnesses=witnesses, source_acquisition_requests=0,
                          scope="Verified conversion of complete published shaped inputs; no original acquisition is asserted")
