@@ -8,7 +8,9 @@ hosted table has exactly one writer.
 
 from __future__ import annotations
 
+import json
 import re
+import subprocess
 import tomllib
 from pathlib import Path
 
@@ -118,15 +120,17 @@ HOSTED_ROLLUPS = (
 #: or workflow: SpicyDocs 0.52.0's native legal-reference tables.
 MANIFEST_ROLLUPS = (NativeLegalReferencesRollup,)
 
-# Scorecards remain manual while complete source scopes are qualified.
-MANUAL_ROLLUPS = (ScorecardsRollup,)
+# Scorecards use a dedicated workflow with qualified weekly source selection.
+SCORECARD_ROLLUPS = (ScorecardsRollup,)
 
 
 def _declared_keys(rollup) -> tuple[str, ...]:
     return rollup.outputs or (rollup.output,)
 
 
-@pytest.mark.parametrize("rollup", HOSTED_ROLLUPS + MANIFEST_ROLLUPS + MANUAL_ROLLUPS + (ScorecardAnalysisRollup,), ids=lambda r: r.name)
+@pytest.mark.parametrize(
+    "rollup", HOSTED_ROLLUPS + MANIFEST_ROLLUPS + SCORECARD_ROLLUPS + (ScorecardAnalysisRollup,), ids=lambda r: r.name
+)
 def test_every_output_is_a_published_table(rollup):
     for key in _declared_keys(rollup):
         assert key.endswith(".parquet")
@@ -219,9 +223,13 @@ def test_a_soft_input_is_an_ingest_output_its_writer_produces_first(rollup, soft
 
 def test_the_bill_family_declares_all_classified_subject_outputs():
     assert "bill_cosponsors.parquet" in BillFamilyRollup.outputs
-    assert set(BillFamilyRollup.outputs) == {p.dataset + ".parquet" for p in BillFamilyRollup.receipt_policies if not p.receipt_only}
+    assert set(BillFamilyRollup.outputs) == {
+        p.dataset + ".parquet" for p in BillFamilyRollup.receipt_policies if not p.receipt_only
+    }
     assert BillFamilyRollup.outputs[0] == "congress_bills.parquet"
-    assert {f"{name}.parquet" for name in BILL_OWN_TABLES if not dd.subject_policies()[name].receipt_only} <= set(BillFamilyRollup.outputs)
+    assert {f"{name}.parquet" for name in BILL_OWN_TABLES if not dd.subject_policies()[name].receipt_only} <= set(
+        BillFamilyRollup.outputs
+    )
     # The property the freshness checker uses resolves to the first key.
     assert BillFamilyRollup(output_dir=None).output == "congress_bills.parquet"
 
@@ -264,13 +272,13 @@ def test_every_hosted_table_has_exactly_one_writer():
     URLs with API resource URLs.
     """
     written: dict[str, list[str]] = {}
-    for rollup in HOSTED_ROLLUPS + MANIFEST_ROLLUPS + MANUAL_ROLLUPS:
+    for rollup in HOSTED_ROLLUPS + MANIFEST_ROLLUPS + SCORECARD_ROLLUPS:
         for key in _declared_keys(rollup):
             written.setdefault(key.removesuffix(".parquet"), []).append(rollup.name)
 
-    assert set(written) == ((set(dd.CONTRACT_TABLES) - ETL_TABLES | set(OWN_TABLES) | HOSTED_OWN_TABLES) & set(dd.TABLES)), (
-        "every contract, plus the bill family's own two tables, must be published by exactly one rollup"
-    )
+    assert set(written) == (
+        (set(dd.CONTRACT_TABLES) - ETL_TABLES | set(OWN_TABLES) | HOSTED_OWN_TABLES) & set(dd.TABLES)
+    ), "every contract, plus the bill family's own two tables, must be published by exactly one rollup"
     doubled = {table: names for table, names in written.items() if len(names) > 1}
     assert not doubled, f"tables with more than one writer: {doubled}"
 
@@ -382,18 +390,154 @@ def test_each_rollup_has_a_console_script_and_a_workflow(rollup):
     assert document["jobs"]["run"]["uses"] == "./.github/workflows/_rollup.yml"
 
 
-def test_scorecard_commands_are_registered_and_ingest_starts_manual():
+def test_scorecard_commands_are_registered_and_inputs_remain_explicit():
     scripts = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())["project"]["scripts"]
     for rollup, module in ((ScorecardsRollup, "scorecards"), (ScorecardAnalysisRollup, "scorecard_analysis")):
         assert scripts[f"run-rollup-{rollup.name}"] == f"spicy_regs.pipelines.rollups.{module}:app"
-    workflow = yaml.safe_load((WORKFLOWS / "rollup-scorecards.yml").read_text())
-    assert "workflow_dispatch" in workflow[True]
-    assert "schedule" not in workflow[True]
     assert ScorecardsRollup.inputs == ()
     assert set(ScorecardAnalysisRollup.inputs) == {
-        "scorecards.parquet", "scorecard_members.parquet", "scorecard_items.parquet", "members.parquet",
-        "member_terms.parquet", "congress_bills.parquet", "amendments.parquet", "roll_call_votes.parquet",
+        "scorecards.parquet",
+        "scorecard_members.parquet",
+        "scorecard_items.parquet",
+        "members.parquet",
+        "member_terms.parquet",
+        "congress_bills.parquet",
+        "amendments.parquet",
+        "roll_call_votes.parquet",
     }
+
+
+def test_scorecard_schedule_selects_only_qualified_weekly_publishers():
+    from spicy_regs.scorecards.registry import load_registry, select_sources
+
+    workflow = yaml.safe_load((WORKFLOWS / "rollup-scorecards.yml").read_text())
+    triggers = workflow.get("on", workflow.get(True))
+    assert set(triggers) == {"workflow_dispatch", "schedule"}
+    assert triggers["schedule"] == [{"cron": "15 6 * * 1"}]
+    selected = select_sources(load_registry())
+    assert {source.publisher_id for source in selected} == {"lcv", "afscme"}
+    proof = json.loads((REPO_ROOT / "docs/research/scorecards/work/integration/live_refresh_20261004.json").read_text())
+    scopes = {row["publisher_id"]: row for row in proof["scopes"]}
+    assert set(scopes) == {source.publisher_id for source in selected}
+    for source in selected:
+        assert source.cadence == "weekly"
+        assert source.historical_backfill is False
+        assert source.evidence_policy == "hash_only"
+        assert source.qualification_id == scopes[source.publisher_id]["qualification_id"]
+        assert scopes[source.publisher_id]["completeness_status"] == "complete"
+        assert scopes[source.publisher_id]["edition"]["is_current"] is True
+
+
+def test_scorecard_workflow_preserves_manual_defaults_and_bounded_publication():
+    workflow = yaml.safe_load((WORKFLOWS / "rollup-scorecards.yml").read_text())
+    triggers = workflow.get("on", workflow.get(True))
+    defaults = {key: value["default"] for key, value in triggers["workflow_dispatch"]["inputs"].items()}
+    assert defaults == {
+        "skip_upload": True,
+        "publishers": "",
+        "editions": "",
+        "zyte_publishers": "",
+        "zyte_browser_publishers": "",
+        "historical_backfill": False,
+        "force": False,
+    }
+    assert workflow["concurrency"] == {"group": "scorecards-publication", "cancel-in-progress": False}
+    assert workflow["permissions"] == {"contents": "read"}
+    job = workflow["jobs"]["run"]
+    assert job["runs-on"] == "ubuntu-latest"
+    assert type(job["timeout-minutes"]) is int
+    assert 0 < job["timeout-minutes"] <= 180
+    steps = {step.get("name"): step for step in job["steps"] if "name" in step}
+    build = steps["Build or publish scorecard family"]
+    assert (
+        build["env"]["SCORECARD_SKIP_UPLOAD"]
+        == "${{ github.event_name == 'schedule' && 'false' || inputs.skip_upload }}"
+    )
+    assert build["env"]["SCORECARD_PUBLISHERS"] == "${{ inputs.publishers }}"
+    assert build["env"]["SCORECARD_HISTORY"] == "${{ inputs.historical_backfill }}"
+    assert build["env"]["SCORECARD_FORCE"] == "${{ inputs.force }}"
+    assert steps["Install pinned dependencies"]["run"] == "uv sync --frozen"
+    audit = steps["Retain invocation and permitted evidence"]
+    assert audit["if"] == "always()"
+    assert audit["with"]["path"].splitlines() == ["output/invocation.json", "output/source-evidence/"]
+    outputs = steps["Retain build-only outputs and failures"]
+    # Scheduled success publishes; failed runs and manual build-only runs retain outputs.
+    assert outputs["if"] == "failure() || (success() && inputs.skip_upload)"
+    assert outputs["with"]["path"] == "output/"
+    for artifact in (audit, outputs):
+        assert artifact["uses"] == "actions/upload-artifact@v4"
+        assert artifact["with"]["retention-days"] == 30
+
+
+@pytest.mark.parametrize(
+    ("skip_upload", "selectors", "extra_args"),
+    [
+        ("true", {}, []),  # Manual dispatch defaults to a local build.
+        ("false", {}, []),  # Scheduled refresh publishes the registry-selected sources.
+        (
+            "false",
+            {
+                "SCORECARD_PUBLISHERS": "lcv,afscme",
+                "SCORECARD_EDITIONS": "lcv:2025,edition with spaces;$literal",
+                "SCORECARD_ZYTE_PUBLISHERS": "lcv",
+                "SCORECARD_ZYTE_BROWSER_PUBLISHERS": "ijm",
+                "SCORECARD_HISTORY": "true",
+                "SCORECARD_FORCE": "true",
+            },
+            [
+                "--publisher",
+                "lcv",
+                "--publisher",
+                "afscme",
+                "--edition",
+                "lcv:2025",
+                "--edition",
+                "edition with spaces;$literal",
+                "--zyte-publisher",
+                "lcv",
+                "--zyte-browser-publisher",
+                "ijm",
+                "--historical-backfill",
+                "--force",
+            ],
+        ),
+    ],
+    ids=["manual-build-default", "scheduled-publication", "explicit-manual-options"],
+)
+def test_scorecard_workflow_executes_quoted_arguments_without_running_rollup(skip_upload, selectors, extra_args):
+    workflow = yaml.safe_load((WORKFLOWS / "rollup-scorecards.yml").read_text())
+    build = next(
+        step for step in workflow["jobs"]["run"]["steps"] if step.get("name") == "Build or publish scorecard family"
+    )
+    # A shell function records argv and prevents network, publication or environment changes.
+    stub = "uv() { printf '%s\\n' \"$@\"; }\n"
+    result = subprocess.run(
+        ["bash", "-e", "-o", "pipefail", "-c", stub + build["run"]],
+        env={
+            "SCORECARD_SKIP_UPLOAD": skip_upload,
+            "SCORECARD_PUBLISHERS": "",
+            "SCORECARD_EDITIONS": "",
+            "SCORECARD_ZYTE_PUBLISHERS": "",
+            "SCORECARD_ZYTE_BROWSER_PUBLISHERS": "",
+            "SCORECARD_HISTORY": "false",
+            "SCORECARD_FORCE": "false",
+            **selectors,
+        },
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert result.stderr == ""
+    assert result.stdout.splitlines() == [
+        "run",
+        "--frozen",
+        "run-rollup-scorecards",
+        "--output-dir",
+        "output",
+        "--skip-upload" if skip_upload == "true" else "--no-skip-upload",
+        *extra_args,
+    ]
 
 
 @pytest.mark.parametrize("rollup", HOSTED_ROLLUPS, ids=lambda r: r.name)
@@ -425,6 +569,9 @@ def test_the_reusable_workflow_declares_every_input_the_callers_pass():
 def test_member_and_cosponsor_family_growth_is_explicit():
     assert MembersRollup.added_tables == ("member_party_affiliations.parquet",)
     assert BillFamilyRollup.added_tables == (
-        "bill_cosponsors.parquet", "bill_committee_activities.parquet", "cbo_feed_items.parquet")
+        "bill_cosponsors.parquet",
+        "bill_committee_activities.parquet",
+        "cbo_feed_items.parquet",
+    )
     for rollup in (MembersRollup, BillFamilyRollup):
         assert set(rollup.added_tables) <= set(rollup.outputs)
