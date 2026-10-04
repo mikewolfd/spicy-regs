@@ -6,21 +6,27 @@ import argparse
 from hashlib import sha256
 import json
 from pathlib import Path
+from os import getenv
+from uuid import uuid4
 
 from dotenv import load_dotenv
 
-from spicy_regs.scorecards.etl import selected_table_entry
 from spicy_regs.scorecards.etl import LINK_NAMES, generation_options
 from spicy_regs.generations import build_generation, verify_generation
 from spicy_regs.source_evidence import CaptureEvidence, verify_evidence
+from spicy_regs.scorecards.analysis_inputs import convert_published_official_input
 from spicy_regs.sources import publication, r2
-from spicy_regs.transforms.build_scorecard_analysis import INPUTS, OFFICIAL_TABLES, OUTPUTS, build_scorecard_analysis
+from spicy_regs.transforms.build_scorecard_analysis import (
+    INPUTS, OFFICIAL_TABLES, OUTPUTS, analysis_input_entries, build_scorecard_analysis,
+)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--env-file", type=Path, default=Path(".env"))
+    parser.add_argument("--convert-published-official-inputs", action="store_true",
+                        help="Explicitly convert pinned published official shaped inputs into verified private native bundles")
     args = parser.parse_args()
     if args.output.exists():
         raise ValueError("Use a fresh analysis directory")
@@ -28,10 +34,11 @@ def main():
     load_dotenv(args.env_file)
     client = r2.get_r2_client()
     snapshot, _, _ = publication._stored_index(client, "spicy-regs")
+    entries = analysis_input_entries(snapshot, convert_published_official_inputs=args.convert_published_official_inputs)
     index_path = args.output / "publication.v2.json"
     index_path.write_text(json.dumps(snapshot, indent=2) + "\n")
     paths, pins, parents = {}, {}, {}
-    source_entry = selected_table_entry(snapshot, "scorecards.parquet")
+    source_entry = entries["scorecards"]
     source_receipt = None
     source_generation = None
     receipt_inputs = {}
@@ -39,12 +46,9 @@ def main():
         source_generation = source_entry["etlReceipts"]["generationId"]
         receipt_inputs["source-etl-receipts.parquet"] = ("scorecards", source_generation)
     for name in OFFICIAL_TABLES:
-        entry = selected_table_entry(snapshot, name + ".parquet")
+        entry = entries[name]
         if "etlReceipts" in entry:
             receipt_inputs[name + "-etl-receipts.parquet"] = (name, entry["etlReceipts"]["generationId"])
-    for name in ("scorecard_members", "scorecard_items"):
-        if selected_table_entry(snapshot, name + ".parquet")["artifactDigest"] != source_entry["artifactDigest"]:
-            raise ValueError("Scorecard analysis source inputs must share one generation")
     for key in (*INPUTS, *receipt_inputs):
         name = key.removesuffix(".parquet")
         if key not in receipt_inputs:
@@ -79,6 +83,20 @@ def main():
         name: (paths.pop(key.removesuffix(".parquet"))[0], generation)
         for key, (name, generation) in receipt_inputs.items() if name in OFFICIAL_TABLES
     }
+    conversions = []
+    conversion_generation = "published-official-conversion:" + uuid4().hex
+    for name in OFFICIAL_TABLES:
+        if name not in official_receipts:
+            selected, proof = convert_published_official_input(
+                snapshot, name, paths[name], args.output / "official-conversions" / name,
+                generation_id=conversion_generation,
+                published_url=getenv("R2_PUBLIC_URL", "https://data.spicygov.ai"),
+            )
+            paths[name] = list(selected.subjects)
+            official_receipts[name] = selected.receipts, selected.generation_id
+            conversions.append(proof)
+    if conversions:
+        (args.output / "published-official-conversion.json").write_text(json.dumps(conversions, indent=2) + "\n")
     files = build_scorecard_analysis(
         args.output,
         input_pins=pins,
@@ -90,6 +108,8 @@ def main():
     evidence = CaptureEvidence(args.output, "scorecard-analysis")
     evidence.inherit(snapshot, public_url="https://data.spicygov.ai")
     evidence.event("verified-published-inputs", input_pins=parents, source_network_requests=0)
+    if conversions:
+        evidence.event("verified-published-shaped-conversion", conversions=conversions, source_network_requests=0)
     artifact = build_generation(
         args.output / "generation",
         family="scorecard-analysis",
@@ -110,6 +130,7 @@ def main():
         "evidence_directory": str(evidence.artifact_dir),
         "read_snapshot_path": str(index_path),
         "source_network_requests": 0,
+        "published_official_conversions": conversions,
         "qualification": qualification,
     }
     (args.output / "preparation.json").write_text(json.dumps(report, indent=2) + "\n")

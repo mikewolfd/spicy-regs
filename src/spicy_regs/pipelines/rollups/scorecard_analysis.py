@@ -8,11 +8,12 @@ from os import getenv
 from pathlib import Path
 from typing import ClassVar
 
-from spicy_regs.scorecards.etl import selected_table_entry
 from spicy_regs.scorecards.etl import LINK_NAMES, POLICIES, verified_receipt_download
 from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
 from spicy_regs.sources import publication
-from spicy_regs.transforms.build_scorecard_analysis import INPUTS, OFFICIAL_TABLES, OUTPUTS, build_scorecard_analysis
+from spicy_regs.transforms.build_scorecard_analysis import (
+    INPUTS, OFFICIAL_TABLES, OUTPUTS, analysis_input_entries, build_scorecard_analysis,
+)
 
 
 class ScorecardAnalysisRollup(RollupPipeline):
@@ -32,6 +33,7 @@ class ScorecardAnalysisRollup(RollupPipeline):
         self._official_receipts = {}
         if snapshot is None:
             raise publication.PublicationError("Scorecard analysis requires a captured publication index")
+        entries = analysis_input_entries(snapshot)
         public_url = getenv("R2_PUBLIC_URL")
         parents, paths = {}, {}
         for key in self.inputs:
@@ -55,17 +57,14 @@ class ScorecardAnalysisRollup(RollupPipeline):
                     if not publication.fetch_member(public_url, member, target, key):
                         raise publication.PublicationError(f"Missing pinned analysis input: {member.key}")
                 paths[key.removesuffix(".parquet")].append(target)
-        source_owner = selected_table_entry(snapshot, "scorecards.parquet")
-        for source_key in ("scorecard_members.parquet", "scorecard_items.parquet"):
-            if selected_table_entry(snapshot, source_key)["artifactDigest"] != source_owner["artifactDigest"]:
-                raise publication.PublicationError("Scorecard analysis source inputs must share one generation")
+        source_owner = entries["scorecards"]
         if "etlReceipts" in source_owner:
             self._scorecard_source_receipt = verified_receipt_download(
                 snapshot, output_dir / "source-etl-receipts.parquet", public_url=public_url
             )
             self._scorecard_source_generation = source_owner["etlReceipts"]["generationId"]
         for name in OFFICIAL_TABLES:
-            owner = selected_table_entry(snapshot, name + ".parquet")
+            owner = entries[name]
             if "etlReceipts" in owner:
                 receipt = verified_receipt_download(
                     snapshot, output_dir / (name + "-etl-receipts.parquet"), public_url=public_url, dataset=name

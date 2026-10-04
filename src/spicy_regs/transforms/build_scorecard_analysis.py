@@ -18,6 +18,38 @@ INPUTS = tuple(f"{name}.parquet" for name in (*SOURCE_TABLES, *OFFICIAL_TABLES))
 OUTPUTS = ("scorecard_member_links.parquet", "scorecard_item_links.parquet")
 
 
+def analysis_input_entries(snapshot: Mapping, *, convert_published_official_inputs: bool = False) -> dict[str, Mapping]:
+    """Require a complete native input selection before downloading its members.
+
+    This only checks the captured index. The caller still verifies every pinned
+    byte, and the build still admits subject/receipt joins under their selected
+    generations. The preparation host may explicitly convert already-published
+    official shaped inputs through the normal Congress writer; it must supply
+    verified new native bundles before building. Source scorecard receipts are
+    always required. No legacy or prior receipts stand in for missing receipts.
+    """
+    from spicy_regs.scorecards.etl import selected_table_entry
+    from spicy_regs.sources import publication
+
+    entries = {name: selected_table_entry(snapshot, name + ".parquet")
+               for name in (*SOURCE_TABLES, *OFFICIAL_TABLES)}
+    source = entries["scorecards"]
+    if any(entries[name]["artifactDigest"] != source["artifactDigest"] for name in SOURCE_TABLES):
+        raise publication.PublicationError("Scorecard analysis source inputs must share one generation")
+    missing = [name for name, owner in entries.items()
+               if name not in owner.get("etlReceipts", {}).get("datasets", ())
+               and not (convert_published_official_inputs and name in OFFICIAL_TABLES and "etlReceipts" not in owner)]
+    if missing:
+        raise publication.PublicationError("Scorecard analysis requires native receipts for: " + ", ".join(missing))
+    for name, owner in entries.items():
+        if convert_published_official_inputs and name in OFFICIAL_TABLES and "etlReceipts" not in owner:
+            continue
+        generation = owner["etlReceipts"].get("generationId")
+        if not isinstance(generation, str) or not generation or len(publication.receipt_members(snapshot, dataset=name)) != 1:
+            raise publication.PublicationError("Scorecard analysis requires one selected native receipt generation: " + name)
+    return entries
+
+
 def _read(paths: Sequence[Path], columns: Sequence[str] | None = None) -> list[dict]:
     if not paths or any(not path.is_file() for path in paths):
         raise FileNotFoundError("Every analysis input needs its verified Parquet members")

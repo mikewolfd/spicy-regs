@@ -325,7 +325,9 @@ INSTRUCTIONS = (
     "Cite source identifiers, evidence locators and dates from returned rows. "
     "When reporting scorecard ratings or preferred actions, name the publisher, edition and metric, "
     "preserve the literal value, and distinguish publisher observations from official congressional records. "
-    "Join scorecard analysis to source rows only when source_snapshot_id matches snapshot_id. "
+    "Use the native keys in describe_table's canonical joins. Before joining scorecard analysis to source rows, "
+    "verify the analysis generation's source parent matches the selected scorecards generation. "
+    "If compatibility is unavailable or differs, do not present those links as current. "
     "Derived relationship views retain source occurrences separately from distinct pairs. "
     "Use resolve_document_citations for bounded target lookups; a normalized citation key alone does not prove existence."
 )

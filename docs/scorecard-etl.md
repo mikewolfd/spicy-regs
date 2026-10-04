@@ -54,8 +54,21 @@ Unchanged prior observations retain their original witnesses and attempt through
 the shared `rebind_receipt` helper. New attempts remain specific to the new build;
 earlier failures remain available in their retained immutable generations.
 Official inputs with receipts use `CongressInput.materialize` before resolution.
-The current congressional reader accepts a complete single-file table; native
-partitioned inputs refuse until its owner supplies a complete-table reader.
+The reader restores every selected partition under its generation-bound receipts.
+Analysis preflight requires matching source generations and complete native receipt
+declarations before downloading inputs.
+
+For official tables published before native receipts, the preparation script
+`docs/research/scorecards/work/integration/deployment/prepare_analysis.py` supports
+the explicit `--convert-published-official-inputs` option. It verifies every pinned
+published object, converts the complete shaped table through
+`write_congress_dataset`, and verifies exact restoration of all original fields,
+ordered rows, schema and footer metadata. The original table pins remain analysis
+parents. Witnesses identify published shaped observations; they do not assert an
+original congressional HTTP acquisition. Refused values stop preparation and
+retain their attempts. Existing native inputs use their selected receipts, and
+source scorecards always require their own receipts. The normal analysis rollup
+does not enable this conversion implicitly.
 
 The resolver's exact-match and conflict rules remain authoritative. Moving
 snapshot identifiers requires query integration to check that an analysis used the
