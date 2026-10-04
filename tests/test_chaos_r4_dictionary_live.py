@@ -100,8 +100,14 @@ def _always_claims() -> list[tuple[str, str, str]]:
 
 
 def test_the_always_claims_are_found():
-    """The regression guard below sees every such sentence; it found ten on 2026-10-03."""
-    assert len(_always_claims()) >= 10
+    """The regression guard below sees every such sentence, so a reworded one cannot drop out of it unseen.
+
+    It found ten on 2026-10-03. The native schemas (2026-10-04) dropped eight of those columns, seven lineage
+    ``supersedes_id`` and ``hearing_transcripts.bill_id``, and with them their sentences; these two remain.
+    """
+    assert {("proceedings", "authority_refs", "`[]`"), ("federal_register", "modify_date", "NULL")} <= set(
+        _always_claims()
+    )
 
 
 @pytest.mark.parametrize(("table", "column", "value"), _always_claims())
