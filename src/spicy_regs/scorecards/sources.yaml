@@ -2,13 +2,13 @@ version: 1
 sources:
   - publisher_id: lcv
     adapter: lcv
-    enabled: false
+    enabled: true
     cadence: weekly
     historical_backfill: false
     evidence_policy: hash_only
     rights_status: unreviewed
     policy_decision_id: scorecards-research-hash-only-v1
-    qualification_id: null
+    qualification_id: live-refresh-20261004:lcv:2025
   - publisher_id: afl_cio
     adapter: afl_cio
     enabled: false
@@ -119,13 +119,13 @@ sources:
     qualification_id: null
   - publisher_id: afscme
     adapter: afscme
-    enabled: false
+    enabled: true
     cadence: weekly
     historical_backfill: false
     evidence_policy: hash_only
     rights_status: unreviewed
     policy_decision_id: scorecards-research-hash-only-v1
-    qualification_id: null
+    qualification_id: live-refresh-20261004:afscme:2025-2026
   - publisher_id: aauw
     adapter: aauw
     enabled: false

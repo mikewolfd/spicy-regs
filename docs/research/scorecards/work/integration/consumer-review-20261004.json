@@ -1,0 +1,82 @@
+{
+  "status": "verified_closure",
+  "verdict": "APPROVE",
+  "findings": [],
+  "reviewer": "independent /root/cpac",
+  "base": "cbbe096a2c4d8996d05016b267f12b645b22eb96",
+  "head": "a0f205686a8be4214f73f5736339b1d3d44316d4",
+  "reviewed_files": {
+    ".github/workflows/rollup-scorecards.yml": "9b9cc5fc667828600d2f12542aa8adf2cc48da156d9e3448037193305d20a828",
+    "docs/research/scorecards/work/integration/deployment/prepare_analysis.py": "01dfd620bd1c02d4c0264b18fe1a60362f1419a690f3a11804596d4cd0c82f4d",
+    "docs/research/scorecards/work/integration/live_refresh_20261004.json": "e4457c3fa17e87156189d89bb73edb09e7967b73d86b61f6eb0e11887b015c02",
+    "docs/scorecard-etl.md": "d5a79b1686f9c5ec45d7fc89cccd2607df17d30f12a18912c7a60c07c3860b7c",
+    "scripts/prepare_scorecard_integrations.py": "8fc68119334dd326da5a61c9e00575a70d65b0035d17202a3cfdaa910cb094e6",
+    "src/spicy_regs/mcp_server.py": "a6d7b3380c82133d2bb9a44bc40c0016756a82336a226f64d2a757b778ff0409",
+    "src/spicy_regs/pipelines/rollups/scorecard_analysis.py": "24e7c0bffc72878a656968579679d278e30edde1b7ec018dc8b2cdb38b83b03e",
+    "src/spicy_regs/scorecards/analysis_inputs.py": "bee6c87de6002665ca91282d14b409d57a6b029d158b607c300d31df67d55d23",
+    "src/spicy_regs/scorecards/sources.yaml": "b6908bc8069d27bfa656907874eb9334f53e37f69a82c3f31ab37a05713b6cce",
+    "src/spicy_regs/transforms/build_scorecard_analysis.py": "16754616338266afa4af51f4af7eafd8cde319f1c85b58a826be08f2b0603122",
+    "tests/test_mcp_scorecard_guidance.py": "0220d662f6af6d89f2aedbcbb3ae6d886eb30274a3ad5ec993be5119f40e3195",
+    "tests/test_scorecard_analysis_preflight.py": "aee68405c6d5a272b20dcceff7476071fc5b1af0ecbd40e745fa36b6ca965d82",
+    "tests/test_scorecard_published_conversion.py": "b00b17905d767295f4a8d390ec2169238837dd058c2d638e41137cb5d173cdc6",
+    "tests/test_scorecard_refresh.py": "8aceb2b8174bf985c1032c26a9a82f7da5b0b98205a794350f91825185df60e0"
+  },
+  "reviewed_dependency_files": {
+    "congress_receipts.py": "6642e52f4f7dcf4f8bed0b40e53ca4a3f940e34ff86af070c97dbd3d4b16e746",
+    "congress_subjects.py": "31f9861d17592098512cb72ad6acdb2794d6b3842e0e50dc10398c01780f0fb7",
+    "generations.py": "c12856f49a2ced44f38c709845fca2e788b2b48793a2342682dd2abfcfe7eeaa",
+    "etl_receipts.py": "ba3558e3f5274a45a058642cd39745944bf960d96972ede80298e5bf4cbf5923",
+    "sources/publication.py": "fcc52788f68d340790c41f40270da51997800ca39406e60e50695c586ffc2710",
+    "pipelines/rollups/base.py": "2e0e059ff9c06b1c871006bd03c782182f31698e9360840f750cd52302bcf73e",
+    "scorecards/etl.py": "f869292e35e1de973901c3dcf9d8ef0083495174cf0a60b2dfb7cdbe7b85b470",
+    "scorecards/registry.py": "86123739200c8a88709760828ed282bd1c19a71aab2ce98cb141e28509e87624",
+    "scorecards/replay.py": "757344326b05998cc99cd95ab3ca3c7f959f5ab84a3eeaff5e42f318238da602",
+    "scorecards/retained.py": "f188e3ec6c98029566249ae700a56c8bbc087ed512fdaf2aae481e885740d5b3",
+    "transforms/build_scorecards.py": "e246fa4168cb2f0894c89a71d4bb8dfec059f32a9b1fe57b56a89261b6a40b77"
+  },
+  "input_proof_file_sha256": {
+    "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/analysis-live-refresh-review/public-index.json": "31235dda05a8dba00a6186a35d124b265274693bcf1ff5ab058d2c18431cfd78",
+    "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/analysis-live-refresh-review/current-official-conversion-qualification.json": "cac493234860c56d56408ae681f15298c8ed356181396965c5fd6fe95409f9db",
+    "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/analysis-live-refresh-review/members-conversion-proof.json": "e9101ad3a6b5770c7a7642923fce8c1569f39cef33673e5f222c7a62a1c079bb",
+    "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/analysis-live-refresh-review/member_terms-conversion-proof.json": "67fd84963a33734c23a47e14d1ddcba1e45cd491faf4075deab5784445e2e2a7",
+    "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/analysis-live-refresh-review/congress_bills-conversion-proof.json": "502a9283a851f552d86057bfe15504b57a2abc38ec1430fa95c8412c0c16d782",
+    "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/analysis-live-refresh-review/amendments-conversion-proof.json": "7a9630023371a871bc7c97e8b54915f968a8d046d77c17f76b9d570fb184c57e",
+    "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/analysis-live-refresh-review/roll_call_votes-conversion-proof.json": "c4da77d61b76bba14dbea6caf7207aef4b9d9e79609919392981c05e6b88e2db"
+  },
+  "lock_sha256": "65ca0944dc13b945c80ade9155805637e0a1dd4d1dbbc2e3478f03f1dc4c47dd",
+  "checkout_pins_unchanged": true,
+  "environment_sync_or_install": false,
+  "runtime_or_publication_changes": false,
+  "network_requests": 0,
+  "focused_tests": {
+    "passed": 152,
+    "seconds": 22.79
+  },
+  "original_rows": 517899,
+  "original_field_values": 23405953,
+  "live_captures": 144,
+  "live_rows": 24708,
+  "live_field_values": 407768,
+  "packages": {
+    "spicy-regs": "0.1.6",
+    "spicy-docs": "0.54.0+scorecards.1a2bc6409221",
+    "rulespec-artifacts": "1.1.2",
+    "pyarrow": "23.0.0"
+  },
+  "artifacts": {
+    "live-full-table-replays.json": "38ae10d587179b34be33c17a8121b2431dba368e835c98a1c9083a44f3db7be0",
+    "report.md": "7d6254872e6f522ddc90995d39b4a8a2014a355878af9ae8535fffd87088bd96",
+    "verify_live.py": "26a8e294208f5c7016b5b00fd7e548d22a37873c73c4b19bfab483891c7bc527",
+    "original-input-comparison.json": "ebc87a85e78469878e01b2b1883bf5887e1e21f6c036da76c6414b110fb2c011",
+    "verify_inputs.py": "cb1355ca98bdf97752bb327c7554203fd4d720ed949f2807d2cd786ba45e34a7",
+    "ruff-v1.log": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+    "focused-tests-v1.log": "c9a08b17cc78b2da6947558b894143cbd6f73392bdf2a7f5d9637f2e4270fd2c",
+    "base-to-working.patch": "c270607ea2f7ed1562fe2e83d78e30bc0e21fb973566aac08ff99f2fd5902116",
+    "focused-tests-v2.log": "d427780d741685f50ad5c9b2cdcd73131a8167e5a4700b08bd3e4edd275c7dae",
+    "review-start.json": "f6a57cff0b7b1daa648ce61ba37ff33cd3daf3c74ab10a95a7aba22b60169160",
+    "original-input-comparison-v1.log": "dbba4248e81d3753f6c7bbd3784857f5689086ab82fc8f3668ff1801013b716f",
+    "actual-pinned-index-preflight.json": "8be2d917eba6af7bbd83742dff9bbca0d79047f1ed9fc6f5f0702a305cbfe252",
+    "live-full-table-replays-v1.log": "c737d2359729cf17591ec329e0b2c7d5ccd4f41c59475df03f27f74d7a309f95"
+  },
+  "limits": "Pinned consumer implementation and retained input review only; parent owns combined-package full gate, runtime qualification and publication."
+}

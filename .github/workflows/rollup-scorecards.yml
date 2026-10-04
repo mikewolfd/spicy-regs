@@ -1,5 +1,7 @@
 name: Rollup — congressional scorecards
 on:
+  schedule:
+    - cron: '15 6 * * 1'
   workflow_dispatch:
     inputs:
       skip_upload:
@@ -38,7 +40,7 @@ permissions:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -59,7 +61,8 @@ jobs:
               'started_at': datetime.datetime.now(datetime.UTC).isoformat(),
               'code_revision': os.environ['GITHUB_SHA'],
               'inputs': json.loads(os.environ['SCORECARD_INPUTS']),
-              'scope': 'Qualified complete source editions; no schedule is enabled',
+              'event': os.environ['GITHUB_EVENT_NAME'],
+              'scope': 'Qualified enabled source editions; scheduled runs follow registry cadence',
           }, indent=2) + '\n')
           PY
       - name: Build or publish scorecard family
@@ -71,7 +74,7 @@ jobs:
           ZYTE_TOKEN: ${{ secrets.ZYTE_TOKEN }}
           SCORECARD_HISTORY: ${{ inputs.historical_backfill }}
           SCORECARD_FORCE: ${{ inputs.force }}
-          SCORECARD_SKIP_UPLOAD: ${{ inputs.skip_upload }}
+          SCORECARD_SKIP_UPLOAD: ${{ github.event_name == 'schedule' && 'false' || inputs.skip_upload }}
           R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
           R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}

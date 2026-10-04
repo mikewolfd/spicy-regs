@@ -79,3 +79,20 @@ The resolver's exact-match and conflict rules remain authoritative. Moving
 snapshot identifiers requires query integration to check that an analysis used the
 currently selected scorecard generation before linking ratings to official people
 or legislation. A stable publisher key alone does not establish a current link.
+
+## Qualified live refresh
+
+The source registry enables only readers qualified for unattended live acquisition.
+See [the retained qualification](research/scorecards/work/integration/live_refresh_20261004.json)
+for the named LCV and AFSCME editions, exact installed reader hashes, completeness
+checks, source counts and private capture pins. Those readers require no private
+PDF extraction assets. Other readers remain available for explicitly qualified
+retained-input builds; registry enablement and published historical coverage are
+separate decisions.
+
+The scorecard workflow runs weekly and follows each enabled source's cadence.
+Manual dispatch defaults to a local candidate; choosing publication still requires
+qualified enabled sources. Complete reads replace only their named editions.
+Failed or incomplete reads preserve prior rows and retain permitted hash-only
+evidence. The workflow serializes its own runs; publication also checks the
+selected source generation so a concurrent publisher cannot silently overwrite it.

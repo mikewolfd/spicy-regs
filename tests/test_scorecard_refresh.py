@@ -324,9 +324,13 @@ def test_all_failed_never_writes_a_new_table_generation(tmp_path, managed):
     assert all(b"PRIVATE SOURCE PAYLOAD" not in p.read_bytes() for p in e.directory.rglob("*") if p.is_file())
 
 
-def test_disabled_default_is_explicit_noop_without_importing_provider(tmp_path, monkeypatch):
+def test_disabled_registry_is_explicit_noop_without_importing_provider(tmp_path, monkeypatch):
     monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
-    pipeline = ScorecardsRollup(output_dir=tmp_path)
+    path = registry(tmp_path)
+    document = yaml.safe_load(path.read_text())
+    document["sources"][0]["enabled"] = False
+    path.write_text(yaml.safe_dump(document))
+    pipeline = ScorecardsRollup(output_dir=tmp_path, registry=path)
     pipeline.run()
     assert pipeline.no_op
     assert not (tmp_path / "generations").exists()
@@ -337,9 +341,9 @@ def test_disabled_default_is_explicit_noop_without_importing_provider(tmp_path, 
 
 def test_registry_rejects_disabled_selectors_and_full_without_rights(tmp_path):
     sources = load_registry()
-    assert all(not s.enabled and s.evidence_policy == "hash_only" for s in sources)
+    assert all(s.evidence_policy == "hash_only" for s in sources)
     with pytest.raises(RegistryError, match="disabled"):
-        select_sources(sources, publishers=["lcv"])
+        select_sources(sources, publishers=["afl_cio"])
     path = registry(tmp_path)
     document = yaml.safe_load(path.read_text())
     document["sources"][0]["evidence_policy"] = "full"
@@ -455,16 +459,46 @@ def test_complete_local_generation_binds_every_table_and_one_evidence_artifact(t
     assert all(b"PRIVATE SOURCE PAYLOAD" not in p.read_bytes() for p in (tmp_path / "output").rglob("*") if p.is_file())
 
 
-def test_manual_workflow_has_no_schedule_and_quotes_selectors():
+def test_live_registry_matches_complete_pinned_reader_qualifications():
+    from spicy_docs.sources.scorecards import get_adapter
+
+    proof = json.loads((ROOT / "docs/research/scorecards/work/integration/live_refresh_20261004.json").read_text())
+    selected = select_sources(load_registry())
+    by_id = {row["publisher_id"]: row for row in proof["scopes"]}
+    assert set(by_id) == {source.publisher_id for source in selected} == {"lcv", "afscme"}
+    assert proof["public_raw_source_bodies"] is False
+    for source in selected:
+        row = by_id[source.publisher_id]
+        adapter = get_adapter(source.adapter)
+        spec = importlib.util.find_spec(adapter.__name__)
+        assert spec is not None and spec.origin is not None
+        assert hashlib.sha256(Path(spec.origin).read_bytes()).hexdigest() == row["reader_sha256"]
+        assert adapter.parser_version == row["parser_version"]
+        assert source.qualification_id == row["qualification_id"]
+        assert source.evidence_policy == row["evidence_policy"] == "hash_only"
+        assert row["completeness_status"] == "complete"
+        assert row["edition"]["is_current"] is True
+        assert row["parsed_counts"]["scorecards"] == 1
+        assert row["parsed_counts"]["scorecard_members"] > 0
+        assert row["parsed_counts"]["scorecard_member_ratings"] > 0
+
+
+def test_weekly_workflow_preserves_manual_build_only_and_quotes_selectors():
     path = ROOT / ".github/workflows/rollup-scorecards.yml"
     raw = path.read_text()
     document = yaml.safe_load(raw)
     triggers = document.get("on", document.get(True))
-    assert set(triggers) == {"workflow_dispatch"}
+    assert set(triggers) == {"workflow_dispatch", "schedule"}
+    assert triggers["schedule"] == [{"cron": "15 6 * * 1"}]
     assert triggers["workflow_dispatch"]["inputs"]["skip_upload"]["default"] is True
     assert document["concurrency"] == {"group": "scorecards-publication", "cancel-in-progress": False}
     for step in document["jobs"]["run"]["steps"]:
         assert "${{ inputs." not in step.get("run", "")
+    build_step = next(step for step in document["jobs"]["run"]["steps"] if "Build or publish" in step.get("name", ""))
+    assert (
+        build_step["env"]["SCORECARD_SKIP_UPLOAD"]
+        == "${{ github.event_name == 'schedule' && 'false' || inputs.skip_upload }}"
+    )
     assert '"${ARGS[@]}"' in raw
     assert "RUNNER_TEMP" not in raw  # Private source spools are never uploaded.
 
