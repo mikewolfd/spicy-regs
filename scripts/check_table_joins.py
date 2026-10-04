@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
+import subprocess
 import sys
 from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path
@@ -29,6 +31,49 @@ from spicy_regs.sources import publication
 
 EXIT_UNREACHABLE = 3
 FAILING = ("BELOW", "UNBASELINED", "EMPTIED", "MULTIPLICITY")
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def previous_record(commit: str) -> dict:
+    """Read the comparison commit's generated registry, never execute its code."""
+    if not re.fullmatch(r"[0-9a-fA-F]{40}|[0-9a-fA-F]{64}", commit):
+        raise ValueError("--changed-since requires a full Git commit SHA")
+    result = subprocess.run(
+        ["git", "show", f"{commit}:src/spicy_regs/table_joins.json"], cwd=REPO_ROOT,
+        capture_output=True, text=True, check=False,
+    )
+    if result.returncode:
+        raise ValueError("Cannot read the comparison commit's table_joins.json; fetch the base commit first")
+    return json.loads(result.stdout)
+
+
+def changed_joins(joins: Iterable[table_joins.Join], previous: dict) -> tuple[list[table_joins.Join], list[str]]:
+    """Select every new or changed declaration, including baseline and evidence changes.
+
+    This bounds PR reads without changing the scheduled full-registry check.
+    Removed declarations are reported separately rather than treated as checks.
+    """
+    if (previous.get("format") != table_joins.RECORD_FORMAT or previous.get("version") != 1
+            or not isinstance(previous.get("joins"), list)):
+        raise ValueError("Comparison registry has an unsupported format")
+    before = {}
+    for record in previous["joins"]:
+        if not isinstance(record, dict):
+            raise ValueError("Comparison registry has an invalid join")
+        for side in ("child", "parent"):
+            columns = record.get(f"{side}_columns")
+            if (not isinstance(record.get(side), str) or not isinstance(columns, list) or not columns
+                    or not all(isinstance(column, str) and column for column in columns)):
+                raise ValueError("Comparison registry has an invalid join identity")
+        name = (f"{record['child']}.{'+'.join(record['child_columns'])} -> "
+                f"{record['parent']}.{'+'.join(record['parent_columns'])}")
+        if name in before:
+            raise ValueError("Comparison registry repeats a join identity")
+        before[name] = record
+    current = list(joins)
+    selected = [join for join in current if before.get(join.name) != table_joins.record(join)]
+    removed = sorted(set(before) - {join.name for join in current})
+    return selected, removed
 
 
 def table_urls(base_url: str) -> Callable[[str], list[str]]:
@@ -129,9 +174,28 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--ledger", type=Path, default=output_ledger.LEDGER)
     parser.add_argument("--index-url", help="Public base URL to check instead of the ledger's stated destination")
     parser.add_argument("--receipt", type=Path, help="Write every measurement to this JSON file")
+    parser.add_argument("--changed-since", help="Check only declarations added or changed since this full Git commit SHA")
     parser.add_argument("--aggregate", action="append", help="Run this named aggregate check instead of join checks; repeatable")
     parser.add_argument("--timeout-seconds", type=float, default=90, help="Aggregate query timeout, at most 90 seconds")
     args = parser.parse_args(argv)
+    if args.changed_since and args.aggregate:
+        parser.error("--changed-since selects joins and cannot be used with --aggregate")
+    joins, removed = list(table_joins.JOINS), []
+    if args.changed_since:
+        try:
+            joins, removed = changed_joins(joins, previous_record(args.changed_since))
+        except (ValueError, OSError) as exc:
+            print(f"Cannot select changed joins: {exc}", file=sys.stderr)
+            return 2
+        print(f"Selected {len(joins)} added or changed joins against {args.changed_since}")
+        for name in removed:
+            print(f"REMOVED     {name}")
+        if not joins:
+            if args.receipt:
+                args.receipt.write_text(json.dumps({"changed_since": args.changed_since, "selected": [],
+                                                  "removed": removed, "results": []}, indent=2) + "\n")
+            print("No added or changed join declarations; no public data reads needed.")
+            return 0
     if args.index_url:
         base, source = args.index_url.rstrip("/"), "an explicit --index-url, not the ledger's destination"
     else:
@@ -156,16 +220,23 @@ def main(argv: Sequence[str] | None = None) -> int:
         if any(r["status"] == "MISMATCH" for r in receipt["results"]):
             return 1
         return 0 if all(r["status"] in ("OK", "EMPTY") for r in receipt["results"]) else EXIT_UNREACHABLE
-    print(f"Declared joins against {base} ({source}); baseline {table_joins.BASELINE_DATE}")
+    print(f"Checking {len(joins)} declared joins against {base} ({source}); baseline {table_joins.BASELINE_DATE}")
     try:
-        results = check(connect(), table_joins.JOINS, table_urls(base))
-    except (httpx.HTTPError, duckdb.IOException, duckdb.HTTPException, publication.PublicationError) as exc:
+        with connect() as con:
+            results = check(con, joins, table_urls(base))
+    except (httpx.HTTPError, duckdb.Error, publication.PublicationError) as exc:
+        if args.receipt:
+            args.receipt.write_text(json.dumps({"base": base, "changed_since": args.changed_since,
+                                              "selected": [join.name for join in joins], "removed": removed,
+                                              "error": str(exc), "status": "UNREACHABLE"}, indent=2) + "\n")
         print(f"Live tables could not be read; joins were NOT checked: {exc}", file=sys.stderr)
         return EXIT_UNREACHABLE
     for result in results:
         print(_line(result))
     if args.receipt:
-        args.receipt.write_text(json.dumps({"base": base, "results": results}, indent=1) + "\n")
+        args.receipt.write_text(json.dumps({"base": base, "changed_since": args.changed_since,
+                                          "selected": [join.name for join in joins], "removed": removed,
+                                          "results": results}, indent=1) + "\n")
     failed = [result for result in results if result["status"] in FAILING]
     counts = {status: sum(r["status"] == status for r in results) for status in dict.fromkeys(r["status"] for r in results)}
     print(" ".join(f"{status}={count}" for status, count in counts.items()))

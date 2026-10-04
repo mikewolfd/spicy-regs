@@ -72,7 +72,16 @@ jobs:
       # stale table. The check reads the publisher the output ledger names.
       - name: Check declared cross-table joins
         if: always()
-        run: uv run --frozen python scripts/check_table_joins.py
+        run: uv run --frozen python scripts/check_table_joins.py --receipt scheduled-join-check-results.json
+
+      - name: Retain complete join-check results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: complete-join-measurements
+          path: scheduled-join-check-results.json
+          if-no-files-found: warn
+          retention-days: 14
 
       # A source a build refused while publishing the rest of its family (Table
       # III inside laws) has no age budget to breach: Table III lags months by

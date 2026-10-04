@@ -287,7 +287,9 @@ def test_describe_omits_only_measurements_and_ledger_statements_by_default_and_s
             assert value == full[key]
     compact_bytes = len(json.dumps(compact, separators=(",", ":")).encode())
     full_bytes = len(json.dumps(full, separators=(",", ":")).encode())
-    assert compact_bytes < full_bytes / 2, (compact_bytes, full_bytes)
+    # Detailed replies also avoid repeating incoming evidence; a relative 2x
+    # ratio would penalize that reduction. The catalog budget test caps both.
+    assert compact_bytes < full_bytes, (compact_bytes, full_bytes)
 
 
 @pytest.fixture

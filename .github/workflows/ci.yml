@@ -85,3 +85,40 @@ jobs:
           uv run spicy-regs-dict generate
           git diff --exit-code docs/tables \
             || { echo "::error::docs/tables is stale. Run 'uv run spicy-regs-dict generate' and commit."; exit 1; }
+
+  changed-joins:
+    # New/changed declarations get full public key-column reads immediately.
+    # Unchanged joins remain covered by the daily complete-registry check.
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+      - name: Install checker dependencies
+        run: uv sync --frozen --no-default-groups
+      - name: Check changed declarations against published data
+        env:
+          CHANGE_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          ARGS=(--receipt join-check-results.json)
+          if [ -n "$CHANGE_BASE" ] && [ "$CHANGE_BASE" != "0000000000000000000000000000000000000000" ]; then
+            ARGS+=(--changed-since "$CHANGE_BASE")
+          fi
+          uv run --frozen --no-default-groups python scripts/check_table_joins.py "${ARGS[@]}"
+      - name: Retain join measurements
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: changed-join-measurements
+          path: join-check-results.json
+          if-no-files-found: warn
+          retention-days: 14

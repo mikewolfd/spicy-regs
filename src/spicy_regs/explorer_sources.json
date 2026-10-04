@@ -848,7 +848,7 @@
         "member_terms"
       ],
       "transformation": "Resolves scorecard members against congressional identities; retains the identity method and unresolved cases.",
-      "evidence": "explorer_supplemental.json provenance",
+      "evidence": "src/spicy_regs/scorecards/resolution.py; src/spicy_regs/transforms/build_scorecard_analysis.py",
       "sources": [
         "members"
       ]
@@ -861,7 +861,7 @@
         "roll_call_votes"
       ],
       "transformation": "Resolves publisher-scored items to bills, amendments or roll calls using their declared identifiers.",
-      "evidence": "explorer_supplemental.json provenance",
+      "evidence": "src/spicy_regs/scorecards/resolution.py; src/spicy_regs/transforms/build_scorecard_analysis.py",
       "sources": [
         "congress",
         "govinfo-billstatus",

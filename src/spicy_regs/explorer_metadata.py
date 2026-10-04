@@ -72,20 +72,16 @@ def validate_join(join: dict, schemas: dict[str, list]) -> tuple:
 
 
 def build_bundle(index: dict, *, descriptions: dict | None = None, registry: dict | None = None,
-                 join_record: dict | None = None, supplemental: dict | None = None, audit: dict | None = None,
-                 additions: dict | None = None,
+                 join_record: dict | None = None, audit: dict | None = None,
                  scorecard_publishers: list[dict] | None = None, source_revision: str = "unknown",
                  generated_at: str | None = None) -> dict:
     """Pure construction and validation; reads committed dictionaries by default."""
     descriptions = read_json("table_metadata.json") if descriptions is None else descriptions
     registry = read_json("explorer_sources.json") if registry is None else registry
     join_record = read_json("table_joins.json") if join_record is None else join_record
-    supplemental = read_json("explorer_supplemental.json") if supplemental is None else supplemental
     if audit is None:
         audit = read_json("join_audit.json") if (ROOT / "join_audit.json").exists() else {}
-    if additions is None:
-        additions = read_json("explorer_join_additions.json") if (ROOT / "explorer_join_additions.json").exists() else {}
-    known = {**supplemental.get("tables", {}), **descriptions}
+    known = descriptions
     live = published_tables(index)
     sources = registry["sources"]
     for source in sources.values():
@@ -132,11 +128,10 @@ def build_bundle(index: dict, *, descriptions: dict | None = None, registry: dic
                for name, desc in known.items()}
     schemas.update({name: entry["schema"] for name, entry in live.items()})
     joins, omitted, seen = [], [], set()
-    # Canonical declarations win when the upstream dictionary catches up to the supplement.
-    for join in [*join_record["joins"], *supplemental.get("joins", []), *additions.get("joins", [])]:
+    for join in join_record["joins"]:
         identity = validate_join(join, schemas)
         if identity in seen:
-            continue
+            raise ValueError(f"Duplicate join declaration: {identity}")
         seen.add(identity)
         if join["child"] not in live or join["parent"] not in live:
             omitted.append({"child": join["child"], "parent": join["parent"],
@@ -170,8 +165,7 @@ def build_bundle(index: dict, *, descriptions: dict | None = None, registry: dic
             "sourceRevision": source_revision,
             "publication": {"sha256": "sha256:" + hashlib.sha256(canonical_bytes(index)).hexdigest(),
                             "families": {f: e["artifactDigest"] for f, e in index["families"].items()}},
-            "tables": tables, "joins": joins, "omittedJoins": omitted,
-            "supplementalProvenance": supplemental.get("provenance")}
+            "tables": tables, "joins": joins, "omittedJoins": omitted}
 
 
 def canonical_bytes(value: dict) -> bytes:

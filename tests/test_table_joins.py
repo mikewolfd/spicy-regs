@@ -74,22 +74,18 @@ def test_the_contract_shape_carries_no_measurement():
 
 
 def test_the_spicy_docs_contracts_reference_the_identity_joins_declared_here():
-    """Every contract reference is a declared join, and every join onto a parent's identity is referenced.
+    """Every provider reference is declared; local declarations may add relationships.
 
-    A reference names its parent's identity, so bill_versions without its source and
-    roll_call_votes by vote_id stay declared here only. A design join may go either way: the
-    always-NULL hearing_transcripts.bill_id is not a reference, while committee_assignments'
-    system_code is one whose legacy joint-committee codes the parent never keys.
+    The producer's schema references are a minimum, not an exhaustive registry
+    of relationships between tables built by this repository. Every local
+    addition still has schema validation, an operational baseline and live CI.
     """
     from spicy_docs.schemas import TABLE_CONTRACTS
 
     declared = {(j.child, j.child_columns, j.parent, j.parent_columns): j for j in table_joins.JOINS}
     referenced = {(contract.name, tuple(ref.child_columns), ref.parent_table, tuple(ref.parent_columns))
                   for contract in TABLE_CONTRACTS.values() for ref in contract.references}
-    identity_joins = {key for key, join in declared.items()
-                      if join.kind != "design" and join.child in TABLE_CONTRACTS and join.parent in TABLE_CONTRACTS
-                      and join.parent_columns == TABLE_CONTRACTS[join.parent].identity}
-    assert identity_joins <= referenced <= declared.keys()
+    assert referenced <= declared.keys()
 
 def test_describe_table_lists_the_joins_a_table_makes_and_receives(monkeypatch):
     described = _tool_data(_serve(monkeypatch, _index(), bundled=True), "describe_table", {"table": "dockets"})
@@ -290,3 +286,26 @@ def test_a_guarantor_reaches_its_loan_by_its_back_reference():
 
 def test_no_join_reason_names_a_path_on_a_maintainers_machine():
     assert [join.name for join in table_joins.JOINS if table_joins.maintainer_path(join.reason)] == []
+
+
+def test_incoming_measurement_evidence_is_retrievable_from_the_child(monkeypatch):
+    from spicy_regs import mcp_server
+
+    monkeypatch.setattr(mcp_server, "_joins", table_joins.joins_record)
+    record = table_joins.joins_record()
+    for declared in record["joins"]:
+        parent = mcp_server._table_joins(declared["parent"], measurements=True)
+        incoming = next(j for j in parent["incoming"]
+                        if (j["child"], j["child_columns"], j["parent_columns"]) ==
+                        (declared["child"], declared["child_columns"], declared["parent_columns"]))
+        if declared["measurement"]:
+            detail = incoming["measurement"]
+            assert detail["status"] == "see_child_description" and detail["tool"] == "describe_table"
+            child = mcp_server._table_joins(detail["arguments"]["table"], measurements=detail["arguments"]["detail"])
+            assert declared in child["outgoing"]
+        else:
+            assert "measurement" not in incoming
+        for key in ("kind", "reason", "baseline_keys", "baseline_missing", "floor_pct"):
+            assert incoming[key] == declared[key]
+        assert incoming.get("measured_via") == declared["measured_via"]
+        assert incoming.get("expected_cardinality", "unspecified") == declared["expected_cardinality"]

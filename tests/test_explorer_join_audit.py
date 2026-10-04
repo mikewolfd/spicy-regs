@@ -1,4 +1,4 @@
-"""Explorer navigation retains source scopes without changing producer floors."""
+"""Audited navigation uses the canonical joins and the same CI regression checks."""
 
 import json
 from pathlib import Path
@@ -13,9 +13,11 @@ from spicy_regs import data_dictionary, table_joins
 
 ROOT = Path(__file__).parents[1]
 DATA = ROOT / "src" / "spicy_regs"
-ADDITIONS = json.loads((DATA / "explorer_join_additions.json").read_text())["joins"]
 AUDIT = json.loads((DATA / "join_audit.json").read_text())
 RECEIPT = json.loads((ROOT / "docs/evidence/explorer-joins-2026-10-03.json").read_text())
+SCORECARD_RECEIPT = json.loads((ROOT / "docs/evidence/scorecard-navigation-2026-10-03.json").read_text())
+REVIEWED_NAMES = {item["measurement"]["join"] for item in [*RECEIPT["results"], *SCORECARD_RECEIPT["joins"]]}
+REVIEWED = [join for join in table_joins.JOINS if join.name in REVIEWED_NAMES]
 
 
 def key(join):
@@ -36,35 +38,38 @@ def test_audit_accounts_for_every_previously_unconnected_published_table():
         assert AUDIT[name]["status"] == "special-handling"
 
 
-def test_navigation_additions_have_real_columns_and_do_not_override_producer_joins():
+def test_every_audited_connection_is_in_the_single_canonical_registry():
     schemas = data_dictionary.expected_schemas()
-    assert len({key(join) for join in ADDITIONS}) == len(ADDITIONS)
-    producer = {key(table_joins.record(join)) for join in table_joins.JOINS}
-    assert not producer.intersection(key(join) for join in ADDITIONS)
-    for join in ADDITIONS:
+    assert {join.name for join in REVIEWED} == REVIEWED_NAMES
+    assert len(REVIEWED) == len(REVIEWED_NAMES)
+    for declaration in REVIEWED:
+        join = table_joins.record(declaration)
         assert len(join["child_columns"]) == len(join["parent_columns"]) > 0
         for side in ("child", "parent"):
             assert set(join[f"{side}_columns"]) <= dict(schemas[join[side]]).keys()
 
 
-def test_measurements_name_complete_immutable_inputs_without_regression_floors():
-    for join in ADDITIONS:
-        measurement = join["measurement"]
+def test_audited_measurements_supply_enforced_baselines_and_cardinality():
+    for join in REVIEWED:
+        measurement = join.measurement
+        assert measurement is not None
         assert measurement["scope"] == "full_selected_inputs"
         assert measurement["parent_duplicate_keys"] == 0
         assert measurement["measured_expected_cardinality"] == "one"
         assert 0 <= measurement["missing"] <= measurement["keys"]
-        assert "floor_pct" not in join and "baseline_keys" not in join
+        assert join.expected_cardinality == "one"
+        assert (join.baseline_keys, join.baseline_missing) == (measurement["keys"], measurement["missing"])
+        assert (join.floor_pct is None) == (measurement["keys"] == 0)
         for side in ("child", "parent"):
             assert measurement[f"{side}_urls"]
             assert all("/generations/" in url for url in measurement[f"{side}_urls"])
         if measurement["keys"] == 0:
-            assert join["kind"] == "empty"
+            assert join.kind == "empty"
         elif measurement["missing"]:
-            assert join["kind"] == "scope"
+            assert join.kind == "scope"
 
 
-@pytest.mark.parametrize("declaration", [j for j in ADDITIONS if len(j["child_columns"]) > 1], ids=key)
+@pytest.mark.parametrize("declaration", [table_joins.record(j) for j in REVIEWED if len(j.child_columns) > 1], ids=key)
 def test_navigation_keys_do_not_cross_edition_digest_or_member_scope(tmp_path, declaration):
     child_columns, parent_columns = declaration["child_columns"], declaration["parent_columns"]
     # A second parent agrees on the apparent ID, but not the final scope field.

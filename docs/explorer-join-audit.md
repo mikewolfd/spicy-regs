@@ -15,9 +15,10 @@ were inferred from matching column names, titles or person names.
 - Reuse the producer's 144 current declarations. This supplies relationships for
   50 of the 53 FEC tables that the old website left unconnected.
 - Preserve the website's 36 scorecard relationships and their recorded origin.
-- Add 40 documented navigation relationships in
-  [`explorer_join_additions.json`](../src/spicy_regs/explorer_join_additions.json).
-  These are separate from producer references and operational regression floors.
+- Consolidate all 220 relationships in
+  [`table_joins.py`](../src/spicy_regs/table_joins.py), including the 40 audited
+  additions. Their measured resolution rates and parent cardinality feed the
+  same CI checks as the existing declarations.
 - Keep a disposition for every published table in
   [`join_audit.json`](../src/spicy_regs/join_audit.json).
 
@@ -63,10 +64,12 @@ and FEC source collections. Their precise sampling bounds are recorded
 separately from the complete measurements. Offline tests add conflicting scope
 values and NULL keys to verify that partial identifiers do not cross scopes.
 
-These results describe the selected inputs on the audit date. They do not assert
-complete source history, future uniqueness or a new minimum resolution rate.
-The stored SQL can be replayed against the exact recorded URLs without moving
-publication pointers.
+These results describe the selected inputs on the audit date, not complete
+source history. Their measured rates now establish regression minimums in the
+canonical registry; CI also checks the declared parent uniqueness. Missing
+matches whose cause is unknown remain explicitly unexplained. The stored SQL
+can be replayed against the exact recorded URLs without moving publication
+pointers.
 
 ## Tables that remain without usable navigation
 

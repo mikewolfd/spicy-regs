@@ -37,13 +37,31 @@ Scorecard publisher names and URLs are read from the current published
 `scorecard_publishers` table, with size and digest checks. The tiny table is the
 only Parquet data read by the metadata publisher.
 
-`explorer_supplemental.json` preserves the 13 scorecard descriptions and 36 joins
-previously committed in the explorer, with their repository revision. Primary
-dictionary entries take precedence as those definitions arrive upstream.
-`explorer_join_additions.json` contains measured navigation relationships that
-do not change the source pipeline's operational join floors. The canonical
-registry wins on duplicate composite keys. `join_audit.json` explains the
-remaining standalone or specially handled tables.
+All table descriptions, including scorecards, come from the primary dictionary.
+All relationships are authored in `table_joins.py` and generated into
+`table_joins.json`. Both the explorer and MCP read this one generated registry.
+There is no supplemental description or navigation registry. Detailed MCP
+descriptions include full measurements on outgoing joins. Incoming joins retain
+their keys, reasons and baseline counts, and point to the child description for
+full measurement evidence so heavily connected tables stay within reply limits.
+
+Every declared join uses the same checks. Pull requests measure added or changed
+joins against published data; the scheduled check measures the whole registry.
+CI checks complete composite keys, declared parent cardinality, and resolution
+against each join's measured minimum. A `scope` join may have missing parent
+keys for its documented reason; a measured rate does not establish that an
+unexplained missing record is correct. Empty joins have no measured minimum;
+newly populated keys require a baseline before the check passes. Existing lag
+allowances remain in effect for independently published tables.
+
+`join_measurements.json` packages full-input measurements and their source
+pointers. The [join audit receipt](evidence/explorer-joins-2026-10-03.json) and
+[scorecard navigation receipt](evidence/scorecard-navigation-2026-10-03.json)
+retain the checked immutable inputs. The
+[scorecard source receipt](evidence/scorecard-source-joins-2026-10-04.json)
+establishes baselines for 25 populated source joins and records five with no
+non-null keys. `join_audit.json` explains tables that
+remain standalone or need special handling; it does not define executable joins.
 
 Before publishing, the builder validates every declared join's table names,
 columns, complete composite-key length, resolution kind and declared
@@ -54,10 +72,13 @@ does not invent it. Valid joins with an unpublished endpoint are retained in
 ## Refresh and deployment
 
 The `Publish explorer metadata` workflow runs after dictionary changes on
-`main`, after the explicitly listed data workflows finish successfully, on
+`main`, after CI or the explicitly listed data workflows finish successfully, on
 manual dispatch, and at minutes 7, 22, 37 and 52 each hour. The scheduled check
 also catches workstation publications and new data workflows. GitHub may delay
-scheduled runs. A newly added workflow can be listed for an immediate refresh;
+scheduled runs. Every trigger first requires successful push CI for the exact
+current `main` revision and checks out that verified revision. Pending or failed
+CI leaves existing metadata in place; successful CI completion retries publication.
+A newly added workflow can be listed for an immediate refresh;
 it does not require a website change. Metadata failures do not fail a data
 publication or replace the previous valid metadata object.
 

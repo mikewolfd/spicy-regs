@@ -30,6 +30,9 @@ _MAINTAINER_PATH = re.compile(r"(?<![\w/.~])(?:~|/[A-Za-z][\w.-]*)/[^`\s]*")
 BASELINE_DATE = "2026-09-26"
 BASELINE_RECEIPTS = (
     "src/spicy_regs/join_measurements.json",
+    "docs/evidence/explorer-joins-2026-10-03.json",
+    "docs/evidence/scorecard-navigation-2026-10-03.json",
+    "docs/evidence/scorecard-source-joins-2026-10-04.json",
     "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/results.json",
     "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/rule-targets-baseline.json",
     "~/Work/corpora/fork-execution-2026-09-21/join-map-2026-09-26/unified-agenda-rin-after-backfill.json",
@@ -50,7 +53,8 @@ BASIS = (
     "baseline_missing count distinct non-null child keys and those absent from the parent on the baseline "
     "date; floor_pct is the resolution rate scripts/check_table_joins.py holds the live tables to. "
     "'complete' says every non-null child key names a parent row; it does not check that the publisher paired "
-    "them correctly. A 'scope' or 'design' join resolves partly for the stated reason; it is not a defect. "
+    "them correctly. A 'scope' or 'design' join may resolve partly; its reason documents the intended scope "
+    "or known gap. A measured baseline does not establish that missing matches are correct. "
     "This is not an exhaustive relationship catalog: JSON-array joins and other undeclared relationships "
     "may be described in the column meanings. An empty join list does not establish that no relationship exists."
 )
@@ -442,68 +446,485 @@ JOINS: tuple[Join, ...] = (
     # Native legal references: each observation names the complete read of its input (spicy-docs 0.52.0's
     # contract reference). Measured 2026-09-28 on native-legal-references 53755e3e…: both scopes resolve.
     _join("native_legal_references", "scope_id", "native_legal_reference_reads", "scope_id", 2, 0),
-    # Scorecard shape declarations; qualification must establish live baselines.
-    _join('scorecards', ('publisher_id',), 'scorecard_publishers', ('publisher_id',),
-          0, 0, "empty", "Scorecard source relationship; no live baseline has been measured."),
-    _join('scorecards', ('snapshot_id',), 'scorecard_snapshots', ('snapshot_id',),
-          0, 0, "empty", "Scorecard source relationship; no live baseline has been measured."),
-    _join('scorecard_snapshots', ('scorecard_id',), 'scorecards', ('scorecard_id',),
-          0, 0, "empty", "Scorecard source relationship; no live baseline has been measured."),
-    _join('scorecard_methodologies', ('scorecard_id',), 'scorecards', ('scorecard_id',),
-          0, 0, "empty", "Scorecard source relationship; no live baseline has been measured."),
-    _join('scorecard_methodologies', ('snapshot_id',), 'scorecard_snapshots', ('snapshot_id',),
-          0, 0, "empty", "Scorecard source relationship; no live baseline has been measured."),
-    _join('scorecard_metrics', ('scorecard_id',), 'scorecards', ('scorecard_id',),
-          0, 0, "empty", "Scorecard source relationship; no live baseline has been measured."),
-    _join('scorecard_metrics', ('snapshot_id',), 'scorecard_snapshots', ('snapshot_id',),
-          0, 0, "empty", "Scorecard source relationship; no live baseline has been measured."),
-    _join('scorecard_metrics', ('scorecard_id', 'methodology_id'), 'scorecard_methodologies', ('scorecard_id', 'methodology_id'),
-          0, 0, "empty", "Scorecard source relationship; no live baseline has been measured."),
-    _join('scorecard_items', ('scorecard_id',), 'scorecards', ('scorecard_id',),
-          0, 0, "empty", "Scorecard source relationship; no live baseline has been measured."),
-    _join('scorecard_items', ('snapshot_id',), 'scorecard_snapshots', ('snapshot_id',),
-          0, 0, "empty", "Scorecard source relationship; no live baseline has been measured."),
-    _join('scorecard_metric_items', ('scorecard_id',), 'scorecards', ('scorecard_id',),
-          0, 0, "empty", "Scorecard source relationship; no live baseline has been measured."),
-    _join('scorecard_metric_items', ('snapshot_id',), 'scorecard_snapshots', ('snapshot_id',),
-          0, 0, "empty", "Scorecard source relationship; no live baseline has been measured."),
-    _join('scorecard_metric_items', ('scorecard_id', 'metric_id'), 'scorecard_metrics', ('scorecard_id', 'metric_id'),
-          0, 0, "empty", "Scorecard source relationship; no live baseline has been measured."),
-    _join('scorecard_metric_items', ('scorecard_id', 'item_id'), 'scorecard_items', ('scorecard_id', 'item_id'),
-          0, 0, "empty", "Scorecard source relationship; no live baseline has been measured."),
-    _join('scorecard_metric_items', ('scorecard_id', 'methodology_id'), 'scorecard_methodologies', ('scorecard_id', 'methodology_id'),
-          0, 0, "empty", "Scorecard source relationship; no live baseline has been measured."),
-    _join('scorecard_metric_components', ('scorecard_id',), 'scorecards', ('scorecard_id',),
-          0, 0, "empty", "Scorecard source relationship; no live baseline has been measured."),
-    _join('scorecard_metric_components', ('snapshot_id',), 'scorecard_snapshots', ('snapshot_id',),
-          0, 0, "empty", "Scorecard source relationship; no live baseline has been measured."),
-    _join('scorecard_metric_components', ('scorecard_id', 'parent_metric_id'), 'scorecard_metrics', ('scorecard_id', 'metric_id'),
-          0, 0, "empty", "Scorecard source relationship; no live baseline has been measured."),
-    _join('scorecard_metric_components', ('scorecard_id', 'component_metric_id'), 'scorecard_metrics', ('scorecard_id', 'metric_id'),
-          0, 0, "empty", "Scorecard source relationship; no live baseline has been measured."),
-    _join('scorecard_members', ('scorecard_id',), 'scorecards', ('scorecard_id',),
-          0, 0, "empty", "Scorecard source relationship; no live baseline has been measured."),
-    _join('scorecard_members', ('snapshot_id',), 'scorecard_snapshots', ('snapshot_id',),
-          0, 0, "empty", "Scorecard source relationship; no live baseline has been measured."),
-    _join('scorecard_member_ratings', ('scorecard_id',), 'scorecards', ('scorecard_id',),
-          0, 0, "empty", "Scorecard source relationship; no live baseline has been measured."),
-    _join('scorecard_member_ratings', ('snapshot_id',), 'scorecard_snapshots', ('snapshot_id',),
-          0, 0, "empty", "Scorecard source relationship; no live baseline has been measured."),
-    _join('scorecard_member_ratings', ('scorecard_id', 'metric_id'), 'scorecard_metrics', ('scorecard_id', 'metric_id'),
-          0, 0, "empty", "Scorecard source relationship; no live baseline has been measured."),
-    _join('scorecard_member_ratings', ('scorecard_id', 'publisher_member_key'), 'scorecard_members', ('scorecard_id', 'publisher_member_key'),
-          0, 0, "empty", "Scorecard source relationship; no live baseline has been measured."),
-    _join('scorecard_member_item_results', ('scorecard_id',), 'scorecards', ('scorecard_id',),
-          0, 0, "empty", "Scorecard source relationship; no live baseline has been measured."),
-    _join('scorecard_member_item_results', ('snapshot_id',), 'scorecard_snapshots', ('snapshot_id',),
-          0, 0, "empty", "Scorecard source relationship; no live baseline has been measured."),
-    _join('scorecard_member_item_results', ('scorecard_id', 'publisher_member_key'), 'scorecard_members', ('scorecard_id', 'publisher_member_key'),
-          0, 0, "empty", "Scorecard source relationship; no live baseline has been measured."),
-    _join('scorecard_member_item_results', ('scorecard_id', 'item_id'), 'scorecard_items', ('scorecard_id', 'item_id'),
-          0, 0, "empty", "Scorecard source relationship; no live baseline has been measured."),
-    _join('scorecard_member_item_results', ('scorecard_id', 'metric_id', 'item_id', 'participation_id'), 'scorecard_metric_items', ('scorecard_id', 'metric_id', 'item_id', 'participation_id'),
-          0, 0, "empty", "Scorecard source relationship; no live baseline has been measured."),
+    # Scorecard source joins, measured over every selected input row.
+    _join('scorecards', 'publisher_id',
+          'scorecard_publishers', 'publisher_id',
+          4, 0, 'complete',
+          'Full selected-input measurement on 2026-10-04; every non-null key resolves to one parent row.',
+          expected_cardinality="one"),
+    _join('scorecards', 'snapshot_id',
+          'scorecard_snapshots', 'snapshot_id',
+          4, 0, 'complete',
+          'Full selected-input measurement on 2026-10-04; every non-null key resolves to one parent row.',
+          expected_cardinality="one"),
+    _join('scorecard_snapshots', 'scorecard_id',
+          'scorecards', 'scorecard_id',
+          4, 0, 'complete',
+          'Full selected-input measurement on 2026-10-04; every non-null key resolves to one parent row.',
+          expected_cardinality="one"),
+    _join('scorecard_methodologies', 'scorecard_id',
+          'scorecards', 'scorecard_id',
+          4, 0, 'complete',
+          'Full selected-input measurement on 2026-10-04; every non-null key resolves to one parent row.',
+          expected_cardinality="one"),
+    _join('scorecard_methodologies', 'snapshot_id',
+          'scorecard_snapshots', 'snapshot_id',
+          4, 0, 'complete',
+          'Full selected-input measurement on 2026-10-04; every non-null key resolves to one parent row.',
+          expected_cardinality="one"),
+    _join('scorecard_metrics', 'scorecard_id',
+          'scorecards', 'scorecard_id',
+          4, 0, 'complete',
+          'Full selected-input measurement on 2026-10-04; every non-null key resolves to one parent row.',
+          expected_cardinality="one"),
+    _join('scorecard_metrics', 'snapshot_id',
+          'scorecard_snapshots', 'snapshot_id',
+          4, 0, 'complete',
+          'Full selected-input measurement on 2026-10-04; every non-null key resolves to one parent row.',
+          expected_cardinality="one"),
+    _join('scorecard_metrics', ('scorecard_id', 'methodology_id'),
+          'scorecard_methodologies', ('scorecard_id', 'methodology_id'),
+          2, 0, 'complete',
+          'Full selected-input measurement on 2026-10-04; every non-null key resolves to one parent row.',
+          expected_cardinality="one"),
+    _join('scorecard_items', 'scorecard_id',
+          'scorecards', 'scorecard_id',
+          4, 0, 'complete',
+          'Full selected-input measurement on 2026-10-04; every non-null key resolves to one parent row.',
+          expected_cardinality="one"),
+    _join('scorecard_items', 'snapshot_id',
+          'scorecard_snapshots', 'snapshot_id',
+          4, 0, 'complete',
+          'Full selected-input measurement on 2026-10-04; every non-null key resolves to one parent row.',
+          expected_cardinality="one"),
+    _join('scorecard_metric_items', 'scorecard_id',
+          'scorecards', 'scorecard_id',
+          3, 0, 'complete',
+          'Full selected-input measurement on 2026-10-04; every non-null key resolves to one parent row.',
+          expected_cardinality="one"),
+    _join('scorecard_metric_items', 'snapshot_id',
+          'scorecard_snapshots', 'snapshot_id',
+          3, 0, 'complete',
+          'Full selected-input measurement on 2026-10-04; every non-null key resolves to one parent row.',
+          expected_cardinality="one"),
+    _join('scorecard_metric_items', ('scorecard_id', 'metric_id'),
+          'scorecard_metrics', ('scorecard_id', 'metric_id'),
+          3, 0, 'complete',
+          'Full selected-input measurement on 2026-10-04; every non-null key resolves to one parent row.',
+          expected_cardinality="one"),
+    _join('scorecard_metric_items', ('scorecard_id', 'item_id'),
+          'scorecard_items', ('scorecard_id', 'item_id'),
+          169, 0, 'complete',
+          'Full selected-input measurement on 2026-10-04; every non-null key resolves to one parent row.',
+          expected_cardinality="one"),
+    _join('scorecard_metric_items', ('scorecard_id', 'methodology_id'),
+          'scorecard_methodologies', ('scorecard_id', 'methodology_id'),
+          0, 0, 'empty',
+          'Full selected-input measurement on 2026-10-04; all child methodology keys are NULL.',
+          expected_cardinality="one"),
+    _join('scorecard_metric_components', 'scorecard_id',
+          'scorecards', 'scorecard_id',
+          0, 0, 'empty',
+          'Full selected-input measurement on 2026-10-04; child table contains no rows.',
+          expected_cardinality="one"),
+    _join('scorecard_metric_components', 'snapshot_id',
+          'scorecard_snapshots', 'snapshot_id',
+          0, 0, 'empty',
+          'Full selected-input measurement on 2026-10-04; child table contains no rows.',
+          expected_cardinality="one"),
+    _join('scorecard_metric_components', ('scorecard_id', 'parent_metric_id'),
+          'scorecard_metrics', ('scorecard_id', 'metric_id'),
+          0, 0, 'empty',
+          'Full selected-input measurement on 2026-10-04; child table contains no rows.',
+          expected_cardinality="one"),
+    _join('scorecard_metric_components', ('scorecard_id', 'component_metric_id'),
+          'scorecard_metrics', ('scorecard_id', 'metric_id'),
+          0, 0, 'empty',
+          'Full selected-input measurement on 2026-10-04; child table contains no rows.',
+          expected_cardinality="one"),
+    _join('scorecard_members', 'scorecard_id',
+          'scorecards', 'scorecard_id',
+          4, 0, 'complete',
+          'Full selected-input measurement on 2026-10-04; every non-null key resolves to one parent row.',
+          expected_cardinality="one"),
+    _join('scorecard_members', 'snapshot_id',
+          'scorecard_snapshots', 'snapshot_id',
+          4, 0, 'complete',
+          'Full selected-input measurement on 2026-10-04; every non-null key resolves to one parent row.',
+          expected_cardinality="one"),
+    _join('scorecard_member_ratings', 'scorecard_id',
+          'scorecards', 'scorecard_id',
+          4, 0, 'complete',
+          'Full selected-input measurement on 2026-10-04; every non-null key resolves to one parent row.',
+          expected_cardinality="one"),
+    _join('scorecard_member_ratings', 'snapshot_id',
+          'scorecard_snapshots', 'snapshot_id',
+          4, 0, 'complete',
+          'Full selected-input measurement on 2026-10-04; every non-null key resolves to one parent row.',
+          expected_cardinality="one"),
+    _join('scorecard_member_ratings', ('scorecard_id', 'metric_id'),
+          'scorecard_metrics', ('scorecard_id', 'metric_id'),
+          16, 0, 'complete',
+          'Full selected-input measurement on 2026-10-04; every non-null key resolves to one parent row.',
+          expected_cardinality="one"),
+    _join('scorecard_member_ratings', ('scorecard_id', 'publisher_member_key'),
+          'scorecard_members', ('scorecard_id', 'publisher_member_key'),
+          2_099, 0, 'complete',
+          'Full selected-input measurement on 2026-10-04; every non-null key resolves to one parent row.',
+          expected_cardinality="one"),
+    _join('scorecard_member_item_results', 'scorecard_id',
+          'scorecards', 'scorecard_id',
+          4, 0, 'complete',
+          'Full selected-input measurement on 2026-10-04; every non-null key resolves to one parent row.',
+          expected_cardinality="one"),
+    _join('scorecard_member_item_results', 'snapshot_id',
+          'scorecard_snapshots', 'snapshot_id',
+          4, 0, 'complete',
+          'Full selected-input measurement on 2026-10-04; every non-null key resolves to one parent row.',
+          expected_cardinality="one"),
+    _join('scorecard_member_item_results', ('scorecard_id', 'publisher_member_key'),
+          'scorecard_members', ('scorecard_id', 'publisher_member_key'),
+          2_095, 0, 'complete',
+          'Full selected-input measurement on 2026-10-04; every non-null key resolves to one parent row.',
+          expected_cardinality="one"),
+    _join('scorecard_member_item_results', ('scorecard_id', 'item_id'),
+          'scorecard_items', ('scorecard_id', 'item_id'),
+          196, 0, 'complete',
+          'Full selected-input measurement on 2026-10-04; every non-null key resolves to one parent row.',
+          expected_cardinality="one"),
+    _join('scorecard_member_item_results', ('scorecard_id', 'metric_id', 'item_id', 'participation_id'),
+          'scorecard_metric_items', ('scorecard_id', 'metric_id', 'item_id', 'participation_id'),
+          140, 0, 'complete',
+          'Full selected-input measurement on 2026-10-04; every non-null key resolves to one parent row.',
+          expected_cardinality="one"),
 
+    # Relationships measured across the complete published inputs on 2026-10-03.
+    # These use the same coverage and parent-cardinality checks as every other join.
+    _join('scorecard_member_links', ('scorecard_id', 'publisher_member_key', 'source_snapshot_id'),
+          'scorecard_members', ('scorecard_id', 'publisher_member_key', 'snapshot_id'),
+          2_102, 0, 'scope',
+          'Matches the publisher identity and the exact source snapshot used for resolution. A newer source snapshot '
+          'is not interchangeable.',
+          expected_cardinality="one"),
+    _join('scorecard_item_links', ('scorecard_id', 'item_id', 'source_snapshot_id'),
+          'scorecard_items', ('scorecard_id', 'item_id', 'snapshot_id'),
+          225, 0, 'scope',
+          'Matches the publisher identity and the exact source snapshot used for resolution. A newer source snapshot '
+          'is not interchangeable.',
+          expected_cardinality="one"),
+    _join('scorecard_member_links', 'bioguide_id',
+          'members', 'bioguide_id',
+          565, 0, 'scope',
+          'Exact identifier emitted by the scorecard resolver. Unresolved or ambiguous identifiers remain NULL. The '
+          'explorer follows current published records; input_pins_json identifies the historical input used by the '
+          'resolver.',
+          expected_cardinality="one"),
+    _join('scorecard_item_links', 'bill_id',
+          'congress_bills', 'bill_id',
+          95, 0, 'scope',
+          'Exact identifier emitted by the scorecard resolver. Unresolved or ambiguous identifiers remain NULL. The '
+          'explorer follows current published records; input_pins_json identifies the historical input used by the '
+          'resolver.',
+          expected_cardinality="one"),
+    _join('scorecard_item_links', 'vote_id',
+          'roll_call_votes', 'vote_id',
+          112, 0, 'scope',
+          'Exact identifier emitted by the scorecard resolver. Unresolved or ambiguous identifiers remain NULL. The '
+          'explorer follows current published records; input_pins_json identifies the historical input used by the '
+          'resolver.',
+          expected_cardinality="one"),
+    _join('scorecard_item_links', 'amendment_id',
+          'amendments', 'amendment_id',
+          0, 0, 'empty',
+          'Exact identifier emitted by the scorecard resolver. Unresolved or ambiguous identifiers remain NULL. The '
+          'explorer follows current published records; input_pins_json identifies the historical input used by the '
+          'resolver.',
+          expected_cardinality="one"),
+    _join('fec_account_transfers', 'definition_set_id',
+          'fec_filing_definitions', 'record_id',
+          10, 0, 'complete',
+          'The normalized original-filing mapper supplies the exact source layout identity. Rows from other source '
+          'formats can have no definition key; this does not prove filing conformance. Parent keys were unique in '
+          'the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.',
+          expected_cardinality="one"),
+    _join('fec_allocated_disbursements', 'definition_set_id',
+          'fec_filing_definitions', 'record_id',
+          10, 0, 'complete',
+          'The normalized original-filing mapper supplies the exact source layout identity. Rows from other source '
+          'formats can have no definition key; this does not prove filing conformance. Parent keys were unique in '
+          'the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.',
+          expected_cardinality="one"),
+    _join('fec_allocation_bases', 'definition_set_id',
+          'fec_filing_definitions', 'record_id',
+          8, 0, 'complete',
+          'The normalized original-filing mapper supplies the exact source layout identity. Rows from other source '
+          'formats can have no definition key; this does not prove filing conformance. Parent keys were unique in '
+          'the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.',
+          expected_cardinality="one"),
+    _join('fec_bundled_contributions', 'definition_set_id',
+          'fec_filing_definitions', 'record_id',
+          1, 0, 'complete',
+          'The normalized original-filing mapper supplies the exact source layout identity. Rows from other source '
+          'formats can have no definition key; this does not prove filing conformance. Parent keys were unique in '
+          'the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.',
+          expected_cardinality="one"),
+    _join('fec_coordinated_party_expenditures', 'definition_set_id',
+          'fec_filing_definitions', 'record_id',
+          3, 0, 'complete',
+          'The normalized original-filing mapper supplies the exact source layout identity. Rows from other source '
+          'formats can have no definition key; this does not prove filing conformance. Parent keys were unique in '
+          'the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.',
+          expected_cardinality="one"),
+    _join('fec_debts', 'definition_set_id',
+          'fec_filing_definitions', 'record_id',
+          11, 0, 'complete',
+          'The normalized original-filing mapper supplies the exact source layout identity. Rows from other source '
+          'formats can have no definition key; this does not prove filing conformance. Parent keys were unique in '
+          'the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.',
+          expected_cardinality="one"),
+    _join('fec_disbursements', 'definition_set_id',
+          'fec_filing_definitions', 'record_id',
+          13, 0, 'complete',
+          'The normalized original-filing mapper supplies the exact source layout identity. Rows from other source '
+          'formats can have no definition key; this does not prove filing conformance. Parent keys were unique in '
+          'the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.',
+          expected_cardinality="one"),
+    _join('fec_filing_report_observations', 'definition_set_id',
+          'fec_filing_definitions', 'record_id',
+          64, 0, 'complete',
+          'The normalized original-filing mapper supplies the exact source layout identity. Rows from other source '
+          'formats can have no definition key; this does not prove filing conformance. Parent keys were unique in '
+          'the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.',
+          expected_cardinality="one"),
+    _join('fec_filing_text_observations', 'definition_set_id',
+          'fec_filing_definitions', 'record_id',
+          9, 0, 'complete',
+          'The normalized original-filing mapper supplies the exact source layout identity. Rows from other source '
+          'formats can have no definition key; this does not prove filing conformance. Parent keys were unique in '
+          'the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.',
+          expected_cardinality="one"),
+    _join('fec_inaugural_donations', 'definition_set_id',
+          'fec_filing_definitions', 'record_id',
+          11, 0, 'complete',
+          'The normalized original-filing mapper supplies the exact source layout identity. Rows from other source '
+          'formats can have no definition key; this does not prove filing conformance. Parent keys were unique in '
+          'the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.',
+          expected_cardinality="one"),
+    _join('fec_independent_expenditures', 'definition_set_id',
+          'fec_filing_definitions', 'record_id',
+          2, 0, 'complete',
+          'The normalized original-filing mapper supplies the exact source layout identity. Rows from other source '
+          'formats can have no definition key; this does not prove filing conformance. Parent keys were unique in '
+          'the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.',
+          expected_cardinality="one"),
+    _join('fec_loan_guarantors', 'definition_set_id',
+          'fec_filing_definitions', 'record_id',
+          2, 0, 'complete',
+          'The normalized original-filing mapper supplies the exact source layout identity. Rows from other source '
+          'formats can have no definition key; this does not prove filing conformance. Parent keys were unique in '
+          'the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.',
+          expected_cardinality="one"),
+    _join('fec_loan_terms', 'definition_set_id',
+          'fec_filing_definitions', 'record_id',
+          2, 0, 'complete',
+          'The normalized original-filing mapper supplies the exact source layout identity. Rows from other source '
+          'formats can have no definition key; this does not prove filing conformance. Parent keys were unique in '
+          'the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.',
+          expected_cardinality="one"),
+    _join('fec_loans', 'definition_set_id',
+          'fec_filing_definitions', 'record_id',
+          8, 0, 'complete',
+          'The normalized original-filing mapper supplies the exact source layout identity. Rows from other source '
+          'formats can have no definition key; this does not prove filing conformance. Parent keys were unique in '
+          'the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.',
+          expected_cardinality="one"),
+    _join('fec_receipts', 'definition_set_id',
+          'fec_filing_definitions', 'record_id',
+          18, 0, 'complete',
+          'The normalized original-filing mapper supplies the exact source layout identity. Rows from other source '
+          'formats can have no definition key; this does not prove filing conformance. Parent keys were unique in '
+          'the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.',
+          expected_cardinality="one"),
+    _join('fec_collections', 'source_family',
+          'fec_source_catalog', 'source_family',
+          26, 0, 'complete',
+          'The collection records the official FEC inventory family. A catalog route identifies available source '
+          'paths, not acquired coverage. Parent keys were unique in the complete selected inputs checked on '
+          '2026-10-03; CI enforces that cardinality.',
+          expected_cardinality="one"),
+    _join('feed_summary', 'docket_id',
+          'dockets', 'docket_id',
+          279_719, 0, 'complete',
+          'The rollup retains each input docket identity. Input generations can advance independently. Parent keys '
+          'were unique in the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.',
+          expected_cardinality="one"),
+    _join('agency_monthly_volume', 'agency_code',
+          'agency_stats', 'agency_code',
+          316, 0, 'complete',
+          'Both aggregates retain the Regulations.gov agency code; counts and date windows remain distinct. Parent '
+          'keys were unique in the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.',
+          expected_cardinality="one"),
+    _join('discovery_signals', 'agency_code',
+          'agency_stats', 'agency_code',
+          11, 0, 'complete',
+          'Both aggregates retain the Regulations.gov agency code; counts and date windows remain distinct. Parent '
+          'keys were unique in the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.',
+          expected_cardinality="one"),
+    _join('cbo_cost_estimates', 'publication_id',
+          'cbo_feed_items', 'publication_id',
+          14_800, 3, 'scope',
+          'CBO publication identity connects each estimate to its feed observation. A feed publication may name '
+          'several bills or no bill. Three publication IDs were absent from the selected feed; the cause is not '
+          'established by this join check. Parent keys were unique in the complete selected inputs checked on '
+          '2026-10-03; CI enforces that cardinality.',
+          expected_cardinality="one"),
+    _join('committee_reports', 'package_id',
+          'committee_report_reads', 'package_id',
+          160, 0, 'complete',
+          'Each report or hearing belongs to its GovInfo package read checkpoint. The checkpoint describes a read, '
+          'not a positive bill relationship. Parent keys were unique in the complete selected inputs checked on '
+          '2026-10-03; CI enforces that cardinality.',
+          expected_cardinality="one"),
+    _join('hearing_transcripts', 'package_id',
+          'committee_report_reads', 'package_id',
+          185, 0, 'complete',
+          'Each report or hearing belongs to its GovInfo package read checkpoint. The checkpoint describes a read, '
+          'not a positive bill relationship. Parent keys were unique in the complete selected inputs checked on '
+          '2026-10-03; CI enforces that cardinality.',
+          expected_cardinality="one"),
+    _join('court_docket_groups', 'cl_docket_id',
+          'court_dockets', 'cl_docket_id',
+          914, 0, 'complete',
+          'This is an inferred, edition-scoped grouping of held docket IDs. The parent is a representative record, '
+          'not a publisher-designated main case; independent publication changes can leave a missing docket. Parent '
+          'keys were unique in the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.',
+          expected_cardinality="one"),
+    _join('court_docket_groups', 'parent_cl_docket_id',
+          'court_dockets', 'cl_docket_id',
+          407, 0, 'complete',
+          'This is an inferred, edition-scoped grouping of held docket IDs. The parent is a representative record, '
+          'not a publisher-designated main case; independent publication changes can leave a missing docket. Parent '
+          'keys were unique in the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.',
+          expected_cardinality="one"),
+    _join('court_opinion_pdf_extractions', ('opinion_id', 'native_sha1'),
+          'court_opinions', ('opinion_id', 'sha1'),
+          3, 0, 'complete',
+          'The original opinion ID and its held native body digest identify the input. Preserve both fields so a '
+          'later changed source body cannot be presented as the extraction input. Parent keys were unique in the '
+          'complete selected inputs checked on 2026-10-03; CI enforces that cardinality.',
+          expected_cardinality="one"),
+    _join('court_citation_map', ('citing_opinion_id', 'dump_date'),
+          'court_opinions', ('opinion_id', 'dump_date'),
+          7_511_929, 262, 'scope',
+          'CourtListener opinion identity is matched within the same exported edition. Publisher exports can contain '
+          'a small residue of absent opinion IDs; a newer independent export does not supply a same-edition match. '
+          'Parent keys were unique in the complete selected inputs checked on 2026-10-03; CI enforces that '
+          'cardinality.',
+          expected_cardinality="one"),
+    _join('court_citation_map', ('cited_opinion_id', 'dump_date'),
+          'court_opinions', ('opinion_id', 'dump_date'),
+          4_519_538, 1, 'scope',
+          'CourtListener opinion identity is matched within the same exported edition. Publisher exports can contain '
+          'a small residue of absent opinion IDs; a newer independent export does not supply a same-edition match. '
+          'Parent keys were unique in the complete selected inputs checked on 2026-10-03; CI enforces that '
+          'cardinality.',
+          expected_cardinality="one"),
+    _join('court_parentheticals', ('described_opinion_id', 'dump_date'),
+          'court_opinions', ('opinion_id', 'dump_date'),
+          1_203_305, 0, 'complete',
+          'CourtListener opinion identity is matched within the same exported edition. Publisher exports can contain '
+          'a small residue of absent opinion IDs; a newer independent export does not supply a same-edition match. '
+          'Parent keys were unique in the complete selected inputs checked on 2026-10-03; CI enforces that '
+          'cardinality.',
+          expected_cardinality="one"),
+    _join('court_parentheticals', ('describing_opinion_id', 'dump_date'),
+          'court_opinions', ('opinion_id', 'dump_date'),
+          1_852_737, 176, 'scope',
+          'CourtListener opinion identity is matched within the same exported edition. Publisher exports can contain '
+          'a small residue of absent opinion IDs; a newer independent export does not supply a same-edition match. '
+          'Parent keys were unique in the complete selected inputs checked on 2026-10-03; CI enforces that '
+          'cardinality.',
+          expected_cardinality="one"),
+    _join('member_vote_terms', ('vote_id', 'member_key'),
+          'member_votes', ('vote_id', 'member_key'),
+          10_561_417, 0, 'complete',
+          'The derived term row retains the complete member-vote key; member_key alone identifies a row only within '
+          'its roll call. Parent keys were unique in the complete selected inputs checked on 2026-10-03; CI enforces '
+          'that cardinality.',
+          expected_cardinality="one"),
+    _join('member_vote_terms', ('bioguide_id', 'term_index'),
+          'member_terms', ('bioguide_id', 'term_index'),
+          5_884, 0, 'complete',
+          'The builder selects one service term by the vote date and chamber. Unresolved or ambiguous terms remain '
+          'NULL and are not joined. Parent keys were unique in the complete selected inputs checked on 2026-10-03; '
+          'CI enforces that cardinality.',
+          expected_cardinality="one"),
+    _join('document_citations', ('document_kind', 'document_key', 'text_sha256'),
+          'document_citation_reads', ('document_kind', 'document_key', 'text_sha256'),
+          79, 67, 'scope',
+          'The exact document kind, identity and text digest bind a citation to its held-field read. The reads table '
+          'covers held-field extraction only; print-derived citations have separate package metadata. Parent keys '
+          'were unique in the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.',
+          expected_cardinality="one"),
+    _join('document_citations', ('document_key', 'text_sha256'),
+          'budget_volumes', ('package_id', 'text_sha256'),
+          79, 53, 'scope',
+          'Package identity plus text digest binds these printed citations to this body. Other document kinds have '
+          'different parents and remain unmatched in this navigation relationship. Parent keys were unique in the '
+          'complete selected inputs checked on 2026-10-03; CI enforces that cardinality.',
+          expected_cardinality="one"),
+    _join('document_citations', ('document_key', 'text_sha256'),
+          'house_activity_reports', ('package_id', 'text_sha256'),
+          79, 38, 'scope',
+          'Package identity plus text digest binds these printed citations to this body. Other document kinds have '
+          'different parents and remain unmatched in this navigation relationship. Parent keys were unique in the '
+          'complete selected inputs checked on 2026-10-03; CI enforces that cardinality.',
+          expected_cardinality="one"),
+    _join('house_activity_reports', 'committee_system_code',
+          'committees', 'system_code',
+          27, 0, 'complete',
+          'The report carries Congress.gov committee identity. The committee table holds its history; a current name '
+          'alone is not the historical name for the report. Parent keys were unique in the complete selected inputs '
+          'checked on 2026-10-03; CI enforces that cardinality.',
+          expected_cardinality="one"),
+    _join('house_activity_reports', 'submitted_by_bioguide_id',
+          'members', 'bioguide_id',
+          33, 0, 'complete',
+          'The publisher-supplied Bioguide ID identifies the member who submitted the report; it does not infer '
+          'service dates. Parent keys were unique in the complete selected inputs checked on 2026-10-03; CI enforces '
+          'that cardinality.',
+          expected_cardinality="one"),
+    _join('house_communications', 'referral_system_code',
+          'committees', 'system_code',
+          22, 0, 'complete',
+          'The scalar referral is the first source-stated committee referral. Further referrals remain in '
+          'committees_json and require array expansion. Parent keys were unique in the complete selected inputs '
+          'checked on 2026-10-03; CI enforces that cardinality.',
+          expected_cardinality="one"),
+    _join('house_communications', 'record_package_id',
+          'record_issues', 'package_id',
+          0, 0, 'empty',
+          'The communication reconstruction retains the exact Congressional Record package. Only held issues can '
+          'resolve; a package ID does not imply article text was acquired. No non-null composite keys were present '
+          'in the measured child; no successful traversal is claimed. Parent keys were unique in the complete '
+          'selected inputs checked on 2026-10-03; CI enforces that cardinality.',
+          expected_cardinality="one"),
+    _join('bill_family_backfills', ('congress', 'bill_type', 'number'),
+          'congress_bills', ('congress', 'bill_type', 'bill_number'),
+          0, 0, 'empty',
+          'A backfill attempt names a bill by Congress, type and number, including refused attempts. The currently '
+          'published child is empty; this is a supported identity path, not proof that every future attempted bill '
+          'will have an output. No non-null composite keys were present in the measured child; no successful '
+          'traversal is claimed. Parent keys were unique in the complete selected inputs checked on 2026-10-03; CI '
+          'enforces that cardinality.',
+          expected_cardinality="one"),
+    _join('fec_filing_definition_evidence', 'target_record_id',
+          'fec_filing_definitions', 'record_id',
+          174, 0, 'complete',
+          'The definition binder writes these witnesses with target_table=fec_filing_definitions and the exact '
+          'layout digest as target_record_id. Each definition may have several evidence rows. Parent keys were '
+          'unique in the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.',
+          expected_cardinality="one"),
 )
 
 
@@ -514,8 +935,9 @@ _MEASUREMENTS = json.loads(Path(__file__).with_name("join_measurements.json").re
 _MEASURED_BY_NAME = {item["join"]: item for item in _MEASUREMENTS["results"]}
 JOINS = tuple(
     replace(join, baseline_keys=measurement["keys"], baseline_missing=measurement["missing"],
-            kind="complete", expected_cardinality="one", measurement=measurement,
-            reason=f"Full selected-input measurement on {measurement.get('measured_on', _MEASUREMENTS['measured_on'])}; "
+            kind=join.kind if measurement.get("receipt") else "complete",
+            expected_cardinality="one", measurement=measurement,
+            reason=join.reason if measurement.get("receipt") else f"Full selected-input measurement on {measurement.get('measured_on', _MEASUREMENTS['measured_on'])}; "
                    "immutable URLs, SQL and cardinality in join_measurements.json. "
                    + measurement.get("reason", "Full-key hardening does not assert prior production amplification."))
     if (measurement := _MEASURED_BY_NAME.get(join.name)) is not None else join
