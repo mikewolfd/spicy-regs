@@ -4,6 +4,8 @@ The [October 4 stopping point](stopping_point_20261004.md) records pushed code,
 published data, the preserved interrupted batch and the next required checks.
 The [merge follow-up](merge_20261004.md) records the provider package selected
 when integrating that work with the newer fork main.
+The [reader repin](repin_20261004.md) records adoption of the remaining reviewed
+readers and their shared PDF validator.
 
 The [generated work queue](integration_progress.md) accounts for every publisher
 in the [adapter matrix](adapter_support_matrix.md) and
@@ -54,6 +56,12 @@ uv run --frozen python scripts/build_scorecard_overlay.py \
 
 The builder creates the wheel twice, requires identical bytes, and proves that
 unrelated runtime and dependency metadata are preserved. Retain `wheel.json`.
+When selecting the reviewed shared PDF validator, freeze
+`src/spicy_docs/reading/pdf_bytes.py` beside the reader modules and add
+`--pdf-bytes-sha256 "$SCORECARD_PDF_BYTES_SHA256"` to the build command. The
+builder checks that exact pin and permits only this explicit additional runtime
+file. The [current package receipt](../../../../../vendor/spicy_docs-scorecards.json)
+records the selected validator and every installed module.
 Copy the selected wheel to `vendor/`, update the matching dependency and source
 pins in `pyproject.toml`, then run `uv lock` and `uv sync --frozen`. Verify the
 installed reader hashes and run the affected consumer checks. Source

@@ -396,3 +396,75 @@ sources:
     rights_status: unreviewed
     policy_decision_id: scorecards-research-hash-only-v1
     qualification_id: null
+  - publisher_id: afge
+    adapter: afge_noted_pdf
+    enabled: false
+    cadence: monthly
+    historical_backfill: false
+    evidence_policy: hash_only
+    rights_status: unreviewed
+    policy_decision_id: scorecards-research-hash-only-v1
+    qualification_id: null
+  - publisher_id: boilermakers
+    adapter: boilermakers
+    enabled: false
+    cadence: monthly
+    historical_backfill: false
+    evidence_policy: hash_only
+    rights_status: unreviewed
+    policy_decision_id: scorecards-research-hash-only-v1
+    qualification_id: null
+  - publisher_id: lugar_mccourt
+    adapter: lugar_mccourt
+    enabled: false
+    cadence: monthly
+    historical_backfill: false
+    evidence_policy: hash_only
+    rights_status: unreviewed
+    policy_decision_id: scorecards-research-hash-only-v1
+    qualification_id: null
+  - publisher_id: national_farmers_union
+    adapter: national_farmers_union
+    enabled: false
+    cadence: monthly
+    historical_backfill: false
+    evidence_policy: hash_only
+    rights_status: unreviewed
+    policy_decision_id: scorecards-research-hash-only-v1
+    qualification_id: null
+  - publisher_id: peace_action
+    adapter: peace_action
+    enabled: false
+    cadence: monthly
+    historical_backfill: false
+    evidence_policy: hash_only
+    rights_status: unreviewed
+    policy_decision_id: scorecards-research-hash-only-v1
+    qualification_id: null
+  - publisher_id: radical_middle
+    adapter: radical_middle
+    enabled: false
+    cadence: monthly
+    historical_backfill: false
+    evidence_policy: hash_only
+    rights_status: unreviewed
+    policy_decision_id: scorecards-research-hash-only-v1
+    qualification_id: null
+  - publisher_id: reproductive_freedom
+    adapter: reproductive_freedom
+    enabled: false
+    cadence: monthly
+    historical_backfill: false
+    evidence_policy: hash_only
+    rights_status: unreviewed
+    policy_decision_id: scorecards-research-hash-only-v1
+    qualification_id: null
+  - publisher_id: sace_action
+    adapter: sace_action
+    enabled: false
+    cadence: monthly
+    historical_backfill: false
+    evidence_policy: hash_only
+    rights_status: unreviewed
+    policy_decision_id: scorecards-research-hash-only-v1
+    qualification_id: null

@@ -15,7 +15,7 @@ from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
 
-def build(baseline: Path, provider: Path, output: Path):
+def build(baseline: Path, provider: Path, output: Path, *, pdf_bytes_sha256: str | None = None):
     with ZipFile(baseline) as archive:
         files = {name: archive.read(name) for name in archive.namelist() if not name.endswith("/")}
     overlays = {
@@ -24,6 +24,14 @@ def build(baseline: Path, provider: Path, output: Path):
     }
     if not overlays or "spicy_docs/sources/scorecards/__init__.py" not in overlays:
         raise ValueError("Scorecard overlay does not contain the publisher registry")
+    runtime_dependencies = {}
+    if pdf_bytes_sha256 is not None:
+        name = "spicy_docs/reading/pdf_bytes.py"
+        raw = (provider / "src" / name).read_bytes()
+        if sha256(raw).hexdigest() != pdf_bytes_sha256:
+            raise ValueError("Reviewed PDF primitive differs from its pin")
+        overlays[name] = raw
+        runtime_dependencies[name] = pdf_bytes_sha256
     inputs = {name: sha256(raw).hexdigest() for name, raw in sorted(overlays.items())}
     baseline_sha = sha256(baseline.read_bytes()).hexdigest()
     digest = sha256(json.dumps({"baseline": baseline_sha, "modules": inputs}, sort_keys=True).encode()).hexdigest()
@@ -79,6 +87,7 @@ def build(baseline: Path, provider: Path, output: Path):
         "baseline_sha256": baseline_sha,
         "overlay_sha256": digest,
         "modules": inputs,
+        "explicit_runtime_dependencies": runtime_dependencies,
         "wheel": wheel_name,
         "wheel_sha256": sha256(wheel.read_bytes()).hexdigest(),
         "repeat_build_identical": True,
@@ -95,8 +104,14 @@ def main():
     parser.add_argument("--baseline-wheel", type=Path, required=True)
     parser.add_argument("--provider", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--pdf-bytes-sha256", help="Explicit SHA-256 of the reviewed shared PDF primitive")
     args = parser.parse_args()
-    print(json.dumps(build(args.baseline_wheel, args.provider, args.output), indent=2))
+    print(
+        json.dumps(
+            build(args.baseline_wheel, args.provider, args.output, pdf_bytes_sha256=args.pdf_bytes_sha256),
+            indent=2,
+        )
+    )
 
 
 if __name__ == "__main__":
