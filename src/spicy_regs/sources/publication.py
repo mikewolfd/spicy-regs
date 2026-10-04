@@ -225,9 +225,12 @@ def parse_index(raw: bytes) -> dict:
                         or not _DIGEST.fullmatch(receipt["sha256"]) or not _counts(receipt)
                         or not isinstance(receipt["generationId"], str) or not receipt["generationId"]
                         or not isinstance(receipt["columns"], list) or not receipt["columns"]
+                        or any(not isinstance(c, list) or len(c) != 2
+                               or not all(isinstance(v, str) and v for v in c) for c in receipt["columns"])
+                        or len({c[0] for c in receipt["columns"]}) != len(receipt["columns"])
                         or not isinstance(receipt["datasets"], list) or not receipt["datasets"]
-                        or len(set(receipt["datasets"])) != len(receipt["datasets"])
-                        or any(not isinstance(name, str) or not _NAME.fullmatch(name) for name in receipt["datasets"])):
+                        or any(not isinstance(name, str) or not _NAME.fullmatch(name) for name in receipt["datasets"])
+                        or len(set(receipt["datasets"])) != len(receipt["datasets"])):
                     raise ValueError("invalid ETL receipt member")
             datasets = {key.removesuffix(".parquet") for key in entry["tables"]}
             datasets.update(entry.get("etlReceipts", {}).get("datasets", []))
@@ -701,7 +704,7 @@ def derive_v1(index: Mapping) -> dict:
     for name, entry in index["families"].items():
         tables = {key: table for key, table in entry["tables"].items() if "members" not in table}
         if tables:
-            families[name] = {**{key: value for key, value in entry.items() if key != "publishedAt"}, "tables": tables}
+            families[name] = {**{key: value for key, value in entry.items() if key not in {"publishedAt", "etlReceipts"}}, "tables": tables}
     return {**empty_index(), "families": families}
 
 

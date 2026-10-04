@@ -748,17 +748,16 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
             raise
         con.execute("CREATE TABLE _spicy_comments_export (snapshot VARCHAR)")
         con.execute("INSERT INTO _spicy_comments_export VALUES (?)", [json.dumps({"receipt": comments, "tables": matched})])
-    # Receipt members are selected independently per captured family, alongside
-    # the subjects above. They are not fabricated ordinary subject tables.
-    receipt_members = []
-    if local is not None:
-        receipt_members.extend(str(path) for path in local.receipts.values())
-    else:
-        for family in publication_index["families"].values():
-            if "etlReceipts" in family:
-                item = family["etlReceipts"]
-                receipt_members.append(f"{R2_BASE_URL}/{family['prefix'].rstrip('/')}/{item['key']}")
-    if receipt_members:
+    # Shared ETL receipts are processing evidence, selected per family from the
+    # same captured index as the subjects above, never fabricated subject tables.
+    # A missing member refuses the connection rather than falling back to another
+    # generation's evidence.
+    from spicy_regs.sources.publication import receipt_members
+
+    receipts = receipt_members(publication_index)
+    urls = (list(map(str, local.receipts.values())) if local is not None
+            else [f"{R2_BASE_URL}/{member.path}" for member in receipts])
+    if urls:
         try:
             if local is not None and local.native:
                 groups = {}
@@ -769,12 +768,14 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
                          for path, names in groups.items()]
                 con.execute('CREATE VIEW etl_receipts AS ' + ' UNION ALL '.join(scans))
             else:
-                con.execute(f'CREATE VIEW etl_receipts AS SELECT * FROM {parquet_scan(receipt_members)}')
-            actual = [[r[0], r[1]] for r in con.execute('DESCRIBE etl_receipts').fetchall()]
-            for family in publication_index["families"].values():
-                if "etlReceipts" in family and family["etlReceipts"]["columns"] != actual:
-                    raise RuntimeError("Published ETL receipt schema differs from admitted generation")
-            allowed_paths.extend(receipt_members)
+                con.execute(f'CREATE VIEW etl_receipts AS SELECT * FROM {parquet_scan(urls)}')
+            actual = [[row[0], row[1]] for row in con.execute('DESCRIBE etl_receipts').fetchall()]
+            # Only the members this view reads: an unselected family's receipts do not gate a local download.
+            selected = set(local.receipts) if local is not None else {member.path for member in receipts}
+            if any(entry["etlReceipts"]["columns"] != actual for entry in publication_index["families"].values()
+                   if "etlReceipts" in entry and f"{entry['prefix']}/{entry['etlReceipts']['key']}" in selected):
+                raise RuntimeError("Published ETL receipt schema differs from the admitted generation")
+            allowed_paths.extend(urls)
         except (duckdb.Error, RuntimeError) as exc:
             con.close()
             raise RuntimeError("Published ETL receipt member unavailable") from exc
@@ -941,6 +942,19 @@ def _publication_status(cursor: duckdb.DuckDBPyConnection) -> dict:
         managed.update({name: {"status": "native_selected", "generation_id": value["generation_id"],
                                "verification": "Selected bytes and exact receipt joins verified; file changes checked around statements."}
                         for name, value in local.get("native", {}).items()})
+    if "etl_receipts" in available:
+        managed["etl_receipts"] = {
+            "status": "managed_receipts",
+            "families": {family: {
+                "artifact_digest": entry["artifactDigest"],
+                "generation_id": entry["etlReceipts"]["generationId"],
+                "sha256": entry["etlReceipts"]["sha256"],
+                "rows": entry["etlReceipts"]["rows"],
+                "datasets": entry["etlReceipts"]["datasets"],
+            } for family, entry in index["families"].items() if "etlReceipts" in entry
+                and (local is None or any(key.removesuffix(".parquet") in local["selected_tables"]
+                                         for key in entry["tables"]))},
+        }
     snapshot = {
         key.removesuffix(".parquet"): {
             "status": "rulemaking_snapshot",
@@ -986,6 +1000,8 @@ def _pinned_rows(index: dict, rulemaking: dict, name: str) -> int | None:
     from spicy_regs.sources.publication import table_descriptor
 
     descriptor = table_descriptor(index, f"{name}.parquet")
+    if name == "etl_receipts":
+        return sum(entry["etlReceipts"]["rows"] for entry in index["families"].values() if "etlReceipts" in entry)
     if descriptor is not None:
         return descriptor["rows"]
     pinned = rulemaking["tables"].get(f"{name}.parquet")
@@ -1170,6 +1186,8 @@ def _reply_pins(cursor: duckdb.DuckDBPyConnection, publication: dict[str, dict],
             # A local download holds no generation roots; the remote root is read on first use, never at build.
             pin |= (_input_lineage(index, name, exports) if pin["status"] == "managed_generation"
                     else {"inputs": None, "inputs_status": "root_unavailable"})
+        elif pin["status"] == "managed_receipts":
+            pin["rows"] = sum(entry["rows"] for entry in pin["families"].values())
         elif pin["status"] == "rulemaking_snapshot":
             manifest = rulemaking["manifest"]
             pin |= {"rows": rulemaking["tables"][f"{name}.parquet"]["rows"],
@@ -1914,6 +1932,9 @@ def _tools() -> list[Tool]:
                 views.setdefault(entry["metadata"]["summary"], []).append(name)
 
         def rows(name: str) -> dict[str, Any]:
+            if name == "etl_receipts":
+                pin = _publication_status(cursor)["publication"][name]
+                return {"rows": sum(entry["rows"] for entry in pin["families"].values())}
             export = exports.get(name)
             if export is None:
                 return {"rows": _pinned_rows(index, rulemaking, name)}
