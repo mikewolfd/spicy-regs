@@ -270,3 +270,48 @@ sources:
     rights_status: unreviewed
     policy_decision_id: scorecards-research-hash-only-v1
     qualification_id: null
+  - publisher_id: aclu
+    adapter: aclu
+    enabled: false
+    cadence: monthly
+    historical_backfill: false
+    evidence_policy: hash_only
+    rights_status: unreviewed
+    policy_decision_id: scorecards-research-hash-only-v1
+    qualification_id: null
+  - publisher_id: first_focus
+    adapter: first_focus
+    enabled: false
+    cadence: monthly
+    historical_backfill: false
+    evidence_policy: hash_only
+    rights_status: unreviewed
+    policy_decision_id: scorecards-research-hash-only-v1
+    qualification_id: null
+  - publisher_id: childrens_defense
+    adapter: childrens_defense
+    enabled: false
+    cadence: monthly
+    historical_backfill: false
+    evidence_policy: hash_only
+    rights_status: unreviewed
+    policy_decision_id: scorecards-research-hash-only-v1
+    qualification_id: null
+  - publisher_id: new_american
+    adapter: new_american
+    enabled: false
+    cadence: monthly
+    historical_backfill: false
+    evidence_policy: hash_only
+    rights_status: unreviewed
+    policy_decision_id: scorecards-research-hash-only-v1
+    qualification_id: null
+  - publisher_id: us_chamber
+    adapter: us_chamber_archive
+    enabled: false
+    cadence: monthly
+    historical_backfill: false
+    evidence_policy: hash_only
+    rights_status: unreviewed
+    policy_decision_id: scorecards-research-hash-only-v1
+    qualification_id: null
