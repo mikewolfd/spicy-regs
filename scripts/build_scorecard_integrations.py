@@ -31,6 +31,42 @@ def nested(value, path):
 
 def read_receipt(directory, record):
     receipt = pinned_document(directory, record["receipt"], record["receipt_sha256"])
+    if receipt.get("format_version") == "scorecard-integration-published-observation/2":
+        source = pinned_document(directory, receipt["source_qualification"], receipt["source_qualification_sha256"])
+        if source.get("format_version") != "scorecard-integration-qualified-scope/1":
+            raise ValueError("Publication needs an immutable source qualification, not another publication")
+        qualification = read_receipt(
+            directory,
+            dict(
+                publisher_id=record["publisher_id"],
+                scorecard_id=record["scorecard_id"],
+                state="qualified",
+                receipt=receipt["source_qualification"],
+                receipt_sha256=receipt["source_qualification_sha256"],
+            ),
+        )
+        readback = pinned_document(directory, receipt["public_readback"], receipt["public_readback_sha256"])
+        scope = readback.get("scopes", {}).get(record["scorecard_id"])
+        if (
+            record["state"] != "published"
+            or qualification.get("format_version") != "scorecard-integration-qualified-scope/1"
+            or receipt.get("publisher_id") != record["publisher_id"]
+            or receipt.get("scorecard_id") != record["scorecard_id"]
+            or receipt.get("counts") != qualification["counts"]
+            or receipt.get("parser_version") != qualification["parser_version"]
+            or readback.get("format_version") != "scorecard-family-publication-readback/1"
+            or readback.get("status") != "passed"
+            or readback.get("source_generation") != receipt.get("observed_source_generation")
+            or scope != dict(
+                publisher_id=record["publisher_id"],
+                parser_version=qualification["parser_version"],
+                counts=qualification["counts"],
+            )
+            or readback.get("public_member_pins_verified") is not True
+            or readback.get("hosted_scope_counts_verified") is not True
+        ):
+            raise ValueError("Publication observation differs from its qualified complete public scope")
+        return receipt
     if receipt.get("format_version") == "scorecard-integration-published-observation/1":
         qualification = pinned_document(
             directory, receipt["source_qualification"], receipt["source_qualification_sha256"]
@@ -61,7 +97,6 @@ def read_receipt(directory, record):
         or receipt.get("publisher_id") != record["publisher_id"]
         or receipt.get("scorecard_id") != record["scorecard_id"]
         or record["state"] == "published"
-        and receipt.get("published") is not True
         or not receipt.get("parser_version")
         or not receipt.get("completeness_rule")
         or not isinstance(receipt.get("counts"), dict)

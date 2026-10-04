@@ -109,6 +109,19 @@ def test_changed_private_semantic_asset_cannot_advance_coverage(tmp_path, monkey
         qualifications.build(*args, observed_at="2026-10-04T04:00:00Z")
 
 
+def test_publication_observation_merges_by_exact_edition_without_duplicates(tmp_path, monkeypatch):
+    args = inputs(tmp_path, monkeypatch)
+    initial = qualifications.build(*args, observed_at="2026-10-04T04:00:00Z")
+    published_record = {**initial["editions"][0], "state": "published", "receipt": "retained-publication.json"}
+    published = tmp_path / "publications.json"
+    published.write_text(json.dumps(dict(editions=[published_record], readers={"lcv": "lcv"})))
+    merged = qualifications.build(*args, observed_at="2026-10-04T04:00:00Z", published_ledger=published)
+    assert merged["editions"] == [published_record]
+    published.write_text(json.dumps(dict(editions=[published_record, published_record], readers={"lcv": "lcv"})))
+    with pytest.raises(ValueError, match="repeats a scope"):
+        qualifications.build(*args, observed_at="2026-10-04T04:00:00Z", published_ledger=published)
+
+
 def publication_observation(tmp_path, *, readback_status="independent_public_readback_passed", rating_count=1):
     qualification = dict(parser_version="source/1", counts={"scorecard_member_ratings": 1})
     readback = dict(

@@ -107,7 +107,17 @@ def build(plan_path, plan_sha256, corpus, directory, *, observed_at, published_l
         published_bytes = published_ledger.read_bytes()
         published = json.loads(published_bytes)
         publication_pin = sha256(published_bytes).hexdigest()
-        editions.extend(published["editions"])
+        by_scope = {record["scorecard_id"]: record for record in editions}
+        observed_scopes = set()
+        for record in published["editions"]:
+            scope = record["scorecard_id"]
+            if scope in observed_scopes or record["state"] != "published":
+                raise ValueError("Publication ledger repeats a scope or names an unfinished stage")
+            observed_scopes.add(scope)
+            if scope in by_scope and by_scope[scope]["publisher_id"] != record["publisher_id"]:
+                raise ValueError("Publication and qualification publisher identities differ")
+            by_scope[scope] = record
+        editions = list(by_scope.values())
         readers.update(published["readers"])
     ledger = dict(
         schema_version="1",

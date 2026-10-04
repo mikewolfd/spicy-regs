@@ -98,6 +98,27 @@ Record authenticated and public readback separately. Download and inspect the
 published tables and query the hosted MCP before recording a published scope in
 the ledger.
 
+Run the generic readback and coverage recorder against the admitted preparation:
+
+```sh
+uv run --frozen python docs/research/scorecards/work/integration/deployment/readback_candidate.py \
+  --preparation "$SCORECARD_CANDIDATE/preparation.json" \
+  --publication-receipt "$SCORECARD_PUBLICATION_RECEIPT" \
+  --output "$SCORECARD_PUBLIC_READBACK"
+uv run --frozen python scripts/record_scorecard_publication.py \
+  --readback "$SCORECARD_PUBLIC_READBACK"
+```
+
+The recorder checks every public member's bytes and footer against the accepted
+generation, reconciles each hosted table population, and reads complete snapshot
+observations through the shared ETL receipt reader. A scope advances only when
+every source table count and parser version agrees with its pinned qualification.
+It retains immutable qualification copies and publication proofs under
+`publications/`. Source values and model bodies do not enter those metadata files.
+Re-run the coverage generation above with the publication ledger to reflect
+these observations. Pending and already published scopes merge by exact edition
+identity; recording publication does not duplicate editions or promote an archive.
+
 When the prior generation still has `scorecard_snapshots.parquet`, declare its
 existing receipt-only migration with
 `--receipt-only-table scorecard_snapshots.parquet`. The publisher checks the
