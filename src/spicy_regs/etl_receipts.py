@@ -12,6 +12,7 @@ import json
 import math
 import re
 import sqlite3
+import zlib
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from contextlib import AbstractContextManager, contextmanager
@@ -409,10 +410,10 @@ def _rows(path):
             yield from batch.to_pylist()
 
 
-def _load_receipts(connection, receipt_paths, policies, generation_id):
+def _load_receipts(connection, receipt_paths, policies, generation_id, *, retain_processing=True):
     connection.execute(
         "CREATE TABLE receipts (dataset TEXT, record_id TEXT, version TEXT, identity_json TEXT, "
-        "receipt_id TEXT UNIQUE, outcome TEXT, processing TEXT, used INTEGER DEFAULT 0)"
+        "receipt_id TEXT UNIQUE, outcome TEXT, processing BLOB, used INTEGER DEFAULT 0)"
     )
     connection.execute("CREATE UNIQUE INDEX accepted_identity ON receipts(dataset, record_id) WHERE outcome='accepted'")
     generations = set()
@@ -466,12 +467,17 @@ def _load_receipts(connection, receipt_paths, policies, generation_id):
                             "identity_json",
                             "receipt_id",
                             "outcome",
-                            "processing_json",
                         )
-                    ],
+                    ] + [zlib.compress(receipt["processing_json"].encode(), level=1) if retain_processing else None],
                 )
             except sqlite3.IntegrityError as exc:
                 raise ValueError("Duplicate or ambiguous receipt join") from exc
+
+
+def _index_processing(body):
+    # This encoding exists only in the disposable join index. Persisted receipts
+    # and their digests remain unchanged, and replay restores the exact JSON.
+    return {} if body is None else _unpack(json.loads(zlib.decompress(body)))
 
 
 def _joined_subjects(connection, subjects, policies):
@@ -494,7 +500,7 @@ def _joined_subjects(connection, subjects, policies):
                 if found is None or found[2]:
                     raise ValueError(f"Missing, ambiguous or reused subject receipt: {dataset}")
                 connection.execute("UPDATE receipts SET used=1 WHERE receipt_id=?", [found[0]])
-                yield dataset, row, _unpack(json.loads(found[1]))
+                yield dataset, row, _index_processing(found[1])
     if connection.execute("SELECT 1 FROM receipts WHERE outcome='accepted' AND used=0 LIMIT 1").fetchone():
         raise ValueError("Accepted receipt has no matching subject")
 
@@ -520,12 +526,15 @@ def validate_receipt_bundle(
 ) -> None:
     """Check native schemas and exact one-to-one accepted joins using a disk index.
 
+    Every processing payload is validated, but only replay readers copy those
+    payloads, losslessly compressed, into the temporary index. Validation retains
+    the exact join fields.
     Includes failures with no subjects. A generation may contain no records;
     callers still bind its explicit generation id in artifact metadata.
     """
     registered = _bundle_policies(subjects, receipt_paths, policies)
     with TemporaryDirectory(prefix="etl-joins-") as temp, sqlite3.connect(str(Path(temp) / "joins.db")) as con:
-        _load_receipts(con, receipt_paths, registered, generation_id)
+        _load_receipts(con, receipt_paths, registered, generation_id, retain_processing=False)
         for _ in _match_subjects(con, subjects, registered):
             pass
 
@@ -560,7 +569,7 @@ def read_receipt_bundle(
             "SELECT dataset, outcome, processing FROM receipts WHERE outcome<>'accepted' ORDER BY rowid"
         ):
             if outcome in outcomes.get(dataset, ()):
-                result[dataset].append(_unpack(json.loads(processing)))
+                result[dataset].append(_index_processing(processing))
     return result
 
 
@@ -639,7 +648,7 @@ def read_attempts(
     if outcomes is not None and not outcomes <= OUTCOMES:
         raise ValueError("Unknown attempt outcome")
     with TemporaryDirectory(prefix="etl-attempts-") as temp, sqlite3.connect(str(Path(temp) / "joins.db")) as con:
-        _load_receipts(con, receipt_paths, {policy.dataset: policy}, generation_id)
+        _load_receipts(con, receipt_paths, {policy.dataset: policy}, generation_id, retain_processing=False)
         for path in receipt_paths:
             for receipt in _rows(path):
                 if outcomes is None or receipt["outcome"] in outcomes:

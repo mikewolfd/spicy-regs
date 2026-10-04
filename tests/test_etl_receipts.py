@@ -88,6 +88,50 @@ def test_native_roundtrip_and_internal_read(tmp_path, policy, context, row):
     assert list(read_with_receipts([subject], [receipt], policy, generation_id="build-1")) == [row]
 
 
+def test_validation_index_stays_small_while_large_processing_payloads_roundtrip(
+    tmp_path, policy, context, row, monkeypatch
+):
+    from spicy_regs import etl_receipts
+
+    rows = [row | {"id": str(index), "amount_raw": "source payload " * 10000} for index in range(16)]
+    pairs = [split_record(policy, record, context) for record in rows]
+    subject, receipts = tmp_path / "subjects.parquet", tmp_path / "receipts.parquet"
+    pq.write_table(pa.Table.from_pylist([pair[0] for pair in pairs], schema=policy.subject_schema), subject)
+    pq.write_table(pa.Table.from_pylist([pair[1] for pair in pairs], schema=RECEIPT_SCHEMA), receipts)
+    original_match = etl_receipts._match_subjects
+
+    def bounded_match(connection, subjects, policies):
+        size = connection.execute("PRAGMA page_count").fetchone()[0] * connection.execute(
+            "PRAGMA page_size"
+        ).fetchone()[0]
+        assert size < 512 * 1024
+        yield from original_match(connection, subjects, policies)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(etl_receipts, "_match_subjects", bounded_match)
+        validate_receipt_bundle({policy.dataset: [subject]}, [receipts], [policy], generation_id="build-1")
+        assert list(read_with_receipts([subject], [receipts], policy, generation_id="build-1")) == rows
+
+
+@pytest.mark.parametrize("fault", ["digest", "unclassified"])
+def test_validation_checks_processing_even_when_it_does_not_keep_a_replay_copy(
+    tmp_path, policy, context, row, fault
+):
+    from spicy_regs import etl_receipts
+
+    subject_row, receipt = split_record(policy, row, context)
+    processing = {field: row[field] for field in policy.receipt_fields}
+    processing["amount_raw" if fault == "digest" else "unclassified"] = "changed source input"
+    receipt["processing_json"] = exact_json(processing)
+    if fault == "unclassified":
+        receipt["receipt_id"] = etl_receipts._digest({key: value for key, value in receipt.items() if key != "receipt_id"})
+    subject, receipts = tmp_path / "subjects.parquet", tmp_path / "receipts.parquet"
+    pq.write_table(pa.Table.from_pylist([subject_row], schema=policy.subject_schema), subject)
+    pq.write_table(pa.Table.from_pylist([receipt], schema=RECEIPT_SCHEMA), receipts)
+    with pytest.raises(ValueError, match="digest" if fault == "digest" else "unclassified"):
+        validate_receipt_bundle({policy.dataset: [subject]}, [receipts], [policy], generation_id="build-1")
+
+
 def test_complete_bundle_read_preserves_exact_values_and_explicit_attempts(tmp_path, policy, context, row):
     reads = DatasetPolicy("parser_reads", pa.schema([]), (), ("checkpoint",), receipt_only=True)
     failed = failure_receipt(policy, replace(context, attempt_id="refused"), outcome="refused", raw_fields=row)
