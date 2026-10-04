@@ -12,7 +12,6 @@ remain in force. A failed source walk leaves the previous output pair intact.
 
 from __future__ import annotations
 
-import json
 from datetime import date, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -27,7 +26,9 @@ from loguru import logger
 
 from spicy_regs.transforms.parquet_rows import str_or_none
 from spicy_regs.sources import r2
-from spicy_regs.sources.courtlistener import CourtListenerDocketIdReader, CourtListenerReader, docket_id_queries
+from spicy_regs.sources.courtlistener import (
+    CourtListenerDocketIdReader, CourtListenerReader, docket_id_queries, record_json,
+)
 from spicy_regs.transforms.table_merge import merge_local_prior
 from spicy_regs.court_subjects import SUBJECT_SCHEMAS
 from spicy_regs.court_receipts import file_witness, finish_court_output, prior_receipt_selection, restore_processing_input, admit_court_updates
@@ -81,7 +82,7 @@ FILL_QUERIES_PER_RUN = 15
 
 def _array_input(value: object) -> str | None:
     """Retain raw arrays, including malformed variants for receipt-only refusal."""
-    return None if value is None else json.dumps(value, ensure_ascii=False)
+    return None if value is None else record_json(value)
 
 
 def _abs_url(docket: dict) -> str | None:
@@ -120,7 +121,7 @@ def _shape(docket: dict) -> dict:
         "absolute_url": _abs_url(docket),
         "blocked": str_or_none(docket.get("blocked")),
         "date_blocked": docket.get("date_blocked"),
-        "raw_source_record": json.dumps(docket, ensure_ascii=False),
+        "raw_source_record": record_json(docket),
     }
 
 

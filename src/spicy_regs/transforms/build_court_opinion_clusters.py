@@ -32,7 +32,6 @@ from datetime import date
 from pathlib import Path
 from typing import cast
 from uuid import uuid4
-import json
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -40,7 +39,7 @@ from loguru import logger
 
 from spicy_regs.sources import r2
 from spicy_regs.transforms._courtlistener_writer import CourtListenerTableWriter
-from spicy_regs.sources.courtlistener import CourtListenerOpinionSearchReader
+from spicy_regs.sources.courtlistener import CourtListenerOpinionSearchReader, record_json
 from spicy_regs.transforms.court_scope import (
     CourtScope,
     build_docket_court_map,
@@ -221,7 +220,7 @@ def _shape_search(result: dict, *, scope: CourtScope | None = None) -> dict:
             "syllabus": _s(result.get("syllabus")),
             "absolute_url": absolute,
             "ingest_source": "search",
-            "raw_source_record": json.dumps(result, ensure_ascii=False),
+            "raw_source_record": record_json(result),
         }
     )
     return row
