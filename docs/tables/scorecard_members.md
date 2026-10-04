@@ -6,6 +6,8 @@
 
 One source member occurrence/context in the edition, including ungraded or excluded members. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='scorecard_members'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled publisher editions selected by the scorecard source registry. Complete edition reads replace that edition; failed or incomplete reads preserve prior observations. Coverage varies by publisher and historical source format. *(measured 2026-10-03)*
 
 - **Parquet file:** `scorecard_members.parquet`
@@ -18,7 +20,7 @@ One source member occurrence/context in the edition, including ungraded or exclu
 | `scorecard_id` | `VARCHAR` | Stable source-layer scorecard id; no downstream identity resolution. |
 | `publisher_member_key` | `VARCHAR` | Versioned reader key for this source member context; not a resolved official identifier. |
 | `publisher_member_id` | `VARCHAR` | Stable source-layer publisher member id; no downstream identity resolution. |
-| `identifiers_json` | `VARCHAR` | Ordered source-supplied member identifiers, each with scheme and value. |
+| `identifiers` | `STRUCT(scheme VARCHAR, "value" VARCHAR)[]` | Ordered source-supplied member identifiers, each with scheme and value. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `member_name` | `VARCHAR` | Source-stated member name, preserved as text; NULL when unstated. |
 | `chamber_text` | `VARCHAR` | Source-stated chamber, preserved as text; NULL when unstated. |
 | `state` | `VARCHAR` | Source-stated state, preserved as text; NULL when unstated. |
@@ -27,7 +29,3 @@ One source member occurrence/context in the edition, including ungraded or exclu
 | `period_text` | `VARCHAR` | Source-stated period, preserved as text; NULL when unstated. |
 | `eligibility_text` | `VARCHAR` | Source-stated eligibility, preserved as text; NULL when unstated. |
 | `notes_text` | `VARCHAR` | Source-stated notes, preserved as text; NULL when unstated. |
-| `snapshot_id` | `VARCHAR` | Opaque identity of the complete accepted edition capture and parse. |
-| `capture_id` | `VARCHAR` | Opaque caller-issued identity of the source observation supporting this row. |
-| `source_url` | `VARCHAR` | Original publisher URL supporting this observation. |
-| `source_path` | `VARCHAR` | Source locator within the captured response, such as cell, JSON path or PDF page. |

@@ -83,9 +83,12 @@ class RollupPipeline(Pipeline):
     publication_family: ClassVar[str | None] = None
     generation_tables: ClassVar[bool] = True
     retain_source_evidence: ClassVar[bool] = False
+    #: Explicit policies for every output. Builders write one shared receipt member in build_dir.
+    receipt_policies: ClassVar[tuple] = ()
     #: Tables this rollup adds to its published family: the explicit migration publication requires before a
     #: family's table set may grow. Inert once they are published; never a way to drop one.
     added_tables: ClassVar[tuple[str, ...]] = ()
+    receipt_only_tables: ClassVar[tuple[str, ...]] = ()
     #: Outputs stored as several files, by key, to their partition columns. The build returns each as a directory
     #: named for the table, holding ``<col>=<value>/part-NNNNNN.parquet`` (multi-file design §4.2).
     partitioned: ClassVar[Mapping[str, tuple[str, ...]]] = {}
@@ -108,6 +111,7 @@ class RollupPipeline(Pipeline):
         self.output_dir = output_dir
         self.skip_upload = skip_upload
         self.source_evidence = None
+        self.receipt_generation_id = uuid4().hex
 
     def run(self) -> None:
         if not self.generation_tables:
@@ -140,9 +144,18 @@ class RollupPipeline(Pipeline):
             if self.source_evidence:
                 self.source_evidence.finish()
 
+    def generation_schemas(self):
+        """The schemas this producer declares for generation admission."""
+        from spicy_regs.data_dictionary import expected_schemas
+
+        return expected_schemas()
+
+    def generation_kwargs(self, out_paths):
+        """Additional shared generation admission arguments supplied by an adopter."""
+        return {}
+
     def _run_tables(self, output_dir: Path) -> None:
         from rulespec_artifacts import publish_directory_no_replace
-        from spicy_regs.data_dictionary import expected_schemas
         from spicy_regs.generations import build_generation, output_keys, verify_generation
         from spicy_regs.sources import publication
 
@@ -168,7 +181,8 @@ class RollupPipeline(Pipeline):
             parents |= remote
             out_paths = built if isinstance(built, tuple) else (built,)
             family = self.name
-            expected_keys = self.outputs or (self.output,)
+            expected_keys = tuple(key for key in (self.outputs or (self.output,))
+                                  if key not in self.receipt_only_tables)
             if len(out_paths) != len(expected_keys) or set(output_keys(out_paths, self.partitioned)) != set(
                 expected_keys
             ):
@@ -213,11 +227,14 @@ class RollupPipeline(Pipeline):
             directory = Path(staging) / "artifact"
             artifact = build_generation(
                 directory, family=family, files=out_paths,
-                expected_keys=expected_keys, schemas=expected_schemas(),
+                expected_keys=expected_keys, schemas=self.generation_schemas(),
                 read_snapshot=prior_index, carried_forward=carried_forward,
                 publication_status=publication_status,
                 inputs=self.source_evidence.inputs() if self.source_evidence else (),
                 parents=parents, partitioned=partitioned,
+                **self.generation_kwargs(out_paths),
+                **({"receipt_path": build_dir / "etl_receipts.parquet", "receipt_policies": self.receipt_policies,
+                    "receipt_generation_id": self.receipt_generation_id} if self.receipt_policies else {}),
             )
             destination = generations / artifact.pin.artifact_digest.removeprefix("sha256:")
             if destination.exists():
@@ -234,7 +251,7 @@ class RollupPipeline(Pipeline):
                 destination, client=r2.get_r2_client(),
                 bucket=getenv("R2_BUCKET_NAME", "spicy-regs"), prior_index=prior_index,
                 evidence_directories=(self.source_evidence.artifact_dir,) if self.source_evidence else (),
-                added_tables=frozenset(self.added_tables),
+                added_tables=frozenset(self.added_tables), receipt_only_tables=frozenset(self.receipt_only_tables),
             )
             from spicy_regs.sources.cloudflare import purge_urls
 

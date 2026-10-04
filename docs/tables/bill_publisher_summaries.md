@@ -6,6 +6,8 @@
 
 One row per CRS summary the publisher states on a bill, at the version and action it describes. `summary_html` is kept exactly as the publisher escaped it. All columns are stored as VARCHAR.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='bill_publisher_summaries'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled: bills the bill family has read from GovInfo BILLSTATUS, Congress by Congress from the 108th on; group by the Congress in bill_id to see which Congresses are filled. A bill has rows only for the summaries the publisher has written. *(measured 2026-09-28)*
 
 - **Parquet file:** `bill_publisher_summaries.parquet`
@@ -21,4 +23,4 @@ One row per CRS summary the publisher states on a bill, at the version and actio
 | `action_desc` | `VARCHAR` | The publisher's description of that action. |
 | `update_date` | `VARCHAR` | When the publisher last updated this summary; the merge prefers the larger value. |
 | `summary_html` | `VARCHAR` | The summary exactly as the publisher escaped it, from either placement, untruncated. |
-| `summary_chars` | `VARCHAR` | Character length of summary_html, so a truncation upstream is visible without reading it. |
+| `summary_chars` | `BIGINT` | Character length of summary_html, so a truncation upstream is visible without reading it. |

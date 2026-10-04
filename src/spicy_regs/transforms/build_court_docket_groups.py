@@ -35,11 +35,13 @@ import pyarrow as pa
 import pyarrow.dataset as ds
 import pyarrow.parquet as pq
 from loguru import logger
+from spicy_regs.court_subjects import SUBJECT_SCHEMAS
+from spicy_regs.court_receipts import file_witness, write_court_rows
 
 RULE_VERSION = "1"
 DOPPELDOCKET_MAX_SPREAD = 5
 
-SCHEMA = pa.schema([
+INPUT_SCHEMA = pa.schema([
     ("cl_docket_id", pa.string()),
     ("parent_cl_docket_id", pa.string()),
     ("confidence_tier", pa.string()),
@@ -47,6 +49,7 @@ SCHEMA = pa.schema([
     ("edition", pa.string()),
     ("rule_version", pa.string()),
 ])
+SCHEMA = SUBJECT_SCHEMAS['court_docket_groups']
 
 _NATIVE_COLUMNS = ["id", "court_id", "docket_number", "pacer_case_id", "case_name"]
 
@@ -99,8 +102,8 @@ def build_court_docket_groups(output_dir: Path, *, dockets_file: Path, native_fi
         raise RuntimeError("a group parent is missing from the published court_dockets selection")
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    out_file = output_dir / "court_docket_groups.parquet"
-    pq.write_table(pa.Table.from_pylist(rows, schema=SCHEMA), out_file, compression="zstd")
+    out_file = write_court_rows('court_docket_groups', rows, output_dir,
+                                witnesses=[file_witness(dockets_file), file_witness(native_file)])
     receipt = {"edition": edition, "rule_version": RULE_VERSION, "dockets_file": str(dockets_file),
                "native_file": str(native_file), "published_rows": len(published), "native_rows_scanned": scanned,
                "grouped_rows": len(rows), **stats}

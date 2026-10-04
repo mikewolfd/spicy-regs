@@ -144,7 +144,7 @@ class TeeAttributes(Transform):
 ROW_GROUP_ROWS = 20_000
 
 
-def newest_copy_sql(source: str, table: str) -> str:
+def newest_copy_sql(source: str, table: str, *, retained_columns: tuple[str, ...] = ()) -> str:
     """One row per identity from ``source`` (SQL), in the contract's columns, by SpicyDocs' volatile-tie rule.
 
     The newest ``_modify_date`` wins. Among the copies tied at it, when every one states its write time, a copy
@@ -158,7 +158,9 @@ def newest_copy_sql(source: str, table: str) -> str:
     from spicy_docs.source_native.regulations_gov import VOLATILE_TIE_MARGIN_SECONDS
 
     table_contract = contract(table)
-    columns = ", ".join(f'"{column}"' for column in table_contract.columns)
+    if any(not column.isidentifier() for column in retained_columns):
+        raise ValueError("Retained selection columns must be identifiers")
+    columns = ", ".join(f'"{column}"' for column in (*table_contract.columns, *retained_columns))
     keys = ", ".join(f'"{column}"' for column in table_contract.identity)
     return (
         f"SELECT {columns} FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY {keys} "

@@ -5,15 +5,16 @@ from typing import ClassVar
 
 from cyclopts import App
 
-from spicy_regs.pipelines.rollups.base import RollupPipeline
-from spicy_regs.sources import r2
-from spicy_regs.transforms.native_legal_references import OUTPUTS, build_native_legal_references
+from spicy_regs.legislative_rollups import LegislativeReceiptRollup, family_policies
+from spicy_regs.transforms.native_legal_references import build_native_legal_references
 
 
-class NativeLegalReferencesRollup(RollupPipeline):
+class NativeLegalReferencesRollup(LegislativeReceiptRollup):
     name: ClassVar[str] = "native-legal-references"
     inputs: ClassVar[tuple[str, ...]] = ()
-    outputs: ClassVar[tuple[str, ...]] = OUTPUTS
+    outputs: ClassVar[tuple[str, ...]] = ("native_legal_references.parquet",)
+    receipt_only_tables = ("native_legal_reference_reads.parquet",)
+    receipt_policies = family_policies("native_legal_references", "native_legal_reference_reads")
     retain_source_evidence: ClassVar[bool] = True
 
     def __init__(self, *, manifest: Path, output_dir: Path | None = None, skip_upload: bool = True):
@@ -21,11 +22,15 @@ class NativeLegalReferencesRollup(RollupPipeline):
         self.manifest = manifest
 
     def build(self, output_dir: Path) -> tuple[Path, ...]:
-        if self.source_evidence is None:
+        evidence = self.source_evidence
+        if evidence is None:
             raise ValueError("native reference build requires the rollup source evidence lifecycle")
-        return build_native_legal_references(
-            self.manifest, output_dir, evidence=self.source_evidence, download_prior=r2.download
-        )
+        def builder(directory, *, download_prior):
+            return build_native_legal_references(
+                self.manifest, directory, evidence=evidence, download_prior=download_prior
+            )
+
+        return self.build_receipts(output_dir, builder)
 
 
 app = App(help=__doc__)

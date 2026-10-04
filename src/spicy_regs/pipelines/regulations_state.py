@@ -5,20 +5,25 @@ from dataclasses import asdict
 from pathlib import Path
 
 import pyarrow as pa
-import pyarrow.parquet as pq
 from loguru import logger
 from spicy_docs.schemas.base import RecordType as SourceRecordType
 from spicy_docs.sources.mirrulations import KeyOutcome
 from spicy_docs.transport.credentials import scrub_credential
 
-from spicy_regs.schemas import RECORD_TYPES, RecordType
-from spicy_regs.sources import r2
+from spicy_regs.schemas import RecordType
 
 
-UNRESOLVED_SCHEMA = pa.schema([
-    ("agency", pa.string()), ("record_type", pa.string()), ("key", pa.string()),
-    ("status", pa.string()), ("reason", pa.string()), ("attempted_at", pa.string()), ("attempts", pa.int64()),
-])
+UNRESOLVED_SCHEMA = pa.schema(
+    [
+        ("agency", pa.string()),
+        ("record_type", pa.string()),
+        ("key", pa.string()),
+        ("status", pa.string()),
+        ("reason", pa.string()),
+        ("attempted_at", pa.string()),
+        ("attempts", pa.int64()),
+    ]
+)
 
 
 def source_record_type(record_type: RecordType) -> SourceRecordType:
@@ -34,24 +39,29 @@ class UnresolvedKeys:
     the old reader's false coverage. Attempts before this format are unknown.
     """
 
-    def __init__(self, output_dir: Path) -> None:
-        self.path = output_dir / "failed_keys.parquet"
-        self.rows: dict[str, dict] = {}
-        if not self.path.exists():
-            r2.download(self.path.name, self.path)
-        if self.path.exists():
-            for row in pq.read_table(self.path).to_pylist():
-                if "status" not in row:
-                    parts = row["key"].split("/")
-                    row = {
-                        "agency": parts[1],
-                        "record_type": next(rt.name for rt in RECORD_TYPES.values() if rt.path_pattern and rt.path_pattern in row["key"]),
-                        **asdict(KeyOutcome(
-                            row["key"], "transport" if row["kind"] == "transient" else "unreadable",
-                            "legacy diagnostic; prior attempts unknown", row["run_at"], 0,
-                        )),
-                    }
-                self.rows[row["key"]] = row
+    def __init__(self, output_dir: Path, *, index=None) -> None:
+        from spicy_regs.pipelines.regulatory_publication import restore_checkpoint
+
+        self.path = output_dir / ".processing" / "failed_keys.parquet"
+        self.rows = {row["key"]: row for row in restore_checkpoint(output_dir, "failed_keys", index=index)}
+
+    @classmethod
+    def from_receipts(cls, receipt: Path, *, generation_id: str, output_dir: Path):
+        """Restore selected failed-key observations without reading an old pointer."""
+        from spicy_regs.transforms.regulations_checkpoints import read_checkpoint
+
+        instance = cls.__new__(cls)
+        instance.path = output_dir / ".processing" / "failed_keys.parquet"
+        instance.rows = {
+            row["key"]: row for row in read_checkpoint("failed_keys", receipt, generation_id=generation_id)
+        }
+        return instance
+
+    def save_receipts(self, destination: Path, context) -> Path:
+        """Retain the current unresolved-key set as processing-only receipts."""
+        from spicy_regs.transforms.regulations_checkpoints import write_checkpoint
+
+        return write_checkpoint("failed_keys", self.rows.values(), destination, context)
 
     def for_reader(self, agency: str, record_type: RecordType | SourceRecordType) -> list[KeyOutcome]:
         return [
@@ -68,10 +78,15 @@ class UnresolvedKeys:
                 row = asdict(observation)
                 row["reason"] = scrub_credential(row["reason"], "")
                 self.rows[observation.key] = {"agency": agency, "record_type": record_type, **row}
-        # Publish an empty checkpoint too: absence would leave the last remote
-        # failures available to resurrect on a fresh hosted runner.
-        temporary = self.path.with_suffix(".tmp.parquet")
-        pq.write_table(pa.Table.from_pylist(list(self.rows.values()), schema=UNRESOLVED_SCHEMA),
-                       temporary, compression="zstd")
-        temporary.replace(self.path)
+        from spicy_regs.pipelines.regulatory_publication import finish_checkpoints, restore_checkpoint
+
+        root = self.path.parent.parent
+        finish_checkpoints(
+            root,
+            {
+                "failed_keys": list(self.rows.values()),
+                "pending_comment_text": restore_checkpoint(root, "pending_comment_text"),
+            },
+            publish=False,
+        )
         logger.info("Retained {} unresolved keys; none manifested as coverage", len(self.rows))

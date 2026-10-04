@@ -75,15 +75,13 @@ def lake(rest_uri, tmp_path, monkeypatch):
     for name in ("R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_ENDPOINT"):
         monkeypatch.delenv(name, raising=False)
     with connect() as con:
-        con.execute(f"CREATE SCHEMA {iceberg._schema_ref()}")
-        con.execute(f"CREATE TABLE {iceberg._qualified(COMMENT)} ("
-                    + ", ".join(f'"{c}" VARCHAR' for c in COMMENT.schema) + ")")
+        iceberg._ensure_table(con, COMMENT)
         for f in range(3):
             rows = [{**dict.fromkeys(COMMENT.schema), "comment_id": f"C-{f}-{i}", "agency_code": "EPA",
                      "docket_id": f"D{f}", "modify_date": T0, "comment": f"body {f}-{i}", "title": "t",
                      "text_content": f"text {f}-{i}", "text_extraction_status": "ok"} for i in range(4)]
             con.register("seed", pl.DataFrame(rows, schema=dict.fromkeys(COMMENT.schema, pl.Utf8)).to_arrow())
-            con.execute(f"INSERT INTO {iceberg._qualified(COMMENT)} SELECT * FROM seed")
+            iceberg.replace_rows(con, COMMENT, "seed")
             con.unregister("seed")
     part = tmp_path / "parts" / "agency=EPA" / "p.parquet"
     part.parent.mkdir(parents=True)
@@ -94,9 +92,19 @@ def lake(rest_uri, tmp_path, monkeypatch):
 
 
 def rows(connect) -> dict[str, dict]:
+    from spicy_regs.sources.regulatory_catalog import processing_table
     with connect() as con:
-        return {r["comment_id"]: r for r in con.execute(
-            f"SELECT *, filename FROM {iceberg._qualified(COMMENT)}").pl().to_dicts()}
+        processing = processing_table(con, COMMENT)
+        return {r['comment_id']: r for r in con.execute(
+            f'SELECT p.*, s.filename FROM {processing} p JOIN {iceberg._qualified(COMMENT)} s USING (comment_id)').pl().to_dicts()}
+
+
+def update_title(con, title):
+    from spicy_regs.sources.regulatory_catalog import processing_table
+    prior = processing_table(con, COMMENT, where="comment_id='C-2-3'")
+    con.execute(f'CREATE TEMP TABLE foreign_change AS SELECT * FROM {prior}')
+    con.execute('UPDATE foreign_change SET title=?', [title])
+    iceberg.replace_rows(con, COMMENT, 'foreign_change', expected_prior=prior)
 
 
 def journal(tmp_path) -> list[dict]:
@@ -129,7 +137,7 @@ def test_rows_move_files_are_checked_before_commit_and_keep_every_other_column(t
     assert all(after[k]["filename"] != before[k]["filename"] for k in before)  # merge-on-read moved every row
     assert all((after[k]["comment"], after[k]["text_content"]) == (before[k]["comment"], before[k]["text_content"])
                for k in before)
-    assert {(r["subtype"], r["duplicate_comments"]) for r in after.values()} == {("Public Comment", "0")}
+    assert {(r["subtype"], r["duplicate_comments"]) for r in after.values()} == {("Public Comment", 0)}
     assert [line["state"] for line in journal(tmp_path)] == ["pending", "verified"] * 3
 
 
@@ -137,7 +145,7 @@ def test_a_merge_that_blanks_a_column_is_rolled_back_and_nothing_is_committed(tm
     cfw.prepare(tmp_path)
     with lake() as con:
         snapshot = iceberg._read_snapshot(con, COMMENT)
-    blank = lambda sql: sql.replace("UPDATE SET ", 'UPDATE SET "text_content" = NULL, ', 1) if sql.lstrip().startswith("MERGE") else sql  # noqa: E731
+    blank = lambda sql: sql.replace('"text_content"=s."text_content"', '"text_content"=NULL') if sql.lstrip().startswith("MERGE") else sql  # noqa: E731
     with lake() as con, pytest.raises(cfw.FillVerificationError):
         cfw.write(tmp_path, con=Proxy(con, rewrite=blank))
     with lake() as con:
@@ -177,7 +185,7 @@ def test_a_foreign_commit_mid_run_stops_it_and_preparing_again_finishes(tmp_path
             commits["n"] += 1
             if commits["n"] == 1:  # another writer (an ETL batch, R2 compaction) commits after batch 1
                 with lake() as other:
-                    other.execute(f"UPDATE {iceberg._qualified(COMMENT)} SET title = 't2' WHERE comment_id = 'C-2-3'")
+                    update_title(other, "t2")
 
     with lake() as con, pytest.raises(RuntimeError, match="another writer"):
         cfw.write(tmp_path, con=Proxy(con, after=compaction), batch_bytes=1)
@@ -222,43 +230,26 @@ def test_an_undo_is_a_forward_commit_that_plain_reads_and_the_etl_write_accept(t
     newer = {**{c: after[k][c] for c in COMMENT.schema}, "modify_date": "2021-01-01T00:00:00Z", "title": "etl"}
     new = {**dict.fromkeys(COMMENT.schema), "comment_id": "C-9-0", "agency_code": "EPA", "modify_date": T0}
     staging = tmp_path / "staging.parquet"
-    pl.DataFrame([newer, new], schema=dict.fromkeys(COMMENT.schema, pl.Utf8)).write_parquet(staging)
+    pl.DataFrame([newer, new], schema=COMMENT.schema).write_parquet(staging)
     with lake() as con:
         assert iceberg._merge(con, [staging], COMMENT) == 2
     final = rows(lake)
     assert (final[k]["title"], final["C-9-0"]["modify_date"], len(final)) == ("etl", T0, 13)
 
 
-def test_a_damaged_commit_found_on_recovery_is_refused_and_undone_whole(tmp_path, lake):
-    """A check that missed the damage (disabled here) and a crash right after COMMIT: the rerun compares the commit
-    with its pre-image, journals it failed, and the undo restores every column from the pre-image."""
+def test_receipt_admission_blocks_damage_even_when_the_legacy_value_check_is_disabled(tmp_path, lake):
+    """The subject/receipt binding independently prevents a corrupt committed batch."""
     before = rows(lake)
     cfw.prepare(tmp_path)
-
     def damage(sql):
-        if sql.lstrip().startswith("MERGE"):
-            return sql.replace("UPDATE SET ", 'UPDATE SET "text_content" = NULL, ', 1)
-        return "SELECT 0" if "EXCEPT ALL" in sql else sql
-
-    def crash(sql):
-        if sql == "COMMIT":
-            raise KeyboardInterrupt
-
-    with lake() as con, pytest.raises(KeyboardInterrupt):
-        cfw.write(tmp_path, con=Proxy(con, rewrite=damage, after=crash), batch_bytes=1)
-    with lake() as con, pytest.raises(cfw.FillVerificationError, match="differs"):
-        cfw.write(tmp_path, con=con, batch_bytes=1)
-    failed = journal(tmp_path)[-1]
-    assert (failed["state"], failed["committed"]) == ("failed", True)
-    with pytest.raises(RuntimeError, match="undo"):
-        cfw.prepare(tmp_path)
-    damaged = [k for k, r in rows(lake).items() if r["text_content"] is None]
-    assert len(damaged) == 4
-    with lake() as con:
-        cfw.undo(tmp_path, failed["batch"], expected_snapshot=_snapshot(lake), con=con)
+        if sql.lstrip().startswith('MERGE'):
+            return sql.replace('"text_content"=s."text_content"', '"text_content"=NULL')
+        return 'SELECT 0' if 'EXCEPT ALL' in sql else sql
+    with lake() as con, pytest.raises(cfw.FillVerificationError, match='subject receipt'):
+        cfw.write(tmp_path, con=Proxy(con, rewrite=damage), batch_bytes=1)
     after = rows(lake)
     assert all(_same(after[k], before[k]) for k in before)
-    assert cfw.prepare(tmp_path)["rows_to_fill"] == 12
+    assert journal(tmp_path)[-1]['committed'] is False
 
 
 def test_a_commit_by_another_writer_during_the_batch_is_refused_at_commit(tmp_path, lake):
@@ -271,7 +262,7 @@ def test_a_commit_by_another_writer_during_the_batch_is_refused_at_commit(tmp_pa
         if "iceberg_load_table_response" in sql and not seen["n"]:
             seen["n"] += 1
             with lake() as other:
-                other.execute(f"UPDATE {iceberg._qualified(COMMENT)} SET title = 'etl' WHERE comment_id = 'C-2-3'")
+                update_title(other, "etl")
 
     with lake() as con, pytest.raises(Exception, match="409|Conflict|conflict") as refused:
         cfw.write(tmp_path, con=Proxy(con, after=foreign), batch_bytes=1)
@@ -279,3 +270,51 @@ def test_a_commit_by_another_writer_during_the_batch_is_refused_at_commit(tmp_pa
     after = rows(lake)
     assert after["C-2-3"]["title"] == "etl" and {r["subtype"] for r in after.values()} == {None}
     assert [line["state"] for line in journal(tmp_path)] == ["pending"]
+
+
+@pytest.mark.parametrize("interrupt", [False, True])
+def test_legacy_preview_then_native_migration_on_same_connection_keeps_source(rest_uri, monkeypatch, tmp_path, interrupt):
+    from spicy_regs.sources import regulatory_catalog as native
+    namespace = 'migration' + uuid4().hex[:8]
+    monkeypatch.setenv('R2_CATALOG_NAMESPACE', namespace)
+    with duckdb.connect() as con:
+        con.execute('LOAD iceberg')
+        con.execute(f"ATTACH '' AS reg_catalog (TYPE iceberg, ENDPOINT '{rest_uri}', CLIENT_ID 'admin', CLIENT_SECRET 'password')")
+        con.execute(f'CREATE SCHEMA {iceberg._schema_ref()}')
+        con.execute(f'CREATE TABLE {iceberg._schema_ref()}.comments (comment_id VARCHAR, agency_code VARCHAR)')
+        con.execute(f"INSERT INTO {iceberg._schema_ref()}.comments VALUES ('held', 'EPA')")
+        legacy_snapshot = iceberg._read_snapshot(con, COMMENT)
+        preview = native.processing_table(con, COMMENT)
+        assert con.execute(f'SELECT comment_id FROM {preview}').fetchall() == [('held',)]
+        if interrupt:
+            class InterruptedPreparation:
+                def execute(self, sql, *args):
+                    result = con.execute(sql, *args)
+                    if sql == 'COMMIT':
+                        raise RuntimeError('crash after empty physical preparation')
+                    return result
+            with pytest.raises(RuntimeError, match='crash after empty'):
+                native.ensure_native(InterruptedPreparation(), COMMENT)
+            assert con.execute(f'SELECT count(*) FROM {native.qualified(COMMENT)}').fetchone() == (0,)
+            assert not native.initialized(con, 'comments')
+            assert iceberg._read_snapshot(con, COMMENT) == legacy_snapshot
+            retained = native.processing_table(con, COMMENT)
+            assert con.execute(f'SELECT comment_id FROM {retained}').fetchall() == [('held',)]
+            with pytest.raises(ValueError, match='initialization receipt'):
+                native.export_pair(con, COMMENT, tmp_path / 'unselected', generation_id='invalid')
+        # A read-only field-fill prepare must use the same legacy UUID, snapshot
+        # and physical files, including after empty native storage was prepared.
+        part = tmp_path / 'legacy-reads.parquet'
+        incoming = {**dict.fromkeys(cf.PART_SCHEMA), 'key': 'raw/held', 'comment_id': 'held',
+                    'agency_code': 'EPA', 'subtype': 'Public Comment'}
+        pl.DataFrame([incoming], schema=cf.PART_SCHEMA).write_parquet(part)
+        prepared = cfw.prepare(tmp_path / 'field-fill', reads=part, con=con)
+        assert prepared['snapshot'] == legacy_snapshot.__dict__
+        assert prepared['table_rows'] == 1 and prepared['rows_to_fill'] == 1
+        assert not native.initialized(con, 'comments')
+        assert iceberg._read_snapshot(con, COMMENT) == legacy_snapshot
+        native.ensure_native(con, COMMENT)
+        assert native.initialized(con, 'comments')
+        assert iceberg._read_snapshot(con, COMMENT).table_uuid != legacy_snapshot.table_uuid
+        assert con.execute(f'SELECT comment_id FROM {native.qualified(COMMENT)}').fetchall() == [('held',)]
+        assert con.execute(f'SELECT comment_id FROM {iceberg._schema_ref()}.comments').fetchall() == [('held',)]

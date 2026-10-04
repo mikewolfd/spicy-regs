@@ -5,12 +5,13 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 import pyarrow.parquet as pq
-from rulespec_artifacts import LocalMemberSource, iter_member_descriptors
-
-from qualify_lcv import digest, write
+from qualify_lcv import digest, entry, write
+from spicy_regs.scorecards.etl import selected_table_entry
 from spicy_regs.generations import verify_generation
+from spicy_regs.scorecards.etl import verified_receipt_download
 from spicy_regs.sources import publication
 
 
@@ -27,14 +28,8 @@ def select(*, baseline: Path, members_receipt: Path, bills: Path, rolls: Path, a
     for directory in (Path(member_receipt["paths"]["members"]).parent, rolls, amendments):
         artifact = verify_generation(directory)
         family = artifact.root["spec"]["family"]
-        members = list(iter_member_descriptors(artifact, LocalMemberSource(directory)))
         previous = snapshot["families"].get(family)
-        snapshot["families"][family] = {
-            "prefix": f"generations/{family}/{artifact.pin.artifact_digest.removeprefix('sha256:')}",
-            "logicalId": artifact.pin.logical_id,
-            "artifactDigest": artifact.pin.artifact_digest,
-            "tables": publication.table_entries(artifact.root["spec"]["tables"], members),
-        }
+        snapshot["families"][family] = entry(artifact, directory)
         selected.append(
             {
                 "family": family,
@@ -45,7 +40,7 @@ def select(*, baseline: Path, members_receipt: Path, bills: Path, rolls: Path, a
             }
         )
     snapshot = publication.parse_index(json.dumps(snapshot).encode())
-    pins, facts = {}, {}
+    pins, facts, receipts = {}, {}, {}
     for name, files in paths.items():
         pin = publication.table_pin(snapshot, name + ".parquet")
         assert len(files) == 1
@@ -53,6 +48,10 @@ def select(*, baseline: Path, members_receipt: Path, bills: Path, rolls: Path, a
         if digest(file) != pin["sha256"] or file.stat().st_size != pin["byteSize"]:
             raise ValueError(f"Retained {name} differs from selected immutable publication pin")
         pins[name] = pin
+        if "etlReceipts" in selected_table_entry(snapshot, name + ".parquet"):
+            receipts[name] = verified_receipt_download(
+                snapshot, file.parent / "etl_receipts.parquet", public_url=None, dataset=name
+            )
         parquet = pq.ParquetFile(file)
         facts[name] = {
             "rows": parquet.metadata.num_rows,
@@ -61,8 +60,16 @@ def select(*, baseline: Path, members_receipt: Path, bills: Path, rolls: Path, a
             "byte_size": file.stat().st_size,
         }
     # Read the actual pinned Parquet record, not a prior derived summary.
-    vote_reader = pq.ParquetFile(paths["roll_call_votes"][0])
-    votes = vote_reader.read().to_pylist()
+    with TemporaryDirectory(prefix="scorecard-official-readback-") as temporary:
+        vote_path = paths["roll_call_votes"][0]
+        if "roll_call_votes" in receipts:
+            from spicy_regs.congress_receipts import CongressInput
+
+            generation = selected_table_entry(snapshot, "roll_call_votes.parquet")["etlReceipts"]["generationId"]
+            vote_path = CongressInput(vote_path, receipts["roll_call_votes"], generation).materialize(
+                "roll_call_votes", Path(temporary) / "roll_call_votes.parquet"
+            )
+        votes = pq.ParquetFile(vote_path).read().to_pylist()
     zeldin = [row for row in votes if row["vote_id"] == "119-senate-1-24"]
     assert len(zeldin) == 1
     report = {
@@ -72,6 +79,7 @@ def select(*, baseline: Path, members_receipt: Path, bills: Path, rolls: Path, a
         "baseline_sha256": digest(baseline),
         "selected_generations": selected,
         "paths": {name: [str(p) for p in files] for name, files in paths.items()},
+        "receipt_paths": {name: str(path) for name, path in receipts.items()},
         "input_pins": pins,
         "selected_index": snapshot,
         "table_facts": facts,

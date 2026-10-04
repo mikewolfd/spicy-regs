@@ -99,7 +99,7 @@ def verify_generation_source(source, table_info: Callable[[str], dict], *, expec
     if root["kind"] != KIND:
         raise ValueError("Not a SpicyRegs rollup generation")
     spec = root["spec"]
-    if set(spec) - {"parents"} != {"family", "tables", "packages", "readSnapshot", "carriedForward", "publicationStatus"}:
+    if set(spec) - {"parents", "etlReceipts"} != {"family", "tables", "packages", "readSnapshot", "carriedForward", "publicationStatus"}:
         raise ValueError("Invalid rollup generation specification")
     if spec["publicationStatus"] not in {"complete-family", "local-partial"}:
         raise ValueError("Invalid generation publication status")
@@ -128,8 +128,20 @@ def verify_generation_source(source, table_info: Callable[[str], dict], *, expec
     if any("partitionColumns" in tables[key] for key in carried):
         raise ValueError("A split table is carried forward member by member at publication, not declared whole")
     members = list(iter_member_descriptors(artifact, source))
-    table_entries(tables, members)
-    for member in members:
+    receipt_spec = spec.get("etlReceipts")
+    receipt_members = [member for member in members if member.object_key == "etl_receipts.parquet"]
+    if bool(receipt_spec) != bool(receipt_members) or len(receipt_members) > 1:
+        raise ValueError("Generation receipt membership differs from its declaration")
+    table_members_only = [member for member in members if member.object_key != "etl_receipts.parquet"]
+    if tables or table_members_only:
+        table_entries(tables, table_members_only)
+    elif not receipt_spec:
+        raise ValueError("Generation has neither subjects nor receipts")
+    if receipt_spec:
+        if receipt_members[0].record_count != receipt_spec['rows']:
+            raise ValueError('Generation receipt member count differs from receipt declaration')
+        _verify_receipts(source, tables, table_members_only, receipt_spec, table_info)
+    for member in table_members_only:
         key = member.object_key
         if key is None:
             raise ValueError("Generation members must be plain Parquet filenames")
@@ -211,6 +223,9 @@ def build_generation(
     inputs=(),
     parents: Mapping[str, Mapping] | None = None,
     partitioned: Mapping[str, Sequence[str]] | None = None,
+    receipt_path: Path | None = None,
+    receipt_policies: Sequence | None = None,
+    receipt_generation_id: str | None = None,
 ):
     """Snapshot exactly one declared family into a new immutable artifact.
 
@@ -234,7 +249,7 @@ def build_generation(
 
     expected, partitioned = set(expected_keys), dict(partitioned or {})
     names = output_keys(files, partitioned)
-    if not expected or len(expected) != len(expected_keys) or len(set(names)) != len(names) or set(names) != expected:
+    if (not expected and receipt_path is None) or len(expected) != len(expected_keys) or len(set(names)) != len(names) or set(names) != expected:
         raise ValueError("Build outputs differ from the declared complete family")
     if any(Path(key).name != key or not key.endswith(".parquet") for key in expected):
         raise ValueError("Output keys must be plain Parquet filenames")
@@ -253,6 +268,20 @@ def build_generation(
         declared = (schemas or {}).get(Path(key).stem)
         if declared is not None and tables[key]["columns"] != [list(column) for column in declared]:
             raise ValueError(f"Output differs from the declared schema: {key}")
+    receipt_spec = None
+    if receipt_path is not None:
+        from spicy_regs.etl_receipts import RECEIPT_KEY
+        if not receipt_policies or not receipt_generation_id or RECEIPT_KEY in tables:
+            raise ValueError("Receipt admission needs policies and a generation identity")
+        shutil.copyfile(receipt_path, directory / RECEIPT_KEY)
+        receipt_spec = {"key": RECEIPT_KEY, "generationId": receipt_generation_id,
+                        "policies": [policy.descriptor() for policy in receipt_policies],
+                        **_table_info(directory / RECEIPT_KEY)}
+        rows[RECEIPT_KEY] = receipt_spec["rows"]
+    elif receipt_policies is not None or receipt_generation_id is not None:
+        raise ValueError("Receipt admission cannot omit the shared receipt member")
+    from spicy_regs.etl_policy_registry import require_registered_receipts
+    require_registered_receipts(tables, receipt_spec)
     source = LocalMemberSource(directory)
     members = [
         describe_member(
@@ -267,7 +296,7 @@ def build_generation(
     _write_generation_metadata(
         directory, family=family, tables=tables, members=members, read_snapshot=read_snapshot,
         carried_forward=carried_forward, publication_status=publication_status, inputs=inputs,
-        parents=parents,
+        parents=parents, etl_receipts=receipt_spec,
     )
     return verify_generation(directory)
 
@@ -307,6 +336,7 @@ def _write_generation_metadata(
     read_snapshot: Mapping | None = None, carried_forward: Mapping[str, str] | None = None,
     publication_status: str = "complete-family", inputs=(), extra_packages: Sequence[str] = (),
     parents: Mapping[str, Mapping] | None = None,
+    etl_receipts: Mapping | None = None,
 ):
     """Write the existing manifest/root format; callers must then verify bytes."""
     from rulespec_artifacts import Producer, build_artifact_root, canonical_json_bytes, write_member_manifest
@@ -327,6 +357,7 @@ def _write_generation_metadata(
             "readSnapshot": dict(read_snapshot or {}),
             "carriedForward": dict(carried_forward or {}),
             "publicationStatus": publication_status,
+            **({"etlReceipts": dict(etl_receipts)} if etl_receipts is not None else {}),
             **({"parents": {key: dict(value) for key, value in parents.items()}} if parents else {}),
         },
         producer=Producer("spicy-regs", implementation, "urn:spicy-regs:rollup-verifier", "1", implementation),
@@ -334,3 +365,25 @@ def _write_generation_metadata(
         inputs=inputs,
     )
     (directory / "artifact.json").write_bytes(canonical_json_bytes(root))
+
+
+def _verify_receipts(source, tables, members, receipt_spec, table_info):
+    """Recheck all row joins through the same local or pinned remote byte source."""
+    from spicy_regs.etl_receipts import DatasetPolicy, RECEIPT_KEY, validate_receipt_bundle
+    from spicy_regs.sources.publication import member_table
+
+    if (set(receipt_spec) != {"key", "generationId", "policies", "columns", "rows"}
+            or receipt_spec["key"] != RECEIPT_KEY or not isinstance(receipt_spec["generationId"], str)
+            or not receipt_spec["generationId"]):
+        raise ValueError("Invalid generation receipt declaration")
+    if table_info(RECEIPT_KEY) != {key: receipt_spec[key] for key in ("columns", "rows")}:
+        raise ValueError("Receipt member differs from its declared shape/count")
+    policies = [DatasetPolicy.from_descriptor(value) for value in receipt_spec["policies"]]
+    if {p.dataset + ".parquet" for p in policies if not p.receipt_only} != set(tables):
+        raise ValueError("Receipt policies must classify every subject output in a generation")
+    subjects = {p.dataset: [] for p in policies}
+    for member in members:
+        subjects[member_table(member.object_key).removesuffix(".parquet")].append(
+            lambda key=member.object_key: source.open(key))
+    validate_receipt_bundle(subjects, [lambda: source.open(RECEIPT_KEY)], policies,
+                            generation_id=receipt_spec["generationId"])

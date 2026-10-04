@@ -1,29 +1,16 @@
-"""Transform: CourtListener tables copied field for field from one quarterly bulk export.
+"""CourtListener bulk domain tables with generation-bound ETL receipts.
 
-Four publisher tables, each renamed to this repository's column names with ``dump_date`` added:
-reporter citations (``court_citations``, keyed to the cluster, i.e. the decision), the opinion
-citation map (``court_citation_map``), parentheticals (``court_parentheticals``) and a text-free
-opinion index (``court_opinions``). The map and the parentheticals name *opinions*; only the
-``opinions`` export maps an opinion to its cluster, and it is 54.6 GB, so the index is built from a
-retained copy rather than on a CI runner. Opinion text is not kept (decision 6 in
-docs/research/fork-delivery-decisions-2026-09-22.md); ``local_path`` and ``download_url`` link out.
+Each complete export becomes one subject table plus shared receipts. Subject
+rows retain native identifiers, legal descriptions and typed domain values.
+Dump editions, publisher record timestamps, body references and extraction
+provenance belong to receipts. Retained source bytes preserve the publisher's
+literal spellings, nulls and empty strings. Receipt conversion inputs preserve
+numeric and boolean literals when the subject uses native types.
 
-Each export is a snapshot, not a delta, so a table is rebuilt whole from one export and never merged
-with its prior. Values are the publisher's strings: every column is VARCHAR, NULL and ``""`` stay
-distinct, and nothing is normalized. The citation map drops only its surrogate row id: it has 77.5
-million rows and the publisher makes each citing/cited pair unique. SpicyDocs'
-``CourtListenerLocalDump`` decodes the export: parallel bzip2, cut at record starts into pieces that
-DuckDB parses in parallel, each piece's row count and opening records held to the reference
-decoder. A table replaces its predecessor only after the whole export has been read.
-
-An export comes from ``COURTLISTENER_BULK_DIR`` when that directory holds it under the publisher's
-filename at the listed size, and is otherwise downloaded, bound to the listed ETag and size.
-
-A table that names clusters waits for them: the publisher cuts each export at a different hour of
-the export day, clusters first, so its citations and opinions name clusters created after the
-cluster export. Such a table is refused while it names a cluster id above the published
-``court_opinion_clusters``, whose search catch-up adds every cluster created since its export; run
-that rollup first.
+A source must be read completely before the subject/receipt pair replaces its
+predecessor. Cluster-naming tables still refuse exports ahead of the selected
+cluster publication. Downloads retain their listed size and ETag checks and
+the existing disk floor; downloaded and pre-existing source bytes remain held.
 """
 
 from __future__ import annotations
@@ -34,12 +21,15 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING
+from uuid import uuid4
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 from loguru import logger
 
 from spicy_regs.duckdb_settings import load_public_http
+from spicy_regs.court_subjects import SUBJECT_SCHEMAS
+from spicy_regs.court_receipts import file_witness, finish_court_output, record_source_failure
 from spicy_regs.transforms._courtlistener_writer import check_headroom
 
 if TYPE_CHECKING:
@@ -62,12 +52,20 @@ class BulkTable:
     fields: tuple[tuple[str, str], ...]
 
     @property
-    def columns(self) -> tuple[str, ...]:
+    def input_columns(self) -> tuple[str, ...]:
         return (*(column for column, _ in self.fields), "dump_date")
 
     @property
+    def input_schema(self) -> pa.Schema:
+        return pa.schema([(column, pa.string()) for column in self.input_columns])
+
+    @property
+    def columns(self) -> tuple[str, ...]:
+        return tuple(self.schema.names)
+
+    @property
     def schema(self) -> pa.Schema:
-        return pa.schema([(column, pa.string()) for column in self.columns])
+        return SUBJECT_SCHEMAS[self.output.removesuffix('.parquet')]
 
     @property
     def names_clusters(self) -> bool:
@@ -208,7 +206,8 @@ def export_file(published: BulkObject, work_dir: Path) -> tuple[Path, bool]:
 
 
 def build_court_bulk_table(
-    table: BulkTable, output_dir: Path, *, local_file: Path, dump_date: date, cluster_ceiling: int | None = None
+    table: BulkTable, output_dir: Path, *, local_file: Path, dump_date: date, cluster_ceiling: int | None = None,
+    generation_id: str | None = None,
 ) -> Path:
     """Write ``table.output`` from one whole export; the previous file survives any failure.
 
@@ -218,21 +217,21 @@ def build_court_bulk_table(
 
     output_dir.mkdir(parents=True, exist_ok=True)
     out_file = output_dir / table.output
-    staging = output_dir / f".{table.output}.partial"
+    staging = output_dir / f".{table.output}.{uuid4().hex}.source.parquet"
     dump = CourtListenerLocalDump(local_file, columns=[source for _, source in table.fields], work_dir=output_dir)
     edition = dump_date.isoformat()
     pending: list[pa.RecordBatch] = []
 
     def flush(writer: pq.ParquetWriter) -> None:
         # A piece of opinion text yields a few thousand metadata rows; gather them into row groups.
-        writer.write_table(pa.Table.from_batches(pending, schema=table.schema), row_group_size=BATCH_ROWS)
+        writer.write_table(pa.Table.from_batches(pending, schema=table.input_schema), row_group_size=BATCH_ROWS)
         pending.clear()
 
     try:
-        with pq.ParquetWriter(staging, table.schema, compression="zstd") as writer:
+        with pq.ParquetWriter(staging, table.input_schema, compression="zstd") as writer:
             for batch in dump.iter_batches():
                 stamped = [*batch.columns, pa.array([edition] * batch.num_rows, pa.string())]
-                pending.append(pa.RecordBatch.from_arrays(stamped, schema=table.schema))
+                pending.append(pa.RecordBatch.from_arrays(stamped, schema=table.input_schema))
                 if sum(part.num_rows for part in pending) >= BATCH_ROWS:
                     flush(writer)
             if pending:
@@ -246,10 +245,18 @@ def build_court_bulk_table(
                     f"{table.output}: the {edition} export names cluster {newest:,}, above the published "
                     f"{CLUSTERS_TABLE} (to {cluster_ceiling:,}); run run-rollup-court-opinion-clusters first"
                 )
-    except BaseException:
+    except BaseException as error:
+        if isinstance(error, Exception):
+            try:
+                record_source_failure(table.output.removesuffix('.parquet'), output_dir,
+                                       witnesses=[file_witness(local_file)], error=error)
+            except Exception as receipt_error:
+                error.add_note(f'Failed to retain source failure receipt: {receipt_error}')
         staging.unlink(missing_ok=True)
         raise
-    staging.replace(out_file)
+    out_file = finish_court_output(table.output.removesuffix('.parquet'), staging, output_dir,
+                                  witnesses=[file_witness(local_file), file_witness(staging)],
+                                  generation_id=generation_id)
     logger.info(
         "{}: {:,} rows from {} ({:.2f} GB of CSV, {} pieces)",
         table.output,
@@ -264,7 +271,7 @@ def build_court_bulk_table(
 def build_court_bulk_tables(
     tables: Sequence[BulkTable], output_dir: Path, *, dump_date: date | None = None
 ) -> tuple[Path, ...]:
-    """Build each table from the newest export that publishes all of them, deleting what it downloaded."""
+    """Build one complete edition and retain its source bytes and shared receipts."""
     from spicy_docs.sources.courtlistener.bulk import find_dump, list_bulk_dumps
 
     objects = list_bulk_dumps()
@@ -275,18 +282,16 @@ def build_court_bulk_tables(
         if ceiling is None:
             raise RuntimeError(f"CourtListener bulk: {CLUSTERS_TABLE} is not published; publish it before its children")
     built = []
+    generation_id = uuid4().hex
     for table in tables:
         published = find_dump(objects, table.dataset, edition)
         if published is None:
             raise RuntimeError(f"CourtListener bulk: no {table.dataset} export for {edition}")
-        local_file, downloaded = export_file(published, output_dir)
-        try:
-            built.append(
-                build_court_bulk_table(
-                    table, output_dir, local_file=local_file, dump_date=edition, cluster_ceiling=ceiling
-                )
+        local_file, _ = export_file(published, output_dir)
+        built.append(
+            build_court_bulk_table(
+                table, output_dir, local_file=local_file, dump_date=edition, cluster_ceiling=ceiling,
+                generation_id=generation_id,
             )
-        finally:
-            if downloaded:
-                local_file.unlink(missing_ok=True)
+        )
     return tuple(built)

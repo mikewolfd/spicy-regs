@@ -6,6 +6,8 @@
 
 One source recommendation or recommendation-status observation. Follow source recommendation text, status, responsible party and reported cost amounts. recommendation_key groups a supported native recommendation; record_id preserves each observed state without choosing a current one. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_oversight_recommendations'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled. Supported observations from retained oversight HTML recommendation tables. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
 
 - **Parquet file:** `fec_oversight_recommendations.parquet`
@@ -16,30 +18,16 @@ One source recommendation or recommendation-status observation. Follow source re
 | Column | Type | Description |
 | --- | --- | --- |
 | `record_id` | `VARCHAR` | Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event. |
-| `identity_version` | `VARCHAR` | Version of the source-observation identity rule; it does not select a current or canonical record. |
-| `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
-| `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
-| `source_record_id` | `VARCHAR` | Native source-observation key within collection_id. Resolve with the source generation, exact locator and source digest, not this value alone. |
-| `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
-| `source_locator_json` | `VARCHAR` | Exact source row or subrecord coordinates, including available member, ordinal, byte span and field-definition references. Resolve in the pinned source generation. |
-| `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
-| `selection_evidence_sha256` | `VARCHAR` | Digest of the retained selection evidence used to authorize this mapper's source scope; not a financial inclusion decision. |
-| `source_url` | `VARCHAR` | Captured source URL for this observation; it does not assert current availability or body retrieval. |
-| `observed_at` | `VARCHAR` | Recorded capture time when supplied, distinct from the source's event, report and publication dates. |
-| `subrecord_pointer` | `VARCHAR` | Exact child pointer within the source-owned native record, retaining repeated occurrences. |
 | `report_id` | `VARCHAR` | Key of the associated agency report edition. It does not merge different captures or schema editions by title. |
 | `recommendation_native_id` | `VARCHAR` | Literal recommendation identifier supplied by the oversight source. |
 | `recommendation_key` | `VARCHAR` | Stable source-qualified recommendation key when supplied; record_id still identifies this status observation. |
 | `recommendation_text` | `VARCHAR` | Exact recommendation wording retained from the oversight source. |
-| `significant_raw` | `VARCHAR` | Literal source significance flag for the recommendation, without imposing a new severity scale. |
 | `responsible_party` | `VARCHAR` | Source-named party responsible for the recommendation or corrective action. |
 | `reported_status` | `VARCHAR` | Status explicitly stated in the source, including cancellation where the meeting table reports it. |
 | `status_basis` | `VARCHAR` | Source text or structure establishing the recommendation status; not inferred from elapsed time. |
-| `status_date_raw` | `VARCHAR` | Date wording associated with the recommendation status as retained in the source, without inventing a normalized date. |
-| `attributes_json` | `VARCHAR` | Additional source-specific attributes retained without converting similarly named fields into shared meanings. |
-| `questioned_costs_raw` | `VARCHAR` | Literal source value before conversion for questioned_costs. Preserves spelling, signs and empty values; the typed value and its status are separate. |
-| `questioned_costs_status` | `VARCHAR` | Source-presence or conversion state for questioned_costs, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
-| `funds_for_better_use_raw` | `VARCHAR` | Literal source value before conversion for funds_for_better_use. Preserves spelling, signs and empty values; the typed value and its status are separate. |
-| `funds_for_better_use_status` | `VARCHAR` | Source-presence or conversion state for funds_for_better_use, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
 | `questioned_costs` | `DECIMAL(38,9)` | Exact decimal for the questioned costs stated by the oversight recommendation. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations. |
 | `funds_for_better_use` | `DECIMAL(38,9)` | Exact decimal for the funds-for-better-use amount stated by the oversight recommendation. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations. |
+| `significant` | `VARCHAR` | Whether the source marks this recommendation significant. |
+| `status_date` | `VARCHAR` | Date associated with the source-stated recommendation status. |
+| `report_number` | `VARCHAR` | Source-stated report number, not an independently qualified report match. |
+| `additional_details` | `VARCHAR` | Additional substantive details supplied by the publisher. |

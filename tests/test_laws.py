@@ -31,8 +31,12 @@ from spicy_docs.sources.govinfo.uslm import (
 )
 from spicy_docs.sources.govinfo.uslm_acquisition import UslmSourceUnavailableError
 from spicy_docs.sources.uscode import UsCodeSourceError, parse_table3_page, read_table3_bulk_archive
-from spicy_docs.sources.uscode.classification import parse_classification_index, parse_classification_table
-from spicy_docs.transport.captured import CapturedBodyResponse
+from spicy_docs.sources.uscode.classification import (
+    CLASSIFICATION_INDEX_URL,
+    parse_classification_index,
+    parse_classification_table,
+)
+from spicy_docs.transport.captured import CapturedBodyResponse, attach_capture
 from spicy_docs.transport.credentials import CredentialRefusedError
 
 from spicy_docs.schemas.law_tables import USLM_READER_VERSION, shape_table3_record
@@ -63,6 +67,10 @@ BULK_EXCERPT = (FIXTURES / "table3-bulk-119-73-excerpt.xml").read_bytes()
 OBSERVED_AT = "2026-09-19T00:00:00Z"
 #: The three listed rows plus the one law the USLM fixture states, as one page.
 LISTED_119 = [*LIST_PAGE["bills"], LAW_119_1]
+#: The public-law-order session tables the index fixture links, in its order: 119-2, then 119-1.
+PUBLIC_LAW_TABLES = [link.url for link in parse_classification_index(INDEX_BYTES).tables if link.order == "public-law"]
+#: What OLRC's keyless routes raise on a 401/403 (the transport's own wording).
+ACCESS_REFUSAL = "Body source answered HTTP 403; stopping acquisition"
 
 
 def _Capture(body: bytes, observed_at: str = OBSERVED_AT) -> CapturedBodyResponse:
@@ -90,17 +98,18 @@ class StubListingReader:
         return iter((_Page(listed, LIST_PAGE["pagination"]["count"]),)) if listed else iter(())
 
 
-def _not_found(url: str) -> CapturedBodyResponse:
-    return CapturedBodyResponse(url, url, 404, "text/html", OBSERVED_AT, b"")
+def _not_found(url: str, observed_at: str = OBSERVED_AT) -> CapturedBodyResponse:
+    return CapturedBodyResponse(url, url, 404, "text/html", observed_at, b"")
 
 
 class StubUslm:
     """Holds PLAW-119publ1 only; other numbers are unavailable, refused or absent as configured."""
 
-    def __init__(self, *, unavailable=(), refused=(), error=None):
+    def __init__(self, *, unavailable=(), refused=(), error=None, observed_at=OBSERVED_AT):
         self.unavailable = set(unavailable)
         self.refused = set(refused)
         self.error = error
+        self.observed_at = observed_at
         self.selections: list[PublicLawSelection] = []
 
     def acquire_public_law(self, selection, *, max_bytes=None):
@@ -108,12 +117,13 @@ class StubUslm:
         if self.error is not None:
             raise self.error
         if selection.number in self.unavailable:
-            raise UslmSourceUnavailableError(_not_found(public_law_xml_locator(selection)))
+            raise UslmSourceUnavailableError(_not_found(public_law_xml_locator(selection), self.observed_at))
         if selection.number in self.refused:
             raise UslmSourceError("stub: the body was not the expected shape")
         if selection == PublicLawSelection(119, "public", 1):
             meta = validate_public_law_xml(USLM_BYTES, selection=selection, final_url=public_law_xml_locator(selection))
-            return SimpleNamespace(metadata=meta, capture=_Capture(USLM_BYTES))
+            url = public_law_xml_locator(selection)
+            return SimpleNamespace(metadata=meta, capture=replace(_Capture(USLM_BYTES), requested_url=url, resolved_url=url))
         raise AssertionError(f"the stub holds no PLAW for {selection}")
 
 
@@ -130,15 +140,18 @@ class StubOlrc:
     """Serves the classification fixtures and one Table III bulk zip, read through the wheel's own bulk reader.
 
     ``bulk`` is the zip's member, or an exception every bulk read raises; ``member_name`` renames the member.
+    ``table_errors`` maps a ``(congress, session)`` to what its table read raises; only 119-2 has a fixture, so
+    any other session table is a transport failure, which journals nothing, unless mapped.
     """
 
     def __init__(self, *, bulk: bytes | Exception = BULK_EXCERPT, release_point="119-73", observed_at=OBSERVED_AT,
-                 index_error=None, member_name=None):
+                 index_error=None, table_errors=None, member_name=None):
         self.bulk = bulk
         self.release_point = release_point
         self.member_name = member_name
         self.observed_at = observed_at
         self.index_error = index_error
+        self.table_errors = table_errors or {}
         self.tables: list[tuple[int, int, str]] = []
         self.bulk_reads = 0
 
@@ -149,8 +162,10 @@ class StubOlrc:
 
     def acquire_classification_table(self, congress, session, *, order="public-law", max_bytes=None, max_rows=65536):
         self.tables.append((congress, session, order))
+        if (congress, session) in self.table_errors:
+            raise self.table_errors[congress, session]
         if (congress, session) != (119, 2):
-            raise UsCodeSourceError("stub: not captured")
+            raise ConnectionError("stub: not captured")
         table = parse_classification_table(TABLE_BYTES, congress=congress, session=session, order=order)
         return SimpleNamespace(result=table, capture=_Capture(TABLE_BYTES))
 
@@ -188,7 +203,7 @@ def _build(tmp_path, *, reader=None, uslm=None, olrc=None, **kw):
 
 def test_a_cold_start_publishes_every_listed_law_with_its_uslm_outcome(tmp_path, scoped):
     uslm = StubUslm(unavailable={110, 109, 104})
-    laws, _, _ = _build(tmp_path, uslm=uslm)
+    laws, _, _, _ = _build(tmp_path, uslm=uslm)
 
     # Newest first, every listed law asked about, none twice.
     assert [s.number for s in uslm.selections] == [110, 109, 104, 1]
@@ -207,10 +222,10 @@ def test_a_cold_start_publishes_every_listed_law_with_its_uslm_outcome(tmp_path,
 
 def test_the_classification_leg_reads_the_public_law_order_the_index_links(tmp_path, scoped):
     olrc = StubOlrc()
-    _, sections, _ = _build(tmp_path, olrc=olrc)
+    _, sections, _, _ = _build(tmp_path, olrc=olrc)
 
     # The index links both sessions of the 119th in both orders; only the
-    # public-law order is asked for, and the 1st session's refusal is that
+    # public-law order is asked for, and the 1st session's failure is that
     # table's gap, not the run's.
     assert olrc.tables == [(119, 2, "public-law"), (119, 1, "public-law")]
     rows = _rows(sections)
@@ -227,7 +242,7 @@ def test_a_session_page_replaces_its_prior_rows_and_leaves_other_sessions(tmp_pa
         [{"congress": "119", "session": "2", "seq": str(i), "observed_at": "2026-09-01"} for i in range(20)]
         + [{"congress": "119", "session": "1", "seq": "0", "observed_at": "2026-09-01"}],
     )
-    _, sections, _ = _build(tmp_path)
+    _, sections, _, _ = _build(tmp_path)
     rows = _rows(sections)
     assert sum(1 for r in rows if r["session"] == "2") == 9, "the twenty stale positions are gone"
     assert sum(1 for r in rows if r["session"] == "1") == 1, "the session not read this run keeps its rows"
@@ -235,7 +250,7 @@ def test_a_session_page_replaces_its_prior_rows_and_leaves_other_sessions(tmp_pa
 
 def test_an_index_failure_reads_no_session_table_and_is_not_a_record(tmp_path, scoped):
     olrc = StubOlrc(index_error=ConnectionError("stub: timed out"))
-    _, sections, _ = _build(tmp_path, olrc=olrc)
+    _, sections, _, _ = _build(tmp_path, olrc=olrc)
     assert olrc.tables == [] and _rows(sections) == []
 
 
@@ -264,7 +279,7 @@ def _laws(tmp_path, *keys):
 def test_table_iii_is_one_bulk_read_for_every_congress_the_laws_table_holds(tmp_path, scoped):
     _laws(tmp_path, "118-2")
     olrc = StubOlrc()
-    _, _, table3 = _build(tmp_path, olrc=olrc)
+    _, _, table3, _ = _build(tmp_path, olrc=olrc)
 
     assert olrc.bulk_reads == 1
     rows = _rows(table3)
@@ -311,7 +326,7 @@ def test_a_fragment_s_own_volume_goes_with_its_records_and_seq_runs_through_the_
 
 
 def test_an_unchanged_bulk_derives_nothing(tmp_path, scoped):
-    _, _, first = _build(tmp_path)
+    _, _, first, _ = _build(tmp_path)
     published, checkpoints = _rows(first), read_checkpoints(first, "laws-table3")
     _again(tmp_path)
     olrc = StubOlrc(observed_at="2026-09-20T00:00:00Z")
@@ -349,11 +364,11 @@ def _rerun(tmp_path, olrc):
     """Publish the first run, then run ``olrc`` over it with evidence; the second run's journal and rows."""
     from spicy_regs.source_evidence import CaptureEvidence
 
-    _, _, first = _build(tmp_path)
+    _, _, first, _ = _build(tmp_path)
     before = (_rows(first), read_checkpoints(first, "laws-table3"))
     _again(tmp_path)
     evidence = CaptureEvidence(tmp_path, "laws")
-    _, _, table3 = _build(tmp_path, olrc=olrc, evidence=evidence)
+    _, _, table3, _ = _build(tmp_path, olrc=olrc, evidence=evidence)
     return before, (_rows(table3), read_checkpoints(table3, "laws-table3")), _journal(evidence)
 
 
@@ -415,7 +430,7 @@ def test_a_page_era_act_with_no_bulk_checkpoint_is_held_all_the_same(tmp_path, s
     seed(tmp_path, "table3_records", [{"act_key": "119-2", "seq": "0", "release_point": "119-73",
                                        "observed_at": "2026-09-01"}])
     evidence = CaptureEvidence(tmp_path, "laws")
-    _, _, table3 = _build(tmp_path, olrc=StubOlrc(release_point=release_point), evidence=evidence)
+    _, _, table3, _ = _build(tmp_path, olrc=StubOlrc(release_point=release_point), evidence=evidence)
     journal = _journal(evidence)
     held = "119-2" in {r["act_key"] for r in _rows(table3)}
     if retired is None:
@@ -432,7 +447,7 @@ def test_a_spicy_docs_release_string_derives_nothing_and_its_code_derives_again(
 
     from spicy_regs.transforms import build_laws as module
 
-    _, _, first = _build(tmp_path)
+    _, _, first, _ = _build(tmp_path)
     published = _rows(first)
     _again(tmp_path)
     if change == "release":
@@ -462,7 +477,7 @@ def test_a_congress_that_left_the_laws_scope_keeps_its_table_iii_rows_current(tm
 
 
 def test_a_failed_bulk_read_leaves_every_row_and_checkpoint_standing(tmp_path, scoped):
-    _, _, first = _build(tmp_path)
+    _, _, first, _ = _build(tmp_path)
     published, checkpoints = _rows(first), read_checkpoints(first, "laws-table3")
     _again(tmp_path)
     _build(tmp_path, olrc=StubOlrc(bulk=ConnectionError("stub: incomplete chunked read")))
@@ -508,7 +523,7 @@ def test_the_citation_reaches_congress_bills_from_a_law_the_run_captured(tmp_pat
 
     from spicy_regs.transforms.table_merge import merge_contract_table, prior_scratch_path
 
-    laws, _, _ = _build(tmp_path)
+    laws, _, _, _ = _build(tmp_path)
     assert _by_law(laws)["119-public-1"]["statutes_at_large_cite"] == "139 Stat. 3"
     # The published laws table is what the next congress_bills writer downloads.
     laws.rename(prior_scratch_path(tmp_path, "laws"))
@@ -523,12 +538,12 @@ def test_the_citation_reaches_congress_bills_from_a_law_the_run_captured(tmp_pat
     assert rows["119-s-307"]["statutes_at_large_cite"] is None, "119-110's PLAW lagged; nothing is guessed"
 
 
-def test_a_captured_law_is_not_re_read_unless_its_list_row_moved(tmp_path, scoped):
+def test_captured_metadata_without_text_is_read_and_failed_reads_keep_prior_metadata(tmp_path, scoped):
     seed(
         tmp_path,
         "laws",
         [
-            # Same update_date as the list row: left standing, not asked about.
+            # Same date, but sections have not been read: acquire once to populate them.
             {
                 "law_id": "119-public-1",
                 "congress": "119",
@@ -563,10 +578,10 @@ def test_a_captured_law_is_not_re_read_unless_its_list_row_moved(tmp_path, scope
         ],
     )
     uslm = StubUslm(unavailable={110, 109, 104})
-    laws, _, _ = _build(tmp_path, uslm=uslm)
-    assert [s.number for s in uslm.selections] == [110, 109, 104]
+    laws, _, _, _ = _build(tmp_path, uslm=uslm)
+    assert [s.number for s in uslm.selections] == [110, 109, 104, 1]
     rows = _by_law(laws)
-    assert rows["119-public-1"]["title"] == "the prior row", "no fresh row was written over the held one"
+    assert rows["119-public-1"]["law_text_outcome"] == "parsed"
     assert rows["119-public-1"]["statutes_at_large_cite"] == "139 Stat. 3"
     # The failed reread does not erase its previously validated native body.
     assert rows["119-public-109"]["uslm_outcome"] == "captured"
@@ -591,7 +606,7 @@ def test_the_cap_leaves_held_rows_standing_and_lists_the_rest_as_not_requested(t
         ],
     )
     uslm = StubUslm()
-    laws, _, _ = _build(tmp_path, uslm=uslm, max_uslm=0)
+    laws, _, _, _ = _build(tmp_path, uslm=uslm, max_uslm=0)
     assert uslm.selections == []
     rows = _by_law(laws)
     assert (
@@ -603,7 +618,7 @@ def test_the_cap_leaves_held_rows_standing_and_lists_the_rest_as_not_requested(t
 
 def test_a_transport_failure_or_refused_body_is_never_published_as_absence(tmp_path, scoped):
     uslm = StubUslm(unavailable={110, 109}, refused={104, 1})
-    laws, _, _ = _build(tmp_path, uslm=uslm)
+    laws, _, _, _ = _build(tmp_path, uslm=uslm)
     rows = _by_law(laws)
     assert rows["119-public-110"]["uslm_outcome"] == "unavailable"
     assert rows["119-public-104"]["uslm_outcome"] == "request_failed"
@@ -618,10 +633,224 @@ def test_a_credential_refusal_aborts_the_run(tmp_path, scoped):
         _build(tmp_path, uslm=StubUslm(error=CredentialRefusedError("stub: 403")))
 
 
+def test_an_unavailable_read_carries_the_time_its_locator_answered_404(tmp_path, scoped):
+    """The 404 is an observation with a time; a reader judges the row's staleness by it, not by guessing."""
+    laws, _, _, _ = _build(tmp_path, uslm=StubUslm(unavailable={110, 109, 104}, observed_at="2026-10-01T01:42:35Z"))
+    rows = _by_law(laws)
+    for law_id in ("119-public-110", "119-public-109", "119-public-104"):
+        row = rows[law_id]
+        assert (row["uslm_outcome"], row["uslm_reason"]) == ("unavailable", "source_unavailable")
+        assert row["uslm_observed_at"] == "2026-10-01T01:42:35Z"
+        assert row["uslm_sha256"] is None and row["law_text_url"] is None, "a 404 validated no bytes and no text read"
+
+
+def test_a_held_unavailable_row_re_read_later_carries_the_newer_stamp(tmp_path, scoped):
+    seed(tmp_path, "laws", [{
+        "law_id": "119-public-110", "congress": "119", "law_type": "public", "number": "110",
+        "update_date": LIST_PAGE["bills"][0]["updateDate"], "uslm_outcome": "unavailable",
+        "uslm_reason": "source_unavailable", "uslm_observed_at": "2026-09-01T00:00:00Z",
+    }])
+    laws, _, _, _ = _build(tmp_path, uslm=StubUslm(unavailable={110, 109, 104}, observed_at="2026-09-20T00:00:00Z"))
+    row = _by_law(laws)["119-public-110"]
+    assert (row["uslm_outcome"], row["uslm_observed_at"]) == ("unavailable", "2026-09-20T00:00:00Z")
+
+
+def test_a_failed_read_with_a_captured_response_keeps_its_time_and_no_digest(tmp_path, scoped):
+    """A 503 established nothing about the file, so no digest; it is still an attempt at a stated time."""
+    error = UslmSourceError("stub: upstream answered 503")
+    attach_capture(error, CapturedBodyResponse("https://stub.invalid/", "https://stub.invalid/", 503, "text/html",
+                                               "2026-10-01T02:00:00Z", b"busy"))
+    laws, _, _, _ = _build(tmp_path, uslm=StubUslm(error=error))
+    for row in _by_law(laws).values():
+        assert (row["uslm_outcome"], row["uslm_reason"]) == ("request_failed", "request_failed")
+        assert row["uslm_observed_at"] == "2026-10-01T02:00:00Z" and row["uslm_sha256"] is None
+
+
+def test_an_access_refusal_on_table_iii_publishes_the_rest_and_journals_it(tmp_path, scoped):
+    """OLRC's routes are keyless, so its 401/403 is a blocked read, not a revoked credential: the laws family still
+    publishes, Table III stands, and the refusal is what ``check_source_refusals.py`` fails on the next night."""
+    before, after, journal = _rerun(tmp_path, StubOlrc(bulk=CredentialRefusedError("stub: Body source answered HTTP 403")))
+    assert after == before, "every Table III row and checkpoint stands"
+    assert _by_law(tmp_path / "laws.parquet")["119-public-1"]["uslm_outcome"] == "captured"
+    (refused,) = (e for e in journal if e["event"] == "table3-bulk-refused")
+    assert refused["reason"] == "access-refused" and refused["error_type"] == "CredentialRefusedError"
+    (refusal,) = (e for e in journal if e["event"] == "refusal" and e["stage"] == "table3:bulk")
+    assert refusal["credential_refused"] is True
+
+
+#: law_code_sections as the last clean read left it: both sessions, stamped 2026-09-30.
+HELD_SECTIONS = [{"congress": "119", "session": session, "seq": str(seq), "observed_at": "2026-09-30T01:34:14Z"}
+                 for session in ("1", "2") for seq in range(2)]
+
+
+#: What uscode.house.gov answered with status 200 on 2026-10-02 and -03, for the classification index and (by the
+#: 07:35Z audit) a session table: house.gov's "Under Maintenance" page, cut to its title, heading and notice (run
+#: 37105584505 retained the whole page as ``bd7439d9…``).
+MAINTENANCE_PAGE = (
+    b'<html lang="en" dir="ltr" class=" js"><head>\n    <meta charset="utf-8">\n    <title>Under Maintenance</title>\n'
+    b"  </head>\n  <body>\n  <div><h1>Site is currently under maintenance</h1>\n"
+    b"\t\t<p>The  site you requested is currently unavailable.</p>\n</div>\n</body></html>\n"
+)
+
+
+def _maintenance_refusal() -> UsCodeSourceError:
+    """The reader refusing the maintenance page served for the index, its capture attached as the acquirer does."""
+    page = CapturedBodyResponse(CLASSIFICATION_INDEX_URL, CLASSIFICATION_INDEX_URL, 200, "text/html; charset=utf-8",
+                                "2026-10-03T07:12:52.671902Z", MAINTENANCE_PAGE)
+    try:
+        parse_classification_index(page.body)
+    except UsCodeSourceError as error:
+        attach_capture(error, page)
+        return error
+    raise AssertionError("the reader read a maintenance page as the classification index")
+
+
+def _classification_run(tmp_path, olrc):
+    """Run ``olrc`` with evidence over a published law_code_sections holding both sessions: its rows and journal."""
+    from spicy_regs.source_evidence import CaptureEvidence
+
+    seed(tmp_path, "law_code_sections", HELD_SECTIONS)
+    evidence = CaptureEvidence(tmp_path, "laws")
+    _, sections, _, _ = _build(tmp_path, olrc=olrc, evidence=evidence)
+    return _rows(sections), _journal(evidence)
+
+
+def _held(rows, session="") -> set[tuple[str, str, str]]:
+    return {(r["session"], r["seq"], r["observed_at"]) for r in rows if r["session"].startswith(session)}
+
+
+@pytest.mark.parametrize(
+    ("index_error", "table_errors", "refused"),
+    [
+        (CredentialRefusedError(ACCESS_REFUSAL), None, [CLASSIFICATION_INDEX_URL]),
+        (None, {(119, 1): CredentialRefusedError(ACCESS_REFUSAL), (119, 2): CredentialRefusedError(ACCESS_REFUSAL)},
+         PUBLIC_LAW_TABLES),
+    ],
+    ids=["index", "every-session-table"],
+)
+def test_an_access_refusal_on_the_classification_leg_publishes_the_rest_and_journals_it(
+    tmp_path, scoped, index_error, table_errors, refused
+):
+    """The classification route is keyless like Table III's, so its 401/403 is a blocked read: every held
+    law_code_sections row stands, the family publishes, and each refused request is journaled by URL and time."""
+    rows, journal = _classification_run(tmp_path, StubOlrc(index_error=index_error, table_errors=table_errors))
+    assert _held(rows) == _held(HELD_SECTIONS), "every held row stands"
+    assert _by_law(tmp_path / "laws.parquet")["119-public-1"]["uslm_outcome"] == "captured"
+    (event,) = (e for e in journal if e["event"] == "classification-refused")
+    assert event["read"] == [] and [request["url"] for request in event["refused"]] == refused
+    for request in event["refused"]:
+        assert (request["reason"], request["error_type"]) == ("access-refused", "CredentialRefusedError")
+        assert request["message"] == ACCESS_REFUSAL and request["observed_at"]
+
+
+@pytest.mark.parametrize(
+    ("status", "index", "refused", "table3_reason", "blocked"),
+    [
+        (200, None, {CLASSIFICATION_INDEX_URL: "classification index does not state the expected title"},
+         "file-refused", []),
+        (200, INDEX_BYTES, dict.fromkeys(PUBLIC_LAW_TABLES, "classification table page states no table heading"),
+         "file-refused", []),
+        (403, None, {CLASSIFICATION_INDEX_URL: ACCESS_REFUSAL}, "access-refused", ["the classification tables",
+                                                                                   "Table III"]),
+    ],
+    ids=["maintenance-page-everywhere", "maintenance-page-for-the-session-tables", "403-everywhere"],
+)
+def test_olrc_s_maintenance_page_or_403_through_the_real_acquirer_is_refused_and_journaled(
+    tmp_path, scoped, status, index, refused, table3_reason, blocked
+):
+    """The publisher's states on 2026-10-02 and -03, through spicy-docs' own acquirer and readers: tables.shtml and
+    tbl119pl_2nd.htm answering 200 with a maintenance page (07:35Z audit), and the bulk zip answering 403.
+
+    A 200 that is not the page asked for is refused, never read as an empty table or a success: the classification
+    reader refuses it by its title or caption, so every held law_code_sections row stands and each refused request
+    is journaled with its URL, status, time and retained bytes, and the bulk leg refuses it by its media type. Only
+    the 403 is a blocked read that fails the run.
+    """
+    from spicy_regs.pipelines.rollups import laws as rollup
+    from spicy_regs.source_evidence import CaptureEvidence
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        if index is not None and str(request.url) == CLASSIFICATION_INDEX_URL:
+            return httpx.Response(200, headers={"Content-Type": "text/html"}, stream=httpx.ByteStream(index))
+        return httpx.Response(status, headers={"Content-Type": "text/html; charset=utf-8"},
+                              stream=httpx.ByteStream(MAINTENANCE_PAGE))
+
+    seed(tmp_path, "law_code_sections", HELD_SECTIONS)
+    evidence = CaptureEvidence(tmp_path, "laws")
+    unpaced = replace(OLRC_BUDGET, min_request_interval_seconds=0.0)
+    with olrc_acquirer(httpx.MockTransport(answer), budget=unpaced) as olrc:
+        _, sections, _, _ = _build(tmp_path, olrc=olrc, evidence=evidence)
+    assert _held(_rows(sections)) == _held(HELD_SECTIONS), "every held row stands"
+    journal = _journal(evidence)
+    (event,) = (e for e in journal if e["event"] == "classification-refused")
+    assert event["read"] == [] and {r["url"]: r["message"] for r in event["refused"]} == refused
+    for request in event["refused"]:
+        assert request["observed_at"]
+        if status == 200:
+            assert (request["reason"], request["status_code"]) == ("page-refused", 200)
+            assert request["sha256"] == "sha256:" + hashlib.sha256(MAINTENANCE_PAGE).hexdigest()
+        else:
+            assert request["reason"] == "access-refused" and "status_code" not in request
+    (bulk,) = (e for e in journal if e["event"] == "table3-bulk-refused")
+    assert bulk["reason"] == table3_reason
+    assert rollup.olrc_access_refused(evidence) == blocked
+
+
+def test_an_access_refusal_on_some_classification_requests_keeps_the_rest_of_the_leg(tmp_path, scoped):
+    """A 401/403 on one session table is that session's gap: the other session is read and replaced, the refused
+    one's rows stand, and the journal says which was which."""
+    rows, journal = _classification_run(
+        tmp_path, StubOlrc(table_errors={(119, 1): CredentialRefusedError(ACCESS_REFUSAL)})
+    )
+    assert _held(rows, "1") == _held(HELD_SECTIONS, "1"), "the refused session's rows stand"
+    assert {r["observed_at"] for r in rows if r["session"] == "2"} == {OBSERVED_AT}, "the read session is replaced"
+    (event,) = (e for e in journal if e["event"] == "classification-refused")
+    assert event["read"] == PUBLIC_LAW_TABLES[:1]
+    assert [(r["url"], r["reason"]) for r in event["refused"]] == [(PUBLIC_LAW_TABLES[1], "access-refused")]
+
+
+@pytest.mark.parametrize(
+    ("olrc", "blocked"),
+    [
+        (lambda: StubOlrc(bulk=CredentialRefusedError(ACCESS_REFUSAL)), ["Table III"]),
+        (lambda: StubOlrc(index_error=CredentialRefusedError(ACCESS_REFUSAL)), ["the classification tables"]),
+        (lambda: StubOlrc(index_error=CredentialRefusedError(ACCESS_REFUSAL),
+                          bulk=CredentialRefusedError(ACCESS_REFUSAL)), ["the classification tables", "Table III"]),
+        (lambda: StubOlrc(table_errors={(119, 1): CredentialRefusedError(ACCESS_REFUSAL)}), []),
+        (lambda: StubOlrc(index_error=_maintenance_refusal()), []),
+        (StubOlrc, []),
+    ],
+    ids=["table-iii", "classification", "both", "some-classification-requests", "maintenance-page", "clean"],
+)
+def test_the_laws_rollup_publishes_then_fails_the_run_on_an_olrc_access_refusal(
+    tmp_path, scoped, monkeypatch, olrc, blocked
+):
+    """The predicate reads the run's own journal, and the rollup raises only after ``run`` has published. A read the
+    publisher blocked fails the run; a refusal on only some classification requests, or a page the reader refused,
+    is journaled for the nightly check and does not."""
+    from spicy_regs.pipelines.rollups import laws as rollup
+    from spicy_regs.source_evidence import CaptureEvidence
+
+    evidence = CaptureEvidence(tmp_path, "laws")
+    _build(tmp_path, olrc=olrc(), evidence=evidence)
+    assert rollup.olrc_access_refused(evidence) == blocked
+
+    published = []
+    monkeypatch.setattr(rollup.LegislativeReceiptRollup, "run", lambda self: published.append(self.name))
+    pipeline = rollup.LawsRollup(output_dir=tmp_path, skip_upload=True)
+    pipeline.source_evidence = evidence
+    if blocked:
+        with pytest.raises(RuntimeError, match=" and ".join(blocked)):
+            pipeline.run()
+    else:
+        pipeline.run()
+    assert published == ["laws"], "the family went out before the run failed"
+
+
 def test_the_published_shapes_are_the_contracts(tmp_path, scoped):
     from spicy_docs.schemas import TABLE_CONTRACTS
 
-    for name, path in zip(("laws", "law_code_sections", "table3_records"), _build(tmp_path), strict=True):
+    for name, path in zip(("laws", "law_code_sections", "table3_records", "law_sections"), _build(tmp_path), strict=True):
         assert path.name == f"{name}.parquet"
         assert pq.read_table(path).schema.names == list(TABLE_CONTRACTS[name].columns)
 
@@ -640,7 +869,8 @@ def test_private_law_read_is_partial_and_stands_under_the_current_rule(tmp_path,
     class Source:
         def acquire_public_law(self, selection, *, max_bytes=None):
             asked.append(selection)
-            return SimpleNamespace(metadata=meta, capture=_Capture(body))
+            url = public_law_xml_locator(selection)
+            return SimpleNamespace(metadata=meta, capture=replace(_Capture(body), requested_url=url, resolved_url=url))
 
     law = {"number": f"119-{number}", "type": "Private Law"}
     plain = shape_law(LAW_119_1, law)
@@ -652,7 +882,8 @@ def test_private_law_read_is_partial_and_stands_under_the_current_rule(tmp_path,
     assert rows[0]["uslm_sha256"] == _Capture(body).sha256
     assert json.loads(rows[0]["uslm_citable_as_json"]) == [f"Private Law 119–{number}"]
 
-    current = {str(plain["law_id"]): HeldLaw(plain["update_date"], "captured_partial", USLM_READER_VERSION)}
+    current = {str(plain["law_id"]): HeldLaw(plain["update_date"], "captured_partial", USLM_READER_VERSION,
+                                          "parsed", rows[0]["law_text_reader_version"])}
     assert _law_rows([(LAW_119_1, law, plain)], current, Source(), PerRunCap(1, "test")) == []
     assert len(asked) == 1, "an unchanged partial read under the current rule is not asked again"
 
@@ -734,3 +965,34 @@ def test_metadata_the_contract_refuses_is_captured_refused_without_its_fields(sc
     row = _uslm_row(Source(), LAW_119_1, law, shape_law(LAW_119_1, law))
     assert (row["uslm_outcome"], row["uslm_reason"]) == ("captured_refused", "contract_refused")
     assert row["uslm_title"] is None and row["statutes_at_large_cite"] is None
+
+
+def test_held_classification_rows_take_the_bare_key_and_place_from_their_stored_columns(tmp_path, scoped):
+    """M7 (round 6): both OLRC tables key the bare section and state its place, re-derived each run from the stored
+    usc_section (and law_code_sections' action), so held rows are corrected without waiting for OLRC, which served
+    maintenance pages on 2026-10-02 and -03. The rows are published ones (laws generation of 2026-10-03)."""
+    held = {"congress": "119", "session": "1", "observed_at": "2026-09-19T00:00:00Z"}
+    seed(tmp_path, "law_code_sections", [
+        {**held, "seq": "0", "law_id": "119-public-1", "usc_title": "8", "usc_section": "1101", "action": "nt new",
+         "usc_section_key": "1101"},
+        {**held, "seq": "16", "law_id": "119-public-4", "usc_title": "5", "usc_section": "5301", "action": "prec",
+         "usc_section_key": "5301"},
+        {**held, "seq": "820", "law_id": "119-public-37", "usc_title": "38", "usc_section": "5701",
+         "action": "nt prec new", "usc_section_key": "5701"},
+    ])
+    seed(tmp_path, "table3_records", [
+        {"act_key": act, "seq": seq, "congress": "119", "usc_title": title, "usc_section": section,
+         "usc_section_key": section}
+        for act, seq, title, section in (("119-1", "0", "8", "1101 nt"), ("119-21", "193", "26", "prec. 211"),
+                                         ("119-60", "1199", "50", "2538a nts"), ("119-37", "34", "38", "nt. prec. 5701"),
+                                         ("119-60", "7", "10", "13, 13a"))
+    ])
+    _, sections, table3, _ = _build(tmp_path, olrc=StubOlrc(bulk=ConnectionError("stub: maintenance")))
+    placed = {r["seq"]: (r["usc_section_key"], r["usc_place"]) for r in _rows(sections) if r["session"] == "1"}
+    assert placed == {"0": ("1101", "note"), "16": ("5301", "preceding"), "820": ("5701", "note_preceding")}
+    assert all(r["usc_place"] is not None for r in _rows(sections) if r["session"] == "2"), "fresh rows too"
+    assert {(r["act_key"], r["seq"]): (r["usc_section_key"], r["usc_place"]) for r in _rows(table3)} == {
+        ("119-1", "0"): ("1101", "note"), ("119-21", "193"): ("211", "preceding"),
+        ("119-60", "1199"): ("2538a", "note"), ("119-37", "34"): ("5701", "note_preceding"),
+        ("119-60", "7"): (None, None),  # a list names no single section
+    }

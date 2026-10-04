@@ -9,7 +9,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from spicy_regs.sources.publication import empty_index, parse_index, table_descriptor, table_members
+from spicy_regs.sources.publication import empty_index, parse_index, table_descriptor, table_members, receipt_members, table_owner
 
 _NAME = re.compile(r"[a-z][a-z0-9_-]*\Z")
 
@@ -27,9 +27,29 @@ class LocalSelection:
     is_download: bool
     split: dict[str, tuple[Path, ...]] = field(default_factory=dict)
 
+    @property
+    def receipts(self):
+        return {member.path: self.directory / receipt_local_key(member)
+                for member in selected_receipt_members(self.publication, self.files)}
+
     def paths(self, name: str) -> tuple[Path, ...]:
         """Every local file of table ``name``: a split table's members in index order, else its one file."""
         return self.split.get(name) or (self.files[name][0],)
+
+
+def receipt_local_key(member):
+    """Family and generation stay in the local key, avoiding shared-name collisions."""
+    return Path(".etl-receipts") / member.path
+
+
+def selected_receipt_members(index, selected):
+    members = {}
+    for name in selected:
+        owner = table_owner(index, name + ".parquet")
+        if owner and "etlReceipts" in owner[1]:
+            for member in receipt_members(index, dataset=name):
+                members[member.path] = member
+    return tuple(members.values())
 
 
 def selection_record(index: Mapping, name: str) -> dict:
@@ -98,7 +118,10 @@ def local_selection(output_dir: Path, *, include_legacy: bool = False) -> LocalS
         for path in sorted(root.glob("*.parquet")):
             if _NAME.fullmatch(path.stem) and path.is_file():
                 result.setdefault(path.stem, (path.resolve(), "legacy-unversioned"))
-    return LocalSelection(directory, result, index, is_download, split)
+    selection = LocalSelection(directory, result, index, is_download, split)
+    for path in selection.receipts.values():
+        file_signature(path)
+    return selection
 
 
 def _assert_exactly(directory: Path, files: tuple[Path, ...]) -> None:
@@ -137,6 +160,16 @@ def verify_local_members(selection: LocalSelection) -> dict[str, list[int]]:
             if file_signature(path) != before:
                 raise RuntimeError(f"Local download member changed during verification: {name}")
             signatures[str(path)] = before
+    for member in selected_receipt_members(selection.publication, selection.files):
+        path = selection.receipts[member.path]
+        before = file_signature(path)
+        with path.open("rb") as stream:
+            digest = "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest()
+        if before[2] != member.byte_size or digest != member.sha256:
+            raise RuntimeError("Local receipt member differs from its generation pin")
+        if file_signature(path) != before:
+            raise RuntimeError("Local receipt member changed during verification")
+        signatures[str(path)] = before
     return signatures
 
 

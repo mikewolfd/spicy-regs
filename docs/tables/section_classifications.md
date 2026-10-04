@@ -6,6 +6,8 @@
 
 One row per label a model assigned to one section of one printing. `vocabulary_hash` is a digest over the sealed label list, so a vocabulary change is visible in the data rather than silently reinterpreting old rows. All columns are stored as VARCHAR.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='section_classifications'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled: written by a language model during bill-family runs; a run without model calls enabled cannot fill it. *(measured 2026-09-28)*
 
 - **Parquet file:** `section_classifications.parquet`
@@ -17,16 +19,8 @@ One row per label a model assigned to one section of one printing. `vocabulary_h
 | --- | --- | --- |
 | `bill_id` | `VARCHAR` | The bill whose section was classified. |
 | `version_code` | `VARCHAR` | The printing whose section was classified. |
-| `source` | `VARCHAR` | Which acquisition path supplied that printing; without it an XML row and its PDF twin collide. |
-| `seq` | `VARCHAR` | The classified section's bill_sections seq, its key within the printing. |
-| `match_path` | `VARCHAR` | The section's normalized cross-version key, unit-separator joined. |
-| `body_index` | `VARCHAR` | Which body element the section came from. |
+| `printing_id` | `VARCHAR` | Which acquisition path supplied that printing; without it an XML row and its PDF twin collide. |
+| `seq` | `BIGINT` | The classified section's bill_sections seq, its key within the printing. |
+| `match_path` | `VARCHAR[]` | The section's normalized cross-version key, unit-separator joined. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `body_index` | `BIGINT` | Which body element the section came from. |
 | `label` | `VARCHAR` | One of the five sealed classification labels. |
-| `confidence` | `VARCHAR` | The model's own confidence, checked to be between 0 and 1 before it was stored. |
-| `model` | `VARCHAR` | The model id the call was made against. |
-| `prompt_version` | `VARCHAR` | The prompt version the label was produced under. |
-| `prompt_hash` | `VARCHAR` | Digest of the exact prompt sent, spelled sha256: plus the hex digest, so a prompt edit is visible per row. |
-| `batch_index` | `VARCHAR` | Which batch of the run this section belonged to. |
-| `requested_at` | `VARCHAR` | When the call was made. |
-| `completed_at` | `VARCHAR` | When the answer came back; the merge prefers the larger value. |
-| `vocabulary_hash` | `VARCHAR` | Digest over the sealed label table, so a vocabulary change is visible in the data. |

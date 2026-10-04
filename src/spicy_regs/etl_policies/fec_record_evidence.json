@@ -1,0 +1,26 @@
+{
+  "dataset": "fec_record_evidence",
+  "policy_version": "fec-identity-context-receipts/1",
+  "subject_schema": "/////zAAAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAAAAAA=",
+  "identity_fields": [],
+  "receipt_fields": [
+    "target_table",
+    "target_record_id",
+    "target_generation_scope",
+    "witness_generation_scope",
+    "witness_generation_pin",
+    "role",
+    "endpoint_kind",
+    "collection_id",
+    "source_record_id",
+    "context_column",
+    "context_pointer",
+    "witness_sha256",
+    "witness_locator_json",
+    "conversion_inputs",
+    "conversion_diagnostics",
+    "source_input"
+  ],
+  "receipt_only": true,
+  "nullable_identity_fields": []
+}

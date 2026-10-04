@@ -1374,17 +1374,8 @@ tables:
       months apart (`b-331093` and `b-331093-0`). `listing_page` names the
       retained listing page that listed it, which the run keeps as evidence. A
       later walk refreshes the rows it lists; a run without one carries the
-      table forward. All columns are stored as VARCHAR.
-    columns:
-      decision_number: "The decision's number as GAO's listing spells it, suffixes and all (`B-424129.2`, `B-423916.2,B-423916.3`, `B-235577.2-O.M.`, a docket `2020-02`). With `url`, the key."
-      b_numbers_json: "JSON array of the B-numbers in `decision_number`, split on commas and semicolons; a fragment GAO cut mid-number is left out. `[]` for a docket- or P-numbered decision."
-      decision_type: "GAO's label for the decision (e.g. `Bid Protest Decision`, `Appropriations Decision`, `Legal Other Decision`)."
-      title: "The decision's heading as GAO's listing states it: the protester or the question decided."
-      decision_date: "The listing's \"Publicly Released\" date (its \"Published\" date where it states no release) as an ISO date string. Sort key."
-      topics_json: "JSON array of GAO's headings the decision was listed under, in listed order."
-      url: "The decision's gao.gov page, as the listing links it (percent-encoded where GAO encodes it). With `decision_number`, the key."
-      listing_page: "The first retained Month in Review or Annual Index page that listed the decision, the evidence a reader can open."
-      source: "The route that supplied the row: `gao_listing` (GAO's own Month in Review and Annual Index)."
+      table forward. Native lists retain ordered business values; processing evidence lives in the shared ETL receipts.
+    columns_from: spicy_docs
   crs_reports:
     identity_columns: [report_id]
     label: "Congressional Research Service reports"
@@ -2705,6 +2696,13 @@ tables:
       `bill_id` is the foreign key to `congress_bills`, whose
       `statutes_at_large_cite` the host fills from this table at that table's
       merge. All columns are stored as VARCHAR.
+    columns_from: spicy_docs
+
+  law_sections:
+    label: Law sections
+    summary: Sections of public and private laws, preserving native section identity and hierarchy.
+    coverage: "Not a range: depends on captured law editions; no complete law coverage is asserted."
+    measured_on: 2026-10-03
     columns_from: spicy_docs
 
   law_code_sections:

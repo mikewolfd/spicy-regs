@@ -9,19 +9,21 @@ shrink-guarded R2 upload of the single output.
 from pathlib import Path
 from typing import ClassVar
 
-from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
+from spicy_regs.pipelines.rollups.base import make_rollup_app
+from spicy_regs.pipelines.rollups.government import GovernmentReceiptRollup
 from spicy_regs.transforms import build_fcc_proceedings
 
 
-class FccProceedingsRollup(RollupPipeline):
+class FccProceedingsRollup(GovernmentReceiptRollup):
     """FCC proceedings (docket equivalents) ingested from ECFS (api.data.gov key)."""
 
     name: ClassVar[str] = "fcc-proceedings"
+    retain_source_evidence: ClassVar[bool] = True
     inputs: ClassVar[tuple[str, ...]] = ()
     output: ClassVar[str] = "fcc_proceedings.parquet"
 
     def build(self, output_dir: Path) -> Path:
-        return build_fcc_proceedings(output_dir)
+        return build_fcc_proceedings(output_dir, evidence=self.source_evidence, receipt_generation_id=self.receipt_generation_id)
 
 
 app = make_rollup_app(FccProceedingsRollup)

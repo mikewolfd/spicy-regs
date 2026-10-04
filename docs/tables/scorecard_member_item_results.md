@@ -6,6 +6,8 @@
 
 One publisher-reported member result for an item, with optional source-stated metric participation. Metric-free grids require no fabricated measurement. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='scorecard_member_item_results'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled publisher editions selected by the scorecard source registry. Complete edition reads replace that edition; failed or incomplete reads preserve prior observations. Coverage varies by publisher and historical source format. *(measured 2026-10-03)*
 
 - **Parquet file:** `scorecard_member_item_results.parquet`
@@ -24,12 +26,8 @@ One publisher-reported member result for an item, with optional source-stated me
 | `action_text` | `VARCHAR` | Action as reported by the publisher, without substituting an official legislative record. |
 | `result_text` | `VARCHAR` | Publisher result glyph or text, preserving display decoding without inferring an official action. |
 | `contribution_text` | `VARCHAR` | Source-stated contribution, preserved as text; NULL when unstated. |
-| `contribution_number` | `VARCHAR` | Optional exact decimal text for a source-stated contribution. |
+| `contribution_number` | `DECIMAL(38,18)` | Optional exact decimal text for a source-stated contribution. |
 | `eligibility_text` | `VARCHAR` | Source-stated eligibility, preserved as text; NULL when unstated. |
-| `counts_toward_metric` | `VARCHAR` | Source-stated participation as true or false, or NULL when unstated. |
+| `counts_toward_metric` | `BOOLEAN` | Source-stated participation as true or false, or NULL when unstated. |
 | `adjustment_text` | `VARCHAR` | Source-stated adjustment, preserved as text; NULL when unstated. |
 | `reason_text` | `VARCHAR` | Source-stated reason, preserved as text; NULL when unstated. |
-| `snapshot_id` | `VARCHAR` | Opaque identity of the complete accepted edition capture and parse. |
-| `capture_id` | `VARCHAR` | Opaque caller-issued identity of the source observation supporting this row. |
-| `source_url` | `VARCHAR` | Original publisher URL supporting this observation. |
-| `source_path` | `VARCHAR` | Source locator within the captured response, such as cell, JSON path or PDF page. |

@@ -6,6 +6,8 @@
 
 One candidate result occurrence in a retained API response. Provides the captured candidate attributes without replacing candidate history or selecting a current profile. Arrays and native field states retain missing, NULL, empty and unsupported distinctions. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_candidate_api_observations'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled. Supported observations from retained candidate API results and literal native arrays. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
 
 - **Parquet file:** `fec_candidate_api_observations.parquet`
@@ -16,19 +18,6 @@ One candidate result occurrence in a retained API response. Provides the capture
 | Column | Type | Description |
 | --- | --- | --- |
 | `record_id` | `VARCHAR` | Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event. |
-| `identity_version` | `VARCHAR` | Version of the source-observation identity rule; it does not select a current or canonical record. |
-| `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
-| `mapping_status` | `VARCHAR` | Whether this source observation mapped fully, partially, or received an explicit nondata/refusal disposition; inspect the reason alongside NULL values. |
-| `mapping_reason_json` | `VARCHAR` | JSON object naming unsupported, missing or otherwise limited field interpretations; native values remain reachable through evidence. |
-| `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
-| `source_record_id` | `VARCHAR` | Native source-observation key within collection_id. Resolve with the source generation, exact locator and source digest, not this value alone. |
-| `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
-| `source_locator_json` | `VARCHAR` | Exact source row or subrecord coordinates, including available member, ordinal, byte span and field-definition references. Resolve in the pinned source generation. |
-| `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
-| `selection_evidence_sha256` | `VARCHAR` | Digest of the retained selection evidence used to authorize this mapper's source scope; not a financial inclusion decision. |
-| `source_representation_role` | `VARCHAR` | Selected source role such as snapshot, insertion or deletion. Amount signs and ordinary amendment flags do not establish correction applicability. |
-| `current_record_status` | `VARCHAR` | Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record. |
-| `source_namespace` | `VARCHAR` | Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent. |
 | `candidate_id` | `VARCHAR` | Literal FEC candidate identifier when the source reports one. Syntax checks do not prove identity resolution or a target match. |
 | `name` | `VARCHAR` | Candidate or committee name exactly as captured in this API/history observation; no cross-record name merge. |
 | `party` | `VARCHAR` | Source-reported political-party code or label within the native layout. |
@@ -40,19 +29,6 @@ One candidate result occurrence in a retained API response. Provides the capture
 | `candidate_status` | `VARCHAR` | Source-stated candidate status; does not select a current candidacy across captures. |
 | `incumbent_challenge` | `VARCHAR` | Source code for incumbent, challenger or open-seat status. |
 | `incumbent_challenge_full` | `VARCHAR` | Source-supplied expanded incumbent/challenger label. |
-| `cycles_json` | `VARCHAR` | Literal JSON array of cycles stated by the API, retaining missing, NULL and empty distinctions. |
-| `cycles_status` | `VARCHAR` | Source array state for cycles: source_missing, source_null, source_empty, reported or unsupported_array; arrays are independent and preserve order. |
-| `election_years_json` | `VARCHAR` | Literal JSON array of election years supplied for this candidate observation. |
-| `election_years_status` | `VARCHAR` | Source array state for election_years: source_missing, source_null, source_empty, reported or unsupported_array; arrays are independent and preserve order. |
-| `election_districts_json` | `VARCHAR` | Literal JSON array of election district values supplied for this candidate observation. |
-| `election_districts_status` | `VARCHAR` | Source array state for election_districts: source_missing, source_null, source_empty, reported or unsupported_array; arrays are independent and preserve order. |
-| `inactive_election_years_json` | `VARCHAR` | Literal JSON array of inactive election years supplied by the API. |
-| `inactive_election_years_status` | `VARCHAR` | Source array state for inactive_election_years: source_missing, source_null, source_empty, reported or unsupported_array; arrays are independent and preserve order. |
-| `source_url` | `VARCHAR` | Captured source URL for this observation; it does not assert current availability or body retrieval. |
-| `source_pointer` | `VARCHAR` | Exact pointer within the provider-owned native record to the mapped value or metadata object. |
-| `original_result_pointer` | `VARCHAR` | Original API results-array pointer retained separately from the provider wrapper's pointer. |
-| `candidate_id_status` | `VARCHAR` | State or syntax check of the reported candidate ID; a valid shape is not a resolved identity. |
-| `query_completeness` | `VARCHAR` | Whether complete traversal of the stated source query was established. A retained page or rejected response is not a completed query. |
 | `active_through` | `INTEGER` | Last active year reported by the source; not an inferred termination date. |
 | `candidate_inactive` | `BOOLEAN` | Source-reported candidate inactive flag. NULL indicates missing or unsupported source value. |
 | `has_raised_funds` | `BOOLEAN` | Source-reported fundraising flag; it is not a computed total or complete-history assertion. |
@@ -60,18 +36,8 @@ One candidate result occurrence in a retained API response. Provides the capture
 | `first_file_date` | `DATE` | First filing date as reported in this source observation, not independently reconstructed history. |
 | `last_file_date` | `DATE` | Last filing date as reported in this source observation; later filings may exist. |
 | `last_f2_date` | `DATE` | Last Form 2 date reported by the source, without a completeness assertion. |
-| `active_through_raw` | `VARCHAR` | Literal source value for active_through before conversion; consult active_through_status for interpretation. |
-| `active_through_status` | `VARCHAR` | Interpretation of source active_through: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
-| `candidate_inactive_raw` | `VARCHAR` | Literal source value for candidate_inactive before conversion; consult candidate_inactive_status for interpretation. |
-| `candidate_inactive_status` | `VARCHAR` | Interpretation of source candidate_inactive: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
-| `has_raised_funds_raw` | `VARCHAR` | Literal source value for has_raised_funds before conversion; consult has_raised_funds_status for interpretation. |
-| `has_raised_funds_status` | `VARCHAR` | Interpretation of source has_raised_funds: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
-| `federal_funds_flag_raw` | `VARCHAR` | Literal source value for federal_funds_flag before conversion; consult federal_funds_flag_status for interpretation. |
-| `federal_funds_flag_status` | `VARCHAR` | Interpretation of source federal_funds_flag: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
-| `first_file_date_raw` | `VARCHAR` | Literal source value for first_file_date before conversion; consult first_file_date_status for interpretation. |
-| `first_file_date_status` | `VARCHAR` | Interpretation of source first_file_date: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
-| `last_file_date_raw` | `VARCHAR` | Literal source value for last_file_date before conversion; consult last_file_date_status for interpretation. |
-| `last_file_date_status` | `VARCHAR` | Interpretation of source last_file_date: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
-| `last_f2_date_raw` | `VARCHAR` | Literal source value for last_f2_date before conversion; consult last_f2_date_status for interpretation. |
-| `last_f2_date_status` | `VARCHAR` | Interpretation of source last_f2_date: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
-| `source_cycle` | `INTEGER` | Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year. |
+| `cycles` | `INTEGER[]` | Literal Native list of cycles stated by the API, retaining missing, NULL and empty distinctions. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `election_years` | `INTEGER[]` | Literal Native list of election years supplied for this candidate observation. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `election_districts` | `VARCHAR[]` | Literal Native list of election district values supplied for this candidate observation. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `inactive_election_years` | `INTEGER[]` | Literal Native list of inactive election years supplied by the API. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `district_number` | `BIGINT` | District number stated for the candidate, as an integer; null when absent or unsupported. |

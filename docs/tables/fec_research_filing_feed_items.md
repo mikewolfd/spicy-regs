@@ -6,6 +6,8 @@
 
 One RSS item occurrence in a captured source feed. Inspect literal title, link, GUID, publication text and native fields. A feed item is not a resolved filing submission or a complete current filing population. Resolve collection_id to fec_collections in the captured source generation and source_context_pointer into its retained context. Context witnesses use their own digest and native coordinates; they do not require a fictional source_record_id.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_research_filing_feed_items'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled. Supported observations from retained FEC filing RSS item metadata. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
 
 - **Parquet file:** `fec_research_filing_feed_items.parquet`
@@ -16,30 +18,15 @@ One RSS item occurrence in a captured source feed. Inspect literal title, link, 
 | Column | Type | Description |
 | --- | --- | --- |
 | `record_id` | `VARCHAR` | Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event. |
-| `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
-| `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
-| `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
-| `source_url` | `VARCHAR` | Captured source URL for this observation; it does not assert current availability or body retrieval. |
-| `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
-| `context_sha256` | `VARCHAR` | Digest of the sealed retained context object used by this mapping; separate from original-source bytes and typed output. |
-| `source_context_pointer` | `VARCHAR` | Exact JSON pointer into the retained collection context to the native fact represented by this observation. |
-| `observed_at_json` | `VARCHAR` | Retained capture time value(s) as JSON without collapsing separately observed captures. |
 | `title` | `VARCHAR` | Source title or explicitly labeled mapper title; consult title_basis or title_status when present. |
 | `link` | `VARCHAR` | Literal RSS item link retained from the source feed. |
 | `guid` | `VARCHAR` | Source RSS item GUID, scoped to the feed; not promoted to a filing number or a globally resolved identity. |
-| `published_at_raw` | `VARCHAR` | Publication timestamp exactly as supplied by the RSS item; distinct from filing receipt date. |
-| `current_record_status` | `VARCHAR` | Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record. |
 | `reported_filer_id` | `VARCHAR` | Literal identifier labelled CommitteeId in the source feed; candidate filings can carry candidate identifiers under this label. |
 | `committee_id` | `VARCHAR` | OpenFEC committee identifier (e.g. `C00684373`). Primary key / dedup key. Joins `fec_committee_history.committee_id` for per-cycle names and the connected organization. |
 | `candidate_id` | `VARCHAR` | Literal candidate identifier reported by API metadata or a verified named bulk field such as CAND_ID. Blanks and aggregate codes remain literal; an ID-shaped aggregate value does not establish a person. Names are not converted to identifiers. |
-| `source_label_status` | `VARCHAR` | Whether the feed's CommitteeId label contains a committee identifier, a candidate identifier, a missing value or an unsupported spelling. |
 | `filing_id` | `VARCHAR` | Source-reported sub_id of a filing metadata row when present; not an inferred original-file number. Amendment/current-record meaning remains in native metadata. |
 | `form_type` | `VARCHAR` | Literal filing form or record-type code from the source layout; does not prove submission conformance. |
 | `report_type` | `VARCHAR` | Source-reported report classification, interpreted within its namespace rather than as a universal period code. |
-| `coverage_start_raw` | `VARCHAR` | Literal CoverageFrom value from the feed's explicitly labelled metadata. |
-| `coverage_end_raw` | `VARCHAR` | Literal CoverageThrough value from the feed's explicitly labelled metadata. |
-| `parsing_status` | `VARCHAR` | Interpretation of source parsing: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
-| `filing_link_status` | `VARCHAR` | Source feed assertion only; the value does not qualify a filing match or establish the target exists. |
 | `coverage_start_date` | `DATE` | Build-parsed CoverageFrom date; requires exact MM/DD/YYYY spelling and a valid calendar date. |
 | `coverage_end_date` | `DATE` | Build-parsed CoverageThrough date; requires exact MM/DD/YYYY spelling and a valid calendar date. |
 | `published_at` | `TIMESTAMP WITH TIME ZONE` | Build-parsed feed publication instant from an exact four-digit-year GMT timestamp; invalid input remains null with parsing status. |

@@ -16,6 +16,7 @@ import pytest
 import yaml
 
 from spicy_regs.pipelines.rollups.scorecards import ScorecardsRollup
+from spicy_regs.scorecards.etl import SOURCE_NAMES, read_family
 from spicy_regs.scorecards.registry import REGISTRY, RegistryError, load_registry, select_sources
 from spicy_regs.source_evidence import CaptureEvidence, SourceEvidenceError
 from spicy_regs.transforms.build_scorecards import NoScorecardsDue, ScorecardRefreshError, build_scorecards
@@ -243,14 +244,15 @@ def test_mixed_success_replaces_whole_scope_and_retains_failed_edition(tmp_path,
         },
     )
     paths = run(tmp_path, p, e, download_prior=download)
-    result = {p.stem: pq.read_table(p).to_pylist() for p in paths}
+    result = read_family(tmp_path / "build", SOURCE_NAMES)
     for name, rows in result.items():
         if name == "scorecard_publishers":
             continue
         assert [r for r in rows if r["scorecard_id"] == b.scorecard_id] == old_b[name]
     assert not [r for r in result["scorecard_items"] if r["scorecard_id"] == a.scorecard_id]
     assert len(result["scorecard_member_ratings"]) == 3
-    assert len(paths) == len(SCHEMA["tables"])
+    assert len(paths) == len(SCHEMA["tables"]) - 1
+    assert not any(p.stem == "scorecard_snapshots" for p in paths)
     assert any(r["event"] == "rows-retired" and r["rows"] for r in journal(e))
     assert journal(e)[-1]["failed_scopes"] == [b.scorecard_id]
 
@@ -260,8 +262,8 @@ def test_absent_historical_edition_is_additive_not_deleted(tmp_path):
     e = evidence(tmp_path)
     old_b = tables(b)
     download = prior(e, combine(tables(a), old_b), tmp_path)
-    paths = run(tmp_path, provider([a], {a.scorecard_id: tables}), e, download_prior=download)
-    result = pq.read_table(next(p for p in paths if p.stem == "scorecards")).to_pylist()
+    run(tmp_path, provider([a], {a.scorecard_id: tables}), e, download_prior=download)
+    result = read_family(tmp_path / "build", SOURCE_NAMES)["scorecards"]
     assert next(r for r in result if r["scorecard_id"] == b.scorecard_id) == old_b["scorecards"][0]
 
 
@@ -370,14 +372,19 @@ def test_history_requires_explicit_enablement_and_selector(tmp_path):
 
 def test_complete_local_generation_binds_every_table_and_one_evidence_artifact(tmp_path, monkeypatch):
     import spicy_regs.data_dictionary as dictionary
+    from spicy_regs.contract_types import described_schema
     from spicy_regs.generations import verify_generation
+    from spicy_regs.scorecards.etl import POLICIES, SOURCE_NAMES
     from spicy_regs.source_evidence import verify_evidence
 
     monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
     monkeypatch.setattr(
         dictionary,
         "expected_schemas",
-        lambda: {table["name"]: [(field, "VARCHAR") for field in table["fields"]] for table in SCHEMA["tables"]},
+        lambda: {
+            name: described_schema(POLICIES[name].subject_schema)
+            for name in SOURCE_NAMES if not POLICIES[name].receipt_only
+        },
     )
     a = edition("2025")
     pipeline = ScorecardsRollup(
@@ -390,7 +397,10 @@ def test_complete_local_generation_binds_every_table_and_one_evidence_artifact(t
     generations = list((tmp_path / "output/generations").iterdir())
     assert len(generations) == 1
     admitted = verify_generation(generations[0])
-    assert set(admitted.root["spec"]["tables"]) == {table["name"] + ".parquet" for table in SCHEMA["tables"]}
+    assert set(admitted.root["spec"]["tables"]) == {
+        table["name"] + ".parquet" for table in SCHEMA["tables"] if table["name"] != "scorecard_snapshots"
+    }
+    assert admitted.root["spec"]["etlReceipts"]["key"] == "etl_receipts.parquet"
     assert admitted.root["spec"]["family"] == "scorecards"
     assert len(admitted.root["inputs"]) == 1
     assert admitted.root["inputs"][0]["role"] == "source-evidence"

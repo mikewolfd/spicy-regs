@@ -6,6 +6,8 @@
 
 One row per printing of a bill, per source that supplied it. The full text is deliberately not a column here: `bill_sections.body` carries it at the grain people query, and the body is re-fetchable by package id and digest. All columns are stored as VARCHAR.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='bill_versions'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled: bills the bill family has read from GovInfo BILLSTATUS, Congress by Congress from the 108th on; group by the Congress in bill_id to see which Congresses are filled. source is govinfo for a printing whose body was acquired; other rows are printings the publisher lists without an acquired body. *(measured 2026-09-28)*
 
 **Data quality.** A numbered reprint is its own printing since spicy-docs 0.37.0: the publisher types it exactly like the printing it follows, so its `version_code` is its own package suffix (`eas2`, `rfs2`) rather than the stage's slug. Generation `d380cdc0…` still keys two such printings under the stage's slug: 119-hr-6644's second Senate engrossed amendment (a congress row with `BILLS-119hr6644eas2`, beside a printing whose sections mix both documents) and 118-hr-7643's second House report. A rebuild of the bill retires the row and publishes each printing under its own code (receipt `repeated-printings-2026-09-26/`).
@@ -19,36 +21,16 @@ One row per printing of a bill, per source that supplied it. The full text is de
 | --- | --- | --- |
 | `bill_id` | `VARCHAR` | The bill this printing belongs to. |
 | `version_code` | `VARCHAR` | The printing's code: its stage's sealed slug, or a numbered reprint's own package suffix (eas2). |
-| `source` | `VARCHAR` | Which acquisition path supplied this row (govinfo, congress, govinfo-pdf, upload). |
+| `printing_id` | `VARCHAR` | Which acquisition path supplied this row (govinfo, congress, govinfo-pdf, upload). |
 | `label` | `VARCHAR` | The publisher's version-type string verbatim, which is not unique per printing. |
 | `version_date` | `VARCHAR` | The publisher's date for this printing; the merge prefers the larger value. |
 | `package_id` | `VARCHAR` | The GovInfo BILLS package id, read from a stated format URL rather than derived by name. |
-| `format_name` | `VARCHAR` | Which rendition was read (xml, txt, pdf, html, uslm), as choose_format named it. |
-| `format_type` | `VARCHAR` | The publisher's own format type string on the chosen link, where it states one. |
-| `requested_url` | `VARCHAR` | The URL the fetch asked for. |
-| `resolved_url` | `VARCHAR` | The URL the response actually came from, which a redirect can change. |
-| `content_type` | `VARCHAR` | The response Content-Type exactly as the publisher sent it. |
-| `byte_size` | `VARCHAR` | Length in bytes of the captured body, before any decoding. |
-| `sha256` | `VARCHAR` | Digest of the captured body bytes, spelled sha256: plus the hex digest. |
-| `observed_at` | `VARCHAR` | When the body was captured; the instant the other capture columns describe. |
-| `offered_formats_json` | `VARCHAR` | Every format link the publisher offered for this printing, as a JSON array. |
-| `version_code_is_reprint_ambiguous` | `VARCHAR` | True when the publisher's version-type string also names a numbered reprint, so the slug alone cannot tell the two printings apart. |
-| `root_tag` | `VARCHAR` | The XML root element name (bill, resolution, amendment-doc). |
-| `body_tags` | `VARCHAR` | The body element names found, unit-separator joined; a reported bill states two. |
+| `version_code_is_reprint_ambiguous` | `BOOLEAN` | True when the publisher's version-type string also names a numbered reprint, so the slug alone cannot tell the two printings apart. |
 | `publisher_stage` | `VARCHAR` | The root's own bill-stage or resolution-stage attribute: the publisher's word for it. |
-| `section_count` | `VARCHAR` | How many content-bearing nodes the flattening produced; the bill_sections row count. |
-| `discarded_elements_json` | `VARCHAR` | Count by element name of every element whose text survives nowhere in the flattened nodes. |
+| `section_count` | `BIGINT` | How many content-bearing nodes the flattening produced; the bill_sections row count. |
 | `equivalent_xml_version_code` | `VARCHAR` | For a PDF twin, the version_code of the XML row it stands in for. |
-| `equivalent_xml_source` | `VARCHAR` | That twin's source.  A version code is not unique across acquisition paths, which is why bill_versions keys on source too, so a twin reference needs both halves to resolve. |
-| `cleanup_line_numbers` | `VARCHAR` | GPO PDF normalization: whether per-line gutter numbering was detected and stripped. |
-| `cleanup_gpo_footers` | `VARCHAR` | GPO PDF normalization: whether VerDate print-metadata footers were stripped. |
-| `cleanup_spacing_normalized` | `VARCHAR` | GPO PDF normalization: the collapse rule always runs, kept for parity. |
-| `cleanup_small_caps_merges` | `VARCHAR` | GPO PDF normalization: how many lone-uppercase-letter lines were merged. |
-| `cleanup_hyphen_rejoins` | `VARCHAR` | GPO PDF normalization: how many gutter-corroborated hyphen wraps were rejoined. |
-| `cleanup_json` | `VARCHAR` | The per-page GPO cleanup breakdown, including which evidence gated bare-digit stripping. |
+| `equivalent_printing_id` | `VARCHAR` | That twin's source.  A version code is not unique across acquisition paths, which is why bill_versions keys on source too, so a twin reference needs both halves to resolve. |
 | `kind` | `VARCHAR` | Interpreted document kind: `full_text`, `kind_uncertain` (a full-text slug whose document is too thin to be sure), `procedural_amendments`, `procedural_summary`, or `unknown`. |
-| `kind_rule` | `VARCHAR` | Which version-kind rule fired, as the classifier names them: `procedural_amendments_slug`, `procedural_summary_slug`, `full_text_slug`, `full_text_slug_thin` (a full-text slug the size heuristic demoted to kind_uncertain), `amendment_substring` (an unlisted slug this repository's own heuristic caught), `size_heuristic` (an unlisted slug a large body promoted to full_text), or `unknown` when nothing claimed it. |
 | `kind_label` | `VARCHAR` | The display label for this kind, supplied by the caller that owns the vocabulary. |
 | `kind_warning` | `VARCHAR` | The inline warning this kind carries, for a version picker.  NULL for `full_text` and for `unknown`, which states none of its own. |
-| `kind_section_count` | `VARCHAR` | The section count the kind heuristic was given, recorded so the answer re-derives. |
-| `kind_body_bytes` | `VARCHAR` | The body byte length the kind heuristic was given, recorded for the same reason. |
+| `body_version_id` | `VARCHAR` | Stable identity of the substantive captured document body, independent of extraction processing. |

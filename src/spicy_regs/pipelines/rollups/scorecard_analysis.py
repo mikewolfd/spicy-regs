@@ -8,9 +8,11 @@ from os import getenv
 from pathlib import Path
 from typing import ClassVar
 
+from spicy_regs.scorecards.etl import selected_table_entry
+from spicy_regs.scorecards.etl import LINK_NAMES, POLICIES, verified_receipt_download
 from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
 from spicy_regs.sources import publication
-from spicy_regs.transforms.build_scorecard_analysis import INPUTS, OUTPUTS, build_scorecard_analysis
+from spicy_regs.transforms.build_scorecard_analysis import INPUTS, OFFICIAL_TABLES, OUTPUTS, build_scorecard_analysis
 
 
 class ScorecardAnalysisRollup(RollupPipeline):
@@ -19,11 +21,15 @@ class ScorecardAnalysisRollup(RollupPipeline):
     name: ClassVar[str] = "scorecard-analysis"
     inputs: ClassVar[tuple[str, ...]] = INPUTS
     outputs: ClassVar[tuple[str, ...]] = OUTPUTS
+    receipt_policies: ClassVar[tuple] = tuple(POLICIES[name] for name in LINK_NAMES)
 
     def _prime(self, output_dir: Path, snapshot: Mapping | None = None) -> dict[str, dict]:
         """Verify every member, including partitioned bill tables, under one index."""
         self.__dict__.pop("_scorecard_input_pins", None)
         self.__dict__.pop("_scorecard_input_paths", None)
+        self._scorecard_source_receipt = None
+        self._scorecard_source_generation = None
+        self._official_receipts = {}
         if snapshot is None:
             raise publication.PublicationError("Scorecard analysis requires a captured publication index")
         public_url = getenv("R2_PUBLIC_URL")
@@ -49,6 +55,22 @@ class ScorecardAnalysisRollup(RollupPipeline):
                     if not publication.fetch_member(public_url, member, target, key):
                         raise publication.PublicationError(f"Missing pinned analysis input: {member.key}")
                 paths[key.removesuffix(".parquet")].append(target)
+        source_owner = selected_table_entry(snapshot, "scorecards.parquet")
+        for source_key in ("scorecard_members.parquet", "scorecard_items.parquet"):
+            if selected_table_entry(snapshot, source_key)["artifactDigest"] != source_owner["artifactDigest"]:
+                raise publication.PublicationError("Scorecard analysis source inputs must share one generation")
+        if "etlReceipts" in source_owner:
+            self._scorecard_source_receipt = verified_receipt_download(
+                snapshot, output_dir / "source-etl-receipts.parquet", public_url=public_url
+            )
+            self._scorecard_source_generation = source_owner["etlReceipts"]["generationId"]
+        for name in OFFICIAL_TABLES:
+            owner = selected_table_entry(snapshot, name + ".parquet")
+            if "etlReceipts" in owner:
+                receipt = verified_receipt_download(
+                    snapshot, output_dir / (name + "-etl-receipts.parquet"), public_url=public_url, dataset=name
+                )
+                self._official_receipts[name] = (receipt, owner["etlReceipts"]["generationId"])
         self._scorecard_input_pins = {key.removesuffix(".parquet"): value for key, value in parents.items()}
         self._scorecard_input_paths = paths
         return parents
@@ -60,6 +82,10 @@ class ScorecardAnalysisRollup(RollupPipeline):
             output_dir,
             input_pins=self._scorecard_input_pins,
             input_paths=self._scorecard_input_paths,
+            source_receipt_path=self._scorecard_source_receipt,
+            source_generation_id=self._scorecard_source_generation,
+            official_receipts=self._official_receipts,
+            receipt_generation_id=self.receipt_generation_id,
         )
 
 

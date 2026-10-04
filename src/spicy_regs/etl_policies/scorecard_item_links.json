@@ -1,0 +1,28 @@
+{
+  "dataset": "scorecard_item_links",
+  "policy_version": "scorecards-etl-v1",
+  "subject_schema": "/////4gCAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAsAAAAgAgAA5AEAALABAAB4AQAAKAEAAPwAAADIAAAAkAAAAGQAAAA4AAAABAAAALj+//8AAAEFEAAAACAAAAAEAAAAAAAAAAwAAABhbWVuZG1lbnRfaWQAAAAADP7//+j+//8AAAEFEAAAABgAAAAEAAAAAAAAAAcAAABiaWxsX2lkADT+//8Q////AAABBRAAAAAYAAAABAAAAAAAAAAHAAAAdm90ZV9pZABc/v//OP///wAAAQIQAAAAHAAAAAQAAAAAAAAACwAAAHJvbGxfbnVtYmVyAHT///8AAAABIAAAAGz///8AAAECEAAAABgAAAAEAAAAAAAAAAcAAABzZXNzaW9uAKT///8AAAABIAAAAJz///8AAAEFEAAAABgAAAAEAAAAAAAAAAcAAABjaGFtYmVyAOj+///E////AAABAhAAAAAkAAAABAAAAAAAAAAIAAAAY29uZ3Jlc3MAAAAACAAMAAgABwAIAAAAAAAAASAAAAAQABQACAAGAAcADAAAABAAEAAAAAAAAQUQAAAAJAAAAAQAAAAAAAAAEwAAAHNvdXJjZV9yZWZlcmVuY2VfaWQAaP///6j///8AAAAFEAAAACAAAAAEAAAAAAAAAAwAAAByZWZlcmVuY2VfaWQAAAAAmP///9j///8AAAAFEAAAABgAAAAEAAAAAAAAAAcAAABpdGVtX2lkAMD///8QABQACAAAAAcADAAAABAAEAAAAAAAAAUQAAAAJAAAAAQAAAAAAAAADAAAAHNjb3JlY2FyZF9pZAAAAAAEAAQABAAAAAAAAAA=",
+  "identity_fields": [
+    "scorecard_id",
+    "item_id",
+    "reference_id"
+  ],
+  "receipt_fields": [
+    "source_snapshot_id",
+    "resolution_status",
+    "resolution_rule",
+    "rule_version",
+    "candidate_count",
+    "candidates_json",
+    "reason",
+    "source_context_json",
+    "input_pins_json",
+    "capture_id",
+    "source_url",
+    "source_path",
+    "conversion_inputs",
+    "raw_source"
+  ],
+  "receipt_only": false,
+  "nullable_identity_fields": []
+}

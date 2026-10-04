@@ -18,7 +18,8 @@ from pathlib import Path
 from typing import ClassVar
 
 from spicy_regs.env_values import date_env
-from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
+from spicy_regs.pipelines.rollups.base import make_rollup_app
+from spicy_regs.pipelines.rollups.government import GovernmentReceiptRollup
 from spicy_regs.transforms import build_fcc_filings
 
 
@@ -29,7 +30,7 @@ def _proceedings_env(name: str) -> tuple[str, ...]:
     return tuple(p.strip() for p in raw.split(",") if p.strip())
 
 
-class FccFilingsRollup(RollupPipeline):
+class FccFilingsRollup(GovernmentReceiptRollup):
     """FCC filings (comment equivalents) ingested from ECFS (api.data.gov key)."""
 
     name: ClassVar[str] = "fcc-filings"
@@ -40,7 +41,7 @@ class FccFilingsRollup(RollupPipeline):
     def build(self, output_dir: Path) -> Path:
         return build_fcc_filings(
             output_dir,
-            evidence=self.source_evidence,
+            evidence=self.source_evidence, receipt_generation_id=self.receipt_generation_id,
             since=date_env("FCC_SINCE"),
             proceedings=_proceedings_env("FCC_PROCEEDINGS"),
         )

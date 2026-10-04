@@ -298,3 +298,72 @@ def test_managed_download_does_not_import_optional_source_readers_or_mcp(tmp_pat
 
     monkeypatch.setattr(builtins, "__import__", base_install_only)
     _download(tmp_path, "a", "b")
+
+
+def test_receipts_download_once_per_selected_family_and_are_guarded(tmp_path, monkeypatch):
+    from spicy_regs.local_data import local_selection, verify_local_members, receipt_local_key
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    from spicy_regs.etl_receipts import RECEIPT_SCHEMA
+    from spicy_regs.native_types import described_schema
+    index, bodies, _, requests = _remote(monkeypatch)
+    output = io.BytesIO()
+    pq.write_table(pa.Table.from_batches([], schema=RECEIPT_SCHEMA), output)
+    body = output.getvalue()
+    bodies["etl_receipts"] = body
+    index["families"]["pair"]["etlReceipts"] = {
+        "key": "etl_receipts.parquet", "sha256": "sha256:" + hashlib.sha256(body).hexdigest(),
+        "byteSize": len(body), "rows": 0, "columns": [list(c) for c in described_schema(RECEIPT_SCHEMA)],
+        "generationId": "capture-a", "datasets": ["a", "b"]}
+    current = _download(tmp_path, "a", "b")
+    selection = local_selection(tmp_path)
+    assert len(selection.receipts) == 1
+    member, = publication.receipt_members(index, dataset="a")
+    receipt = current / receipt_local_key(member)
+    assert receipt.read_bytes() == body
+    assert len([url for url in requests if url.endswith("etl_receipts.parquet")]) == 1
+    assert str(receipt) in verify_local_members(selection)
+    receipt.write_bytes(b"different")
+    with pytest.raises(RuntimeError, match="receipt member differs"):
+        verify_local_members(selection)
+
+
+def test_failed_receipt_download_keeps_previous_current(tmp_path, monkeypatch):
+    index, bodies, _, _ = _remote(monkeypatch)
+    old = _download(tmp_path, "a")
+    index["families"]["pair"]["etlReceipts"] = {
+        "key": "etl_receipts.parquet", "sha256": "sha256:" + "a" * 64,
+        "byteSize": 1, "rows": 0, "columns": [["receipt_id", "VARCHAR"]],
+        "generationId": "capture-a", "datasets": ["a", "b"]}
+    bodies["etl_receipts"] = b"wrong bytes"
+    with pytest.raises(RuntimeError, match="differs from its pin"):
+        _download(tmp_path, "a")
+    assert (tmp_path / "current").resolve() == old
+
+
+def test_two_family_receipt_names_never_collide(tmp_path, monkeypatch):
+    from spicy_regs.local_data import local_selection, verify_local_members
+    index, bodies, _, _ = _remote(monkeypatch)
+    first = index["families"]["pair"]
+    other = deepcopy(first)
+    other.update(prefix="generations/second/" + "b" * 64, artifactDigest="sha256:" + "b" * 64,
+                 tables={"b.parquet": first["tables"].pop("b.parquet")})
+    index["families"]["second"] = other
+    receipt_bodies = {"pair": b"receipt-a", "second": b"receipt-b"}
+    for family, entry in index["families"].items():
+        body = receipt_bodies[family]
+        entry["etlReceipts"] = {"key": "etl_receipts.parquet", "sha256": "sha256:" + hashlib.sha256(body).hexdigest(),
+            "byteSize": len(body), "rows": 0, "columns": [["receipt_id", "VARCHAR"]],
+            "generationId": family, "datasets": ["a" if family == "pair" else "b"]}
+    @contextmanager
+    def stream(method, url, **kwargs):
+        family = "second" if "/second/" in url else "pair"
+        name = url.rsplit("/", 1)[-1].removesuffix(".parquet")
+        body = receipt_bodies[family] if name == "etl_receipts" else bodies[name]
+        yield httpx.Response(200, content=body, request=httpx.Request(method, url))
+    monkeypatch.setattr(cli.httpx, "stream", stream)
+    _download(tmp_path, "a", "b")
+    selection = local_selection(tmp_path)
+    assert len(selection.receipts) == 2
+    assert {path.read_bytes() for path in selection.receipts.values()} == set(receipt_bodies.values())
+    assert len(verify_local_members(selection)) == 4

@@ -6,6 +6,8 @@
 
 One row per scheduled committee meeting, as the Congress.gov committee-meeting list and detail routes state it, keyed `(congress, chamber, event_id)`. The detail carries the hearing transcript jackets (`hearing_transcripts` joins on `event_id`), the related bills, the witnesses and every document URL. All columns are stored as VARCHAR.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='committee_meetings'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled, and accumulating. Each run walks the current Congress's whole `committee-meeting` list, and the previous Congress's from the day before its newest held `updateDate` (or its oldest unread row), and reads the detail of every meeting the table does not yet hold, newest `updateDate` first, at most 1,000 a run; a meeting whose detail is unread or refused has its list fields only. The previous Congress stays in scope because its meetings change when GovInfo prints their transcripts: 204 of the 118th's 3,326 in 2026 to September 26, and all seven hearing transcripts that named a meeting the table lacked (receipt `join-gaps-2026-09-26/f/`). *(measured 2026-09-28)*
 
 **Data quality.** A row whose `committees_json` is NULL is list-only: its detail has not been read yet, and every detail-only column is NULL with it; a read detail states `[]` where it lists none. Event ids are keyed with their chamber because their uniqueness across chambers is unmeasured (spicy-docs' contract note); the 119th's House ids sit near 119,000 and its Senate ids near 338,000.
@@ -28,20 +30,19 @@ The publisher's `NoChamber` value is stored as `nochamber`, matching its detail 
 | `location_building` | `VARCHAR` | The building the detail names. |
 | `location_room` | `VARCHAR` | The room the detail names. |
 | `committee_system_code` | `VARCHAR` | System code of the first committee the detail lists. |
-| `committee_count` | `VARCHAR` | How many committees the detail lists; every one is in committees_json. |
-| `committees_json` | `VARCHAR` | Every committee the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read. |
+| `committee_count` | `BIGINT` | How many committees the detail lists; every one is in committees_json. |
+| `committees` | `STRUCT("name" VARCHAR, systemCode VARCHAR, url VARCHAR)[]` | Every committee the detail lists, as a Native list of the publisher's objects. NULL where no detail was read. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `hearing_jacket` | `VARCHAR` | The first hearing transcript jacket number the detail lists, where it lists any. |
-| `hearing_jacket_count` | `VARCHAR` | How many transcript jackets the detail lists; every one is in hearing_jackets_json. |
-| `hearing_jackets_json` | `VARCHAR` | Every transcript jacket number the detail lists, as a JSON array of strings. NULL where no detail was read. |
-| `bill_count` | `VARCHAR` | How many bills the detail relates to the meeting; every one is in bill_ids_json. |
-| `bill_ids_json` | `VARCHAR` | Natural keys of every bill in relatedItems.bills, as a JSON array, in publisher order. NULL where no detail was read. |
-| `witness_count` | `VARCHAR` | How many witnesses the detail lists. |
-| `witnesses_json` | `VARCHAR` | Every witness the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read. |
-| `witness_document_count` | `VARCHAR` | How many witness documents the detail lists. |
-| `witness_documents_json` | `VARCHAR` | Every witness document the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read. |
-| `meeting_document_count` | `VARCHAR` | How many meeting documents the detail lists. |
-| `meeting_documents_json` | `VARCHAR` | Every meeting document the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read. |
-| `document_urls_json` | `VARCHAR` | The URL of every document the meeting lists, witness documents first then meeting documents, in publisher order: what the map's meeting-to-documents edge resolves. NULL where no detail was read. |
-| `videos_json` | `VARCHAR` | Every video link the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read. |
+| `hearing_jacket_count` | `BIGINT` | How many transcript jackets the detail lists; every one is in hearing_jackets_json. |
+| `hearing_jackets` | `VARCHAR[]` | Every transcript jacket number the detail lists, as a Native list of strings. NULL where no detail was read. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `bill_count` | `BIGINT` | How many bills the detail relates to the meeting; every one is in bill_ids_json. |
+| `bill_ids` | `VARCHAR[]` | Natural keys of every bill in relatedItems.bills, as a Native list, in publisher order. NULL where no detail was read. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `witness_count` | `BIGINT` | How many witnesses the detail lists. |
+| `witnesses` | `STRUCT("name" VARCHAR, "position" VARCHAR, organization VARCHAR)[]` | Every witness the detail lists, as a Native list of the publisher's objects. NULL where no detail was read. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `witness_document_count` | `BIGINT` | How many witness documents the detail lists. |
+| `witness_documents` | `STRUCT(documentType VARCHAR, format VARCHAR, url VARCHAR)[]` | Every witness document the detail lists, as a Native list of the publisher's objects. NULL where no detail was read. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `meeting_document_count` | `BIGINT` | How many meeting documents the detail lists. |
+| `meeting_documents` | `STRUCT(description VARCHAR, documentType VARCHAR, format VARCHAR, "name" VARCHAR, url VARCHAR)[]` | Every meeting document the detail lists, as a Native list of the publisher's objects. NULL where no detail was read. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `document_urls` | `VARCHAR[]` | The URL of every document the meeting lists, witness documents first then meeting documents, in publisher order: what the map's meeting-to-documents edge resolves. NULL where no detail was read. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `videos` | `STRUCT("name" VARCHAR, url VARCHAR)[]` | Every video link the detail lists, as a Native list of the publisher's objects. NULL where no detail was read. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `update_date` | `VARCHAR` | The publisher's updateDate; the merge prefers the larger value. |
-| `url` | `VARCHAR` | The publisher's own URL for this meeting, which only the list row states. |

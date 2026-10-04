@@ -14,6 +14,9 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from spicy_regs.transforms.build_gao_reports import COLUMNS, SOURCE_REPAIR
+from spicy_regs.transforms.government_receipts import internal_prior, receipt_builder, generation_receipt_args
+from spicy_regs.transforms.government_source_shapes import SUBJECT_SCHEMAS
+from spicy_regs.native_types import described_schema
 
 if TYPE_CHECKING:
     import httpx
@@ -63,8 +66,10 @@ def target_index(product_id: str, *, retained: CapturedBodyResponse | None = Non
         raise
 
 
+@receipt_builder(output_argument="output", dataset="gao_reports")
 def append_missing_target(prior: Path, output: Path, index: Any) -> dict:
     """Preserve every prior cell, adding one source-identified report with unknown fields null."""
+    prior = internal_prior("gao_reports", prior)
     table = pq.read_table(prior)
     if not set(COLUMNS) <= set(table.column_names):
         raise ValueError('Prior GAO table lacks required metadata columns')
@@ -93,8 +98,26 @@ def append_missing_target(prior: Path, output: Path, index: Any) -> dict:
             'added_report_id':index.product_id,'published_date':row['published_date'],'table_body_storage':'unsupported'}
 
 
+@receipt_builder
+def _target_tables(output_dir: Path, *, prior_file: Path, index, siblings: tuple[Path, ...],
+                   prior_receipts: Path | None, prior_generation_id: str | None, report: dict, evidence) -> tuple[Path, ...]:
+    """Rebuild the full selected family while retaining sibling processing evidence."""
+    import shutil
+    output_dir.mkdir(parents=True, exist_ok=True)
+    prior = internal_prior("gao_reports", prior_file, receipt_path=prior_receipts, generation_id=prior_generation_id)
+    output = output_dir / "gao_reports.parquet"
+    report.update(append_missing_target(prior, output, index))
+    paths = [output]
+    for sibling in siblings:
+        literal = internal_prior(sibling.stem, sibling, receipt_path=prior_receipts, generation_id=prior_generation_id)
+        target = output_dir / sibling.name
+        shutil.copyfile(literal, target)
+        paths.append(target)
+    return tuple(paths)
+
+
 def prepare_target_generation(output_dir: Path, *, product_id: str, prior_file: Path,
-                              prior_index: dict, public_url: str,
+                              prior_index: dict, public_url: str, prior_decisions_file: Path | None = None,
                               retained_index: CapturedBodyResponse | None = None,
                               retained_pdf: CapturedBodyResponse | None = None,
                               retained_product_page: bytes | None = None,
@@ -108,7 +131,7 @@ def prepare_target_generation(output_dir: Path, *, product_id: str, prior_file: 
 
     key='gao_reports.parquet'
     owner=publication.table_owner(prior_index,key)
-    if owner is None or owner[0]!='gao-reports' or set(owner[1]['tables'])!={key}:
+    if owner is None or owner[0]!='gao-reports' or key not in owner[1]['tables'] or not set(owner[1]['tables']) <= {key, 'gao_decisions.parquet'}:
         raise ValueError('Expected complete managed gao-reports family')
     identity=publication.file_identity(prior_file)
     declared=publication.table_descriptor(prior_index,key)
@@ -138,16 +161,51 @@ def prepare_target_generation(output_dir: Path, *, product_id: str, prior_file: 
                 raise ValueError('Retained PDF exceeds bounds or is not a successful capture')
             validate_gao_report_pdf(retained_pdf,product_id=product_id)
             evidence.capture(retained_pdf,stage='gao-explicit-target-retained-pdf')
-        output=output_dir/'candidate'/key
-        report=append_missing_target(prior_file,output,index)
+        selected_dir = output_dir / 'selected-prior'
+        selected_dir.mkdir(parents=True, exist_ok=True)
+        siblings = []
+        parents = {key: {'sha256':identity['sha256'], 'byteSize':identity['bytes'],
+                         'family':'gao-reports', 'artifactDigest':owner[1]['artifactDigest']}}
+        for sibling_key in set(owner[1]['tables']) - {key}:
+            sibling = prior_decisions_file or selected_dir / sibling_key
+            if prior_decisions_file is None:
+                members = publication.table_members(prior_index, sibling_key)
+                if len(members) != 1 or not publication.fetch_member(public_url, members[0], sibling):
+                    raise ValueError('Missing pinned GAO sibling')
+            sibling_identity = publication.file_identity(sibling)
+            declared_sibling = publication.table_descriptor(prior_index, sibling_key)
+            if declared_sibling is None:
+                raise ValueError('Selected GAO sibling has no declared identity')
+            if (sibling_identity['sha256'] != declared_sibling['sha256'] or
+                    sibling_identity['bytes'] != declared_sibling['byteSize']):
+                raise ValueError('Retained GAO sibling differs from the captured publication')
+            # Use the declared table name even when the caller provided an alias.
+            selected = selected_dir / sibling_key
+            if sibling != selected:
+                import shutil
+                shutil.copyfile(sibling, selected)
+            siblings.append(selected)
+            parents[sibling_key] = {'sha256':sibling_identity['sha256'], 'byteSize':sibling_identity['bytes'],
+                                   'family':'gao-reports', 'artifactDigest':owner[1]['artifactDigest']}
+        prior_receipts = None
+        prior_generation_id = None
+        if owner[1].get('etlReceipts'):
+            members = publication.receipt_members(prior_index, dataset='gao_reports')
+            prior_receipts = selected_dir / 'etl_receipts.parquet'
+            if len(members) != 1 or not publication.fetch_member(public_url, members[0], prior_receipts):
+                raise ValueError('Missing pinned GAO receipts')
+            prior_generation_id = owner[1]['etlReceipts']['generationId']
+        report = {}
+        outputs = _target_tables(output_dir/'candidate', prior_file=prior_file, index=index, siblings=tuple(siblings),
+            prior_receipts=prior_receipts, prior_generation_id=prior_generation_id, report=report, evidence=evidence)
         evidence.event('explicit-target-projection',**report,offered_pdf_url=index.pdf_url,
             limits='Metadata table only; no text/body reference column, no exact publication day inferred. '
                    'PDF validation checks file route and format; content identity is a separate qualification.')
         generation=output_dir/'generation'
-        artifact=build_generation(generation,family='gao-reports',files=[output],expected_keys=[key],
-            read_snapshot=prior_index,inputs=evidence.inputs(),parents={key:{
-                'sha256':identity['sha256'],'byteSize':identity['bytes'],
-                'family':'gao-reports','artifactDigest':owner[1]['artifactDigest']}})
+        artifact=build_generation(generation,family='gao-reports',files=outputs,expected_keys=tuple(owner[1]['tables']),
+            read_snapshot=prior_index,inputs=evidence.inputs(),
+            schemas={path.stem: described_schema(SUBJECT_SCHEMAS[path.stem]) for path in outputs},
+            **generation_receipt_args(outputs), parents=parents)
         verify_generation(generation,expected_pin=artifact.pin)
         report.update(status='verified_candidate_not_published',candidate_pin=artifact.pin.as_dict(),
                       generation_directory=str(generation),evidence_directory=str(evidence.artifact_dir))

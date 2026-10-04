@@ -11,13 +11,21 @@ A genuinely end-to-end run against R2 is covered by the manual
 """
 
 from pathlib import Path
+from dataclasses import replace
 
 import duckdb
 import polars as pl
 import pytest
 
-from spicy_regs.schemas import COMMENT, DOCKET
+from spicy_regs.schemas import COMMENT as SOURCE_COMMENT, DOCKET as SOURCE_DOCKET
 from spicy_regs.sources import iceberg
+
+# These tests exercise the reusable legacy catalog algorithms on unregistered fixtures.
+# Production regulatory policies and atomic pairs are covered in test_regulatory_native_catalog.
+COMMENT = replace(SOURCE_COMMENT, name="fixture_comments")
+DOCKET = replace(SOURCE_DOCKET, name="fixture_dockets")
+
+
 
 
 def _write_staging(staging_dir: Path, agency: str, rows: list[dict]) -> None:
@@ -259,7 +267,7 @@ def test_export_parquet_matches_published_shape(tmp_path, local_catalog) -> None
 
     out = tmp_path / "output"
     out_file = iceberg._export_parquet(con, DOCKET, out)
-    assert out_file == out / "dockets.parquet"
+    assert out_file == out / f"{DOCKET.name}.parquet"
 
     df = pl.read_parquet(out_file)
     # Same columns as the published schema, sorted by (agency_code, modify_date).
@@ -705,12 +713,12 @@ def test_dedupe_table_resumes_interrupted_swap(tmp_path, local_catalog) -> None:
     # the live table has already been dropped (as happens after DROP + before the
     # per-agency INSERTs finish).
     tbl = iceberg._qualified(COMMENT)
-    dedup_tbl = f'{iceberg._schema_ref()}."comments_dedup"'
+    dedup_tbl = f'{iceberg._schema_ref()}."{COMMENT.name}_dedup"'
     col_defs = ", ".join(f'"{c}" VARCHAR' for c in COMMENT.schema)
     col_list = ", ".join(f'"{c}"' for c in COMMENT.schema)
     con.execute(f"CREATE TABLE {dedup_tbl} ({col_defs});")
     con.execute(f"INSERT INTO {dedup_tbl} ({col_list}) SELECT {col_list} FROM {tbl};")
-    state_tbl = f'{iceberg._schema_ref()}."comments_dedup_state"'
+    state_tbl = f'{iceberg._schema_ref()}."{COMMENT.name}_dedup_state"'
     con.execute(f"CREATE TABLE {state_tbl} (phase VARCHAR, row_count BIGINT)")
     con.execute(f"INSERT INTO {state_tbl} VALUES ('building', 3), ('ready', 3)")
     con.execute(f"DROP TABLE {tbl};")
@@ -741,8 +749,8 @@ def test_dedupe_recovers_after_each_durable_phase(tmp_path, local_catalog, state
     pl.DataFrame(rows + rows, schema=COMMENT.schema).write_parquet(base)
     iceberg.seed_comments_from_parquet(con, str(base), COMMENT)
     live = iceberg._qualified(COMMENT)
-    prefix = statement.format(live=live, sibling=f'{iceberg._schema_ref()}."comments_dedup"',
-                              state=f'{iceberg._schema_ref()}."comments_dedup_state"')
+    prefix = statement.format(live=live, sibling=f'{iceberg._schema_ref()}."{COMMENT.name}_dedup"',
+                              state=f'{iceberg._schema_ref()}."{COMMENT.name}_dedup_state"')
 
     class InterruptedConnection:
         seen = 0
@@ -766,7 +774,7 @@ def test_dedupe_recovers_after_each_durable_phase(tmp_path, local_catalog, state
 def test_dedupe_preserves_unjournaled_legacy_candidate(local_catalog):
     con = local_catalog
     iceberg._ensure_table(con, COMMENT)
-    sibling = f'{iceberg._schema_ref()}."comments_dedup"'
+    sibling = f'{iceberg._schema_ref()}."{COMMENT.name}_dedup"'
     con.execute(f'CREATE TABLE {sibling} AS SELECT * FROM {iceberg._qualified(COMMENT)}')
     with pytest.raises(RuntimeError, match='Unjournaled'):
         iceberg.dedupe_table(con, COMMENT)
@@ -1115,26 +1123,27 @@ def test_replace_preserves_commit_error_when_transaction_already_aborted(local_c
     con.execute('ROLLBACK')
 
 
-def test_document_attachment_nullable_migration_preserves_legacy_rows(local_catalog):
+def test_document_native_migration_preserves_legacy_processing_rows(local_catalog):
     from spicy_regs.schemas import RECORD_TYPES
-
-    con = local_catalog
+    from spicy_regs.sources import regulatory_catalog as native
     record = RECORD_TYPES['documents']
-    table = iceberg._qualified(record)
-    con.execute(f'CREATE SCHEMA IF NOT EXISTS {iceberg._schema_ref()}')
-    con.execute(f'CREATE TABLE {table} (document_id VARCHAR, pdf_extraction_results_json VARCHAR)')
-    con.execute(f"INSERT INTO {table} VALUES ('held', 'prior diagnostics')")
-    assert iceberg._ensure_nullable_column(con, record) == 'attachment_records_json'
-    assert con.execute(f'SELECT * FROM {table}').fetchall() == [('held', 'prior diagnostics', None)]
-    assert iceberg._ensure_nullable_column(con, record) is None
+    legacy = f'{iceberg._schema_ref()}."documents"'
+    local_catalog.execute(f'CREATE SCHEMA IF NOT EXISTS {iceberg._schema_ref()}')
+    local_catalog.execute(f'CREATE TABLE {legacy} (document_id VARCHAR, pdf_extraction_results_json VARCHAR)')
+    local_catalog.execute(f"INSERT INTO {legacy} VALUES ('held', 'prior diagnostics')")
+    native.ensure_native(local_catalog, record)
+    restored = native.processing_table(local_catalog, record)
+    assert local_catalog.execute(f'SELECT document_id,pdf_extraction_results_json,attachment_records_json FROM {restored}').fetchall() == [('held', 'prior diagnostics', None)]
 
 
-def test_document_attachment_migration_refuses_wrong_existing_type(local_catalog):
+def test_document_native_migration_refuses_wrong_existing_type(local_catalog):
     from spicy_regs.schemas import RECORD_TYPES
-
+    from spicy_regs.sources import regulatory_catalog as native
     record = RECORD_TYPES['documents']
-    with pytest.raises(ValueError, match='attachment_records_json must be VARCHAR'):
-        iceberg._ensure_nullable_column(local_catalog, record, existing={'attachment_records_json': 'INTEGER'})
+    local_catalog.execute(f'CREATE SCHEMA IF NOT EXISTS {iceberg._schema_ref()}')
+    local_catalog.execute(f'CREATE TABLE {iceberg._schema_ref()}.documents (document_id VARCHAR, attachment_records_json INTEGER)')
+    with pytest.raises(ValueError, match='incompatible types'):
+        native.ensure_native(local_catalog, record)
 
 
 # --- interrupted writes (#202) ---------------------------------------------

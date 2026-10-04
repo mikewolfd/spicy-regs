@@ -27,7 +27,7 @@ enable a source, change publication, or schedule a refresh.
 
 | Owner | Responsibility | Existing code to reuse |
 | --- | --- | --- |
-| SpicyDocs | Bounded acquisition, publisher-specific parsing, literal fields, validation, provenance and reusable table schemas | `spicy_docs.transport`, `spicy_docs.reading`, `spicy_docs.schemas`; [source workflow](../../spicy-docs/docs/source-workflows.md) |
+| SpicyDocs | Bounded acquisition, publisher-specific parsing, literal fields, validation, provenance and reusable table schemas | `spicy_docs.transport`, `spicy_docs.reading`, `spicy_docs.schemas`; source workflow in `spicy-docs/docs/source-workflows.md` |
 | SpicyRegs | Source selection, rights/evidence policy, cadence, backfill, complete-scope replacement, identity resolution and publication | `src/spicy_regs/source_evidence.py`, `pipelines/rollups/base.py`, `sources/publication.py`, `transforms/` |
 | SpicyRegs consumers | Table descriptions, joins and attributed queries | `table_metadata.json`, `table_joins.json`, existing `list_sources`, `describe_table`, `query_sql` |
 

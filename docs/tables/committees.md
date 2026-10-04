@@ -6,6 +6,8 @@
 
 One row per committee or subcommittee of any Congress the Congress.gov committee list route states, keyed on the publisher's `systemCode`, with the detail record's history, subcommittees, parent and currency folded on where captured. All columns are stored as VARCHAR.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='committees'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled. Since 2026-09-26 the Congress.gov committee route is walked whole with no Congress: every committee of every Congress the publisher records, because `committee_meetings` keeps the previous Congress and `bill_committees` reaches the 108th. The committee detail is folded onto each row under a per-run cap, newest `update_date` first; a committee whose detail was captured is re-read only when its list row's `update_date` moves. Receipt `committee-fixes-2026-09-26/3-rosters-118/`. *(measured 2026-09-26)*
 
 **Data quality.** The route over-declares: on 2026-09-19 `committee/119` declared 238 and served 236 on its one terminal page with no continuation. The reader's terminal-page count refusal is the one refusal this rollup reads past, publishing what the publisher served with both numbers in the run log; every other walk refusal fails the run. `detail_captured` says whether the detail's columns are the publisher's or NULL; where the detail was captured, its `subcommittees` are the row's, an empty list included. The detail's counts (`bill_count` and the rest) are that day's statement, dated by `detail_update_date`. Rows are committees of every Congress: filter `is_current` for today's. 95 historical committees are keyed on their Library of Congress name-authority id (`n79043125`, the Senate's Indian Affairs, 1820-1946), which their history states as `locLinkedDataId`; none is current. A code the detail route cannot address is a list row with `detail_captured` false. All columns are stored as VARCHAR.
@@ -23,18 +25,16 @@ One row per committee or subcommittee of any Congress the Congress.gov committee
 | `committee_type` | `VARCHAR` | The publisher's committeeTypeCode (Standing, Select, Subcommittee, Joint, and the rest). |
 | `parent_system_code` | `VARCHAR` | The parent committee's systemCode, where the publisher states a parent. |
 | `parent_name` | `VARCHAR` | The parent committee's name as the publisher states it. |
-| `is_subcommittee` | `VARCHAR` | true when the publisher states a parent, false otherwise. |
-| `subcommittee_count` | `VARCHAR` | How many subcommittees the publisher lists under this committee. |
-| `subcommittees_json` | `VARCHAR` | The listed subcommittees' systemCodes, as a JSON array in the publisher's order. |
+| `is_subcommittee` | `BOOLEAN` | true when the publisher states a parent, false otherwise. |
+| `subcommittee_count` | `BIGINT` | How many subcommittees the publisher lists under this committee. |
+| `subcommittees` | `VARCHAR[]` | The listed subcommittees' systemCodes, as a Native list in the publisher's order. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `update_date` | `VARCHAR` | The list row's updateDate; the merge prefers the larger value. |
-| `url` | `VARCHAR` | The publisher's own URL for this committee. |
-| `detail_captured` | `VARCHAR` | true when the committee-detail record was captured and folded onto this row. |
-| `is_current` | `VARCHAR` | The detail record's isCurrent, where captured. |
+| `is_current` | `BOOLEAN` | The detail record's isCurrent, where captured. |
 | `detail_type` | `VARCHAR` | The detail record's type, where captured. |
 | `website_url` | `VARCHAR` | The detail record's committeeWebsiteUrl, where captured. |
-| `history_count` | `VARCHAR` | How many history entries the detail record carries. |
-| `history_json` | `VARCHAR` | The detail record's history entries, verbatim, as a JSON array in the publisher's order. |
-| `bill_count` | `VARCHAR` | The detail record's stated count of bills referred to this committee, that day's statement. |
-| `report_count` | `VARCHAR` | The detail record's stated count of reports, that day's statement. |
-| `communication_count` | `VARCHAR` | The detail record's stated count of communications, that day's statement. |
+| `history_count` | `BIGINT` | How many history entries the detail record carries. |
+| `history` | `STRUCT(committeeTypeCode VARCHAR, establishingAuthority VARCHAR, libraryOfCongressName VARCHAR, locLinkedDataId VARCHAR, naraId VARCHAR, officialName VARCHAR, startDate VARCHAR, superintendentDocumentNumber VARCHAR, updateDate VARCHAR, endDate VARCHAR)[]` | The detail record's history entries, verbatim, as a Native list in the publisher's order. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `bill_count` | `BIGINT` | The detail record's stated count of bills referred to this committee, that day's statement. |
+| `report_count` | `BIGINT` | The detail record's stated count of reports, that day's statement. |
+| `communication_count` | `BIGINT` | The detail record's stated count of communications, that day's statement. |
 | `detail_update_date` | `VARCHAR` | The detail record's own updateDate. |

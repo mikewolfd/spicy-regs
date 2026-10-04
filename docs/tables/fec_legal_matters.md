@@ -6,6 +6,8 @@
 
 One source observation of a namespaced legal matter. Use matter_id for authority/type/native-case identity and record_id for each observation. Native amounts describe legal states or payments, not a summed case-wide liability. Child collection states and query completeness remain explicit. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_legal_matters'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled. Supported observations from retained advisory opinion, enforcement, administrative fine, dispute-resolution, rulemaking and audit metadata. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
 
 - **Parquet file:** `fec_legal_matters.parquet`
@@ -16,61 +18,18 @@ One source observation of a namespaced legal matter. Use matter_id for authority
 | Column | Type | Description |
 | --- | --- | --- |
 | `record_id` | `VARCHAR` | Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event. |
-| `identity_version` | `VARCHAR` | Version of the source-observation identity rule; it does not select a current or canonical record. |
-| `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
-| `mapping_status` | `VARCHAR` | Whether this source observation mapped fully, partially, or received an explicit nondata/refusal disposition; inspect the reason alongside NULL values. |
-| `mapping_reason_json` | `VARCHAR` | JSON object naming unsupported, missing or otherwise limited field interpretations; native values remain reachable through evidence. |
-| `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
-| `source_record_id` | `VARCHAR` | Native source-observation key within collection_id. Resolve with the source generation, exact locator and source digest, not this value alone. |
-| `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
-| `source_locator_json` | `VARCHAR` | Exact source row or subrecord coordinates, including available member, ordinal, byte span and field-definition references. Resolve in the pinned source generation. |
-| `source_pointer` | `VARCHAR` | Exact pointer within the provider-owned native record to the mapped value or metadata object. |
-| `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
-| `selection_evidence_sha256` | `VARCHAR` | Digest of the retained selection evidence used to authorize this mapper's source scope; not a financial inclusion decision. |
 | `matter_id` | `VARCHAR` | Authority-, matter-type- and namespace-qualified logical case key. Multiple retained observations may share it. |
 | `matter_record_id` | `VARCHAR` | Exact fec_legal_matters.record_id observation supporting this child event, party, document or finding. |
-| `query_completeness` | `VARCHAR` | Whether complete traversal of the stated source query was established. A retained page or rejected response is not a completed query. |
 | `matter_type` | `VARCHAR` | Legal source family such as advisory opinion, enforcement, administrative fine, dispute resolution, rulemaking or audit. |
-| `source_namespace` | `VARCHAR` | Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent. |
 | `native_matter_id` | `VARCHAR` | Literal case identifier within its legal source namespace; similar numbers across matter types do not identify the same case. |
 | `native_document_id` | `VARCHAR` | Literal document identifier in its native matter/document namespace. |
 | `title` | `VARCHAR` | Source title or explicitly labeled mapper title; consult title_basis or title_status when present. |
-| `title_status` | `VARCHAR` | Source-presence state of the title, preserving missing, NULL and empty values. |
 | `description` | `VARCHAR` | Literal source description or narrative associated with this observation. |
-| `description_status` | `VARCHAR` | Presence/interpretation state of the source description. |
 | `status` | `VARCHAR` | Legal status stated by the source at this observation, without selecting a current state across captures. |
-| `status_status` | `VARCHAR` | Source-presence state of the legal status field. |
-| `source_url` | `VARCHAR` | Captured source URL for this observation; it does not assert current availability or body retrieval. |
-| `source_url_status` | `VARCHAR` | Source-presence state of the matter's URL. |
 | `committee_id` | `VARCHAR` | Literal FEC committee identifier as reported in this observation. Use cycle and source scope for historical joins. |
 | `candidate_id` | `VARCHAR` | Literal FEC candidate identifier when the source reports one. Syntax checks do not prove identity resolution or a target match. |
 | `audit_id` | `VARCHAR` | Literal source audit identifier; it does not replace the namespaced matter identity. |
-| `reported_cycle_status` | `VARCHAR` | Interpretation of source reported_cycle: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
-| `is_pending_status` | `VARCHAR` | Interpretation of source is_pending: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
-| `is_published_status` | `VARCHAR` | Interpretation of source is_published: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
-| `current_state_status` | `VARCHAR` | Whether a current legal matter state has been selected; retained observations alone do not establish one. |
-| `collection_states_json` | `VARCHAR` | JSON states for native child collections, preserving absent, NULL, empty and populated collections. |
-| `native_facts_json` | `VARCHAR` | Structured source citation and subject arrays used by child navigation. Scalar facts are explicit columns; the complete original remains at source evidence. |
-| `final_determination_amount_status` | `VARCHAR` | Source-presence or conversion state for final_determination_amount, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
-| `final_determination_amount_raw` | `VARCHAR` | Literal source value before conversion for final_determination_amount. Preserves spelling, signs and empty values; the typed value and its status are separate. |
-| `payment_amount_status` | `VARCHAR` | Source-presence or conversion state for payment_amount, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
-| `payment_amount_raw` | `VARCHAR` | Literal source value before conversion for payment_amount. Preserves spelling, signs and empty values; the typed value and its status are separate. |
-| `reason_to_believe_fine_amount_status` | `VARCHAR` | Source-presence or conversion state for reason_to_believe_fine_amount, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
-| `reason_to_believe_fine_amount_raw` | `VARCHAR` | Literal source value before conversion for reason_to_believe_fine_amount. Preserves spelling, signs and empty values; the typed value and its status are separate. |
-| `treasury_referral_amount_status` | `VARCHAR` | Source-presence or conversion state for treasury_referral_amount, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
-| `treasury_referral_amount_raw` | `VARCHAR` | Literal source value before conversion for treasury_referral_amount. Preserves spelling, signs and empty values; the typed value and its status are separate. |
 | `currency` | `VARCHAR` | Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately. |
-| `challenge_outcome_status` | `VARCHAR` | Interpretation of source challenge_outcome: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
-| `civil_penalty_payment_status_status` | `VARCHAR` | Interpretation of source civil_penalty_payment_status: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
-| `report_type_status` | `VARCHAR` | Interpretation of source report_type: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
-| `mur_type_status` | `VARCHAR` | Interpretation of source mur_type: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
-| `committee_description_status` | `VARCHAR` | Interpretation of source committee_description: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
-| `committee_designation_status` | `VARCHAR` | Interpretation of source committee_designation: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
-| `committee_type_status` | `VARCHAR` | Interpretation of source committee_type: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
-| `rm_id_status` | `VARCHAR` | Interpretation of source rm_id: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
-| `rm_number_status` | `VARCHAR` | Interpretation of source rm_number: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
-| `report_year_status` | `VARCHAR` | Whether the CSV source report year has an exact four-digit spelling, is missing, or is unsupported. |
-| `is_open_for_comment_status` | `VARCHAR` | Interpretation of source is_open_for_comment: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
 | `reported_cycle` | `INTEGER` | Cycle exactly as reported in a native field; kept separate from the selection's source_cycle. |
 | `is_pending` | `BOOLEAN` | Source-reported pending flag for this legal matter; not an independently determined legal status. |
 | `is_published` | `BOOLEAN` | Source-reported publication flag for this legal matter; not proof that a document body was acquired. |
@@ -89,3 +48,15 @@ One source observation of a namespaced legal matter. Use matter_id for authority
 | `payment_amount` | `DECIMAL(38,9)` | Exact decimal for the payment amount stated in the legal matter observation. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations. |
 | `reason_to_believe_fine_amount` | `DECIMAL(38,9)` | Exact decimal for the source-stated reason-to-believe fine amount. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations. |
 | `treasury_referral_amount` | `DECIMAL(38,9)` | Exact decimal for the amount stated for referral to Treasury. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations. |
+| `ao_no` | `VARCHAR` | Publisher advisory-opinion number. |
+| `case_serial` | `BIGINT` | Publisher legal matter serial number. |
+| `election_cycles` | `INTEGER[]` | Election cycles stated for the legal matter; original order and repetitions are preserved. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `ao_citations` | `STRUCT("name" VARCHAR, "no" VARCHAR)[]` | Advisory opinions cited by this legal matter, retaining source citation attributes. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `aos_cited_by` | `STRUCT("name" VARCHAR, "no" VARCHAR)[]` | Advisory opinions that cite this matter, retaining the source direction. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `regulatory_citations` | `STRUCT(title INTEGER, part INTEGER, section INTEGER)[]` | Source-listed regulatory citations; no applicability determination is implied. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `statutory_citations` | `STRUCT(title INTEGER, section VARCHAR)[]` | Source-listed statutory citations; no applicability determination is implied. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `citations` | `STRUCT(regulations STRUCT("text" VARCHAR, url VARCHAR)[], us_code STRUCT("text" VARCHAR, url VARCHAR)[])` | Source-listed legal citations, grouped by citation kind with literal text and URLs. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `subject` | `STRUCT(path INTEGER[], node STRUCT("text" VARCHAR, children INTEGER[]))[]` | Publisher subject hierarchy with source identifiers and ordered child links. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `subjects` | `STRUCT(primary_subject_id VARCHAR, secondary_subject_id VARCHAR, subject VARCHAR)[]` | Publisher subject identifiers in source order, preserving repeated entries. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `non_monetary_terms` | `VARCHAR[]` | Nonmonetary terms stated in the legal matter. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `non_monetary_terms_respondents` | `VARCHAR[]` | Respondents associated with the source-stated nonmonetary terms. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |

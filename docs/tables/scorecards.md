@@ -6,6 +6,8 @@
 
 One publisher-defined edition, with a series_id for continuity; a live series is not itself an edition. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='scorecards'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled publisher editions selected by the scorecard source registry. Complete edition reads replace that edition; failed or incomplete reads preserve prior observations. Coverage varies by publisher and historical source format. *(measured 2026-10-03)*
 
 - **Parquet file:** `scorecards.parquet`
@@ -27,12 +29,7 @@ One publisher-defined edition, with a series_id for continuity; a live series is
 | `congress_text` | `VARCHAR` | Source-stated congress, preserved as text; NULL when unstated. |
 | `session_text` | `VARCHAR` | Source-stated session, preserved as text; NULL when unstated. |
 | `timespan_text` | `VARCHAR` | Source-stated timespan, preserved as text; NULL when unstated. |
-| `periods_json` | `VARCHAR` | Ordered explicit or relative source periods with occurrence_id, period_text, kind and source_path. |
-| `source_url` | `VARCHAR` | Original publisher URL supporting this observation. |
+| `periods` | `STRUCT(occurrence_id VARCHAR, period_text VARCHAR, kind VARCHAR, congress_text VARCHAR, chamber_text VARCHAR, session_text VARCHAR, year_text VARCHAR)[]` | Ordered explicit or relative source periods with occurrence_id, period_text, kind and source_path. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `methodology_url` | `VARCHAR` | Source-stated methodology url, preserved as text; NULL when unstated. |
 | `published_at_text` | `VARCHAR` | Source-stated published at, preserved as text; NULL when unstated. |
 | `updated_at_text` | `VARCHAR` | Source-stated updated at, preserved as text; NULL when unstated. |
-| `observed_at` | `VARCHAR` | UTC instant at which the supporting source response was observed. |
-| `snapshot_id` | `VARCHAR` | Opaque identity of the complete accepted edition capture and parse. |
-| `capture_id` | `VARCHAR` | Opaque caller-issued identity of the source observation supporting this row. |
-| `source_path` | `VARCHAR` | Source locator within the captured response, such as cell, JSON path or PDF page. |

@@ -1,6 +1,6 @@
 """Transform: build ``usaspending_recipients.parquet`` from USASpending.gov.
 
-Produces an all-VARCHAR schema keyed on ``recipient_id`` — the
+Produces a native subject table and shared receipts keyed on ``recipient_id`` — the
 federal-award **recipient** reference dimension that sits alongside the
 regulations.gov corpus and complements the SAM entity registry and FEC
 committee table for resolving organization commenters by their federal
@@ -34,6 +34,7 @@ import pyarrow.parquet as pq
 from loguru import logger
 
 from spicy_regs.sources import r2
+from spicy_regs.transforms.government_receipts import internal_prior, receipt_builder
 
 if TYPE_CHECKING:
     from spicy_regs.source_evidence import CaptureEvidence
@@ -176,6 +177,7 @@ def _funded(record: Mapping[str, Any]) -> bool:
     return isinstance(amount, int | float | Decimal) and not isinstance(amount, bool) and amount > 0
 
 
+@receipt_builder
 def build_usaspending_recipients(
     output_dir: Path, *, max_pages: int | None = None, evidence: CaptureEvidence | None = None,
     every_funded: bool = False,
@@ -188,6 +190,8 @@ def build_usaspending_recipients(
 
     # 1. Pull the prior table (best effort — absence just means a clean build).
     have_prior = prior_file.exists() or r2.download(OUTPUT, prior_file)
+    if have_prior:
+        prior_file = internal_prior("usaspending_recipients", prior_file)
     if have_prior:
         logger.info("USASpending recipients: merging against prior table {}", prior_file)
     else:

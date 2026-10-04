@@ -108,8 +108,14 @@ def repair_records(
             raise ValueError("attachment relationships contain unselected document identities")
 
         if table == "comments":
-            receipt = _repair_comments(staging, output_dir, count=count, apply=apply,
-                                       expected_snapshot=expected_snapshot, source_pins=source_pins)
+            receipt = _repair_comments(
+                staging,
+                output_dir,
+                count=count,
+                apply=apply,
+                expected_snapshot=expected_snapshot,
+                source_pins=source_pins,
+            )
             return {
                 "table": table,
                 "input_records": count,
@@ -122,14 +128,27 @@ def repair_records(
             }
         changed: list[Path] = []
         if count:
+            from spicy_regs.pipelines.regulatory_publication import finish_dataset, restore_dataset
+
+            work = staging / "processing"
+            work.mkdir()
+            selected = output_dir / f"{table}.parquet"
+            if selected.exists() and not (output_dir / ".native-state" / f"{table}.json").exists():
+                # Explicit held-input repair: leave its original bytes untouched until validation succeeds.
+                from shutil import copyfile
+
+                copyfile(selected, work / f"{table}.parquet")
+            else:
+                restore_dataset(output_dir, table, work / f"{table}.parquet")
             merge_staging_files(
                 staging,
-                output_dir,
+                work,
                 [table],
                 {table: host.schema},
                 {table: host.dedup_key},
                 source_correction=True,
             )
+            finish_dataset(output_dir, table, work / f"{table}.parquet", publish=False)
             changed = [output_dir / f"{table}.parquet"]
     return {
         "table": table,
@@ -139,12 +158,19 @@ def repair_records(
         "scope": "explicit retained input into local Parquet; no acquisition, Iceberg update or publication",
         "acquisition_manifest_changed": False,
         "source_pins": dict(source_pins or {}),
-        "attachment_relationships_read": len(attachment_relationships) if attachment_relationships is not None else None,
+        "attachment_relationships_read": len(attachment_relationships)
+        if attachment_relationships is not None
+        else None,
     }
 
 
 def _repair_comments(
-    staging: Path, output_dir: Path, *, count: int, apply: bool, expected_snapshot: int | None,
+    staging: Path,
+    output_dir: Path,
+    *,
+    count: int,
+    apply: bool,
+    expected_snapshot: int | None,
     source_pins: Mapping | None,
 ) -> dict:
     """Correct the staged comment identities in the catalog, reading priors at one pinned snapshot.
@@ -166,42 +192,49 @@ def _repair_comments(
     project = ", ".join(f'CAST("{column}" AS VARCHAR) AS "{column}"' for column in columns)
     con = iceberg._connect()
     try:
+        from spicy_regs.sources.regulatory_catalog import processing_table, ensure_native
+
+        if apply:
+            ensure_native(con, record_type)
         snapshot = iceberg._read_snapshot(con, record_type)
         if expected_snapshot is not None and snapshot.snapshot_id != expected_snapshot:
             raise RuntimeError(f"catalog is at snapshot {snapshot.snapshot_id}, not the reviewed {expected_snapshot}")
-        current_columns = iceberg._column_types(con, record_type)
-        missing_write_columns = set(columns) - current_columns.keys()
-        for column in iceberg._COMMENT_ADDED_COLUMNS:
-            if column in current_columns and current_columns[column] != "VARCHAR":
-                raise ValueError(f"comments.{column} must be VARCHAR, found {current_columns[column]}")
-        prior_sql = iceberg._snapshot_query(record_type, snapshot)
-        prior_columns = {row[0] for row in con.execute(f"DESCRIBE ({prior_sql})").fetchall()}
-        missing_columns = set(columns) - prior_columns
-        unsupported_missing = (missing_columns | missing_write_columns) - set(iceberg._COMMENT_ADDED_COLUMNS)
-        if unsupported_missing:
-            raise ValueError("Unsupported missing comment columns: " + ", ".join(sorted(unsupported_missing)))
-        # A dry run must not migrate the catalog. Nullable fields absent from
-        # the reviewed snapshot represent unread source values, never empty lists.
-        prior_project = ", ".join(
-            f'NULL::VARCHAR AS "{column}"' if column in missing_columns
-            else f'CAST("{column}" AS VARCHAR) AS "{column}"' for column in columns
+        con.execute(
+            f"CREATE TEMP TABLE _repair_fresh AS SELECT {project} FROM read_parquet([{files}], union_by_name=true)"
         )
-        con.execute(f"CREATE TEMP TABLE _repair_fresh AS SELECT {project} FROM read_parquet([{files}], union_by_name=true)")
+        prior_table = processing_table(con, record_type, where=f'"{key}" IN (SELECT "{key}" FROM _repair_fresh)')
+        if iceberg._read_snapshot(con, record_type) != snapshot:
+            raise RuntimeError("the comments catalog moved since the repair read it; rerun the repair")
+        prior_sql = f"SELECT * FROM {prior_table}"
+        missing_write_columns: set[str] = set()
+        missing_columns: set[str] = set()
+        prior_project = ", ".join(f'CAST("{column}" AS VARCHAR) AS "{column}"' for column in columns)
         con.execute(f"""
             CREATE TEMP TABLE _repair_prior AS
             SELECT {prior_project} FROM ({prior_sql})
             WHERE "{key}" IN (SELECT "{key}" FROM _repair_fresh)
         """)
-        corrected = correction_query(con, fresh_sql="SELECT * FROM _repair_fresh",
-                                     prior_sql="SELECT * FROM _repair_prior", columns=columns, key=key)
+        corrected = correction_query(
+            con,
+            fresh_sql="SELECT * FROM _repair_fresh",
+            prior_sql="SELECT * FROM _repair_prior",
+            columns=columns,
+            key=key,
+        )
         differs = " OR ".join(f'c."{column}" IS DISTINCT FROM p."{column}"' for column in columns)
         con.execute(f"""
             CREATE TEMP TABLE _repair_write AS
             SELECT c.* FROM ({corrected}) c JOIN _repair_prior p ON c."{key}" = p."{key}" WHERE {differs}
         """)
-        before = {row[key]: row for row in _rows(con, f"""
+        before = {
+            row[key]: row
+            for row in _rows(
+                con,
+                f"""
             SELECT p.* FROM _repair_prior p JOIN _repair_write w ON p."{key}" = w."{key}"
-        """)}
+        """,
+            )
+        }
         rows = _rows(con, f'SELECT * FROM _repair_write ORDER BY "{key}"')
         receipt = {
             "format": "spicy-regs-comment-repair",
@@ -212,12 +245,21 @@ def _repair_comments(
             "schema_migration_required": sorted(missing_write_columns),
             "snapshot_columns_null_filled": sorted(missing_columns),
             "identities": [row[0] for row in con.execute(f'SELECT "{key}" FROM _repair_fresh ORDER BY 1').fetchall()],
-            "missing_identities": [row[0] for row in con.execute(f"""
+            "missing_identities": [
+                row[0]
+                for row in con.execute(f"""
                 SELECT "{key}" FROM _repair_fresh EXCEPT SELECT "{key}" FROM _repair_prior ORDER BY 1
-            """).fetchall()],
+            """).fetchall()
+            ],
             "changes": [
-                {key: row[key], "cells": {column: {"before": before[row[key]][column], "after": row[column]}
-                                          for column in columns if before[row[key]][column] != row[column]}}
+                {
+                    key: row[key],
+                    "cells": {
+                        column: {"before": before[row[key]][column], "after": row[column]}
+                        for column in columns
+                        if before[row[key]][column] != row[column]
+                    },
+                }
                 for row in rows
             ],
             "rows": rows,
@@ -230,7 +272,8 @@ def _repair_comments(
         if missing_write_columns:
             raise ValueError(
                 "Migrate the comments schema through the catalog ingestion/export path, "
-                "then rerun the repair against its current write schema; missing: " + ", ".join(sorted(missing_write_columns))
+                "then rerun the repair against its current write schema; missing: "
+                + ", ".join(sorted(missing_write_columns))
             )
         if receipt["missing_identities"]:
             raise ValueError(
@@ -241,10 +284,11 @@ def _repair_comments(
             raise RuntimeError("the comments catalog moved since the repair read it; rerun the repair")
         if rows:
             iceberg.replace_rows(con, record_type, "_repair_write", expected_prior="_repair_prior")
+            written_table = processing_table(con, record_type, where=f'"{key}" IN (SELECT "{key}" FROM _repair_write)')
             same = " AND ".join(f't."{column}" IS NOT DISTINCT FROM w."{column}"' for column in columns)
             found, matching = con.execute(f"""
                 SELECT count(*), count(*) FILTER (WHERE {same})
-                FROM {iceberg._qualified(record_type)} t JOIN _repair_write w ON t."{key}" = w."{key}"
+                FROM {written_table} t JOIN _repair_write w ON t."{key}" = w."{key}"
             """).fetchone()
             if found != len(rows) or matching != len(rows):
                 raise RuntimeError(
@@ -303,10 +347,16 @@ def main(
         raise ValueError("source correction requires a release without unresolved records")
     source_release = {"logical_id": logical_id, "artifact_digest": artifact_digest}
     result = repair_records(
-        (row["record"] for row in reader.iter_records()), table=table, output_dir=output_dir, apply=apply,
+        (row["record"] for row in reader.iter_records()),
+        table=table,
+        output_dir=output_dir,
+        apply=apply,
         expected_snapshot=expected_snapshot,
-        source_pins={**source_release, "accepted_verifier_implementation_id": accepted_verifier_implementation_id,
-                "collection_outcome": dict(reader.collection_outcome)},
+        source_pins={
+            **source_release,
+            "accepted_verifier_implementation_id": accepted_verifier_implementation_id,
+            "collection_outcome": dict(reader.collection_outcome),
+        },
     )
     result["source_release"] = source_release
     result["collection_outcome"] = dict(reader.collection_outcome)

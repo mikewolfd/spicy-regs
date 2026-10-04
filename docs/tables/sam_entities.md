@@ -6,6 +6,8 @@
 
 One row per active SAM.gov registration, ingested from the Entity Management API v4 bulk extract (`/entities?format=json`) by `build_sam_entities`. The authoritative federal entity registry, the directory of organizations registered to do business with or receive assistance from the U.S. government, and the anchor for organization/entity resolution across the corpus: the same UEI ties a commenting organization to its registered identity. Filtered to public active registrations (`registrationStatus=A`); list-level fields only. All columns are stored as VARCHAR.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='sam_entities'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Window, complete for the years read. Every public active registration SAM.gov dated 1996 through 2026 and the two older ones (1949, 1968), one bulk extract per registrationDate year: 792,846 registrations of 787,293 UEIs on 2026-09-26, against the entity API's 792,892 active that day. Each year matched its active count when read, less its credited renewals (see data_quality). Scheduled runs re-read the current year every other day and cycle through the older years between, and each year read replaces that year's rows. *(measured 2026-09-26)*
 
 **Data quality.** A row is a registration, keyed by `uei` and `entity_eft_indicator`: one entity registers once per EFT indicator (187 of the 147,038 UEIs in the 2026 extract carry more than one), so `uei` alone is not unique. SAM keeps a renewed registration's prior record Active until its expiry is processed, and counts both; the table keeps the newer, and the reader credits the other toward the file's declared count (one each in 2007, 2008, 2011, 2013, 2019 and 2020 and two in 2026, each journaled). A file with fewer registrations than it declares, less those credits, is refused. A year read retires the registrations it no longer holds (80 expired from 2002 and 2003 and 11 from 2026 on 2026-09-26), journaled as `rows-retired` so qualification reconciles every removal. A stalled extract is abandoned and triggered afresh, each abandonment journaled.
@@ -31,8 +33,8 @@ One row per active SAM.gov registration, ingested from the Entity Management API
 | `congressional_district` | `VARCHAR` | U.S. congressional district of the physical address (`coreData.congressionalDistrict`). Null for non-US registrants. |
 | `primary_naics` | `VARCHAR` | Primary NAICS industry code the entity asserted (`assertions.goodsAndServices.primaryNaics`). Often null. |
 | `registration_status` | `VARCHAR` | Registration status as returned by the API (e.g. `Active`). The ingest filters on the request-side `registrationStatus=A`. |
-| `registration_date` | `VARCHAR` | Date the entity's current registration was recorded (ISO 8601 string). |
-| `registration_expiration_date` | `VARCHAR` | Date the current registration expires (ISO 8601 string). |
+| `registration_date` | `DATE` | Date the entity's current registration was recorded (ISO 8601 string). |
+| `registration_expiration_date` | `DATE` | Date the current registration expires (ISO 8601 string). |
 | `exclusion_status_flag` | `VARCHAR` | Whether the entity has an active exclusion/debarment record (`Y`/`N`). |
 | `purpose_of_registration_desc` | `VARCHAR` | Purpose-of-registration description (e.g. `Federal Assistance Awards`, `All Awards`). |
 | `entity_url` | `VARCHAR` | Entity's self-reported website URL (`coreData.entityInformation.entityURL`). Often null. |

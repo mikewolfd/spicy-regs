@@ -47,10 +47,38 @@ def test_local_edition_uses_pinned_scope_and_preserves_prior(tmp_path: Path, mon
     )
     [row] = pq.read_table(output).to_pylist()
     assert (row["cluster_id"], row["case_name"], row["court_id"], row["court_jurisdiction"], row["court_is_federal"]) == (
-        "1", "Alpha", "dcd", "FD", "t"
+        "1", "Alpha", "dcd", "FD", True
     )
     assert not (tmp_path / "_clusters_new.parquet").exists()
     if retained_prior:
         assert prior.read_bytes() == b"retained caller evidence"
     else:
         assert not prior.exists()
+
+
+def test_incremental_rerun_uses_latest_complete_local_pair(tmp_path, monkeypatch):
+    """A later source edition merges against the selected local build and its receipts."""
+    from spicy_regs.court_receipts import read_court_rows
+
+    monkeypatch.setattr(r2, "download", lambda *args, **kwargs: False)
+    first_source = tmp_path / "first.csv.bz2"
+    first_source.write_bytes(bz2.compress(
+        b'id,case_name,date_created\n"1","First","2026-06-30T08:00:00Z"\n'
+    ))
+    first = build_court_opinion_clusters(tmp_path, local_file=first_source,
+        skip_search_catchup=True, skip_court_scope=True)
+    first_bytes = first.read_bytes()
+    # Retained pre-migration scratch must not displace the complete native pair.
+    (tmp_path / "_clusters_prior.parquet").write_bytes(b"stale retained scratch")
+    second_source = tmp_path / "second.csv.bz2"
+    second_source.write_bytes(bz2.compress(
+        b'id,case_name,date_created\n"2","Second","2026-07-01T08:00:00Z"\n'
+    ))
+    second = build_court_opinion_clusters(tmp_path, local_file=second_source,
+        skip_search_catchup=True, skip_court_scope=True)
+    restored = {r["cluster_id"]: r for r in read_court_rows(second, dataset="court_opinion_clusters")}
+    assert set(restored) == {"1", "2"}
+    assert restored["1"]["date_created"] == "2026-06-30T08:00:00Z"
+    assert restored["2"]["date_created"] == "2026-07-01T08:00:00Z"
+    assert first.read_bytes() == first_bytes
+    assert (tmp_path / "court_opinion_clusters.parquet").resolve() == second

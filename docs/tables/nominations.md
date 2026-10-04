@@ -6,6 +6,8 @@
 
 One row per nomination or part, as the Congress.gov nomination list route states it, keyed `(congress, citation)`; the citation carries the part number. All columns are stored as VARCHAR.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='nominations'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled. Distinct 119th-Congress nomination-list identities from retained list pages. The pages repeat some identical records, so a pagination total does not prove a stable or complete population. Latest-action fields only: not nominee details, action histories, person entities or inferred confirmation outcomes. Receipts: fork-execution-2026-09-21/legislative-publication-summary.json, legislative-seeds/sealed-candidates.json and legislative-mcp-audit/. *(measured 2026-09-21)*
 
 **Data quality.** The shared Congress index reader pools complete walks with varied page sizes, keyed by `(congress, citation)`, keeping each identity's newest `updateDate`. A clean walk or a pool matching the declared total settles the query. A population change restarts pooling; incomplete or inconsistent walks exhaust the source reader's bounded attempts and fail before output is replaced. The list carries the latest action only, not the action history.
@@ -24,9 +26,8 @@ One row per nomination or part, as the Congress.gov nomination list route states
 | `description` | `VARCHAR` | The publisher's description of the nomination. |
 | `organization` | `VARCHAR` | The organization the nominee would serve in. |
 | `received_date` | `VARCHAR` | The date the Senate received the nomination. |
-| `is_civilian` | `VARCHAR` | Whether the publisher's nominationType says the nomination is civilian. |
-| `nomination_type_json` | `VARCHAR` | The publisher's nominationType object, as JSON. |
+| `is_civilian` | `BOOLEAN` | Whether the publisher's nominationType says the nomination is civilian. |
+| `is_military` | `BOOLEAN` | The publisher's nominationType object, as JSON. This column retains the source property isMilitary. |
 | `latest_action_date` | `VARCHAR` | Date of the publisher's latestAction entry. |
 | `latest_action_text` | `VARCHAR` | Text of the publisher's latestAction entry. |
 | `update_date` | `VARCHAR` | The publisher's updateDate; the merge prefers the larger value. |
-| `url` | `VARCHAR` | The publisher's own URL for this nomination. |

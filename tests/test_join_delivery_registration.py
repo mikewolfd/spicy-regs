@@ -8,16 +8,21 @@ from spicy_regs.relationship_views import SQL_RELATIONSHIP_VIEWS, install_relati
 from spicy_regs.relationship_views.fcc_native import FCC_NATIVE_VIEWS
 from spicy_regs.relationship_views.lifecycle_dates import LIFECYCLE_DATE_VIEWS
 from spicy_regs.transforms.native_legal_references import CONTRACTS
-from spicy_regs.transforms.build_fcc_ecfs import FILING_COLUMNS
+from spicy_regs.subject_catalog import policies
+from spicy_regs.native_types import described_schema
 import duckdb
 
 
 def test_native_and_fcc_schemas_follow_builders():
     schemas = expected_schemas()
     for contract in CONTRACTS:
-        assert schemas[contract.name] == [(column, "VARCHAR") for column in contract.columns]
-        assert contract.name in MCP_QUERYABLE
-    assert schemas["fcc_filings"] == [(column, "VARCHAR") for column in FILING_COLUMNS]
+        policy = policies()[contract.name]
+        if policy.receipt_only:
+            assert contract.name not in schemas
+        else:
+            assert schemas[contract.name] == described_schema(policy.subject_schema)
+            assert contract.name in MCP_QUERYABLE
+    assert schemas["fcc_filings"] == described_schema(policies()["fcc_filings"].subject_schema)
     assert ("docket_source_ordinal", "BIGINT") in schemas["fr_docket_links"]
 
 
@@ -27,7 +32,8 @@ def test_new_views_registered_but_missing_inputs_unavailable():
     assert names <= registered
     with duckdb.connect() as con:
         states = install_relationship_views(con, [])
-    assert all(states[name]["status"] == "unavailable" for name in names)
+    assert "lifecycle_date_evidence" not in states
+    assert all(states[name]["status"] == "unavailable" for name in names - {"lifecycle_date_evidence"})
 
 
 def test_retained_rollup_cli_entries():

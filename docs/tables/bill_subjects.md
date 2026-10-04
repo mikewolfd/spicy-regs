@@ -6,6 +6,8 @@
 
 Subject assignments returned by Congress.gov or GovInfo BILLSTATUS, keyed by bill_id for a left join to congress_bills.bill_id. policy_area is one publisher category; subjects_json is a JSON array of legislative subject names, not separate bill records. The consumer trims and deduplicates names. All columns are VARCHAR, including subject_count. carrier and enriched_at record how and when the answer was obtained.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='bill_subjects'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled; it grows each run and is not a complete subject census. From the 108th Congress every bill the bill family filled from GovInfo BILLSTATUS is copied from its congress_bills row; other bills from the 108th come from their folder's BILLSTATUS bulk zip, 32 folders a run, newest Congress first. Bills from the 93rd to the 107th, and bills whose BILLSTATUS file the reader refuses, come from the Congress.gov API with a key, up to 2,000 a run. No folder read and no API request, page or retry starts 20 minutes or more after the run began. A list-level bill in a folder the family reads waits for the family while its Congress is the current or previous one, and then goes to the API. *(measured 2026-09-23)*
 
 **Data quality.** A missing row can mean pending, failed or outside the configured scope. An empty assignment can mean no assignments or that the source did not hold the requested bill; those outcomes are not separately represented in this table. Rows copied from the bill family are rewritten when the family's BILLSTATUS read changes; other answers are not asked again. The table does not retain the original response or its digest.
@@ -19,7 +21,5 @@ Subject assignments returned by Congress.gov or GovInfo BILLSTATUS, keyed by bil
 | --- | --- | --- |
 | `bill_id` | `VARCHAR` | Stable bill key shared with congress_bills.bill_id, such as 119-hr-1. Primary/dedup key; join by this identifier rather than title. |
 | `policy_area` | `VARCHAR` | Publisher policy-area name after trimming, or NULL when the returned answer has no policy area. |
-| `subjects_json` | `VARCHAR` | JSON array of trimmed, deduplicated legislative subject names. An empty array alone does not distinguish unassigned from not held. |
-| `subject_count` | `VARCHAR` | Length of subjects_json, stored as a decimal string; not a count of bills or independent source responses. |
-| `carrier` | `VARCHAR` | Source reader that answered: govinfo-billstatus from the 108th Congress on, congress-api below it or where the BILLSTATUS file was refused. |
-| `enriched_at` | `VARCHAR` | UTC timestamp when this retained answer was shaped, not the publisher's modification date. |
+| `subjects` | `VARCHAR[]` | Native list of trimmed, deduplicated legislative subject names. An empty array alone does not distinguish unassigned from not held. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `subject_count` | `BIGINT` | Length of subjects_json, stored as a decimal string; not a count of bills or independent source responses. |

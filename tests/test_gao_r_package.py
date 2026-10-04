@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pyarrow as pa
 import pyarrow.parquet as pq
+from tests.government_fakes import literal_table
 import pytest
 
 from spicy_regs.sources import gao_r_package as package
@@ -101,8 +102,8 @@ def test_a_live_table_without_the_package_columns_gains_them_and_changes_no_cell
     out = tmp_path / "out.parquet"
     added = [_shaped(records[1])]
     importer.import_package_rows(_prior(tmp_path, columns=11), records, out, rows_sha256=importer.rows_digest(added))
-    assert pq.read_schema(out).names == list(module.COLUMNS)
-    rows = {r["report_id"]: r for r in pq.read_table(out).to_pylist()}
+    assert literal_table(out).column_names == list(module.COLUMNS)
+    rows = {r["report_id"]: r for r in literal_table(out).to_pylist()}
     assert (rows["gao-16-75sp"]["page_count"], rows["gao-16-75sp"]["title"]) == (7, "Feed gao-16-75sp")
 
 
@@ -117,7 +118,7 @@ def test_the_copy_adds_only_what_no_row_holds_and_changes_no_held_cell(tmp_path)
     out = tmp_path / "out.parquet"
     report = importer.import_package_rows(_prior(tmp_path), records, out, rows_sha256=importer.rows_digest(added),
                                           fill_nulls=False)
-    rows = {row["report_id"]: row for row in pq.read_table(out).to_pylist()}
+    rows = {row["report_id"]: row for row in literal_table(out).to_pylist()}
     assert set(rows) == {"gao-16-75sp", "24669"} and rows["gao-16-75sp"]["abstract"] is None
     assert (report["added"], report["held"], report["held_as_twin"], report["legal_decisions_left_out"]) == (1, 2, 1, 1)
     assert report["null_fills_available"] == {"gao_listing.abstract": 1, "gao_listing.requester_type": 1}
@@ -125,7 +126,7 @@ def test_the_copy_adds_only_what_no_row_holds_and_changes_no_held_cell(tmp_path)
     filled = tmp_path / "filled.parquet"
     importer.import_package_rows(_prior(tmp_path), records, filled, rows_sha256=importer.rows_digest(added),
                                  fill_nulls=True)
-    row = {r["report_id"]: r for r in pq.read_table(filled).to_pylist()}["gao-16-75sp"]
+    row = {r["report_id"]: r for r in literal_table(filled).to_pylist()}["gao-16-75sp"]
     assert (row["abstract"], row["title"], row["source"]) == ("Package summary.", "Feed gao-16-75sp", "gao_listing")
     assert (row["requester_type"], row["report_number"]) == ("congressional_request", "GAO-16-75SP")
 

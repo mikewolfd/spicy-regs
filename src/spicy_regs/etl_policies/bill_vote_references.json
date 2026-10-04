@@ -1,0 +1,21 @@
+{
+  "dataset": "bill_vote_references",
+  "policy_version": "congress-subjects/1",
+  "subject_schema": "/////9ABAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAgAAAB0AQAAOAEAAAgBAADcAAAArAAAAGgAAAA8AAAABAAAALz+//8AAAEFEAAAACQAAAAEAAAAAAAAABAAAABmdWxsX2FjdGlvbl9uYW1lAAAAALj+///w/v//AAABBRAAAAAYAAAABAAAAAAAAAAEAAAAZGF0ZQAAAADg/v//GP///wAAAQIQAAAAKAAAAAQAAAAAAAAADAAAAGFjdGlvbl9pbmRleAAAAAAIAAwACAAHAAgAAAAAAAABQAAAAFj///8AAAEFEAAAABwAAAAEAAAAAAAAAAsAAAByb2xsX251bWJlcgBM////hP///wAAAQUQAAAAGAAAAAQAAAAAAAAABwAAAHNlc3Npb24AdP///6z///8AAAEFEAAAABwAAAAEAAAAAAAAAAgAAABjb25ncmVzcwAAAACg////2P///wAAAQUQAAAAGAAAAAQAAAAAAAAABwAAAGNoYW1iZXIAyP///xAAFAAIAAYABwAMAAAAEAAQAAAAAAABBRAAAAAcAAAABAAAAAAAAAAHAAAAYmlsbF9pZAAEAAQABAAAAA==",
+  "identity_fields": [
+    "bill_id",
+    "chamber",
+    "congress",
+    "session",
+    "roll_number",
+    "action_index"
+  ],
+  "receipt_fields": [
+    "source_fields",
+    "source_metadata",
+    "source_schema",
+    "entry_kind"
+  ],
+  "receipt_only": false,
+  "nullable_identity_fields": []
+}

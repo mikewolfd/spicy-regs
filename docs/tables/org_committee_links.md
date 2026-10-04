@@ -6,6 +6,8 @@
 
 One row per (commenter organization name, FEC committee) name match, derived by `build_org_committee_links`. Materializes the organization-name bridge between the regulations.gov corpus and `fec_committees` — the join the data model always described but left to each query author, so every consumer normalized names differently. `organization` is the raw string as filed, joining straight back to `comments.organization`; `committee_id` joins to `fec_committees`. Coverage is inherently small: `comments.organization` is populated on only ~0.08% of comments (~20.7K of ~25.8M), and most commenting organizations do not run a federal PAC, so a few hundred organizations resolving is the correct answer rather than a matcher to tune harder. Matching runs in three tiers (`exact`, `core`, `prefix`) and every row carries `match_method`, `confidence`, and `committee_match_count` so consumers pick their own precision bar instead of trusting an opaque score. A high `committee_match_count` can reflect multiple committees sharing a name prefix; inspect the source evidence before treating those matches as an affiliation network.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='org_committee_links'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Derived, and bounded by a small input. Name matches between commenter organizations and FEC committees, reachable only for the small share of comments that carry an `organization` value at all, so absence of a link is not evidence that a commenter has none. *(measured 2026-09-06)*
 
 **Data quality.** These are heuristic name matches, not source-reported affiliations. confidence describes the matching rule, not a measured probability of accuracy. Matching names and resolvable committee IDs do not establish that the commenter and committee share an organization.
@@ -18,9 +20,6 @@ One row per (commenter organization name, FEC committee) name match, derived by 
 | Column | Type | Description |
 | --- | --- | --- |
 | `organization` | `VARCHAR` | Commenter organization exactly as filed on the comment. Join key back to `comments.organization`. |
-| `organization_norm` | `VARCHAR` | `organization` uppercased with parenthetical asides, apostrophes and punctuation removed and `&` expanded to `AND`. |
-| `organization_core` | `VARCHAR` | `organization_norm` with trailing legal suffixes (`INC`, `LLC`, ...) and a leading `THE` removed. The form the `core`/`prefix` tiers compare. |
-| `name_source` | `VARCHAR` | Where the organization name came from. Always `organization_field` today; text-derived names (comment title, letterhead, signature block) would be added as extra rows under their own source. |
 | `committee_id` | `VARCHAR` | Matched OpenFEC committee identifier. Joins to `fec_committees.committee_id`. |
 | `committee_name` | `VARCHAR` | Matched committee name as registered with the FEC. |
 | `committee_type_full` | `VARCHAR` | Human-readable committee type of the matched committee (e.g. `PAC - Qualified`). |
@@ -28,11 +27,10 @@ One row per (commenter organization name, FEC committee) name match, derived by 
 | `party_full` | `VARCHAR` | Human-readable political party of the matched committee. Often null for non-party committees. |
 | `organization_type_full` | `VARCHAR` | Sponsoring organization type of the matched committee (e.g. `Trade Association`, `Labor Organization`). Often null. |
 | `committee_state` | `VARCHAR` | Two-letter state on the matched committee (`fec_committees.state`). Often null. |
-| `match_method` | `VARCHAR` | How the pair matched: `exact` (full normalized names equal), `core` (decoration-stripped cores equal), or `prefix` (committee core starts with the whole organization core on a token boundary). |
-| `confidence` | `VARCHAR` | `high` for `exact`/`core`; for `prefix`, `medium` when `committee_match_count` <= 5 and `low` above that. Filter on this to pick a precision bar. |
 | `committee_match_count` | `BIGINT` | How many committees this organization name matched in total. A high count does not establish an affiliate network; inspect source evidence alongside the matching rule. |
 | `comment_count` | `BIGINT` | Comments filed under this exact organization string (deduplicated on `comment_id`, newest `modify_date` wins — matching the MCP `comments` view). |
 | `docket_count` | `BIGINT` | Distinct dockets this organization string commented on. |
-| `agency_codes_json` | `VARCHAR` | JSON array of the distinct agency codes this organization commented to, sorted. |
-| `first_comment_date` | `VARCHAR` | Earliest `posted_date` across this organization's comments (ISO 8601 string). |
-| `last_comment_date` | `VARCHAR` | Latest `posted_date` across this organization's comments (ISO 8601 string). |
+| `first_comment_date` | `TIMESTAMP WITH TIME ZONE` | Earliest `posted_date` across this organization's comments (ISO 8601 string). |
+| `last_comment_date` | `TIMESTAMP WITH TIME ZONE` | Latest `posted_date` across this organization's comments (ISO 8601 string). |
+| `agency_codes` | `VARCHAR[]` | Native list of the distinct agency codes this organization commented to, sorted. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `association_kind` | `VARCHAR` | Meaning of the stated organization-to-committee association; no shared legal identity is implied. |

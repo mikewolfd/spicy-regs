@@ -140,6 +140,14 @@ def decision_rows(run: ListingRun) -> tuple[list[dict], Counter[str]]:
         }
         for item, b_numbers in decided
     ]
+    for row, (item, _) in zip(rows, decided, strict=True):
+        if hasattr(item, "status"):
+            # Status is source data; interpretation remains the source owner's
+            # versioned exact-sentence reader. Older readers have no status attr.
+            from spicy_docs.interpretation.gao_decisions import decision_outcome
+
+            finding = decision_outcome(item.status)
+            row.update(decision_status=item.status, outcome=finding.outcome, outcome_rule=finding.rule)
     counts: Counter[str] = Counter(
         decision_rows=len(rows), unnumbered_left_out=sum(other.product_number is None for other in run.others)
     )

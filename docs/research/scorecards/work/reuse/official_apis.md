@@ -56,7 +56,7 @@ project to ingest or redistribute its rating database.
   [House vote model](https://github.com/LibraryOfCongress/api.congress.gov/blob/main/Documentation/HouseRollCallVoteEndpoint.md)
 - **Code/endpoint to integrate:** Keep `CongressListingReader` and
   `list_route_url` in
-  [the existing reader](../../../../../../spicy-docs/src/spicy_docs/sources/congress/listing.py).
+  the existing reader in `spicy-docs/src/spicy_docs/sources/congress/listing.py`.
   Relevant routes include `/v3/member/{bioguideId}`,
   `/v3/bill/{congress}/{billType}/{billNumber}/cosponsors`, and
   `/v3/house-vote/{congress}/{session}/{voteNumber}/members`. Reuse existing
@@ -93,9 +93,9 @@ project to ingest or redistribute its rating database.
   separate from scorecard edition identity. [API model](https://github.com/usgpo/api),
   [BILLSTATUS documentation](https://github.com/usgpo/bill-status)
 - **Code/endpoint to integrate:** Reuse
-  [GovInfoDiscoveryReader](../../../../../../spicy-docs/src/spicy_docs/sources/govinfo/discovery.py),
-  [body acquisition](../../../../../../spicy-docs/src/spicy_docs/sources/govinfo/body_acquisition.py),
-  and [bulk status](../../../../../../spicy-docs/src/spicy_docs/sources/congress/bulk_status.py).
+  `GovInfoDiscoveryReader` in `spicy-docs/src/spicy_docs/sources/govinfo/discovery.py`,
+  body acquisition in `spicy-docs/src/spicy_docs/sources/govinfo/body_acquisition.py`,
+  and bulk status in `spicy-docs/src/spicy_docs/sources/congress/bulk_status.py`.
   Existing service routes include `/collections/{collection}/{lastModifiedStartDate}`,
   `/packages/{packageId}/summary`, and package granules. Bulk listing is also
   available at `/bulkdata/json/BILLSTATUS/119`; the original data remains XML.
@@ -127,8 +127,8 @@ project to ingest or redistribute its rating database.
   service. The official code distinguishes current/detail candidate data from
   `CandidateHistory`. [Candidate models and filters](https://github.com/fecgov/openFEC/blob/develop/webservices/resources/candidates.py)
 - **Code/endpoint to integrate:** Reuse
-  [FecClient](../../../../../../spicy-docs/src/spicy_docs/sources/fec/client.py)
-  and the [retained candidate query profile](../../../../../../spicy-docs/src/spicy_docs/sources/fec/candidate_profile.py).
+  `FecClient` in `spicy-docs/src/spicy_docs/sources/fec/client.py`
+  and the retained candidate query profile in `spicy-docs/src/spicy_docs/sources/fec/candidate_profile.py`.
   Relevant service paths are `/v1/candidates/?candidate_id=...`,
   `/v1/candidate/{candidate_id}/`, and
   `/v1/candidate/{candidate_id}/history/{cycle}/`. Prefer already-published FEC

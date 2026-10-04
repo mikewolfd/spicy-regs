@@ -6,6 +6,8 @@
 
 One source legal-document occurrence or rendition associated with a matter observation. Discover native document IDs, titles, categories, URLs and source associations. Byte equality does not merge document editions; deferred bodies remain separate from available metadata. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_legal_documents'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled. Supported observations from retained legal and audit metadata document structures. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
 
 - **Parquet file:** `fec_legal_documents.parquet`
@@ -16,38 +18,18 @@ One source legal-document occurrence or rendition associated with a matter obser
 | Column | Type | Description |
 | --- | --- | --- |
 | `record_id` | `VARCHAR` | Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event. |
-| `identity_version` | `VARCHAR` | Version of the source-observation identity rule; it does not select a current or canonical record. |
-| `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
-| `mapping_status` | `VARCHAR` | Whether this source observation mapped fully, partially, or received an explicit nondata/refusal disposition; inspect the reason alongside NULL values. |
-| `mapping_reason_json` | `VARCHAR` | JSON object naming unsupported, missing or otherwise limited field interpretations; native values remain reachable through evidence. |
-| `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
-| `source_record_id` | `VARCHAR` | Native source-observation key within collection_id. Resolve with the source generation, exact locator and source digest, not this value alone. |
-| `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
-| `source_locator_json` | `VARCHAR` | Exact source row or subrecord coordinates, including available member, ordinal, byte span and field-definition references. Resolve in the pinned source generation. |
-| `source_pointer` | `VARCHAR` | Exact pointer within the provider-owned native record to the mapped value or metadata object. |
-| `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
-| `selection_evidence_sha256` | `VARCHAR` | Digest of the retained selection evidence used to authorize this mapper's source scope; not a financial inclusion decision. |
 | `matter_id` | `VARCHAR` | Authority-, matter-type- and namespace-qualified logical case key. Multiple retained observations may share it. |
 | `matter_record_id` | `VARCHAR` | Exact fec_legal_matters.record_id observation supporting this child event, party, document or finding. |
-| `query_completeness` | `VARCHAR` | Whether complete traversal of the stated source query was established. A retained page or rejected response is not a completed query. |
 | `document_id` | `VARCHAR` | Namespace-qualified logical document identity when source evidence supports one; this observation's record_id remains distinct. |
 | `native_document_id` | `VARCHAR` | Literal document identifier in its native matter/document namespace. |
-| `document_identity_status` | `VARCHAR` | Whether the source supplied a usable document identity; names and URLs do not force a cross-source merge. |
 | `parent_document_record_id` | `VARCHAR` | Typed document-observation key for a source-stated parent/rendition relationship. |
 | `title` | `VARCHAR` | Source title or explicitly labeled mapper title; consult title_basis or title_status when present. |
-| `title_status` | `VARCHAR` | Source-presence state of the title, preserving missing, NULL and empty values. |
 | `category` | `VARCHAR` | Source document category or classification, retained within the native source namespace. |
-| `category_status` | `VARCHAR` | Presence/interpretation state of the source category. |
 | `document_type` | `VARCHAR` | Literal document-type code or source-specific type. |
 | `filename` | `VARCHAR` | Literal source filename, not an inferred document identity or media-type guarantee. |
 | `url` | `VARCHAR` | Source-reported document or reference URL; consult body_status before assuming retained readable content. |
-| `url_status` | `VARCHAR` | Source-presence or interpretation state of the reference URL. |
-| `document_date_raw` | `VARCHAR` | Literal source value before conversion for document_date. Preserves spelling, signs and empty values; the typed value and its status are separate. |
-| `document_date_status` | `VARCHAR` | Source-presence or conversion state for document_date, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
 | `date_precision` | `VARCHAR` | Precision supported by the native date, retained independently of the normalized date value. |
 | `media_type` | `VARCHAR` | Source-supplied or explicitly supported media type for the document reference. |
-| `body_status` | `VARCHAR` | Explicit body availability or processing status. A PDF link remains deferred; metadata does not imply extracted content. |
-| `content_sha256` | `VARCHAR` | Content digest only where the retained source supplies one; a URL alone does not prove body bytes. |
-| `length_raw` | `VARCHAR` | Source-stated content length in its native spelling; not a measurement from newly retrieved bytes. |
 | `source_association_kind` | `VARCHAR` | Source basis for this document's association with a matter or parent document. |
 | `document_date` | `DATE` | Date parsed from the date supplied for the legal document. NULL requires the source value and conversion status; capture time is not substituted. |
+| `document_length` | `VARCHAR` | Document length stated by the source. |

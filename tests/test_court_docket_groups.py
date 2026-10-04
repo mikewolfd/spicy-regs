@@ -56,8 +56,6 @@ def test_build_uses_only_published_members_and_every_parent_resolves(tmp_path):
     table = pq.read_table(out)
     assert table.schema == SCHEMA
     assert table.to_pylist() == [
-        {"cl_docket_id": "10", "parent_cl_docket_id": "11", "confidence_tier": "doppeldocket", "group_size": 2,
-         "edition": "2026-06-30", "rule_version": "1"},
-        {"cl_docket_id": "11", "parent_cl_docket_id": "11", "confidence_tier": "doppeldocket", "group_size": 2,
-         "edition": "2026-06-30", "rule_version": "1"},
+        {"cl_docket_id": "10", "parent_cl_docket_id": "11", "confidence_tier": "doppeldocket", "group_size": 2},
+        {"cl_docket_id": "11", "parent_cl_docket_id": "11", "confidence_tier": "doppeldocket", "group_size": 2},
     ]

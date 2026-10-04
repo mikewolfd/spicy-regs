@@ -170,10 +170,12 @@ def test_shape_produces_exact_schema():
     assert row["carrier"] == CARRIER_API
 
 
-def test_assignment_trims_drops_blanks_and_dedups_in_first_seen_order():
+def test_assignment_preserves_literal_names_nulls_blanks_and_repetition():
     result = assignment("  Health ", ["B", " A  a ", None, "", "B", "A a"], CARRIER_BULKDATA)
-    assert result == BillSubjects("Health", ("B", "A a"), CARRIER_BULKDATA)
-    assert assignment(" ", [], CARRIER_API).policy_area is None
+    assert result == BillSubjects("  Health ", ("B", " A  a ", None, "", "B", "A a"), CARRIER_BULKDATA)
+    assert assignment(" ", [], CARRIER_API).policy_area == " "
+    with pytest.raises(ValueError, match="text or null"):
+        assignment("Health", [{"name": "unsupported"}], CARRIER_API)
 
 
 def test_every_result_lands_in_exactly_one_bucket():
@@ -205,8 +207,8 @@ def test_family_rows_are_copied_without_any_request(tmp_path):
     row = _rows(out)["119-hr-1"]
     assert (row["policy_area"], json.loads(row["subjects_json"]), row["subject_count"], row["carrier"]) == (
         "Health",
-        ["Medicare", "Drug safety"],
-        "2",
+        [" Medicare ", "Drug safety", "Medicare"],
+        "3",
         CARRIER_BULKDATA,
     )
     assert folders.read == [] and fetcher.asked == []
@@ -259,7 +261,9 @@ def test_a_folder_the_family_has_not_read_comes_from_its_zip_once(tmp_path):
     fetcher = _StubFetcher({f"{OLD}-hr-3": BillSubjects("Health", (), CARRIER_API)})
     rows = _rows(enrich_bill_subjects(tmp_path, read_folder=folders, fetcher=fetcher))
     assert folders.read == [(OLD, "hr")]
-    assert json.loads(rows[f"{OLD}-hr-1"]["subjects_json"]) == ["Air quality", "Congressional oversight"]
+    assert json.loads(rows[f"{OLD}-hr-1"]["subjects_json"]) == [
+        "Air quality", "  Congressional  oversight ", "Air quality",
+    ]
     assert rows[f"{OLD}-hr-2"]["policy_area"] == "Environmental Protection"
     # A file the reader refuses goes to the API; a bill a settled zip does not list is not held.
     assert fetcher.asked == [f"{OLD}-hr-3"]

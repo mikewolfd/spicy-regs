@@ -764,13 +764,13 @@ class TestDocumentAttachmentColumns:
         # and merge are exercised against an actual payload.
         raw = json.loads((SAMPLE_DATA / "document-ACF-2025-0038-0001.json").read_text())
         record = DOCUMENT.extract(raw)
-        write_staging("ACF", "documents", [record], staging, DOCUMENT_SCHEMA)
+        write_staging("ACF", "documents", [record], staging, DOCUMENT.schema)
 
         merge_staging_files(
             staging,
             output,
             ["documents"],
-            {"documents": DOCUMENT_SCHEMA},
+            {"documents": DOCUMENT.schema},
             {"documents": "document_id"},
         )
 
@@ -779,6 +779,7 @@ class TestDocumentAttachmentColumns:
         row = merged.row(0, named=True)
         assert row["document_id"] == "ACF-2025-0038-0001"
         assert row["fr_doc_num"] == "2025-13790"
+        assert set(DOCUMENT.schema) <= set(merged.columns)
         assert json.loads(row["attachments_json"]) == [
             {
                 "url": "https://downloads.regulations.gov/ACF-2025-0038-0001/content.pdf",
@@ -795,7 +796,7 @@ class TestDocumentAttachmentColumns:
         output = tmp_path / "output"
         output.mkdir()
 
-        legacy_schema = {k: v for k, v in DOCUMENT_SCHEMA.items() if k not in ("attachments_json", "fr_doc_num")}
+        legacy_schema = {k: v for k, v in DOCUMENT.schema.items() if k not in ("attachments_json", "fr_doc_num")}
         existing = [
             {
                 "document_id": "OLD-001",
@@ -816,13 +817,13 @@ class TestDocumentAttachmentColumns:
         write_parquet_from_dicts(output / "documents.parquet", existing, legacy_schema)
 
         raw = json.loads((SAMPLE_DATA / "document-ACF-2025-0038-0001.json").read_text())
-        write_staging("ACF", "documents", [DOCUMENT.extract(raw)], staging, DOCUMENT_SCHEMA)
+        write_staging("ACF", "documents", [DOCUMENT.extract(raw)], staging, DOCUMENT.schema)
 
         merge_staging_files(
             staging,
             output,
             ["documents"],
-            {"documents": DOCUMENT_SCHEMA},
+            {"documents": DOCUMENT.schema},
             {"documents": "document_id"},
         )
 

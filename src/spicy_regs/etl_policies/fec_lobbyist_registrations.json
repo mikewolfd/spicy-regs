@@ -1,0 +1,35 @@
+{
+  "dataset": "fec_lobbyist_registrations",
+  "policy_version": "fec-identity-context-receipts/1",
+  "subject_schema": "/////7ABAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAcAAABQAQAADAEAANgAAACoAAAAcAAAADQAAAAEAAAA3P7//wAAAQYQAAAAHAAAAAQAAAAAAAAACwAAAGlzX2xvYmJ5aXN0AMz+//8I////AAABCBAAAAAkAAAABAAAAAAAAAAKAAAAZmlsZWRfZGF0ZQAAAAAGAAgABgAGAAAAAAAAAED///8AAAEFEAAAACQAAAAEAAAAAAAAABIAAABsb2JieWlzdF9pbmRpY2F0b3IAADj///90////AAABBRAAAAAcAAAABAAAAAAAAAAJAAAAaW1hZ2VfdXJsAAAAZP///6D///8AAAEFEAAAACAAAAAEAAAAAAAAAA4AAABjb21taXR0ZWVfbmFtZQAAlP///9D///8AAAEFEAAAACAAAAAEAAAAAAAAAAwAAABjb21taXR0ZWVfaWQAAAAAxP///xAAFAAIAAYABwAMAAAAEAAQAAAAAAABBRAAAAAgAAAABAAAAAAAAAAJAAAAcmVjb3JkX2lkAAAABAAEAAQAAAA=",
+  "identity_fields": [
+    "record_id"
+  ],
+  "receipt_fields": [
+    "identity_version",
+    "mapping_version",
+    "mapping_status",
+    "mapping_reason_json",
+    "collection_id",
+    "source_record_id",
+    "source_sha256",
+    "source_locator_json",
+    "source_authority",
+    "selection_evidence_sha256",
+    "source_representation_role",
+    "current_record_status",
+    "source_namespace",
+    "source_pointer",
+    "committee_id_status",
+    "lobbyist_status",
+    "image_body_status",
+    "filed_date_raw",
+    "filed_date_status",
+    "source_cycle",
+    "conversion_inputs",
+    "conversion_diagnostics",
+    "source_input"
+  ],
+  "receipt_only": false,
+  "nullable_identity_fields": []
+}

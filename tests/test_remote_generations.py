@@ -227,3 +227,28 @@ def test_stale_family_refuses_before_promotion(tmp_path):
     with pytest.raises(pub.PublicationError, match="changed since"):
         publish(store, old_dir, old, prior)
     assert store.objects[pub.INDEX_KEY] == before and len(store.copied) == copies
+
+
+def test_receipt_only_remote_generation_admits_and_selects_checkpoints(tmp_path):
+    from spicy_regs.etl_receipts import DatasetPolicy, ReceiptContext, RECEIPT_SCHEMA, write_dataset
+    from spicy_regs.native_types import described_schema
+    policy = DatasetPolicy('resume_checks', pa.schema([]), (), ('cursor',), receipt_only=True)
+    context = ReceiptContext('build-one', 'read-one', 'test:1', [
+        {'source_id': 'fixture', 'source_uri': None, 'sha256': 'a' * 64,
+         'locator': 'row:1', 'body_version': None}])
+    _, receipt = write_dataset([({'cursor': 'complete'}, context)], tmp_path / 'bundle', policy)
+    store = RemoteStore()
+    raw = receipt.read_bytes()
+    key = 'stage/receipts/etl_receipts.parquet'
+    store.objects[key] = raw
+    etag = store.get_object(Bucket='fork', Key=key)['ETag']
+    member = StoredParquet(key, len(raw), 'sha256:' + sha256(raw).hexdigest(), etag, 1)
+    directory = tmp_path / 'generation'
+    remote.prepare_remote_generation(
+        directory, family='checks', client=store, bucket='fork', staging_prefix='stage/receipts',
+        members=[member], expected_keys=['etl_receipts.parquet'],
+        schemas={'etl_receipts': described_schema(RECEIPT_SCHEMA)},
+        receipt_policies=[policy], receipt_generation_id='build-one')
+    index = publish(store, directory, member)
+    assert index['families']['checks']['tables'] == {}
+    assert pub.receipt_members(index, dataset='resume_checks')[0].rows == 1

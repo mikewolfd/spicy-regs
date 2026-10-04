@@ -26,6 +26,8 @@ Usage::
 
 from __future__ import annotations
 
+from spicy_regs.subject_catalog import subject_tables, policies as subject_policies
+
 import argparse
 import hashlib
 import json
@@ -179,6 +181,7 @@ CONTRACT_TABLES: tuple[str, ...] = (
     "cbo_cost_estimates",
     # A8/A9 (laws and rosters): the laws and committee-rosters rollups.
     "laws",
+    "law_sections",
     "law_code_sections",
     "table3_records",
     "committees",
@@ -215,6 +218,7 @@ CONTRACT_TABLES: tuple[str, ...] = (
     "native_legal_reference_reads",
     # GAO's open-recommendations export, accumulated daily (spicy-docs 0.53.0).
     "gao_recommendations",
+    "gao_decisions",
 )
 
 
@@ -353,6 +357,10 @@ TABLES: tuple[str, ...] = (
     "committee_report_reads",
 )
 
+
+LEGACY_TABLES = TABLES
+TABLES = subject_tables(TABLES)
+
 # Tables the MCP server (list_sources / describe_table / query_sql) exposes.
 # This must equal spicy_regs.mcp_server.TABLES; a test enforces it so the docs'
 # "queryable via MCP" flag can't drift from what the server actually serves.
@@ -388,7 +396,6 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "org_committee_links",
         "gao_reports",
         "gao_decisions",
-    "gao_decisions",
         "crs_reports",
         "court_dockets",
         "court_docket_groups",
@@ -412,6 +419,8 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         *CONTRACT_TABLES,
     }
 )
+MCP_QUERYABLE = frozenset(subject_tables(MCP_QUERYABLE))
+
 
 # Schemas for the derived rollups. These mirror the SQL/Polars schemas in
 # src/spicy_regs/transforms/{build_feed_summary,build_agency_rollups}.py and
@@ -877,8 +886,11 @@ def expected_schemas() -> dict[str, list[tuple[str, str]]]:
         "lifecycle_events": EVENT_SCHEMA,
         "agency_lifecycle_stats": AGENCY_LIFECYCLE_STATS_SCHEMA,
     }
+    installed = subject_policies()
     for name in TABLES:
-        if name in builder_columns:
+        if name in installed:
+            schemas[name] = described_schema(installed[name].subject_schema)
+        elif name in builder_columns:
             schemas[name] = [(column, "VARCHAR") for column in builder_columns[name]]
         elif name in builder_schemas:
             schemas[name] = described_schema(builder_schemas[name])
@@ -989,6 +1001,18 @@ def load_descriptions(path: Path = DEFAULT_DESCRIPTIONS) -> dict:
         if inline:
             raise ValueError(f"[{name}] declares columns_from: {COLUMNS_FROM_SPICY_DOCS} and also lists columns inline")
         entry["columns"] = contract_column_prose(name)
+    # Subject prose is generated from explicit family field maps. Source-only
+    # processing datasets remain discoverable through receipt declarations.
+    subject_prose = REPO_ROOT / "data_dictionary" / "subject_descriptions.json"
+    overrides = json.loads(subject_prose.read_text()) if subject_prose.exists() else {}
+    for name, policy in subject_policies().items():
+        if policy.receipt_only:
+            tables.pop(name, None)
+            continue
+        entry = tables.setdefault(name, overrides.get(name, {}))
+        if name in overrides:
+            entry.update(overrides[name])
+        entry["identity_columns"] = list(policy.identity_fields)
     return tables
 
 
@@ -1024,7 +1048,7 @@ def check_descriptions(
         errors.append(f"[{table}] table has a schema but no entry in descriptions.yaml")
     for table in sorted(desc_tables - schema_tables):
         errors.append(f"[{table}] described in descriptions.yaml but is not a known table")
-    for table in sorted(set(COVERAGE_PROSE_EXCEPTIONS) - set(TABLES)):
+    for table in sorted(set(COVERAGE_PROSE_EXCEPTIONS) - set(LEGACY_TABLES)):
         errors.append(f"[{table}] has a coverage exception but is not a known table")
 
     for table in sorted(schema_tables & desc_tables):
@@ -1154,7 +1178,7 @@ def _render_table_page(
     data_quality = (entry.get("data_quality") or "").strip()
     if data_quality:
         lines += [f"**Data quality.** {data_quality}", ""]
-    queryable = "Configured" if table in MCP_QUERYABLE else "Not configured"
+    queryable = "Configured" if table in MCP_QUERYABLE or table == "etl_receipts" else "Not configured"
     where = f", in the snapshot that `{SNAPSHOT_POINTER}` names" if table in RULEMAKING_TABLES else ""
     lines += [
         f"- **Parquet file:** `{table}.parquet`{where}",
@@ -1330,6 +1354,7 @@ def build_catalog(descriptions: dict, schemas: dict[str, list[tuple[str, str]]])
         "format_version": CATALOG_FORMAT_VERSION,
         "declares": "supported table schemas; publication and search availability are verified separately",
         "views": list(build_fec_child_metadata(descriptions, schemas).values()),
+        "etl_receipts": receipt_metadata(),
         "classes": [
             {
                 "table": table,
@@ -1374,6 +1399,35 @@ def build_fec_child_metadata(descriptions, schemas):
     return result
 
 
+def receipt_metadata():
+    """Describe separate generation-bound evidence, never a subject mirror."""
+    from spicy_regs.etl_receipts import RECEIPT_SCHEMA
+    from spicy_regs.contract_types import described_schema
+    prose = {
+        "receipt_id": "Stable identity of this processing receipt.", "dataset": "Logical dataset whose observation or attempted processing this receipt records.",
+        "policy_version": "Explicit field policy used to separate subject values and processing evidence.",
+        "generation_id": "Exact generation containing this receipt and its selected subject values.",
+        "record_id": "Shared-receipt identity derived from the dataset's declared subject key; null for observations without a subject.",
+        "subject_version": "Digest of the exact native subject values, used to prevent joining a receipt to a different row version.",
+        "identity_json": "Lossless typed encoding of the subject's declared natural key.",
+        "attempt_id": "Identity of the processing attempt, including failed or empty attempts.",
+        "outcome": "accepted, observed, rejected, refused or error; these processing outcomes are separate from business statuses.",
+        "processor": "Processor or interpretation version that produced the receipt.",
+        "witnesses": "Ordered source witnesses with identifiers, URIs, digests, locators and body versions; repetitions are preserved.",
+        "processing_json": "Shared lossless typed encoding of explicitly classified processing fields and original conversion inputs.",
+        "diagnostic_json": "Shared lossless typed encoding of processing diagnostics; separate from subject content.",
+    }
+    return {"table": "etl_receipts", "label": "ETL receipts", "category": "processing_evidence", "kind": "not_a_range",
+            "summary": "Processing outcomes and exact source evidence stored separately from useful subject rows.",
+            "grain": "One receipt per selected subject version or processing attempt, within its generation.",
+            "identity_columns": ["receipt_id"], "member": "etl_receipts.parquet",
+            "selection": "Read the receipt member named by the same captured publication family as the subject; never join independent latest snapshots.",
+            "columns": [{"column_name": name, "column_type": dtype, "description": prose[name]} for name, dtype in described_schema(RECEIPT_SCHEMA)],
+            "datasets": [{"dataset": name, "receipt_only": p.receipt_only, "policy_version": p.policy_version,
+                          "identity_columns": list(p.identity_fields), "processing_fields": list(p.receipt_fields)}
+                         for name,p in subject_policies().items()]}
+
+
 def build_mcp_metadata(descriptions: dict, schemas: dict[str, list[tuple[str, str]]]) -> dict:
     """Bundle dictionary meaning for MCP without a runtime source-reader dependency.
 
@@ -1391,8 +1445,9 @@ def build_mcp_metadata(descriptions: dict, schemas: dict[str, list[tuple[str, st
         description = descriptions[table]
         contract = _contracts().get(table) if table in CONTRACT_TABLES else None
         record_type = RECORD_TYPES.get(table)
+        policy = subject_policies().get(table)
         identity = (
-            list(contract.identity)
+            list(policy.identity_fields) if policy is not None else list(contract.identity)
             if contract is not None
             else [record_type.dedup_key]
             if record_type is not None
@@ -1401,7 +1456,7 @@ def build_mcp_metadata(descriptions: dict, schemas: dict[str, list[tuple[str, st
         result[table] = {
             **entry,
             **({"category": table_category(table)} if table_category(table) else {}),
-            "grain": contract.grain if contract is not None else description.get("grain"),
+            "grain": description.get("grain") or (contract.grain if contract is not None else None),
             "identity_columns": identity,
             "columns": [
                 {
@@ -1422,6 +1477,7 @@ def build_mcp_metadata(descriptions: dict, schemas: dict[str, list[tuple[str, st
         if checks:
             result[table]["aggregate_checks"] = checks
     result.update(build_fec_child_metadata(descriptions, schemas))
+    result["etl_receipts"] = receipt_metadata()
     return result
 
 
@@ -1494,6 +1550,18 @@ def cmd_generate(args: argparse.Namespace) -> int:
         print(f"  - {DEFAULT_CATALOG_PATH.relative_to(REPO_ROOT)} (+ .sha256)")
         DEFAULT_MCP_METADATA_PATH.write_bytes(catalog_bytes(build_mcp_metadata(descriptions, schemas)))
         print(f"  - {DEFAULT_MCP_METADATA_PATH.relative_to(REPO_ROOT)}")
+        receipt = receipt_metadata()
+        receipt_columns = [(column["column_name"], column["column_type"]) for column in receipt["columns"]]
+        receipt_entry = {**receipt, "columns": {c["column_name"]: c["description"] for c in receipt["columns"]}}
+        (out_dir / "etl_receipts.md").write_text(_render_table_page("etl_receipts", receipt_columns, receipt_entry))
+        for name, policy in subject_policies().items():
+            if policy.receipt_only:
+                (out_dir / f"{name}.md").write_text(
+                    _GENERATED_BANNER + f"\n\n# `{name}` processing evidence\n\n"
+                    "This dataset contains processing evidence rather than subject rows. "
+                    f"Read [ETL receipts](etl_receipts.md) with `dataset = '{name}'`. "
+                    "The receipt retains exact values, ordered source witnesses, processing outcomes, and the selected generation.\n")
+
         try:
             output_ledger.RECORD.write_bytes(qualification_bytes())
         except (OSError, ValueError) as exc:

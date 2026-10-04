@@ -7,6 +7,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
+from spicy_regs.scorecards.etl import LINK_NAMES, generation_options, read_family
 from spicy_regs.generations import build_generation, verify_generation
 from spicy_regs.pipelines.rollups.scorecard_analysis import ScorecardAnalysisRollup
 from spicy_regs.scorecards.resolution import OFFICIAL_COLUMNS
@@ -23,7 +24,7 @@ def test_old_member_artifact_reports_missing_votesmart_column(tmp_path):
         _read([path], OFFICIAL_COLUMNS["members"])
 
 
-def _inputs(tmp_path, *, row_overrides=None):
+def _inputs(tmp_path, *, row_overrides=None, native_members=False):
     source = tmp_path / "inputs"
     source.mkdir()
     provenance = {
@@ -88,15 +89,40 @@ def _inputs(tmp_path, *, row_overrides=None):
         )
     files.append(source / "congress_bills")
     artifact = tmp_path / "published-inputs"
-    build_generation(
-        artifact,
-        family="test-inputs",
-        files=files,
-        expected_keys=ScorecardAnalysisRollup.inputs,
-        partitioned={"congress_bills.parquet": ("congress",)},
-    )
     store = Store()
-    index = pub.publish_generation(artifact, client=store, bucket="test", prior_index=pub.empty_index())
+    selected = [p for p in files if not native_members or p.stem not in {"members", "member_terms"}]
+    # Construct a historical, pre-policy fixture; runtime reads and the output
+    # generation still use installed policy enforcement.
+    with pytest.MonkeyPatch.context() as legacy_fixture:
+        legacy_fixture.setattr("spicy_regs.etl_policy_registry.installed_policies", lambda: {})
+        build_generation(
+            artifact,
+            family="test-inputs",
+            files=selected,
+            expected_keys=tuple(p.name if p.is_file() else p.name + ".parquet" for p in selected),
+            partitioned={"congress_bills.parquet": ("congress",)},
+        )
+        index = pub.publish_generation(artifact, client=store, bucket="test", prior_index=pub.empty_index())
+    if native_members:
+        from spicy_regs.congress_receipts import policy, write_congress_dataset
+        from spicy_regs.etl_receipts import combine_receipts
+
+        native, receipts = [], []
+        for name in ("members", "member_terms"):
+            subject, receipt = write_congress_dataset(
+                source / (name + ".parquet"), tmp_path / ("native-" + name),
+                dataset=name, generation_id="official-v1",
+            )
+            native.append(subject)
+            receipts.append(receipt)
+        official_generation = tmp_path / "official-generation"
+        build_generation(
+            official_generation, family="members", files=native, expected_keys=[p.name for p in native],
+            receipt_path=combine_receipts(receipts, tmp_path / "official-receipts.parquet"),
+            receipt_policies=[policy(name) for name in ("members", "member_terms")],
+            receipt_generation_id="official-v1",
+        )
+        index = pub.publish_generation(official_generation, client=store, bucket="test", prior_index=index)
     return store, index
 
 
@@ -131,7 +157,9 @@ def test_analysis_pins_every_partition_and_keeps_publisher_identities(tmp_path, 
     assert member["bioguide_id"] == "X000001"
     assert item["bill_id"] == "119-hr-1"
     assert item["vote_id"] is None
-    assert json.loads(item["input_pins_json"])["congress_bills"] == parents["congress_bills.parquet"]
+    assert "input_pins_json" not in item
+    item_receipt = read_family(output, LINK_NAMES)["scorecard_item_links"][0]
+    assert json.loads(item_receipt["input_pins_json"])["congress_bills"] == parents["congress_bills.parquet"]
     sealed = tmp_path / "analysis-generation"
     build_generation(
         sealed,
@@ -140,11 +168,28 @@ def test_analysis_pins_every_partition_and_keeps_publisher_identities(tmp_path, 
         expected_keys=rollup.outputs,
         parents=parents,
         read_snapshot=index,
+        **generation_options(output, LINK_NAMES),
     )
     verify_generation(sealed)
     # A warm read validates bytes and needs no network.
     rollup._prime(output, index)
     assert len(calls) == len(rollup.inputs) + 1
+
+
+def test_analysis_reads_native_official_members_through_selected_receipts(tmp_path, monkeypatch):
+    store, index = _inputs(tmp_path, native_members=True)
+    _serve(monkeypatch, store)
+    output = tmp_path / "analysis"
+    output.mkdir()
+    rollup = ScorecardAnalysisRollup(output_dir=output)
+    rollup._prime(output, index)
+    assert set(rollup._official_receipts) == {"members", "member_terms"}
+    members, _ = rollup.build(output)
+    assert pq.read_table(members).to_pylist()[0]["bioguide_id"] == "X000001"
+    receipts, _ = rollup._official_receipts["member_terms"]
+    receipts.write_bytes(b"corrupt")
+    with pytest.raises(ValueError, match="receipt changed"):
+        rollup._prime(output, index)
 
 
 def test_analysis_preserves_unresolved_people_and_independent_actions(tmp_path, monkeypatch):
@@ -214,13 +259,16 @@ def test_analysis_preserves_unresolved_people_and_independent_actions(tmp_path, 
     members, links = rollup.build(output)
     # Analysis uses only the selected inputs; it does not acquire official data again.
     assert calls == acquired
-    person = pq.read_table(members).to_pylist()[0]
+    assert pq.read_table(members).num_rows == 0
+    reconstructed = read_family(output, LINK_NAMES)
+    person = reconstructed["scorecard_member_links"][0]
     assert person["bioguide_id"] is None
     assert person["resolution_status"] == "unresolved"
     observed = json.loads(person["source_context_json"])
     assert observed["member_name"] == source_people[0]["member_name"]
     assert observed["identifiers_json"] == source_people[0]["identifiers_json"]
-    linked = {row["item_id"]: row for row in pq.read_table(links).to_pylist()}
+    assert all(row["item_id"] != "committee-motion" for row in pq.read_table(links).to_pylist())
+    linked = {row["item_id"]: row for row in reconstructed["scorecard_item_links"]}
     assert linked["committee-motion"]["vote_id"] is None
     assert linked["committee-motion"]["bill_id"] is None
     assert "committee_action_not_mapped_to_floor_roll" in linked["committee-motion"]["reason"]

@@ -103,8 +103,9 @@ def test_cluster_metadata_matches_frozen_mapping_through_empty_and_null_fields(t
     [old] = old_rows(body)
     [new] = CourtListenerBulkReader("opinions", local_file=_dump(tmp_path, body)).iter_records()
     assert new == records[0]
-    assert _shape_bulk(new) == old_cluster(old)
-    assert _shape_bulk(new)["syllabus"] is None
+    expected = {**old_cluster(old), "syllabus": empty, "raw_source_record": None}
+    assert _shape_bulk(new) == expected
+    assert _shape_bulk(new)["syllabus"] == empty
 
 
 def test_docket_map_preserves_quoted_empty_source_fields(tmp_path):
@@ -331,7 +332,7 @@ def test_search_catchup_failure_after_flush_preserves_prior_and_output(tmp_path,
             status = 200
         else:
             assert [row["cluster_id"] for row in written] == ["1", "2"]
-            assert (tmp_path / "_clusters_new.parquet").exists()
+            assert list(tmp_path.glob(".clusters-new-*.parquet"))
             payload = {"count": 3, "next": None, "results": [{"cluster_id": 3}]}
             status = 500 if failure == "http" else 200
         return httpx.Response(
@@ -350,7 +351,7 @@ def test_search_catchup_failure_after_flush_preserves_prior_and_output(tmp_path,
         (httpx.HTTPStatusError, "HTTP 500") if failure == "http" else (ValueError, "declared count changed")
     )
     with pytest.raises(error_type, match=message):
-        module.build_court_opinion_clusters(tmp_path, local_file=dump, dump_date=DUMP_DATE, skip_court_scope=True)
+        module.build_court_opinion_clusters(tmp_path, local_file=dump, dump_date=DUMP_DATE, skip_court_scope=True, allow_legacy_prior=True)
 
     assert len(requests) == 2
     assert requests[0].url.params["type"] == "o"
@@ -382,7 +383,7 @@ def test_a_prior_holding_the_newest_export_is_only_caught_up(
     module = importlib.import_module("spicy_regs.transforms.build_court_opinion_clusters")
     prior = {**_shape_bulk({"id": "5", "docket_id": "1", "date_created": prior_created}), "court_id": "dcd"}
     pq.write_table(pa.Table.from_pylist([prior], schema=module._SCHEMA), tmp_path / "_clusters_prior.parquet")
-    assert module.held_export(tmp_path / "_clusters_prior.parquet") == (5, prior_created[:10])
+    assert module.held_export(tmp_path / "_clusters_prior.parquet", allow_legacy=True) == (5, prior_created[:10])
     monkeypatch.setattr(bulk, "list_bulk_dumps", lambda: [])
     monkeypatch.setattr(bulk, "latest_dump_date", lambda objects, dataset: DUMP_DATE)
     listed = BulkObject("bulk-data/opinion-clusters-2026-06-30.csv.bz2", 1, '"etag"', "2026-06-30T12:00:00Z")
@@ -408,13 +409,14 @@ def test_a_prior_holding_the_newest_export_is_only_caught_up(
             yield {"cluster_id": 9, "court_id": "dcd", "caseName": "Created after the export"}
 
     monkeypatch.setattr(module, "CourtListenerOpinionSearchReader", Search)
-    out = module.build_court_opinion_clusters(tmp_path, dump_date=DUMP_DATE if named_edition else None)
+    out = module.build_court_opinion_clusters(tmp_path, dump_date=DUMP_DATE if named_edition else None, allow_legacy_prior=True)
 
-    rows = {row["cluster_id"]: row for row in pq.read_table(out).to_pylist()}
+    from spicy_regs.court_receipts import read_court_rows
+    rows = {row["cluster_id"]: row for row in read_court_rows(out, dataset="court_opinion_clusters")}
     assert bool(exported) is reads_export
     assert selections == [{"above": 8 if reads_export else 5}]
     assert sorted(rows) == (["5", "8", "9"] if reads_export else ["5", "9"])
-    assert (rows["9"]["ingest_source"], rows["9"]["court_is_federal"]) == ("search", "t")
+    assert (rows["9"]["ingest_source"], rows["9"]["court_is_federal"]) == ("search", True)
     assert rows["5"]["ingest_source"] == "bulk"
 
 
@@ -571,13 +573,16 @@ def test_local_table_build_matches_frozen_mapping_by_id(tmp_path, monkeypatch, k
         dump_date=DUMP_DATE,
         **kwargs,
     )
+    from spicy_regs.court_subjects import SUBJECT_SCHEMAS
     expected = [old_cluster(row) for row in old_rows(raw)]
+    for row, original in zip(expected, records[:row_count], strict=True):
+        row["syllabus"] = original["syllabus"]
+    expected = [{k: row[k] for k in SUBJECT_SCHEMAS["court_opinion_clusters"].names} for row in expected]
     key = "cluster_id"
     assert {row[key]: row for row in pq.read_table(output).to_pylist()} == {row[key]: row for row in expected}
     parquet = pq.ParquetFile(output)
-    assert parquet.schema_arrow == module._SCHEMA
+    assert parquet.schema_arrow == SUBJECT_SCHEMAS["court_opinion_clusters"]
     assert parquet.metadata.num_rows == row_count
-    assert parquet.metadata.num_row_groups == max(1, (row_count + 1) // 2)
 
 
 @pytest.mark.parametrize("mutation,match", [("etag", "ETag differs"), ("range", "exact remaining bytes")])

@@ -11,7 +11,8 @@ from pathlib import Path
 import time
 from types import SimpleNamespace
 from urllib.parse import urljoin, urlsplit
-from uuid import UUID
+from uuid import UUID, uuid4
+from os import getenv
 
 import httpx
 import pyarrow.parquet as pq
@@ -22,7 +23,14 @@ from spicy_regs.scorecards.registry import REGISTRY, load_registry, select_sourc
 from spicy_regs.scorecards.acquisition import ScorecardTransportError
 from spicy_regs.source_evidence import CaptureEvidence, SourceEvidenceError
 from spicy_regs.sources import r2
-from spicy_regs.transforms.table_merge import merge_table, prior_scratch_path
+from spicy_regs.scorecards.etl import (
+    read_family,
+    write_family,
+    verified_receipt_download,
+    source_failure_receipts,
+    POLICIES,
+)
+from spicy_regs.etl_receipts import write_dataset
 
 TABLE_NAMES = (
     "scorecard_publishers",
@@ -37,7 +45,7 @@ TABLE_NAMES = (
     "scorecard_member_ratings",
     "scorecard_member_item_results",
 )
-OUTPUTS = tuple(name + ".parquet" for name in TABLE_NAMES)
+OUTPUTS = tuple(name + ".parquet" for name in TABLE_NAMES if name != "scorecard_snapshots")
 MAX_BYTES = 20 * 1024 * 1024
 MAX_REQUESTS = 2000
 
@@ -145,30 +153,42 @@ def bounded_fetch(source):
         yield fetch
 
 
-def _prior_tables(output_dir, evidence, contracts, download_prior):
-    """A managed prior is mandatory and digest checked; local stale files cannot mask failure."""
+def _prior_tables(
+    output_dir, evidence, contracts, download_prior, receipt_public_url=None, download_prior_receipts=None
+):
+    """Verify legacy input explicitly or reconstruct a native generation with its receipts."""
     snapshot = evidence.read_snapshot or {"families": {}}
     prior = snapshot["families"].get("scorecards")
-    if prior is not None and set(prior["tables"]) != set(OUTPUTS):
+    if prior is None:
+        return {name: [] for name in contracts}, {name: False for name in contracts}, None
+    native = "etlReceipts" in prior
+    expected = set(OUTPUTS) if native else {name + ".parquet" for name in TABLE_NAMES}
+    if set(prior["tables"]) != expected:
         raise ScorecardRefreshError("Prior scorecard family does not contain the complete frozen table set")
-    result, present = {}, {}
-    for name in contracts:
-        path = prior_scratch_path(output_dir, name)
-        key = name + ".parquet"
-        if prior is not None:
-            if not download_prior(key, path):
-                raise ScorecardRefreshError("A managed prior scorecard table is unavailable")
-            expected = prior["tables"][key]
-            with path.open("rb") as stream:
-                digest = "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest()
-            if expected.get("sha256") != digest or expected.get("byteSize") != path.stat().st_size:
-                raise ScorecardRefreshError("Managed prior scorecard table differs from its immutable pin")
-            present[name] = True
-        else:
-            # No published family means cold start. Never adopt stray local cached tables.
-            present[name] = False
-        result[name] = pq.read_table(path).to_pylist() if present[name] else []
-    return result, present
+    directory = output_dir / (".scorecard-prior-" + uuid4().hex)
+    directory.mkdir()
+    result = {}
+    receipt = None
+    for key in sorted(expected):
+        path = directory / key
+        if not download_prior(key, path):
+            raise ScorecardRefreshError("A managed prior scorecard table is unavailable")
+        pin = prior["tables"][key]
+        with path.open("rb") as stream:
+            digest = "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest()
+        if pin.get("sha256") != digest or pin.get("byteSize") != path.stat().st_size:
+            raise ScorecardRefreshError("Managed prior scorecard table differs from its immutable pin")
+        result[path.stem] = pq.ParquetFile(path).read().to_pylist()
+    if native:
+        if download_prior_receipts is not None and not download_prior_receipts(directory / "etl_receipts.parquet"):
+            raise ScorecardRefreshError("Pinned prior receipts are unavailable")
+        receipt = verified_receipt_download(
+            snapshot, directory / "etl_receipts.parquet", public_url=receipt_public_url or getenv("R2_PUBLIC_URL")
+        )
+        result = read_family(
+            directory, TABLE_NAMES, receipt_path=receipt, generation_id=prior["etlReceipts"]["generationId"]
+        )
+    return result, {name: True for name in contracts}, receipt
 
 
 def _accept(result, edition, source, receipts, provider, parser_version):
@@ -254,6 +274,9 @@ def build_scorecards(
     retain_extraction=None,
     fetch_factory: Callable = bounded_fetch,
     download_prior: Callable = r2.download,
+    receipt_public_url: str | None = None,
+    download_prior_receipts: Callable | None = None,
+    receipt_generation_id: str | None = None,
     now: datetime | None = None,
 ) -> tuple[Path, ...]:
     """Acquire explicit selected scopes and construct one complete source family.
@@ -278,10 +301,14 @@ def build_scorecards(
     if set(provider.contracts) != set(TABLE_NAMES):
         raise ScorecardRefreshError("Installed provider does not expose the frozen scorecard tables")
     output_dir.mkdir(parents=True, exist_ok=True)
-    prior_rows, present = _prior_tables(output_dir, evidence, provider.contracts, download_prior)
+    prior_rows, present, prior_receipts = _prior_tables(
+        output_dir, evidence, provider.contracts, download_prior, receipt_public_url, download_prior_receipts
+    )
     if any(present.values()):
         provider.validate(prior_rows)
     accepted, failed, selected_editions = {}, [], set()
+    failed_attempts = []
+    generation_id = receipt_generation_id or "scorecard-build:" + uuid4().hex
     requested = set(editions)
     for source in due:
         adapter = provider.get_adapter(source.adapter)
@@ -348,6 +375,14 @@ def build_scorecards(
                         )
                     except (provider.refusal, ScorecardRefreshError, httpx.HTTPError) as error:
                         _fatal(error)
+                        failed_attempts.append(
+                            dict(
+                                publisher_id=source.publisher_id,
+                                scorecard_id=edition.scorecard_id,
+                                stage="edition",
+                                error_type=type(error).__name__,
+                            )
+                        )
                         scope.refusal(error, stage="edition")
                         failed.append(edition.scorecard_id)
                         evidence.event(
@@ -358,6 +393,9 @@ def build_scorecards(
                         )
         except (provider.refusal, ScorecardRefreshError, httpx.HTTPError) as error:
             _fatal(error)
+            failed_attempts.append(
+                dict(publisher_id=source.publisher_id, stage="listing", error_type=type(error).__name__)
+            )
             scope.refusal(error, stage="listing")
             failed.append(source.publisher_id + ":listing")
     if requested - selected_editions:
@@ -365,7 +403,14 @@ def build_scorecards(
         evidence.event("scorecard-selection-missing", edition_ids=sorted(requested - selected_editions))
     if evidence.retention_failure:
         raise SourceEvidenceError("Source evidence retention failed")
+    attempt_receipts = source_failure_receipts(failed_attempts, generation_id=generation_id, registry=registry)
     if not accepted:
+        write_dataset(
+            [],
+            output_dir / (".scorecard-failures-" + uuid4().hex),
+            POLICIES["scorecard_snapshots"],
+            failures=attempt_receipts,
+        )
         evidence.event("scorecard-all-failed", failed_scopes=failed)
         raise ScorecardRefreshError("No complete scorecard edition was acquired; prior generation preserved")
     fresh = {name: [] for name in TABLE_NAMES}
@@ -401,26 +446,11 @@ def build_scorecards(
                 reason="complete-scorecard-replacement",
             )
     provider.validate(merged)  # Duplicates/orphans fail before the merge helper can deduplicate them.
-    paths = []
-    for name, contract in provider.contracts.items():
-        column, replaced = (
-            ("publisher_id", set(publisher_rows)) if name == "scorecard_publishers" else ("scorecard_id", set(accepted))
-        )
-        paths.append(
-            merge_table(
-                output_dir,
-                name=name,
-                columns=contract.columns,
-                identity=contract.identity,
-                version_column=None,
-                rows=fresh[name],
-                remote_key=name + ".parquet",
-                prior_present=present[name],
-                coalesce_prior=False,
-                replace_parents=(column, replaced),
-            )
-        )
-    readback = {path.stem: pq.read_table(path).to_pylist() for path in paths}
+    paths = write_family(
+        output_dir, merged, generation_id=generation_id, attempt_failures=attempt_receipts,
+        prior_receipts=prior_receipts,
+    )
+    readback = read_family(output_dir, TABLE_NAMES)
     provider.validate(readback)
     evidence.event(
         "scorecard-refresh",

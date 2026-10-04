@@ -3,7 +3,8 @@
 from pathlib import Path
 from typing import ClassVar
 
-from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
+from spicy_regs.pipelines.rollups.base import make_rollup_app
+from spicy_regs.pipelines.rollups.subject_receipts import SubjectReceiptRollup as RollupPipeline
 from spicy_regs.transforms.build_amendments import build_amendments
 
 
@@ -17,7 +18,7 @@ class AmendmentsRollup(RollupPipeline):
     retain_source_evidence: ClassVar[bool] = True
 
     def build(self, output_dir: Path) -> Path:
-        return build_amendments(output_dir, evidence=self.source_evidence)
+        return self.build_receipts(output_dir, build_amendments, evidence=self.source_evidence)
 
 
 app = make_rollup_app(AmendmentsRollup)

@@ -111,15 +111,18 @@ class BillSubjects:
     """
 
     policy_area: str | None
-    subjects: tuple[str, ...]
+    subjects: tuple[str | None, ...]
     carrier: str
     held: bool = True
 
 
 def assignment(policy_area: object, subjects: Iterable[object], carrier: str) -> BillSubjects:
-    """The published cleanup: trimmed names, blanks dropped, repeats removed in first-seen order."""
-    names = (name for value in subjects if (name := _clean(value)))
-    return BillSubjects(_clean(policy_area), tuple(dict.fromkeys(names)), carrier)
+    """Retain literal names, including repeated, blank and null occurrences."""
+    names = tuple(subjects)
+    if any(value is not None and not isinstance(value, str) for value in (policy_area, *names)):
+        raise ValueError("Subject assignments require text or null names")
+    from typing import cast
+    return BillSubjects(cast(str | None, policy_area), cast(tuple[str | None, ...], names), carrier)
 
 
 @dataclass
@@ -310,11 +313,3 @@ class BillSubjectsFetcher:
                 )
                 time.sleep(backoff)
         return None
-
-
-def _clean(value: object) -> str | None:
-    """Collapse a possibly-absent XML/JSON text node to a non-empty string."""
-    if value is None:
-        return None
-    text = " ".join(str(value).split())
-    return text or None

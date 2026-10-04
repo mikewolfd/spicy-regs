@@ -1,0 +1,28 @@
+{
+  "dataset": "scorecard_snapshots",
+  "policy_version": "scorecards-etl-v1",
+  "subject_schema": "/////zAAAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAAAAAA=",
+  "identity_fields": [],
+  "receipt_fields": [
+    "snapshot_id",
+    "scorecard_id",
+    "observed_at",
+    "capture_ids_json",
+    "parser_version",
+    "methodology_digest",
+    "completeness_status",
+    "completeness_rule",
+    "source_declared_counts_json",
+    "parsed_counts_json",
+    "evidence_policy",
+    "capture_roles_json",
+    "rendition_selection_rule",
+    "identity_rule_version",
+    "capture_id",
+    "source_url",
+    "source_path",
+    "raw_source"
+  ],
+  "receipt_only": true,
+  "nullable_identity_fields": []
+}

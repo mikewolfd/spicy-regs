@@ -196,5 +196,6 @@ def test_the_rollup_is_registered_scheduled_and_described():
     assert f"run-rollup-{MemberVoteTermsRollup.name}" in scripts
     workflow = yaml.safe_load((REPO_ROOT / ".github/workflows/rollup-member-vote-terms.yml").read_text())
     assert workflow["jobs"]["run"]["with"]["command"] == "run-rollup-member-vote-terms"
-    assert dd.expected_schemas()["member_vote_terms"] == [(c, "VARCHAR") for c in COLUMNS]
+    from spicy_regs.native_types import described_schema
+    assert dd.expected_schemas()["member_vote_terms"] == described_schema(dd.subject_policies()["member_vote_terms"].subject_schema)
     assert "member_vote_terms" in dd.MCP_QUERYABLE and (REPO_ROOT / "docs/tables/member_vote_terms.md").exists()

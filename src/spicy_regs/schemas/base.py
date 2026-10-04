@@ -51,8 +51,6 @@ class RecordType:
 
     def sql_type(self, column: str) -> str:
         """The DuckDB type ``column`` is published as, from its schema dtype."""
-        dtype = self.schema[column]
-        for candidate, label in SQL_TYPES:
-            if dtype == candidate:
-                return label
-        raise KeyError(f"{self.name}.{column}: no published SQL type for {dtype}")
+        from spicy_regs.native_types import polars_sql_type
+
+        return polars_sql_type(self.schema[column])

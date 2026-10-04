@@ -6,6 +6,8 @@
 
 Text from literally offered PDF URLs, tied to the selected opinion generation, native body fingerprint, capture evidence and extractor version. A native digest mismatch records a refusal without supplying text. Join opinion_id to court_opinions and cluster_id to court_opinion_clusters; this table does not infer case-name identity.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='court_opinion_pdf_extractions'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled. Selected publisher PDFs acquired on 2026-09-27. Each exact body matches its held CourtListener SHA-1 and has its own SHA-256 and extraction outcome. This is derived PDF text, separate from CourtListener native text fields and from the complete opinion index. Receipt: spicy-regs-court-cohort-20260927/bodies-receipt.json. *(measured 2026-09-27)*
 
 - **Parquet file:** `court_opinion_pdf_extractions.parquet`
@@ -15,17 +17,7 @@ Text from literally offered PDF URLs, tied to the selected opinion generation, n
 
 | Column | Type | Description |
 | --- | --- | --- |
+| `opinion_body_id` | `VARCHAR` | Stable identity of this opinion and captured body version; independent of extraction processing. |
 | `opinion_id` | `VARCHAR` | Native CourtListener opinion ID selected for acquisition. |
 | `cluster_id` | `VARCHAR` | Native opinion cluster ID from that same held opinion row. |
-| `source_url` | `VARCHAR` | Literal download_url offered by the selected opinion. |
-| `resolved_url` | `VARCHAR` | Final response URL observed by the provider. |
-| `source_sha256` | `VARCHAR` | SHA-256 of complete captured PDF bytes. |
-| `native_sha1` | `VARCHAR` | Body SHA-1 asserted by the selected native opinion row. |
-| `actual_sha1` | `VARCHAR` | SHA-1 independently computed over captured bytes. |
-| `sha1_matches` | `VARCHAR` | Whether the captured bytes match the native fingerprint, stored as text. |
 | `text_content` | `VARCHAR` | Derived PDF text when fingerprint and extraction checks succeed; null after a refusal. |
-| `pdf_extraction_results_json` | `VARCHAR` | URL, body SHA-256, status, page count and error for the selected attempt. |
-| `observed_at` | `VARCHAR` | Provider capture observation time. |
-| `extractor` | `VARCHAR` | Application extraction implementation identity. |
-| `extractor_version` | `VARCHAR` | Installed pypdf distribution version. |
-| `parent_opinion_publication_json` | `VARCHAR` | Exact selected opinion family and its member metadata. |

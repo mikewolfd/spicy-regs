@@ -7,6 +7,7 @@ from datetime import date
 import duckdb
 import pyarrow as pa
 import pyarrow.parquet as pq
+from spicy_regs.transforms.government_source_shapes import map_subject
 import pytest
 
 module = importlib.import_module("spicy_regs.transforms.build_fcc_ecfs")
@@ -196,7 +197,7 @@ def test_builder_passes_a_shaping_generator_to_the_merge(tmp_path, monkeypatch):
     monkeypatch.setattr(module, "_merge_incremental", observed_merge)
     output = module.build_fcc_filings(tmp_path, since=date(2026, 9, 25), proceedings=("17-108",))
     assert calls == [("filings", {"since": date(2026, 9, 25), "proceedings": ("17-108",), "transport": None})]
-    assert pq.read_table(output).to_pylist() == [filing("fresh", text="source text")]
+    assert pq.read_table(output).to_pylist() == [map_subject("fcc_filings", filing("fresh", text="source text"))]
 
 
 class Today(date):
@@ -238,7 +239,7 @@ def test_builder_derives_since_from_the_first_run_bound_or_the_prior_overlap(
     assert downloads == [(module.FILINGS_OUTPUT, tmp_path / "_fcc_filings_prior.parquet")]
     assert calls == [("filings", {"since": expected, "proceedings": ("17-108",), "transport": None})]
     newest_first = sorted(prior_rows or [], key=lambda row: row["date_received"], reverse=True)
-    assert pq.read_table(output).to_pylist() == newest_first
+    assert pq.read_table(output).to_pylist() == [map_subject("fcc_filings", row) for row in newest_first]
 
 
 def test_builder_closes_source_and_preserves_output_when_arrow_conversion_fails(tmp_path, monkeypatch):

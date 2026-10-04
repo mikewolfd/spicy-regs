@@ -36,7 +36,7 @@ CONTRACT_NAMES = sorted(TABLE_CONTRACTS)
 #: (released 0.47.0, ``f549c16``, only adds ``bill_sections.congress``); 0.52.0 adds the two native legal-reference
 #: tables; 0.53.0 adds comment attributes and GAO recommendations; the candidate master adds fec_candidate_history.
 #: The scorecard candidate adds the source tables; see reader_wheel.json for the adopted registry.
-ADOPTED_CONTRACT_COUNT = 64
+ADOPTED_CONTRACT_COUNT = 66
 
 #: A contract here leaves the set when its owning rollup hosts it.
 UNHOSTED_CONTRACTS = frozenset()
@@ -135,9 +135,10 @@ def test_every_hosted_table_is_registered_everywhere():
         "a wheel contract is hosted, published as a record type, or named as not yet"
     )
     assert UNHOSTED_CONTRACTS.isdisjoint(dd.TABLES), "an unhosted contract must not be half-listed"
-    assert hosted <= set(dd.TABLES)
-    assert hosted <= set(mcp_server.TABLES)
-    assert hosted <= set(dd.load_descriptions())
+    assert hosted - set(dd.subject_policies()[name].dataset for name in hosted if dd.subject_policies()[name].receipt_only) <= set(dd.TABLES)
+    subjects = {name for name in hosted if not dd.subject_policies()[name].receipt_only}
+    assert subjects <= set(mcp_server.TABLES)
+    assert subjects <= set(dd.load_descriptions())
 
 
 #: Columns a record type's contract appends that this host does not write yet, by table, in contract order. SpicyDocs
@@ -183,5 +184,8 @@ def test_congress_bills_keeps_its_frozen_prefix():
     assert contract.identity == ("bill_id",)
     assert len(contract.columns) > 10, "the family appends columns; it does not replace them"
     dictionary = [column for column, _ in dd.expected_schemas()["congress_bills"]]
-    assert tuple(dictionary) == contract.columns
-    assert dictionary[-2:] == ["url_source", "cosponsors_outcome"]
+    assert dictionary == dd.subject_policies()["congress_bills"].subject_schema.names
+    from spicy_regs.congress_subjects import map_record
+    mapped = map_record("congress_bills", {"url_source": "test-route", "cosponsors_outcome": "unread"})
+    assert "url_source" not in dictionary and "cosponsors_outcome" not in dictionary
+    assert mapped.source_fields["url_source"] == "test-route" and mapped.source_fields["cosponsors_outcome"] == "unread"

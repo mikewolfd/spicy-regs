@@ -6,6 +6,8 @@
 
 The Federal Register ↔ docket bridge: each `federal_register` row's `docket_ids_json` array exploded to one row per (docket_id, document_number, publication_date), carrying the FR display columns. Use this instead of an `ILIKE` scan over `federal_register.docket_ids_json` — it is sorted by `docket_id`, so `WHERE docket_id = ?` prunes row groups. This is the practical join from regulations.gov to the Federal Register using the Federal Register's own stated docket links. Built by `build_fr_docket_links`.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fr_docket_links'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Derived, and bounded by its inputs: one link per docket id that a dated Federal Register record names, over the `federal_register` table's own date range. On 2026-09-23 the table equalled a separate re-derivation from that parent row for row; that measurement predates the ordinal and normalization columns, which require rebuilding. *(measured 2026-09-23)*
 
 - **Parquet file:** `fr_docket_links.parquet`
@@ -17,8 +19,6 @@ The Federal Register ↔ docket bridge: each `federal_register` row's `docket_id
 | --- | --- | --- |
 | `docket_id` | `VARCHAR` | One literal docket ID extracted from the FR document's `docket_ids_json` array. |
 | `docket_source_ordinal` | `BIGINT` | Zero-based position in the original docket array, before null/blank elements are filtered. Present only after rebuilding. Required with document_number and publication_date to identify an occurrence. |
-| `normalized_docket_candidates_json` | `VARCHAR` | Owner-normalizer candidate interpretations of the literal docket value; an empty array means no supported interpretation, not absence of a docket. |
-| `docket_normalization_rule` | `VARCHAR` | Digest-pinned owner identifier-normalization rule used to produce candidates. |
 | `document_number` | `VARCHAR` | Literal Federal Register document number. Join to `federal_register` on both this value and `publication_date`; a number can name distinct dated records. |
 | `title` | `VARCHAR` | FR document title. |
 | `abstract` | `VARCHAR` | FR document abstract. |
@@ -28,9 +28,7 @@ The Federal Register ↔ docket bridge: each `federal_register` row's `docket_id
 | `effective_on` | `VARCHAR` | Date the rule takes effect, when the document carries one. |
 | `comments_close_on` | `VARCHAR` | Comment period close date, when the document carries one. |
 | `signing_date` | `VARCHAR` | Signing date, for presidential documents. |
-| `agency_slugs` | `VARCHAR` | Federal Register agency slugs for the issuing agencies. |
-| `docket_ids_json` | `VARCHAR` | The full original docket-ID array, retained so consumers can see the other IDs this FR document links to. |
-| `regulation_id_numbers_json` | `VARCHAR` | RINs (JSON array) claimed by the FR document — the RIN-side join key for a rulemaking. |
-| `html_url` | `VARCHAR` | federalregister.gov HTML permalink. |
-| `pdf_url` | `VARCHAR` | Federal Register PDF URL. |
+| `agency_slugs` | `VARCHAR[]` | Federal Register agency slugs for the issuing agencies. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `docket_ids` | `VARCHAR[]` | The full original docket-ID array, retained so consumers can see the other IDs this FR document links to. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `regulation_id_numbers` | `VARCHAR[]` | RINs (Native list) claimed by the FR document — the RIN-side join key for a rulemaking. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `executive_order_number` | `VARCHAR` | Executive order number, for presidential documents. |

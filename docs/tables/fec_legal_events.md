@@ -6,6 +6,8 @@
 
 One dated or undated native event occurrence within a matter observation. Reconstruct source-stated events and votes using exact dates, precision, descriptions and document references. Unknown dates and status conflicts remain observations instead of a synthesized current state. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_legal_events'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled. Supported observations from retained advisory, enforcement, dispute, fine, rulemaking and audit event metadata. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
 
 - **Parquet file:** `fec_legal_events.parquet`
@@ -16,32 +18,15 @@ One dated or undated native event occurrence within a matter observation. Recons
 | Column | Type | Description |
 | --- | --- | --- |
 | `record_id` | `VARCHAR` | Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event. |
-| `identity_version` | `VARCHAR` | Version of the source-observation identity rule; it does not select a current or canonical record. |
-| `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
-| `mapping_status` | `VARCHAR` | Whether this source observation mapped fully, partially, or received an explicit nondata/refusal disposition; inspect the reason alongside NULL values. |
-| `mapping_reason_json` | `VARCHAR` | JSON object naming unsupported, missing or otherwise limited field interpretations; native values remain reachable through evidence. |
-| `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
-| `source_record_id` | `VARCHAR` | Native source-observation key within collection_id. Resolve with the source generation, exact locator and source digest, not this value alone. |
-| `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
-| `source_locator_json` | `VARCHAR` | Exact source row or subrecord coordinates, including available member, ordinal, byte span and field-definition references. Resolve in the pinned source generation. |
-| `source_pointer` | `VARCHAR` | Exact pointer within the provider-owned native record to the mapped value or metadata object. |
-| `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
-| `selection_evidence_sha256` | `VARCHAR` | Digest of the retained selection evidence used to authorize this mapper's source scope; not a financial inclusion decision. |
 | `matter_id` | `VARCHAR` | Authority-, matter-type- and namespace-qualified logical case key. Multiple retained observations may share it. |
 | `matter_record_id` | `VARCHAR` | Exact fec_legal_matters.record_id observation supporting this child event, party, document or finding. |
-| `query_completeness` | `VARCHAR` | Whether complete traversal of the stated source query was established. A retained page or rejected response is not a completed query. |
 | `event_type` | `VARCHAR` | Source-defined event or activity type, interpreted within this table and source namespace. |
-| `event_date_raw` | `VARCHAR` | Literal source value before conversion for event_date. Preserves spelling, signs and empty values; the typed value and its status are separate. |
-| `event_date_status` | `VARCHAR` | Source-presence or conversion state for event_date, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
 | `date_precision` | `VARCHAR` | Precision supported by the native date, retained independently of the normalized date value. |
 | `description` | `VARCHAR` | Literal source description or narrative associated with this observation. |
-| `description_status` | `VARCHAR` | Presence/interpretation state of the source description. |
 | `actor_name` | `VARCHAR` | Name of the actor stated in this legal event; not a resolved person identifier. |
 | `vote_type` | `VARCHAR` | Source-stated vote classification in a legal event. |
 | `respondent_name` | `VARCHAR` | Respondent name reported for this matter/event, with no name-based identity merge. |
 | `related_document_record_id` | `VARCHAR` | Typed document observation explicitly linked by the source to this legal event. |
-| `amount_raw` | `VARCHAR` | Literal source value before conversion for amount. Preserves spelling, signs and empty values; the typed value and its status are separate. |
-| `amount_status` | `VARCHAR` | Source-presence or conversion state for amount, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
 | `amount_kind` | `VARCHAR` | Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It is not an aggregation permission. |
 | `currency` | `VARCHAR` | Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately. |
 | `event_date` | `DATE` | Date parsed from the source-stated legal event date. NULL requires the source value and conversion status; capture time is not substituted. |

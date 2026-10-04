@@ -6,7 +6,6 @@ catalog, where rows move files and commits carry parents and summaries.
 """
 
 import json
-import re
 from pathlib import Path
 
 import duckdb
@@ -17,6 +16,8 @@ from spicy_regs.pipelines import comment_fields as cf
 from spicy_regs.pipelines import comment_fields_write as cfw
 from spicy_regs.schemas import COMMENT
 from spicy_regs.sources import iceberg
+
+
 
 T0 = "2020-01-01T00:00:00Z"
 
@@ -30,13 +31,13 @@ def catalog(tmp_path, monkeypatch):
         con.execute(f"ATTACH '{path}' AS {iceberg._CATALOG_ALIAS}")
         return con
 
-    def snapshot(con, record_type):
+    def snapshot(con, record_type, **_options):
         digest = con.execute(f"SELECT coalesce(sum(hash(t)), 0) FROM {iceberg._qualified(record_type)} t").fetchone()[0]
         return iceberg.CatalogSnapshot("local", int(digest % 2**62), 1)
 
     monkeypatch.setattr(iceberg, "_connect", connect)
     monkeypatch.setattr(iceberg, "_read_snapshot", snapshot)
-    monkeypatch.setattr(iceberg, "_snapshot_query", lambda rt, _: f"SELECT * FROM {iceberg._qualified(rt)}")
+    monkeypatch.setattr(iceberg, "_snapshot_query", lambda rt, _, **kw: f"SELECT * FROM {iceberg._qualified(rt)}")
     monkeypatch.setattr(cfw, "FILE_COLUMN", "agency_code")
     files = lambda con: {r[0] for r in con.execute(  # noqa: E731
         f"SELECT DISTINCT agency_code FROM {iceberg._qualified(COMMENT)}").fetchall()}
@@ -46,9 +47,7 @@ def catalog(tmp_path, monkeypatch):
     monkeypatch.setenv("R2_CATALOG_NAMESPACE", "default")
     monkeypatch.setenv(iceberg.CATALOG_LOCK_ENV, "test")
     with connect() as con:
-        con.execute(f"CREATE SCHEMA {iceberg._schema_ref()}")
-        con.execute(f"CREATE TABLE {iceberg._qualified(COMMENT)} ("
-                    + ", ".join(f'"{c}" VARCHAR' for c in COMMENT.schema) + ")")
+        iceberg._ensure_table(con, COMMENT)
     return connect
 
 
@@ -60,7 +59,7 @@ def row(comment_id, agency="EPA", modify=T0, **values):
 def seed(connect, rows):
     with connect() as con:
         con.register("seed", pl.DataFrame(rows, schema=dict.fromkeys(COMMENT.schema, pl.Utf8)).to_arrow())
-        con.execute(f"INSERT INTO {iceberg._qualified(COMMENT)} SELECT * FROM seed")
+        iceberg.replace_rows(con, COMMENT, "seed")
 
 
 def reads(tmp_path, rows, agency="EPA"):
@@ -72,7 +71,8 @@ def reads(tmp_path, rows, agency="EPA"):
 
 def table(connect) -> dict[str, dict]:
     with connect() as con:
-        return {r["comment_id"]: r for r in con.execute(f"SELECT * FROM {iceberg._qualified(COMMENT)}").pl().to_dicts()}
+        from spicy_regs.sources.regulatory_catalog import processing_table
+        return {r["comment_id"]: r for r in con.execute(f"SELECT * FROM {processing_table(con, COMMENT)}").pl().to_dicts()}
 
 
 def fill(tmp_path, connect, **options):
@@ -108,15 +108,15 @@ def journal(tmp_path) -> list[dict]:
 def test_only_null_cells_are_filled_and_a_stated_zero_is_a_value(tmp_path, catalog):
     seed(catalog, [row("A", subtype="Kept"), row("B"), row("C")])
     reads(tmp_path, [
-        {"key": "a", "comment_id": "A", "subtype": "Read", "duplicate_comments": 3, "attachments_json": "[1]"},
+        {"key": "a", "comment_id": "A", "subtype": "Read", "duplicate_comments": 3, "attachments_json": '[{"title":"attachment"}]'},
         {"key": "b", "comment_id": "B", "subtype": "Public Comment", "duplicate_comments": 0},
         {"key": "c", "comment_id": "C"},
     ])
     prepared, written = fill(tmp_path, catalog)
     rows = table(catalog)
     assert rows["A"]["subtype"] == "Kept"
-    assert (rows["A"]["duplicate_comments"], rows["A"]["attachments_json"]) == ("3", "[1]")
-    assert (rows["B"]["subtype"], rows["B"]["duplicate_comments"]) == ("Public Comment", "0")
+    assert (rows["A"]["duplicate_comments"], rows["A"]["attachments_json"]) == (3, '[{"title":"attachment"}]')
+    assert (rows["B"]["subtype"], rows["B"]["duplicate_comments"]) == ("Public Comment", 0)
     assert rows["C"]["duplicate_comments"] is None
     assert (rows["A"]["comment"], rows["A"]["text_content"]) == ("body of A", "text of A")
     assert (prepared["rows_to_fill"], written["rows_changed"]) == (2, 2)
@@ -135,7 +135,7 @@ def test_a_read_of_another_version_fills_nothing(tmp_path, catalog):
 def test_copies_that_disagree_on_one_column_block_only_that_column(tmp_path, catalog):
     seed(catalog, [row("A")])
     reads(tmp_path, [
-        {"key": "a", "comment_id": "A", "subtype": "S", "attachments_json": "[1]"},
+        {"key": "a", "comment_id": "A", "subtype": "S", "attachments_json": '[{"title":"attachment"}]'},
         {"key": "a(1)", "comment_id": "A", "subtype": "S", "attachments_json": "[2]"},
     ])
     prepared, _ = fill(tmp_path, catalog)
@@ -164,7 +164,7 @@ def test_a_merge_that_damages_a_non_fill_column_is_rolled_back(tmp_path, catalog
     seed(catalog, [row("A"), row("B")])
     reads(tmp_path, [{"key": "a", "comment_id": "A", "subtype": "S"}, {"key": "b", "comment_id": "B", "subtype": "S"}])
     cfw.prepare(tmp_path)
-    blank = lambda sql: sql.replace("UPDATE SET ", 'UPDATE SET "text_content" = NULL, ', 1) if _merge(sql) else sql  # noqa: E731
+    blank = lambda sql: sql.replace('"text_content"=s."text_content"', '"text_content"=NULL') if _merge(sql) else sql  # noqa: E731
     with catalog() as con, pytest.raises(cfw.FillVerificationError, match="differ"):
         cfw.write(tmp_path, con=Proxy(con, rewrite=blank))
     assert {r["text_content"] for r in table(catalog).values()} == {"text of A", "text of B"}  # nothing committed
@@ -175,7 +175,7 @@ def test_an_overwriting_merge_is_rolled_back(tmp_path, catalog):
     seed(catalog, [row("A", subtype="Kept")])
     reads(tmp_path, [{"key": "a", "comment_id": "A", "subtype": "Read", "duplicate_comments": 1}])
     cfw.prepare(tmp_path)
-    overwrite = lambda sql: re.sub(r'COALESCE\(t\.("[a-z_]+"), s\.("[a-z_]+")\)', r"s.\2", sql) if _merge(sql) else sql  # noqa: E731
+    overwrite = lambda sql: sql.replace('COALESCE(p."subtype", CAST(b."subtype" AS VARCHAR))', 'b."subtype"') if 'CREATE OR REPLACE TEMP TABLE _filled' in sql else sql  # noqa: E731
     with catalog() as con, pytest.raises(cfw.FillVerificationError):
         cfw.write(tmp_path, con=Proxy(con, rewrite=overwrite))
     assert table(catalog)["A"]["subtype"] == "Kept"
@@ -191,7 +191,7 @@ def test_a_merge_that_rewrites_rows_needing_nothing_is_refused_by_the_count(tmp_
     stale = extra.with_columns(pl.lit("B").alias("comment_id"), pl.lit(None, pl.Utf8).alias("subtype"))
     pl.concat([extra, stale]).write_parquet(fill_file)  # B needs nothing: a stale fill row
     _restamp(tmp_path)
-    unguarded = lambda sql: re.sub(r"WHEN MATCHED AND \(.*\) THEN UPDATE", "WHEN MATCHED THEN UPDATE", sql, flags=re.S) if _merge(sql) else sql  # noqa: E731
+    unguarded = lambda sql: sql.split(' WHERE ')[0] if 'CREATE OR REPLACE TEMP TABLE _filled' in sql else sql  # noqa: E731
     with catalog() as con, pytest.raises(cfw.FillVerificationError, match="planned"):
         cfw.write(tmp_path, con=Proxy(con, rewrite=unguarded))
 
@@ -218,7 +218,7 @@ def test_a_merge_that_ignores_modify_date_is_refused(tmp_path, catalog):
     rows = pl.read_parquet(fill_file)
     pl.concat([rows, rows.with_columns(pl.lit("B").alias("comment_id"))]).write_parquet(fill_file)  # B at T0: stale
     _restamp(tmp_path)
-    loose = lambda sql: sql.replace(" AND t.modify_date IS NOT DISTINCT FROM s.modify_date", "") if _merge(sql) else sql  # noqa: E731
+    loose = lambda sql: sql.replace(' AND p.modify_date IS NOT DISTINCT FROM b.modify_date', '') if 'CREATE OR REPLACE TEMP TABLE _filled' in sql else sql  # noqa: E731
     with catalog() as con, pytest.raises(cfw.FillVerificationError):
         cfw.write(tmp_path, con=Proxy(con, rewrite=loose))
     with catalog() as con:
@@ -241,7 +241,7 @@ def test_a_failed_batch_stops_every_later_run_until_cleared(tmp_path, catalog):
     seed(catalog, [row("A")])
     reads(tmp_path, [{"key": "a", "comment_id": "A", "subtype": "S"}])
     cfw.prepare(tmp_path)
-    blank = lambda sql: sql.replace("UPDATE SET ", 'UPDATE SET "comment" = NULL, ', 1) if _merge(sql) else sql  # noqa: E731
+    blank = lambda sql: sql.replace('"comment"=s."comment"', '"comment"=NULL') if _merge(sql) else sql  # noqa: E731
     with catalog() as con, pytest.raises(cfw.FillVerificationError):
         cfw.write(tmp_path, con=Proxy(con, rewrite=blank))
     with catalog() as con, pytest.raises(RuntimeError, match="clear-failure"):
@@ -310,7 +310,7 @@ def test_the_write_needs_the_lock_the_columns_and_for_a_pilot_a_scope(tmp_path, 
 def test_a_catalog_without_the_new_columns_is_refused_not_migrated(tmp_path, catalog):
     with catalog() as con:
         con.execute(f"ALTER TABLE {iceberg._qualified(COMMENT)} DROP COLUMN subtype")
-    with pytest.raises(RuntimeError, match="lacks"):
+    with pytest.raises(ValueError, match="schema differs"):
         cfw.prepare(tmp_path)
     with catalog() as con:
         assert "subtype" not in iceberg._column_types(con, COMMENT)
@@ -469,7 +469,7 @@ def test_prepare_refuses_a_file_whose_size_it_cannot_read(tmp_path, catalog, mon
 def test_prepare_reads_the_staged_fill_input_as_it_reads_the_parts(tmp_path, catalog):
     seed(catalog, [row("A"), row("B")])
     reads(tmp_path, [{"key": "a", "comment_id": "A", "subtype": "S", "duplicate_comments": 0},
-                     {"key": "b", "comment_id": "B", "attachments_json": "[1]"}])
+                     {"key": "b", "comment_id": "B", "attachments_json": '[{"title":"attachment"}]'}])
     from_parts = cfw.prepare(tmp_path)
     staged = tmp_path / "reads.parquet"
     pl.read_parquet(tmp_path / "parts" / "*" / "*.parquet").select(cfw.READ_COLUMNS).write_parquet(staged)
@@ -520,9 +520,10 @@ def test_undo_refuses_a_commit_between_its_check_and_its_transaction(tmp_path, c
 
     with catalog() as con:
         proxy = Proxy(con, after=foreign)
-        with pytest.raises(RuntimeError, match="moved"):
+        with pytest.raises(RuntimeError, match="snapshot changed"):
             cfw.undo(tmp_path, filled["batch"], expected_snapshot=expected, con=proxy)
-    assert table(catalog)["A"]["subtype"] == "S"
+    with catalog() as con:
+        assert con.execute(f"SELECT subtype FROM {_table()} WHERE comment_id='A'").fetchone() == ('S',)
 
 
 def test_undo_refuses_a_row_changed_since_the_fill(tmp_path, catalog):
@@ -530,9 +531,10 @@ def test_undo_refuses_a_row_changed_since_the_fill(tmp_path, catalog):
     with catalog() as con:
         con.execute(f"UPDATE {_table()} SET title = 'edited' WHERE comment_id = 'A'")
     expected = _current(catalog)
-    with catalog() as con, pytest.raises(RuntimeError, match="changed since"):
+    with catalog() as con, pytest.raises(ValueError, match="subject receipt"):
         cfw.undo(tmp_path, filled["batch"], expected_snapshot=expected, con=con)
-    assert (table(catalog)["A"]["subtype"], table(catalog)["A"]["title"]) == ("S", "edited")
+    with catalog() as con:
+        assert con.execute(f"SELECT subtype,title FROM {_table()} WHERE comment_id='A'").fetchone() == ('S', 'edited')
 
 
 class _Bucket:

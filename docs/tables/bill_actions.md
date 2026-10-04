@@ -6,6 +6,8 @@
 
 One row per action entry in a bill's BILLSTATUS document, in publisher order. Each row also carries the stage the action text implies, with the rule and matcher that fired, which makes `congress_bills.stage` auditable action by action. All columns are stored as VARCHAR.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='bill_actions'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled: bills the bill family has read from GovInfo BILLSTATUS, Congress by Congress from the 108th on; group by the Congress in bill_id to see which Congresses are filled. *(measured 2026-09-28)*
 
 - **Parquet file:** `bill_actions.parquet`
@@ -16,16 +18,12 @@ One row per action entry in a bill's BILLSTATUS document, in publisher order. Ea
 | Column | Type | Description |
 | --- | --- | --- |
 | `bill_id` | `VARCHAR` | The bill this action belongs to. |
-| `action_index` | `VARCHAR` | Zero-based position in the publisher's own action list; part of the identity. |
+| `action_index` | `BIGINT` | Zero-based position in the publisher's own action list; part of the identity. |
 | `action_date` | `VARCHAR` | The publisher's actionDate for this action. |
 | `action_time` | `VARCHAR` | The publisher's actionTime, where the source system states one. |
 | `action_text` | `VARCHAR` | The action text exactly as written, whitespace included; NULL when the publisher stated none. |
 | `action_code` | `VARCHAR` | The publisher's action code, which is what the became-law rule keys on. |
 | `action_type` | `VARCHAR` | The publisher's action type (IntroReferral, Floor, BecameLaw...). |
-| `source_system_code` | `VARCHAR` | Code of the system that reported the action. |
-| `source_system_name` | `VARCHAR` | Name of the system that reported the action. |
-| `recorded_vote_count` | `VARCHAR` | How many recordedVote entries this action carries. |
-| `is_latest_action` | `VARCHAR` | True on the one actions[] entry the publisher's separate latestAction element names. |
+| `recorded_vote_count` | `BIGINT` | How many recordedVote entries this action carries. |
+| `is_latest_action` | `BOOLEAN` | True on the one actions[] entry the publisher's separate latestAction element names. |
 | `stage` | `VARCHAR` | Stage this one action's qualified code and text classify as, including failed/vetoed outcomes. |
-| `stage_rule` | `VARCHAR` | Which stage rule fired on this action, or NULL when none did. |
-| `stage_matcher` | `VARCHAR` | The matched text pattern, publisher code or vote-result reading used by the named rule. |

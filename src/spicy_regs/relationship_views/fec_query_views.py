@@ -155,12 +155,16 @@ def fec_query_views(
     as_of: str,
     namespace_evidence: Mapping[str, str],
     package_root: Path | None = None,
+    processing_schemas: Mapping[str, tuple[str, ...]] | None = None,
 ) -> tuple[QualifiedView, ...]:
     """Build trusted view declarations; leave image/receipt pins and activation unset.
 
     Namespace witnesses bind retained source definitions for native FILE_NUM
     equivalence. An empty explicit mapping produces unresolved association rules.
     ``package_root`` is a trusted installed-package location, not receipt input.
+    Receipt-separated families require processing_schemas from the private,
+    receipt-validated relations built by register_internal_fec_table. These are
+    internal qualification inputs, not public subject schema declarations.
     Each resulting spec captures its SQL now; later caller mutation cannot
     change scope, columns or witnesses. No source processors are imported.
     """
@@ -174,6 +178,10 @@ def fec_query_views(
         if len(columns) != len(set(columns)):
             raise ValueError(f"Repeated installed dictionary column: {table}")
         schemas[table] = columns
+    for table, columns in (processing_schemas or {}).items():
+        if not table.startswith("fec_") or len(set(columns)) != len(columns):
+            raise ValueError("Invalid receipt-restored FEC processing schema")
+        schemas[table] = tuple(columns)
     specs = []
 
     def required(table, columns):
@@ -210,6 +218,13 @@ def fec_query_views(
     for table in _FINANCIAL_TABLES:
         columns = schemas.get(table, ())
         if not set(_EVIDENCE_COLUMNS) <= set(columns):
+            if table != "fec_historical_ie_statistics":
+                raise ValueError(
+                    f"{table}: source evidence requires receipt-validated processing inputs; "
+                    "refusing legacy stored-evidence fallback"
+                )
+            if "mapping_version" not in columns or "source_context_pointer" not in columns:
+                raise ValueError(f"{table}: context evidence requires receipt-validated processing inputs")
             # Context-derived financial rows already have complete stored
             # evidence, including worksheet header and methodology witnesses.
             add(

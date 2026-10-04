@@ -17,7 +17,8 @@ from spicy_regs.comments_health import check_comments, check_retained_ids
 from spicy_regs.duckdb_settings import ExportResources
 from spicy_regs.public_url import resolve_r2_base_url
 from spicy_regs.schemas.regulations import RECORD_TYPES
-from spicy_regs.sources import iceberg, r2
+from spicy_regs.sources import iceberg, r2, publication
+from spicy_regs.pipelines.comments_generation import build_comments_generation
 from spicy_regs.transforms.partition_comments import agency_comments
 
 FORMAT_VERSION = 1
@@ -78,6 +79,11 @@ def _receipt_matches(receipt: dict | None, snapshot: iceberg.CatalogSnapshot, ba
         return False
     if receipt.get("source") != asdict(snapshot):
         return False
+    generation = receipt.get("generation")
+    if not isinstance(generation, dict):
+        return False
+    if publication.current_index(base_url)["families"].get("comments") != generation:
+        return False
     files = receipt.get("files")
     if not isinstance(files, dict) or not {"comments.parquet", "comments_index.parquet"} < files.keys():
         return False
@@ -105,6 +111,12 @@ def _receipt_matches(receipt: dict | None, snapshot: iceberg.CatalogSnapshot, ba
         return all(list(pool.map(unchanged, files.items())))
 
 
+def _prepare_catalog(record_type) -> None:
+    """Finish or resume native pair selection before pinning a mirror read."""
+    prepared = iceberg._connect_for_table(record_type)
+    prepared.close()
+
+
 def publish_comments_mirror(output_dir: Path, *, resources: ExportResources | None = None,
                             skip_upload: bool = False, force: bool = False) -> bool:
     """Build/verify/publish; return False only for a verified unchanged publication.
@@ -115,6 +127,11 @@ def publish_comments_mirror(output_dir: Path, *, resources: ExportResources | No
     """
     resources = resources or ExportResources()
     rt = RECORD_TYPES["comments"]
+    if not skip_upload and not getenv("R2_ACCESS_KEY_ID"):
+        raise RuntimeError("R2 upload credentials are required to publish the comments mirror")
+    # Establish the selected native pair before pinning the export snapshot.
+    # This also resumes a migration interrupted after empty-table preparation.
+    _prepare_catalog(rt)
     snapshot = iceberg.catalog_snapshot(rt)
     base_url = resolve_r2_base_url().rstrip("/")
     receipt = None
@@ -126,6 +143,7 @@ def publish_comments_mirror(output_dir: Path, *, resources: ExportResources | No
             logger.info("Comments snapshot {} already published; verified object versions, skipping build", snapshot.snapshot_id)
             return False
 
+    prior_index = publication.current_index(base_url) if not skip_upload else publication.empty_index()
     result = iceberg.export_public_comments(output_dir, rt, resources=resources, snapshot=snapshot)
     n_rows = pq.ParquetFile(result["comments"]).metadata.num_rows
     if n_rows < MIN_EXPECTED_ROWS:
@@ -147,8 +165,9 @@ def publish_comments_mirror(output_dir: Path, *, resources: ExportResources | No
         "format_version": FORMAT_VERSION, "source": asdict(snapshot),
         "resources": asdict(resources), "rows": n_rows, "predecessor_etag": predecessor.etag,
     }, indent=2, sort_keys=True) + "\n")
+    generation_directory = build_comments_generation(output_dir, result, snapshot)
     if skip_upload:
-        logger.info("Verified local comments mirror in {}", output_dir)
+        logger.info("Verified local comments generation in {}", generation_directory)
         return True
 
     # A concurrent catalog writer is outside the caller's lock, so refuse it.
@@ -169,7 +188,11 @@ def publish_comments_mirror(output_dir: Path, *, resources: ExportResources | No
 
     with ThreadPoolExecutor(max_workers=4) as pool:
         descriptors = dict(pool.map(verify, files))
-    receipt = {"format_version": FORMAT_VERSION, "source": asdict(snapshot), "files": descriptors}
+    published_index = publication.publish_generation(
+        generation_directory, client=r2.get_r2_client(), bucket=getenv("R2_BUCKET_NAME", "spicy-regs"),
+        prior_index=prior_index)
+    receipt = {"format_version": FORMAT_VERSION, "source": asdict(snapshot), "files": descriptors,
+               "generation": published_index["families"]["comments"]}
     receipt_path = output_dir / RECEIPT_KEY
     receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
     r2.upload_file(receipt_path, remote_key=RECEIPT_KEY, cache_control="no-cache, must-revalidate")

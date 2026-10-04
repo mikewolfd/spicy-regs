@@ -96,11 +96,11 @@ def test_discovery_reports_actual_parquet_schema_and_dictionary_caveats(tmp_path
     result = _tool_data(server, "describe_table", {"table": "org_committee_links"})
     assert result["available"] is True
     assert result["schema_matches_declared"] is False
-    assert result["schema_differences"]["unexpected_columns"] == ["new_field"]
+    assert result["schema_differences"]["unexpected_columns"] == ["match_method", "new_field"]
     assert result["schema_differences"]["type_differences"] == [
         {"column": "committee_match_count", "declared": "BIGINT", "actual": "INTEGER"}
     ]
-    assert "confidence" in result["schema_differences"]["missing_columns"]
+    assert "association_kind" in result["schema_differences"]["missing_columns"]
     assert "heuristic name matches" in result["metadata"]["data_quality"]
     assert result["metadata"]["identity_columns"] == ["organization", "committee_id"]
     actual_columns = {column["column_name"]: column for column in result["columns"]}
@@ -130,14 +130,14 @@ def test_describe_exposes_provider_identity_without_importing_provider(monkeypat
         return original_import(name, *args, **kwargs)
 
     con = duckdb.connect()
-    con.execute("CREATE TABLE members (bioguide_id VARCHAR, fec_ids_json VARCHAR)")
+    con.execute("CREATE TABLE members (bioguide_id VARCHAR, fec_ids VARCHAR[])")
     monkeypatch.setattr(mcp_server, "_get_connection", lambda: con)
     monkeypatch.setattr(builtins, "__import__", without_provider)
     mcp_server._table_metadata.cache_clear()
     result = _tool_data(mcp_server.build_server(), "describe_table", {"table": "members"})
     assert result["metadata"]["identity_columns"] == ["bioguide_id"]
     assert result["metadata"]["grain"]
-    assert "FEC" in next(c["description"] for c in result["columns"] if c["column_name"] == "fec_ids_json")
+    assert "FEC" in next(c["description"] for c in result["columns"] if c["column_name"] == "fec_ids")
 
 
 def test_describe_unknown_table_refuses_names_outside_declarations_and_snapshot(monkeypatch):

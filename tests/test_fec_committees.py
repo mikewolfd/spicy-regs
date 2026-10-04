@@ -182,9 +182,11 @@ def test_shape_handles_missing_fields_and_null_arrays():
     assert row["name"] is None
     assert row["organization_type_full"] is None
     assert row["party_full"] is None
-    # Missing / null array fields serialize to an empty JSON array, not null.
-    assert row["cycles_json"] == "[]"
-    assert row["candidate_ids_json"] == "[]"
+    # Missing, explicit null and empty arrays retain distinct conversion inputs.
+    assert row["cycles_json"] is None
+    assert row["candidate_ids_json"] is None
+    assert _shape({"cycles": None})["cycles_json"] == "null"
+    assert _shape({"cycles": []})["cycles_json"] == "[]"
 
 
 def test_shape_omits_unpublished_organization_type_code():

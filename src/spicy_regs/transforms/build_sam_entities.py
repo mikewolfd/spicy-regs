@@ -1,6 +1,6 @@
 """Transform: build ``sam_entities.parquet`` from the SAM.gov Entity API (v4).
 
-Produces a 19-column all-VARCHAR schema keyed on ``(uei, entity_eft_indicator)`` --
+Produces a native subject table and shared receipts keyed on ``(uei, entity_eft_indicator)`` --
 one row per registration, since an entity registers once per EFT indicator -- the
 federal entity registry anchoring organization/entity resolution across the corpus.
 
@@ -44,6 +44,7 @@ import pyarrow.parquet as pq
 from loguru import logger
 
 from spicy_regs.sources import r2
+from spicy_regs.transforms.government_receipts import internal_prior, receipt_builder
 from spicy_regs.transforms.table_merge import merge_local_prior, retired_rows
 
 if TYPE_CHECKING:
@@ -225,7 +226,7 @@ OUTPUT = "sam_entities.parquet"
 # full ~hundreds-of-thousands-row backfill). Raise deliberately for a wider pull.
 DEFAULT_MAX_RECORDS = 5_000
 
-# The published schema: 19 columns, all VARCHAR, in a fixed order. ``(uei,
+# Literal processing schema, converted to native subjects and retained in receipts: 19 columns, all VARCHAR, in a fixed order. ``(uei,
 # entity_eft_indicator)`` is the registration key: one entity registers once per EFT
 # indicator (187 of 147,038 UEIs in the 2026 registration-year extract). Nested paths (source field) are noted where non-obvious.
 COLUMNS = (
@@ -298,6 +299,7 @@ def _shape(doc: dict) -> dict:
     }
 
 
+@receipt_builder
 def build_sam_entities(
     output_dir: Path,
     *,
@@ -323,6 +325,8 @@ def build_sam_entities(
 
     # 1. Pull the prior table (best effort — absence just means a fresh seed).
     have_prior = prior_file.exists() or r2.download(OUTPUT, prior_file)
+    if have_prior:
+        prior_file = internal_prior("sam_entities", prior_file)
     if have_prior:
         logger.info("SAM entities: merging against prior table {}", prior_file)
     else:

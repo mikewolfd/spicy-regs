@@ -23,7 +23,7 @@ from spicy_docs.sources.courtlistener.bulk import (
 )
 from spicy_regs.transforms._courtlistener_writer import DISK_HEADROOM_FLOOR, check_headroom
 from spicy_regs.transforms.build_court_opinion_clusters import (
-    COLUMNS as CLUSTER_COLUMNS,
+    INPUT_COLUMNS as CLUSTER_COLUMNS,
 )
 from spicy_regs.transforms.build_court_opinion_clusters import (
     _shape_bulk,

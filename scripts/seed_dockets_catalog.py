@@ -46,6 +46,7 @@ from loguru import logger
 
 from spicy_regs.schemas import DOCKET
 from spicy_regs.sources import iceberg
+from spicy_regs.sources.regulatory_catalog import namespace
 from spicy_regs.sources.r2 import upload_file
 
 # The catalog table is expected to be badly under-populated (that is the bug);
@@ -60,16 +61,13 @@ def counts(con, source_uri: str) -> tuple[int, int, int]:
     exists = con.execute(
         "SELECT EXISTS (SELECT 1 FROM information_schema.tables "
         "WHERE table_catalog = ? AND table_schema = ? AND table_name = ?)",
-        [iceberg._CATALOG_ALIAS, iceberg._namespace(), DOCKET.name],
+        [iceberg._CATALOG_ALIAS, namespace(), DOCKET.name],
     ).fetchone()[0]
     qualified = iceberg._qualified(DOCKET)
     before = con.execute(f"SELECT count(*) FROM {qualified}").fetchone()[0] if exists else 0
     source = f"read_parquet('{iceberg._sql_str(source_uri)}')"
     source_rows = con.execute(f"SELECT count(*) FROM {source}").fetchone()[0]
-    absent = (
-        f'WHERE NOT EXISTS (SELECT 1 FROM {qualified} t WHERE t."{DOCKET.dedup_key}" = src.k)'
-        if exists else ""
-    )
+    absent = f'WHERE NOT EXISTS (SELECT 1 FROM {qualified} t WHERE t."{DOCKET.dedup_key}" = src.k)' if exists else ""
     missing = con.execute(
         f'SELECT count(*) FROM (SELECT DISTINCT "{DOCKET.dedup_key}" AS k '
         f'FROM {source} WHERE "{DOCKET.dedup_key}" IS NOT NULL) src {absent}'

@@ -1,0 +1,401 @@
+"""Explicit native domain mapping for the regulations datasets.
+
+No acquisition or publication occurs here. Unknown fields, malformed JSON and
+unrepresented nested properties refuse before Arrow can silently drop them.
+Exact converted inputs remain available to the shared receipt writer.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+from functools import cache
+from collections.abc import Mapping
+
+import pyarrow as pa
+
+from spicy_regs.schemas.regulations_subjects import LEGACY_COLUMNS, RECEIPT_COLUMNS
+
+S = pa.string()
+STRINGS = pa.list_(S)
+FORMAT = pa.struct([("url", S), ("format", S), ("size", pa.int64())])
+FORMATS = pa.list_(FORMAT)
+DISPLAY = pa.list_(pa.struct([("name", S), ("label", S), ("tooltip", S)]))
+COMMENT_ATTACHMENTS = pa.list_(
+    pa.struct(
+        [("title", S), ("formats", FORMATS), ("attachment_id", S), ("restrict_reason", S), ("restrict_reason_type", S)]
+    )
+)
+ATTACHMENT_RECORDS = pa.list_(
+    pa.struct(
+        [
+            ("attachment_id", S),
+            ("title", S),
+            ("file_formats", FORMATS),
+            ("restrict_reason", S),
+            ("restrict_reason_type", S),
+        ]
+    )
+)
+AGENCIES = pa.list_(
+    pa.struct(
+        [
+            ("id", pa.int64()),
+            ("name", S),
+            ("raw_name", S),
+            ("parent_id", pa.int64()),
+            ("slug", S),
+        ]
+    )
+)
+CFR_REFERENCES = pa.list_(pa.struct([("title", pa.int64()), ("part", S), ("chapter", S)]))
+TIMETABLE = pa.list_(pa.struct([("action", S), ("date", S), ("fr_citation", S)]))
+STAGE_EVENTS = pa.list_(
+    pa.struct(
+        [
+            ("stage", S),
+            ("event_kind", S),
+            ("effective_date", S),
+            ("document_id", S),
+        ]
+    )
+)
+
+# Each mapping is a deliberate field decision. No suffix-based classification.
+NATIVE_FIELDS = {
+    "comment_attributes": {
+        "display_properties_json": ("display_properties", DISPLAY),
+        "file_formats_json": ("file_formats", FORMATS),
+    },
+    "docket_attributes": {"display_properties_json": ("display_properties", DISPLAY)},
+    "document_attributes": {"display_properties_json": ("display_properties", DISPLAY)},
+    "comments": {"attachments_json": ("attachments", COMMENT_ATTACHMENTS)},
+    "documents": {
+        "attachments_json": ("attachments", FORMATS),
+        "attachment_records_json": ("attachment_records", ATTACHMENT_RECORDS),
+        "additional_rins": ("additional_rins", STRINGS),
+    },
+    "federal_register": {
+        "agencies_json": ("agencies", AGENCIES),
+        "docket_ids_json": ("docket_ids", STRINGS),
+        "regulation_id_numbers_json": ("regulation_id_numbers", STRINGS),
+        "cfr_references_json": ("cfr_references", CFR_REFERENCES),
+        "topics_json": ("topics", STRINGS),
+        "agency_slugs": ("agency_slugs", STRINGS),
+    },
+    "fr_docket_links": {
+        "agency_slugs": ("agency_slugs", STRINGS),
+        "docket_ids_json": ("docket_ids", STRINGS),
+        "regulation_id_numbers_json": ("regulation_id_numbers", STRINGS),
+    },
+    "comment_periods": {
+        "proceeding_ids_json": ("proceeding_ids", STRINGS),
+        "rins_json": ("rins", STRINGS),
+        "docket_ids_json": ("docket_ids", STRINGS),
+        "opened_by_artifact_ids_json": ("opened_by_artifact_ids", STRINGS),
+    },
+    "proceedings": {
+        "docket_ids_json": ("docket_ids", STRINGS),
+        "stage_events_json": ("stage_events", STAGE_EVENTS),
+        "fr_document_numbers_json": ("fr_document_numbers", STRINGS),
+        "fr_document_ids_json": ("fr_document_ids", STRINGS),
+        "cfr_refs_json": ("cfr_refs", STRINGS),
+        "cfr_target_iris_json": ("cfr_target_iris", STRINGS),
+        "authority_refs_json": ("authority_refs", STRINGS),
+        "rins_json": ("rins", STRINGS),
+    },
+    "rulemaking_lifecycles": {"specific_rins_json": ("specific_rins", STRINGS)},
+    "unified_agenda": {
+        "timetable_json": ("timetable", TIMETABLE),
+        "cfr_references_json": ("cfr_references", STRINGS),
+        "legal_authority_json": ("legal_authority", STRINGS),
+    },
+}
+TYPE_OVERRIDES = {
+    "documents": {"withdrawn": pa.bool_()},
+    "regulatory_agenda_items": {"linked_proceeding_count": pa.int64(), "observation_count": pa.int64()},
+}
+IDENTITIES = {
+    "agency_lifecycle_stats": ("agency_code", "stratum"),
+    "agency_monthly_volume": ("agency_code", "year", "month", "document_type"),
+    "agency_stats": ("agency_code",),
+    "agenda_item_proceedings": ("relationship_id",),
+    "cfr_sections": ("granule_id",),
+    "comment_attributes": ("comment_id",),
+    "comment_periods": ("comment_period_id",),
+    "comments": ("comment_id",),
+    "comments_index": ("agency_code", "docket_id", "year", "month"),
+    "discovery_signals": ("agency_code",),
+    "docket_attributes": ("docket_id",),
+    "dockets": ("docket_id",),
+    "document_attributes": ("document_id",),
+    "documents": ("document_id",),
+    "federal_register": ("document_number", "publication_date"),
+    "feed_summary": ("docket_id",),
+    "fr_docket_links": ("document_number", "publication_date", "docket_source_ordinal"),
+    "lifecycle_events": ("lifecycle_event_id",),
+    "proceedings": ("proceeding_id",),
+    "regulatory_agenda_items": ("agenda_item_id",),
+    "rule_targets": ("rule_target_id",),
+    "rulemaking_lifecycles": ("proceeding_id",),
+    "unified_agenda": ("rin", "agenda_edition"),
+}
+# Preserve witness-distinct legacy rows when their witness columns move to receipts.
+DERIVED_IDENTITIES = {
+    "rule_targets": ("rule_target_id", ("docket_id", "cfr_ref", "rin", "source")),
+    "lifecycle_events": (
+        "lifecycle_event_id",
+        (
+            "proceeding_id",
+            "document_id",
+            "stage",
+            "event_date",
+            "source",
+            "dated_by",
+            "evidence_id",
+            "joined_by",
+            "document_form",
+            "anchor_role",
+        ),
+    ),
+}
+TYPES = {
+    "VARCHAR": S,
+    "BIGINT": pa.int64(),
+    "INTEGER": pa.int32(),
+    "DOUBLE": pa.float64(),
+    "BOOLEAN": pa.bool_(),
+    "DATE": pa.date32(),
+    "TIMESTAMP WITH TIME ZONE": pa.timestamp("us", tz="UTC"),
+    "VARCHAR[]": STRINGS,
+}
+
+
+class RegulationsShapeError(ValueError):
+    """A source value cannot be represented without losing information."""
+
+
+def _pairs(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise RegulationsShapeError(f"repeated JSON key: {key}")
+        result[key] = value
+    return result
+
+
+def _array(value, field):
+    if value is None:
+        return None
+    if isinstance(value, str):
+        try:
+            value = json.loads(
+                value,
+                object_pairs_hook=_pairs,
+                parse_constant=lambda v: (_ for _ in ()).throw(RegulationsShapeError(v)),
+            )
+        except (ValueError, TypeError) as error:
+            raise RegulationsShapeError(f"{field}: malformed JSON: {error}") from error
+    if value is None:
+        return None
+    if not isinstance(value, list):
+        raise RegulationsShapeError(f"{field}: expected list, got {type(value).__name__}")
+    return value
+
+
+def _object(value, allowed, field):
+    if not isinstance(value, Mapping) or set(value) - set(allowed):
+        raise RegulationsShapeError(f"{field}: unexpected object fields or value: {value!r}")
+    return value
+
+
+def _text_number(value, field):
+    # CFR parts/chapter labels include alpha suffixes and printed ranges. Keep
+    # source strings exactly; integer JSON tokens have one unambiguous spelling.
+    if value is None or isinstance(value, str):
+        return value
+    if type(value) is int:
+        return str(value)
+    raise RegulationsShapeError(f"{field}: expected string or integer")
+
+
+def _formats(value, field, *, source_names=False):
+    if value is None:
+        return None
+    result = []
+    for item in value:
+        if item is None:
+            result.append(None)
+            continue
+        if source_names:
+            _object(item, ("fileUrl", "format", "size"), field)
+            item = {"url": item.get("fileUrl"), "format": item.get("format"), "size": item.get("size")}
+        result.append(item)
+    return result
+
+
+def _native(dataset, field, value):
+    if field == "agency_slugs":
+        if value is None or isinstance(value, list):
+            return value
+        if not isinstance(value, str):
+            raise RegulationsShapeError(f"{dataset}.agency_slugs: expected publisher slug string")
+        return value.split(",")
+    values = _array(value, f"{dataset}.{field}")
+    if values is None:
+        return None
+    result = []
+    for item in values:
+        if item is None:
+            result.append(None)
+            continue
+        if dataset == "federal_register" and field == "agencies_json":
+            _object(item, ("id", "name", "raw_name", "parent_id", "slug", "url", "json_url"), field)
+            item = {k: item.get(k) for k in ("id", "name", "raw_name", "parent_id", "slug")}
+        elif dataset == "federal_register" and field == "cfr_references_json":
+            _object(item, ("title", "part", "chapter", "citation_url"), field)
+            item = {
+                "title": item.get("title"),
+                "part": _text_number(item.get("part"), field),
+                "chapter": _text_number(item.get("chapter"), field),
+            }
+        elif dataset == "proceedings" and field == "stage_events_json":
+            _object(item, ("stage", "event_kind", "effective_date", "evidence_id", "joined_by", "source"), field)
+            item = {k: item.get(k) for k in ("stage", "event_kind", "effective_date")} | {
+                "document_id": item.get("evidence_id")
+            }
+        elif field == "attachment_records_json":
+            _object(item, ("id", "type", "attributes", "links", "relationships"), field)
+            if item.get("type") != "attachments":
+                raise RegulationsShapeError(f"{field}: source record is not an attachment")
+            attrs = _object(
+                item.get("attributes") or {}, ("title", "fileFormats", "restrictReason", "restrictReasonType"), field
+            )
+            item = {
+                "attachment_id": item.get("id"),
+                "title": attrs.get("title"),
+                "file_formats": _formats(attrs.get("fileFormats"), field, source_names=True),
+                "restrict_reason": attrs.get("restrictReason"),
+                "restrict_reason_type": attrs.get("restrictReasonType"),
+            }
+        elif field == "file_formats_json":
+            item = _formats([item], field, source_names=True)[0]
+        result.append(item)
+    return result
+
+
+@cache
+def subject_schema(dataset):
+    fields = []
+    for name, type_name in LEGACY_COLUMNS[dataset]:
+        if name in RECEIPT_COLUMNS[dataset]:
+            continue
+        target, dtype = NATIVE_FIELDS.get(dataset, {}).get(name, (name, TYPES[type_name]))
+        dtype = TYPE_OVERRIDES.get(dataset, {}).get(name, dtype)
+        fields.append(pa.field(target, dtype))
+    if dataset in DERIVED_IDENTITIES:
+        fields.insert(0, pa.field(DERIVED_IDENTITIES[dataset][0], S))
+    if dataset == "rule_targets":
+        fields.append(pa.field("fr_document_ids", STRINGS))
+    return pa.schema(fields)
+
+
+def _validate(value, dtype, path):
+    if value is None:
+        return
+    if pa.types.is_list(dtype):
+        if not isinstance(value, list):
+            raise RegulationsShapeError(f"{path}: expected list")
+        for i, item in enumerate(value):
+            _validate(item, dtype.value_type, f"{path}[{i}]")
+    elif pa.types.is_struct(dtype):
+        _object(value, [f.name for f in dtype], path)
+        for f in dtype:
+            _validate(value.get(f.name), f.type, f"{path}.{f.name}")
+    elif pa.types.is_string(dtype) and not isinstance(value, str):
+        raise RegulationsShapeError(f"{path}: expected string")
+    elif pa.types.is_integer(dtype) and type(value) is not int:
+        raise RegulationsShapeError(f"{path}: expected integer")
+    elif pa.types.is_boolean(dtype) and type(value) is not bool:
+        raise RegulationsShapeError(f"{path}: expected boolean")
+
+
+def shape_record(dataset, row):
+    """Return native fields plus explicitly declared receipt-only input fields.
+
+    An omitted legacy field stays omitted in raw_conversion_inputs; SQL NULL,
+    JSON null, empty lists, repeated list items and original key spelling are
+    distinguishable there. Subjects never carry this processing evidence.
+    """
+    known = {c for c, _ in LEGACY_COLUMNS[dataset]}
+    if unknown := set(row) - known:
+        raise RegulationsShapeError(f"{dataset}: undeclared fields {sorted(unknown)}")
+    shaped = {c: row[c] for c in RECEIPT_COLUMNS[dataset] if c in row}
+    # Only transformed values need conversion input retention; evidence fields
+    # above retain their exact values and ordinary domain fields stay unchanged.
+    conversions = set(NATIVE_FIELDS.get(dataset, {})) | set(TYPE_OVERRIDES.get(dataset, {}))
+    shaped["raw_conversion_inputs"] = {c: row[c] for c in sorted(conversions) if c in row}
+    for name, _ in LEGACY_COLUMNS[dataset]:
+        if name in RECEIPT_COLUMNS[dataset]:
+            continue
+        value = row.get(name)
+        target = name
+        if name in NATIVE_FIELDS.get(dataset, {}):
+            target, _ = NATIVE_FIELDS[dataset][name]
+            value = _native(dataset, name, value)
+        elif dataset == "documents" and name == "withdrawn" and value is not None:
+            if type(value) is not bool:
+                if value not in ("true", "false", "True", "False"):
+                    raise RegulationsShapeError("documents.withdrawn: unknown boolean spelling")
+                value = value.lower() == "true"
+        elif dataset == "regulatory_agenda_items" and name in TYPE_OVERRIDES[dataset] and value is not None:
+            if isinstance(value, str) and value.isascii() and value.isdecimal():
+                value = int(value)
+            elif type(value) is not int:
+                raise RegulationsShapeError(f"{dataset}.{name}: expected nonnegative integer")
+            if value < 0:
+                raise RegulationsShapeError(f"{dataset}.{name}: negative count")
+        shaped[target] = value
+    if dataset in DERIVED_IDENTITIES:
+        key, columns = DERIVED_IDENTITIES[dataset]
+        literal = json.dumps(
+            [dataset, [(c, row.get(c)) for c in columns]], ensure_ascii=False, separators=(",", ":"), default=str
+        )
+        shaped[key] = hashlib.sha256(literal.encode()).hexdigest()
+    if dataset == "rule_targets":
+        references = _array(row.get("fr_references_json"), "rule_targets.fr_references_json")
+        targets = []
+        for reference in references or ():
+            if reference is None:
+                targets.append(None)
+                continue
+            if not isinstance(reference, Mapping) or not isinstance(reference.get("candidate_ids"), list):
+                raise RegulationsShapeError("rule_targets.fr_references_json: expected native candidate list")
+            candidates = reference["candidate_ids"]
+            if any(not isinstance(candidate, str) for candidate in candidates):
+                raise RegulationsShapeError("rule_targets.fr_references_json: invalid candidate identity")
+            # Match the existing FederalRegisterIndex resolution rule: one
+            # selected dated record resolves; missing/ambiguous references do not.
+            targets.append(candidates[0] if len(candidates) == 1 else None)
+        shaped["fr_document_ids"] = None if references is None else targets
+    schema = subject_schema(dataset)
+    for field in schema:
+        _validate(shaped.get(field.name), field.type, f"{dataset}.{field.name}")
+    # Arrow checks range/date errors after structural validation prevents loss.
+    pa.Table.from_pylist([{f.name: shaped.get(f.name) for f in schema}], schema=schema)
+    return shaped
+
+
+def restore_legacy_record(dataset, row):
+    """Restore only an internal row already qualified by read_with_receipts."""
+    if "raw_conversion_inputs" not in row:
+        raise RegulationsShapeError(f"{dataset}: qualified conversion receipt required")
+    raw = row["raw_conversion_inputs"]
+    result = {}
+    for name, _ in LEGACY_COLUMNS[dataset]:
+        if name in NATIVE_FIELDS.get(dataset, {}) or name in TYPE_OVERRIDES.get(dataset, {}):
+            if name in raw:
+                result[name] = raw[name]
+        else:
+            result[name] = row.get(name)
+    return result

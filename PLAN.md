@@ -40,15 +40,15 @@ Domain statuses such as candidate status, canceled meetings and withdrawal
 remain domain values; processing statuses move to receipts. Classify fields
 explicitly by meaning, not by a naming suffix.
 
-The local FEC cleanup is an intermediate implementation and does not yet meet
-this decision: it still stores processing columns alongside subject values
-and encodes some repeated values as JSON strings. The required migration
-must cover producer schemas, every writer, incremental-build readers,
-financial qualification and evidence consumers, dictionary declarations and
-native-list navigation together. The existing output ledger describes table
-qualification; it does not replace per-record ETL receipts. Publish subject
-outputs and their receipts as one validated generation; refuse missing or
-ambiguous receipt joins rather than weakening existing qualification checks.
+The integrated implementation applies the declared field policies to producer
+schemas, catalog writers, incremental-build readers, financial qualification,
+evidence consumers, dictionary declarations and native-list navigation. The
+existing output ledger describes table qualification; it does not replace
+per-record ETL receipts. Subject outputs and their receipts publish as one
+validated generation; missing or ambiguous joins refuse admission. Legacy
+inputs migrate from their pinned source bytes before incremental processing.
+This local code integration does not establish deployment or publication of
+new production generations.
 
 For FEC history, `treasurer_name` remains subject data. `treasurer_text` is
 a source PostgreSQL `tsvector`; preserve that literal search-index value in

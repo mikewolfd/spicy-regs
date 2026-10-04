@@ -19,7 +19,9 @@ import sys
 from datetime import date
 from pathlib import Path
 
+import pytest
 import pyarrow as pa
+from spicy_regs.court_subjects import SUBJECT_SCHEMAS
 import pyarrow.parquet as pq
 
 _SPEC = importlib.util.spec_from_file_location(
@@ -82,32 +84,14 @@ def _run(tmp_path: Path, mode: str, monkeypatch) -> dict:
         output_dir=tmp_path / "out",
         dump_date=date(2026, 6, 30),
         mode=mode,
+        allow_legacy_input=True,
     )
 
 
-def test_scope_mode_writes_a_joinable_side_table(tmp_path: Path, monkeypatch):
-    receipt = _run(tmp_path, "scope", monkeypatch)
-    rows = pq.read_table(tmp_path / "out" / "court_cluster_scope.parquet").to_pylist()
-
-    assert [r["cluster_id"] for r in rows] == ["1", "2", "3", "4"]
-    assert rows[0] == {
-        "cluster_id": "1",
-        "cl_docket_id": "10",
-        "court_id": "dcd",
-        "court_jurisdiction": "FD",
-        "court_is_federal": "t",
-    }
-    assert rows[1]["court_is_federal"] == "f"
-    # A docket the map does not place, and a cluster with no docket at all: both
-    # NULL. "We do not know" and "not federal" are different claims.
-    assert rows[2]["court_is_federal"] is None
-    assert rows[3]["court_id"] is None
-
-    assert receipt["mode"] == "scope"
-    assert receipt["coverage"]["denominator_count"] == 4
-    assert receipt["coverage"]["clusters_in_a_federal_court"] == 1
-    assert receipt["coverage"]["clusters_with_no_court"] == 2
-    assert receipt["coverage"]["by_jurisdiction"]["FD"] == 1
+def test_scope_mode_refuses_an_unnecessary_parallel_subject_table(tmp_path: Path, monkeypatch):
+    with pytest.raises(ValueError, match="retired"):
+        _run(tmp_path, "scope", monkeypatch)
+    assert not (tmp_path / "out" / "court_cluster_scope.parquet").exists()
 
 
 def test_full_mode_keeps_every_original_column_and_the_published_order(tmp_path: Path, monkeypatch):
@@ -115,14 +99,7 @@ def test_full_mode_keeps_every_original_column_and_the_published_order(tmp_path:
     receipt = _run(tmp_path, "full", monkeypatch)
     table = pq.read_table(tmp_path / "out" / "court_opinion_clusters.parquet")
 
-    assert table.schema.names == [
-        "cluster_id",
-        "cl_docket_id",
-        "court_id",
-        "court_jurisdiction",
-        "court_is_federal",
-        "case_name",
-    ]
+    assert table.schema == SUBJECT_SCHEMAS['court_opinion_clusters']
     rows = table.to_pylist()
     assert rows[0]["case_name"] == "Federal"
     assert rows[0]["court_jurisdiction"] == "FD"
@@ -130,14 +107,11 @@ def test_full_mode_keeps_every_original_column_and_the_published_order(tmp_path:
     assert receipt["coverage"]["rows_written"] == 4
 
 
-def test_auto_falls_back_to_the_side_table_when_the_rewrite_would_cross_the_floor(tmp_path: Path, monkeypatch):
-    """The choice is made by arithmetic, and the choice made is recorded."""
-    monkeypatch.setattr(backfill_module, "_fits", lambda *a, **k: False)
-    receipt = _run(tmp_path, "auto", monkeypatch)
-    assert receipt["mode"] == "scope"
-    assert (tmp_path / "out" / "court_cluster_scope.parquet").exists()
+def test_auto_refuses_before_crossing_the_disk_floor(tmp_path: Path, monkeypatch):
+    def refuse(*args, **kwargs):
+        raise RuntimeError("disk floor")
+    monkeypatch.setattr(backfill_module, "check_headroom", refuse)
+    with pytest.raises(RuntimeError, match="disk floor"):
+        _run(tmp_path, "auto", monkeypatch)
+    assert not (tmp_path / "out" / "court_cluster_scope.parquet").exists()
     assert not (tmp_path / "out" / "court_opinion_clusters.parquet").exists()
-
-    monkeypatch.setattr(backfill_module, "_fits", lambda *a, **k: True)
-    receipt = _run(tmp_path, "auto", monkeypatch)
-    assert receipt["mode"] == "full"

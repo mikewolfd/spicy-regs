@@ -6,6 +6,8 @@
 
 One source-reported metric value for a member; different grades, ranks and scores remain distinct measurements. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='scorecard_member_ratings'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled publisher editions selected by the scorecard source registry. Complete edition reads replace that edition; failed or incomplete reads preserve prior observations. Coverage varies by publisher and historical source format. *(measured 2026-10-03)*
 
 - **Parquet file:** `scorecard_member_ratings.parquet`
@@ -19,11 +21,7 @@ One source-reported metric value for a member; different grades, ranks and score
 | `metric_id` | `VARCHAR` | Stable source-layer metric id; no downstream identity resolution. |
 | `publisher_member_key` | `VARCHAR` | Versioned reader key for this source member context; not a resolved official identifier. |
 | `value_text` | `VARCHAR` | The publisher-reported rating, including units, suffixes and exclusions; reader-documented text normalization retains the original in source evidence. |
-| `value_number` | `VARCHAR` | Optional exact decimal text read from an unambiguous numerical value; never a grade conversion. |
+| `value_number` | `DECIMAL(38,18)` | Optional exact decimal text read from an unambiguous numerical value; never a grade conversion. |
 | `value_status_text` | `VARCHAR` | Source-stated value status, preserved as text; NULL when unstated. |
 | `rank_text` | `VARCHAR` | Source-stated rank, preserved as text; NULL when unstated. |
 | `notes_text` | `VARCHAR` | Source-stated notes, preserved as text; NULL when unstated. |
-| `source_url` | `VARCHAR` | Original publisher URL supporting this observation. |
-| `source_path` | `VARCHAR` | Source locator within the captured response, such as cell, JSON path or PDF page. |
-| `snapshot_id` | `VARCHAR` | Opaque identity of the complete accepted edition capture and parse. |
-| `capture_id` | `VARCHAR` | Opaque caller-issued identity of the source observation supporting this row. |

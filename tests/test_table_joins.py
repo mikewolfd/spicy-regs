@@ -68,7 +68,13 @@ def test_the_spicy_docs_contracts_reference_the_identity_joins_declared_here():
     identity_joins = {key for key, join in declared.items()
                       if join.kind != "design" and join.child in TABLE_CONTRACTS and join.parent in TABLE_CONTRACTS
                       and join.parent_columns == TABLE_CONTRACTS[join.parent].identity}
-    assert identity_joins <= referenced <= declared.keys()
+    retired = {(j.child, j.child_columns, j.parent, j.parent_columns) for j in table_joins.RETIRED_PROCESSING_JOINS}
+    translated = set()
+    for child, child_columns, parent, parent_columns in referenced - retired:
+        rename = table_joins._NATIVE_JOIN_FIELDS
+        translated.add((child, tuple(rename.get((child, c), c) for c in child_columns),
+                        parent, tuple(rename.get((parent, c), c) for c in parent_columns)))
+    assert identity_joins <= translated <= declared.keys()
 
 def test_describe_table_lists_the_joins_a_table_makes_and_receives(monkeypatch):
     described = _tool_data(_serve(monkeypatch, _index(), bundled=True), "describe_table", {"table": "dockets"})

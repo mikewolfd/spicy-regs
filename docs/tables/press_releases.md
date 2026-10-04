@@ -6,6 +6,8 @@
 
 One row per item in one appropriations committee press-release feed capture. `bill_id` is an inferred candidate when a pattern matches a published bill identifier in the title or description. All columns are stored as VARCHAR.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='press_releases'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Window. Releases from the House and Senate Appropriations committees' feeds as captured since September 19, 2026, including items that later rotated out of a feed; bill links are inferred from release text. Not all committees, earlier history or release-page bodies. See `press-release-qualification/` and `press-link-repair/` in the fork execution receipts. *(measured 2026-09-28)*
 
 **Data quality.** The bill linkage is a pattern match over the release's own words, not a publisher statement. An earlier local run falsely matched `s 2027` inside a reference to the President's 2027 budget to Senate bill 2027. The corrected matcher rejects possessive suffixes while preserving quoted bill citations; wider matching quality remains unmeasured. `matched_field` and `matched_text` carry what was matched and where: a false positive is readable from the row rather than only by re-running the matcher. One pattern is compiled per published bill in the Congresses in scope, bounded on both sides and built from the bill's own type, so a bare number matches nothing. Three states are distinct and must not be read as one: a `bill_id` with `match_rule = bill_number_in_title` or `bill_number_in_excerpt` is a match; `match_rule = unmatched` with a NULL `bill_id` means the matcher ran and found no pattern match; an all-NULL `match_rule` means no matching pass ran at all, because no `congress_bills` table was published when the rollup ran, or none was published for that release's Congress, or the release states no readable `pub_date` to scope by. The Senate feed carries no item description, so a Senate release can only ever match on its title. One consequence worth knowing before relying on these four columns: a run that cannot read `congress_bills` republishes the whole live window with NULL match columns, because this table merges row-wise and a fresh row wins whole. The next run that can read it re-derives them for every release still in the feed, so the gap normally lasts one cycle — but a release that rotates off the feed during that cycle keeps the NULL permanently. The other publisher columns are unaffected; only these four degrade.
@@ -19,35 +21,19 @@ One row per item in one appropriations committee press-release feed capture. `bi
 | --- | --- | --- |
 | `release_id` | `VARCHAR` | Digest of the chamber and the item's full link; replaces a truncated-URL unique key. |
 | `chamber` | `VARCHAR` | Which committee feed this item came from. |
-| `feed_url` | `VARCHAR` | The feed address the capture requested. |
-| `channel_title` | `VARCHAR` | The channel title, which is also the proof the requested feed answered. |
-| `channel_link` | `VARCHAR` | The channel link, checked against the publisher's own host. |
-| `channel_description` | `VARCHAR` | The channel description as the publisher wrote it. |
-| `channel_language` | `VARCHAR` | The channel language tag. |
-| `channel_copyright` | `VARCHAR` | The channel copyright line, which only the Senate feed states. |
-| `channel_docs` | `VARCHAR` | The channel docs URL, which only the Senate feed states. |
-| `channel_last_build_date` | `VARCHAR` | The channel lastBuildDate, which only the Senate feed states. |
-| `channel_ttl` | `VARCHAR` | The channel ttl: the publisher's own polling contract. |
-| `channel_skip_days` | `VARCHAR` | The channel skipDays, unit-separator joined; NULL where the channel states none. |
-| `channel_skip_hours` | `VARCHAR` | The channel skipHours, unit-separator joined; NULL where the channel states none. |
-| `item_index` | `VARCHAR` | Zero-based position of this item in the captured channel. |
 | `title` | `VARCHAR` | The item title in full, never truncated to a display length. |
 | `link` | `VARCHAR` | The item's full link. |
 | `guid` | `VARCHAR` | The item's guid, where it carries one. |
-| `guid_is_permalink` | `VARCHAR` | The guid's isPermaLink, defaulting to true when the attribute is absent. |
+| `guid_is_permalink` | `BOOLEAN` | The guid's isPermaLink, defaulting to true when the attribute is absent. |
 | `description` | `VARCHAR` | The item's raw HTML description exactly as the publisher wrote it, untruncated. |
 | `description_text` | `VARCHAR` | That description read as plain text, not a truncated excerpt. |
-| `description_chars` | `VARCHAR` | Character length of description_text. |
+| `description_chars` | `BIGINT` | Character length of description_text. |
 | `pub_date` | `VARCHAR` | The item's pubDate exactly as the publisher spelled it, wrong zone abbreviation included. |
 | `pub_date_instant` | `VARCHAR` | That pubDate parsed to an instant under RFC 822's fixed abbreviation table. |
 | `author` | `VARCHAR` | The item's author, which the Senate feed states as a shared mailbox. |
 | `creator` | `VARCHAR` | The item's dc:creator, which the House feed states as a named staffer. |
-| `categories_json` | `VARCHAR` | Every category the item lists, as a JSON array. |
+| `categories` | `VARCHAR[]` | Every category the item lists, as a Native list. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `enclosure_url` | `VARCHAR` | The enclosure URL, where the item carries one. |
-| `enclosure_length` | `VARCHAR` | The enclosure length in bytes, where the item states one. |
+| `enclosure_length` | `BIGINT` | The enclosure length in bytes, where the item states one. |
 | `enclosure_type` | `VARCHAR` | The enclosure media type, where the item states one. |
-| `observed_at` | `VARCHAR` | When the feed was captured; the merge prefers the larger value. |
 | `bill_id` | `VARCHAR` | The bill this release names, where a bill-number pattern matched. |
-| `match_rule` | `VARCHAR` | Which release-matching rule fired, including unmatched. |
-| `matched_field` | `VARCHAR` | Which field the mention was found in; the Senate feed can only ever match on title. |
-| `matched_text` | `VARCHAR` | The exact text that matched, so a false positive is readable from the row. |

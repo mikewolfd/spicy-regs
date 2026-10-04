@@ -6,6 +6,8 @@
 
 One row per plain-language summary of one printing of a bill. `frame` is stored because without it the summary is not reproducible from the row. All columns are stored as VARCHAR.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='bill_summaries'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled: written by a language model during bill-family runs; a run without model calls enabled cannot fill it. *(measured 2026-09-28)*
 
 - **Parquet file:** `bill_summaries.parquet`
@@ -17,16 +19,8 @@ One row per plain-language summary of one printing of a bill. `frame` is stored 
 | --- | --- | --- |
 | `bill_id` | `VARCHAR` | The bill this summary describes. |
 | `version_code` | `VARCHAR` | The printing this summary was written from. |
-| `source` | `VARCHAR` | Which acquisition path supplied that printing. |
+| `printing_id` | `VARCHAR` | Which acquisition path supplied that printing. |
 | `summary` | `VARCHAR` | The plain-language paragraph, length-checked before it was stored. |
 | `audience` | `VARCHAR` | The short phrase naming the most-affected audience. |
-| `top_provisions_json` | `VARCHAR` | Up to three notable provisions, as a JSON array in the model's order. |
-| `model` | `VARCHAR` | The model id the call was made against. |
-| `prompt_version` | `VARCHAR` | The prompt version this summary was produced under. |
-| `content_hash` | `VARCHAR` | Digest of the version text the summary was written from, spelled sha256: plus the hex digest; what a cached summary is keyed on. |
-| `input_tokens` | `VARCHAR` | Input tokens the provider reported, where it reported any. |
-| `output_tokens` | `VARCHAR` | Output tokens the provider reported. |
-| `requested_at` | `VARCHAR` | When the call was made. |
-| `completed_at` | `VARCHAR` | When the answer came back; the merge prefers the larger value. |
+| `top_provisions` | `VARCHAR[]` | Up to three notable provisions, as a Native list in the model's order. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `money_bill_kind` | `VARCHAR` | The money-bill kind that selected the framing sentence. |
-| `frame` | `VARCHAR` | The sealed framing sentence the prompt carried; without it the summary is not reproducible. |

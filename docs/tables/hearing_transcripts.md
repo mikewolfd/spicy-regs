@@ -6,6 +6,8 @@
 
 One row per captured GovInfo hearing transcript. bill_id is always NULL: a hearing can concern several bills, represented in hearing_bill_links. All columns are stored as VARCHAR.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='hearing_transcripts'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled. Selected hearing packages from GovInfo, each with its native event identifiers checked: package and body metadata, not speaker turns or complete hearing history. *(measured 2026-09-28)*
 
 **Data quality.** Cover bills come from the package's MODS and cost no extra requests. BODY mentions do not become hearing links. event_id comes from a verified Congress.gov hearing detail; NULL can mean no meeting or a refused detail. committee_report_reads distinguishes a completed read from a refused one. body_completeness says what the read text states about itself: a publisher_placeholder body is the publisher's notice that the document is only in the PDF. When the package offers that PDF it is read instead (pdf_extracted, with text_derivation naming the extraction); when it offers none, the notice is published as it stands. NULL on rows not re-read since the column was added.
@@ -26,16 +28,5 @@ One row per captured GovInfo hearing transcript. bill_id is always NULL: a heari
 | `title` | `VARCHAR` | The package title as the keyed summary states it. |
 | `date_issued` | `VARCHAR` | The date the package was issued. |
 | `last_modified` | `VARCHAR` | When the publisher last modified the package; the merge prefers the larger value. |
-| `bill_id` | `VARCHAR` | Always NULL here, and NULL for a stated reason: a legislative hearing is held on a *list* of bills -- twelve of them on CHRG-118hhrg56198 -- so a scalar column would have to pick one of twelve.  The relationship is one-to-many and `hearing_bill_links` hosts it, one row per hearing, bill and source, the way `event_id` names `committee_meetings`.  The column stays because this table shares its shape with `committee_reports`, where a report *is* filed against one bill. |
-| `format` | `VARCHAR` | Which rendition was read (htm, xml, txt, pdf). |
-| `media_type` | `VARCHAR` | The response media type, proved against the format before the body was accepted. |
-| `requested_url` | `VARCHAR` | The URL the body fetch asked for. |
-| `resolved_url` | `VARCHAR` | The URL the body actually came from. |
-| `byte_size` | `VARCHAR` | Length in bytes of the captured body. |
-| `sha256` | `VARCHAR` | Digest of the captured body bytes. |
-| `observed_at` | `VARCHAR` | When the body was captured. |
-| `page_count` | `VARCHAR` | How many pages the extraction read, where a page-based extractor ran. |
-| `text_sha256` | `VARCHAR` | Digest of the extracted text, so a re-extraction that changed nothing is visible as such. |
+| `body_version_id` | `VARCHAR` | Digest of the extracted text, so a re-extraction that changed nothing is visible as such. |
 | `event_id` | `VARCHAR` | The committee-meeting event id the Congress.gov hearing record names as its associatedMeeting, which committee_meetings.event_id joins on; NULL where the hearing names none or was not looked up. |
-| `body_completeness` | `VARCHAR` | What the read text states about itself (`sources.govinfo.bodies.publisher_body_status`): `publisher_placeholder` where it is the publisher's own notice that the text is only in the PDF, so text_sha256 digests that notice, not the document; `pdf_extracted` for text extracted from a PDF, including one read in place of a placeholder; `not_flagged` otherwise.  No value asserts the text is complete.  NULL on a row not re-read since the column was added. |
-| `text_derivation` | `VARCHAR` | The derivation that produced the text text_sha256 digests (`markup-reader`, `text-rendition-cleanup` or `pdf-extraction-gpo-normalized`), from the body sha256 digests; NULL on a row not re-read since the column was added. |

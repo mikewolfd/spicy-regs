@@ -1,7 +1,7 @@
 # FEC tables and child rows
 
 **Status:** the implementation described below is intermediate. The October 3
-repository-wide decision in [PLAN](../PLAN.md#dataset-and-etl-receipt-separation)
+repository-wide decision in [FEC subject and receipt guidance](fec-subject-receipts.md)
 requires subject tables to contain domain data and stable keys only, with
 processing details in a separate shared ETL receipt table and native lists in
 place of JSON text. The existing cleanup has not yet completed that migration.

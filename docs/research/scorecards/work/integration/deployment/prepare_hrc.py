@@ -23,7 +23,7 @@ from rulespec_artifacts import LocalMemberSource, iter_member_descriptors
 import yaml
 
 from spicy_docs.transport.captured import CapturedBodyResponse
-from spicy_regs.data_dictionary import expected_schemas
+from spicy_regs.scorecards.etl import SOURCE_NAMES, generation_options, read_family
 from spicy_regs.generations import build_generation, implementation_id, verify_generation
 from spicy_regs.scorecards.registry import REGISTRY
 from spicy_regs.source_evidence import CaptureEvidence, verify_evidence
@@ -187,8 +187,11 @@ def prepare(args):
     registry_path = args.output / "selected-registry.yaml"
     registry_path.write_text(yaml.safe_dump(registry, sort_keys=False))
     prior_rows = {}
+    prior_directory = None
 
     def download_prior(key, destination):
+        nonlocal prior_directory
+        prior_directory = destination.parent
         member = publication.single_member(index, key)
         if not publication.fetch_member(args.public_url, member, destination):
             raise ValueError("The pinned live scorecard table is missing")
@@ -230,8 +233,16 @@ def prepare(args):
             provider=provider,
             fetch_factory=factory,
             download_prior=download_prior,
+            receipt_public_url=args.public_url,
         )
-        current = {path.stem: pq.ParquetFile(path).read().to_pylist() for path in files}
+        current = read_family(args.output, SOURCE_NAMES)
+        if "etlReceipts" in index["families"]["scorecards"]:
+            assert prior_directory is not None
+            prior_rows = read_family(
+                prior_directory,
+                SOURCE_NAMES,
+                generation_id=index["families"]["scorecards"]["etlReceipts"]["generationId"],
+            )
         editions, preserved = check_scopes(prior_rows, current, reference)
         if not private_receipts or not requests:
             raise ValueError("Reader did not evidence both source and qualified private observations")
@@ -240,7 +251,7 @@ def prepare(args):
             family="scorecards",
             files=files,
             expected_keys=OUTPUTS,
-            schemas=expected_schemas(),
+            **generation_options(args.output, SOURCE_NAMES),
             read_snapshot=index,
             inputs=evidence.inputs(),
         )

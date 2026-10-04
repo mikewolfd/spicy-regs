@@ -8,6 +8,8 @@ reading either the public R2 bucket or an explicitly configured local directory
 
 from __future__ import annotations
 
+from spicy_regs.subject_catalog import subject_tables
+
 import base64
 import difflib
 import functools
@@ -40,9 +42,9 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from spicy_regs._icon import ICON_DATA_URI
+from spicy_regs.fec_receipt_adapter import qualified_views
 from spicy_regs.duckdb_settings import INTERACTIVE_HTTP_RETRIES, load_public_http, memory_limit
 from spicy_regs.public_url import resolve_r2_base_url
-from spicy_regs.relationship_views.fec_query_views import fec_query_views
 
 TABLES = (
     "dockets",
@@ -233,16 +235,15 @@ TABLES = (
     "native_legal_reference_reads",
     "court_opinion_pdf_extractions",
 )
+TABLES = subject_tables(TABLES)
+
 STATEMENT_TIMEOUT = os.environ.get("SPICY_REGS_STATEMENT_TIMEOUT", "790s")
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_CATALOG_NAMESPACE = "default"
-# Trusted installed scope and SQL declare the candidate views. Release checks
-# keep them disabled until exact data, interpretation and consumer pins match.
-# A receipt cannot populate this registry, change scope or supply executable SQL.
-FEC_QUALIFIED_VIEWS: tuple = fec_query_views(
-    **json.loads(files("spicy_regs").joinpath("fec_query_scope.json").read_text(encoding="utf-8"))
+FEC_QUALIFIED_VIEWS: tuple = qualified_views(
+    json.loads(files("spicy_regs").joinpath("fec_query_scope.json").read_text(encoding="utf-8"))
 )
 
 
@@ -576,6 +577,7 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
                         "directory": str(local.directory),
                         "signatures": signatures,
                         "selected_tables": list(local.files),
+                        "receipt_members": {name: str(path) for name, path in local.receipts.items()},
                     }
                 )
             ],
@@ -615,6 +617,27 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
                 kind = "Published generation member" if required else "Legacy table"
                 raise RuntimeError(f"{kind} unavailable: {name}") from exc
             logger.warning("table %s not available at %s; skipping view: %s", name, urls, exc)
+    # Receipt members are selected independently per captured family, alongside
+    # the subjects above. They are not fabricated ordinary subject tables.
+    receipt_members = []
+    if local is not None:
+        receipt_members.extend(str(path) for path in local.receipts.values())
+    else:
+        for family in publication_index["families"].values():
+            if "etlReceipts" in family:
+                item = family["etlReceipts"]
+                receipt_members.append(f"{R2_BASE_URL}/{family['prefix'].rstrip('/')}/{item['key']}")
+    if receipt_members:
+        try:
+            con.execute(f'CREATE VIEW etl_receipts AS SELECT * FROM {parquet_scan(receipt_members)}')
+            actual = [[r[0], r[1]] for r in con.execute('DESCRIBE etl_receipts').fetchall()]
+            for family in publication_index["families"].values():
+                if "etlReceipts" in family and family["etlReceipts"]["columns"] != actual:
+                    raise RuntimeError("Published ETL receipt schema differs from admitted generation")
+            allowed_paths.extend(receipt_members)
+        except (duckdb.Error, RuntimeError) as exc:
+            con.close()
+            raise RuntimeError("Published ETL receipt member unavailable") from exc
     _install_relationship_views(con)
     _apply_security_settings(con, allowed_paths)
     return con
@@ -708,11 +731,36 @@ def _fec_release_reply(cursor):
 
 
 def _install_relationship_views(con: duckdb.DuckDBPyConnection) -> None:
-    """Bind trusted SQL definitions before locking the connection; no source row scan."""
+    """Bind trusted definitions and verify selected FEC receipt inputs before locking."""
     from spicy_regs.relationship_views import install_relationship_views
 
     status = _publication_status(con)
     relationships = install_relationship_views(con, status["tables"], publication=status["publication"])
+    from spicy_regs.fec_receipt_adapter import ReceiptAdapter, receipt_owner
+    from spicy_regs.relationship_views.fec import FEC_VIEWS
+    from spicy_regs.relationship_views.sql_views import install_sql_views
+    index = _connection_index(con)
+    from spicy_regs.subject_catalog import descriptors
+    declared = descriptors()
+    local_selection = _connection_local_selection(con)
+    processing = {name for family in index["families"].values()
+                  if local_selection is None or
+                  f"{family['prefix'].rstrip('/')}/{family.get('etlReceipts', {}).get('key')}"
+                  in local_selection.get("receipt_members", {})
+                  for name in family.get("etlReceipts", {}).get("datasets", ())
+                  if declared.get(name, {}).get("receipt_only")}
+    local_directory = local_selection["directory"] if local_selection else DATA_DIR
+    adapter = ReceiptAdapter(con, index, R2_BASE_URL, local_directory=local_directory,
+                             local_receipts=local_selection.get("receipt_members") if local_selection else None)
+    for spec in FEC_VIEWS:
+        if (set(spec.required) <= set(status["tables"]) | processing
+                and any(receipt_owner(index, table) for table in spec.required)):
+            prepared = adapter.prepare(spec, spec.query(status["publication"]))
+            item = install_sql_views(con, prepared.required, [prepared], status["publication"])[spec.name]
+            item["dependencies"] = list(spec.required)
+            item["metadata"]["input_publications"] = {table: status["publication"].get(table) for table in spec.required}
+            item["metadata"]["availability_basis"] = "Pinned subject and receipt bytes and exact row-version joins validated before binding."
+            relationships[spec.name] = item
     selected = _fec_release_configuration(con, status["publication"])
     if selected is not None:
         from spicy_regs.fec_release import install_views
@@ -720,8 +768,8 @@ def _install_relationship_views(con: duckdb.DuckDBPyConnection) -> None:
         if any(spec.view.name in {*status["tables"], *relationships} for spec in FEC_QUALIFIED_VIEWS):
             raise ValueError("Qualified FEC view collides with an existing table or relationship view")
         relationships.update(install_views(
-            con, FEC_QUALIFIED_VIEWS, selected, _connection_index(con), status["tables"], status["publication"],
-            read_tables=_tables_named,
+            con, FEC_QUALIFIED_VIEWS, selected, index, set(status["tables"]) | processing, status["publication"],
+            read_tables=_tables_named, prepare=adapter.prepare,
         ))
         con.execute("CREATE TABLE _spicy_fec_release (snapshot VARCHAR)")
         con.execute("INSERT INTO _spicy_fec_release VALUES (?)", [json.dumps(selected)])
@@ -1066,7 +1114,7 @@ def _available_tables(cursor: duckdb.DuckDBPyConnection) -> list[str]:
     selected = local["selected_tables"] if local is not None else []
     relationships = _connection_relationships(cursor)
     return [
-        name for name in dict.fromkeys((*TABLES, *managed, *snapshot, *selected, *relationships)) if name in registered
+        name for name in dict.fromkeys((*TABLES, *managed, *snapshot, *selected, *relationships, "etl_receipts")) if name in registered
     ]
 
 
@@ -1149,6 +1197,14 @@ def _register_tools(mcp: MCPServer) -> None:
             ],
             "relationship_views": [{"views": names, "summary": summary} for summary, names in views.items()],
             "unavailable_tables": [name for name in (*TABLES, *relationships) if name not in available],
+            "etl_receipts": {
+                "available": "etl_receipts" in available,
+                "query_table": "etl_receipts" if "etl_receipts" in available else None,
+                "datasets": metadata.get("etl_receipts", {}).get("datasets", []),
+                "members": [{"family": name, "prefix": family["prefix"], **family["etlReceipts"]}
+                            for name, family in _connection_index(cursor)["families"].items() if "etlReceipts" in family],
+                "selection": "Receipt and subject versions must belong to the same selected generation; absence does not mean no processing history.",
+            },
             "fec_release": _fec_release_reply(cursor),
         }
 
@@ -1173,7 +1229,7 @@ def _register_tools(mcp: MCPServer) -> None:
         with _statement_timeout(cursor):
             status = _publication_status(cursor)
         relationships = _connection_relationships(cursor)
-        if table not in TABLES and table not in status["tables"] and table not in relationships:
+        if table not in TABLES and table != "etl_receipts" and table not in status["tables"] and table not in relationships:
             known = list(dict.fromkeys((*TABLES, *status["tables"], *relationships)))
             close = difflib.get_close_matches(table, known, n=5, cutoff=0.6)
             hint = f" Close names: {', '.join(close)}." if close else ""

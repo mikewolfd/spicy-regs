@@ -20,6 +20,7 @@ MAPPING_VERSION = "fec-retained-candidate-api/2"
 FIELDS = "candidate_id name party party_full office office_full state district candidate_status incumbent_challenge incumbent_challenge_full".split()
 ARRAYS = "cycles election_years election_districts inactive_election_years".split()
 TYPED = {
+    "district_number": "integer",
     "active_through": "year",
     "candidate_inactive": "boolean",
     "has_raised_funds": "boolean",

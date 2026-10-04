@@ -10,7 +10,6 @@ import json
 from pathlib import Path
 import shutil
 
-import pyarrow.parquet as pq
 from mcp.types import CallToolResult
 
 from qualify_lcv import digest, write
@@ -18,7 +17,7 @@ from spicy_regs.generation_audit import PublicBase, audit
 from spicy_regs.generations import build_generation, verify_generation
 from spicy_regs.local_data import selection_record
 from spicy_regs.pipelines.rollups.scorecard_analysis import ScorecardAnalysisRollup
-from spicy_regs.scorecards.resolution import LINK_COLUMNS
+from spicy_regs.scorecards.etl import LINK_NAMES, generation_options, read_family
 from spicy_regs.source_evidence import CaptureEvidence
 from spicy_regs.sources import publication
 from spicy_regs.transforms.build_scorecard_analysis import OUTPUTS
@@ -107,6 +106,7 @@ def integrate(source_report: Path, official_inputs: Path, output: Path):
         bucket="local-qualification",
         prior_index=initial_index,
         evidence_directories=(evidence_directory,),
+        receipt_only_tables=frozenset({"scorecard_snapshots.parquet"}),
     )
     paths = {name: [Path(p) for p in files] for name, files in official["paths"].items()}
     for name in ("scorecards", "scorecard_members", "scorecard_items"):
@@ -118,6 +118,10 @@ def integrate(source_report: Path, official_inputs: Path, output: Path):
             target = build / member.key
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(file, target)
+    if "etlReceipts" in selected["families"]["scorecards"]:
+        shutil.copyfile(source_directory / "etl_receipts.parquet", build / "source-etl-receipts.parquet")
+    for name, receipt in official.get("receipt_paths", {}).items():
+        shutil.copyfile(receipt, build / (name + "-etl-receipts.parquet"))
     pipeline = ScorecardAnalysisRollup(output_dir=build, skip_upload=True)
     parents = pipeline._prime(build, selected)
     outputs = pipeline.build(build)
@@ -130,7 +134,7 @@ def integrate(source_report: Path, official_inputs: Path, output: Path):
         family="scorecard-analysis",
         files=outputs,
         expected_keys=OUTPUTS,
-        schemas={name: [(c, "VARCHAR") for c in columns] for name, columns in LINK_COLUMNS.items()},
+        **generation_options(build, LINK_NAMES),
         read_snapshot=selected,
         parents=parents,
         inputs=analysis_evidence.inputs(),
@@ -162,8 +166,11 @@ def integrate(source_report: Path, official_inputs: Path, output: Path):
     copy_selection(final_index, query_paths, query_dir)
     queries = asyncio.run(mcp_readback(query_dir))
     write(output / "mcp-readback.json", queries)
-    member_links = pq.ParquetFile(generation / "scorecard_member_links.parquet").read().to_pylist()
-    item_links = pq.ParquetFile(generation / "scorecard_item_links.parquet").read().to_pylist()
+    reconstructed = read_family(
+        generation, LINK_NAMES, generation_id=analysis_artifact.root["spec"]["etlReceipts"]["generationId"]
+    )
+    member_links = reconstructed["scorecard_member_links"]
+    item_links = reconstructed["scorecard_item_links"]
     unresolved = [row for row in member_links + item_links if row["resolution_status"] != "resolved"]
     write(output / "unresolved.private.json", unresolved)
     zeldin = next(row for row in item_links if row["item_id"] == "36294")

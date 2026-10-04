@@ -1,0 +1,30 @@
+{
+  "dataset": "fec_research_filing_feed_items",
+  "policy_version": "fec-identity-context-receipts/1",
+  "subject_schema": "//////gCAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAA0AAACUAgAAWAIAACwCAAAAAgAAyAEAAJQBAABgAQAAMAEAAAABAADQAAAAjAAAAFAAAAAEAAAAsP3//wAAAQoQAAAAKAAAAAQAAAAAAAAADAAAAHB1Ymxpc2hlZF9hdAAAAAAIAAwABgAIAAgAAAAAAAIABAAAAAMAAABVVEMA+P3//wAAAQgQAAAAJAAAAAQAAAAAAAAAEQAAAGNvdmVyYWdlX2VuZF9kYXRlAAAAxv///wAAAAAw/v//AAABCBAAAAAsAAAABAAAAAAAAAATAAAAY292ZXJhZ2Vfc3RhcnRfZGF0ZQAAAAYACAAGAAYAAAAAAAAAcP7//wAAAQUQAAAAHAAAAAQAAAAAAAAACwAAAHJlcG9ydF90eXBlAGD+//+c/v//AAABBRAAAAAcAAAABAAAAAAAAAAJAAAAZm9ybV90eXBlAAAAjP7//8j+//8AAAEFEAAAABwAAAAEAAAAAAAAAAkAAABmaWxpbmdfaWQAAAC4/v//9P7//wAAAQUQAAAAIAAAAAQAAAAAAAAADAAAAGNhbmRpZGF0ZV9pZAAAAADo/v//JP///wAAAQUQAAAAIAAAAAQAAAAAAAAADAAAAGNvbW1pdHRlZV9pZAAAAAAY////VP///wAAAQUQAAAAJAAAAAQAAAAAAAAAEQAAAHJlcG9ydGVkX2ZpbGVyX2lkAAAATP///4j///8AAAEFEAAAABgAAAAEAAAAAAAAAAQAAABndWlkAAAAAHT///+w////AAABBRAAAAAYAAAABAAAAAAAAAAEAAAAbGluawAAAACc////2P///wAAAQUQAAAAGAAAAAQAAAAAAAAABQAAAHRpdGxlAAAAxP///xAAFAAIAAYABwAMAAAAEAAQAAAAAAABBRAAAAAgAAAABAAAAAAAAAAJAAAAcmVjb3JkX2lkAAAABAAEAAQAAAAAAAAA",
+  "identity_fields": [
+    "record_id"
+  ],
+  "receipt_fields": [
+    "mapping_version",
+    "collection_id",
+    "source_authority",
+    "source_url",
+    "source_sha256",
+    "context_sha256",
+    "source_context_pointer",
+    "observed_at_json",
+    "published_at_raw",
+    "current_record_status",
+    "source_label_status",
+    "coverage_start_raw",
+    "coverage_end_raw",
+    "parsing_status",
+    "filing_link_status",
+    "conversion_inputs",
+    "conversion_diagnostics",
+    "source_input"
+  ],
+  "receipt_only": false,
+  "nullable_identity_fields": []
+}

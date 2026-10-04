@@ -6,6 +6,8 @@
 
 One row per docketed proceeding (owner decisions 54-56c): its earliest proposal, the earliest final strictly after it, or what else its events make (`kind`), with survival columns (`outcome`, `duration_days`, `censor_date`) for time-to-final estimates, Unified Agenda status and routine-family strata. A docket-less proceeding is one Register document that cannot pair and is left out. Keyed `proceeding_id`; joins `proceedings` on it and is joined by `lifecycle_events`. Built by `build_lifecycles`; dates are DATE, counts INTEGER and flags BOOLEAN. Replaces the documents-based rollup withdrawn on 2026-09-23.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='rulemaking_lifecycles'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Derived, and bounded by its inputs: every docketed proceeding, paired from its cleaned `lifecycle_events` and censored at the day its inputs end. *(measured 2026-09-28)*
 
 **Data quality.** A Regulations.gov document whose stated Register number resolves to no Register row is dated by its upload, which for a legacy document can be years after the rule: on snapshot_9b2c770e's inputs 262 lifecycles anchor on such a document, 74 of them upload pairs outside survival (docs/ontology.md).
@@ -29,7 +31,6 @@ One row per docketed proceeding (owner decisions 54-56c): its earliest proposal,
 | `finals_before_proposal` | `INTEGER` | Finals dated before the proposal, counted and never paired; NULL without a proposal. |
 | `withdrawal_date` | `DATE` | Day of the withdrawal that makes it `withdrawn`; NULL otherwise. |
 | `withdrawal_document_id` | `VARCHAR` | The withdrawal: a dated Register record id, or the agenda item id (`urn:rkaf:us:rin:<rin>`) of an Agenda withdrawal. |
-| `withdrawal_source` | `VARCHAR` | Who withdrew it: `federal_register` or `unified_agenda`. |
 | `outcome` | `VARCHAR` | Its survival outcome: `final`, `withdrawn` (a competing outcome) or `censored`; NULL for a kind outside survival. |
 | `duration_days` | `INTEGER` | Days from the proposal to the final, the withdrawal or `censor_date`; NULL without an outcome. |
 | `censor_date` | `DATE` | The generation's last event day, capped at the run's day, where open lifecycles are censored; one date in every row. |
@@ -37,11 +38,5 @@ One row per docketed proceeding (owner decisions 54-56c): its earliest proposal,
 | `routine_family` | `VARCHAR` | The routine family its agency and titles name (`airworthiness_directive`, `airspace`, `state_air_plan`, `pesticide_tolerance`, `coast_guard_local`); NULL otherwise. |
 | `agenda_priority` | `VARCHAR` | That Agenda entry's `priority_category` (e.g. `Economically Significant`); NULL without one. |
 | `agenda_major` | `VARCHAR` | That Agenda entry's `major` (`Yes`, `No` or `Undetermined`); NULL without one. |
-| `specific_rins_json` | `VARCHAR` | JSON array of the RINs the proceeding's docket-side evidence alone holds. |
-| `anchored_by_specific_rin` | `BOOLEAN` | Whether its proposal or final anchor joined the proceeding by specific RIN (decision 56c). |
+| `specific_rins` | `VARCHAR[]` | Native list of the RINs the proceeding's docket-side evidence alone holds. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `pre_2008_coverage` | `BOOLEAN` | Whether it is anchored before 2008, when Regulations.gov coverage is thin; NULL without an anchor, or for an upload pair from 2008 on. |
-| `method` | `VARCHAR` | How the row was asserted; `deterministic` (computed by rule) throughout. |
-| `actor_id` | `VARCHAR` | The builder that asserted the row, with its version (`spicy-regs:rulemaking-lifecycles:v<n>`), bumped when its published rows change. |
-| `run_id` | `VARCHAR` | The materialization run that built the snapshot (e.g. `rulemaking-20260927T062656Z`). |
-| `asserted_at` | `VARCHAR` | When that run asserted the row, as a UTC ISO 8601 instant. |
-| `supersedes_id` | `VARCHAR` | Id of a prior row this one continues; always NULL here. |

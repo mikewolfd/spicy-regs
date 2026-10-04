@@ -1,0 +1,464 @@
+"""Native regulatory catalog rows and their receipts commit in one transaction.
+
+The old namespace remains a migration input. Active native tables use the same
+business names in a dedicated namespace; private processing tables reconstruct
+legacy algorithm inputs only after exact subject/receipt validation.
+"""
+from __future__ import annotations
+
+from contextlib import contextmanager
+from hashlib import sha256
+from pathlib import Path
+from tempfile import TemporaryDirectory, NamedTemporaryFile
+from uuid import uuid4
+
+import pyarrow as pa
+import pyarrow.parquet as pq
+
+from spicy_regs.etl_receipts import RECEIPT_SCHEMA, rebind_receipt, read_with_receipts, subject_identity
+from spicy_regs.native_types import described_schema
+from spicy_regs.transforms.parquet_rows import write_rows
+from spicy_regs.transforms.regulations_receipts import policy, write_records
+from spicy_regs.transforms.regulations_shape import LEGACY_COLUMNS, restore_legacy_record, TYPES
+
+DATASETS = frozenset({'dockets', 'documents', 'comments'})
+
+
+class CatalogConversionRefused(ValueError):
+    """Conversion failed; the separately staged attempts survive transaction rollback."""
+    def __init__(self, receipt_path):
+        import shutil
+        with NamedTemporaryFile(prefix='catalog-refusal-', suffix='.parquet', delete=False) as retained:
+            self.receipt_path = Path(retained.name)
+        shutil.copyfile(receipt_path, self.receipt_path)
+        super().__init__('Catalog conversion refused source rows; source state was not changed')
+
+
+def retain_refusal(con, error):
+    """After rollback, persist only failed attempts; no subject becomes accepted."""
+    while error is not None and not isinstance(error, CatalogConversionRefused):
+        error = error.__cause__
+    if error is None:
+        return
+    from . import iceberg
+    try:
+        con.execute(f'CREATE SCHEMA IF NOT EXISTS {iceberg._CATALOG_ALIAS}."{namespace()}"')
+        with _transaction(con):
+            con.execute(f'CREATE TABLE IF NOT EXISTS {receipts_table()} ({_ddl(RECEIPT_SCHEMA)})')
+            con.execute(f"INSERT INTO {receipts_table()} SELECT * FROM read_parquet(?) WHERE outcome<>'accepted'",
+                        [str(error.receipt_path)])
+    finally:
+        error.receipt_path.unlink(missing_ok=True)
+
+
+def rejected_attempts(con, source, dataset, work, generation, *, reason):
+    """Keep unselected exact source observations as processing evidence."""
+    from spicy_regs.etl_receipts import ReceiptContext, failure_receipt, exact_json
+    path = work / ('rejected-source-' + uuid4().hex + '.parquet')
+    _copy(con, f'SELECT * FROM {source}', path)
+    def records():
+        for i, row in enumerate(_rows(path)):
+            witness = {'source_id': source, 'source_uri': None,
+                       'sha256': sha256(exact_json(row).encode()).hexdigest(),
+                       'locator': 'receipt.values.raw_source_record (canonical exact_json)',
+                       'body_version': generation}
+            context = ReceiptContext(generation, f'unselected-row:{i}', 'regulatory-catalog-native-v1',
+                                     [witness], {'reason': reason})
+            yield failure_receipt(policy(dataset), context, outcome='rejected', raw_fields={'raw_source_record': row})
+    receipts = work / ('rejected-receipts-' + uuid4().hex + '.parquet')
+    write_rows(records(), receipts, RECEIPT_SCHEMA)
+    con.execute(f'INSERT INTO {receipts_table()} SELECT * FROM read_parquet(?)', [str(receipts)])
+
+
+def supports(record_type):
+    return record_type.name in DATASETS
+
+
+def namespace():
+    from . import iceberg
+    return iceberg._namespace() + '_native'
+
+
+def qualified(record_type):
+    from . import iceberg
+    return f'{iceberg._CATALOG_ALIAS}."{namespace()}"."{record_type.name}"'
+
+
+def receipts_table():
+    from . import iceberg
+    return f'{iceberg._CATALOG_ALIAS}."{namespace()}"."etl_receipts"'
+
+
+def _exists(con, name):
+    # A failed SELECT on an absent Iceberg namespace caches that negative lookup
+    # for the connection. Inspect metadata instead so a preview can precede DDL.
+    import re
+    parts = [part[1:-1].replace('""', '"') if part.startswith('"') else part
+             for part in re.findall(r'"(?:[^"]|"")*"|[^.]+', name)]
+    if len(parts) != 3:
+        raise ValueError('Catalog existence lookup requires a qualified table name')
+    return con.execute('SELECT 1 FROM information_schema.tables WHERE table_catalog=? '
+                       'AND table_schema=? AND table_name=? LIMIT 1', parts).fetchone() is not None
+
+
+def _ddl(schema):
+    return ', '.join('"' + name.replace('"', '""') + '" ' + dtype for name, dtype in described_schema(schema))
+
+
+def _copy(con, sql, path):
+    from .iceberg import _sql_str
+    con.execute(f"COPY ({sql}) TO '{_sql_str(str(path))}' (FORMAT PARQUET, COMPRESSION ZSTD)")
+
+
+def _rows(path):
+    for batch in pq.ParquetFile(path).iter_batches(batch_size=2000):
+        yield from batch.to_pylist()
+
+
+def _legacy_projection(con, source, dataset):
+    """Read old VARCHAR catalog values through their declared input types."""
+    types = {r[0]: r[1] for r in con.execute(f'DESCRIBE SELECT * FROM {source}').fetchall()}
+    held = set(types)
+    wrong = [name for name, dtype in LEGACY_COLUMNS[dataset]
+             if dtype == 'VARCHAR' and name in held and types[name] != 'VARCHAR']
+    if wrong:
+        raise ValueError(f'{dataset}: source string columns have incompatible types: {wrong}')
+    unknown = held - {c for c, _ in LEGACY_COLUMNS[dataset]}
+    if unknown:
+        raise ValueError(f'{dataset}: unclassified legacy catalog columns {sorted(unknown)}')
+    return ', '.join(f'CAST("{name}" AS {dtype}) AS "{name}"' if name in held
+                     else f'CAST(NULL AS {dtype}) AS "{name}"' for name, dtype in LEGACY_COLUMNS[dataset])
+
+
+def _stage(con, source, dataset, work, generation, *, prior_witnesses=None):
+    from spicy_regs.etl_receipts import ReceiptContext
+    source_path = work / 'source.parquet'
+    _legacy_projection(con, source, dataset)  # Refuse unclassified columns before conversion.
+    key = policy(dataset).identity_fields[0]
+    source_query = f'SELECT * FROM {source}'
+    if prior_witnesses is not None:
+        source_query = f'SELECT s.*, w.witnesses AS _prior_witnesses FROM {source} s LEFT JOIN {prior_witnesses} w USING ("{key}")'
+    _copy(con, source_query, source_path)
+    def observations():
+        from spicy_regs.etl_receipts import exact_json
+        for i, row in enumerate(_rows(source_path)):
+            witnesses = row.pop('_prior_witnesses', None) or []
+            # The exact source record is retained in this receipt; its canonical bytes
+            # remain reconstructable after temporary staging files are removed.
+            witness = {'source_id': source, 'source_uri': None,
+                       'sha256': sha256(exact_json(row).encode()).hexdigest(),
+                       'locator': 'receipt.values.raw_source_record (canonical exact_json)',
+                       'body_version': generation}
+            yield row, ReceiptContext(generation, f'row:{i}', 'regulatory-catalog-native-v1',
+                [witness, *witnesses])
+    records = observations()
+    def normalized(row):
+        from datetime import date, datetime
+        shaped = {}
+        identity = row.get(key)
+        if not isinstance(identity, str) or not identity.strip():
+            raise ValueError(f'{dataset}: source identity must be nonblank text')
+        for name, dtype in LEGACY_COLUMNS[dataset]:
+            value = row.get(name)
+            if isinstance(value, str) and dtype in {'INTEGER', 'BIGINT'}:
+                import re
+                if not re.fullmatch(r'[+-]?[0-9]+', value):
+                    raise ValueError(f'{dataset}.{name}: invalid integer')
+                value = int(value)
+            elif isinstance(value, str) and dtype == 'BOOLEAN':
+                if value.lower() not in {'true', 'false'}:
+                    raise ValueError(f'{dataset}.{name}: invalid boolean')
+                value = value.lower() == 'true'
+            elif isinstance(value, str) and dtype == 'DATE':
+                value = date.fromisoformat(value)
+            elif isinstance(value, str) and dtype.startswith('TIMESTAMP'):
+                value = datetime.fromisoformat(value.replace('Z', '+00:00'))
+            elif isinstance(value, str) and dtype == 'DOUBLE':
+                value = float(value)
+            shaped[name] = value
+        return shaped
+    subject, receipts = write_records(dataset, records, work / 'mapped', project=normalized)
+    if pq.ParquetFile(subject).metadata.num_rows != pq.ParquetFile(source_path).metadata.num_rows:
+        raise CatalogConversionRefused(receipts)
+    return subject, receipts
+
+
+@contextmanager
+def _transaction(con, *, retain_failed=False):
+    con.execute('BEGIN')
+    try:
+        yield
+        con.execute('COMMIT')
+    except BaseException as error:
+        try:
+            con.execute('ROLLBACK')
+        except Exception:
+            pass
+        if retain_failed:
+            retain_refusal(con, error)
+        raise
+
+
+def initialized(con, dataset):
+    """Selection requires one checked shared receipt for completed initialization."""
+    if not _exists(con, receipts_table()):
+        return False
+    rows = con.execute(f"SELECT * FROM {receipts_table()} WHERE dataset=? "
+                       "AND processor='regulatory-catalog-initialization-v1'",
+                       [dataset]).to_arrow_table().to_pylist()
+    if not rows:
+        return False
+    if len(rows) != 1:
+        raise ValueError('Native catalog has ambiguous initialization receipts')
+    row = rows[0]
+    from spicy_regs.etl_receipts import exact_json, ReceiptContext
+    ReceiptContext(row['generation_id'], row['attempt_id'], row['processor'], row['witnesses'])
+    rebind_receipt(row, generation_id=row['generation_id'])  # Verify the exact receipt digest.
+    if (row['outcome'] != 'observed' or row['policy_version'] != policy(dataset).policy_version
+            or row['record_id'] is not None or row['subject_version'] is not None
+            or row['processing_json'] != exact_json({'input_metadata': {'catalog_initialized': True}})):
+        raise ValueError('Native catalog initialization receipt differs from field policy')
+    return True
+
+
+def ensure_native(con, record_type, *, deduplicate=False):
+    """Prepare empty storage, then atomically select a qualified subject/receipt pair.
+
+    Empty prepared tables are not selected until the initialization observation
+    commits alongside the population. Reads use retained legacy state meanwhile.
+    """
+    from . import iceberg
+    from spicy_regs.etl_receipts import ReceiptContext, observation_receipt
+    dataset = record_type.name
+    declared = policy(dataset)
+    target = qualified(record_type)
+    con.execute(f'CREATE SCHEMA IF NOT EXISTS {iceberg._CATALOG_ALIAS}."{namespace()}"')
+    if _exists(con, target):
+        observed = [(r[0], r[1]) for r in con.execute(f'DESCRIBE {target}').fetchall()]
+        if observed != described_schema(declared.subject_schema):
+            raise ValueError('Native catalog schema differs from declared policy')
+        if initialized(con, dataset):
+            return
+    # DuckDB Iceberg can atomically CREATE empty tables, and atomically update
+    # existing tables. Its multi-table CREATE+data path loses staged manifests.
+    with _transaction(con):
+        con.execute(f'CREATE TABLE IF NOT EXISTS {receipts_table()} ({_ddl(RECEIPT_SCHEMA)})')
+        con.execute(f'CREATE TABLE IF NOT EXISTS {target} ({_ddl(declared.subject_schema)})')
+    if initialized(con, dataset):
+        return
+    legacy = f'{iceberg._schema_ref()}."{dataset}"'
+    with TemporaryDirectory(prefix='catalog-migration-') as temporary, _transaction(con, retain_failed=True):
+        if initialized(con, dataset):
+            return
+        if con.execute(f'SELECT count(*) FROM {target}').fetchone()[0]:
+            raise ValueError('Uninitialized native catalog contains unselected rows')
+        generation = 'migration-' + uuid4().hex
+        if _exists(con, legacy):
+            migration_source = legacy
+            rejected_path = None
+            if deduplicate:
+                key = record_type.dedup_key
+                ranked = '_migration_ranked_' + uuid4().hex
+                con.execute(f'CREATE TEMP TABLE {ranked} AS SELECT *, row_number() OVER '
+                            f'(PARTITION BY "{key}" ORDER BY modify_date DESC NULLS LAST, to_json(t)) AS _rank '
+                            f'FROM {legacy} t')
+                migration_source = f'(SELECT * EXCLUDE (_rank) FROM {ranked} WHERE _rank=1)'
+                rejected_path = Path(temporary) / 'losing-source.parquet'
+                _copy(con, f'SELECT * EXCLUDE (_rank) FROM {ranked} WHERE _rank>1', rejected_path)
+            subject, receipts = _stage(con, migration_source, dataset, Path(temporary), generation)
+            if rejected_path is not None:
+                from spicy_regs.etl_receipts import ReceiptContext, failure_receipt, exact_json, combine_receipts
+                def rejected():
+                    for i, row in enumerate(_rows(rejected_path)):
+                        witness = {'source_id': legacy, 'source_uri': None,
+                                   'sha256': sha256(exact_json(row).encode()).hexdigest(),
+                                   'locator': 'receipt.values.raw_source_record (canonical exact_json)',
+                                   'body_version': generation}
+                        context = ReceiptContext(generation, f'losing-row:{i}', 'regulatory-catalog-native-v1',
+                                                 [witness], {'reason': 'superseded by latest source row'})
+                        yield failure_receipt(declared, context, outcome='rejected',
+                                              raw_fields={'raw_source_record': row})
+                rejected_receipts = Path(temporary) / 'rejected-receipts.parquet'
+                write_rows(rejected(), rejected_receipts, RECEIPT_SCHEMA)
+                combined = Path(temporary) / 'all-receipts.parquet'
+                combine_receipts([receipts, rejected_receipts], combined)
+                receipts = combined
+            for _ in read_with_receipts([subject], [receipts], declared, generation_id=generation):
+                pass
+            con.execute(f'INSERT INTO {target} SELECT * FROM read_parquet(?)', [str(subject)])
+            con.execute(f'INSERT INTO {receipts_table()} SELECT * FROM read_parquet(?)', [str(receipts)])
+        context = ReceiptContext(generation, 'initialize', 'regulatory-catalog-initialization-v1',
+            [{'source_id': legacy if _exists(con, legacy) else dataset, 'source_uri': None,
+              'sha256': None, 'locator': 'atomic native catalog initialization', 'body_version': generation}])
+        marker = observation_receipt(declared, context, processing_fields={
+            'input_metadata': {'catalog_initialized': True}})
+        marker_path = Path(temporary) / 'initialization.parquet'
+        write_rows([marker], marker_path, RECEIPT_SCHEMA)
+        con.execute(f'INSERT INTO {receipts_table()} SELECT * FROM read_parquet(?)', [str(marker_path)])
+        checked = processing_table(con, record_type, in_transaction=True)
+        con.execute(f'DROP TABLE {checked}')
+
+
+def processing_table(con, record_type, *, where: str | None = None, in_transaction=False):
+    """Return a private legacy-shaped temp table from one checked catalog read.
+
+    Native pairs are read in one transaction. Before migration, read-only
+    previews validate a bounded conversion of the retained legacy table without
+    creating or modifying catalog tables.
+    """
+    from . import iceberg
+    from contextlib import nullcontext
+    dataset = record_type.name
+    target = qualified(record_type)
+    temporary_name = '_processing_' + dataset + '_' + uuid4().hex
+    predicate = f' WHERE {where}' if where else ''
+    with TemporaryDirectory(prefix='catalog-read-') as temporary:
+        work = Path(temporary)
+        with (nullcontext() if in_transaction else _transaction(con)):
+            generation = 'read-' + uuid4().hex
+            if not _exists(con, target) or not initialized(con, dataset):
+                legacy = f'{iceberg._schema_ref()}."{dataset}"'
+                selected = f'(SELECT * FROM {legacy}{predicate})'
+                try:
+                    subject, receipts = _stage(con, selected, dataset, work, generation)
+                except CatalogConversionRefused as error:
+                    error.receipt_path.unlink(missing_ok=True)
+                    raise
+            else:
+                subject = work / 'subjects.parquet'
+                _copy(con, f'SELECT * FROM {target}{predicate}', subject)
+                ids = work / 'identities.parquet'
+                write_rows(({'record_id': subject_identity(policy(dataset), row)[0]} for row in _rows(subject)),
+                           ids, pa.schema([('record_id', pa.string())]))
+                raw_receipts = work / 'selected-receipts.parquet'
+                # Full reads also detect orphan receipts (for example an unpaired DELETE).
+                # Scoped reads join only selected identities and avoid restoring unrelated agencies.
+                selected_ids = (f" SEMI JOIN read_parquet('{iceberg._sql_str(str(ids))}') i USING (record_id)"
+                                if where else '')
+                _copy(con, f"SELECT r.* FROM {receipts_table()} r{selected_ids} "
+                           f"WHERE r.dataset='{dataset}' AND r.outcome='accepted'", raw_receipts)
+                receipts = work / 'receipts.parquet'
+                write_rows((rebind_receipt(row, generation_id=generation) for row in _rows(raw_receipts)),
+                           receipts, RECEIPT_SCHEMA)
+            restored = work / 'processing.parquet'
+            rows = (restore_legacy_record(dataset, row) for row in
+                    read_with_receipts([subject], [receipts], policy(dataset), generation_id=generation))
+            write_rows(rows, restored, pa.schema([(n, TYPES[t]) for n, t in LEGACY_COLUMNS[dataset]]))
+            con.execute(f'CREATE TEMP TABLE "{temporary_name}" AS SELECT * FROM read_parquet(?)', [str(restored)])
+    return '"' + temporary_name + '"'
+
+
+def replace_native(con, record_type, source, *, expected_prior=None, scope=None, expected_snapshot=None, in_transaction=False, delete_scope=False, rejected_source=None):
+    """Replace selected rows and current receipts in one multi-table catalog commit."""
+    from . import iceberg
+    from contextlib import nullcontext
+    if not in_transaction:
+        ensure_native(con, record_type)
+    key = record_type.dedup_key
+    key_sql = '"' + key.replace('"', '""') + '"'
+    scope_sql = iceberg._scope_predicate(record_type, scope)
+    count, distinct, missing, outside = con.execute(f'''SELECT count(*), count(DISTINCT {key_sql}),
+        count(*) FILTER (WHERE {key_sql} IS NULL OR trim({key_sql})=''),
+        count(*) FILTER (WHERE ({scope_sql}) IS NOT TRUE) FROM {source}''').fetchone()
+    if missing or count != distinct or outside:
+        raise ValueError('Catalog replacements require distinct, nonblank identities within scope')
+    if delete_scope and not scope:
+        raise ValueError('Replacing a whole scope requires an explicit scope')
+    if not count and not delete_scope and rejected_source is None:
+        return
+    with TemporaryDirectory(prefix='catalog-replace-') as temporary:
+        work = Path(temporary)
+        generation = 'write-' + uuid4().hex
+        with (nullcontext() if in_transaction else _transaction(con, retain_failed=True)):
+            if expected_snapshot is not None and iceberg._read_snapshot(con, record_type) != expected_snapshot:
+                raise RuntimeError('Catalog snapshot changed after preparation; rerun the operation')
+            prior_where = scope_sql if delete_scope else f'{key_sql} IN (SELECT {key_sql} FROM {source}) AND {scope_sql}'
+            prior = processing_table(con, record_type, where=prior_where, in_transaction=True)
+            if expected_prior is not None:
+                expected_prior = f'(SELECT * FROM {expected_prior} WHERE {prior_where})'
+                delta = con.execute(f'''SELECT count(*) FROM ((SELECT * FROM {prior} EXCEPT ALL SELECT * FROM {expected_prior})
+                    UNION ALL (SELECT * FROM {expected_prior} EXCEPT ALL SELECT * FROM {prior}))''').fetchone()[0]
+                if delta:
+                    raise RuntimeError('Catalog changed after preparation; rerun the operation')
+            if scope and con.execute(f'SELECT 1 FROM {qualified(record_type)} WHERE {key_sql} IN '
+                                     f'(SELECT {key_sql} FROM {source}) AND ({scope_sql}) IS NOT TRUE LIMIT 1').fetchone():
+                raise ValueError('Catalog replacement identity belongs to another scope')
+            identities = work / 'prior-identities.parquet'
+            reader = con.execute(f'SELECT {key_sql} FROM {prior}').to_arrow_reader(2000)
+            write_rows(({'record_id': subject_identity(policy(record_type.name), row)[0], key: row[key]}
+                        for batch in reader for row in batch.to_pylist()), identities,
+                       pa.schema([('record_id', pa.string()), (key, pa.string())]))
+            prior_witnesses = '_prior_witnesses_' + uuid4().hex
+            con.execute(f'CREATE TEMP TABLE {prior_witnesses} AS SELECT i."{key}", r.witnesses '
+                        f'FROM {receipts_table()} r JOIN read_parquet(?) i USING (record_id) '
+                        "WHERE r.dataset=? AND r.outcome='accepted'", [str(identities), record_type.name])
+            subject, receipts = _stage(con, source, record_type.name, work, generation,
+                                      prior_witnesses=prior_witnesses)
+            native = '_native_replacement_' + uuid4().hex
+            pending = '_receipt_replacement_' + uuid4().hex
+            con.execute(f'CREATE TEMP TABLE {native} AS SELECT * FROM read_parquet(?)', [str(subject)])
+            con.execute(f'CREATE TEMP TABLE {pending} AS SELECT * FROM read_parquet(?)', [str(receipts)])
+            if delete_scope:
+                removed = work / 'removed-identities.parquet'
+                from spicy_regs.transforms.regulations_shape import shape_record
+                write_rows(({'record_id': subject_identity(policy(record_type.name), shape_record(record_type.name, row))[0]}
+                            for batch in con.execute(f'SELECT * FROM {prior} WHERE {key_sql} NOT IN '
+                                                   f'(SELECT {key_sql} FROM {source})').to_arrow_reader(2000)
+                            for row in batch.to_pylist()),
+                           removed, pa.schema([('record_id', pa.string())]))
+                con.execute(f'DELETE FROM {receipts_table()} WHERE dataset=? AND record_id IN '
+                            '(SELECT record_id FROM read_parquet(?))', [record_type.name, str(removed)])
+                con.execute(f'DELETE FROM {qualified(record_type)} WHERE {scope_sql} AND {key_sql} NOT IN '
+                            f'(SELECT {key_sql} FROM {source})')
+            columns = policy(record_type.name).subject_schema.names
+            assignments = ', '.join(f'"{c}"=s."{c}"' for c in columns)
+            names = ', '.join(f'"{c}"' for c in columns)
+            values = ', '.join(f's."{c}"' for c in columns)
+            changed = con.execute(f'''MERGE INTO {qualified(record_type)} t USING {native} s ON t.{key_sql}=s.{key_sql}
+                WHEN MATCHED THEN UPDATE SET {assignments}
+                WHEN NOT MATCHED THEN INSERT ({names}) VALUES ({values})''').fetchone()[0]
+            if changed != count:
+                raise RuntimeError('Catalog replacement changed an unexpected number of rows')
+            con.execute(f'''DELETE FROM {receipts_table()} WHERE dataset=? AND outcome='accepted'
+                AND record_id IN (SELECT record_id FROM {pending})''', [record_type.name])
+            con.execute(f'INSERT INTO {receipts_table()} SELECT * FROM {pending}')
+            if rejected_source is not None:
+                rejected_attempts(con, rejected_source, record_type.name, work, generation,
+                                  reason='not selected: duplicate or not newer than current subject')
+            verified = processing_table(con, record_type, where=f'{key_sql} IN (SELECT {key_sql} FROM {source})',
+                                        in_transaction=True)
+            delta = con.execute(f'''SELECT count(*) FROM ((SELECT * FROM {verified} EXCEPT ALL SELECT * FROM {source})
+                UNION ALL (SELECT * FROM {source} EXCEPT ALL SELECT * FROM {verified}))''').fetchone()[0]
+            if delta:
+                raise RuntimeError('Catalog replacement changed source values')
+            for temporary_table in (prior, verified, prior_witnesses, native, pending):
+                con.execute(f'DROP TABLE {temporary_table}')
+
+
+def export_pair(con, record_type, output_dir, *, generation_id, snapshot=None):
+    """Export and qualify one native catalog read, preserving its source witnesses."""
+    import json
+    from spicy_regs.transforms.regulations_receipts import ReceiptInput
+    from . import iceberg
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    dataset = record_type.name
+    subjects = output_dir / f'{dataset}.parquet'
+    receipts = output_dir / 'etl_receipts.parquet'
+    with TemporaryDirectory(prefix='catalog-export-') as temporary, _transaction(con):
+        if not initialized(con, dataset):
+            raise ValueError('Native catalog has no qualified initialization receipt')
+        if snapshot is not None and iceberg._read_snapshot(con, record_type) != snapshot:
+            raise RuntimeError('Catalog snapshot changed before paired export; retry')
+        _copy(con, f'SELECT * FROM {qualified(record_type)}', subjects)
+        raw_receipts = Path(temporary) / 'receipts.parquet'
+        _copy(con, f"SELECT * FROM {receipts_table()} WHERE dataset='{dataset}'", raw_receipts)
+        write_rows((rebind_receipt(row, generation_id=generation_id) for row in _rows(raw_receipts)),
+                   receipts, RECEIPT_SCHEMA)
+        for _ in read_with_receipts([subjects], [receipts], policy(dataset), generation_id=generation_id):
+            pass
+    metadata = {'generation_id': generation_id, 'dataset': dataset}
+    if snapshot is not None:
+        metadata['snapshot'] = snapshot.__dict__
+    (output_dir / 'generation.json').write_text(json.dumps(metadata, sort_keys=True) + '\n')
+    return ReceiptInput(dataset, (subjects,), receipts, generation_id)

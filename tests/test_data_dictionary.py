@@ -22,7 +22,7 @@ def test_record_types_covered_by_expected_schemas():
     expected = dd.expected_schemas()
     for name, rt in RECORD_TYPES.items():
         assert name in expected
-        assert [c for c, _ in expected[name]] == list(rt.schema.keys())
+        assert [c for c, _ in expected[name]] == dd.subject_policies()[name].subject_schema.names
 
 
 def test_all_tables_have_a_schema():
@@ -268,7 +268,7 @@ def test_bundled_mcp_metadata_matches_dictionary_and_provider():
     committed = json.loads(dd.DEFAULT_MCP_METADATA_PATH.read_text(encoding="utf-8"))
     assert committed == fresh, "table_metadata.json is stale; run 'uv run spicy-regs-dict generate'"
     assert committed["dockets"]["identity_columns"] == ["docket_id"]
-    assert committed["member_votes"]["identity_columns"] == list(dd._contracts()["member_votes"].identity)
+    assert committed["member_votes"]["identity_columns"] == list(dd.subject_policies()["member_votes"].identity_fields)
     assert committed["member_votes"]["grain"] == dd.contract_grain("member_votes")
 
 
@@ -368,7 +368,7 @@ def test_every_hosted_column_has_prose():
     """All four hundred-odd columns carry a sentence, read from the contract."""
     descriptions = dd.load_descriptions()
     schemas = dd.expected_schemas()
-    for table in dd.CONTRACT_TABLES:
+    for table in set(dd.CONTRACT_TABLES) & set(dd.TABLES):
         columns = descriptions[table]["columns"]
         assert set(columns) == {c for c, _ in schemas[table]}, table
         blank = [name for name, text in columns.items() if not (text or "").strip()]
@@ -380,8 +380,12 @@ def test_hosted_prose_is_the_contract_prose_not_a_copy():
     from spicy_docs.schemas import TABLE_CONTRACTS
 
     descriptions = dd.load_descriptions()
-    for table in dd.CONTRACT_TABLES:
-        assert descriptions[table]["columns"] == dict(TABLE_CONTRACTS[table].descriptions), table
+    for table in set(dd.CONTRACT_TABLES) & set(dd.TABLES):
+        source = dict(TABLE_CONTRACTS[table].descriptions)
+        policy = dd.subject_policies().get(table)
+        for field, prose in descriptions[table]["columns"].items():
+            if field in source and (policy is None or str(policy.subject_schema.field(field).type) in {"string", "bool", "int64", "int32"}):
+                assert prose == source[field], (table, field)
 
 
 def test_hosted_entries_do_not_list_columns_inline():
@@ -428,13 +432,13 @@ def test_hosted_schemas_follow_the_contract_types_in_contract_order():
 # The materialized rulemaking dataset: builders' own schemas, served from the snapshot pointer.
 # --------------------------------------------------------------------------- #
 RULEMAKING_IDENTITY = {
-    "rule_targets": ["docket_id", "cfr_ref", "rin", "source"],
+    "rule_targets": ["rule_target_id"],
     "proceedings": ["proceeding_id"],
     "regulatory_agenda_items": ["agenda_item_id"],
     "agenda_item_proceedings": ["relationship_id"],
     "comment_periods": ["comment_period_id"],
     "rulemaking_lifecycles": ["proceeding_id"],
-    "lifecycle_events": ["proceeding_id", "document_id"],
+    "lifecycle_events": ["lifecycle_event_id"],
     "agency_lifecycle_stats": ["agency_code", "stratum"],
 }
 

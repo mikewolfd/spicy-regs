@@ -16,11 +16,12 @@ from pathlib import Path
 from typing import ClassVar
 
 from spicy_regs.env_values import flag_env
-from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
+from spicy_regs.pipelines.rollups.base import make_rollup_app
+from spicy_regs.pipelines.rollups.government import GovernmentReceiptRollup
 from spicy_regs.transforms import build_gao_reports
 
 
-class GaoReportsRollup(RollupPipeline):
+class GaoReportsRollup(GovernmentReceiptRollup):
     """GAO oversight reports ingested from the gao.gov reports RSS feed."""
 
     name: ClassVar[str] = "gao-reports"
@@ -33,9 +34,10 @@ class GaoReportsRollup(RollupPipeline):
     def build(self, output_dir: Path) -> tuple[Path, Path]:
         return build_gao_reports(
             output_dir,
-            evidence=self.source_evidence,
+            evidence=self.source_evidence, receipt_generation_id=self.receipt_generation_id,
             govinfo_history=flag_env("GAO_GOVINFO_HISTORY"),
             govinfo_mods=flag_env("GAO_GOVINFO_MODS"),
+            decision_pages=Path(pages) if (pages := os.environ.get("GAO_DECISION_PAGES", "").strip()) else None,
             listing_run=Path(listing) if (listing := os.environ.get("GAO_LISTING_RUN", "").strip()) else None,
         )
 

@@ -20,7 +20,8 @@ cap, each run resuming on what the last published.
 from pathlib import Path
 from typing import ClassVar
 
-from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
+from spicy_regs.pipelines.rollups.base import make_rollup_app
+from spicy_regs.pipelines.rollups.subject_receipts import SubjectReceiptRollup as RollupPipeline
 from spicy_regs.transforms.build_roll_call_votes import build_roll_call_votes, max_votes_from_env
 
 
@@ -34,7 +35,7 @@ class RollCallVotesRollup(RollupPipeline):
     retain_source_evidence: ClassVar[bool] = True
 
     def build(self, output_dir: Path) -> tuple[Path, ...]:
-        return build_roll_call_votes(output_dir, max_votes=max_votes_from_env(), evidence=self.source_evidence)
+        return self.build_receipts(output_dir, build_roll_call_votes, max_votes=max_votes_from_env(), evidence=self.source_evidence)
 
 
 app = make_rollup_app(RollCallVotesRollup)

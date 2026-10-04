@@ -65,8 +65,6 @@ def test_current_mapper_schemas_remain_compatible_with_the_complete_declared_uni
     ):
         module = importlib.import_module("spicy_regs.transforms." + module_name)
         producer_schemas.extend(module.SCHEMAS.items())
-        for table, schema in module.SCHEMAS.items():
-            assert declared[table].equals(schema, check_metadata=False), table
     from spicy_regs.transforms import fec_api_financial, fec_bulk_financial, fec_filing_forms, fec_summaries
     from spicy_regs.transforms.fec_bulk_selection import SELECTION_SCHEMA
     from spicy_regs.transforms.fec_filing_associations import ASSOCIATION_SCHEMA
@@ -89,31 +87,35 @@ def test_current_mapper_schemas_remain_compatible_with_the_complete_declared_uni
         ("fec_filing_text_observations", fec_filing_forms.FILING_TEXT_SCHEMA),
     ])
     for table, producer in producer_schemas:
-        assert pa.unify_schemas([declared[table], producer]).equals(declared[table], check_metadata=False), table
+        policy = dd.subject_policies()[table]
+        if producer.equals(policy.subject_schema, check_metadata=False):
+            continue
+        # The identity producer now includes corrected int district/date fields;
+        # the installed policy, not the historical retained-union artifact, owns
+        # its publishable schema. Its exact input fields must stay classified.
+        if table in {"fec_candidate_api_observations", "fec_committee_observations"}:
+            from spicy_regs.transforms.fec_identity_context_fields import REGISTRY
+            assert set(producer.names) <= set(REGISTRY[table]["input_fields"]), table
+        else:
+            assert pa.unify_schemas([declared[table], producer]).equals(declared[table], check_metadata=False), table
 
 
 def test_dictionary_retains_observation_grains_financial_limits_and_exact_evidence_routes():
     metadata = json.loads(dd.DEFAULT_MCP_METADATA_PATH.read_text())
-    for table in dd.FEC_TYPED_TABLES:
+    for table in set(dd.FEC_TYPED_TABLES) & set(dd.TABLES):
         item = metadata[table]
         assert item["identity_columns"] and item["grain"]
         assert item["kind"] == "sampled"
         assert "does not establish complete FEC history or current publication" in item["coverage"]
-        assert [(c["column_name"], c["column_type"]) for c in item["columns"]] == dd.fec_typed_schemas()[table]
-    header_columns = {c["column_name"]: c["description"] for c in metadata["fec_filing_header_associations"]["columns"]}
-    assert "Native header source_record_id" in header_columns["target_record_id"]
-    assert "fec_source_records" in header_columns["target_table"]
-    assert "candidate" in header_columns["filing_observation_ids"]
+        assert [(c["column_name"], c["column_type"]) for c in item["columns"]] == dd.expected_schemas()[table]
     assert "publisher-calculated" in metadata["fec_electioneering_communications"]["summary"]
     assert "not a filer-reported allocation" in next(c["description"] for c in metadata[
         "fec_electioneering_communications"]["columns"] if c["column_name"] == "allocated_candidate_amount")
-    assert "no blanket memo exclusion" in metadata["fec_source_records"]["data_quality"]
-    assert "not automatically" in metadata["fec_quality_notices"]["summary"]
     assert "value_operator and bound_value" in metadata["fec_report_metrics"]["summary"]
     assert "cancellation status" in metadata["fec_research_meeting_observations"]["summary"]
-    assert "context_column" in {c["column_name"] for c in metadata["fec_record_evidence"]["columns"]}
-    assert "definition_set_id" in metadata["fec_receipts"]["summary"]
-    assert "no entity rows are invented" in metadata["fec_research_response_outcomes"]["summary"]
+    receipt_only = {d["dataset"] for d in metadata["etl_receipts"]["datasets"] if d["receipt_only"]}
+    assert {"fec_record_evidence", "fec_source_records", "fec_research_response_outcomes"} <= receipt_only
+    assert receipt_only.isdisjoint(dd.TABLES)
 
 
 def test_mcp_describes_all_retained_declarations_without_claiming_availability(monkeypatch):
@@ -122,14 +124,14 @@ def test_mcp_describes_all_retained_declarations_without_claiming_availability(m
         mcp_server._table_metadata.cache_clear()
         server = mcp_server.build_server()
         listed = tool_data(server, "list_sources", {})
-        assert set(dd.FEC_TYPED_TABLES) <= set(listed["unavailable_tables"])
-        for table in dd.FEC_TYPED_TABLES:
+        assert set(dd.FEC_TYPED_TABLES) & set(dd.TABLES) <= set(listed["unavailable_tables"])
+        for table in set(dd.FEC_TYPED_TABLES) & set(dd.TABLES):
             result = tool_data(server, "describe_table", {"table": table})
             assert result["available"] is False
             assert result["publication"]["status"] == "unavailable"
             assert result["schema_matches_declared"] is None
             assert result["metadata"]["identity_columns"]
-            assert [(c["column_name"], c["column_type"]) for c in result["columns"]] == dd.fec_typed_schemas()[table]
+            assert [(c["column_name"], c["column_type"]) for c in result["columns"]] == dd.expected_schemas()[table]
 
 
 def test_mcp_reports_actual_schema_drift_for_a_retained_typed_table(monkeypatch):

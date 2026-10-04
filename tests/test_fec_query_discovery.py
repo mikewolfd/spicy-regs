@@ -4,6 +4,9 @@ import asyncio
 from dataclasses import replace
 from typing import Any
 
+import pyarrow as pa
+from spicy_regs.subject_catalog import policies
+
 import duckdb
 import pytest
 
@@ -16,14 +19,12 @@ from spicy_regs.relationship_views.sql_views import annotate_views, install_sql_
 
 def test_primary_and_necessary_children_share_discovery(monkeypatch):
     con: Any = duckdb.connect()
-    spec = next(s for s in FEC_QUERY_VIEWS if s.name == "fec_candidate_cycles")
-    table = "fec_candidate_api_observations"
-    columns = spec.required[table]
-    con.execute(f"CREATE TABLE {table} (" + ", ".join(f"{name} VARCHAR" for name in columns) + ")")
-    values = {"record_id": "observation", "candidate_id": "P00000001", "cycles_json": "[2024,2024]"}
-    con.execute(
-        f"INSERT INTO {table} VALUES (" + ",".join("?" for _ in columns) + ")", [values.get(name) for name in columns]
-    )
+    table = "fec_filing_text_observations"
+    schema = policies()[table].subject_schema
+    values = {"record_id": "observation", "text_fragments": [{"field_position": 2, "text": "Narrative"}] * 2}
+    con.register("fixture", pa.Table.from_pylist([values], schema=schema))
+    con.execute(f"CREATE TABLE {table} AS SELECT * FROM fixture")
+    con.unregister("fixture")
     mcp_server._install_relationship_views(con)
     monkeypatch.setattr(mcp_server, "_get_connection", lambda: con)
     server: Any = mcp_server.build_server()
@@ -31,20 +32,20 @@ def test_primary_and_necessary_children_share_discovery(monkeypatch):
     assert "query_views" not in sources
     names = {item["table"]: item for item in sources["tables"]}
     assert names[table]["category"] == "query_data"
-    assert names["fec_candidate_cycles"]["role"] == "child_query"
-    assert names["fec_candidate_cycles"]["source_tables"] == [table]
+    assert names["fec_filing_text"]["role"] == "child_query"
+    assert names["fec_filing_text"]["source_tables"] == [table]
     assert "fec_candidate_records" not in names
-    described = asyncio.run(server.call_tool("describe_table", {"table": "fec_candidate_cycles"})).structured_content
+    described = asyncio.run(server.call_tool("describe_table", {"table": "fec_filing_text"})).structured_content
     meanings = {c["column_name"]: c["description"] for c in described["columns"]}
     assert "Zero-based" in meanings["source_ordinal"]
-    assert "independent" in meanings["cycle"]
+    assert meanings["text"]
     assert all("its meaning and source grain" not in v for v in meanings.values())
     result = asyncio.run(
         server.call_tool(
-            "query_sql", {"sql": "SELECT source_ordinal, cycle FROM fec_candidate_cycles ORDER BY source_ordinal"}
+            "query_sql", {"sql": "SELECT source_ordinal, text FROM fec_filing_text ORDER BY source_ordinal"}
         )
     ).structured_content
-    assert result["rows"] == [{"source_ordinal": 0, "cycle": 2024}, {"source_ordinal": 1, "cycle": 2024}]
+    assert result["rows"] == [{"source_ordinal": 0, "text": "Narrative"}, {"source_ordinal": 1, "text": "Narrative"}]
 
 
 def test_role_is_explicit_and_installation_does_not_evaluate_rows():
@@ -56,11 +57,11 @@ def test_role_is_explicit_and_installation_does_not_evaluate_rows():
         return value
 
     con.create_function("observe", observe, side_effects=True)
-    spec = replace(next(s for s in FEC_QUERY_VIEWS if s.name == "fec_candidate_cycles"), rule_version="future-version")
-    table = "fec_candidate_api_observations"
-    con.execute(
-        f"CREATE VIEW {table} AS SELECT " + ", ".join(f"observe('[]') AS {name}" for name in spec.required[table])
-    )
+    spec = replace(next(s for s in FEC_QUERY_VIEWS if s.name == "fec_filing_text"), rule_version="future-version")
+    table = "fec_filing_text_observations"
+    schema = policies()[table].subject_schema
+    con.register("empty", pa.Table.from_batches([], schema=schema))
+    con.execute(f"CREATE VIEW {table} AS SELECT * REPLACE (observe(record_id) AS record_id) FROM empty")
     installed = install_sql_views(con, [table], [spec])
     annotate_views(installed)
     assert installed[spec.name]["status"] == "available"

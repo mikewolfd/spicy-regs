@@ -1,0 +1,18 @@
+{
+  "dataset": "court_citations",
+  "policy_version": "courts/1",
+  "subject_schema": "/////2ABAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAYAAAAAAQAAwAAAAJQAAABkAAAAOAAAAAQAAAAo////AAABBRAAAAAgAAAABAAAAAAAAAANAAAAY2l0YXRpb25fdHlwZQAAABz///9Y////AAABBRAAAAAYAAAABAAAAAAAAAAEAAAAcGFnZQAAAABE////gP///wAAAQUQAAAAHAAAAAQAAAAAAAAACAAAAHJlcG9ydGVyAAAAAHD///+s////AAABBRAAAAAYAAAABAAAAAAAAAAGAAAAdm9sdW1lAACY////1P///wAAAQUQAAAAHAAAAAQAAAAAAAAACgAAAGNsdXN0ZXJfaWQAAMT///8QABQACAAGAAcADAAAABAAEAAAAAAAAQUQAAAAIAAAAAQAAAAAAAAACwAAAGNpdGF0aW9uX2lkAAQABAAEAAAA",
+  "identity_fields": [
+    "citation_id"
+  ],
+  "receipt_fields": [
+    "date_created",
+    "date_modified",
+    "dump_date",
+    "conversion_inputs",
+    "raw_source_record",
+    "source_observation"
+  ],
+  "receipt_only": false,
+  "nullable_identity_fields": []
+}

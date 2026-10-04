@@ -1,0 +1,24 @@
+{
+  "dataset": "agenda_item_proceedings",
+  "policy_version": "regulations-native-v1",
+  "subject_schema": "/////0ABAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAUAAADcAAAAmAAAAHAAAAA8AAAABAAAAEj///8AAAEFEAAAACQAAAAEAAAAAAAAABEAAAByZWxhdGlvbnNoaXBfcm9sZQAAADz///98////AAABBRAAAAAgAAAABAAAAAAAAAANAAAAcHJvY2VlZGluZ19pZAAAAGz///+s////AAABBRAAAAAUAAAABAAAAAAAAAADAAAAcmluAJD////Q////AAABBRAAAAAgAAAABAAAAAAAAAAOAAAAYWdlbmRhX2l0ZW1faWQAAMD///8QABQACAAGAAcADAAAABAAEAAAAAAAAQUQAAAAJAAAAAQAAAAAAAAADwAAAHJlbGF0aW9uc2hpcF9pZAAEAAQABAAAAA==",
+  "identity_fields": [
+    "relationship_id"
+  ],
+  "receipt_fields": [
+    "source",
+    "evidence_id",
+    "evidence_uri",
+    "evidence_date",
+    "method",
+    "actor_id",
+    "run_id",
+    "asserted_at",
+    "supersedes_id",
+    "raw_conversion_inputs",
+    "input_metadata",
+    "raw_source_record"
+  ],
+  "receipt_only": false,
+  "nullable_identity_fields": []
+}

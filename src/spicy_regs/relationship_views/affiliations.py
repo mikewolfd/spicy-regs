@@ -7,12 +7,27 @@ AFFILIATION_FIELDS = ('bioguide_id','input_sha256','term_index','affiliation_ind
                       'source_path','source_json','observed_at')
 
 
-def dated_parties(p):
+def dated_parties(p, *, native=False):
     valid = """a.start_status='valid' AND a.end_status='valid'
         AND TRY_CAST(a.affiliation_start AS DATE) IS NOT NULL AND TRY_CAST(a.affiliation_end AS DATE) IS NOT NULL
         AND TRY_CAST(a.affiliation_start AS DATE)<TRY_CAST(a.affiliation_end AS DATE)"""
+    if native:
+        # Equivalent to SpicyDocs literal_date_status: a real Gregorian date
+        # whose ISO rendering is exactly the original spelling. Year zero is
+        # accepted by DuckDB but not Python's source reader, so exclude it.
+        valid = """strftime(TRY_CAST(a.affiliation_start AS DATE),'%Y-%m-%d')=a.affiliation_start
+            AND strftime(TRY_CAST(a.affiliation_end AS DATE),'%Y-%m-%d')=a.affiliation_end
+            AND left(a.affiliation_start,4)<>'0000' AND left(a.affiliation_end,4)<>'0000'
+            AND TRY_CAST(a.affiliation_start AS DATE)<TRY_CAST(a.affiliation_end AS DATE)"""
     matches = f"""{valid} AND TRY_CAST(a.affiliation_start AS DATE)<=TRY_CAST(v.vote_day AS DATE)
         AND TRY_CAST(v.vote_day AS DATE)<TRY_CAST(a.affiliation_end AS DATE)"""
+    candidates = ("term_index:=a.term_index,affiliation_index:=a.affiliation_index,party:=a.party,"
+                  "affiliation_start:=a.affiliation_start,affiliation_end:=a.affiliation_end,caucus:=a.caucus") if native else (
+                  "input_sha256:=a.input_sha256,term_index:=a.term_index,affiliation_index:=a.affiliation_index,"
+                  "party:=a.party,affiliation_start:=a.affiliation_start,affiliation_end:=a.affiliation_end,"
+                  "source_path:=a.source_path,source_json:=a.source_json,observed_at:=a.observed_at")
+    candidate_column = ('m.candidates AS affiliation_candidates' if native else
+                        'to_json(m.candidates)::VARCHAR AS affiliation_candidates_json')
     return f"""SELECT v.*,m.source_affiliation_count,m.unusable_interval_count,m.target_count,
         CASE WHEN m.target_count=1 THEN m.candidates[1].party ELSE NULL END AS dated_party,
         CASE WHEN TRY_CAST(v.vote_day AS DATE) IS NULL OR v.term_index IS NULL OR v.bioguide_id IS NULL
@@ -21,7 +36,7 @@ def dated_parties(p):
         CASE WHEN m.target_count>1 THEN 'ambiguous'
              WHEN m.target_count=1 AND m.candidates[1].party IS NOT NULL THEN 'source_interval'
              ELSE 'unknown' END AS party_status,
-        to_json(m.candidates)::VARCHAR AS affiliation_candidates_json,
+        {candidate_column},
         {pin(p, 'member_vote_terms')} AS source_publication_json,
         {pin(p, 'member_party_affiliations')} AS target_publication_json,
         'native-party-half-open-v1' AS rule_version
@@ -29,10 +44,7 @@ def dated_parties(p):
             SELECT count(*) AS source_affiliation_count,
                 count(*) FILTER (WHERE NOT coalesce(({valid}),FALSE)) AS unusable_interval_count,
                 count(*) FILTER (WHERE {matches}) AS target_count,
-                list(struct_pack(input_sha256:=a.input_sha256,term_index:=a.term_index,
-                    affiliation_index:=a.affiliation_index,party:=a.party,
-                    affiliation_start:=a.affiliation_start,affiliation_end:=a.affiliation_end,
-                    source_path:=a.source_path,source_json:=a.source_json,observed_at:=a.observed_at))
+                list(struct_pack({candidates}) ORDER BY a.affiliation_index)
                     FILTER (WHERE {matches}) AS candidates
             FROM member_party_affiliations a
             WHERE a.bioguide_id=v.bioguide_id AND a.term_index=v.term_index
@@ -47,4 +59,17 @@ AFFILIATION_VIEWS = (
        'missing/invalid end dates never mean open-ended. Gaps stay unknown, overlaps or multiple captures stay '
        'ambiguous, and no latest-capture or term-level party fallback is chosen. Candidate JSON retains capture '
        'digests and source occurrence positions.', ('vote_id','member_key')),
+)
+
+
+NATIVE_AFFILIATION_VIEWS = (
+    SQLView('member_vote_party_affiliations', {
+        'member_vote_terms': ('vote_id', 'member_key', 'bioguide_id', 'term_index', 'vote_day'),
+        'member_party_affiliations': ('bioguide_id', 'term_index', 'affiliation_index', 'party',
+                                     'affiliation_start', 'affiliation_end', 'caucus'),
+    }, lambda p: dated_parties(p, native=True),
+       'One row per established vote-to-term assignment. Literal party intervals use start <= vote_day < end; '
+       'invalid or missing ends never mean open-ended, overlaps remain ambiguous, and term party is not a fallback. '
+       'Candidates are native structs. Unresolved term attempts and source evidence are in ETL receipts.',
+       ('vote_id', 'member_key')),
 )

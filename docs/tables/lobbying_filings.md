@@ -6,6 +6,8 @@
 
 One row per federal lobbying-disclosure filing, ingested from the U.S. Senate Lobbying Disclosure Act (LDA) REST API (`lda.gov`, formerly `lda.senate.gov`) by `build_lobbying_filings`. Registrants file quarterly reports naming the clients they lobby for, the money involved, the issues raised, and the government entities (agencies/chambers) lobbied — so this table links the comment campaigns in `comments`/`dockets` to the same organizations' *direct* agency lobbying. Primary / dedup key is `filing_uuid`. All columns are stored as VARCHAR; nested/array fields are JSON strings.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='lobbying_filings'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** True range: every filing of each filing year held, read whole from the LDA API, from the earliest filing year the backfill has reached to date; earlier years are added one year per dispatched run (owner decision 47). Query min(filing_year) for the current start. *(measured 2026-09-28)*
 
 - **Parquet file:** `lobbying_filings.parquet`
@@ -17,15 +19,14 @@ One row per federal lobbying-disclosure filing, ingested from the U.S. Senate Lo
 | --- | --- | --- |
 | `filing_uuid` | `VARCHAR` | LDA filing UUID (e.g. `7866327b-c892-4430-b9f0-1f0f679c58c6`). Primary key / dedup key. |
 | `filing_type` | `VARCHAR` | Filing type code (e.g. `RR` registration, `Q1`–`Q4` quarterly reports, `1A`–`4A` amendments, terminations). An amendment is a separate filing that restates its quarter's report. |
-| `filing_year` | `VARCHAR` | Calendar year the filing reports on. |
+| `filing_year` | `BIGINT` | Calendar year the filing reports on. |
 | `filing_period` | `VARCHAR` | Reporting period within the year (e.g. `first_quarter`, `year_end`). |
-| `dt_posted` | `VARCHAR` | Timestamp the filing was posted to the LDA system (ISO 8601 string with timezone). Sort key. |
+| `dt_posted` | `TIMESTAMP WITH TIME ZONE` | Timestamp the filing was posted to the LDA system (ISO 8601 string with timezone). Sort key. |
 | `registrant_name` | `VARCHAR` | Name of the registrant (the lobbying firm or self-filing organization). |
 | `registrant_id` | `VARCHAR` | LDA registrant id. Stable join key across a registrant's filings. |
 | `client_name` | `VARCHAR` | Name of the client the lobbying was performed for. Joins by name to `organizations`/comment filers. |
 | `client_id` | `VARCHAR` | LDA client id. |
-| `income` | `VARCHAR` | Lobbying income reported by a lobbying firm for the period, in USD. Null for self-filers (who report `expenses`). An amended report (`filing_type` `1A`–`4A`) restates its quarter's amount, often unchanged, so summing over every filing counts that quarter twice; keep the latest filing per registrant, client and quarter. |
-| `expenses` | `VARCHAR` | Lobbying expenses reported by a self-filing organization for the period, in USD. Null for firms (who report `income`). An amended report (`filing_type` `1A`–`4A`) restates its quarter's amount, often unchanged, so summing over every filing counts that quarter twice; keep the latest filing per registrant, client and quarter. A self-filing organization's expenses already include what it pays outside lobbying firms, whose `income` for that client is reported separately; do not add the two. |
-| `lobbying_activities_json` | `VARCHAR` | JSON array of lobbying activities, each `{general_issue_code, general_issue_code_display, description}` — the issue areas lobbied and their free-text descriptions. |
-| `government_entities_json` | `VARCHAR` | JSON array of the distinct government entities lobbied (`{id, name}`) — the agencies and chambers (e.g. `HOUSE OF REPRESENTATIVES`, `SENATE`) named across the filing's activities. |
-| `url` | `VARCHAR` | URL of the filing's printable document page on lda.senate.gov (`filing_document_url`). |
+| `income` | `DECIMAL(38,6)` | Lobbying income reported by a lobbying firm for the period, in USD. Null for self-filers (who report `expenses`). An amended report (`filing_type` `1A`–`4A`) restates its quarter's amount, often unchanged, so summing over every filing counts that quarter twice; keep the latest filing per registrant, client and quarter. |
+| `expenses` | `DECIMAL(38,6)` | Lobbying expenses reported by a self-filing organization for the period, in USD. Null for firms (who report `income`). An amended report (`filing_type` `1A`–`4A`) restates its quarter's amount, often unchanged, so summing over every filing counts that quarter twice; keep the latest filing per registrant, client and quarter. A self-filing organization's expenses already include what it pays outside lobbying firms, whose `income` for that client is reported separately; do not add the two. |
+| `lobbying_activities` | `STRUCT(general_issue_code VARCHAR, general_issue_code_display VARCHAR, description VARCHAR)[]` | Native list of lobbying activities, each `{general_issue_code, general_issue_code_display, description}` — the issue areas lobbied and their free-text descriptions. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `government_entities` | `STRUCT(id VARCHAR, "name" VARCHAR)[]` | Native list of the distinct government entities lobbied (`{id, name}`) — the agencies and chambers (e.g. `HOUSE OF REPRESENTATIVES`, `SENATE`) named across the filing's activities. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |

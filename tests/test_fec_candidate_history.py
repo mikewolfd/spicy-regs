@@ -197,8 +197,8 @@ def test_complete_generation_binds_exact_responses_and_refresh_retires_rows(tmp_
     second.run()
     rows = pq.read_table(tmp_path / build.OUTPUT).to_pylist()
     assert [(r["candidate_id"], r["cycle"], r["name"]) for r in rows] == [
-        ("H0AA00001", "1980", "CORRECTED"),
-        ("H0AA00003", "1982", "OTHER CYCLE"),
+        ("H0AA00001", 1980, "CORRECTED"),
+        ("H0AA00003", 1982, "OTHER CYCLE"),
     ]
     assert len(list((tmp_path / "generations").iterdir())) == 2
     evidence = second.source_evidence

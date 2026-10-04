@@ -6,6 +6,8 @@
 
 One row per daily Congressional Record issue, keyed `(volume, issue)`, the publisher's own identity. The detail's section names give `chambers`, the legislative-day calendar (which chambers sat), and the stem of the whole-issue link for part 1 gives the GovInfo CREC `package_id` (`entire_issue_url_stem/2`). The volume is the year minus 1854 (volume 172 is 2026). All columns are stored as VARCHAR.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='record_issues'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled, and accumulating. Each run walks the whole `daily-congressional-record/{volume}` list for each session volume of the Congresses in scope and reads the detail of every issue the table does not yet hold, newest `updateDate` first, up to 1,000 a run, so at the 119th's size one run completes it. *(measured 2026-09-29)*
 
 **Data quality.** A row whose `sections_json` is NULL is list-only: its detail has not been read yet, so `chambers`, `package_id` and every other detail-only column are NULL with it. A read detail with no chamber section (a Daily Digest only) states an empty `chambers`, distinct from NULL. The rule before 2026-09-29 read the first whole-issue link listed, and an issue printed in several books lists a later book's `-bk{N}` link first on 7 of 368 held rows, which GovInfo holds no package under; a one-time rebuild re-reads every held row's own `entire_issue_json` under the new rule.
@@ -22,15 +24,11 @@ One row per daily Congressional Record issue, keyed `(volume, issue)`, the publi
 | `congress` | `VARCHAR` | The numbered Congress the issue belongs to. |
 | `session` | `VARCHAR` | The session of Congress the issue belongs to. |
 | `issue_date` | `VARCHAR` | The issue date instant as the publisher states it. |
-| `chambers` | `VARCHAR` | Which chambers this issue records a sitting of, unit-separator joined and sorted (`house`, `senate`); NULL where no detail was read, empty where the detail names no chamber section. |
-| `chambers_rule` | `VARCHAR` | How chambers was derived: `section_name`, from the detail's section names. |
-| `section_count` | `VARCHAR` | How many sections the detail lists. |
-| `section_names` | `VARCHAR` | Every section name the detail lists, unit-separator joined, in publisher order. |
-| `sections_json` | `VARCHAR` | Every section the detail lists, as a JSON array of the publisher's objects. |
-| `entire_issue_json` | `VARCHAR` | Every whole-issue rendition the detail lists, as a JSON array of the publisher's objects. |
+| `chambers` | `VARCHAR[]` | Which chambers this issue records a sitting of, unit-separator joined and sorted (`house`, `senate`); NULL where no detail was read, empty where the detail names no chamber section. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `section_count` | `BIGINT` | How many sections the detail lists. |
+| `section_names` | `VARCHAR[]` | Every section name the detail lists, unit-separator joined, in publisher order. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `sections` | `STRUCT(endPage VARCHAR, "name" VARCHAR, startPage VARCHAR, "text" STRUCT("type" VARCHAR, url VARCHAR, part VARCHAR)[])[]` | Every section the detail lists, as a Native list of the publisher's objects. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `entire_issue` | `STRUCT(part VARCHAR, "type" VARCHAR, url VARCHAR)[]` | Every whole-issue rendition the detail lists, as a Native list of the publisher's objects. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `package_id` | `VARCHAR` | The GovInfo CREC package id read from the file stem of the whole-issue link for part 1. NULL where the detail lists no part 1, or part 1 links under two stems. |
-| `package_id_rule` | `VARCHAR` | How package_id was derived: `entire_issue_url_stem/2`. |
-| `article_count` | `VARCHAR` | How many articles the detail says the issue has. |
-| `articles_url` | `VARCHAR` | The publisher's URL for the issue's article list. |
+| `article_count` | `BIGINT` | How many articles the detail says the issue has. |
 | `update_date` | `VARCHAR` | The publisher's updateDate; the merge prefers the larger value. |
-| `url` | `VARCHAR` | The publisher's own URL for this issue. |

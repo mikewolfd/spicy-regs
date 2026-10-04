@@ -6,6 +6,8 @@
 
 Which court opinion cites which, and how often, as CourtListener's citator resolved it. Both ids are opinion ids, not decision ids: join each to court_opinions.opinion_id, then court_opinions.cluster_id to court_opinion_clusters, to ask what cites a decision or which decisions are cited most. Rebuilt whole from each quarterly export. All columns are VARCHAR.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='court_citation_map'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Not a range. The complete 2026-06-30 CourtListener citation-map export: citing/cited opinion pairs, each unique as the publisher's schema requires, with no NULL depth. Only the publisher's surrogate row id is dropped. Through court_opinions of the same edition, all but 3,758 citing ids and one cited id resolved on 2026-09-22. *(measured 2026-09-22)*
 
 **Data quality.** The edges are the publisher's automated citation resolution, not a reviewed citator: citations it could not resolve are absent, and depth counts mentions, not treatment (followed, distinguished or overruled are not recorded). Several opinions of one decision each carry their own edges, so count distinct clusters, not rows, when ranking decisions.
@@ -19,5 +21,4 @@ Which court opinion cites which, and how often, as CourtListener's citator resol
 | --- | --- | --- |
 | `citing_opinion_id` | `VARCHAR` | CourtListener opinion ID of the opinion that cites. Joins court_opinions.opinion_id. |
 | `cited_opinion_id` | `VARCHAR` | CourtListener opinion ID of the opinion cited. Joins court_opinions.opinion_id. |
-| `depth` | `VARCHAR` | Number of times the citing opinion cites the cited one, as text. |
-| `dump_date` | `VARCHAR` | The CourtListener bulk export the row was copied from (ISO date). |
+| `depth` | `BIGINT` | Number of times the citing opinion cites the cited one, as text. |

@@ -6,6 +6,8 @@
 
 One row per Regulations.gov document, keyed by `document_id`, with the attributes the thin `documents` table does not carry: abstract, authors, topics, dates, page count, comment-window flags, the submitter's stated contact details (decision 66) and the agency's display properties. Typed where the value is (decision 67): flags BOOLEAN, `page_count` INTEGER, dates TIMESTAMPTZ, authors and topics string lists. Projected from each record's API attributes by SpicyDocs' contract.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='document_attributes'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** True range. Every document record in the Mirrulations mirror, read whole by `run-attributes-sweep` and kept current by the daily regulations ETL. DocSpec's API capture of 2026-09-02 held 1,943,106 of them (receipt `regulations-attributes-20260926/`); the published count is measured at the first sweep. *(measured 2026-09-27)*
 
 - **Parquet file:** `document_attributes.parquet`
@@ -20,13 +22,13 @@ One row per Regulations.gov document, keyed by `document_id`, with the attribute
 | `address2` | `VARCHAR` | The submitter's street address, second line, as stated. |
 | `allow_late_comments` | `BOOLEAN` | Whether the agency accepts comments after the period closes, as the publisher stated it on the record's latest version; the comment window's state comes from its dates. |
 | `author_date` | `TIMESTAMP WITH TIME ZONE` | When the document was written (labelled “Author/ Document Date”), a UTC instant. |
-| `authors` | `VARCHAR[]` | The document's authors, people or organizations, in the publisher's order; almost all on Supporting & Related Material. |
+| `authors` | `VARCHAR[]` | The document's authors, people or organizations, in the publisher's order; almost all on Supporting & Related Material. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `category` | `VARCHAR` | The submitter's sector category the agency assigns. |
 | `cfr_part` | `VARCHAR` | The CFR parts the document affects, free text as stated. |
 | `city` | `VARCHAR` | The submitter's city. |
 | `comment` | `VARCHAR` | The record's comment text as stated, markup included. |
 | `country` | `VARCHAR` | The submitter's country. |
-| `display_properties_json` | `VARCHAR` | The agency's labels for this record's fields: a JSON array of {label, name, tooltip}, name being the attribute it labels; json_column spelling. |
+| `display_properties` | `STRUCT("name" VARCHAR, "label" VARCHAR, tooltip VARCHAR)[]` | The agency's labels for this record's fields: a Native list of {label, name, tooltip}, name being the attribute it labels; json_column spelling. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `doc_abstract` | `VARCHAR` | The document's abstract or summary. |
 | `effective_date` | `TIMESTAMP WITH TIME ZONE` | When the action takes effect, a UTC instant. |
 | `exhibit_location` | `VARCHAR` | Where a physical exhibit is held. |
@@ -59,7 +61,7 @@ One row per Regulations.gov document, keyed by `document_id`, with the attribute
 | `subject` | `VARCHAR` | The subject line. |
 | `submitter_rep` | `VARCHAR` | The name of the submitter's representative. |
 | `subtype` | `VARCHAR` | The agency's subtype: Correspondence, Report, Decision and others. |
-| `topics` | `VARCHAR[]` | The publisher's topics, in its order. |
+| `topics` | `VARCHAR[]` | The publisher's topics, in its order. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `tracking_nbr` | `VARCHAR` | The portal's tracking number. |
 | `within_comment_period` | `BOOLEAN` | Whether the document arrived within the comment period, where given, as the publisher stated it on the record's latest version; the comment window's state comes from its dates. |
 | `zip` | `VARCHAR` | The submitter's postal code. |

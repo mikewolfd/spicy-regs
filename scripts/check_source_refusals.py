@@ -6,10 +6,13 @@ reports success, so a refusal that repeats every run would stop that source
 updating in silence. The laws rollup does this for Table III: a bulk file whose
 member is renamed (it has been, twice since 2020), whose release point went
 backwards, or that drops acts is refused, and ``laws`` and ``law_code_sections``
-publish as usual. The build journals ``table3-bulk-refused``; this check reads
-the current generation's source-evidence journal, each hop checked against the
-digest above it, and fails while it holds one. A later run that reads the file
-cleanly publishes a generation without the event, which clears the failure.
+publish as usual. The build journals ``table3-bulk-refused``, and
+``classification-refused`` for an OLRC classification page refused the same
+way (its maintenance page, or a 401/403), which leaves that session's
+``law_code_sections`` rows standing; this check reads the current generation's
+source-evidence journal, each hop checked against the digest above it, and
+fails while it holds one. A later run that reads cleanly publishes a generation
+without the event, which clears the failure.
 
 A declared family with no published generation, or whose generation retained no
 source evidence, cannot show its refusals, so that fails too. Read-only.
@@ -29,7 +32,9 @@ from spicy_regs.source_evidence import INPUT_ROLE
 from spicy_regs.sources import publication
 
 #: Family -> the journal events that mean its build refused a source read and published the rest.
-REFUSAL_EVENTS: dict[str, tuple[str, ...]] = {"laws": ("table3-bulk-refused",)}
+REFUSAL_EVENTS: dict[str, tuple[str, ...]] = {
+    "laws": ("table3-bulk-refused", "classification-refused", "law-text-refused"),
+}
 
 
 def refusals(base_url: str, index: Mapping, declared: Mapping[str, tuple[str, ...]] = REFUSAL_EVENTS) -> list[str]:

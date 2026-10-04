@@ -1,12 +1,8 @@
-"""Rollup pipelines: the ETL's dockets, documents and the three attribute tables as managed families.
+"""Republish selected native regulatory subjects with their exact shared receipts.
 
-The ETL rewrites the bare ``dockets.parquet`` and ``documents.parquet`` after
-every sweep batch and keeps reading them as its working copies; the same read
-merges ``docket_attributes.parquet`` and ``document_attributes.parquet``
-(decisions 65-67). Once a sweep completes, these publish each as its own
-generation family, so index-aware readers and DocSpec's by-reference admission
-see one verified snapshot per sweep. Bare-URL readers keep reading the working
-copies.
+Scheduled refresh jobs preserve the selected generation's source evidence while
+rebinding receipts to the newly sealed generation. No bare processing copy is a
+publication input.
 """
 
 from pathlib import Path
@@ -17,7 +13,12 @@ import pyarrow.parquet as pq
 
 from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
 from spicy_regs.schemas.regulations import RECORD_TYPES
-from spicy_regs.sources import r2
+from spicy_regs.etl_receipts import select_receipts, rebind_receipt, RECEIPT_SCHEMA
+from spicy_regs.transforms.parquet_rows import write_rows
+from spicy_regs.transforms.regulations_receipts import policy
+from spicy_regs.native_types import described_schema
+from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
+import shutil
 
 
 #: DocSpec admits a member by reference only when every row group is at most
@@ -34,10 +35,31 @@ class _BaseTableFamily(RollupPipeline):
         """The column every row must carry once."""
         return RECORD_TYPES[self.name].dedup_key
 
+    def generation_schemas(self):
+        dataset = self.output.removesuffix(".parquet")
+        return {dataset: described_schema(policy(dataset).subject_schema)}
+
     def build(self, output_dir: Path) -> Path:
         path = output_dir / self.output
-        if not r2.download_working_copy(self.output, path):
-            raise RuntimeError(f"{self.output}: no working copy on R2 to publish")
+        dataset = self.output.removesuffix(".parquet")
+        selected = SelectedPriors(output_dir / ".selected")
+        if selected.get(dataset) is None:
+            raise RuntimeError(f"{self.output}: no selected native generation to publish")
+        subjects, receipts, _ = selected.selections[dataset]
+        if len(subjects) != 1:
+            raise ValueError("Base regulatory family requires one subject member")
+        shutil.copyfile(subjects[0], path)
+        scoped = select_receipts(receipts, output_dir / ".selected-receipts.parquet", dataset=dataset)
+        write_rows(
+            (
+                rebind_receipt(row, generation_id=self.receipt_generation_id)
+                for batch in pq.ParquetFile(scoped).iter_batches()
+                for row in batch.to_pylist()
+            ),
+            output_dir / "etl_receipts.parquet",
+            RECEIPT_SCHEMA,
+        )
+        type(self).receipt_policies = (policy(dataset),)
         key = self.key()
         rows, distinct, missing = (
             duckdb.connect()

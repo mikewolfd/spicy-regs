@@ -415,8 +415,13 @@ def build_index_table(
     max_details: int = MAX_DETAILS_PER_RUN,
     download_prior: Callable[[str, Path], bool] = r2.download,
     evidence: CaptureEvidence | None = None,
+    receipt_build=None,
 ) -> Path:
     """Walk ``spec``'s list units, read the details the published table lacks, and merge."""
+    if receipt_build is not None:
+        return receipt_build.run(build_index_table, output_dir, **{
+            key: value for key, value in locals().items() if key not in {"output_dir", "receipt_build"}
+        })
     if reader is None:
         api_key = _resolve_api_key()
         if not api_key:

@@ -7,6 +7,9 @@ from typing import Any
 import duckdb
 import pyarrow as pa
 import pyarrow.parquet as pq
+import pytest
+
+from spicy_regs.transforms.government_source_shapes import SUBJECT_SCHEMAS, map_subject, GovernmentShapeError
 
 from spicy_regs.relationship_views.fcc_native import FCC_NATIVE_VIEWS
 from spicy_regs.relationship_views.sql_views import install_sql_views
@@ -24,7 +27,7 @@ def retained(label):
 def test_native_replay_preserves_roles_proceeding_ids_and_artifact_alternatives():
     rows = [_shape_filing(retained(label)) for label in ['positive','alternatives','empty']]
     con: Any = duckdb.connect()
-    arrow = pa.Table.from_pylist(rows, schema=_FILING_SCHEMA)
+    arrow = pa.Table.from_pylist([map_subject("fcc_filings", row) for row in rows], schema=SUBJECT_SCHEMAS["fcc_filings"])
     con.register('fcc_filings', arrow)
     con.execute("CREATE TABLE fcc_proceedings AS SELECT '17-108' AS name,'301759' AS id_proceeding")
     metadata = install_sql_views(con,['fcc_filings','fcc_proceedings'],FCC_NATIVE_VIEWS)
@@ -39,22 +42,23 @@ def test_native_replay_preserves_roles_proceeding_ids_and_artifact_alternatives(
     con.execute("INSERT INTO fcc_proceedings VALUES ('17-108','301759')")
     assert con.execute("SELECT target_status FROM fcc_native_proceeding_links "
                        "WHERE id_submission='04272972619149'").fetchone()[0]=='ambiguous'
-    assert con.execute("SELECT field_state FROM fcc_native_field_states "
-                       "WHERE id_submission='104290235804100' AND source_field='documents'").fetchone()[0]=='empty_array'
+    assert con.execute("SELECT documents FROM fcc_filings WHERE id_submission='104290235804100'").fetchone()[0] == []
+    assert "fcc_native_field_states" not in metadata
     assert all(r['native_fields_sha256']=='sha256:'+hashlib.sha256(r['native_fields_json'].encode()).hexdigest() for r in rows)
 
 
-def test_native_states_keep_missing_null_unsupported_and_repeated_elements():
-    raw={'id_submission':'x','proceedings':[None,3,{'name':'17-108','id_proceeding':'301759'}]*2,
-         'filers':None,'authors':42,'documents':[]}
-    con: Any=duckdb.connect()
-    arrow=pa.Table.from_pylist([_shape_filing(raw)],schema=_FILING_SCHEMA)
-    con.register('fcc_filings',arrow)
-    install_sql_views(con,['fcc_filings'],FCC_NATIVE_VIEWS)
-    states=dict(con.execute('SELECT source_field,field_state FROM fcc_native_field_states').fetchall())
-    assert states=={'proceedings':'populated_array','filers':'null','authors':'unsupported_shape',
-                   'lawfirms':'absent','bureaus':'absent','documents':'empty_array'}
-    assert con.execute('SELECT count(*) FROM fcc_native_observations').fetchone()[0]==6
+def test_native_states_keep_null_and_repeated_elements_and_refuse_unsupported():
+    raw = {'id_submission': 'x', 'proceedings': [None, {'name': '17-108', 'id_proceeding': '301759'}]*2,
+           'filers': None, 'authors': [], 'documents': []}
+    subject = map_subject('fcc_filings', _shape_filing(raw))
+    con = duckdb.connect()
+    con.register('fcc_filings', pa.Table.from_pylist([subject], schema=SUBJECT_SCHEMAS['fcc_filings']))
+    install_sql_views(con, ['fcc_filings'], FCC_NATIVE_VIEWS)
+    assert con.execute('SELECT source_ordinal, observed_name FROM fcc_native_observations ORDER BY source_ordinal').fetchall() == [
+        (0, None), (1, '17-108'), (2, None), (3, '17-108')]
+    assert subject['filers'] is None and subject['authors'] == [] and subject['lawfirms'] is None
+    with pytest.raises(GovernmentShapeError):
+        map_subject('fcc_filings', _shape_filing({**raw, 'authors': 42}))
 
 
 def test_incremental_fcc_upgrades_legacy_schema_and_fresh_correction_replaces_arrays(tmp_path):

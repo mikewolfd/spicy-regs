@@ -1,7 +1,7 @@
-"""Transform: build ``laws``, ``law_code_sections`` and ``table3_records``.
+"""Build law metadata, native law sections and relationships to the U.S. Code.
 
-Three tables from three publishers in one pass, because the second and third
-are addressed by what the first enumerates. **``laws``**: the Congress.gov
+Four tables from three publishers in one pass; law text and classifications
+are addressed by what the law list enumerates. **``laws``**: the Congress.gov
 ``law/{congress}`` list route walked whole per scoped Congress (it lists
 private laws too when ``law_type`` is omitted), one row per
 ``laws[]`` entry, each joined to the GovInfo PLAW USLM file whose ``<meta>``
@@ -10,6 +10,11 @@ per-run cap). ``shape_law`` refuses a meta that states another law, so a
 citation never lands on the wrong row; a validated file that states no
 ``NNN Stat. NNN`` (the private laws) is ``captured_partial``, its literal
 ``citableAs`` kept and its Statutes fields NULL.
+**``law_sections``**: native sections from the same validated PLAW bytes,
+with source paths and hashes. A successful reread replaces that law's whole
+section set; an unsuccessful reread preserves its prior metadata and sections.
+These are sections as printed in the enacted law, including amendment
+instructions and explicitly marked quoted sections, not a consolidated Code.
 **``law_code_sections``**: the OLRC per-Congress classification table, read in
 the publisher's public-law order alone (the index links the current Congress's
 session tables only) — the two orders hold the same rows, but the contract
@@ -33,14 +38,16 @@ lists is retired only past a release-point advance and within
 
 **Incremental.** The list is re-walked whole every run; the PLAW is what is
 not re-read. A law already published ``captured`` or ``captured_partial`` under
-the current :data:`~spicy_docs.schemas.law_tables.USLM_READER_VERSION` with the
-same ``update_date`` is left standing; any other is asked for again, newest
+the current metadata and text readers with the same ``update_date`` and
+retained section table is left standing; any other is asked for again, newest
 first, under :data:`MAX_USLM_PER_RUN`. Every attempt publishes a truthful
 outcome (``unavailable`` only for a ``404``/``410`` from the exact locator),
 except that a failed attempt never replaces a validated prior row; a law the
 cap does not reach keeps its prior row, or gets its list row with
 ``not_requested``. A classification page read this run replaces every prior
-row for its Congress and session. Table III keeps one checkpoint per Congress:
+row for its Congress and session; one the reader refuses, or OLRC answers
+``401``/``403``, keeps them, and the run journals it as
+:data:`CLASSIFICATION_REFUSED`. Table III keeps one checkpoint per Congress:
 the derivation rule, the bulk member's digest and release point, and each act's
 shaped-row digest. OLRC states no ``Last-Modified``, ``ETag`` or
 ``Content-Length`` for the zip, on ``GET`` or ``HEAD``, so only its bytes can
@@ -51,9 +58,18 @@ longer lists, is published, its whole row set replaced. A failed read, or one
 the retirement guard or the reader refuses, publishes nothing for Table III and
 keeps every checkpoint, while ``laws`` and ``law_code_sections`` publish as
 usual; a refusal is journaled, and the nightly
-``scripts/check_source_refusals.py`` fails on it. A ``401``/``403`` from any of
-the three publishers aborts the run. Needs an api.data.gov key for the list
-route; the PLAW and OLRC routes are keyless.
+``scripts/check_source_refusals.py`` fails on it. Whatever a run read, every
+merged row of both classification tables has ``usc_section_key`` and
+``usc_place`` derived again from its stored ``usc_section`` (and
+``law_code_sections.action``) by spicy-docs' ``usc_section_place``, so a
+change of that rule reaches held rows without a publisher read. A ``401``/``403`` from the
+list or PLAW route aborts the run. OLRC's is a journaled refusal with reason
+:data:`ACCESS_REFUSED` (the routes are keyless, so it is the publisher blocking
+the read, as Akamai did for the Table III zip on 2026-10-02 and -03); when it
+blocks Table III, or leaves no classification table read, the laws rollup
+publishes the family and then fails the run (:func:`olrc_access_refused`).
+Needs an api.data.gov key for the list route; the PLAW and OLRC routes are
+keyless.
 """
 
 from __future__ import annotations
@@ -61,16 +77,26 @@ from __future__ import annotations
 import re
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping
+from datetime import UTC, datetime
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple, Protocol
 
 import httpx
 from loguru import logger
 from spicy_docs.reading.paged_json import PagedJsonBudget
-from spicy_docs.schemas.law_tables import USLM_READER_VERSION, shape_law, shape_law_code_section, shape_table3_record
+from spicy_docs.schemas.law_tables import (
+    USLM_READER_VERSION,
+    shape_law,
+    shape_law_code_section,
+    shape_law_section,
+    shape_table3_record,
+    usc_section_place,
+)
 from spicy_docs.schemas.tables import TableContractError, digest, json_column
 from spicy_docs.sources.congress.listing import LIST_ROUTES, MAX_LIMIT, CongressListingReader, list_route_url
 from spicy_docs.sources.govinfo.uslm import PublicLawSelection, UslmIdentityError, UslmSourceError
+from spicy_docs.sources.govinfo.law_text import LAW_TEXT_READER_VERSION, read_law_sections
 from spicy_docs.sources.govinfo.uslm_acquisition import (
     UslmAcquirer,
     UslmAcquisitionBudget,
@@ -78,8 +104,9 @@ from spicy_docs.sources.govinfo.uslm_acquisition import (
 )
 from spicy_docs.sources.uscode import Table3Page, Table3Record, UsCodeSourceError, iter_table3_acts
 from spicy_docs.sources.uscode.acquisition import UsCodeAcquirer, UsCodeAcquisitionBudget
+from spicy_docs.sources.uscode.classification import CLASSIFICATION_INDEX_URL
 from spicy_docs.transport.captured import attached_capture
-from spicy_docs.transport.credentials import scrub_credential
+from spicy_docs.transport.credentials import CredentialRefusedError, scrub_credential
 
 from spicy_regs.generations import spicy_docs_code
 from spicy_regs.sources import r2
@@ -87,7 +114,13 @@ from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key
 from spicy_regs.transforms.congress_scope import congresses_from_env
 from spicy_regs.transforms.congress_walk import ListingSource, PerRunCap, walk_route
 from spicy_regs.transforms.read_checkpoints import checkpoint_metadata, read_checkpoints
-from spicy_regs.transforms.table_merge import merge_contract_table, published_table, retired_rows
+from spicy_regs.transforms.table_merge import (
+    merge_contract_table,
+    published_table,
+    retired_rows,
+    set_column,
+    write_in_place,
+)
 
 if TYPE_CHECKING:
     from spicy_regs.source_evidence import CaptureEvidence
@@ -150,11 +183,19 @@ MAX_USLM_PER_RUN = 300
 NAME = "laws"
 CODE_SECTIONS = "law_code_sections"
 TABLE3 = "table3_records"
+TEXT_SECTIONS = "law_sections"
 CAPTURED = "captured"
 #: The outcomes whose USLM identity was validated; a failed later attempt never replaces one.
 VALIDATED = ("captured", "captured_partial")
 #: The one classification order read; see the module docstring.
 TABLE_ORDER = "public-law"
+#: The ``table3-bulk-refused`` and ``classification-refused`` reason for a 401/403 from a keyless OLRC route: a
+#: blocked read, which the laws rollup fails the run on after publishing (:func:`olrc_access_refused`).
+ACCESS_REFUSED = "access-refused"
+#: The journal event naming each classification request refused this run, beside the session tables read.
+CLASSIFICATION_REFUSED = "classification-refused"
+#: The OLRC reads a 401/403 can block, by the journal event that records each, as the failed run names them.
+OLRC_READS = {CLASSIFICATION_REFUSED: "the classification tables", "table3-bulk-refused": "Table III"}
 
 
 class HeldLaw(NamedTuple):
@@ -163,6 +204,8 @@ class HeldLaw(NamedTuple):
     update_date: str | None
     uslm_outcome: str | None
     reader_version: str | None = None
+    text_outcome: str | None = None
+    text_reader_version: str | None = None
 
 
 #: At most this many held acts may leave Table III in one release, and only when
@@ -200,19 +243,36 @@ def _transport_error(error: BaseException) -> str:
     return scrub_credential(str(error), "")
 
 
-def _held_laws(prior_file: Path | None, congresses: tuple[int, ...]) -> dict[str, HeldLaw]:
+def _held_laws(prior_file: Path | None, congresses: tuple[int, ...], sections_file: Path | None = None) -> dict[str, HeldLaw]:
     """``law_id`` -> what is published for it, for the scoped Congresses."""
     if prior_file is None:
         return {}
     import duckdb
 
     columns = {row[0] for row in duckdb.sql(f"DESCRIBE SELECT * FROM read_parquet('{prior_file}')").fetchall()}
-    version = "uslm_reader_version" if "uslm_reader_version" in columns else "NULL"
+    selected = [name if name in columns else "NULL" for name in
+                ("uslm_reader_version", "law_text_outcome", "law_text_reader_version")]
+    if sections_file is None:
+        selected[1:] = ["NULL", "NULL"]
     rows = duckdb.sql(
-        f"SELECT law_id, update_date, uslm_outcome, {version} FROM read_parquet('{prior_file}') WHERE congress IN (SELECT UNNEST(?))",
+        f"SELECT law_id, update_date, uslm_outcome, {', '.join(selected)} FROM read_parquet('{prior_file}') WHERE congress IN (SELECT UNNEST(?))",
         params=[[str(c) for c in congresses]],
     ).fetchall()
-    return {str(law_id): HeldLaw(update_date, outcome, version) for law_id, update_date, outcome, version in rows}
+    held = {str(row[0]): HeldLaw(*row[1:]) for row in rows}
+    if sections_file is not None and {"law_section_count", "uslm_sha256"} <= columns:
+        # A parent status alone cannot establish that its matching children survived.
+        invalid = duckdb.sql(
+            f"SELECT p.law_id FROM read_parquet('{prior_file}') p LEFT JOIN "
+            f"(SELECT law_id, count(*) AS n, min(source_sha256) AS lo, max(source_sha256) AS hi "
+            f"FROM read_parquet('{sections_file}') GROUP BY law_id) s USING (law_id) "
+            "WHERE p.law_text_outcome = 'parsed' AND "
+            "(TRY_CAST(p.law_section_count AS BIGINT) IS DISTINCT FROM coalesce(s.n, 0) "
+            "OR s.lo IS DISTINCT FROM p.uslm_sha256 OR s.hi IS DISTINCT FROM p.uslm_sha256)"
+        ).fetchall()
+        for (law_id,) in invalid:
+            if law_id in held:
+                held[law_id] = held[law_id]._replace(text_reader_version=None)
+    return held
 
 
 def _held_congresses(prior_file: Path | None) -> set[int]:
@@ -278,6 +338,7 @@ def _list_laws(
 def _uslm_row(
     uslm: LawTextSource, record: Mapping[str, Any], law: Mapping[str, Any], plain: dict,
     evidence: CaptureEvidence | None = None,
+    text_sections: list[dict] | None = None,
 ) -> dict:
     """The law's row with its PLAW leg: every attempted read states a truthful outcome.
 
@@ -296,7 +357,11 @@ def _uslm_row(
     except UslmSourceUnavailableError as error:
         if evidence:
             evidence.refusal(error, stage=stage)
-        return shape_law(record, law, uslm_outcome="unavailable", uslm_reason="source_unavailable")
+        # The 404 is an observation at a time; the row carries it so a reader can tell a lag the folder may
+        # since have closed from one established today. The locator is the row's ``package_id`` under
+        # GovInfo's PLAW bulkdata folder, and the response itself is in the evidence journal.
+        return shape_law(record, law, uslm_outcome="unavailable", uslm_reason="source_unavailable",
+                         uslm_observed_at=error.capture.observed_at)
     except (UslmSourceError, httpx.HTTPError, ConnectionError) as error:
         if evidence:
             evidence.refusal(error, stage=stage)
@@ -307,12 +372,12 @@ def _uslm_row(
             record, law, uslm_outcome="captured_refused" if refused else "request_failed",
             uslm_reason=reason if refused else "request_failed",
             uslm_sha256=capture.sha256 if refused else None,
-            uslm_observed_at=capture.observed_at if refused else None,
+            uslm_observed_at=None if capture is None else capture.observed_at,
         )
     if evidence:
         evidence.capture(acquired.capture, stage=stage)
     try:
-        return shape_law(
+        row = shape_law(
             record, law, uslm=acquired.metadata, uslm_sha256=acquired.capture.sha256,
             uslm_observed_at=acquired.capture.observed_at, uslm_outcome=CAPTURED,
         )
@@ -324,6 +389,29 @@ def _uslm_row(
             uslm_observed_at=acquired.capture.observed_at,
             uslm_outcome="captured_refused", uslm_reason="contract_refused",
         )
+    try:
+        document = read_law_sections(acquired.capture.body, selection=selection,
+                                     final_url=acquired.capture.resolved_url)
+        children = [shape_law_section(section, document=document, observed_at=acquired.capture.observed_at)
+                    for section in document.sections]
+    except (UslmSourceError, TableContractError) as error:
+        reason = scrub_credential(str(error), "")[:1000]
+        row = shape_law(record, law, uslm=acquired.metadata, uslm_sha256=acquired.capture.sha256,
+                        uslm_observed_at=acquired.capture.observed_at, uslm_outcome=CAPTURED,
+                        law_text_outcome="refused", law_text_reader_version=LAW_TEXT_READER_VERSION,
+                        law_text_reason="section_structure_refused", law_text_url=acquired.capture.resolved_url)
+        if evidence:
+            evidence.event("law-text-refused", stage=stage, law_id=plain["law_id"], reason=reason,
+                           source_sha256=acquired.capture.sha256, reader_version=LAW_TEXT_READER_VERSION)
+        return row
+    row = shape_law(record, law, uslm=acquired.metadata, uslm_sha256=acquired.capture.sha256,
+                    uslm_observed_at=acquired.capture.observed_at, uslm_outcome=CAPTURED,
+                    law_text_outcome="parsed", law_text_reader_version=LAW_TEXT_READER_VERSION,
+                    law_section_count=len(children), law_body_remainder=document.unsectioned_body,
+                    law_text_issues=document.issues, law_text_url=acquired.capture.resolved_url)
+    if text_sections is not None:
+        text_sections.extend(children)
+    return row
 
 
 def _law_rows(
@@ -332,6 +420,8 @@ def _law_rows(
     uslm: LawTextSource,
     cap: PerRunCap,
     evidence: CaptureEvidence | None = None,
+    text_sections: list[dict] | None = None,
+    text_evaluated: set[str] | None = None,
 ) -> list[dict]:
     rows: list[dict] = []
     outcomes: Counter[str] = Counter()
@@ -341,15 +431,18 @@ def _law_rows(
         # A validated read under the current rule stands until the list row moves; ``captured_partial`` is
         # the whole truth about a law whose USLM states no Statutes citation, not a read to retry every run.
         if (prior is not None and prior.uslm_outcome in VALIDATED
-                and prior.reader_version == USLM_READER_VERSION and prior.update_date == plain["update_date"]):
+                and prior.reader_version == USLM_READER_VERSION and prior.update_date == plain["update_date"]
+                and prior.text_outcome == "parsed" and prior.text_reader_version == LAW_TEXT_READER_VERSION):
             unchanged += 1
             continue
-        row = _uslm_row(uslm, record, law, plain, evidence) if cap.take() else None
+        children: list[dict] = []
+        row = _uslm_row(uslm, record, law, plain, evidence, children) if cap.take() else None
         if row is not None and evidence:
             evidence.event("law-read", law_id=plain["law_id"], outcome=row["uslm_outcome"],
                            reason=row["uslm_reason"], reader_version=USLM_READER_VERSION)
         if (row is not None and prior is not None and prior.uslm_outcome in VALIDATED
-                and row["uslm_outcome"] not in VALIDATED):
+                and (row["uslm_outcome"] not in VALIDATED
+                     or (prior.text_outcome == "parsed" and row["law_text_outcome"] != "parsed"))):
             # A failed new attempt must not erase an earlier validated body.
             deferred += 1
             continue
@@ -359,6 +452,11 @@ def _law_rows(
                 deferred += 1
                 continue
             row = plain
+        if row["law_text_outcome"] == "parsed":
+            if text_sections is not None:
+                text_sections.extend(children)
+            if text_evaluated is not None:
+                text_evaluated.add(str(row["law_id"]))
         outcomes[row["uslm_outcome"]] += 1
         rows.append(row)
     logger.info(
@@ -374,35 +472,45 @@ def _law_rows(
 
 def _classification_rows(olrc: OlrcSource, congresses: tuple[int, ...],
                          evidence: CaptureEvidence | None = None, evaluated: set | None = None) -> list[dict]:
-    """Every line of each public-law-order session table the index links for a scoped Congress."""
-    try:
-        acquired_index = olrc.acquire_classification_index()
-        if evidence:
-            evidence.capture(acquired_index.capture, stage="classification:index")
-        index = acquired_index.result
-    except (UsCodeSourceError, httpx.HTTPError, ConnectionError) as error:
-        if evidence:
-            evidence.refusal(error, stage="classification:index")
-        logger.warning(
-            "Laws: classification index not established — no session table read this run: {}", _transport_error(error)
-        )
-        return []
-    linked = [link for link in index.tables if link.order == TABLE_ORDER and link.congress in congresses]
-    unlinked = sorted(set(congresses) - {link.congress for link in linked})
-    if unlinked:
-        logger.info("Laws: the classification index links no table for Congress {}", unlinked)
-    rows: list[dict] = []
-    for link in linked:
+    """Every line of each public-law-order session table the index links for a scoped Congress.
+
+    A request the reader refuses (``page-refused``: OLRC answered its classification pages with a maintenance
+    page and status 200 on 2026-10-02 and -03) or OLRC answers 401/403 (:data:`ACCESS_REFUSED`)
+    reads nothing, so every row of its session stands; the run journals one :data:`CLASSIFICATION_REFUSED`
+    event naming each refused request beside the tables it did read. A transport failure is only logged, and
+    the next run retries it.
+    """
+    read: list[str] = []
+    refused: list[dict[str, object]] = []
+
+    def acquire(request: Callable[[], Any], url: str, stage: str) -> Any | None:
         try:
-            acquired = olrc.acquire_classification_table(link.congress, link.session, order=TABLE_ORDER)
-        except (UsCodeSourceError, httpx.HTTPError, ConnectionError) as error:
+            acquired = request()
+        except (UsCodeSourceError, CredentialRefusedError, httpx.HTTPError, ConnectionError) as error:
             if evidence:
-                evidence.refusal(error, stage="classification:" + link.href)
-            logger.warning("Laws: classification table {} not established: {}", link.href, _transport_error(error))
-            continue
-        table = acquired.result
+                evidence.refusal(error, stage=stage)
+            logger.warning("Laws: classification {} not established, its rows stand: {}", url, _transport_error(error))
+            if isinstance(error, (UsCodeSourceError, CredentialRefusedError)):
+                refused.append(_refused_request(url, error))
+            return None
         if evidence:
-            evidence.capture(acquired.capture, stage="classification:" + link.href)
+            evidence.capture(acquired.capture, stage=stage)
+        return acquired
+
+    rows: list[dict] = []
+    linked = []
+    index = acquire(olrc.acquire_classification_index, CLASSIFICATION_INDEX_URL, "classification:index")
+    if index is not None:
+        linked = [link for link in index.result.tables if link.order == TABLE_ORDER and link.congress in congresses]
+        if unlinked := sorted(set(congresses) - {link.congress for link in linked}):
+            logger.info("Laws: the classification index links no table for Congress {}", unlinked)
+    for link in linked:
+        acquired = acquire(partial(olrc.acquire_classification_table, link.congress, link.session, order=TABLE_ORDER),
+                           link.url, "classification:" + link.href)
+        if acquired is None:
+            continue
+        read.append(link.url)
+        table = acquired.result
         if evaluated is not None:
             evaluated.add((str(table.congress), str(table.session)))
         observed_at = acquired.capture.observed_at
@@ -414,7 +522,20 @@ def _classification_rows(olrc: OlrcSource, congresses: tuple[int, ...],
             table.stated_laws,
             table.prepared_date,
         )
+    if refused and evidence:
+        evidence.event(CLASSIFICATION_REFUSED, congresses=list(congresses), read=read, refused=refused)
     return rows
+
+
+def _refused_request(url: str, error: Exception) -> dict[str, object]:
+    """One refused classification request as journaled: URL, reason, the reader's or transport's own words, and
+    the status, time and digest of the response the reader refused. A 401/403 keeps no response (its status is
+    in the transport's message), so its time is when the refusal was caught."""
+    capture = attached_capture(error)
+    answered = ({"status_code": capture.status_code, "observed_at": capture.observed_at, "sha256": capture.sha256}
+                if capture else {"observed_at": datetime.now(UTC).isoformat()})
+    return {"url": url, "reason": ACCESS_REFUSED if isinstance(error, CredentialRefusedError) else "page-refused",
+            **answered, "error_type": type(error).__name__, "message": _transport_error(error)[:500]}
 
 
 def _public_law(key: str | None) -> tuple[int, int] | None:
@@ -499,7 +620,8 @@ def _table3_rows(
     table or a checkpoint states), when it drops an act without advancing past
     it, when it drops more than :data:`TABLE3_MAX_RETIRED_PER_RELEASE`, or when
     the reader refuses the file itself (a renamed or reshaped member, a
-    malformed zip, a ``404``). Each refusal journals ``table3-bulk-refused``,
+    malformed zip, a ``404``), or when the publisher answers ``401``/``403``
+    (:data:`ACCESS_REFUSED`). Each refusal journals ``table3-bulk-refused``,
     which the nightly ``scripts/check_source_refusals.py`` fails on, because it
     repeats every run until someone acts: the rest of the laws family still
     publishes. A transport failure changes nothing and is only logged; the next
@@ -522,6 +644,13 @@ def _table3_rows(
         if evidence:
             evidence.refusal(error, stage="table3:bulk")
         return refuse("file-refused", error_type=type(error).__name__, message=_transport_error(error)[:500])
+    except CredentialRefusedError as error:
+        # This route is keyless, so a 401/403 is the publisher blocking the read (Akamai, 2026-10-02 and -03),
+        # not a revoked credential: nothing is published as absence, the laws family publishes, and the rollup
+        # fails the run after publishing (:func:`olrc_access_refused`) so the block is not hidden.
+        if evidence:
+            evidence.refusal(error, stage="table3:bulk")
+        return refuse(ACCESS_REFUSED, error_type=type(error).__name__, message=_transport_error(error)[:500])
     except (httpx.HTTPError, ConnectionError) as error:
         if evidence:
             evidence.refusal(error, stage="table3:bulk")
@@ -584,6 +713,32 @@ def _table3_rows(
     return Table3Read(rows, retiring, bulk.release_point)
 
 
+def olrc_access_refused(evidence: CaptureEvidence) -> list[str]:
+    """The OLRC reads this run's 401/403 blocked, named as in :data:`OLRC_READS`, in the order the run made them.
+
+    Table III is blocked when its one request was :data:`ACCESS_REFUSED`; the classification tables when that left
+    no session table read, so a refusal on only some of them is that session's gap, journaled but not failing the
+    run. Read from the run's own journal so the rollup can publish the family first and fail the run after: an
+    exception from the build would publish nothing, which is what hid the 2026-10-02 and -03 blocks behind a red run.
+    """
+    import json
+
+    from spicy_regs.source_evidence import JOURNAL
+
+    journal = evidence.artifact_dir / JOURNAL
+    if not journal.exists():
+        return []
+    return [OLRC_READS[event["event"]] for event in map(json.loads, journal.read_text().splitlines())
+            if event.get("event") in OLRC_READS and _blocked(event)]
+
+
+def _blocked(refusal: Mapping[str, Any]) -> bool:
+    """Whether a journaled OLRC refusal is a 401/403 that left its read with nothing."""
+    if refusal["event"] == CLASSIFICATION_REFUSED:
+        return not refusal["read"] and any(request["reason"] == ACCESS_REFUSED for request in refusal["refused"])
+    return refusal.get("reason") == ACCESS_REFUSED
+
+
 def _journal_retired(prior_file: Path | None, read: Table3Read, scratch_dir: Path,
                      evidence: CaptureEvidence | None) -> None:
     """Journal the acts the merge will remove as ``rows-retired``, as ``retired_rows`` finds them.
@@ -619,6 +774,23 @@ def _rows_digest(rows: list[dict]) -> str | None:
     return digest(json_column([{name: value for name, value in row.items() if name != "observed_at"} for row in rows]))
 
 
+def _rederive_places(path: Path, *, action: bool) -> Path:
+    """Every row's ``usc_section_key`` and ``usc_place`` again, from its stored section (and action); O(rows).
+
+    Table III passes no action: it prints the place inside the section. Each distinct pair is read once.
+    """
+    import pyarrow.parquet as pq
+
+    table = pq.read_table(path)
+    sections = table["usc_section"].to_pylist()
+    actions = table["action"].to_pylist() if action else [None] * len(sections)
+    pairs = list(zip(sections, actions, strict=True))
+    derived = {pair: usc_section_place(*pair) for pair in set(pairs)}
+    table = set_column(table, "usc_section_key", [derived[pair][0] for pair in pairs])
+    write_in_place(set_column(table, "usc_place", [derived[pair][1] for pair in pairs]), path)
+    return path
+
+
 def build_laws(
     output_dir: Path,
     *,
@@ -628,8 +800,8 @@ def build_laws(
     max_uslm: int = MAX_USLM_PER_RUN,
     download_prior: Callable[[str, Path], bool] = r2.download,
     evidence: CaptureEvidence | None = None,
-) -> tuple[Path, Path, Path]:
-    """Build ``laws.parquet``, ``law_code_sections.parquet`` and ``table3_records.parquet``."""
+) -> tuple[Path, Path, Path, Path]:
+    """Build law metadata, Code relationships and sections from the law's own XML."""
     if reader is None:
         api_key = _resolve_api_key()
         if not api_key:
@@ -643,7 +815,7 @@ def build_laws(
     olrc = olrc or olrc_acquirer()
 
     congresses = congresses_from_env()
-    priors = {name: published_table(output_dir, name, download_prior) for name in (NAME, CODE_SECTIONS, TABLE3)}
+    priors = {name: published_table(output_dir, name, download_prior) for name in (NAME, CODE_SECTIONS, TABLE3, TEXT_SECTIONS)}
 
     # 1. The enumeration, whole, then the PLAW leg under its cap.
     if evidence:
@@ -652,7 +824,10 @@ def build_laws(
     listed = _list_laws(reader, congresses)
     if evidence:
         evidence.event("law-list-complete", law_ids=[plain["law_id"] for _, _, plain in listed])
-    law_rows = _law_rows(listed, _held_laws(priors[NAME], congresses), uslm, PerRunCap(max_uslm, "Laws: PLAW files"), evidence)
+    text_sections: list[dict] = []
+    text_evaluated: set[str] = set()
+    law_rows = _law_rows(listed, _held_laws(priors[NAME], congresses, priors[TEXT_SECTIONS]), uslm,
+                         PerRunCap(max_uslm, "Laws: PLAW files"), evidence, text_sections, text_evaluated)
 
     # 2. The per-Congress classification tables the index links.
     sessions: set[tuple[str, str]] = set()
@@ -669,9 +844,13 @@ def build_laws(
 
     return (
         merge_contract_table(output_dir, NAME, law_rows, prior_present=priors[NAME] is not None),
-        merge_contract_table(output_dir, CODE_SECTIONS, section_rows, prior_present=priors[CODE_SECTIONS] is not None,
-                             replace_parents=(("congress", "session"), sessions)),
-        merge_contract_table(output_dir, TABLE3, table3.rows, prior_present=priors[TABLE3] is not None,
-                             replace_parents=("act_key", evaluated),
-                             parquet_metadata=checkpoint_metadata(priors[TABLE3], "laws-table3", checkpoints.values())),
+        _rederive_places(merge_contract_table(output_dir, CODE_SECTIONS, section_rows,
+                                              prior_present=priors[CODE_SECTIONS] is not None,
+                                              replace_parents=(("congress", "session"), sessions)), action=True),
+        _rederive_places(merge_contract_table(output_dir, TABLE3, table3.rows, prior_present=priors[TABLE3] is not None,
+                                              replace_parents=("act_key", evaluated),
+                                              parquet_metadata=checkpoint_metadata(priors[TABLE3], "laws-table3",
+                                                                                   checkpoints.values())), action=False),
+        merge_contract_table(output_dir, TEXT_SECTIONS, text_sections, prior_present=priors[TEXT_SECTIONS] is not None,
+                             replace_parents=("law_id", text_evaluated)),
     )

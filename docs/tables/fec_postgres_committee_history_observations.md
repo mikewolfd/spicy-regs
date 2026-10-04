@@ -6,6 +6,8 @@
 
 One native COPY row from a selected retained history derivation. Preserves original COPY strings alongside named fields, including SQL NULL and array/date/boolean text. Overlapping derivations are not silently deduplicated or used to replace the current registry. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_postgres_committee_history_observations'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled. Supported observations from retained PostgreSQL committee-history dump derivations and exact source column definitions. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
 
 - **Parquet file:** `fec_postgres_committee_history_observations.parquet`
@@ -16,22 +18,6 @@ One native COPY row from a selected retained history derivation. Preserves origi
 | Column | Type | Description |
 | --- | --- | --- |
 | `record_id` | `VARCHAR` | Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event. |
-| `identity_version` | `VARCHAR` | Version of the source-observation identity rule; it does not select a current or canonical record. |
-| `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
-| `mapping_status` | `VARCHAR` | Whether this source observation mapped fully, partially, or received an explicit nondata/refusal disposition; inspect the reason alongside NULL values. |
-| `mapping_reason_json` | `VARCHAR` | JSON object naming unsupported, missing or otherwise limited field interpretations; native values remain reachable through evidence. |
-| `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
-| `source_record_id` | `VARCHAR` | Native source-observation key within collection_id. Resolve with the source generation, exact locator and source digest, not this value alone. |
-| `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
-| `source_locator_json` | `VARCHAR` | Exact source row or subrecord coordinates, including available member, ordinal, byte span and field-definition references. Resolve in the pinned source generation. |
-| `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
-| `selection_evidence_sha256` | `VARCHAR` | Digest of the retained selection evidence used to authorize this mapper's source scope; not a financial inclusion decision. |
-| `source_representation_role` | `VARCHAR` | Selected source role such as snapshot, insertion or deletion. Amount signs and ordinary amendment flags do not establish correction applicability. |
-| `current_record_status` | `VARCHAR` | Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record. |
-| `source_namespace` | `VARCHAR` | Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent. |
-| `source_url` | `VARCHAR` | Captured source URL for this observation; it does not assert current availability or body retrieval. |
-| `history_scope_status` | `VARCHAR` | Explicit historical scope limitation; repeated snapshots remain source observations instead of replacing committee/cycle identity rows. |
-| `source_cycle` | `INTEGER` | Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year. |
 | `committee_id` | `VARCHAR` | Literal FEC committee identifier as reported in this observation. Use cycle and source scope for historical joins. |
 | `name` | `VARCHAR` | Committee name as registered with the FEC. |
 | `treasurer_name` | `VARCHAR` | Name of the committee's treasurer. |
@@ -98,35 +84,8 @@ One native COPY row from a selected retained history derivation. Preserves origi
 | `convert_to_pac_flag` | `BOOLEAN` | Source-reported conversion-to-PAC flag, preserving null or unsupported values. |
 | `former_candidate_election_year` | `INTEGER` | Election year reported for the former candidate association. |
 | `first_f1_date` | `DATE` | First Form 1 date reported by the source, without a completeness assertion. |
-| `cycle_raw` | `VARCHAR` | Literal source value for cycle before conversion; consult cycle_status for interpretation. |
-| `cycle_status` | `VARCHAR` | Interpretation of source cycle: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
-| `qualifying_date_raw` | `VARCHAR` | Literal source value for qualifying_date before conversion; consult qualifying_date_status for interpretation. |
-| `qualifying_date_status` | `VARCHAR` | Interpretation of source qualifying_date: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
-| `first_file_date_raw` | `VARCHAR` | Literal source value for first_file_date before conversion; consult first_file_date_status for interpretation. |
-| `first_file_date_status` | `VARCHAR` | Interpretation of source first_file_date: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
-| `last_file_date_raw` | `VARCHAR` | Literal source value for last_file_date before conversion; consult last_file_date_status for interpretation. |
-| `last_file_date_status` | `VARCHAR` | Interpretation of source last_file_date: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
-| `last_f1_date_raw` | `VARCHAR` | Literal source value for last_f1_date before conversion; consult last_f1_date_status for interpretation. |
-| `last_f1_date_status` | `VARCHAR` | Interpretation of source last_f1_date: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
-| `last_cycle_has_financial_raw` | `VARCHAR` | Literal source value for last_cycle_has_financial before conversion; consult last_cycle_has_financial_status for interpretation. |
-| `last_cycle_has_financial_status` | `VARCHAR` | Interpretation of source last_cycle_has_financial: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
-| `last_cycle_has_activity_raw` | `VARCHAR` | Literal source value for last_cycle_has_activity before conversion; consult last_cycle_has_activity_status for interpretation. |
-| `last_cycle_has_activity_status` | `VARCHAR` | Interpretation of source last_cycle_has_activity: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
-| `is_active_raw` | `VARCHAR` | Literal source value for is_active before conversion; consult is_active_status for interpretation. |
-| `is_active_status` | `VARCHAR` | Interpretation of source is_active: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
-| `convert_to_pac_flag_raw` | `VARCHAR` | Literal source value for convert_to_pac_flag before conversion; consult convert_to_pac_flag_status for interpretation. |
-| `convert_to_pac_flag_status` | `VARCHAR` | Interpretation of source convert_to_pac_flag: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
-| `former_candidate_election_year_raw` | `VARCHAR` | Literal source value for former_candidate_election_year before conversion; consult former_candidate_election_year_status for interpretation. |
-| `former_candidate_election_year_status` | `VARCHAR` | Interpretation of source former_candidate_election_year: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
-| `first_f1_date_raw` | `VARCHAR` | Literal source value for first_f1_date before conversion; consult first_f1_date_status for interpretation. |
-| `first_f1_date_status` | `VARCHAR` | Interpretation of source first_f1_date: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
-| `cycles_json` | `VARCHAR` | JSON array of election-cycle years the committee was active in (e.g. `[2018, 2020, 2022]`). |
-| `cycles_status` | `VARCHAR` | Source array state for cycles: source_missing, source_null, source_empty, reported or unsupported_array; arrays are independent and preserve order. |
-| `candidate_ids_json` | `VARCHAR` | JSON array of OpenFEC candidate IDs associated with the committee (e.g. `["P00008052"]`). Often `[]`. |
-| `candidate_ids_status` | `VARCHAR` | Source array state for candidate_ids: source_missing, source_null, source_empty, reported or unsupported_array; arrays are independent and preserve order. |
-| `cycles_has_financial_json` | `VARCHAR` | Ordered source array of cycles marked as having financial activity; not independently verified completeness. |
-| `cycles_has_financial_status` | `VARCHAR` | Source array state for cycles_has_financial: source_missing, source_null, source_empty, reported or unsupported_array; arrays are independent and preserve order. |
-| `cycles_has_activity_json` | `VARCHAR` | Ordered source array of cycles marked as having activity; not independently verified completeness. |
-| `cycles_has_activity_status` | `VARCHAR` | Source array state for cycles_has_activity: source_missing, source_null, source_empty, reported or unsupported_array; arrays are independent and preserve order. |
-| `sponsor_candidate_ids_json` | `VARCHAR` | Independent ordered array of source sponsor-candidate references; never pair positions with cycles or candidate_ids. |
-| `sponsor_candidate_ids_status` | `VARCHAR` | Source array state for sponsor_candidate_ids: source_missing, source_null, source_empty, reported or unsupported_array; arrays are independent and preserve order. |
+| `cycles` | `INTEGER[]` | Native list of election-cycle years the committee was active in (e.g. `[2018, 2020, 2022]`). Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `candidate_ids` | `VARCHAR[]` | Native list of OpenFEC candidate IDs associated with the committee (e.g. `["P00008052"]`). Often `[]`. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `sponsor_candidate_ids` | `VARCHAR[]` | Independent ordered array of source sponsor-candidate references; never pair positions with cycles or candidate_ids. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `cycles_has_financial` | `INTEGER[]` | Ordered source array of cycles marked as having financial activity; not independently verified completeness. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `cycles_has_activity` | `INTEGER[]` | Ordered source array of cycles marked as having activity; not independently verified completeness. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |

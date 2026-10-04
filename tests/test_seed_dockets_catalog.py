@@ -10,6 +10,8 @@ from spicy_regs.schemas import DOCKET
 from spicy_regs.sources import iceberg
 
 
+
+
 def test_counts_leave_missing_namespace_and_table_absent(tmp_path):
     source = tmp_path / "dockets.parquet"
     pl.DataFrame({"docket_id": ["EPA-1", "EPA-1", "EPA-2", None]}).write_parquet(source)

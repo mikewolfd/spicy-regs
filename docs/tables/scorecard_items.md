@@ -6,6 +6,8 @@
 
 One publisher-identified action or scoring item; multiple actions on one bill remain separate. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='scorecard_items'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled publisher editions selected by the scorecard source registry. Complete edition reads replace that edition; failed or incomplete reads preserve prior observations. Coverage varies by publisher and historical source format. *(measured 2026-10-03)*
 
 - **Parquet file:** `scorecard_items.parquet`
@@ -27,11 +29,5 @@ One publisher-identified action or scoring item; multiple actions on one bill re
 | `roll_number_text` | `VARCHAR` | Source-stated roll number, preserved as text; NULL when unstated. |
 | `bill_citation_text` | `VARCHAR` | Source-stated bill citation, preserved as text; NULL when unstated. |
 | `amendment_citation_text` | `VARCHAR` | Source-stated amendment citation, preserved as text; NULL when unstated. |
-| `references_json` | `VARCHAR` | Ordered source citation occurrences with occurrence_id, citation_text, kind and source_path. |
-| `source_url` | `VARCHAR` | Original publisher URL supporting this observation. |
-| `source_path` | `VARCHAR` | Source locator within the captured response, such as cell, JSON path or PDF page. |
+| `references` | `STRUCT(occurrence_id VARCHAR, citation_text VARCHAR, kind VARCHAR, congress_text VARCHAR, chamber_text VARCHAR, session_text VARCHAR, roll_number_text VARCHAR, bill_citation_text VARCHAR, amendment_citation_text VARCHAR)[]` | Ordered source citation occurrences with occurrence_id, citation_text, kind and source_path. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `publisher_position_text` | `VARCHAR` | Source-stated publisher position, preserved as text; NULL when unstated. |
-| `position_basis` | `VARCHAR` | Whether a publisher position is explicit, inferred by its presentation, or absent. |
-| `position_source_path` | `VARCHAR` | Exact source locator supporting the publisher position. |
-| `snapshot_id` | `VARCHAR` | Opaque identity of the complete accepted edition capture and parse. |
-| `capture_id` | `VARCHAR` | Opaque caller-issued identity of the source observation supporting this row. |

@@ -14,7 +14,8 @@ only adds the clusters created since.
 from pathlib import Path
 from typing import ClassVar
 
-from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
+from spicy_regs.pipelines.rollups.base import make_rollup_app
+from spicy_regs.pipelines.rollups.court_receipts import CourtReceiptRollup as RollupPipeline
 from spicy_regs.transforms import build_court_opinion_clusters
 
 

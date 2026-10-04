@@ -6,6 +6,8 @@
 
 One physical CSV row exposed by retained collection context. Preserves source values, amounts and dates under the context's actual coverage status. A complete retained prefix is still not an asserted complete source population or current financial total. Resolve collection_id to fec_collections in the captured source generation and source_context_pointer into its retained context. Context witnesses use their own digest and native coordinates; they do not require a fictional source_record_id.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_retained_csv_observations'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled. Supported observations from supported retained CSV context rows with exact native fields and addresses. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
 
 - **Parquet file:** `fec_retained_csv_observations.parquet`
@@ -16,27 +18,12 @@ One physical CSV row exposed by retained collection context. Preserves source va
 | Column | Type | Description |
 | --- | --- | --- |
 | `record_id` | `VARCHAR` | Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event. |
-| `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
-| `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
-| `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
-| `source_url` | `VARCHAR` | Captured source URL for this observation; it does not assert current availability or body retrieval. |
-| `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
-| `context_sha256` | `VARCHAR` | Digest of the sealed retained context object used by this mapping; separate from original-source bytes and typed output. |
-| `source_context_pointer` | `VARCHAR` | Exact JSON pointer into the retained collection context to the native fact represented by this observation. |
-| `observed_at_json` | `VARCHAR` | Retained capture time value(s) as JSON without collapsing separately observed captures. |
 | `observation_type` | `VARCHAR` | Type of retained CSV context row, preserving its source-specific population and meaning. |
 | `reporting_committee_id` | `VARCHAR` | Literal FEC ID of the reporting committee where that source field identifies a committee. It does not by itself identify the sender or recipient of money. |
 | `reporting_committee_name` | `VARCHAR` | Reporting committee name exactly as supplied by the retained CSV source. |
 | `counterparty_name` | `VARCHAR` | The counterparty's name as reported, without a name-based identity merge. |
 | `transaction_id` | `VARCHAR` | Literal transaction identifier within its source filing/layout scope; not a globally unique transaction or economic-event key. |
 | `native_sub_id` | `VARCHAR` | Literal source sub_id retained separately from typed identity and transaction ID. |
-| `amount_raw` | `VARCHAR` | Literal source value before conversion for amount. Preserves spelling, signs and empty values; the typed value and its status are separate. |
-| `amount_status` | `VARCHAR` | Source-presence or conversion state for amount, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
-| `date_raw` | `VARCHAR` | Literal date field of the retained CSV context row before source-specific interpretation. |
-| `date_status` | `VARCHAR` | Conversion state for the reported transaction/context date; distinguishes exact values, source NULL/empty and invalid or unsupported spelling. |
-| `native_row_locator_json` | `VARCHAR` | Exact original CSV row and field coordinates retained by the source context. |
-| `coverage_status` | `VARCHAR` | Explicit completeness/retention scope of the context rows; a retained prefix does not become complete source history. |
-| `current_total_status` | `VARCHAR` | Explicit limitation or refusal for current financial totals; historical/context observations are not silently treated as a current population. |
 | `amendment_indicator` | `VARCHAR` | Literal source amendment flag. It does not by itself prove the amendment chain, replacement scope or current record. |
 | `amendment_indicator_desc` | `VARCHAR` | Source-provided description of the amendment indicator; not a current-record selection. |
 | `memo_code` | `VARCHAR` | Literal source memo code; no automatic financial exclusion is inferred. |
@@ -50,7 +37,5 @@ One physical CSV row exposed by retained collection context. Preserves source va
 | `back_reference_transaction_id` | `VARCHAR` | Source-stated transaction back-reference. Resolve only within the evidenced filing and schedule scope; no automatic parent match. |
 | `back_reference_schedule_name` | `VARCHAR` | Literal schedule name for the source back-reference; no resolved transaction relationship is implied. |
 | `report_year` | `INTEGER` | Year reported for the filing/report, preserved independently of cycle and transaction date. |
-| `report_year_status` | `VARCHAR` | Whether the CSV source report year has an exact four-digit spelling, is missing, or is unsupported. |
 | `amount` | `DECIMAL(38,9)` | Exact decimal for the source-reported amount for this record and its amount_kind. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations. |
 | `reported_date` | `DATE` | Date parsed from the date stated for this historical/context observation. NULL requires the source value and conversion status; capture time is not substituted. |
-| `source_row_ordinal` | `INTEGER` | Native row ordinal supplied by the retained CSV context. |

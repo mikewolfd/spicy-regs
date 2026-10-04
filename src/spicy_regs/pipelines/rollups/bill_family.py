@@ -38,7 +38,8 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import ClassVar
 
-from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
+from spicy_regs.pipelines.rollups.base import make_rollup_app
+from spicy_regs.pipelines.rollups.subject_receipts import SubjectReceiptRollup as RollupPipeline
 from spicy_regs.transforms.build_bill_family import (
     ARCHIVES_TABLE,
     BACKFILLS_TABLE,
@@ -79,7 +80,7 @@ class BillFamilyRollup(RollupPipeline):
         if raw and (not raw.isascii() or not raw.isdecimal()):
             raise ValueError("BILL_FAMILY_MAX_VERSION_FETCHES must be a nonnegative integer; zero disables acquisition")
         budget = int(raw) if raw else MAX_VERSION_FETCHES
-        return build_bill_family(output_dir, max_version_fetches=budget, evidence=self.source_evidence)
+        return self.build_receipts(output_dir, build_bill_family, max_version_fetches=budget, evidence=self.source_evidence)
 
 
 app = make_rollup_app(BillFamilyRollup)

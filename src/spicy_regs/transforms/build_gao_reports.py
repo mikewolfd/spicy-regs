@@ -1,6 +1,6 @@
 """Transform: build ``gao_reports.parquet`` from the GAO reports RSS feed, plus GovInfo's and GAO's own listings on request.
 
-Produces an 11-column all-VARCHAR schema keyed on ``report_id`` (e.g.
+Produces a native subject table and shared receipts keyed on ``report_id`` (e.g.
 ``gao-26-107974``) — the Government Accountability Office oversight layer over
 the rulemakings this dataset tracks. ``source`` names the route that supplied
 each row: ``gao_rss`` (this feed), ``gao_repair`` (an explicit repair,
@@ -58,6 +58,7 @@ from contextlib import nullcontext
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from urllib.parse import unquote
 
 if TYPE_CHECKING:
     from spicy_regs.source_evidence import CaptureEvidence
@@ -67,6 +68,9 @@ import pyarrow.parquet as pq
 from loguru import logger
 
 from spicy_regs.sources import gao_govinfo, gao_listing, gao_r_package, r2
+from spicy_regs.transforms.government_receipts import internal_prior, receipt_builder
+from spicy_regs.transforms.government_source_shapes import LEGACY_COLUMNS
+from spicy_regs.sources.gao_decision_pages import DecisionPageCapture
 from spicy_regs.sources.gao_reports import GaoReportsReader
 from spicy_regs.transforms.table_merge import merge_local_prior
 
@@ -102,17 +106,9 @@ _SCHEMA = pa.schema([(c, pa.int64() if c in COUNT_COLUMNS else pa.string()) for 
 
 #: GAO's legal decisions from its own listing: all VARCHAR, keyed on the number as GAO spells it and the page.
 DECISIONS_OUTPUT = "gao_decisions.parquet"
-DECISION_COLUMNS = (
-    "decision_number",
-    "b_numbers_json",
-    "decision_type",
-    "title",
-    "decision_date",
-    "topics_json",
-    "url",
-    "listing_page",
-    "source",
-)
+# Keep later held source-status and caption fields while reading older listings.
+# decision_date is the historical spelling of the release day, not the decided day.
+DECISION_COLUMNS = LEGACY_COLUMNS["gao_decisions"]
 _DECISION_SCHEMA = pa.schema([(c, pa.string()) for c in DECISION_COLUMNS])
 
 # GAO's reports RSS feed carries published products (reports & testimonies).
@@ -251,7 +247,8 @@ def _govinfo_additions(
 
 
 def _listing_rows(
-    prior_file: Path | None, rows_now: list[dict], directory: Path, evidence: CaptureEvidence | None
+    prior_file: Path | None, rows_now: list[dict], directory: Path, evidence: CaptureEvidence | None,
+    pages: Path | None = None,
 ) -> tuple[list[dict], list[dict]]:
     """The listing's product rows for ids no row holds yet, held rows whose NULL ``report_number`` it fills, and its
     decisions. ``rows_now`` (this run's rows) is filled in place; each page read is retained as evidence.
@@ -272,8 +269,8 @@ def _listing_rows(
             if row["report_id"] in numbers and row["report_id"] not in now and row.get("report_number") is None:
                 filled.append({**row, "report_number": numbers[row["report_id"]]})
         counts["report_number_filled"] += len(filled)
-    decisions, decision_counts = gao_listing.decision_rows(run)
-    counts.update(decision_counts)
+    decisions = _decision_rows(run, pages, evidence)
+    counts.update(decision_rows=len(decisions), unnumbered_left_out=sum(o.product_number is None for o in run.others))
     logger.info("GAO reports: GAO listing {} (unfinished scopes left for a later run: {})", dict(counts),
                 list(run.incomplete_scopes))
     if evidence:
@@ -317,6 +314,7 @@ def _mods_reads(prior_file: Path, acquirer: Any, evidence: CaptureEvidence | Non
     return read
 
 
+@receipt_builder
 def build_gao_reports(
     output_dir: Path,
     *,
@@ -327,6 +325,7 @@ def build_gao_reports(
     govinfo_mods: bool = False,
     mods: Any = None,
     listing_run: Path | None = None,
+    decision_pages: Path | None = None,
 ) -> tuple[Path, Path]:
     """Build ``gao_reports.parquet`` (append-only merge with the prior table).
 
@@ -343,6 +342,8 @@ def build_gao_reports(
 
     # 1. Pull the prior table (best effort — absence just means a fresh start).
     have_prior = prior_file.exists() or r2.download(OUTPUT, prior_file)
+    if have_prior:
+        prior_file = internal_prior("gao_reports", prior_file)
     if have_prior:
         logger.info("GAO reports: accumulating onto prior table {}", prior_file)
     else:
@@ -365,7 +366,7 @@ def build_gao_reports(
             rows += _mods_reads(prior_file, acquirer, evidence)
     decisions: list[dict] = []
     if listing_run is not None:
-        listed, decisions = _listing_rows(prior_file if have_prior else None, rows, listing_run, evidence)
+        listed, decisions = _listing_rows(prior_file if have_prior else None, rows, listing_run, evidence, decision_pages)
         rows += listed
     rows, taken_over = _over_lowest(prior_file if have_prior else None, rows)
     if taken_over:
@@ -394,10 +395,59 @@ def build_gao_reports(
 
     total = pq.ParquetFile(out_file).metadata.num_rows
     logger.info("GAO reports: {:,} rows", total)
-    return out_file, _build_decisions(output_dir, decisions)
+    return out_file, _build_decisions(output_dir, decisions, evidence)
 
 
-def _build_decisions(output_dir: Path, decisions: list[dict]) -> Path:
+def _decision_rows(
+    run: gao_listing.ListingRun, pages: Path | None = None, evidence: CaptureEvidence | None = None
+) -> list[dict]:
+    """One contract row per listed decision: every B-numbered one and every numbered other (a docket has no B-number).
+
+    Shaped by spicy-docs, with the outcome its sentence states; each listed item carries its first listing page. With
+    ``pages``, each decision's page is read from that capture by spicy-docs' caption reader, whose File list replaces
+    the listing's numbers and whose Date fills ``decided_date``; a page not held, without a caption or refused keeps
+    the listing's values. O(listed decisions), one page read each.
+    """
+    from spicy_docs.interpretation.gao_decisions import decision_outcome
+    from spicy_docs.schemas.gao_decision_tables import GAO_SITE, shape_gao_decision
+    from spicy_docs.sources.gao.decision_pages import GaoDecisionPageError, read_decision_caption
+
+    listed = [*run.decisions, *(other for other in run.others if other.product_number is not None)]
+    capture = None if pages is None else DecisionPageCapture(pages)
+    counts: Counter[str] = Counter()
+    refused: list[dict[str, str]] = []
+    rows = []
+    for item in listed:
+        caption = None
+        if capture is not None:
+            url = GAO_SITE + item.link
+            body = capture.page(url)
+            if body is None:
+                counts["not_held"] += 1
+            else:
+                try:
+                    caption = read_decision_caption(body, product_id=unquote(item.link.removeprefix("/products/")),
+                                                    listed=getattr(item, "decision_numbers", ()))
+                except GaoDecisionPageError as error:
+                    refused.append({"url": url, "reason": error.reason})
+                else:
+                    counts["read" if caption is not None else "no_caption"] += 1
+        rows.append(shape_gao_decision(item, outcome=decision_outcome(item.status), caption=caption))
+    if capture is not None:
+        digest, size = capture.record()
+        logger.info("GAO decisions: pages from capture {} ({}): {} read, {} without a caption, {} not held, {} refused "
+                    "{}", capture.campaign, digest, counts["read"], counts["no_caption"], counts["not_held"],
+                    len(refused), dict(Counter(entry["reason"] for entry in refused)))
+        if evidence:
+            evidence.event("gao-decision-pages", campaign=capture.campaign, receipts_sha256=digest, receipts_bytes=size,
+                           read=counts["read"], no_caption=counts["no_caption"], not_held=counts["not_held"],
+                           refused=refused)
+    return rows
+
+
+
+@receipt_builder
+def _build_decisions(output_dir: Path, decisions: list[dict], evidence: CaptureEvidence | None = None) -> Path:
     """``gao_decisions.parquet``: the prior table, with this run's listed decisions over it on the same number and page."""
     import duckdb
 
@@ -405,7 +455,24 @@ def _build_decisions(output_dir: Path, decisions: list[dict]) -> Path:
     prior_file = output_dir / "_gao_decisions_prior.parquet"
     new_file = output_dir / "_gao_decisions_new.parquet"
     have_prior = prior_file.exists() or r2.download(DECISIONS_OUTPUT, prior_file)
-    table = pa.Table.from_pylist(decisions, schema=_DECISION_SCHEMA) if decisions else _DECISION_SCHEMA.empty_table()
+    if have_prior:
+        prior_file = internal_prior("gao_decisions", prior_file)
+    held = {(row["decision_number"], row["url"]): row for row in pq.read_table(prior_file).to_pylist()} if have_prior else {}
+    refreshed = []
+    for incoming in decisions:
+        row = dict(incoming)
+        old = held.get((row["decision_number"], row["url"]), {})
+        # A listing-only read cannot erase a caption's complete number list/day.
+        if old.get("decided_date") is not None and row.get("decided_date") is None:
+            for column in ("decided_date", "b_numbers_json", "b_numbers_truncated"):
+                row[column] = old.get(column)
+        # Absence means this source reader did not read status; explicit None is
+        # still a fresh source observation and must not be filled from the prior.
+        for column in ("decision_status", "outcome", "outcome_rule"):
+            if column not in row:
+                row[column] = old.get(column)
+        refreshed.append(row)
+    table = pa.Table.from_pylist(refreshed, schema=_DECISION_SCHEMA) if refreshed else _DECISION_SCHEMA.empty_table()
     pq.write_table(table, new_file, compression="zstd")
     con = duckdb.connect()
     con.execute("SET preserve_insertion_order=false")
@@ -413,7 +480,7 @@ def _build_decisions(output_dir: Path, decisions: list[dict]) -> Path:
         con,
         columns=DECISION_COLUMNS,
         identity=("decision_number", "url"),
-        order_by="decision_date DESC, decision_number, url",
+        order_by="coalesce(released_date, decision_date) DESC, decision_number, url",
         prior_file=prior_file if have_prior else None,
         new_file=new_file,
         out_file=out_file,
@@ -421,5 +488,15 @@ def _build_decisions(output_dir: Path, decisions: list[dict]) -> Path:
     con.close()
     for scratch in (prior_file, new_file):
         scratch.unlink(missing_ok=True)
+    from spicy_docs.interpretation.gao_decisions import decision_outcome, unmapped_sentences
+
+    merged = pq.read_table(out_file)
+    statuses = merged.column("decision_status").to_pylist()
+    findings = [decision_outcome(status) for status in statuses]
+    for name, values in (("outcome", [f.outcome for f in findings]), ("outcome_rule", [f.rule for f in findings])):
+        merged = merged.set_column(merged.schema.get_field_index(name), name, pa.array(values, pa.string()))
+    pq.write_table(merged, out_file, compression="zstd")
+    if evidence:
+        evidence.event("gao-decision-outcomes", rows=merged.num_rows, unmapped_sentences=dict(unmapped_sentences(statuses)))
     logger.info("GAO decisions: {:,} rows", pq.ParquetFile(out_file).metadata.num_rows)
     return out_file

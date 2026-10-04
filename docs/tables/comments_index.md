@@ -6,6 +6,8 @@
 
 A small row-count index over `comments`. Each row counts the comments of one agency, docket and posting month, so consumers can compute comment totals without scanning the full table. It is rebuilt from the same catalog snapshot as each comments publication. Its rows are groups, not files: no Parquet file exists per row.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='comments_index'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Derived. Counts over `comments` by agency, docket and posting month; it covers exactly what that table covers and adds no rows of its own. *(measured 2026-09-06)*
 
 - **Parquet file:** `comments_index.parquet`

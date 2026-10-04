@@ -33,7 +33,7 @@ from spicy_regs.pipelines.base import Pipeline
 from spicy_regs.pipelines.staging import stage_agencies
 from spicy_regs.schemas import RECORD_TYPES, RecordType
 from spicy_regs.sources import iceberg, r2
-from spicy_regs.pipelines.comment_text import PendingCommentText, PENDING_TEXT_FILE
+from spicy_regs.pipelines.comment_text import PendingCommentText
 from spicy_regs.transforms.derived_text_pool import DerivedTextPool
 from spicy_regs.transforms.regulations_attributes import ATTRIBUTE_TABLES, TeeAttributes, merge_attribute_parts
 from spicy_regs.transforms.comment_partitions import validate_staged_comments
@@ -103,6 +103,8 @@ class RegulationsPipeline(Pipeline):
         self._text_pool: DerivedTextPool | None = None
         self._staging_dir: Path | None = None
         self._merged_attributes: list[str] = []
+        self._unresolved: UnresolvedKeys | None = None
+        self._publication_index = None
 
     def _refuse_comments_without_catalog(self) -> None:
         """Comments merge only into the catalog (decision 40), so refuse before any manifest is read."""
@@ -116,17 +118,26 @@ class RegulationsPipeline(Pipeline):
             raise ValueError("A reused manifest cannot be combined with full_refresh")
         output_dir = self.output_dir or (Path.cwd() / "output")
         output_dir.mkdir(parents=True, exist_ok=True)
+        from spicy_regs.sources import publication
+
+        public_url = getenv("R2_PUBLIC_URL")
+        self._publication_index = publication.current_index(public_url) if public_url else publication.empty_index()
         self._pending_text: PendingCommentText | None = None
         self._text_pool: DerivedTextPool | None = None
         started = monotonic()
         if manifest is None:
-            manifest = Manifest.empty() if self.full_refresh else Manifest.load(
-                output_dir, allow_fresh_start=self.allow_fresh_start,
+            manifest = (
+                Manifest.empty()
+                if self.full_refresh
+                else Manifest.load(
+                    output_dir,
+                    allow_fresh_start=self.allow_fresh_start,
+                )
             )
         logger.info("ETL manifest ready in {:.1f}s", monotonic() - started)
         with ExitStack() as resources:
             if self.enrich_text and not self.skip_comments:
-                self._pending_text = PendingCommentText(output_dir)
+                self._pending_text = PendingCommentText(output_dir, index=self._publication_index)
                 self._text_pool = resources.enter_context(
                     DerivedTextPool(mirrulations.s3_resource, max_workers=self.text_workers)
                 )
@@ -161,7 +172,9 @@ class RegulationsPipeline(Pipeline):
             self._sweep_agencies = None
 
     def _run(self, manifest: Manifest) -> None:
-        output_dir = self.output_dir or (Path.cwd() / "output")
+        state_dir = self.output_dir or (Path.cwd() / "output")
+        output_dir = state_dir / ".processing"
+        output_dir.mkdir(parents=True, exist_ok=True)
         staging_dir = output_dir / "staging"
         staging_dir.mkdir(parents=True, exist_ok=True)
         self._staging_dir = staging_dir
@@ -177,7 +190,7 @@ class RegulationsPipeline(Pipeline):
                 self._ingest_comments_chunked(agency, output_dir, staging_dir, manifest)
             self._retry_text(output_dir, agencies)
             if self._pending_text is not None:
-                self._pending_text.save()
+                self._save_checkpoints(publish=not self.skip_upload)
                 if not self.skip_upload:
                     self._publish(output_dir, record_types, {})
             rmtree(staging_dir, ignore_errors=True)
@@ -200,11 +213,15 @@ class RegulationsPipeline(Pipeline):
             len(record_types),
             self.max_workers,
         )
-        unresolved = UnresolvedKeys(output_dir)
+        unresolved = UnresolvedKeys(self.output_dir or Path.cwd() / "output", index=self._publication_index)
+        self._unresolved = unresolved
         source_types = {rt.name: source_record_type(rt) for rt in record_types}
         read = mirrulations.reader_factory(
-            list(source_types.values()), processed_keys=manifest, unresolved_keys=unresolved.for_reader,
-            since_year=self.since_year, verbose=self.verbose,
+            list(source_types.values()),
+            processed_keys=manifest,
+            unresolved_keys=unresolved.for_reader,
+            since_year=self.since_year,
+            verbose=self.verbose,
         )
         result = stage_agencies(
             agencies,
@@ -234,10 +251,9 @@ class RegulationsPipeline(Pipeline):
         started = monotonic()
         # 4. Load: persist the manifest, then publish to R2 (off by default while vetting).
         unresolved.update(result.consumed_keys, result.unresolved)
-        if self._pending_text is not None:
-            self._pending_text.save()
+        self._save_checkpoints(publish=not self.skip_upload)
         manifest.record(result.consumed_keys)
-        manifest.save(output_dir)
+        manifest.save(self.output_dir or Path.cwd() / "output")
         if self.skip_upload:
             logger.info("skip_upload=True — output left in {}", output_dir)
         else:
@@ -267,37 +283,31 @@ class RegulationsPipeline(Pipeline):
         object clears its size guard first, and the manifest uploads last, once
         every data upload has returned.
         """
-        base_data_types = [rt.name for rt in record_types if rt.name != "comments" and staged.get(rt.name, 0)]
-        base_data_types += self._merged_attributes
-        manifest_file = output_dir / "manifest.parquet"
-        unresolved_file = output_dir / "failed_keys.parquet"
-        text_pending_file = output_dir / PENDING_TEXT_FILE
-        # Comments commit to the catalog only. Mirror finalization publishes the
-        # comments, agency files and index after every batch has succeeded.
-        # Manifest.save writes only when this run recorded keys, so a missing
-        # file means there is no checkpoint to advance.
-        publish_manifest = manifest_file.exists()
-
-        planned = r2.dataset_files(output_dir, base_data_types)
-        if unresolved_file.exists():
-            planned.append(unresolved_file)
-        if text_pending_file.exists():
-            planned.append(text_pending_file)
-        if publish_manifest:
-            planned.append(manifest_file)
-        r2.preflight_uploads(output_dir, planned)
-
-        # Redundant-looking, but --only-comments leaves base_data_types empty and
-        # upload_dataset would log a misleading "no files to publish" warning.
-        if base_data_types:
-            r2.upload_dataset(output_dir, base_data_types)
-        if unresolved_file.exists():
-            r2.upload_file(unresolved_file, remote_key=unresolved_file.name)
-        if text_pending_file.exists():
-            r2.upload_file(text_pending_file, remote_key=text_pending_file.name)
-        if publish_manifest:
-            logger.info("Uploading manifest after all data files succeeded...")
+        state_dir = self.output_dir or Path.cwd() / "output"
+        manifest_file = state_dir / "manifest.parquet"
+        if manifest_file.exists():
+            r2.preflight_uploads(state_dir, [manifest_file])
             r2.upload_file(manifest_file, remote_key="manifest.parquet")
+
+    def _save_checkpoints(self, *, publish: bool) -> None:
+        from spicy_regs.pipelines.regulatory_publication import finish_checkpoints, restore_checkpoint
+
+        root = self.output_dir or Path.cwd() / "output"
+        checkpoints = {
+            "failed_keys": list(self._unresolved.rows.values())
+            if self._unresolved is not None
+            else restore_checkpoint(root, "failed_keys"),
+            "pending_comment_text": list(self._pending_text.rows.values())
+            if self._pending_text is not None
+            else restore_checkpoint(root, "pending_comment_text"),
+        }
+        finish_checkpoints(root, checkpoints, publish=publish, index=self._publication_index)
+        if publish:
+            from spicy_regs.sources import publication
+
+            public_url = getenv("R2_PUBLIC_URL")
+            assert public_url is not None
+            self._publication_index = publication.current_index(public_url)
 
     def _ingest_comments_chunked(self, agency: str, output_dir: Path, staging_dir: Path, manifest: Manifest) -> None:
         """Ingest one agency's comments in bounded key-chunks, committing each.
@@ -325,14 +335,19 @@ class RegulationsPipeline(Pipeline):
         total = len(keys)
         logger.info("[{}] comments: {} files, ingesting in chunks of {}", agency, total, self.chunk_size)
 
-        unresolved = UnresolvedKeys(output_dir)
+        unresolved = UnresolvedKeys(self.output_dir or Path.cwd() / "output", index=self._publication_index)
+        self._unresolved = unresolved
         previous = unresolved.for_reader(agency, comment_rt)
         keys = list(dict.fromkeys([*(item.key for item in previous), *keys]))
         total = len(keys)
         for start in range(0, total, self.chunk_size):
             chunk = keys[start : start + self.chunk_size]
             reader = mirrulations.MirrulationsReader(
-                resource, mirrulations.BUCKET, mirrulations.PREFIX, agency, source_record_type(comment_rt),
+                resource,
+                mirrulations.BUCKET,
+                mirrulations.PREFIX,
+                agency,
+                source_record_type(comment_rt),
                 key_lister=lambda: chunk,
                 unresolved_keys=[item for item in previous if item.key in chunk],
             )
@@ -343,10 +358,9 @@ class RegulationsPipeline(Pipeline):
                 rmtree(staging_dir / comment_rt.name, ignore_errors=True)
             # Only a completed read and successful merge can retire a key.
             unresolved.update(reader.last_keys, {(agency, comment_rt.name): reader.unresolved})
-            if self._pending_text is not None:
-                self._pending_text.save()
+            self._save_checkpoints(publish=not self.skip_upload)
             manifest.record(reader.last_keys)
-            manifest.save(output_dir)
+            manifest.save(self.output_dir or Path.cwd() / "output")
             if not self.skip_upload:
                 self._publish(output_dir, [comment_rt], {comment_rt.name: len(records)})
             logger.info("[{}] comments: committed {}/{}", agency, start + len(chunk), total)
@@ -415,13 +429,15 @@ class RegulationsPipeline(Pipeline):
         Monolithic ``{type}.parquet`` files are pulled whole, with each record type's attribute table. Comments live
         in the catalog, so only ``comment_attributes`` is fetched for them.
         """
+        from spicy_regs.pipelines.regulatory_publication import restore_dataset
+
+        root = self.output_dir or Path.cwd() / "output"
         for rt in record_types:
-            local = output_dir / f"{rt.name}.parquet"
-            if rt.name != "comments" and not local.exists():
-                r2.download_working_copy(f"{rt.name}.parquet", local)
+            if rt.name != "comments":
+                restore_dataset(root, rt.name, output_dir / f"{rt.name}.parquet", index=self._publication_index)
             table = ATTRIBUTE_TABLES.get(rt.name)
-            if table is not None and not (output_dir / f"{table}.parquet").exists():
-                r2.download_working_copy(f"{table}.parquet", output_dir / f"{table}.parquet")
+            if table is not None:
+                restore_dataset(root, table, output_dir / f"{table}.parquet", index=self._publication_index)
 
     def _merge_attributes(self, staging_dir: Path, output_dir: Path, table: str) -> bool:
         """Merge this run's attribute rows into the table's working copy, once the full sweep has seeded it.
@@ -435,8 +451,12 @@ class RegulationsPipeline(Pipeline):
             return False
         prior = output_dir / f"{table}.parquet"
         if not prior.exists():
-            seeder = "fill-comment-fields attributes" if table == ATTRIBUTE_TABLES["comments"] else "run-attributes-sweep"
-            logger.warning("{}: no seeded working copy yet; this run's rows are dropped until {} seeds it", table, seeder)
+            seeder = (
+                "fill-comment-fields attributes" if table == ATTRIBUTE_TABLES["comments"] else "run-attributes-sweep"
+            )
+            logger.warning(
+                "{}: no seeded working copy yet; this run's rows are dropped until {} seeds it", table, seeder
+            )
             return False
         rows = merge_attribute_parts(table, parts, prior, prior)
         logger.info("{}: {:,} rows after this run's merge", table, rows)
@@ -486,6 +506,14 @@ class RegulationsPipeline(Pipeline):
             if (table := ATTRIBUTE_TABLES.get(name)) and self._merge_attributes(staging_dir, output_dir, table)
         ]
 
+        from spicy_regs.pipelines.regulatory_publication import finish_dataset
+
+        root = self.output_dir or Path.cwd() / "output"
+        for name in [*non_comment, *iceberg_names, *self._merged_attributes]:
+            source = output_dir / f"{name}.parquet"
+            if source.exists():
+                finish_dataset(root, name, source, publish=not self.skip_upload, index=self._publication_index)
+
         if "comments" in names and staged.get("comments", 0) > 0:
             # Finalization owns the one mirror/index build after the sweep.
             iceberg.merge_comments(staging_dir, RECORD_TYPES["comments"])
@@ -513,7 +541,8 @@ def main(
     ] = None,
     sweep: Annotated[bool, Parameter(help="Run every batch with one manifest; requires --batch-count")] = False,
     defer_comments_publication: Annotated[
-        bool, Parameter(help="Caller will finalize the comments mirror after ingestion (workflow use)"),
+        bool,
+        Parameter(help="Caller will finalize the comments mirror after ingestion (workflow use)"),
     ] = False,
     full_refresh: Annotated[bool, Parameter(help="Ignore manifest + existing output")] = False,
     allow_fresh_start: Annotated[

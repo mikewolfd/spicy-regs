@@ -1,6 +1,6 @@
 """Transform: build ``crs_reports.parquet`` from the Congress.gov REST API.
 
-Produces an 8-column all-VARCHAR schema keyed on ``report_id`` (e.g. ``R48641``,
+Produces a native subject table and shared receipts keyed on ``report_id`` (e.g. ``R48641``,
 ``IN12713``) — the Congressional Research Service analysis layer over the policy
 questions behind the rulemakings this dataset tracks.
 
@@ -27,6 +27,7 @@ import pyarrow.parquet as pq
 from loguru import logger
 
 from spicy_regs.sources import r2
+from spicy_regs.transforms.government_receipts import internal_prior, receipt_builder
 from spicy_regs.sources.crs_reports import CrsReportsReader
 from spicy_regs.transforms.table_merge import merge_local_prior
 
@@ -36,7 +37,7 @@ OUTPUT = "crs_reports.parquet"
 # reports updated after our previous run's cutoff are picked up.
 OVERLAP_DAYS = 3
 
-# The published schema: 8 columns, all VARCHAR, in a fixed order. ``report_id``
+# Literal processing schema, converted to native subjects and retained in receipts: 8 columns, all VARCHAR, in a fixed order. ``report_id``
 # is the primary / dedup key.
 COLUMNS = (
     "report_id",
@@ -87,6 +88,7 @@ def _prior_max_update_date(prior_file: Path) -> date | None:
         return None
 
 
+@receipt_builder
 def build_crs_reports(output_dir: Path, *, since: date | None = None, evidence: CaptureEvidence | None = None) -> Path:
     """Build ``crs_reports.parquet`` (incremental merge with the prior table)."""
     import duckdb
@@ -96,6 +98,8 @@ def build_crs_reports(output_dir: Path, *, since: date | None = None, evidence: 
 
     # 1. Pull the prior table (best effort — absence just means full backfill).
     have_prior = prior_file.exists() or r2.download(OUTPUT, prior_file)
+    if have_prior:
+        prior_file = internal_prior("crs_reports", prior_file)
     if have_prior:
         logger.info("CRS reports: merging against prior table {}", prior_file)
     else:

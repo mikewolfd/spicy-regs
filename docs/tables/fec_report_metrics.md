@@ -6,6 +6,8 @@
 
 One defined measure occurrence within an agency report edition. Compare values only with their namespaced definition, period, unit and dimensions. Source inequalities retain value_operator and bound_value; structural Word/XML tokens are not metrics, and an unknown unit is not guessed. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_report_metrics'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled. Supported observations from retained supported FOIA XML metric definitions and exact native values. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
 
 - **Parquet file:** `fec_report_metrics.parquet`
@@ -16,32 +18,20 @@ One defined measure occurrence within an agency report edition. Compare values o
 | Column | Type | Description |
 | --- | --- | --- |
 | `record_id` | `VARCHAR` | Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event. |
-| `identity_version` | `VARCHAR` | Version of the source-observation identity rule; it does not select a current or canonical record. |
-| `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
-| `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
-| `source_record_id` | `VARCHAR` | Native source-observation key within collection_id. Resolve with the source generation, exact locator and source digest, not this value alone. |
-| `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
-| `source_locator_json` | `VARCHAR` | Exact source row or subrecord coordinates, including available member, ordinal, byte span and field-definition references. Resolve in the pinned source generation. |
-| `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
-| `selection_evidence_sha256` | `VARCHAR` | Digest of the retained selection evidence used to authorize this mapper's source scope; not a financial inclusion decision. |
-| `source_url` | `VARCHAR` | Captured source URL for this observation; it does not assert current availability or body retrieval. |
-| `observed_at` | `VARCHAR` | Recorded capture time when supplied, distinct from the source's event, report and publication dates. |
-| `subrecord_pointer` | `VARCHAR` | Exact child pointer within the source-owned native record, retaining repeated occurrences. |
 | `report_id` | `VARCHAR` | Key of the associated agency report edition. It does not merge different captures or schema editions by title. |
 | `metric_definition_id` | `VARCHAR` | Namespaced identity of this source metric definition, including XML schema/path context; matching labels alone do not establish equivalent measures. |
 | `metric_label` | `VARCHAR` | Human-readable source metric label within its definition; retain metric_definition_id when comparing values. |
 | `native_field` | `VARCHAR` | Exact source field name underlying the measure, including namespace/path distinctions where applicable. |
-| `definition_json` | `VARCHAR` | Retained source definition, native path and supporting context used to interpret the measure. |
-| `dimensions_json` | `VARCHAR` | Exact source dimension values defining this measure/group; compare only matching populations and definitions. |
-| `raw_value` | `VARCHAR` | Literal native measure value before conversion, preserving spelling, bounds and source-empty states. |
-| `value_status` | `VARCHAR` | Explicit interpretation or source-presence state for value; a NULL typed value must be read with this status. |
 | `value_operator` | `VARCHAR` | Source comparison operator for a reported bound, such as less-than; bounded values are not exact point estimates. |
 | `unit` | `VARCHAR` | Unit established by the source-specific definition, such as USD, count or days; unknown units must remain explicit. |
-| `unit_status` | `VARCHAR` | Evidence state of the declared unit; unknown units are not inferred solely from a numeric token. |
 | `period_basis` | `VARCHAR` | Evidence and source definition establishing the covered period; unknown or overlapping periods remain explicit. |
-| `mapping_status` | `VARCHAR` | Whether this source observation mapped fully, partially, or received an explicit nondata/refusal disposition; inspect the reason alongside NULL values. |
 | `value` | `DECIMAL(38,9)` | Exact interpreted measure value when supported; read value_status, unit and definition before comparison or arithmetic. |
 | `bound_value` | `DECIMAL(38,9)` | Exact numerical boundary for a reported inequality. Interpret with value_operator; it is not a measured point value. |
 | `fiscal_year` | `INTEGER` | Agency report fiscal year parsed from its stated source value; not an election cycle. |
 | `period_start` | `DATE` | Date parsed from the start of the source-defined reporting period. NULL requires the source value and conversion status; capture time is not substituted. |
 | `period_end` | `DATE` | Date parsed from the end of the source-defined reporting period. NULL requires the source value and conversion status; capture time is not substituted. |
+| `definition_namespace` | `VARCHAR` | Namespace of the source definition identifying this reported metric. |
+| `definition_path` | `VARCHAR[]` | Path of the source definition identifying this reported metric. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `definition_schema_version` | `VARCHAR` | Version of the source metric-definition schema, part of the metric meaning. |
+| `dimension_context` | `STRUCT(ordinal BIGINT, tag VARCHAR, "text" VARCHAR, attributes STRUCT("name" VARCHAR, "value" VARCHAR)[])[]` | Source-reported dimensions that qualify this metric value. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `report_number` | `VARCHAR` | Source-stated report number, not an independently qualified report match. |

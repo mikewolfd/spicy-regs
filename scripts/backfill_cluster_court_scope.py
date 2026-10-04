@@ -1,23 +1,9 @@
-"""Add the court scope to an already-built ``court_opinion_clusters`` table.
+"""Enrich retained court opinion clusters with court scope and matching receipts.
 
-``build_court_opinion_clusters`` resolves ``court_id`` / ``court_jurisdiction``
-/ ``court_is_federal`` while it shapes each row, so any table built from now on
-carries them. A table built before that does not, and re-streaming the 2.3 GiB
-dump to add three columns it already has the key for is 23 minutes of reading
-for no new facts.
-
-Two output modes, chosen by what the volume can afford rather than by taste:
-
-* ``scope`` writes a small ``(cluster_id, cl_docket_id, court_id,
-  court_jurisdiction, court_is_federal)`` table — four narrow columns over ten
-  million rows, tens of megabytes — which any query can join.
-* ``full`` rewrites the whole clusters table with the columns inline. That is
-  the better artifact and it costs a second copy of a 3.9 GB file, which is why
-  it is guarded by ``check_headroom`` rather than attempted hopefully.
-
-The default is whichever fits. A run that silently produced the lesser artifact
-would be the sort of quiet degradation this codebase keeps getting bitten by,
-so the mode actually used is logged and lands in the receipt.
+The existing docket map supplies court identity and jurisdiction. Scope stays
+inline on the cluster subject. The historical separate scope-table mode now
+refuses; existing files remain untouched. The disk floor is checked before the
+rewrite, and an unreceipted legacy input requires explicit migration selection.
 """
 
 from __future__ import annotations
@@ -28,6 +14,7 @@ import json
 from collections import Counter
 from datetime import UTC, date, datetime
 from pathlib import Path
+from uuid import uuid4
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -35,6 +22,8 @@ from loguru import logger
 
 from spicy_regs.transforms._courtlistener_writer import check_headroom, disk_floor
 from spicy_regs.transforms.court_scope import CourtScope, court_jurisdictions
+from spicy_regs.court_receipts import finish_court_output, file_witness, restore_processing_input, prior_receipt_selection
+from spicy_regs.transforms.build_court_opinion_clusters import _SCHEMA as INPUT_SCHEMA
 
 SCOPE_COLUMNS = (
     "cluster_id",
@@ -72,14 +61,26 @@ def backfill(
     output_dir: Path,
     dump_date: date,
     mode: str = "auto",
+    allow_legacy_input: bool = False,
 ) -> dict:
     """Write the scoped table and return its receipt."""
     output_dir.mkdir(parents=True, exist_ok=True)
+    if mode == 'scope':
+        raise ValueError('Separate court_cluster_scope output is retired; enrich cluster columns with receipts')
+    if mode not in ('auto', 'full'):
+        raise ValueError('Unsupported court scope mode')
+    check_headroom(clusters.stat().st_size * 3, path=output_dir)
+    original_clusters = clusters
+    receipt_path, generation_id = prior_receipt_selection(clusters, dataset='court_opinion_clusters')
+    clusters = restore_processing_input(clusters, output_dir / f'.clusters-input-{uuid4().hex}.parquet',
+        dataset='court_opinion_clusters', schema=INPUT_SCHEMA, receipt_path=receipt_path,
+        generation_id=generation_id, allow_legacy=allow_legacy_input)
     source = pq.ParquetFile(clusters)
     total_rows = source.metadata.num_rows
 
     if mode == "auto":
-        mode = "full" if _fits(clusters.stat().st_size, output_dir) else "scope"
+        check_headroom(clusters.stat().st_size, path=output_dir)
+        mode = 'full'
     elif mode == "full":
         check_headroom(clusters.stat().st_size, path=output_dir)
     logger.info(
@@ -109,7 +110,8 @@ def backfill(
         ]
         at = out_columns.index("cl_docket_id") + 1
         out_columns[at:at] = missing
-        out_schema = pa.schema([(c, pa.string()) for c in out_columns])
+        out_schema = pa.schema([source.schema_arrow.field(c) if c in existing else pa.field(c, pa.string())
+                                for c in out_columns])
         out_file = args.output_dir / "court_opinion_clusters.parquet"
     else:
         out_columns = list(SCOPE_COLUMNS)
@@ -162,7 +164,12 @@ def backfill(
                 logger.info("Court scope backfill: {:,} / {:,} rows", written, total_rows)
     finally:
         writer.close()
-    staging.replace(out_file)
+    # Keep the completed mapper input and bind the rewritten subject to new receipts.
+    retained = output_dir / f'.clusters-enriched-source-{uuid4().hex}.parquet'
+    staging.replace(retained)
+    out_file = finish_court_output('court_opinion_clusters', retained, output_dir,
+        witnesses=[file_witness(original_clusters), file_witness(docket_court_map),
+                   file_witness(courts_dump), file_witness(retained)])
 
     receipt = {
         "artifact": out_file.name,
@@ -206,6 +213,7 @@ def main() -> None:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--dump-date", type=date.fromisoformat, default=date(2026, 6, 30))
     parser.add_argument("--mode", choices=("auto", "scope", "full"), default="auto")
+    parser.add_argument('--allow-legacy-input', action='store_true')
     options = parser.parse_args()
     print(
         json.dumps(
@@ -216,6 +224,7 @@ def main() -> None:
                 output_dir=options.output_dir,
                 dump_date=options.dump_date,
                 mode=options.mode,
+                allow_legacy_input=options.allow_legacy_input,
             ),
             indent=2,
         )

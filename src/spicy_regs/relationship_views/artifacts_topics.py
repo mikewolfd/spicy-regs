@@ -73,3 +73,8 @@ ARTIFACT_SQL_VIEWS = (
             attachment_renditions, 'Every offered attachment format in source order, independent of document content URLs. No acquisition is implied.',
             ('document_id','attachment_ordinal','format_ordinal')),
 )
+
+
+NATIVE_BILL_SUBJECTS = vocabulary(
+    'bill_subject_terms', 'bill_subjects', ('bill_id',), 'subjects', 'congress_subject'
+)

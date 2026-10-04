@@ -6,6 +6,8 @@
 
 One reported receipt record version or physical source observation. Preserves contributor, amount, date, transaction type, memo, source role and evidence. Main/date partitions, amendments and correction streams remain distinct observations; select proved representation membership and a named financial rule before totals. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. For original-filing rows, definition_set_id joins fec_filing_definitions.record_id and its fec_filing_definition_evidence context witnesses; filing_header_record_id and filing_header_locator_json identify the separate actual header witness. Other source layouts retain their own dictionary evidence.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_receipts'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled. Supported observations from retained individual-contribution bulk representations, original-filing receipt schedules and supported receipt APIs. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
 
 **Data quality.** Exact decimals preserve signs. Memo, subtotal and attribution flags require source-specific interpretation; successful mapping does not qualify current, gross or net totals. Keep reported balances, allocation totals/components, overlapping summaries and two-sided transfers at their declared grains. Quality notices do not automatically exclude records.
@@ -18,21 +20,7 @@ One reported receipt record version or physical source observation. Preserves co
 | Column | Type | Description |
 | --- | --- | --- |
 | `record_id` | `VARCHAR` | Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event. |
-| `identity_version` | `VARCHAR` | Version of the source-observation identity rule; it does not select a current or canonical record. |
-| `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
-| `value_mapping_version` | `VARCHAR` | Version of the exact monetary and date conversion rules used for supported values. |
-| `mapping_status` | `VARCHAR` | Whether this source observation mapped fully, partially, or received an explicit nondata/refusal disposition; inspect the reason alongside NULL values. |
-| `mapping_reason_json` | `VARCHAR` | JSON object naming unsupported, missing or otherwise limited field interpretations; native values remain reachable through evidence. |
-| `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
-| `source_record_id` | `VARCHAR` | Native source-observation key within collection_id. Resolve with the source generation, exact locator and source digest, not this value alone. |
-| `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
-| `source_locator_json` | `VARCHAR` | Exact source row or subrecord coordinates, including available member, ordinal, byte span and field-definition references. Resolve in the pinned source generation. |
-| `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
-| `selection_evidence_sha256` | `VARCHAR` | Digest of the retained selection evidence used to authorize this mapper's source scope; not a financial inclusion decision. |
-| `source_representation_role` | `VARCHAR` | Selected source role such as snapshot, insertion or deletion. Amount signs and ordinary amendment flags do not establish correction applicability. |
 | `correction_operation` | `VARCHAR` | Source-supported correction operation, when applicable; a positive amount in a deletion stream is not a new receipt or an inferred refund. |
-| `correction_applicability_status` | `VARCHAR` | Whether the captured correction can be applied to an evidenced base and target population; unresolved applicability prevents a qualified current total. |
-| `current_record_status` | `VARCHAR` | Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record. |
 | `reporting_committee_id` | `VARCHAR` | Literal FEC ID of the reporting committee where that source field identifies a committee. It does not by itself identify the sender or recipient of money. |
 | `contributor_name` | `VARCHAR` | The contributor's name as reported, without a name-based identity merge. |
 | `contributor_type` | `VARCHAR` | Native entity-type classification for the contributor. |
@@ -41,14 +29,11 @@ One reported receipt record version or physical source observation. Preserves co
 | `contributor_zip` | `VARCHAR` | The contributor's reported postal code, preserving leading zeroes. |
 | `employer` | `VARCHAR` | Employer name reported for the contributor or other named person; not an inferred organization identity. |
 | `occupation` | `VARCHAR` | Occupation reported by the source for the named person. |
-| `date_status` | `VARCHAR` | Conversion state for the reported transaction/context date; distinguishes exact values, source NULL/empty and invalid or unsupported spelling. |
-| `amount_status` | `VARCHAR` | Source-presence or conversion state for amount, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
 | `currency` | `VARCHAR` | Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately. |
 | `amount_kind` | `VARCHAR` | Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It is not an aggregation permission. |
 | `transaction_type` | `VARCHAR` | Literal source transaction-type code; direction and gross/net treatment require the applicable definitions. |
 | `transaction_id` | `VARCHAR` | Literal transaction identifier within its source filing/layout scope; not a globally unique transaction or economic-event key. |
 | `source_record_identifier` | `VARCHAR` | Source-reported row identifier such as sub_id; it is not promoted to a global event key or file number. |
-| `source_namespace` | `VARCHAR` | Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent. |
 | `report_number` | `VARCHAR` | Literal source file/report number, retained separately from source row, image and transaction identifiers. A filing join requires a qualified number namespace. |
 | `report_type` | `VARCHAR` | Source-reported report classification, interpreted within its namespace rather than as a universal period code. |
 | `image_number` | `VARCHAR` | Literal FEC image reference; it is not a transaction ID or filing number. |
@@ -58,7 +43,6 @@ One reported receipt record version or physical source observation. Preserves co
 | `other_native_id` | `VARCHAR` | Literal other-entity reference from the source; transaction definitions determine its role and namespace. |
 | `transaction_election` | `VARCHAR` | Native election designation associated with the transaction. |
 | `filing_key` | `VARCHAR` | Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. |
-| `filing_link_status` | `VARCHAR` | Status of the relationship to a submitted filing version; unresolved references preserve the financial observation. |
 | `source_cycle` | `INTEGER` | Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year. |
 | `transaction_date` | `DATE` | Date parsed from the transaction date reported by the source. NULL requires the source value and conversion status; capture time is not substituted. |
 | `amount` | `DECIMAL(38,9)` | Exact decimal for the source-reported amount for this record and its amount_kind. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations. |
@@ -72,12 +56,6 @@ One reported receipt record version or physical source observation. Preserves co
 | `account_type` | `VARCHAR` | Account classification explicitly stated by the source, without merging account populations. |
 | `reported_cycle` | `VARCHAR` | Cycle exactly as reported in a native field; kept separate from the selection's source_cycle. |
 | `line_number` | `VARCHAR` | Literal report line reference from the source; not the physical row ordinal or a globally unique item key. |
-| `query_completeness` | `VARCHAR` | Whether complete traversal of the stated source query was established. A retained page or rejected response is not a completed query. |
-| `amount_raw` | `VARCHAR` | Literal source value before conversion for amount. Preserves spelling, signs and empty values; the typed value and its status are separate. |
-| `contributor_aggregate_ytd_raw` | `VARCHAR` | Literal source value before conversion for contributor_aggregate_ytd. Preserves spelling, signs and empty values; the typed value and its status are separate. |
-| `contributor_aggregate_ytd_status` | `VARCHAR` | Source-presence or conversion state for contributor_aggregate_ytd, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
-| `transaction_date_raw` | `VARCHAR` | Literal source value before conversion for transaction_date. Preserves spelling, signs and empty values; the typed value and its status are separate. |
-| `transaction_date_status` | `VARCHAR` | Source-presence or conversion state for transaction_date, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
 | `contributor_aggregate_ytd` | `DECIMAL(38,9)` | Exact decimal for the source-stated year-to-date aggregate for the contributor. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations. |
 | `back_reference_transaction_id` | `VARCHAR` | Source-stated transaction back-reference. Resolve only within the evidenced filing and schedule scope; no automatic parent match. |
 | `back_reference_schedule` | `VARCHAR` | Source-stated schedule for a back-reference, retained with its transaction reference. |
@@ -111,14 +89,7 @@ One reported receipt record version or physical source observation. Preserves co
 | `conduit_state` | `VARCHAR` | The conduit's reported state value. |
 | `conduit_zip` | `VARCHAR` | The conduit's reported postal code, preserving leading zeroes. |
 | `account_reference` | `VARCHAR` | Literal account reference carried by the filing record. |
-| `reported_aggregate_amount_raw` | `VARCHAR` | Literal source value before conversion for reported_aggregate_amount. Preserves spelling, signs and empty values; the typed value and its status are separate. |
-| `reported_aggregate_amount_status` | `VARCHAR` | Source-presence or conversion state for reported_aggregate_amount, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
 | `reported_aggregate_amount` | `DECIMAL(38,9)` | Exact decimal for the source-stated aggregate accompanying this expenditure. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations. |
-| `definition_set_id` | `VARCHAR` | Key of the pinned source layout in fec_filing_definitions. Join its definition evidence for exact workbook cells; the layout does not validate the submission. |
-| `declared_format_version` | `VARCHAR` | Format version declared by the filing header, retained separately from the reviewed source layout version. |
-| `filing_header_record_id` | `VARCHAR` | Source-record key of the actual file header. Resolve with collection_id and filing_header_locator_json in the source generation. |
-| `filing_header_locator_json` | `VARCHAR` | Exact native coordinates of the file-header witness, separate from the financial row's own locator. |
-| `submission_conformance_status` | `VARCHAR` | Explicit statement of whether submission conformance was established; successful field mapping alone does not establish it. |
 | `transaction_code` | `VARCHAR` | Literal transaction code from the selected filing layout; its meaning is distinct from unrelated families' codes. |
 | `donor_committee_street1` | `VARCHAR` | The donor committee's first reported street-address line. |
 | `donor_committee_street2` | `VARCHAR` | The donor committee's second reported street-address line. |
@@ -133,7 +104,6 @@ One reported receipt record version or physical source observation. Preserves co
 | `source_increased_limit` | `VARCHAR` | Literal native increased-limit designation from the retained filing layout. |
 | `contributor_committee_id` | `VARCHAR` | The contributor committee's literal identifier in the source namespace; not inferred from the name. |
 | `financial_grain` | `VARCHAR` | Explicit financial row meaning selected for this layout, separating reported activity, balances, allocations and other observations. |
-| `aggregation_status` | `VARCHAR` | Declared limitation on adding this observation to other records; requires the relevant named financial policy before totals. |
 | `contributor_candidate_id` | `VARCHAR` | The contributor candidate's literal identifier in the source namespace; not inferred from the name. |
 | `contributor_candidate_name` | `VARCHAR` | The contributor candidate's name as reported, without a name-based identity merge. |
 | `contributor_candidate_office` | `VARCHAR` | The contributor candidate's reported office code. |

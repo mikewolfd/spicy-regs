@@ -349,8 +349,10 @@ def _backfill_agency_in_catalog(
     """
     from spicy_regs.sources import iceberg
 
-    tbl = iceberg._qualified(record_type)
+    from spicy_regs.sources.regulatory_catalog import processing_table
+
     ag = iceberg._sql_str(agency)
+    tbl = processing_table(con, record_type, where=f"agency_code = '{ag}'")
     rederive = f" OR text_extraction_status = '{DERIVED_STATUS}'" if overwrite else ""
     status_filter = f"AND (text_extraction_status IS NULL OR text_extraction_status = ''{rederive})"
     attachment_filter = (

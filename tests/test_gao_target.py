@@ -3,6 +3,7 @@ from typing import Any
 import httpx
 import pyarrow as pa
 import pyarrow.parquet as pq
+from tests.government_fakes import literal_table
 import pytest
 
 from spicy_docs.sources.gao.files import gao_report_index_locator
@@ -57,7 +58,7 @@ def test_candidate_preserves_all_prior_cells_leaves_date_unknown_and_resolves(tm
     index,_=target_index(PRODUCT,retained=retained())
     report=append_missing_target(prior,out,index)
     assert report['prior_cells_equal'] and report['candidate_rows']==2
-    added=pq.read_table(out).to_pylist()[1]
+    added=literal_table(out, "gao_reports").to_pylist()[1]
     assert added['published_date'] is None and added['topics_json'] is None
     assert added['source']=='gao_repair'
     c: Any=duckdb.connect()
@@ -70,7 +71,8 @@ def test_candidate_preserves_all_prior_cells_leaves_date_unknown_and_resolves(tm
 
 
 @pytest.mark.parametrize("product_page", [False, True])
-def test_complete_generation_candidate_uses_prior_pin_without_publication(tmp_path,monkeypatch,product_page):
+@pytest.mark.parametrize("with_decisions", [False, True])
+def test_complete_generation_candidate_uses_prior_pin_without_publication(tmp_path,monkeypatch,product_page,with_decisions):
     from spicy_regs.generations import build_generation,verify_generation
     from spicy_regs.sources import publication
     from spicy_regs.transforms.build_gao_target import prepare_target_generation
@@ -81,11 +83,26 @@ def test_complete_generation_candidate_uses_prior_pin_without_publication(tmp_pa
     row.update(report_id='gao-26-1',title='Existing')
     pq.write_table(pa.Table.from_pylist([row],schema=_SCHEMA),prior)
     directory=tmp_path/'prior-generation'
-    build_generation(directory,family='gao-reports',files=[prior],expected_keys=[prior.name])
+    from spicy_regs.transforms.government_receipts import migrate_outputs, generation_receipt_args, _legacy_schema
+    outputs = [prior]
+    if with_decisions:
+        decisions = tmp_path/'gao_decisions.parquet'
+        pq.write_table(pa.Table.from_pylist([{'decision_number':'B-1','url':'https://gao.test/b1',
+            'released_date':'2025-01-02','decided_date':'2025-01-01','decision_status':'Denied.',
+            'outcome':'denied','source':'listing','b_numbers_json':'["B-1"]'}], schema=_legacy_schema('gao_decisions')), decisions)
+        outputs.append(decisions)
+    migrate_outputs(tuple(outputs), generation_id='prior')
+    before = pq.read_table(outputs[-1]) if with_decisions else None
+    build_generation(directory,family='gao-reports',files=outputs,expected_keys=[p.name for p in outputs],
+                     **generation_receipt_args(tuple(outputs)))
     store=Store()
     snapshot=publication.publish_generation(directory,client=store,bucket='test',prior_index=publication.empty_index())
     raw=(directory/'artifact.json').read_bytes()
     monkeypatch.setattr(publication,'load_family_root',lambda *_:(raw,json.loads(raw)))
+    def fetch_member(base, member, target, *args):
+        target.write_bytes(store.objects[member.path])
+        return True
+    monkeypatch.setattr(publication,'fetch_member',fetch_member)
     from pathlib import Path
     page = (Path(__file__).parent/'fixtures/gao_target/product-page.zip').read_bytes() if product_page else None
     report=prepare_target_generation(tmp_path/'target',product_id=PRODUCT,prior_file=prior,
@@ -95,6 +112,8 @@ def test_complete_generation_candidate_uses_prior_pin_without_publication(tmp_pa
     assert report['status']=='verified_candidate_not_published'
     assert artifact.root['spec']['parents']['gao_reports.parquet']['artifactDigest']==snapshot['families']['gao-reports']['artifactDigest']
     assert report['candidate_rows']==2
+    if with_decisions:
+        assert pq.read_table(tmp_path/'target/generation/gao_decisions.parquet').equals(before)
 
 
 def test_retained_product_page_qualifies_exact_heading_and_explicit_day():

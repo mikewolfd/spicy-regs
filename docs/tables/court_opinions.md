@@ -6,6 +6,8 @@
 
 Every CourtListener opinion's decision, type and author, without its text. It is what connects court_citation_map and court_parentheticals, which name opinions, to court_opinion_clusters, which holds decisions: join opinion_id from either, then cluster_id to court_opinion_clusters.cluster_id. local_path and download_url locate the original document. Rebuilt whole from each quarterly export, locally rather than on a schedule, because the source export is 54.6 GB. All columns are VARCHAR.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='court_opinions'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Not a range. The complete 2026-06-30 CourtListener opinions export without its eight text fields: every opinion_id unique and every cluster_id set. All but 21 name a decision in court_opinion_clusters; those 21 are RECAP trial-court opinions created between the two exports, which opinion search does not index, and resolve with the next export (receipt join-gaps-2026-09-26/i/). Opinion text is not included: the fork links out to CourtListener instead. *(measured 2026-09-22)*
 
 **Data quality.** Author strings are the publisher's text and are not resolved to people; author_id is set only where the publisher linked a judge. opinion_type is the publisher's code, such as 010combined or 040dissent.
@@ -22,13 +24,6 @@ Every CourtListener opinion's decision, type and author, without its text. It is
 | `opinion_type` | `VARCHAR` | Publisher opinion type code, such as `010combined`, `020lead`, `030concurrence` or `040dissent`. |
 | `author_id` | `VARCHAR` | CourtListener judge ID of the author, when the publisher linked one. |
 | `author_str` | `VARCHAR` | Author as the publisher's source text names them; not resolved to a person. |
-| `per_curiam` | `VARCHAR` | Publisher per-curiam flag (`t` or `f`). |
+| `per_curiam` | `BOOLEAN` | Publisher per-curiam flag (`t` or `f`). |
 | `joined_by_str` | `VARCHAR` | Judges joining the opinion, as the publisher's source text names them. |
-| `page_count` | `VARCHAR` | Page count of the original document when known, as text. |
-| `sha1` | `VARCHAR` | Publisher's SHA-1 of the original document; not a SpicyRegs capture digest. |
-| `download_url` | `VARCHAR` | Where the publisher obtained the original document, when recorded; no current accessibility claim. |
-| `local_path` | `VARCHAR` | Path of the original document in CourtListener's storage, not a SpicyRegs file. |
-| `extracted_by_ocr` | `VARCHAR` | Publisher flag for text extracted by OCR (`t` or `f`). |
-| `date_created` | `VARCHAR` | Timestamp the publisher created the opinion record. |
-| `date_modified` | `VARCHAR` | Timestamp the publisher last modified the opinion record. |
-| `dump_date` | `VARCHAR` | The CourtListener bulk export the row was copied from (ISO date). |
+| `page_count` | `BIGINT` | Page count of the original document when known, as text. |

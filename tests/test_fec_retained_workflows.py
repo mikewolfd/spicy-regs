@@ -63,14 +63,16 @@ def test_real_release_and_capture_transfer_build_complete_generation(tmp_path, m
     assert {p.name for p in generation.iterdir()} == {
         "artifact.json",
         "members.json",
-        "fec_source_records.parquet",
-        "fec_collections.parquet",
         "fec_relationships.parquet",
+        "etl_receipts.parquet",
     }
-    records = pq.read_table(generation / "fec_source_records.parquet").to_pylist()
-    collections = pq.read_table(generation / "fec_collections.parquet").to_pylist()
+    from spicy_regs.transforms.fec_identity_receipts import read_identity_processing
+    root = json.loads((generation / "artifact.json").read_text())
+    generation_id = root["spec"]["etlReceipts"]["generationId"]
+    records = list(read_identity_processing(generation, "fec_source_records", generation_id=generation_id))
+    collections = list(read_identity_processing(generation, "fec_collections", generation_id=generation_id))
     expected = _load_fixture_rows(tmp_path)
-    assert records == expected
+    assert [{key: row[key] for key in original} for row, original in zip(records, expected, strict=True)] == expected
     evidence = next(path for path in (FIXTURE / "release-blobs/sha256").iterdir() if is_zipfile(path))
     with ZipFile(evidence) as retained:
         raw = retained.read("response.json")

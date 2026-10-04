@@ -6,6 +6,8 @@
 
 Same-case record groups for the APA litigation dockets: which published docket rows are alternative records of one case, and which row is the group's parent. Join on cl_docket_id; the parent row carries parent_cl_docket_id equal to cl_docket_id. This is an inferred mapping, not publisher data; it is edition-scoped (2026-06-30) and does not cover dockets published after the edition until recomputed.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='court_docket_groups'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Not a range. A derived mapping over the published `court_dockets` selection, computed from the 2026-06-30 bulk edition. The edition leaves its own parent_docket_id blank in every row, so the parent is inferred from the publisher's PACER mechanics (one main case created first, plus per-defendant sub-dockets: the documented doppeldocket problem, FLP wiki / GitHub issue #2185): group by (court_id, docket_number) with a single caption among published members, parent = lowest pacer_case_id in the group. confidence_tier separates tight-pacer doppeldockets from wide-spread refilings of one case. Groups with multiple captions (docket-number reuse) or no pacer ids stay ungrouped and have no row. *(measured 2026-09-22)*
 
 - **Parquet file:** `court_docket_groups.parquet`
@@ -19,5 +21,3 @@ Same-case record groups for the APA litigation dockets: which published docket r
 | `parent_cl_docket_id` | `VARCHAR` | The group's parent docket id (lowest pacer_case_id among published group members). Equal to cl_docket_id on the parent's own row. |
 | `confidence_tier` | `VARCHAR` | `doppeldocket` when the group's pacer ids are contiguous (spread <= 5), `refiled` when the same case was refiled across a wider pacer spread. |
 | `group_size` | `BIGINT` | Number of published court_dockets rows in the same-case group. |
-| `edition` | `VARCHAR` | The CourtListener bulk edition the grouping was computed from (`2026-06-30`). |
-| `rule_version` | `VARCHAR` | Version of the grouping rule (1: single-caption group, parent = lowest pacer_case_id). |

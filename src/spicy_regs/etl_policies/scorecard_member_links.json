@@ -1,0 +1,28 @@
+{
+  "dataset": "scorecard_member_links",
+  "policy_version": "scorecards-etl-v1",
+  "subject_schema": "//////gAAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAMAAACQAAAARAAAABQAAAAQABQACAAGAAcADAAAABAAEAAAAAAAAQUQAAAAHAAAAAQAAAAAAAAACwAAAGJpb2d1aWRlX2lkAIj////I////AAAABRAAAAAoAAAABAAAAAAAAAAUAAAAcHVibGlzaGVyX21lbWJlcl9rZXkAAAAAwP///xAAFAAIAAAABwAMAAAAEAAQAAAAAAAABRAAAAAkAAAABAAAAAAAAAAMAAAAc2NvcmVjYXJkX2lkAAAAAAQABAAEAAAAAAAAAA==",
+  "identity_fields": [
+    "scorecard_id",
+    "publisher_member_key"
+  ],
+  "receipt_fields": [
+    "term_candidates_json",
+    "override_version",
+    "source_snapshot_id",
+    "resolution_status",
+    "resolution_rule",
+    "rule_version",
+    "candidate_count",
+    "candidates_json",
+    "reason",
+    "source_context_json",
+    "input_pins_json",
+    "capture_id",
+    "source_url",
+    "source_path",
+    "raw_source"
+  ],
+  "receipt_only": false,
+  "nullable_identity_fields": []
+}

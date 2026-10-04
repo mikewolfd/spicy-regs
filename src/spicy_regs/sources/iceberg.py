@@ -134,9 +134,15 @@ def _warn_unlocked_write(record_type: RecordType, operation: str) -> None:
     )
 
 
+def _catalog_namespace(record_type):
+    from .regulatory_catalog import supports, namespace
+    return namespace() if supports(record_type) else _namespace()
+
+
 def _qualified(record_type: RecordType) -> str:
     """Fully-qualified catalog table identifier: ``alias."namespace"."name"``."""
-    return f'{_schema_ref()}."{record_type.name}"'
+    from .regulatory_catalog import supports, qualified
+    return qualified(record_type) if supports(record_type) else f'{_schema_ref()}."{record_type.name}"'
 
 
 def _ensure_table(con, record_type: RecordType) -> str | None:
@@ -148,6 +154,10 @@ def _ensure_table(con, record_type: RecordType) -> str | None:
     nullable column added to an existing table, if any. Iceberg callers must
     reopen after each change; :func:`_connect_for_table` handles this.
     """
+    from .regulatory_catalog import supports, ensure_native
+    if supports(record_type):
+        ensure_native(con, record_type)
+        return None
     columns = ", ".join(f'"{col}" VARCHAR' for col in record_type.schema)
     con.execute(f"CREATE SCHEMA IF NOT EXISTS {_schema_ref()};")
     con.execute(f"CREATE TABLE IF NOT EXISTS {_qualified(record_type)} ({columns});")
@@ -172,6 +182,9 @@ def _ensure_nullable_column(con, record_type: RecordType, *, existing: dict[str,
     A migration uses one ALTER per connection because Iceberg can cache the old
     schema. Validate all existing migration fields before changing any of them.
     """
+    from .regulatory_catalog import supports
+    if supports(record_type):
+        return None
     if record_type.name not in ("documents", "comments"):
         return None
     columns = (_PDF_RESULTS_COLUMN,) + (
@@ -283,6 +296,11 @@ def replace_rows(
     readback read the catalog table again, so an unscoped call scans it three
     times, not four.
     """
+    from .regulatory_catalog import supports, replace_native
+    if supports(record_type):
+        return replace_native(con, record_type, source, expected_prior=expected_prior,
+                              scope=scope, expected_snapshot=expected_snapshot)
+    _warn_unlocked_write(record_type, "replace rows")
     key = record_type.dedup_key
     tbl = _qualified(record_type)
     col_list = ", ".join(f'"{c}"' for c in record_type.schema)
@@ -299,7 +317,6 @@ def replace_rows(
         raise ValueError("Catalog replacement source rows fall outside the requested scope")
     if not count:
         return
-    _warn_unlocked_write(record_type, "replace rows")
     target = f"_replace_target_{record_type.name}"
     con.execute("BEGIN")
     try:
@@ -378,6 +395,7 @@ def _merge(con, staging_files: list[Path], record_type: RecordType) -> int:
     """
     cols = list(record_type.schema)
     key = record_type.dedup_key
+    from .regulatory_catalog import supports, processing_table
     tbl = _qualified(record_type)
     # Temp names are per-record-type so a dockets + comments run on one
     # connection can't collide.
@@ -386,7 +404,7 @@ def _merge(con, staging_files: list[Path], record_type: RecordType) -> int:
     prior = f"_prior_{record_type.name}"
 
     files_sql = ", ".join(f"'{_sql_str(str(p))}'" for p in staging_files)
-    col_select = ", ".join(f'CAST("{c}" AS VARCHAR) AS "{c}"' for c in cols)
+    col_select = ", ".join(f'CAST("{c}" AS {record_type.sql_type(c) if supports(record_type) else "VARCHAR"}) AS "{c}"' for c in cols)
 
     # 1. Collapse staging to one row per key (latest modify_date wins).
     con.execute(
@@ -400,6 +418,8 @@ def _merge(con, staging_files: list[Path], record_type: RecordType) -> int:
         ) = 1;
         """
     )
+    if supports(record_type):
+        tbl = processing_table(con, record_type, where=f'"{key}" IN (SELECT "{key}" FROM {staged})')
     con.execute(f'CREATE OR REPLACE TEMP TABLE {prior} AS SELECT * FROM {tbl} '
                 f'WHERE "{key}" IN (SELECT "{key}" FROM {staged})')
     # 2. Keep only rows that should win over the table: a new key, or one whose
@@ -418,13 +438,19 @@ def _merge(con, staging_files: list[Path], record_type: RecordType) -> int:
     changed = con.execute(f"SELECT count(*) FROM {winners}").fetchone()[0]
     try:
         # Avoid empty catalog commits: the snapshot is also the mirror's input identity.
-        if changed:
+        if supports(record_type):
+            from .regulatory_catalog import replace_native
+            rejected = f'(SELECT {col_select} FROM read_parquet([{files_sql}], union_by_name=true) EXCEPT ALL SELECT * FROM {winners})'
+            replace_native(con, record_type, winners, expected_prior=prior, rejected_source=rejected)
+        elif changed:
             replace_rows(con, record_type, winners, expected_prior=prior)
         return changed
     finally:
         con.execute(f"DROP TABLE IF EXISTS {staged};")
         con.execute(f"DROP TABLE IF EXISTS {winners};")
         con.execute(f"DROP TABLE IF EXISTS {prior};")
+        if supports(record_type):
+            con.execute(f"DROP TABLE IF EXISTS {tbl}")
 
 
 def _published_projection(record_type: RecordType, missing: frozenset[str] = frozenset()) -> str:
@@ -453,6 +479,19 @@ def _export_parquet(con, record_type: RecordType, output_dir: Path) -> Path:
     """
     output_dir.mkdir(parents=True, exist_ok=True)
     out_file = output_dir / f"{record_type.name}.parquet"
+
+    from . import regulatory_catalog as native
+    if native.supports(record_type):
+        from uuid import uuid4
+        selected = native.export_pair(con, record_type, output_dir / '.catalog-pairs' / record_type.name,
+                                      generation_id='catalog-' + uuid4().hex)
+        from spicy_regs.transforms.regulations_receipts import read_internal
+        from spicy_regs.transforms.parquet_rows import write_rows
+        import pyarrow as pa
+        from spicy_regs.transforms.regulations_shape import LEGACY_COLUMNS, TYPES
+        write_rows(read_internal(selected), out_file,
+                   pa.schema([(n, TYPES[t]) for n, t in LEGACY_COLUMNS[record_type.name]]))
+        return out_file
 
     sort_cols = [c for c in ("agency_code", "modify_date") if c in record_type.schema]
     order_by = f"ORDER BY {', '.join(sort_cols)}" if sort_cols else ""
@@ -532,6 +571,20 @@ def seed_comments_from_parquet(
     so this stays testable against a local catalog and local files.
     """
     _warn_unlocked_write(record_type, "seed")
+    from . import regulatory_catalog as native
+    if native.supports(record_type):
+        if replace and agency is None:
+            raise ValueError("replace needs the agency whose rows it replaces")
+        native.ensure_native(con, record_type)
+        present = {r[0] for r in con.execute("DESCRIBE SELECT * FROM read_parquet(?, union_by_name=true, hive_partitioning=false)", [source_glob]).fetchall()}
+        fields = ', '.join(f'CAST("{c}" AS {record_type.sql_type(c)}) AS "{c}"' if c in present
+                           else f'NULL::{record_type.sql_type(c)} AS "{c}"' for c in record_type.schema)
+        predicate = '' if agency is None else f"WHERE agency_code='{_sql_str(agency)}'"
+        con.execute(f'CREATE OR REPLACE TEMP TABLE _seed_native AS SELECT {fields} FROM '
+                    f'read_parquet(?, union_by_name=true, hive_partitioning=false) {predicate}', [source_glob])
+        native.replace_native(con, record_type, '_seed_native', scope={'agency_code': agency} if agency else None,
+                              delete_scope=replace)
+        return con.execute(f'SELECT count(*) FROM {_qualified(record_type)}').fetchone()[0]
     columns = list(record_type.schema)
     esc = _sql_str(source_glob)
     if replace and agency is None:
@@ -617,6 +670,23 @@ def backfill_missing_from_parquet(con, source_uri: str, record_type: RecordType)
     wins) so a snapshot with repeats can't fan out into duplicate rows.
     """
     _warn_unlocked_write(record_type, "backfill missing rows")
+    from . import regulatory_catalog as native
+    if native.supports(record_type):
+        native.ensure_native(con, record_type)
+        key = record_type.dedup_key
+        present = {r[0] for r in con.execute("DESCRIBE SELECT * FROM read_parquet(?, union_by_name=true, hive_partitioning=false)", [source_uri]).fetchall()}
+        if key not in present:
+            raise RuntimeError(f"Source {source_uri} has no '{key}' column; refusing to backfill {record_type.name}")
+        fields = ', '.join(f'CAST("{c}" AS {record_type.sql_type(c)}) AS "{c}"' if c in present
+                           else f'NULL::{record_type.sql_type(c)} AS "{c}"' for c in record_type.schema)
+        con.execute(f'CREATE OR REPLACE TEMP TABLE _backfill_native AS WITH src AS (SELECT {fields} FROM '
+                    f'read_parquet(?, union_by_name=true, hive_partitioning=false) QUALIFY row_number() OVER '
+                    f'(PARTITION BY "{key}" ORDER BY modify_date DESC NULLS LAST)=1) SELECT * FROM src '
+                    f'WHERE "{key}" IS NOT NULL AND NOT EXISTS (SELECT 1 FROM {_qualified(record_type)} t '
+                    f'WHERE t."{key}"=src."{key}")', [source_uri])
+        inserted = con.execute('SELECT count(*) FROM _backfill_native').fetchone()[0]
+        native.replace_native(con, record_type, '_backfill_native')
+        return inserted, con.execute(f'SELECT count(*) FROM {_qualified(record_type)}').fetchone()[0]
     key = record_type.dedup_key
     columns = list(record_type.schema)
     esc = _sql_str(source_uri)
@@ -698,7 +768,9 @@ def upsert_comment_text(con, record_type: RecordType, agency: str, updates: "pl.
         con.execute("DROP TABLE _uct_updates;")
         return
 
-    tbl = _qualified(record_type)
+    from .regulatory_catalog import supports, processing_table
+    tbl = (processing_table(con, record_type, where=f"agency_code = '{_sql_str(agency)}' AND comment_id IN (SELECT comment_id FROM _uct_updates)")
+           if supports(record_type) else _qualified(record_type))
     ag = _sql_str(agency)
     col_list = ", ".join(f'"{c}"' for c in record_type.schema)
     update_columns = {row[0] for row in con.execute("DESCRIBE _uct_updates").fetchall()}
@@ -729,6 +801,8 @@ def upsert_comment_text(con, record_type: RecordType, agency: str, updates: "pl.
     con.execute("DROP TABLE IF EXISTS _uct_updates;")
     con.execute("DROP TABLE IF EXISTS _uct_replacement;")
     con.execute("DROP TABLE IF EXISTS _uct_prior;")
+    if supports(record_type):
+        con.execute(f"DROP TABLE {tbl}")
 
 
 def merge_comments(staging_dir: Path, record_type: RecordType) -> int:
@@ -757,11 +831,20 @@ class CatalogSnapshot:
     schema_id: int
 
 
-def _read_snapshot(con, record_type: RecordType) -> CatalogSnapshot:
+def _selected_catalog_namespace(con, record_type: RecordType) -> str:
+    """Resolve read authority without mutating or initializing the catalog."""
+    from .regulatory_catalog import supports, initialized
+    if supports(record_type) and not initialized(con, record_type.name):
+        return _namespace()
+    return _catalog_namespace(record_type)
+
+
+def _read_snapshot(con, record_type: RecordType, *, namespace: str | None = None) -> CatalogSnapshot:
     if dedupe_recovery_pending(con, record_type):
         raise RuntimeError(f"Unfinished dedupe for {record_type.name}; recover before exporting")
+    selected_namespace = namespace if namespace is not None else _selected_catalog_namespace(con, record_type)
     raw = con.execute("SELECT metadata FROM iceberg_load_table_response(?)", [
-        f"{_CATALOG_ALIAS}.{_namespace()}.{record_type.name}",
+        f"{_CATALOG_ALIAS}.{selected_namespace}.{record_type.name}",
     ]).fetchone()[0]
     metadata = json.loads(raw) if isinstance(raw, str) else raw
     snapshot = CatalogSnapshot(metadata["table-uuid"], int(metadata["current-snapshot-id"]),
@@ -780,8 +863,10 @@ def catalog_snapshot(record_type: RecordType) -> CatalogSnapshot:
         con.close()
 
 
-def _snapshot_query(record_type: RecordType, snapshot: CatalogSnapshot) -> str:
-    return f"SELECT * FROM {_qualified(record_type)} AT (VERSION => {int(snapshot.snapshot_id)})"
+def _snapshot_query(record_type: RecordType, snapshot: CatalogSnapshot, *, namespace: str | None = None) -> str:
+    table = (_qualified(record_type) if namespace is None
+             else f'{_CATALOG_ALIAS}."{namespace}"."{record_type.name}"')
+    return f"SELECT * FROM {table} AT (VERSION => {int(snapshot.snapshot_id)})"
 
 
 def export_public_comments(
@@ -803,23 +888,29 @@ def export_public_comments(
         work_dir = Path(work)
         con = _connect()
         try:
+            from .regulatory_catalog import supports, ensure_native
+            if supports(record_type):
+                ensure_native(con, record_type)
             current = _read_snapshot(con, record_type)
             if snapshot is not None and current != snapshot:
                 raise RuntimeError("Catalog snapshot changed before export; retry")
             resources.configure(con, work_dir / "spill")
-            source = _snapshot_query(record_type, current)
-            snapshot_columns = set(con.sql(source).columns)
-            missing = set(record_type.schema) - snapshot_columns
-            unsupported = missing - set(_COMMENT_ADDED_COLUMNS)
-            if unsupported:
-                raise ValueError("Unsupported missing comment snapshot columns: " + ", ".join(sorted(unsupported)))
-            # Schema-only DDL does not advance the data snapshot. Its older
-            # schema cannot name newly added nullable fields; keep them unread.
-            # The record type's order is the mirror's column contract (spicy-docs
-            # 0.50.0 COMMENT: reference fields after docket_id), not the catalog's
-            # physical order, where ALTER ADD COLUMN appends them.
-            columns = list(record_type.schema)
-            source = f"SELECT {_published_projection(record_type, frozenset(missing))} FROM ({source})"
+            from . import regulatory_catalog as native
+            if native.supports(record_type):
+                from spicy_regs.transforms.regulations_receipts import policy
+                from uuid import uuid4
+                sidecar = output_dir / '.catalog-pairs' / record_type.name
+                selected = native.export_pair(con, record_type, sidecar,
+                                              generation_id='catalog-' + uuid4().hex, snapshot=current)
+                columns = policy(record_type.name).subject_schema.names
+                source = f"SELECT * FROM read_parquet('{_sql_str(str(selected.subjects[0]))}')"
+            else:
+                source = _snapshot_query(record_type, current)
+                missing = set(record_type.schema) - set(con.sql(source).columns)
+                if missing - set(_COMMENT_ADDED_COLUMNS):
+                    raise ValueError('Unsupported missing comment snapshot columns: ' + ', '.join(sorted(missing)))
+                columns = list(record_type.schema)
+                source = f"SELECT {_published_projection(record_type, frozenset(missing))} FROM ({source})"
             stage_comment_agencies(con, source, work_dir / "staging", resources=resources)
         finally:
             con.close()
@@ -830,7 +921,10 @@ def export_public_comments(
             con.from_parquet(str(monolith)).create_view("comments_export")
             index_file = _build_comments_index(con, record_type, output_dir,
                                                source_sql="SELECT * FROM comments_export")
-        return {"comments": monolith, "index": index_file, "partitions": partitions}
+        result = {"comments": monolith, "index": index_file, "partitions": partitions}
+        if native.supports(record_type):
+            result.update(receipts=selected.receipts, generation=sidecar / "generation.json")
+        return result
 
 
 def audit_duplicates(con, record_type: RecordType) -> list[tuple[str, int, int]]:
@@ -904,6 +998,17 @@ def dedupe_table(con, record_type: RecordType) -> tuple[int, int]:
     distinct keys when the rebuild succeeds.
     """
     _warn_unlocked_write(record_type, "dedupe")
+    from . import regulatory_catalog as native
+    if native.supports(record_type):
+        if not native._exists(con, native.qualified(record_type)):
+            legacy = f'{_schema_ref()}."{record_type.name}"'
+            before = con.execute(f'SELECT count(*) FROM {legacy}').fetchone()[0]
+            native.ensure_native(con, record_type, deduplicate=True)
+            after = con.execute(f'SELECT count(*) FROM {native.qualified(record_type)}').fetchone()[0]
+            return before, after
+        checked = native.processing_table(con, record_type)
+        count = con.execute(f'SELECT count(*) FROM {checked}').fetchone()[0]
+        return count, count
     key = record_type.dedup_key
     name = record_type.name
     tbl = _qualified(record_type)

@@ -28,6 +28,10 @@ def table_category(name: str) -> str | None:
 
 
 CHILD_COLUMN_DESCRIPTIONS = {
+    "native_label": "Literal source definition label for the reported measure.",
+    "part": "Regulatory part identifier stated by the source citation.",
+    "ordinal_path": "Ordered source-list positions identifying this subject in the parent hierarchy.",
+    "child_ordinals": "Ordered child positions declared by this subject node in the parent hierarchy.",
     "parent_record_id": "record_id of the containing typed observation in the named source table and selected publication.",
     "matter_record_id": "record_id of the containing fec_legal_matters observation; distinct from matter_id.",
     "source_ordinal": "Zero-based position within the named parent array. Repeated source elements remain separate rows.",

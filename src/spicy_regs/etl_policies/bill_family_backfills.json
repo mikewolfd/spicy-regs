@@ -1,0 +1,14 @@
+{
+  "dataset": "bill_family_backfills",
+  "policy_version": "congress-subjects/1",
+  "subject_schema": "/////zAAAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAAAAAA=",
+  "identity_fields": [],
+  "receipt_fields": [
+    "source_fields",
+    "source_metadata",
+    "source_schema",
+    "entry_kind"
+  ],
+  "receipt_only": true,
+  "nullable_identity_fields": []
+}

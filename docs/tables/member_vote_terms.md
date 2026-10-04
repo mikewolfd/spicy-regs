@@ -6,6 +6,8 @@
 
 The term each member vote counts toward (delivery decision 2). A vote on `vote_day` counts toward the term with `term_start <= vote_day < term_end`, so the day one Congress ends and the next begins belongs to the new term. Only where that finds none is an inclusive end accepted, and only if exactly one term qualifies. The term type follows the chamber (`rep`, `sen`); a term with no end date never matches. Built by `build_member_vote_terms` from `member_votes`, `members` (a Senate row's LIS id resolves to its Bioguide id there) and `member_terms`. Join to `member_votes` on (`vote_id`, `member_key`) and to `member_terms` on (`bioguide_id`, `term_index`). All columns are stored as VARCHAR.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='member_vote_terms'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Derived, and bounded by its inputs: one row for every `member_votes` row, matched to the member's term on the vote date. On 2026-09-23 all but 18 votes matched a half-open term: 15 matched only an inclusive end date and 3 matched no term, exactly as an independent replay found (fork-execution-2026-09-21/votes-qualification/complete-member-join-replay.json). *(measured 2026-09-23)*
 
 - **Parquet file:** `member_vote_terms.parquet`
@@ -20,7 +22,6 @@ The term each member vote counts toward (delivery decision 2). A vote on `vote_d
 | `chamber` | `VARCHAR` | `house` or `senate`. |
 | `bioguide_id` | `VARCHAR` | The member's Bioguide id: native for the House, resolved from the LIS id through `members` for the Senate. NULL when the LIS id resolves to no member, and on a House row of 1990-2002, whose `name:` key states none and is never read as a person. |
 | `vote_day` | `VARCHAR` | The vote's day (YYYY-MM-DD) as the chamber printed it in Eastern time, read from `member_votes.vote_date` by the same rule as `roll_call_votes.vote_day`; NULL when the file prints no date. |
-| `term_match` | `VARCHAR` | `half_open` (one term with start <= day < end), `inclusive_end` (none half-open, exactly one with the end day included), `ambiguous` (more than one term either way), `unmatched` (none), `unresolved_member`, or `undated` (the file prints no date, so no term is chosen). `undated` wins over `unresolved_member`; such a row still carries `bioguide_id` wherever the member resolves. |
-| `term_index` | `VARCHAR` | The matched term's `term_index` in `member_terms`; NULL unless matched. |
+| `term_index` | `BIGINT` | The matched term's `term_index` in `member_terms`; NULL unless matched. |
 | `term_start` | `VARCHAR` | The matched term's start date; NULL unless matched. |
 | `term_end` | `VARCHAR` | The matched term's end date; NULL unless matched. |

@@ -13,7 +13,8 @@ import pyarrow.parquet as pq
 import pytest
 
 from scripts import check_source_refusals as check
-from spicy_regs.data_dictionary import expected_schemas
+from spicy_regs.native_types import described_schema
+from spicy_regs.legislative_receipts import migrate_outputs, policy, FILE_POLICY
 from spicy_regs.generations import build_generation
 from spicy_regs.source_evidence import CaptureEvidence
 from spicy_regs.sources import publication as pub
@@ -50,8 +51,14 @@ def _published(tmp_path, monkeypatch, olrc, *, after=None, retain=True):
     evidence.inherit(pub.empty_index(), public_url=None)
     outputs = run(olrc, evidence)
     directory = tmp_path / "generation"
-    build_generation(directory, family="laws", files=list(outputs), expected_keys=[p.name for p in outputs],
-                     schemas=expected_schemas(), inputs=evidence.inputs() if retain else ())
+    bundle = tmp_path / "native-bundle"
+    manifest = migrate_outputs(outputs, bundle, generation_id="laws-refusal-test")
+    native = [bundle / member for members in manifest["subjects"].values() for member in members]
+    policies = [policy(name) for name in manifest["datasets"]] + [FILE_POLICY]
+    build_generation(directory, family="laws", files=native, expected_keys=[p.name for p in native],
+                     schemas={p.dataset: described_schema(p.subject_schema) for p in policies if not p.receipt_only},
+                     receipt_path=bundle / "etl_receipts.parquet", receipt_policies=policies,
+                     receipt_generation_id="laws-refusal-test", inputs=evidence.inputs() if retain else ())
     store = Store()
     pub.publish_generation(directory, client=store, bucket="test", prior_index=pub.empty_index(),
                            evidence_directories=(evidence.artifact_dir,) if retain else ())
@@ -82,7 +89,7 @@ def test_a_refused_bulk_read_fails_the_nightly_check_and_blocks_nothing_else(tmp
                                                                                reason, table3_rows):
     """Each refusal leaves the prior Table III rows standing, publishes laws, and fails the check; a clean read passes."""
     rows = _published(tmp_path, monkeypatch, olrc, after=StubOlrc())
-    assert rows == {"laws.parquet": 4, "law_code_sections.parquet": 9, "table3_records.parquet": table3_rows}
+    assert rows == {"laws.parquet": 4, "law_code_sections.parquet": 9, "table3_records.parquet": table3_rows, "law_sections.parquet": 3}
     assert check.main(["--base-url", BASE]) == (1 if reason else 0)
     out = capsys.readouterr().out
     if reason:

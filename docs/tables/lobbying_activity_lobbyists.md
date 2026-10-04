@@ -6,6 +6,8 @@
 
 One row per lobbyist an LDA filing names on one of its activities, with the lobbyist's LDA id and name parts, any covered official position they held, and whether the filing lists them as new. Keyed `(filing_uuid, activity_index, lobbyist_index)`, positions in the filing's own lists. Joins to `lobbying_activities` on `(filing_uuid, activity_index)`. All columns are stored as VARCHAR.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='lobbying_activity_lobbyists'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** True range, the same filings as `lobbying_filings`: one row per lobbyist named on each activity. An activity that names no lobbyist has no rows here. *(measured 2026-09-28)*
 
 - **Parquet file:** `lobbying_activity_lobbyists.parquet`
@@ -16,8 +18,8 @@ One row per lobbyist an LDA filing names on one of its activities, with the lobb
 | Column | Type | Description |
 | --- | --- | --- |
 | `filing_uuid` | `VARCHAR` | The filing; joins to `lobbying_filings.filing_uuid`. |
-| `activity_index` | `VARCHAR` | The activity's position in the filing; with `filing_uuid`, joins to `lobbying_activities`. |
-| `lobbyist_index` | `VARCHAR` | The lobbyist's position in the activity's list, from `0`. Completes the key. |
+| `activity_index` | `BIGINT` | The activity's position in the filing; with `filing_uuid`, joins to `lobbying_activities`. |
+| `lobbyist_index` | `BIGINT` | The lobbyist's position in the activity's list, from `0`. Completes the key. |
 | `lobbyist_id` | `VARCHAR` | LDA lobbyist id: the stable identity of the person across filings. |
 | `prefix` | `VARCHAR` | Name prefix as filed; often null. |
 | `first_name` | `VARCHAR` | First name as filed (LDA prints names upper-case). |
@@ -26,4 +28,4 @@ One row per lobbyist an LDA filing names on one of its activities, with the lobb
 | `last_name` | `VARCHAR` | Last name as filed. |
 | `suffix` | `VARCHAR` | Name suffix as filed; often null. |
 | `covered_position` | `VARCHAR` | The covered executive- or legislative-branch position the lobbyist held, as filed; null when none. |
-| `new` | `VARCHAR` | `True` when the filing lists the lobbyist as new for this activity, `False` otherwise. |
+| `new` | `BOOLEAN` | `True` when the filing lists the lobbyist as new for this activity, `False` otherwise. |

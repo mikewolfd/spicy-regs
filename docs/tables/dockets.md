@@ -6,6 +6,8 @@
 
 One row per regulations.gov docket. A docket is the top-level folder a federal agency opens for a rulemaking or other action; it groups the documents the agency posts and the public comments it receives.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='dockets'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled repair with retained prior rows. On 2026-09-21 the fork merged every selected retained docket release into the prior table, keeping newer and unrelated rows; the daily regulations ETL adds to it. It is not a fresh regulations.gov census. modify_date records source modification, not docket opening or acquisition. Receipts: fork-execution-2026-09-21/publication-dockets.json and fork-base-repair-2026-09-21/repair-audit.json. *(measured 2026-09-28)*
 
 - **Parquet file:** `dockets.parquet`

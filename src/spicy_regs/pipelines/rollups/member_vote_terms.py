@@ -3,7 +3,8 @@
 from pathlib import Path
 from typing import ClassVar
 
-from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
+from spicy_regs.pipelines.rollups.base import make_rollup_app
+from spicy_regs.pipelines.rollups.subject_receipts import SubjectReceiptRollup as RollupPipeline
 from spicy_regs.transforms import build_member_vote_terms
 from spicy_regs.transforms.build_member_vote_terms import INPUTS, OUTPUT
 
@@ -16,7 +17,7 @@ class MemberVoteTermsRollup(RollupPipeline):
     output: ClassVar[str] = OUTPUT
 
     def build(self, output_dir: Path) -> Path:
-        return build_member_vote_terms(output_dir)
+        return self.build_receipts(output_dir, build_member_vote_terms)
 
 
 app = make_rollup_app(MemberVoteTermsRollup)

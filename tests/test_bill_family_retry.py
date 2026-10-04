@@ -778,6 +778,7 @@ def test_rollup_forwards_explicit_budget(monkeypatch, tmp_path, raw, expected):
     else:
         monkeypatch.setenv("BILL_FAMILY_MAX_VERSION_FETCHES", raw)
     calls = []
+    monkeypatch.setattr(rollup.BillFamilyRollup, "build_receipts", lambda self, directory, builder, **kwargs: builder(directory, **kwargs))
     monkeypatch.setattr(rollup, "build_bill_family", lambda output_dir, **kwargs: calls.append(kwargs) or ())
     assert rollup.BillFamilyRollup().build(tmp_path) == ()
     assert calls == [{"max_version_fetches": expected, "evidence": None}]

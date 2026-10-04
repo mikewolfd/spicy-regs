@@ -55,7 +55,7 @@ def test_repeated_cohort_refuses_before_writing(tmp_path):
 
 def test_preserving_merge_idempotence_body_versions_and_duplicate_refusal():
     import pyarrow as pa
-    from spicy_regs.transforms.build_court_pdf_extractions import SCHEMA, merge_extractions
+    from spicy_regs.transforms.build_court_pdf_extractions import RAW_SCHEMA as SCHEMA, merge_extractions
     opinion, capture = case()
     row = shape_captured_opinion(opinion, capture, parent={},
         extract=lambda _: PdfTextResult(PdfTextStatus.OK, 'old', 1))

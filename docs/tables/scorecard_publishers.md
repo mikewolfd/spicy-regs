@@ -6,6 +6,8 @@
 
 One stable publisher identity; historical names remain on edition observations. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='scorecard_publishers'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled publisher editions selected by the scorecard source registry. Complete edition reads replace that edition; failed or incomplete reads preserve prior observations. Coverage varies by publisher and historical source format. *(measured 2026-10-03)*
 
 - **Parquet file:** `scorecard_publishers.parquet`
@@ -18,10 +20,6 @@ One stable publisher identity; historical names remain on edition observations. 
 | `publisher_id` | `VARCHAR` | Stable source-layer publisher id; no downstream identity resolution. |
 | `name` | `VARCHAR` | Source-stated name, preserved as text; NULL when unstated. |
 | `abbreviation` | `VARCHAR` | Source-stated abbreviation, preserved as text; NULL when unstated. |
-| `aliases_json` | `VARCHAR` | JSON array of publisher name aliases as stated by the source. |
+| `aliases` | `VARCHAR[]` | Native list of publisher name aliases as stated by the source. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `homepage_url` | `VARCHAR` | Source-stated homepage url, preserved as text; NULL when unstated. |
 | `scorecard_index_url` | `VARCHAR` | Source-stated scorecard index url, preserved as text; NULL when unstated. |
-| `observed_at` | `VARCHAR` | UTC instant at which the supporting source response was observed. |
-| `capture_id` | `VARCHAR` | Opaque caller-issued identity of the source observation supporting this row. |
-| `source_url` | `VARCHAR` | Original publisher URL supporting this observation. |
-| `source_path` | `VARCHAR` | Source locator within the captured response, such as cell, JSON path or PDF page. |

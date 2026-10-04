@@ -456,8 +456,9 @@ def test_empty_success_keeps_prior_rows_or_builds_zero(monkeypatch, tmp_path, ki
         assert all(pq.read_table(other).num_rows == 0 for other in others)
     assert out.name == output_name
     result = pq.read_table(out)
-    assert result.to_pylist() == expected
-    assert result.schema == getattr(module, schema_name)
+    from spicy_regs.transforms.government_source_shapes import SUBJECT_SCHEMAS, map_subject
+    assert result.to_pylist() == [map_subject(out.stem, row) for row in expected]
+    assert result.schema == SUBJECT_SCHEMAS[out.stem]
 
 
 def test_fcc_proceedings_refuse_an_empty_whole_walk_and_keep_the_output(monkeypatch, tmp_path):

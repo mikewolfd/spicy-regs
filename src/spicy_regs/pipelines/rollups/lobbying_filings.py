@@ -11,11 +11,12 @@ from pathlib import Path
 from typing import ClassVar
 
 from spicy_regs.env_values import date_env, int_env
-from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
+from spicy_regs.pipelines.rollups.base import make_rollup_app
+from spicy_regs.pipelines.rollups.government import GovernmentReceiptRollup
 from spicy_regs.transforms import build_lobbying_filings
 
 
-class LobbyingFilingsRollup(RollupPipeline):
+class LobbyingFilingsRollup(GovernmentReceiptRollup):
     """Senate Lobbying Disclosure Act filings ingested from lda.gov (key optional)."""
 
     name: ClassVar[str] = "lobbying-filings"
@@ -30,7 +31,7 @@ class LobbyingFilingsRollup(RollupPipeline):
     def build(self, output_dir: Path) -> tuple[Path, ...]:
         return build_lobbying_filings(
             output_dir,
-            evidence=self.source_evidence,
+            evidence=self.source_evidence, receipt_generation_id=self.receipt_generation_id,
             since=date_env("LDA_SINCE"),
             until=date_env("LDA_UNTIL"),
             filing_year=int_env("LDA_FILING_YEAR"),

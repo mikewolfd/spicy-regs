@@ -1,0 +1,23 @@
+{
+  "dataset": "rule_targets",
+  "policy_version": "regulations-native-v1",
+  "subject_schema": "/////1ACAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAoAAADoAQAAqAEAAHwBAABMAQAAHAEAAOwAAADEAAAAlAAAAGQAAAAEAAAAUP7//wAAAQwUAAAAJAAAAAQAAAABAAAAHAAAAA8AAABmcl9kb2N1bWVudF9pZHMARP7//4T+//8AAAEFEAAAABgAAAAEAAAAAAAAAAQAAABpdGVtAAAAAGz+//+s/v//AAABBRAAAAAcAAAABAAAAAAAAAAJAAAAbGFzdF9zZWVuAAAAmP7//9j+//8AAAEFEAAAABwAAAAEAAAAAAAAAAoAAABmaXJzdF9zZWVuAADE/v//BP///wAAAQUQAAAAFAAAAAQAAAAAAAAAAwAAAHJpbgDo/v//KP///wAAAQUQAAAAHAAAAAQAAAAAAAAACwAAAGNmcl9zZWN0aW9uABT///9U////AAABBRAAAAAcAAAABAAAAAAAAAAIAAAAY2ZyX3BhcnQAAAAAQP///4D///8AAAEFEAAAABwAAAAEAAAAAAAAAAkAAABjZnJfdGl0bGUAAABs////rP///wAAAQUQAAAAGAAAAAQAAAAAAAAABwAAAGNmcl9yZWYAlP///9T///8AAAEFEAAAABwAAAAEAAAAAAAAAAkAAABkb2NrZXRfaWQAAADA////EAAUAAgABgAHAAwAAAAQABAAAAAAAAEFEAAAACQAAAAEAAAAAAAAAA4AAABydWxlX3RhcmdldF9pZAAABAAEAAQAAAAAAAAA",
+  "identity_fields": [
+    "rule_target_id"
+  ],
+  "receipt_fields": [
+    "source",
+    "evidence_id",
+    "method",
+    "actor_id",
+    "run_id",
+    "asserted_at",
+    "supersedes_id",
+    "fr_references_json",
+    "raw_conversion_inputs",
+    "input_metadata",
+    "raw_source_record"
+  ],
+  "receipt_only": false,
+  "nullable_identity_fields": []
+}

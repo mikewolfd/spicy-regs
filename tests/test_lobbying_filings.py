@@ -58,7 +58,7 @@ _RAW_FILING = {
             "general_issue_code": "BUD",
             "general_issue_code_display": "Budget/Appropriations",
             "description": "Appropriations.",
-            # Same chamber lobbied again — should dedup to one entity.
+            # Same chamber lobbied again — must remain a repeated occurrence.
             "government_entities": [
                 {"id": 2, "name": "HOUSE OF REPRESENTATIVES"},
                 {"id": 1, "name": "SENATE"},
@@ -90,18 +90,19 @@ def test_shape_maps_and_serializes_fields():
     acts = json.loads(row["lobbying_activities_json"])
     assert [a["general_issue_code"] for a in acts] == ["TEC", "BUD"]
     assert acts[0]["general_issue_code_display"] == "Telecommunications"
-    # Government entities flatten + dedup across activities.
+    # Government entities retain every occurrence in activity order.
     ents = json.loads(row["government_entities_json"])
     assert {e["name"] for e in ents} == {"HOUSE OF REPRESENTATIVES", "SENATE"}
-    assert len(ents) == 2
+    assert len(ents) == 3
+    assert [e["id"] for e in ents] == [2, 2, 1]
 
 
 def test_shape_handles_missing_nested():
     row = _shape({"filing_uuid": "x"})
     assert row["registrant_name"] is None
     assert row["client_id"] is None
-    assert row["lobbying_activities_json"] == "[]"
-    assert row["government_entities_json"] == "[]"
+    assert row["lobbying_activities_json"] == "null"
+    assert row["government_entities_json"] == "null"
 
 
 def _page(uuids: list[str], next_url: str | None, *, count: int | None = None) -> dict:
@@ -338,12 +339,12 @@ def test_each_activity_and_each_named_lobbyist_is_a_row_at_its_position(tmp_path
 
     assert [r["filing_uuid"] for r in pq.read_table(filings).to_pylist()] == ["f-1"]
     acts = pq.read_table(activities).to_pylist()
-    assert [(a["activity_index"], a["general_issue_code"]) for a in acts] == [("0", "SCI"), ("1", "TRD")]
-    assert json.loads(acts[0]["government_entities_json"]) == [{"id": 2, "name": "HOUSE OF REPRESENTATIVES"},
-                                                               {"id": 1, "name": "SENATE"}]
+    assert [(a["activity_index"], a["general_issue_code"]) for a in acts] == [(0, "SCI"), (1, "TRD")]
+    assert acts[0]["government_entities"] == [{"id": "2", "name": "HOUSE OF REPRESENTATIVES"},
+                                                               {"id": "1", "name": "SENATE"}]
     people = pq.read_table(lobbyists).to_pylist()
     assert [(p["activity_index"], p["lobbyist_index"], p["lobbyist_id"], p["last_name"], p["new"]) for p in people] == [
-        ("0", "0", "67914", "GALLANT", "False"), ("0", "1", "70001", "RUIZ", "True")]
+        (0, 0, "67914", "GALLANT", False), (0, 1, "70001", "RUIZ", True)]
     assert people[1]["covered_position"] == "Legislative Assistant, Sen. X"
 
 

@@ -39,6 +39,7 @@ from spicy_regs.pipelines.rollups.base import make_rollup_app
 from spicy_regs.pipelines.rollups.gao_reports import GaoReportsRollup
 from spicy_regs.sources import gao_r_package as package
 from spicy_regs.transforms.table_merge import merge_local_prior
+from spicy_regs.transforms.government_receipts import internal_prior, receipt_builder
 
 reports = import_module("spicy_regs.transforms.build_gao_reports")
 
@@ -75,10 +76,12 @@ def rows_digest(rows: Iterable[Mapping[str, Any]]) -> str:
     return "sha256:" + hashlib.sha256("\n".join(lines).encode()).hexdigest()
 
 
+@receipt_builder(output_argument="output", dataset="gao_reports")
 def import_package_rows(
     prior: Path, records: Iterable[Mapping[str, Any]], output: Path, *, rows_sha256: str, fill_nulls: bool = FILL_NULLS
 ) -> dict[str, Any]:
     """The live table plus the package's reports it lacks; a held row's cells never change, NULLs only if asked."""
+    prior = internal_prior("gao_reports", prior)
     schema = pq.read_schema(prior)
     wanted = {f.name: f.type for f in reports._SCHEMA}
     if any(wanted.get(f.name) != f.type for f in schema) or schema.names != list(reports.COLUMNS)[: len(schema)]:
@@ -156,8 +159,9 @@ class GaoRPackageImport(GaoReportsRollup):
         parents[package.RDS_URL] = {"sha256": package.RDS_SHA256, "byteSize": package.RDS_BYTES}
         return parents
 
+    @receipt_builder
     def build(self, output_dir: Path) -> tuple[Path, Path]:
-        output = output_dir / "import" / reports.OUTPUT
+        output = output_dir / reports.OUTPUT
         output.parent.mkdir(parents=True, exist_ok=True)
         records = package.read_package(self.package_dir / "gao_links.parquet")
         report = import_package_rows(output_dir / reports.OUTPUT, records, output, rows_sha256=ROWS_SHA256,

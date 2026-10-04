@@ -31,6 +31,8 @@ from contextlib import closing
 from datetime import date
 from pathlib import Path
 from typing import cast
+from uuid import uuid4
+import json
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -45,6 +47,10 @@ from spicy_regs.transforms.court_scope import (
     court_jurisdictions,
 )
 from spicy_regs.transforms.table_merge import merge_local_prior
+from spicy_regs.court_subjects import SUBJECT_SCHEMAS
+from spicy_regs.court_receipts import (
+    finish_court_output, file_witness, read_court_rows, prior_receipt_selection, restore_processing_input,
+)
 
 OUTPUT = "court_opinion_clusters.parquet"
 DATASET = "opinion-clusters"
@@ -57,7 +63,7 @@ BATCH_ROWS = 25_000
 # Published schema: all VARCHAR, keyed by cluster_id. ``cl_docket_id`` is the
 # bulk dump's ``docket_id``, renamed to match ``court_dockets.cl_docket_id`` so
 # the join reads the same on both sides.
-COLUMNS = (
+INPUT_COLUMNS = (
     "cluster_id",
     "cl_docket_id",
     "court_id",
@@ -97,16 +103,23 @@ COLUMNS = (
     "date_created",
     "date_modified",
     "ingest_source",
+    "raw_source_record",
 )
-_SCHEMA = pa.schema([(c, pa.string()) for c in COLUMNS])
+_SCHEMA = pa.schema([(c, pa.list_(pa.string()) if c == 'attorneys' else pa.string()) for c in INPUT_COLUMNS])
+COLUMNS = tuple(SUBJECT_SCHEMAS['court_opinion_clusters'].names)
 
 
 def _s(value: object) -> str | None:
-    """Table policy: empty strings and missing values are both NULL."""
+    """Keep the source's null versus empty distinction."""
     if value is None:
         return None
     text = str(value)
-    return text if text != "" else None
+    return text
+
+
+def _counsel(value):
+    """Keep free prose whole, and preserve actual arrays without splitting names."""
+    return value if value is None or isinstance(value, list) else [str(value)]
 
 
 def _cluster_url(cluster_id: str | None, slug: str | None) -> str | None:
@@ -143,7 +156,7 @@ def _shape_bulk(row: dict, *, scope: CourtScope | None = None) -> dict:
         "scdb_votes_minority": _s(row.get("scdb_votes_minority")),
         "source": _s(row.get("source")),
         "procedural_history": _s(row.get("procedural_history")),
-        "attorneys": _s(row.get("attorneys")),
+        "attorneys": _counsel(row.get("attorneys")),
         "posture": _s(row.get("posture")),
         "syllabus": _s(row.get("syllabus")),
         "headnotes": _s(row.get("headnotes")),
@@ -162,6 +175,7 @@ def _shape_bulk(row: dict, *, scope: CourtScope | None = None) -> dict:
         "date_created": _s(row.get("date_created")),
         "date_modified": _s(row.get("date_modified")),
         "ingest_source": "bulk",
+        "raw_source_record": None,
     }
 
 
@@ -184,7 +198,7 @@ def _shape_search(result: dict, *, scope: CourtScope | None = None) -> dict:
     court_id, jurisdiction, federal = (
         scope.for_court(_s(result.get("court_id"))) if scope else (_s(result.get("court_id")), None, None)
     )
-    row = dict.fromkeys(COLUMNS)
+    row = dict.fromkeys(INPUT_COLUMNS)
     row.update(
         {
             "cluster_id": cluster_id,
@@ -202,17 +216,19 @@ def _shape_search(result: dict, *, scope: CourtScope | None = None) -> dict:
             "scdb_id": _s(result.get("scdb_id")),
             "source": _s(result.get("source")),
             "procedural_history": _s(result.get("procedural_history")),
-            "attorneys": _s(result.get("attorney")),
+            "attorneys": _counsel(result.get("attorney")),
             "posture": _s(result.get("posture")),
             "syllabus": _s(result.get("syllabus")),
             "absolute_url": absolute,
             "ingest_source": "search",
+            "raw_source_record": json.dumps(result, ensure_ascii=False),
         }
     )
     return row
 
 
-def held_export(table: Path) -> tuple[int | None, str | None]:
+def held_export(table: Path, *, receipt_path: Path | None = None,
+                generation_id: str | None = None, allow_legacy: bool = False) -> tuple[int | None, str | None]:
     """A clusters table's highest bulk ``cluster_id`` and the day of its newest bulk ``date_created``.
 
     Together they name the export the table holds without a stamp: the id is
@@ -222,6 +238,17 @@ def held_export(table: Path) -> tuple[int | None, str | None]:
     """
     import duckdb
 
+    if not allow_legacy or pq.read_schema(table).equals(SUBJECT_SCHEMAS['court_opinion_clusters']):
+        high, created = None, None
+        for row in read_court_rows(table, dataset='court_opinion_clusters', receipt_path=receipt_path,
+                                  generation_id=generation_id, allow_legacy=allow_legacy):
+            if row.get('ingest_source') == 'bulk':
+                identity = row.get('cluster_id')
+                if identity and identity.isdecimal():
+                    high = max(high or 0, int(identity))
+                if row.get('date_created'):
+                    created = max(created or '', row['date_created'])
+        return high, created[:10] if created else None
     path = str(table).replace("'", "''")
     with duckdb.connect() as con:
         high, created = con.execute(
@@ -243,6 +270,7 @@ def build_court_opinion_clusters(
     courts_local_file: Path | None = None,
     skip_court_scope: bool = False,
     include_prior: bool = True,
+    allow_legacy_prior: bool = False,
 ) -> Path:
     """Build ``court_opinion_clusters.parquet`` (bulk dump + search catch-up).
 
@@ -272,11 +300,19 @@ def build_court_opinion_clusters(
     )
 
     out_file = output_dir / OUTPUT
-    prior_file = output_dir / "_clusters_prior.parquet"
-    new_file = output_dir / "_clusters_new.parquet"
+    prior_file = out_file if out_file.is_symlink() else output_dir / "_clusters_prior.parquet"
+    new_file = output_dir / f".clusters-new-{uuid4().hex}.parquet"
 
     # 1. Prior table (absence just means first build).
     have_prior = include_prior and (prior_file.exists() or r2.download(OUTPUT, prior_file))
+    input_witnesses = [file_witness(prior_file)] if have_prior else []
+    if have_prior and (not allow_legacy_prior or not pq.read_schema(prior_file).equals(_SCHEMA)):
+        receipt_path, generation_id = prior_receipt_selection(prior_file, dataset='court_opinion_clusters')
+        if receipt_path is not None:
+            input_witnesses.append(file_witness(receipt_path))
+        prior_file = restore_processing_input(prior_file, output_dir / f'.clusters-prior-{uuid4().hex}.parquet',
+            dataset='court_opinion_clusters', schema=_SCHEMA, receipt_path=receipt_path,
+            generation_id=generation_id, allow_legacy=allow_legacy_prior)
     logger.info(
         "Opinion clusters: {}",
         f"merging against prior table {prior_file}" if have_prior else "no prior table — full build",
@@ -293,7 +329,7 @@ def build_court_opinion_clusters(
         published = find_dump(objects, DATASET, resolved)
         if published is None:
             raise RuntimeError(f"CourtListener bulk: no {DATASET} dump for {resolved}")
-        held_high, held_day = held_export(prior_file) if have_prior and dump_date is None else (None, None)
+        held_high, held_day = held_export(prior_file, allow_legacy=True) if have_prior and dump_date is None else (None, None)
         catch_up_only = held_high is not None and held_day is not None and held_day >= resolved.isoformat()
         if catch_up_only:
             logger.info("Opinion clusters: prior holds the {} export (to id {:,}); catch-up only", resolved, held_high)
@@ -340,6 +376,8 @@ def build_court_opinion_clusters(
                     cluster_id = shaped["cluster_id"]
                     if cluster_id and cluster_id.isdecimal():
                         export_high = max(export_high or 0, int(cluster_id))
+            if reader.stopped_early:
+                raise RuntimeError('Opinion cluster dump was not read to its end')
 
         bulk_rows = writer.written + len(writer.rows)
 
@@ -377,7 +415,12 @@ def build_court_opinion_clusters(
     # So the first build promotes the staged file instead, and pays for that with
     # dump order rather than date order.
     if not have_prior:
-        new_file.replace(out_file)
+        witnesses = [file_witness(new_file)]
+        if local_file is not None:
+            witnesses.insert(0, file_witness(local_file))
+        out_file = finish_court_output('court_opinion_clusters', new_file, output_dir, witnesses=witnesses,
+            diagnostics={'dump_date': resolved.isoformat() if resolved else None, 'bulk_rows': bulk_rows,
+                         'search_rows': search_rows, 'legacy_prior_authorized': allow_legacy_prior})
         total = pq.ParquetFile(out_file).metadata.num_rows
         logger.info("Court opinion clusters: {:,} rows (first build, dump order)", total)
         return out_file
@@ -390,19 +433,22 @@ def build_court_opinion_clusters(
     con.execute("SET threads=2")
     con.execute(f"SET temp_directory='{spill_dir}'")
 
+    staged = output_dir / f'.clusters-merged-{uuid4().hex}.parquet'
     merge_local_prior(
         con,
-        columns=COLUMNS,
+        columns=INPUT_COLUMNS,
         identity="cluster_id",
         order_by="date_filed DESC, cluster_id",
         prior_file=prior_file if have_prior else None,
         new_file=new_file,
-        out_file=out_file,
+        out_file=staged,
     )
     con.close()
 
-    for scratch in (prior_file, new_file):
-        scratch.unlink(missing_ok=True)
+    out_file = finish_court_output('court_opinion_clusters', staged, output_dir,
+        witnesses=[file_witness(staged), *input_witnesses],
+        diagnostics={'dump_date': resolved.isoformat() if resolved else None, 'bulk_rows': bulk_rows,
+                     'search_rows': search_rows, 'legacy_prior_authorized': allow_legacy_prior})
 
     total = pq.ParquetFile(out_file).metadata.num_rows
     logger.info("Court opinion clusters: {:,} rows", total)

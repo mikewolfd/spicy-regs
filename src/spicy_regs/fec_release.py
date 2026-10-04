@@ -241,7 +241,12 @@ def captured_table(index: Mapping, name: str) -> dict | None:
 
     owner = table_owner(index, name + ".parquet")
     if owner is None:
-        return None
+        from .fec_receipt_adapter import receipt_owner
+        owner = receipt_owner(index, name)
+        if owner is None:
+            return None
+        return json.loads(_json({"family": owner[0], "generation": owner[1]["artifactDigest"],
+                                 "descriptor": owner[1]["etlReceipts"]}))
     return json.loads(_json({"family": owner[0], "generation": owner[1]["artifactDigest"],
                              "descriptor": table_descriptor(index, name + ".parquet")}))
 
@@ -308,7 +313,7 @@ def check_view(spec: QualifiedView, configuration: dict, index: Mapping, availab
                         issue("dependencies." + table, "captured_managed_table_unavailable", dependencies[table], pin)
                     elif pin != dependencies[table]:
                         issue("dependencies." + table, "exact_table_pin_mismatch", dependencies[table], pin)
-                    if pin is not None and pin["family"] == "fec-query" and receipt["output_membership"].get(table) != dependencies[table]:
+                    if pin is not None and pin["family"] == "fec-query" and "datasets" not in pin["descriptor"] and receipt["output_membership"].get(table) != dependencies[table]:
                         issue("output_membership." + table, "typed_output_membership_mismatch")
                     if (pin is not None and (not isinstance(dependencies[table], dict)
                             or dependencies[table].get("generation") not in receipt["recovery"]["retained_generations"].get(pin["family"], []))):
@@ -330,7 +335,7 @@ def check_view(spec: QualifiedView, configuration: dict, index: Mapping, availab
     )
 
 
-def install_views(connection, specs, configuration, index, available_tables, publication, *, read_tables):
+def install_views(connection, specs, configuration, index, available_tables, publication, *, read_tables, prepare=None):
     """Check first, then reuse the relationship-view owner for compatible trusted SQL."""
     from .relationship_views.sql_views import install_sql_views
 
@@ -352,7 +357,11 @@ def install_views(connection, specs, configuration, index, available_tables, pub
         if release["status"] == "compatible":
             sql = configuration["views"][spec.view.name]["sql"]
             prepared = replace(spec.view, query=lambda _pins, sql=sql: sql)
-            entry = install_sql_views(connection, available_tables, [prepared], publication)[spec.view.name]
+            if prepare is not None:
+                prepared = prepare(prepared, sql)
+            entry = install_sql_views(connection, set(available_tables) | set(prepared.required), [prepared], publication)[spec.view.name]
+            entry["dependencies"] = list(spec.view.required)
+            entry["metadata"]["input_publications"] = {table: publication.get(table) for table in spec.view.required}
             if entry["status"] != "available":
                 release["status"] = "disabled"
                 release["reasons"].append(dict(path="schema", reason=entry["reason"], expected=None, actual=None))

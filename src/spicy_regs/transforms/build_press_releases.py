@@ -175,6 +175,7 @@ def build_press_releases(
     *,
     acquirer: PressReleaseSource | None = None,
     download_prior: Callable[[str, Path], bool] = r2.download,
+    receipt_build=None,
 ) -> Path:
     """Build ``press_releases.parquet`` from both chambers' feeds.
 
@@ -185,6 +186,10 @@ def build_press_releases(
     perishable read happens first and the linkage — which is re-derivable on
     the next run — happens second.
     """
+    if receipt_build is not None:
+        return receipt_build.run(build_press_releases, output_dir, **{
+            key: value for key, value in locals().items() if key not in {"output_dir", "receipt_build"}
+        })
     acquirer = acquirer or PressReleaseAcquirer(budget=BUDGET)
 
     captures = []

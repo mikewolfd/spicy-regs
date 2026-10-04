@@ -41,7 +41,7 @@ _RAW_DOCKET = {
     "party": [
         "HENNEPIN COUNTY, MINNESOTA",
         "U.S. DEPARTMENT OF HEALTH AND HUMAN SERVICES",
-        None,  # blanks are dropped
+        None,  # Source list positions remain intact.
     ],
     "attorney": ["Skye Perryman", "Allison Marcy Zieve"],
     "firm": ["Democracy Forward", "Public Citizen Litigation Group"],
@@ -63,8 +63,8 @@ def test_shape_maps_and_serializes_fields():
     # Integer id stringifies (schema is all-VARCHAR).
     assert row["cl_docket_id"] == "73613631"
     assert row["case_name"].startswith("HENNEPIN COUNTY")
-    # Empty full caption normalizes to NULL, not "".
-    assert row["case_name_full"] is None
+    # Source empty captions remain distinct from missing captions.
+    assert row["case_name_full"] == ""
     assert row["court_id"] == "dcd"
     assert row["court_citation_string"] == "D.D.C."
     assert row["docket_number"] == "1:26-cv-02460"
@@ -80,11 +80,12 @@ def test_shape_maps_and_serializes_fields():
     assert row["absolute_url"] == (
         "https://www.courtlistener.com/docket/73613631/hennepin-county-minnesota-v-us-dept-of-hhs/"
     )
-    # Array fields serialize to JSON, dropping blank/None entries.
+    # Private mapper inputs keep all list elements for the native subject writer.
     parties = json.loads(row["parties_json"])
     assert parties == [
         "HENNEPIN COUNTY, MINNESOTA",
         "U.S. DEPARTMENT OF HEALTH AND HUMAN SERVICES",
+        None,
     ]
     assert json.loads(row["attorneys_json"]) == ["Skye Perryman", "Allison Marcy Zieve"]
     assert json.loads(row["firms_json"]) == ["Democracy Forward", "Public Citizen Litigation Group"]
@@ -94,11 +95,33 @@ def test_shape_handles_missing_fields():
     row = _shape({"docket_id": 42})
     assert row["cl_docket_id"] == "42"
     assert row["case_name"] is None
-    assert row["parties_json"] == "[]"
-    assert row["attorneys_json"] == "[]"
-    assert row["firms_json"] == "[]"
+    assert row["parties_json"] is None
+    assert row["attorneys_json"] is None
+    assert row["firms_json"] is None
     assert row["absolute_url"] is None
     assert row["date_created"] is None
+
+
+def test_incremental_rerun_uses_latest_complete_local_pair(tmp_path, monkeypatch):
+    from spicy_regs.court_receipts import read_court_rows
+    from spicy_regs.transforms.build_courtlistener import build_courtlistener
+
+    monkeypatch.setattr("spicy_regs.sources.r2.download", lambda *args, **kwargs: False)
+    rows = [{"docket_id": 1, "party": ["Agency", None, "", "Agency"],
+             "meta": {"date_created": "2026-06-30T08:00:00Z"}}]
+    monkeypatch.setattr(CourtListenerReader, "iter_records", lambda self: iter(rows))
+    first = build_courtlistener(tmp_path, max_records=10)
+    first_bytes = first.read_bytes()
+    (tmp_path / "_cl_prior.parquet").write_bytes(b"stale retained scratch")
+    rows[:] = [{"docket_id": 2, "party": [], "meta": {"date_created": "2026-07-01T08:00:00Z"}}]
+    second = build_courtlistener(tmp_path, max_records=10)
+    restored = {r["cl_docket_id"]: r for r in read_court_rows(second, dataset="court_dockets")}
+    assert set(restored) == {"1", "2"}
+    assert restored["1"]["parties"] == ["Agency", None, "", "Agency"]
+    assert restored["2"]["parties"] == []
+    assert restored["1"]["date_created"] == "2026-06-30T08:00:00Z"
+    assert first.read_bytes() == first_bytes
+    assert (tmp_path / "court_dockets.parquet").resolve() == second
 
 
 def _page(ids, next_url=None, *, total=None, kind="r"):
@@ -325,11 +348,11 @@ def test_a_run_fills_a_bounded_slice_of_unnamed_dockets_and_flags_case_type(monk
     monkeypatch.setattr(module, "CourtListenerDocketIdReader", Named)
     monkeypatch.setattr(module, "FILL_QUERIES_PER_RUN", 1)
 
-    rows = {r["cl_docket_id"]: r for r in pq.read_table(module.build_courtlistener(tmp_path)).to_pylist()}
+    rows = {r["cl_docket_id"]: r for r in pq.read_table(module.build_courtlistener(tmp_path, allow_legacy_prior=True)).to_pylist()}
     filled = asked[0].removeprefix("docket_id:(").removesuffix(")").split(" OR ")
     assert len(asked) == 1 and filled == [row["cl_docket_id"] for row in unnamed[:len(filled)]]
-    assert all(json.loads(rows[i]["parties_json"]) == [f"party of {i}"] for i in filled)
-    assert all(rows[row["cl_docket_id"]]["parties_json"] is None for row in unnamed[len(filled):])
+    assert all(rows[i]["parties"] == [f"party of {i}"] for i in filled)
+    assert all(rows[row["cl_docket_id"]]["parties"] is None for row in unnamed[len(filled):])
     assert rows["1"]["case_type"] == "cv" and rows[filled[0]]["case_type"] is None
     assert rows[unnamed[-1]["cl_docket_id"]]["case_type"] == "cr"
     assert list(rows["1"]) == list(module.PUBLISHED_COLUMNS)

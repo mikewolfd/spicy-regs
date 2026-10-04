@@ -58,6 +58,8 @@ nav:
       - Remaining work: fec-gaps.md
       - Coverage census: research/fec-coverage-2026-09-21.md
   - Tables:
+      - ETL receipts: tables/etl_receipts.md
+      - law_sections: tables/law_sections.md
       - dockets: tables/dockets.md
       - documents: tables/documents.md
       - comments: tables/comments.md

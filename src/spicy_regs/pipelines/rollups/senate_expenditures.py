@@ -10,19 +10,21 @@ package body the citation families read.
 from pathlib import Path
 from typing import ClassVar
 
-from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
+from spicy_regs.pipelines.rollups.base import make_rollup_app
+from spicy_regs.legislative_rollups import LegislativeReceiptRollup, family_policies
 from spicy_regs.transforms.build_senate_expenditures import build_senate_expenditures
 
 
-class SenateExpendituresRollup(RollupPipeline):
+class SenateExpendituresRollup(LegislativeReceiptRollup):
     """The Secretary of the Senate's ruled expenditure tables, from GovInfo granule PDFs (api.data.gov key)."""
 
     name: ClassVar[str] = "senate-expenditures"
     inputs: ClassVar[tuple[str, ...]] = ()
+    receipt_policies = family_policies('senate_expenditures')
     output: ClassVar[str] = "senate_expenditures.parquet"
 
     def build(self, output_dir: Path) -> Path:
-        return build_senate_expenditures(output_dir)
+        return self.build_receipts(output_dir, build_senate_expenditures)[0]
 
 
 app = make_rollup_app(SenateExpendituresRollup)

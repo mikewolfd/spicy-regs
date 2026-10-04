@@ -393,6 +393,23 @@ JOINS = tuple(
 )
 
 
+# Processing relationships are inspected through selected ETL receipts. Native
+# printing identities replace acquisition-source keys in subject joins.
+_PROCESSING_TABLES = {"fec_source_records", "fec_collections", "native_legal_reference_reads", "scorecard_snapshots"}
+RETIRED_PROCESSING_JOINS = tuple(join for join in JOINS if join.child in _PROCESSING_TABLES or join.parent in _PROCESSING_TABLES
+                               or (join.child == "hearing_transcripts" and join.child_columns == ("bill_id",)))
+JOINS = tuple(join for join in JOINS if join not in RETIRED_PROCESSING_JOINS)
+_NATIVE_JOIN_FIELDS = {("bill_sections", "source"): "printing_id", ("bill_versions", "source"): "printing_id",
+                       ("section_diffs", "from_source"): "from_printing_id", ("section_diffs", "to_source"): "to_printing_id"}
+JOINS = tuple(replace(join,
+    child_columns=tuple(_NATIVE_JOIN_FIELDS.get((join.child, col), col) for col in join.child_columns),
+    parent_columns=tuple(_NATIVE_JOIN_FIELDS.get((join.parent, col), col) for col in join.parent_columns),
+    baseline_keys=0, baseline_missing=0, kind="empty", measurement=None,
+    reason="Native subject printing identities replace capture-source keys; no new published join baseline is claimed.")
+    if any((join.child, col) in _NATIVE_JOIN_FIELDS for col in join.child_columns)
+       or any((join.parent, col) in _NATIVE_JOIN_FIELDS for col in join.parent_columns) else join for join in JOINS)
+
+
 def joins_for(table: str) -> dict[str, list[dict]]:
     """The declared joins where ``table`` is the child (``outgoing``) or the parent (``incoming``)."""
     return {

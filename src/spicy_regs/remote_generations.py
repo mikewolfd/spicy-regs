@@ -95,7 +95,10 @@ def _verify_remote(source, *, expected_pin=None):
     from rulespec_artifacts import iter_member_descriptors
 
     artifact = verify_generation_source(source, source.table_info, expected_pin=expected_pin)
-    if set(artifact.root["spec"]["tables"]) != set(source.members):
+    expected = set(artifact.root["spec"]["tables"])
+    if "etlReceipts" in artifact.root["spec"]:
+        expected.add("etl_receipts.parquet")
+    if expected != set(source.members):
         raise ValueError("Staged receipts differ from the declared generation")
     for descriptor in iter_member_descriptors(artifact, source):
         staged = source.members[descriptor.object_key]
@@ -110,6 +113,7 @@ def prepare_remote_generation(
     members: Sequence[StoredParquet], expected_keys: Sequence[str],
     schemas: Mapping[str, list[tuple[str, str]]], read_snapshot: Mapping | None = None,
     carried_forward: Mapping[str, str] | None = None, publication_status: str = "complete-family", inputs=(),
+    receipt_policies: Sequence | None = None, receipt_generation_id: str | None = None,
 ):
     """Create and fully verify the standard artifact using pinned remote tables.
 
@@ -133,10 +137,21 @@ def prepare_remote_generation(
             object_key=key, role="table", media_type="application/vnd.apache.parquet",
             byte_size=member.byte_size, sha256=member.sha256, record_count=member.rows,
         ))
+    receipt_spec = None
+    if "etl_receipts.parquet" in tables:
+        if not receipt_policies or not receipt_generation_id:
+            raise ValueError("Remote receipts need policies and a generation identity")
+        receipt_spec = {"key": "etl_receipts.parquet", "generationId": receipt_generation_id,
+                        "policies": [p.descriptor() for p in receipt_policies],
+                        **tables.pop("etl_receipts.parquet")}
+    elif receipt_policies is not None or receipt_generation_id is not None:
+        raise ValueError("Remote receipt admission cannot omit receipts")
+    from spicy_regs.etl_policy_registry import require_registered_receipts
+    require_registered_receipts(tables, receipt_spec)
     _write_generation_metadata(
         directory, family=family, tables=tables, members=descriptors, read_snapshot=read_snapshot,
         carried_forward=carried_forward, publication_status=publication_status, inputs=inputs,
-        extra_packages=("pyarrow", "duckdb", "smart-open", "wrapt"),
+        extra_packages=("pyarrow", "duckdb", "smart-open", "wrapt"), etl_receipts=receipt_spec,
     )
     return _verify_remote(source)
 
@@ -176,6 +191,7 @@ def _copy_immutable(client, bucket: str, target: str, member: StoredParquet) -> 
 def publish_remote_generation(
     directory: Path, *, client, bucket: str, staging_prefix: str, members: Sequence[StoredParquet],
     prior_index: Mapping, evidence_directories: tuple[Path, ...] = (),
+    added_tables: frozenset[str] = frozenset(), receipt_only_tables: frozenset[str] = frozenset(),
 ) -> dict:
     """Use the ordinary publication gates, promoting tables without local copies."""
     source = _RemoteGenerationSource(directory, client=client, bucket=bucket,
@@ -191,5 +207,5 @@ def publish_remote_generation(
 
     return _publish_verified_generation(
         artifact, source, upload_member=upload, client=client, bucket=bucket, prior_index=prior_index,
-        evidence_directories=evidence_directories,
+        evidence_directories=evidence_directories, added_tables=added_tables, receipt_only_tables=receipt_only_tables,
     )

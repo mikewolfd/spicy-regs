@@ -6,6 +6,8 @@
 
 One source entity/period/summary-layout/version observation. Keeps monetary measures in a typed list with native names, raw spelling, status and unit. Reported totals are separate from itemized observations; overlapping cycle, year-to-date, quarterly and semiannual measures are not automatically additive. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_reported_financial_summaries'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled. Supported observations from retained candidate, committee, presidential and bundling summary layouts. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
 
 - **Parquet file:** `fec_reported_financial_summaries.parquet`
@@ -16,38 +18,52 @@ One source entity/period/summary-layout/version observation. Keeps monetary meas
 | Column | Type | Description |
 | --- | --- | --- |
 | `record_id` | `VARCHAR` | Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event. |
-| `identity_version` | `VARCHAR` | Version of the source-observation identity rule; it does not select a current or canonical record. |
-| `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
-| `value_mapping_version` | `VARCHAR` | Version of the exact monetary and date conversion rules used for supported values. |
-| `mapping_status` | `VARCHAR` | Whether this source observation mapped fully, partially, or received an explicit nondata/refusal disposition; inspect the reason alongside NULL values. |
-| `mapping_reason_json` | `VARCHAR` | JSON object naming unsupported, missing or otherwise limited field interpretations; native values remain reachable through evidence. |
-| `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
-| `source_record_id` | `VARCHAR` | Native source-observation key within collection_id. Resolve with the source generation, exact locator and source digest, not this value alone. |
-| `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
-| `source_locator_json` | `VARCHAR` | Exact source row or subrecord coordinates, including available member, ordinal, byte span and field-definition references. Resolve in the pinned source generation. |
-| `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
-| `selection_evidence_sha256` | `VARCHAR` | Digest of the retained selection evidence used to authorize this mapper's source scope; not a financial inclusion decision. |
-| `source_representation_role` | `VARCHAR` | Selected source role such as snapshot, insertion or deletion. Amount signs and ordinary amendment flags do not establish correction applicability. |
 | `correction_operation` | `VARCHAR` | Source-supported correction operation, when applicable; a positive amount in a deletion stream is not a new receipt or an inferred refund. |
-| `correction_applicability_status` | `VARCHAR` | Whether the captured correction can be applied to an evidenced base and target population; unresolved applicability prevents a qualified current total. |
-| `current_record_status` | `VARCHAR` | Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record. |
 | `filing_key` | `VARCHAR` | Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. |
-| `filing_link_status` | `VARCHAR` | Status of the relationship to a submitted filing version; unresolved references preserve the financial observation. |
 | `summary_type` | `VARCHAR` | Namespaced source summary layout or report type; measures from different layouts and periods are not interchangeable. |
-| `source_namespace` | `VARCHAR` | Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent. |
 | `currency` | `VARCHAR` | Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately. |
-| `entity_reference_status` | `VARCHAR` | Resolution status of the literal entity reference. ID-shaped aggregate codes do not establish a candidate or committee. |
 | `candidate_native_id` | `VARCHAR` | Literal candidate-like reference as reported. Aggregate codes or unresolved references do not establish a person. |
 | `candidate_name` | `VARCHAR` | The candidate's name as reported, without a name-based identity merge. |
 | `committee_native_id` | `VARCHAR` | Literal committee reference in a summary; entity_reference_status states its resolution limits. |
 | `committee_name` | `VARCHAR` | The committee's name as reported, without a name-based identity merge. |
-| `period_start_raw` | `VARCHAR` | Literal source value before conversion for period_start. Preserves spelling, signs and empty values; the typed value and its status are separate. |
-| `period_start_status` | `VARCHAR` | Source-presence or conversion state for period_start, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
-| `period_end_raw` | `VARCHAR` | Literal source value before conversion for period_end. Preserves spelling, signs and empty values; the typed value and its status are separate. |
-| `period_end_status` | `VARCHAR` | Source-presence or conversion state for period_end, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
-| `attributes_json` | `VARCHAR` | Additional source-specific attributes retained without converting similarly named fields into shared meanings. |
 | `period_basis` | `VARCHAR` | Evidence and source definition establishing the covered period; unknown or overlapping periods remain explicit. |
 | `source_cycle` | `INTEGER` | Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year. |
 | `period_start` | `DATE` | Date parsed from the start of the source-defined reporting period. NULL requires the source value and conversion status; capture time is not substituted. |
 | `period_end` | `DATE` | Date parsed from the end of the source-defined reporting period. NULL requires the source value and conversion status; capture time is not substituted. |
-| `measures` | `STRUCT(native_field VARCHAR, raw_value VARCHAR, "value" DECIMAL(38,9), value_status VARCHAR, unit VARCHAR)[]` | Source-specific monetary measures as a list of structs: native_field, raw_value, exact DECIMAL value, value_status and unit. Unnest with record_id; never add parent summaries to their itemized details. |
+| `cand_ici` | `VARCHAR` | Publisher financial-summary field CAND_ICI; its literal value qualifies the reported summary. |
+| `cand_office_district` | `VARCHAR` | Publisher financial-summary field CAND_OFFICE_DISTRICT; its literal value qualifies the reported summary. |
+| `cand_office_st` | `VARCHAR` | Publisher financial-summary field Cand_Office_St; its literal value qualifies the reported summary. |
+| `cand_pty_affiliation` | `VARCHAR` | Publisher financial-summary field CAND_PTY_AFFILIATION; its literal value qualifies the reported summary. |
+| `cmte_city` | `VARCHAR` | Publisher financial-summary field CMTE_CITY; its literal value qualifies the reported summary. |
+| `cmte_dsgn` | `VARCHAR` | Publisher financial-summary field CMTE_DSGN; its literal value qualifies the reported summary. |
+| `cmte_filing_freq` | `VARCHAR` | Publisher financial-summary field CMTE_FILING_FREQ; its literal value qualifies the reported summary. |
+| `cmte_st` | `VARCHAR` | Publisher financial-summary field CMTE_ST; its literal value qualifies the reported summary. |
+| `cmte_st1` | `VARCHAR` | Publisher financial-summary field CMTE_ST1; its literal value qualifies the reported summary. |
+| `cmte_st2` | `VARCHAR` | Publisher financial-summary field CMTE_ST2; its literal value qualifies the reported summary. |
+| `cmte_tp` | `VARCHAR` | Publisher financial-summary field CMTE_TP; its literal value qualifies the reported summary. |
+| `cmte_zip` | `VARCHAR` | Publisher financial-summary field CMTE_ZIP; its literal value qualifies the reported summary. |
+| `cand_city` | `VARCHAR` | Publisher financial-summary field Cand_City; its literal value qualifies the reported summary. |
+| `cand_incumbent_challenger_open_seat` | `VARCHAR` | Publisher financial-summary field Cand_Incumbent_Challenger_Open_Seat; its literal value qualifies the reported summary. |
+| `cand_office` | `VARCHAR` | Publisher financial-summary field Cand_Office; its literal value qualifies the reported summary. |
+| `cand_office_dist` | `VARCHAR` | Publisher financial-summary field Cand_Office_Dist; its literal value qualifies the reported summary. |
+| `cand_party_affiliation` | `VARCHAR` | Publisher financial-summary field Cand_Party_Affiliation; its literal value qualifies the reported summary. |
+| `cand_state` | `VARCHAR` | Publisher financial-summary field Cand_State; its literal value qualifies the reported summary. |
+| `cand_street_1` | `VARCHAR` | Publisher financial-summary field Cand_Street_1; its literal value qualifies the reported summary. |
+| `cand_street_2` | `VARCHAR` | Publisher financial-summary field Cand_Street_2; its literal value qualifies the reported summary. |
+| `cand_zip` | `VARCHAR` | Publisher financial-summary field Cand_Zip; its literal value qualifies the reported summary. |
+| `committee_election_district` | `VARCHAR` | Publisher financial-summary field Committee_Election_District; its literal value qualifies the reported summary. |
+| `committee_election_state` | `VARCHAR` | Publisher financial-summary field Committee_Election_State; its literal value qualifies the reported summary. |
+| `election_yr` | `VARCHAR` | Publisher financial-summary field ELECTION_YR; its literal value qualifies the reported summary. |
+| `fec_election_yr` | `VARCHAR` | Publisher financial-summary field FEC_ELECTION_YR; its literal value qualifies the reported summary. |
+| `gen_election` | `VARCHAR` | Publisher financial-summary field GEN_ELECTION; its literal value qualifies the reported summary. |
+| `gen_election_precent` | `VARCHAR` | Publisher financial-summary field GEN_ELECTION_PRECENT; its literal value qualifies the reported summary. |
+| `org_tp` | `VARCHAR` | Publisher financial-summary field ORG_TP; its literal value qualifies the reported summary. |
+| `prim_election` | `VARCHAR` | Publisher financial-summary field PRIM_ELECTION; its literal value qualifies the reported summary. |
+| `pty_cd` | `VARCHAR` | Publisher financial-summary field PTY_CD; its literal value qualifies the reported summary. |
+| `run_election` | `VARCHAR` | Publisher financial-summary field RUN_ELECTION; its literal value qualifies the reported summary. |
+| `receipt_date` | `VARCHAR` | Publisher financial-summary field Receipt_Date; its literal value qualifies the reported summary. |
+| `report_type` | `VARCHAR` | Publisher financial-summary field Report_Type; its literal value qualifies the reported summary. |
+| `spec_election` | `VARCHAR` | Publisher financial-summary field SPEC_ELECTION; its literal value qualifies the reported summary. |
+| `sponsor_name` | `VARCHAR` | Publisher financial-summary field Sponsor_Name; its literal value qualifies the reported summary. |
+| `tres_nm` | `VARCHAR` | Publisher financial-summary field TRES_NM; its literal value qualifies the reported summary. |
+| `measures` | `STRUCT(native_field VARCHAR, "value" DECIMAL(38,9), unit VARCHAR)[]` | Source-specific monetary measures as a list of structs: native_field, raw_value, exact DECIMAL value, value_status and unit. Unnest with record_id; never add parent summaries to their itemized details. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |

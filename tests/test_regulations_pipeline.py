@@ -17,6 +17,16 @@ import spicy_docs.sources.mirrulations as mirrulations
 from spicy_regs.manifest import Manifest, MissingManifestError
 from spicy_regs.pipelines import Pipeline, RegulationsPipeline
 
+
+from spicy_regs.pipelines.regulatory_publication import restore_checkpoint
+from tests.regulatory_publication_fakes import install as install_publication
+
+
+@pytest.fixture(autouse=True)
+def native_publication(monkeypatch):
+    return install_publication(monkeypatch)
+
+
 PREFIX = "raw-data"
 AGENCY = "EPA"
 
@@ -47,8 +57,14 @@ def test_reviewed_exclusions_are_checkpointed_without_catalog_writes(tmp_path, m
     monkeypatch.setattr(regulations.iceberg, "merge_comments", forbidden)
     output = tmp_path / "output"
     RegulationsPipeline(
-        allow_fresh_start=True, agency="CFTC", output_dir=output, only_comments=True,
-        use_iceberg=True, enrich_text=False, chunk_size=chunk_size, skip_upload=True,
+        allow_fresh_start=True,
+        agency="CFTC",
+        output_dir=output,
+        only_comments=True,
+        use_iceberg=True,
+        enrich_text=False,
+        chunk_size=chunk_size,
+        skip_upload=True,
     ).run()
     assert set(pl.read_parquet(output / "manifest.parquet")["key"].to_list()) == set(store)
     assert not list(output.glob("staging/comments/*.parquet"))
@@ -74,8 +90,12 @@ def test_invalid_comment_staging_refuses_before_any_dataset_merge(tmp_path, monk
     output = tmp_path / "output"
     with pytest.raises(ValueError, match="invalid coordinates"):
         RegulationsPipeline(
-            allow_fresh_start=True, agency=AGENCY, output_dir=output,
-            use_iceberg=True, enrich_text=False, skip_upload=True,
+            allow_fresh_start=True,
+            agency=AGENCY,
+            output_dir=output,
+            use_iceberg=True,
+            enrich_text=False,
+            skip_upload=True,
         ).run()
     assert not (output / "manifest.parquet").exists()
 
@@ -429,17 +449,50 @@ def test_parse_failure_is_unresolved_and_recovers(tmp_output: Path, monkeypatch:
     assert corrupt not in reloaded
     assert good in reloaded
 
-    failed = pl.read_parquet(tmp_output / "failed_keys.parquet")
+    failed = pl.DataFrame(
+        restore_checkpoint(tmp_output, "failed_keys"),
+        schema={
+            "agency": pl.String,
+            "record_type": pl.String,
+            "key": pl.String,
+            "status": pl.String,
+            "reason": pl.String,
+            "attempted_at": pl.String,
+            "attempts": pl.Int64,
+        },
+    )
     row = failed.filter(pl.col("key") == corrupt)
     assert row.height == 1
     assert row["status"].to_list() == ["unreadable"]
     assert row["attempts"].to_list() == [1]
     _run(tmp_output)
-    assert pl.read_parquet(tmp_output / "failed_keys.parquet")["attempts"].to_list() == [2]
+    assert pl.DataFrame(
+        restore_checkpoint(tmp_output, "failed_keys"),
+        schema={
+            "agency": pl.String,
+            "record_type": pl.String,
+            "key": pl.String,
+            "status": pl.String,
+            "reason": pl.String,
+            "attempted_at": pl.String,
+            "attempts": pl.Int64,
+        },
+    )["attempts"].to_list() == [2]
     store[corrupt] = dumps(_docket_payload("EPA-2025-0002", "2025-01-01")).encode()
     _run(tmp_output)
     assert corrupt in Manifest.load(tmp_output)
-    assert pl.read_parquet(tmp_output / "failed_keys.parquet").is_empty()
+    assert pl.DataFrame(
+        restore_checkpoint(tmp_output, "failed_keys"),
+        schema={
+            "agency": pl.String,
+            "record_type": pl.String,
+            "key": pl.String,
+            "status": pl.String,
+            "reason": pl.String,
+            "attempted_at": pl.String,
+            "attempts": pl.Int64,
+        },
+    ).is_empty()
 
 
 def test_chunked_comments_exclude_failed_keys_from_manifest(tmp_output: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -474,7 +527,18 @@ def test_chunked_comments_exclude_failed_keys_from_manifest(tmp_output: Path, mo
     assert keys["c0"] in recorded
     assert keys["c2"] in recorded
     # The transient failure is surfaced in the local diagnostic.
-    failed = pl.read_parquet(tmp_output / "failed_keys.parquet")
+    failed = pl.DataFrame(
+        restore_checkpoint(tmp_output, "failed_keys"),
+        schema={
+            "agency": pl.String,
+            "record_type": pl.String,
+            "key": pl.String,
+            "status": pl.String,
+            "reason": pl.String,
+            "attempted_at": pl.String,
+            "attempts": pl.Int64,
+        },
+    )
     assert flaky in failed["key"].to_list()
 
 
@@ -518,9 +582,8 @@ def test_run_does_not_advance_manifest_after_base_upload_failure(
     monkeypatch.setattr(mirrulations, "s3_resource", lambda: _FakeS3Resource(store))
     monkeypatch.setattr(regulations.r2, "preflight_uploads", lambda out, files: None)
     monkeypatch.setattr(
-        regulations.r2,
-        "upload_dataset",
-        lambda out, types: (_ for _ in ()).throw(RuntimeError("base upload failed")),
+        "spicy_regs.sources.publication.publish_generation",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("base upload failed")),
     )
     uploaded: list[tuple[Path, str | None]] = []
     monkeypatch.setattr(
@@ -585,15 +648,25 @@ def test_run_preflight_failure_stops_all_publication(tmp_output: Path, monkeypat
 
 
 def test_catalog_ingestion_defers_index_until_mirror(tmp_output, monkeypatch):
-    store = {_comment_key("c1", "EPA-2024-0001"): dumps(
-        _comment_payload("c1", "EPA-2024-0001", "2024-01-01T00:00:00Z")).encode()}
+    store = {
+        _comment_key("c1", "EPA-2024-0001"): dumps(
+            _comment_payload("c1", "EPA-2024-0001", "2024-01-01T00:00:00Z")
+        ).encode()
+    }
     monkeypatch.setattr(mirrulations, "s3_resource", lambda: _FakeS3Resource(store))
     monkeypatch.setattr(regulations.iceberg, "merge_comments", lambda sd, rt: 1)
     uploaded = []
     monkeypatch.setattr(regulations.r2, "preflight_uploads", lambda output_dir, files: None)
     monkeypatch.setattr(regulations.r2, "upload_file", lambda path, remote_key=None: uploaded.append(path.name))
-    RegulationsPipeline(allow_fresh_start=True, agency=AGENCY, output_dir=tmp_output,
-                        only_comments=True, use_iceberg=True, enrich_text=False, skip_upload=False).run()
+    RegulationsPipeline(
+        allow_fresh_start=True,
+        agency=AGENCY,
+        output_dir=tmp_output,
+        only_comments=True,
+        use_iceberg=True,
+        enrich_text=False,
+        skip_upload=False,
+    ).run()
     assert "comments_index.parquet" not in uploaded
     assert uploaded[-1] == "manifest.parquet"
 
@@ -788,6 +861,5 @@ def test_manual_cli_finalizes_once_unless_workflow_owns_finalization(tmp_output,
     calls = []
     monkeypatch.setattr(RegulationsPipeline, "run", lambda self: calls.append("ingest"))
     monkeypatch.setattr(comments_mirror, "publish_comments_mirror", lambda out: calls.append("mirror"))
-    regulations.main(output_dir=tmp_output, use_iceberg=True, skip_upload=False,
-                     defer_comments_publication=defer)
+    regulations.main(output_dir=tmp_output, use_iceberg=True, skip_upload=False, defer_comments_publication=defer)
     assert calls == (["ingest"] if defer else ["ingest", "mirror"])

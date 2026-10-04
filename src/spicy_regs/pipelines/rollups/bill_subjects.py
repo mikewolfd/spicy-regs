@@ -16,7 +16,8 @@ import os
 from pathlib import Path
 from typing import ClassVar
 
-from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
+from spicy_regs.pipelines.rollups.base import make_rollup_app
+from spicy_regs.pipelines.rollups.subject_receipts import SubjectReceiptRollup as RollupPipeline
 from spicy_regs.transforms import enrich_bill_subjects
 from spicy_regs.transforms.enrich_bill_subjects import DEADLINE_SECONDS
 
@@ -45,8 +46,8 @@ class BillSubjectsRollup(RollupPipeline):
 
     def build(self, output_dir: Path) -> Path:
         minutes = _int_env("BILL_SUBJECTS_DEADLINE_MINUTES")
-        return enrich_bill_subjects(
-            output_dir,
+        return self.build_receipts(
+            output_dir, enrich_bill_subjects,
             max_bills=_int_env("BILL_SUBJECTS_MAX"),
             deadline_seconds=DEADLINE_SECONDS if minutes is None else minutes * 60,
             evidence=self.source_evidence,

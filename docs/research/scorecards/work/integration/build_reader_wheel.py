@@ -82,7 +82,12 @@ def overlay(repo: Path) -> dict[str, bytes]:
     functions = {node.name: node for node in ast.parse(observations).body if isinstance(node, ast.FunctionDef)}
     if set(OBSERVATION_TESTS) - functions.keys():
         raise ValueError("Selected observation tests changed; review the extraction overlay")
-    selected_tests = [ast.get_source_segment(observations, functions[name]) for name in OBSERVATION_TESTS]
+    selected_tests: list[str] = []
+    for name in OBSERVATION_TESTS:
+        segment = ast.get_source_segment(observations, functions[name])
+        if segment is None:
+            raise ValueError(f"Cannot recover source of selected test {name}")
+        selected_tests.append(segment)
     files[observation_path] = (
         '"""Adopted extraction behavior and baseline-compatible native evidence checks."""\n\n'
         "from spicy_docs.extraction import (\n"

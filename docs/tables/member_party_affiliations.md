@@ -6,6 +6,8 @@
 
 One member, input digest, term index and affiliation index. Literal dates and their parsing states remain separate from any dated membership decision.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='member_party_affiliations'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled. The complete retained September 25 community crosswalk captures, replayed and published on September 27; every source affiliation occurrence was reconciled. This is the selected community crosswalk, not an official or newly acquired roster. Receipt: spicy-regs-t19-members-20260927/public-readback.json. *(measured 2026-09-27)*
 
 - **Parquet file:** `member_party_affiliations.parquet`
@@ -16,15 +18,10 @@ One member, input digest, term index and affiliation index. Literal dates and th
 | Column | Type | Description |
 | --- | --- | --- |
 | `bioguide_id` | `VARCHAR` | The source's member identifier. |
-| `input_sha256` | `VARCHAR` | Digest of the complete retained crosswalk JSON bytes. |
-| `term_index` | `VARCHAR` | Zero-based source term position. |
-| `affiliation_index` | `VARCHAR` | Zero-based affiliation position within the source term. |
+| `term_index` | `BIGINT` | Zero-based source term position. |
+| `affiliation_index` | `BIGINT` | Zero-based affiliation position within the source term. |
 | `party` | `VARCHAR` | Literal nested party; NULL is not filled from the term-level party. |
 | `affiliation_start` | `VARCHAR` | Literal nested start date; interval boundary policy belongs to the consumer. |
 | `affiliation_end` | `VARCHAR` | Literal nested end date; a missing end does not imply an open interval. |
-| `start_status` | `VARCHAR` | Calendar spelling status: absent, empty, valid or invalid. |
-| `end_status` | `VARCHAR` | Calendar spelling status: absent, empty, valid or invalid. |
 | `term_party` | `VARCHAR` | The separate term-level party assertion, not a dated fallback. |
-| `source_path` | `VARCHAR` | JSON pointer to the affiliation in the retained capture. |
-| `source_json` | `VARCHAR` | Complete affiliation object, retaining absent, null and unknown fields. |
-| `observed_at` | `VARCHAR` | Caller-supplied capture instant; not a source affiliation date. |
+| `caucus` | `VARCHAR` | Complete affiliation object, retaining absent, null and unknown fields. This column retains the source property caucus. |

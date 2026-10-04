@@ -1,0 +1,18 @@
+{
+  "dataset": "member_party_affiliations",
+  "policy_version": "congress-subjects/1",
+  "subject_schema": "/////+gBAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAgAAACIAQAAOAEAAPgAAADMAAAAlAAAAGAAAAAwAAAABAAAAKj+//8AAAEFEAAAABgAAAAEAAAAAAAAAAYAAABjYXVjdXMAAJT+///Q/v//AAABBRAAAAAcAAAABAAAAAAAAAAKAAAAdGVybV9wYXJ0eQAAwP7///z+//8AAAEFEAAAACAAAAAEAAAAAAAAAA8AAABhZmZpbGlhdGlvbl9lbmQA8P7//yz///8AAAEFEAAAACQAAAAEAAAAAAAAABEAAABhZmZpbGlhdGlvbl9zdGFydAAAACT///9g////AAABBRAAAAAYAAAABAAAAAAAAAAFAAAAcGFydHkAAABM////iP///wAAAQIQAAAAJAAAAAQAAAAAAAAAEQAAAGFmZmlsaWF0aW9uX2luZGV4AAAAzP///wAAAAFAAAAAxP///wAAAQIQAAAAJAAAAAQAAAAAAAAACgAAAHRlcm1faW5kZXgAAAgADAAIAAcACAAAAAAAAAFAAAAAEAAUAAgABgAHAAwAAAAQABAAAAAAAAEFEAAAACAAAAAEAAAAAAAAAAsAAABiaW9ndWlkZV9pZAAEAAQABAAAAA==",
+  "identity_fields": [
+    "bioguide_id",
+    "term_index",
+    "affiliation_index"
+  ],
+  "receipt_fields": [
+    "source_fields",
+    "source_metadata",
+    "source_schema",
+    "entry_kind"
+  ],
+  "receipt_only": false,
+  "nullable_identity_fields": []
+}

@@ -6,6 +6,8 @@ from importlib import import_module
 
 import pyarrow as pa
 import pyarrow.parquet as pq
+from tests.government_fakes import literal_table
+from spicy_regs.transforms.government_source_shapes import SUBJECT_SCHEMAS
 
 from spicy_regs.transforms.build_gao_reports import (
     COLUMNS,
@@ -93,6 +95,9 @@ def _run(tmp_path, monkeypatch, *, prior=None, feed=(), history=None, listed=Non
 
     def read_listing(directory, evidence):
         assert directory == tmp_path / "walk"
+        for item in decided or ():
+            item.status = None
+            item.listing_page = None
         run = _listing(*(listed or ()), decisions=decided or ())
         rows, counts = module.gao_listing.listing_rows(run)
         return rows, counts, run
@@ -104,12 +109,12 @@ def _run(tmp_path, monkeypatch, *, prior=None, feed=(), history=None, listed=Non
                             govinfo=ListingReader(history) if history is not None else None,
                             listing_run=tmp_path / "walk" if listed is not None else None, evidence=evidence)
     out, decisions = out
-    table = pq.read_table(out)
-    assert table.column_names == list(COLUMNS)
-    assert pq.read_table(decisions).column_names == list(module.DECISION_COLUMNS)
+    assert pq.read_schema(out).equals(SUBJECT_SCHEMAS['gao_reports'])
+    assert pq.read_schema(decisions).equals(SUBJECT_SCHEMAS['gao_decisions'])
+    table = literal_table(out).select(COLUMNS)
     rows = {row["report_id"]: row for row in table.to_pylist()}
     if with_decisions:
-        return rows, pq.read_table(decisions).to_pylist()
+        return rows, literal_table(decisions).select(module.DECISION_COLUMNS).to_pylist()
     return rows
 
 
@@ -209,10 +214,13 @@ def test_a_listing_read_is_journaled_with_its_scopes_and_counts(tmp_path, monkey
         def event(self, name, **fields):
             self.events.append((name, fields))
 
+        def retain_file(self, path, **fields):
+            assert path.is_file()
+
     evidence = Evidence()
     _run(tmp_path, monkeypatch, feed=["gao-26-1"], listed=[_product("gao-26-1"), _product("gao-12-100")],
          evidence=evidence)
-    (name, fields), = evidence.events
+    (name, fields), = [event for event in evidence.events if event[0] == "gao-listing"]
     assert name == "gao-listing" and fields["scopes_read"] == ["2026-08"] and fields["scopes_unfinished"] == []
     assert fields["rows"] == 2 and fields["already_held"] == 1 and fields["complete_scopes"] == 1
 

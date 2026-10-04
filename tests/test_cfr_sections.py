@@ -450,6 +450,7 @@ def test_rollup_passes_replace_all_from_the_workflow_input(monkeypatch, tmp_path
     else:
         monkeypatch.setenv("CFR_REPLACE_ALL", raw)
     calls = []
+    monkeypatch.setattr(rollup.CfrSectionsRollup, "build_receipts", lambda self, directory, builder, **kwargs: builder(directory, **kwargs))
     monkeypatch.setattr(rollup, "build_cfr_sections", lambda output_dir, **kwargs: calls.append(kwargs) or output_dir)
     rollup.CfrSectionsRollup(output_dir=tmp_path).build(tmp_path)
     assert calls == [{"replace_all": expected}]

@@ -96,7 +96,7 @@ def test_composite_full_identity_and_actual_field_digest():
     key = document_key("bill_section", keys)
     assert key_values("bill_section", key) == keys
     with duckdb.connect() as con:
-        con.execute("CREATE TABLE bill_sections(bill_id VARCHAR,version_code VARCHAR,source VARCHAR,seq INTEGER,body VARCHAR)")
+        con.execute("CREATE TABLE bill_sections(bill_id VARCHAR,version_code VARCHAR,printing_id VARCHAR,seq INTEGER,body VARCHAR)")
         con.execute("INSERT INTO bill_sections VALUES (?,?,?,?,?), (?,?,?,?,?)", [*keys, "right", *keys[:3], "3", "wrong"])
         assert source_digests(con, "bill_section", key) == [("sha256:" + hashlib.sha256(b"right").hexdigest(),)]
         con.execute("INSERT INTO bill_sections SELECT * FROM bill_sections WHERE seq=2")
@@ -164,7 +164,7 @@ class _Recording:
 
 def test_selected_fields_read_with_two_scans_per_kind_on_native_key_types():
     with duckdb.connect() as con:
-        con.execute("CREATE TABLE bill_sections(bill_id VARCHAR,version_code VARCHAR,source VARCHAR,seq INTEGER,body VARCHAR)")
+        con.execute("CREATE TABLE bill_sections(bill_id VARCHAR,version_code VARCHAR,printing_id VARCHAR,seq INTEGER,body VARCHAR)")
         con.executemany("INSERT INTO bill_sections VALUES ('B','ih','congress.gov',?,?)",
                         [(n, f"section {n}") for n in range(1, 6)])
         selections = [held.Selection("bill_section", ("B", "ih", "congress.gov", key)) for key in ("2", "02", "5", "9")]

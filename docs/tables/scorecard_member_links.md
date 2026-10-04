@@ -6,6 +6,8 @@
 
 One resolution disposition per publisher member.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='scorecard_member_links'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Derived exact identity links over pinned scorecard and congressional tables. Historical context constrains member matches; unresolved and ambiguous identities remain visible. No fuzzy matching or score conversion is applied. *(measured 2026-10-03)*
 
 - **Parquet file:** `scorecard_member_links.parquet`
@@ -18,17 +20,3 @@ One resolution disposition per publisher member.
 | `scorecard_id` | `VARCHAR` | Stable publisher edition identifier; join within the recorded source snapshot. |
 | `publisher_member_key` | `VARCHAR` | Unchanged publisher member key within the edition. |
 | `bioguide_id` | `VARCHAR` | Exact resolved congressional member identifier; NULL when unresolved or ambiguous. |
-| `term_candidates_json` | `VARCHAR` | JSON array recording the historical terms considered for the member match. |
-| `override_version` | `VARCHAR` | Version of an explicit member override, when used. |
-| `source_snapshot_id` | `VARCHAR` | Source snapshot used for resolution; require equality when joining to refreshed source facts. |
-| `resolution_status` | `VARCHAR` | Resolution outcome, including resolved, unresolved, ambiguous or conflicting source identifiers. |
-| `resolution_rule` | `VARCHAR` | Exact matching rule that produced this disposition. |
-| `rule_version` | `VARCHAR` | Version of the deterministic resolver rules. |
-| `candidate_count` | `VARCHAR` | Number of candidates, retained as decimal text. |
-| `candidates_json` | `VARCHAR` | JSON array of candidate identifiers retained for review. |
-| `reason` | `VARCHAR` | Explanation of the resolution outcome or refusal. |
-| `source_context_json` | `VARCHAR` | Source identity and period context used by the resolver, retained as JSON. |
-| `input_pins_json` | `VARCHAR` | Immutable input family and artifact pins; sha256 binds a single file and tableDescriptorDigest binds all members of a partitioned table. |
-| `capture_id` | `VARCHAR` | Source capture identifier carried through from the publisher fact. |
-| `source_url` | `VARCHAR` | Original publisher URL for the source fact. |
-| `source_path` | `VARCHAR` | Location of the source fact or reference within the captured document. |

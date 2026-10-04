@@ -6,6 +6,8 @@
 
 One row per Regulation Identifier Number: the durable Regulatory Agenda item a RIN identifies, with how many proceedings evidence links it to and whether its scope is resolved. Keyed `agenda_item_id` (`urn:rkaf:us:rin:<rin>`), one per `rin`; joined by `agenda_item_proceedings` on `agenda_item_id`, and to `unified_agenda` on `rin`. Built by `build_regulatory_agenda`; all columns are VARCHAR.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='regulatory_agenda_items'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Derived, and bounded by its inputs: every RIN that `unified_agenda`, `dockets`, `documents` or `federal_register` states. *(measured 2026-09-28)*
 
 - **Parquet file:** `regulatory_agenda_items.parquet`, in the snapshot that `materialized/rulemaking/latest.json` names
@@ -18,15 +20,8 @@ One row per Regulation Identifier Number: the durable Regulatory Agenda item a R
 | `agenda_item_id` | `VARCHAR` | The item's id, `urn:rkaf:us:rin:<rin>`. |
 | `rin` | `VARCHAR` | The Regulation Identifier Number the item is (e.g. `2060-AV16`). |
 | `scope_status` | `VARCHAR` | `recurring` (its latest Agenda priority is Routine and Frequent), `single_observed` (evidence links one proceeding) or `unresolved` (none or several). |
-| `scope_basis` | `VARCHAR` | Why `scope_status` holds: `latest_agenda_priority_routine_and_frequent`, `one_evidence_linked_proceeding`, `zero_evidence_linked_proceedings` or `multiple_evidence_linked_proceedings`. |
-| `linked_proceeding_count` | `VARCHAR` | How many proceedings `agenda_item_proceedings` links the item to, as a decimal string. |
-| `observation_count` | `VARCHAR` | How many distinct Unified Agenda entries (edition and URL) list the RIN, as a decimal string; `0` when no edition does. |
+| `linked_proceeding_count` | `BIGINT` | How many proceedings `agenda_item_proceedings` links the item to, as a decimal string. |
+| `observation_count` | `BIGINT` | How many distinct Unified Agenda entries (edition and URL) list the RIN, as a decimal string; `0` when no edition does. |
 | `latest_agenda_edition` | `VARCHAR` | The latest Unified Agenda edition listing the RIN, `YYYYMM`; NULL when no edition does. |
 | `first_seen` | `VARCHAR` | Earliest Eastern day any source dates the RIN: an Agenda edition or action date, a docket or document date, or a Register publication. |
 | `last_seen` | `VARCHAR` | Latest Eastern day any source dates the RIN. |
-| `method` | `VARCHAR` | How the row was asserted; `deterministic` (computed by rule) throughout. |
-| `actor_id` | `VARCHAR` | The builder that asserted the row, with its version (`spicy-regs:regulatory-agenda-items:v<n>`), bumped when its published rows change. |
-| `run_id` | `VARCHAR` | The materialization run that built the snapshot (e.g. `rulemaking-20260927T062656Z`). |
-| `asserted_at` | `VARCHAR` | When that run asserted the row, as a UTC ISO 8601 instant. |
-| `supersedes_id` | `VARCHAR` | Id of a prior row this one continues; always NULL here, since an item's id is its RIN. |
-| `unresolved_fr_references_json` | `VARCHAR` | JSON array of unresolved Register number references from the Register documents that state this RIN. |

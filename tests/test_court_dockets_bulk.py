@@ -55,10 +55,10 @@ def test_direct_fields_and_court_join():
     assert row["nature_of_suit"].startswith("899")
 
 
-def test_empty_string_becomes_null_where_the_host_spells_absence_as_null():
+def test_source_empty_strings_stay_distinct_from_null():
     row = shape_bulk_docket(_native_row(), _COURTS)
-    assert row["case_name_full"] is None
-    assert row["referred_to"] is None
+    assert row["case_name_full"] == ""
+    assert row["referred_to"] == ""
     assert row["date_terminated"] is None
     assert row["date_argued"] is None
 

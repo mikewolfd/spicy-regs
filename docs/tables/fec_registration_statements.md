@@ -6,6 +6,8 @@
 
 One source Form 1 or Form 2 registration observation. Makes filed committee/candidate attributes and source dates inspectable without replacing candidate/committee history. Names and native IDs remain distinct; affiliation and identifier status do not imply resolved relationships. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_registration_statements'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled. Supported observations from retained registration statement source layouts. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
 
 - **Parquet file:** `fec_registration_statements.parquet`
@@ -16,20 +18,6 @@ One source Form 1 or Form 2 registration observation. Makes filed committee/cand
 | Column | Type | Description |
 | --- | --- | --- |
 | `record_id` | `VARCHAR` | Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event. |
-| `identity_version` | `VARCHAR` | Version of the source-observation identity rule; it does not select a current or canonical record. |
-| `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
-| `mapping_status` | `VARCHAR` | Whether this source observation mapped fully, partially, or received an explicit nondata/refusal disposition; inspect the reason alongside NULL values. |
-| `mapping_reason_json` | `VARCHAR` | JSON object naming unsupported, missing or otherwise limited field interpretations; native values remain reachable through evidence. |
-| `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
-| `source_record_id` | `VARCHAR` | Native source-observation key within collection_id. Resolve with the source generation, exact locator and source digest, not this value alone. |
-| `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
-| `source_locator_json` | `VARCHAR` | Exact source row or subrecord coordinates, including available member, ordinal, byte span and field-definition references. Resolve in the pinned source generation. |
-| `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
-| `selection_evidence_sha256` | `VARCHAR` | Digest of the retained selection evidence used to authorize this mapper's source scope; not a financial inclusion decision. |
-| `source_representation_role` | `VARCHAR` | Selected source role such as snapshot, insertion or deletion. Amount signs and ordinary amendment flags do not establish correction applicability. |
-| `current_record_status` | `VARCHAR` | Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record. |
-| `source_namespace` | `VARCHAR` | Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent. |
-| `source_pointer` | `VARCHAR` | Exact pointer within the provider-owned native record to the mapped value or metadata object. |
 | `committee_id` | `VARCHAR` | Literal FEC committee identifier as reported in this observation. Use cycle and source scope for historical joins. |
 | `committee_name` | `VARCHAR` | The committee's name as reported, without a name-based identity merge. |
 | `committee_street_1` | `VARCHAR` | The committee's first reported street-address line. |
@@ -59,16 +47,6 @@ One source Form 1 or Form 2 registration observation. Makes filed committee/cand
 | `candidate_state` | `VARCHAR` | The candidate's reported state value. |
 | `candidate_zip` | `VARCHAR` | The candidate's reported postal code, preserving leading zeroes. |
 | `form_type` | `VARCHAR` | Literal filing form or record-type code from the source layout; does not prove submission conformance. |
-| `committee_id_status` | `VARCHAR` | State or syntax check of the reported committee ID; a valid shape is not a resolved identity. |
-| `candidate_id_status` | `VARCHAR` | State or syntax check of the reported candidate ID; a valid shape is not a resolved identity. |
-| `affiliation_status` | `VARCHAR` | Whether the affiliation is represented by a supported source identifier or only a literal name. |
-| `receipt_date_raw` | `VARCHAR` | Literal source value before conversion for receipt_date. Preserves spelling, signs and empty values; the typed value and its status are separate. |
-| `receipt_date_status` | `VARCHAR` | Source-presence or conversion state for receipt_date, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
-| `source_cycle` | `INTEGER` | Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year. |
 | `receipt_date` | `DATE` | Date parsed from the filing receipt date stated by the source. NULL requires the source value and conversion status; capture time is not substituted. |
 | `election_year` | `INTEGER` | Election year stated by the source, distinct from source cycle, fiscal year and capture time. |
 | `report_year` | `INTEGER` | Year reported for the filing/report, preserved independently of cycle and transaction date. |
-| `election_year_raw` | `VARCHAR` | Literal source value for election_year before conversion; consult election_year_status for interpretation. |
-| `election_year_status` | `VARCHAR` | Interpretation of source election_year: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
-| `report_year_raw` | `VARCHAR` | Literal source value for report_year before conversion; consult report_year_status for interpretation. |
-| `report_year_status` | `VARCHAR` | Whether the CSV source report year has an exact four-digit spelling, is missing, or is unsupported. |

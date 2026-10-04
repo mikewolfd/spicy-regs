@@ -107,7 +107,11 @@ def merge_staging_files(
 
         # Escape single quotes in paths for inline SQL.
         files_sql = ", ".join(f"'{str(p).replace(chr(39), chr(39) * 2)}'" for p in valid_files)
-        col_select = ", ".join(f'CAST("{c}" AS VARCHAR) AS "{c}"' for c in target_columns)
+        import polars as pl
+        from spicy_regs.native_types import described_schema
+
+        sql_types = dict(described_schema(pl.DataFrame(schema=schemas[data_type]).to_arrow().schema))
+        col_select = ", ".join(f'CAST("{c}" AS {sql_types[c]}) AS "{c}"' for c in target_columns)
 
         # Cluster the output by docket_id so consumers filtering on it (the UI
         # docket page reads documents/dockets with `WHERE docket_id = ?` over
@@ -146,13 +150,13 @@ def merge_staging_files(
                 if output_file.exists():
                     present = set(pq.ParquetFile(output_file).schema_arrow.names)
                     prior_columns = ", ".join(
-                        f'CAST("{c}" AS VARCHAR) AS "{c}"' if c in present else f'NULL::VARCHAR AS "{c}"'
+                        f'CAST("{c}" AS {sql_types[c]}) AS "{c}"' if c in present else f'NULL::{sql_types[c]} AS "{c}"'
                         for c in target_columns
                     )
                     escaped = str(output_file).replace("'", "''")
                     prior_sql = f"SELECT {prior_columns} FROM read_parquet('{escaped}')"
                 else:
-                    prior_sql = f"SELECT {', '.join(f'NULL::VARCHAR AS "{c}"' for c in target_columns)} WHERE false"
+                    prior_sql = f"SELECT {', '.join(f'NULL::{sql_types[c]} AS "{c}"' for c in target_columns)} WHERE false"
                 corrected = correction_query(
                     con,
                     fresh_sql=fresh_sql,

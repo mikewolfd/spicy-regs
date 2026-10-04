@@ -457,6 +457,7 @@ def respell_comment_digests(*, agencies: Sequence[str] = (), apply: bool = False
 
     from spicy_regs.schemas import COMMENT
     from spicy_regs.sources import iceberg
+    from spicy_regs.sources.regulatory_catalog import processing_table
 
     if apply and receipt_dir is None:
         raise ValueError("--apply keeps each written row's prior value; name --receipt-dir")
@@ -467,7 +468,8 @@ def respell_comment_digests(*, agencies: Sequence[str] = (), apply: bool = False
         names = list(agencies) or [row[0] for row in con.execute(
             f"SELECT DISTINCT agency_code FROM {table} WHERE agency_code IS NOT NULL ORDER BY 1").fetchall()]
         for agency in names:
-            repairs = comment_digest_repairs(con, table, agency=agency)
+            source = processing_table(con, COMMENT, where=f"agency_code = '{iceberg._sql_str(agency)}'")
+            repairs = comment_digest_repairs(con, source, agency=agency)
             counts["agencies"] += 1
             counts["comments_respelled"] += len(repairs)
             if not repairs:
@@ -494,13 +496,14 @@ def restore_comment_digests(receipt_dir: Path) -> dict[str, int]:
 
     from spicy_regs.schemas import COMMENT
     from spicy_regs.sources import iceberg
+    from spicy_regs.sources.regulatory_catalog import processing_table
 
     con = iceberg._connect_for_table(COMMENT)
     counts: Counter[str] = Counter()
     try:
-        table = iceberg._qualified(COMMENT)
         for receipt in sorted(receipt_dir.glob("comment-digests-*.parquet")):
             agency = receipt.stem.removeprefix("comment-digests-")
+            table = processing_table(con, COMMENT, where=f"agency_code = '{iceberg._sql_str(agency)}'")
             held = pq.read_table(receipt).to_pylist()
             con.register("_restore_receipt", pa.Table.from_pylist(held))
             current = dict(con.execute(

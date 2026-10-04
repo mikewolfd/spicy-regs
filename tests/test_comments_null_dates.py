@@ -15,6 +15,8 @@ from spicy_regs.transforms.build_feed_summary import build_feed_summary
 from spicy_regs.transforms.build_agency_stats import build_agency_stats
 
 
+
+
 def comment(identity, date):
     """Build one comment row with schema columns defaulted null and the identity, agency, docket, and dates set."""
     return {

@@ -23,6 +23,12 @@ MAPPING_VERSION = "fec-retained-committee-api/2"
 _EXTRA = "source_url source_pointer original_result_pointer query_completeness registry_scope_status".split()
 TYPED = {name: "date" for name in ("first_file_date", "last_file_date", "first_f1_date", "last_f1_date")}
 ARRAYS = ("cycles", "candidate_ids", "sponsor_candidate_ids")
+AGENT_FIELDS = (
+    "designated_agent_city designated_agent_first_name designated_agent_last_name "
+    "designated_agent_middle_name designated_agent_name designated_agent_phone_number "
+    "designated_agent_prefix designated_agent_state designated_agent_street1 "
+    "designated_agent_street2 designated_agent_suffix designated_agent_title designated_agent_zip"
+).split()
 SCHEMAS = {
     COMMITTEES: pa.schema(
         [
@@ -31,6 +37,7 @@ SCHEMAS = {
             + [n for n in COLUMNS if n not in TYPED and not n.endswith("_json")]
             + _EXTRA
             + ["committee_id_status", "affiliated_committee_name", "organization_type"]
+            + AGENT_FIELDS + ["sponsor_candidate_list_json", "sponsor_candidate_list_status"]
             + [name + suffix for name in ARRAYS for suffix in ("_json", "_status")]
         ]
         + typed_columns(TYPED)
@@ -95,7 +102,10 @@ def map_committee_api(row, selection: CollectionSelection):
             result.update(array_values(doc, name))
             if result[name + "_status"] == "unsupported_shape":
                 problems[name] = "source_value_is_not_an_array"
-        for name in ("affiliated_committee_name", "organization_type"):
+        result.update(array_values(doc, "sponsor_candidate_list"))
+        if result["sponsor_candidate_list_status"] == "unsupported_shape":
+            problems["sponsor_candidate_list"] = "source_value_is_not_an_array"
+        for name in ("affiliated_committee_name", "organization_type", *AGENT_FIELDS):
             result[name] = _scalar(doc.get(name))
         values, invalid = typed_values(doc, TYPED)
         result.update(values)

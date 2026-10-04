@@ -17,7 +17,7 @@ existing secret store supplies the token. No schedule is enabled by this change.
 
 SpicyDocs owns `ZyteHttpFetcher`, `ZyteTransport`, and `BoundedHttpCapture`.
 SpicyRegs composes those existing components in
-[`scorecards/acquisition.py`](../src/spicy_regs/scorecards/acquisition.py).
+`src/spicy_regs/scorecards/acquisition.py`.
 The default Zyte selection uses `httpResponseBody`. For IJM's API only,
 `--zyte-browser-publisher ijm` selects a separately identified `browserHtml`
 rendition. Its original index and scripts still use `httpResponseBody`.

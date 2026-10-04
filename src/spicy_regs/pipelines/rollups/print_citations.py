@@ -10,15 +10,17 @@ other grouping, and why ``senate_expenditures`` is a rollup of its own.
 from pathlib import Path
 from typing import ClassVar
 
-from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
+from spicy_regs.pipelines.rollups.base import make_rollup_app
+from spicy_regs.legislative_rollups import LegislativeReceiptRollup, family_policies
 from spicy_regs.transforms.build_print_citations import build_print_citations
 
 
-class PrintCitationsRollup(RollupPipeline):
+class PrintCitationsRollup(LegislativeReceiptRollup):
     """GovInfo activity reports and budget volumes, what their prints cite, and the actions they state (api.data.gov key)."""
 
     name: ClassVar[str] = "print-citations"
     inputs: ClassVar[tuple[str, ...]] = ()
+    receipt_policies = family_policies('house_activity_reports', 'budget_volumes', 'bill_committee_actions', 'document_citations')
     outputs: ClassVar[tuple[str, ...]] = (
         "house_activity_reports.parquet",
         "budget_volumes.parquet",
@@ -29,7 +31,7 @@ class PrintCitationsRollup(RollupPipeline):
     retain_source_evidence: ClassVar[bool] = True
 
     def build(self, output_dir: Path) -> tuple[Path, ...]:
-        return build_print_citations(output_dir, evidence=self.source_evidence)
+        return self.build_receipts(output_dir, build_print_citations, evidence=self.source_evidence)
 
 
 app = make_rollup_app(PrintCitationsRollup)

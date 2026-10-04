@@ -6,6 +6,8 @@
 
 One row per line of an OLRC per-Congress classification table: a U.S. Code place one public law section touched, with the Statutes at Large page and the publisher's action word. All columns are stored as VARCHAR.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='law_code_sections'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled. Every row of each public-law-order table the OLRC classification index links for a scoped Congress, read whole every run and replacing that session's rows. The index links the current Congress's session tables only. *(measured 2026-09-19)*
 
 **Data quality.** A row is its position on the page (`seq`), because one line can repeat; a page read this run replaces every prior row for its Congress and session, so a line the publisher removed does not linger under a position it no longer holds. Only the public-law order is read: the code-order twin holds the same lines under positions that would collide with these. A Congress the index does not link — every Congress but the current one — gets no rows here; `table3_records` is the historical view. `action` is the page's column 3 verbatim, NULL where the page left it blank, which its legend reads as amended. `usc_section_key` is `usc_section` folded for joins (trimmed, lower-cased, every dash spelling an ASCII hyphen), because case carries no identity in the Code and a join on the printed letter misses the upper-case spellings (decision 30, `docs/research/fork-delivery-decisions-2026-09-22.md`); a session's next read replaces its rows, which fills the key for rows published before the column existed. All columns are stored as VARCHAR.
@@ -19,14 +21,14 @@ One row per line of an OLRC per-Congress classification table: a U.S. Code place
 | --- | --- | --- |
 | `congress` | `VARCHAR` | The Congress the table page states in its caption. |
 | `session` | `VARCHAR` | The session (1 or 2) the table page states in its caption. |
-| `seq` | `VARCHAR` | Zero-based position of this line in the page; part of the identity because one line can repeat. |
+| `seq` | `BIGINT` | Zero-based position of this line in the page; part of the identity because one line can repeat. |
 | `law_id` | `VARCHAR` | Natural key of the law, as laws keys it. |
 | `law_number` | `VARCHAR` | The public law number as the table prints it, Congress prefix included. |
 | `law_type` | `VARCHAR` | Always `public`: the page is the publisher's table for public laws. |
 | `number` | `VARCHAR` | The law's number within its Congress. |
 | `usc_title` | `VARCHAR` | The U.S. Code title as printed; a trailing A means the title's appendix, per the page's legend. |
 | `usc_section` | `VARCHAR` | The U.S. Code section as printed. |
-| `action` | `VARCHAR` | Column 3 verbatim (nt, new, nt new, nt [tbl], prec, fr, to, gen amd, omitted, repealed, ed chg); NULL where the page left it blank, which the page's legend reads as amended. |
+| `action` | `VARCHAR` | Column 3 verbatim; NULL where the page left it blank. The page's own legend (Explanation of Table, column 3, as the retained tbl119pl_2nd.htm prints it): `nt` means note; `nt [tbl]` means note [table]; `prec` means preceding; `fr` means a transfer from another section; `to` means a transfer to another section; `new` means a new section or new note; `gen amd` means the section or note is generally amended; `omitted` means the section is omitted; `repealed` means the section or note is repealed; `nt ed chg` and `ed chg` refer to the Editorial Classification Change Table; no entry or `nt` by itself means the section or note is amended. Tokens combine (`nt new`: a new note). A transfer prints as `tr fr <title>/<section>` (from that section) or `tr to <title>/<section>` (to it), the legend's `fr` and `to`. The leading `nt` or `prec` is the row's place, which usc_place states. |
 | `act_section` | `VARCHAR` | The law's own section that did it, as printed; a quoted item after it names a new section. |
 | `statutes_at_large_volume` | `VARCHAR` | The volume the page's column header names. |
 | `statutes_at_large_page` | `VARCHAR` | The page as printed: one page, or a span such as two pages joined by a comma or a dash. |
@@ -35,5 +37,5 @@ One row per line of an OLRC per-Congress classification table: a U.S. Code place
 | `table_order` | `VARCHAR` | Which of the publisher's two orders the page is: `public-law` or `code`; both hold the same lines. |
 | `stated_laws` | `VARCHAR` | The law range the page's caption states it covers, verbatim. |
 | `prepared_date` | `VARCHAR` | The date the page states it was prepared. |
-| `observed_at` | `VARCHAR` | When the page was captured; the merge prefers the larger value. |
-| `usc_section_key` | `VARCHAR` | usc_section as a join key: lower-cased, with every dash spelling an ASCII hyphen, as RefSpec's section oracle keys it. Fold the other side the same way (schemas.tables.usc_section_key): document_citations' usc_section rule 001 keeps the printed case and dashes. NULL where usc_section is, and on rows published before the column existed. |
+| `usc_section_key` | `VARCHAR` | The one U.S. Code section the row names, as a join key: the section number without Table III's printed note words (`nt`, `nts`, `prec.`; usc_place states them), lower-cased, with every dash spelling an ASCII hyphen, as RefSpec's section oracle keys it. Both OLRC tables key it the same way, so they meet on usc_title, usc_section_key and usc_place; without usc_place a note line meets the section's own line. Fold another source the same way (schemas.tables.usc_section_key): document_citations' usc_section rule 001 keeps the printed case and dashes. NULL where usc_section is NULL or names no single section (a list, a range or a chapter, which Table III prints for some older acts), and on rows published before the column existed. |
+| `usc_place` | `VARCHAR` | Where on that section the row lands: `section` (the section itself), `note` (a note under it; OLRC's `nt` or `nts`), `preceding` (the place just before it, such as a chapter or subchapter heading a law adds there; `prec`) or `note_preceding` (a note at that place). Read from the section as Table III prints it (`1101 nt`, `prec. 1071`, `nt. prec. 791`) and from the head of law_code_sections.action (`nt new`, `prec`, `nt prec new`), by schemas.law_tables.usc_section_place. NULL where usc_section_key is NULL, and on rows published before the column existed. |

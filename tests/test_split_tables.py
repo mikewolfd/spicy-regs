@@ -33,12 +33,14 @@ from tests.test_mcp_server import _tool_data
 
 DIGEST = "sha256:" + "b" * 64
 PREFIX = f"generations/bills/{'b' * 64}"
+
+# Synthetic tables exercise storage mechanics independently of installed subject policies.
 COLUMNS = [["bill_id", "VARCHAR"], ["congress", "VARCHAR"], ["body", "VARCHAR"]]
-DECLARED = {"bill_sections": Declaration(tuple(map(tuple, COLUMNS)), ("bill_id",), "test")}
+DECLARED = {"fixture_bill_sections": Declaration(tuple(map(tuple, COLUMNS)), ("bill_id",), "test")}
 
 
 def _member(congress: str, rows: int, size: int) -> dict:
-    return {"key": f"bill_sections/congress={congress}/part-000000.parquet", "sha256": "sha256:" + congress[-1] * 64,
+    return {"key": f"fixture_bill_sections/congress={congress}/part-000000.parquet", "sha256": "sha256:" + congress[-1] * 64,
             "byteSize": size, "rows": rows, "partition": {"congress": congress}}
 
 
@@ -48,7 +50,7 @@ def _index(**table) -> dict:
     single = {"sha256": "sha256:" + "c" * 64, "byteSize": 7, "rows": 1, "columns": [["bill_id", "VARCHAR"]]}
     return {"format": "spicy-regs-publication", "version": 2, "families": {"bills": {
         "prefix": PREFIX, "logicalId": "urn:spicy-regs:family:bills", "artifactDigest": DIGEST,
-        "tables": {"bill_sections.parquet": split | table, "congress_bills.parquet": single}}}}
+        "tables": {"fixture_bill_sections.parquet": split | table, "fixture_congress_bills.parquet": single}}}}
 
 
 def _parse(index: dict) -> dict:
@@ -57,17 +59,17 @@ def _parse(index: dict) -> dict:
 
 def test_a_split_table_resolves_to_its_members_and_a_single_table_to_itself():
     index = _parse(_index())
-    assert pub.table_members(index, "bill_sections.parquet") == (
-        pub.Member(f"{PREFIX}/bill_sections/congress=118/part-000000.parquet", "sha256:" + "8" * 64, 10, 2),
-        pub.Member(f"{PREFIX}/bill_sections/congress=119/part-000000.parquet", "sha256:" + "9" * 64, 5, 1),
+    assert pub.table_members(index, "fixture_bill_sections.parquet") == (
+        pub.Member(f"{PREFIX}/fixture_bill_sections/congress=118/part-000000.parquet", "sha256:" + "8" * 64, 10, 2),
+        pub.Member(f"{PREFIX}/fixture_bill_sections/congress=119/part-000000.parquet", "sha256:" + "9" * 64, 5, 1),
     )
-    assert pub.single_member(index, "congress_bills.parquet") == pub.Member(
-        f"{PREFIX}/congress_bills.parquet", "sha256:" + "c" * 64, 7, 1)
+    assert pub.single_member(index, "fixture_congress_bills.parquet") == pub.Member(
+        f"{PREFIX}/fixture_congress_bills.parquet", "sha256:" + "c" * 64, 7, 1)
     with pytest.raises(pub.PublicationError, match="2 files; read it through table_members"):
-        pub.single_member(index, "bill_sections.parquet")
+        pub.single_member(index, "fixture_bill_sections.parquet")
     # A member's key within its generation is the layout a download keeps; a legacy file's key is its own path.
-    assert [m.key for m in pub.table_members(index, "bill_sections.parquet")] == [
-        "bill_sections/congress=118/part-000000.parquet", "bill_sections/congress=119/part-000000.parquet"]
+    assert [m.key for m in pub.table_members(index, "fixture_bill_sections.parquet")] == [
+        "fixture_bill_sections/congress=118/part-000000.parquet", "fixture_bill_sections/congress=119/part-000000.parquet"]
     assert pub.table_members(index, "legacy.parquet")[0].key == "legacy.parquet"
     with pytest.raises(pub.PublicationError, match="not under a generation prefix"):
         _ = pub.Member("generations/bills/short/x.parquet", DIGEST, 1, 1).key
@@ -78,11 +80,11 @@ def test_a_split_table_resolves_to_its_members_and_a_single_table_to_itself():
     {"byteSize": 14},
     {"partitionColumns": ["session"]},  # not a declared column
     {"members": [_member("118", 2, 10), {**_member("119", 1, 5), "partition": {"congress": "118"}}]},
-    {"members": [_member("118", 2, 10), {**_member("119", 1, 5), "key": "bill_sections/congress=119/x.parquet"}]},
+    {"members": [_member("118", 2, 10), {**_member("119", 1, 5), "key": "fixture_bill_sections/congress=119/x.parquet"}]},
     {"members": [_member("118", 3, 15), _member("118", 0, 0)]},  # one key twice
     {"members": [_member("../118", 3, 15)]},  # its key spells the value; only the value grammar refuses
     {"columns": [*COLUMNS, ["../x", "VARCHAR"]], "partitionColumns": ["../x"],  # a column spells a key directory
-     "members": [{**_member("118", 3, 15), "key": "bill_sections/../x=118/part-000000.parquet",
+     "members": [{**_member("118", 3, 15), "key": "fixture_bill_sections/../x=118/part-000000.parquet",
                   "partition": {"../x": "118"}}]},
 ])
 def test_a_split_table_whose_members_do_not_add_up_or_name_their_partition_refuses(broken):
@@ -97,11 +99,11 @@ def test_only_version_2_may_list_a_split_table():
 
 def test_readers_prefer_the_version_2_index_and_fall_back_to_version_1(monkeypatch):
     v1: dict[str, Any] = {**_index(), "version": 1}
-    v1["families"]["bills"]["tables"].pop("bill_sections.parquet")
+    v1["families"]["bills"]["tables"].pop("fixture_bill_sections.parquet")
     served = {pub.INDEX_KEY: v1, pub.INDEX_V2_KEY: _index()}
     monkeypatch.setattr(pub, "_bounded_get", lambda url, **_: (
         json.dumps(served[key]).encode() if (key := url.rsplit("/", 1)[1]) in served else None))
-    assert "bill_sections.parquet" in pub.load_index("https://test")["families"]["bills"]["tables"]
+    assert "fixture_bill_sections.parquet" in pub.load_index("https://test")["families"]["bills"]["tables"]
     del served[pub.INDEX_V2_KEY]
     assert pub.load_index("https://test")["version"] == 1
 
@@ -115,15 +117,15 @@ def test_the_mcp_serves_one_view_over_every_member_without_a_hive_column(tmp_pat
         path.parent.mkdir()
         pq.write_table(pa.table({"bill_id": bills, "congress": [congress] * len(bills), "body": ["text"] * len(bills)}),
                        path)
-        locations[f"{PREFIX}/bill_sections/congress={congress}/part-000000.parquet"] = path
-    single = tmp_path / "congress_bills.parquet"
+        locations[f"{PREFIX}/fixture_bill_sections/congress={congress}/part-000000.parquet"] = path
+    single = tmp_path / "fixture_congress_bills.parquet"
     pq.write_table(pa.table({"bill_id": ["119-s5"]}), single)
-    locations[f"{PREFIX}/congress_bills.parquet"] = single
+    locations[f"{PREFIX}/fixture_congress_bills.parquet"] = single
     built = connection_fixture(monkeypatch, index, locations, tables=())
     mcp_server._build_connection()
     [con] = built
-    assert [row[0] for row in con.inner.execute("DESCRIBE bill_sections").fetchall()] == ["bill_id", "congress", "body"]
-    assert con.inner.execute("SELECT congress, count(*) FROM bill_sections GROUP BY 1 ORDER BY 1").fetchall() == [
+    assert [row[0] for row in con.inner.execute("DESCRIBE fixture_bill_sections").fetchall()] == ["bill_id", "congress", "body"]
+    assert con.inner.execute("SELECT congress, count(*) FROM fixture_bill_sections GROUP BY 1 ORDER BY 1").fetchall() == [
         ("118", 2), ("119", 1)]
     con.inner.close()
 
@@ -131,14 +133,14 @@ def test_the_mcp_serves_one_view_over_every_member_without_a_hive_column(tmp_pat
 # --------------------------------------------------------------------------- #
 # Producing and publishing a split table (multi-file design §4.2-§4.4).
 # --------------------------------------------------------------------------- #
-SPLIT = {"bill_sections.parquet": ["congress"]}
-KEYS = ["bill_sections.parquet", "congress_bills.parquet"]
+SPLIT = {"fixture_bill_sections.parquet": ["congress"]}
+KEYS = ["fixture_bill_sections.parquet", "fixture_congress_bills.parquet"]
 
 
 def _sections(directory, by_congress: dict[str, list[str]]) -> None:
     """Write one ``congress=<N>/part-000000.parquet`` member per congress, its rows holding that congress."""
     for congress, bills in by_congress.items():
-        path = directory / "bill_sections" / f"congress={congress}" / "part-000000.parquet"
+        path = directory / "fixture_bill_sections" / f"congress={congress}" / "part-000000.parquet"
         path.parent.mkdir(parents=True, exist_ok=True)
         pq.write_table(pa.table({"bill_id": bills, "congress": [congress] * len(bills),
                                  "body": [f"text of {bill}" for bill in bills]}), path)
@@ -148,8 +150,8 @@ def _outputs(directory, by_congress=None, *, bills=("119-s5",)) -> list:
     """A bills family's outputs under ``directory``: split sections (unless already there) and one single table."""
     if by_congress is not None:
         _sections(directory, by_congress)
-    pq.write_table(pa.table({"bill_id": list(bills)}), directory / "congress_bills.parquet")
-    return [directory / "bill_sections", directory / "congress_bills.parquet"]
+    pq.write_table(pa.table({"bill_id": list(bills)}), directory / "fixture_congress_bills.parquet")
+    return [directory / "fixture_bill_sections", directory / "fixture_congress_bills.parquet"]
 
 
 def _publish(tmp_path, store, name, files, prior=None):
@@ -178,28 +180,28 @@ def test_a_split_table_publishes_in_version_2_and_an_unchanged_partition_is_copi
     store = Store()
     first = _publish(tmp_path, store, "first", _outputs(tmp_path / "out1", {"118": ["118-hr1", "118-hr2"],
                                                                            "119": ["119-s5"]}))
-    split = first["families"]["bills"]["tables"]["bill_sections.parquet"]
+    split = first["families"]["bills"]["tables"]["fixture_bill_sections.parquet"]
     assert (split["rows"], split["partitionColumns"]) == (3, ["congress"])
     assert [(m["key"], m["rows"], m["partition"]) for m in split["members"]] == [
-        ("bill_sections/congress=118/part-000000.parquet", 2, {"congress": "118"}),
-        ("bill_sections/congress=119/part-000000.parquet", 1, {"congress": "119"})]
+        ("fixture_bill_sections/congress=118/part-000000.parquet", 2, {"congress": "118"}),
+        ("fixture_bill_sections/congress=119/part-000000.parquet", 1, {"congress": "119"})]
     v1 = pub.parse_index(store.objects[pub.INDEX_KEY])
-    assert list(v1["families"]["bills"]["tables"]) == ["congress_bills.parquet"]
+    assert list(v1["families"]["bills"]["tables"]) == ["fixture_congress_bills.parquet"]
 
     # The builder's nightly shape: fetch the prior partitions, rewrite only the sitting Congress.
     _serve(monkeypatch, store)
     rebuilt = tmp_path / "out2"
-    fetched = r2.download_members("bill_sections.parquet", rebuilt)
+    fetched = r2.download_members("fixture_bill_sections.parquet", rebuilt)
     assert [path.relative_to(rebuilt).as_posix() for path in fetched] == [m["key"] for m in split["members"]]
     _sections(rebuilt, {"119": ["119-s5", "119-s6"]})
     store.copies.clear()
     second = _publish(tmp_path, store, "second", _outputs(rebuilt), prior=first)
 
     prefix = second["families"]["bills"]["prefix"]
-    assert sorted(store.copies) == [f"{prefix}/bill_sections/congress=118/part-000000.parquet",
-                                    f"{prefix}/congress_bills.parquet"]
-    assert f"{prefix}/bill_sections/congress=119/part-000000.parquet" in store.writes
-    assert second["families"]["bills"]["tables"]["bill_sections.parquet"]["rows"] == 4
+    assert sorted(store.copies) == [f"{prefix}/fixture_bill_sections/congress=118/part-000000.parquet",
+                                    f"{prefix}/fixture_congress_bills.parquet"]
+    assert f"{prefix}/fixture_bill_sections/congress=119/part-000000.parquet" in store.writes
+    assert second["families"]["bills"]["tables"]["fixture_bill_sections.parquet"]["rows"] == 4
 
 
 def test_the_audit_reconciles_a_split_table_member_by_member(tmp_path):
@@ -208,14 +210,14 @@ def test_the_audit_reconciles_a_split_table_member_by_member(tmp_path):
     _publish(tmp_path, store, "second", _outputs(tmp_path / "out2", {"118": ["118-hr1"], "119": ["119-s5", "119-s6"]}),
              prior=first)
 
-    report = audit(public_base(store, tmp_path / "public"), family="bills", table="bill_sections",
+    report = audit(public_base(store, tmp_path / "public"), family="bills", table="fixture_bill_sections",
                    declarations=DECLARED)
 
-    table = report["sections"]["publication"]["tables"]["bill_sections.parquet"]
+    table = report["sections"]["publication"]["tables"]["fixture_bill_sections.parquet"]
     assert (table["index_equals_manifest"], table["index_equals_root"], table["observed_bytes_equal_index"]) == (
         True, True, True)
     assert len(table["manifest"]) == 2
-    conservation = report["sections"]["conservation"]["bill_sections"]
+    conservation = report["sections"]["conservation"]["fixture_bill_sections"]
     assert (conservation["rows"], conservation["prior_rows"], conservation["bytes_equal"]) == (3, 2, False)
     assert (conservation["identities_added"], conservation["added_sample"]) == (1, [{"bill_id": "119-s6"}])
     assert report["findings"] == []
@@ -226,14 +228,14 @@ def test_the_audit_finds_one_split_member_the_index_misstates_and_retains_versio
     store = Store()
     _publish(tmp_path, store, "first", _outputs(tmp_path / "out1", {"118": ["118-hr1"], "119": ["119-s5"]}))
     index = pub.parse_index(store.objects[pub.INDEX_V2_KEY])
-    index["families"]["bills"]["tables"]["bill_sections.parquet"]["members"][1]["sha256"] = "sha256:" + "0" * 64
+    index["families"]["bills"]["tables"]["fixture_bill_sections.parquet"]["members"][1]["sha256"] = "sha256:" + "0" * 64
     store.objects[pub.INDEX_V2_KEY] = canonical_json_bytes(index)
     retained = tmp_path / "retained"
 
-    report = audit(public_base(store, tmp_path / "public"), family="bills", table="bill_sections",
+    report = audit(public_base(store, tmp_path / "public"), family="bills", table="fixture_bill_sections",
                    declarations=DECLARED, retain=retained)
 
-    table = report["sections"]["publication"]["tables"]["bill_sections.parquet"]
+    table = report["sections"]["publication"]["tables"]["fixture_bill_sections.parquet"]
     assert (table["index_equals_manifest"], table["index_equals_root"], table["observed_bytes_equal_index"]) == (
         False, True, False)
     assert {f["code"] for f in report["findings"]} >= {"index-equals-manifest-false",
@@ -247,14 +249,14 @@ def test_the_audit_rereads_the_etag_of_every_member_of_both_generations():
     current = _parse(_index())["families"]["bills"]
     prior: dict[str, Any] = {**current, "prefix": f"generations/bills/{'a' * 64}"}
     locations = [f"{entry['prefix']}/{member['key']}" for entry in (current, prior)
-                 for member in entry["tables"]["bill_sections.parquet"]["members"]]
+                 for member in entry["tables"]["fixture_bill_sections.parquet"]["members"]]
     moved = {locations[1], locations[2]}
     base = PublicBase("https://data.test", client=httpx.Client(transport=httpx.MockTransport(
         lambda request: httpx.Response(200, headers={"etag": '"moved"' if request.url.path[1:] in moved else '"e"'}))))
     base.receipts = [{"key": location, "etag": '"e"', "complete": True} for location in locations]
     run = _Run(samples=1, secrets={})
 
-    result = _consistency(base, current, prior, ["bill_sections.parquet"], run)
+    result = _consistency(base, current, prior, ["fixture_bill_sections.parquet"], run)
 
     assert result["etag_stable"] == {location: location not in moved for location in locations}
     assert sorted(f["location"] for f in run.findings) == sorted(moved)
@@ -280,22 +282,22 @@ def test_a_split_table_keeps_every_partition_its_prior_generation_holds(tmp_path
 
     out = tmp_path / "out3"
     _sections(out, {"118": ["118-hr1"], "120": ["120-hr1"]})
-    (out / "bill_sections" / "congress=119").mkdir()
+    (out / "fixture_bill_sections" / "congress=119").mkdir()
     for part, bills in enumerate((many[:1500], many[1500:])):
         pq.write_table(pa.table({"bill_id": bills, "congress": ["119"] * len(bills), "body": ["b"] * len(bills)}),
-                       out / "bill_sections" / "congress=119" / f"part-{part:06d}.parquet")
+                       out / "fixture_bill_sections" / "congress=119" / f"part-{part:06d}.parquet")
     third = _publish(tmp_path, store, "third", _outputs(out), prior=first)
-    members = third["families"]["bills"]["tables"]["bill_sections.parquet"]["members"]
+    members = third["families"]["bills"]["tables"]["fixture_bill_sections.parquet"]["members"]
     assert [member["key"].split("/", 1)[1] for member in members] == [
         "congress=118/part-000000.parquet", "congress=119/part-000000.parquet", "congress=119/part-000001.parquet",
         "congress=120/part-000000.parquet"]
 
 
 @pytest.mark.parametrize(("layout", "message"), [
-    ({"bill_sections/congress=118/part-000000.parquet": "119"}, "differ from the partition"),
-    ({"bill_sections/congress=118/data.parquet": "118"}, "is not <col>=<value>"),
-    ({"bill_sections/session=1/part-000000.parquet": "118"}, "is not <col>=<value>"),
-    ({"bill_sections/part-000000.parquet": "118"}, "is not <col>=<value>"),
+    ({"fixture_bill_sections/congress=118/part-000000.parquet": "119"}, "differ from the partition"),
+    ({"fixture_bill_sections/congress=118/data.parquet": "118"}, "is not <col>=<value>"),
+    ({"fixture_bill_sections/session=1/part-000000.parquet": "118"}, "is not <col>=<value>"),
+    ({"fixture_bill_sections/part-000000.parquet": "118"}, "is not <col>=<value>"),
 ])
 def test_a_split_output_whose_layout_or_rows_disagree_with_its_partitions_refuses(tmp_path, layout, message):
     out = tmp_path / "out"
@@ -310,7 +312,7 @@ def test_a_split_output_whose_layout_or_rows_disagree_with_its_partitions_refuse
 def test_members_of_one_split_table_must_share_their_columns(tmp_path):
     out = tmp_path / "out"
     _sections(out, {"118": ["118-hr1"]})
-    other = out / "bill_sections" / "congress=119" / "part-000000.parquet"
+    other = out / "fixture_bill_sections" / "congress=119" / "part-000000.parquet"
     other.parent.mkdir(parents=True)
     pq.write_table(pa.table({"bill_id": ["119-s5"], "congress": ["119"]}), other)
     with pytest.raises(ValueError, match="differ in columns"):
@@ -328,7 +330,7 @@ def _download_split(tmp_path, monkeypatch):
     _serve(monkeypatch, store)
     monkeypatch.delenv("SPICY_REGS_R2_URL", raising=False)
     output = tmp_path / "data"
-    cli.cmd_download(argparse.Namespace(output_dir=output, types=["bill_sections", "congress_bills"], force=False))
+    cli.cmd_download(argparse.Namespace(output_dir=output, types=["fixture_bill_sections", "fixture_congress_bills"], force=False))
     return output, (output / "current").resolve(strict=True)
 
 
@@ -336,36 +338,36 @@ def test_a_split_table_downloads_verifies_and_is_read_locally_without_a_hive_col
     output, batch = _download_split(tmp_path, monkeypatch)
     metadata = json.loads((batch / "download.json").read_text())
     prefix = metadata["publication"]["families"]["bills"]["prefix"]
-    members = [f"bill_sections/congress={n}/part-000000.parquet" for n in ("118", "119")]
+    members = [f"fixture_bill_sections/congress={n}/part-000000.parquet" for n in ("118", "119")]
     assert metadata["selected"] == {
-        "bill_sections": {"key": [f"{prefix}/{key}" for key in members], "status": "managed"},
-        "congress_bills": {"key": f"{prefix}/congress_bills.parquet", "status": "managed"}}
+        "fixture_bill_sections": {"key": [f"{prefix}/{key}" for key in members], "status": "managed"},
+        "fixture_congress_bills": {"key": f"{prefix}/fixture_congress_bills.parquet", "status": "managed"}}
 
     selection = local_selection(output)
-    assert selection.files["bill_sections"] == (batch / "bill_sections", "managed")
-    assert selection.paths("bill_sections") == tuple(batch / key for key in members)
-    assert set(verify_local_members(selection)) == {str(batch / key) for key in [*members, "congress_bills.parquet"]}
+    assert selection.files["fixture_bill_sections"] == (batch / "fixture_bill_sections", "managed")
+    assert selection.paths("fixture_bill_sections") == tuple(batch / key for key in members)
+    assert set(verify_local_members(selection)) == {str(batch / key) for key in [*members, "fixture_congress_bills.parquet"]}
 
     con, server = serve(monkeypatch, output)
     try:
-        assert [row[0] for row in con.execute("DESCRIBE bill_sections").fetchall()] == ["bill_id", "congress", "body"]
-        result = _tool_data(server, "query_sql", {"sql": "SELECT congress, count(*) AS n FROM bill_sections "
+        assert [row[0] for row in con.execute("DESCRIBE fixture_bill_sections").fetchall()] == ["bill_id", "congress", "body"]
+        result = _tool_data(server, "query_sql", {"sql": "SELECT congress, count(*) AS n FROM fixture_bill_sections "
                                                          "GROUP BY 1 ORDER BY 1"})
         assert result["rows"] == [{"congress": "118", "n": 2}, {"congress": "119", "n": 1}]
         # The view names the verified member files, so a file added to the directory later is never read.
-        extra = batch / "bill_sections" / "congress=119" / "part-000001.parquet"
+        extra = batch / "fixture_bill_sections" / "congress=119" / "part-000001.parquet"
         extra.write_bytes((batch / members[1]).read_bytes())
-        count = _tool_data(server, "query_sql", {"sql": "SELECT count(*) AS n FROM bill_sections"})
+        count = _tool_data(server, "query_sql", {"sql": "SELECT count(*) AS n FROM fixture_bill_sections"})
         extra.unlink()
         assert count["rows"] == [{"n": 3}]
     finally:
         con.close()
 
     capsys.readouterr()
-    args = argparse.Namespace(output_dir=output, data_type="bill_sections", agency=None, n=3, query="118-hr2", limit=5)
+    args = argparse.Namespace(output_dir=output, data_type="fixture_bill_sections", agency=None, n=3, query="118-hr2", limit=5)
     cli.cmd_stats(args)
     stats = capsys.readouterr().out
-    assert "BILL_SECTIONS" in stats and "Rows: 3" in stats and "Columns: bill_id, congress, body\n" in stats
+    assert "FIXTURE_BILL_SECTIONS" in stats and "Rows: 3" in stats and "Columns: bill_id, congress, body\n" in stats
     cli.cmd_sample(args)
     cli.cmd_search(args)
     assert "3 total rows; managed" in (out := capsys.readouterr().out) and "118-hr2" in out
@@ -379,7 +381,7 @@ def test_a_split_table_downloads_verifies_and_is_read_locally_without_a_hive_col
 ])
 def test_a_split_download_whose_files_differ_from_its_members_refuses(tmp_path, monkeypatch, damage, message):
     output, batch = _download_split(tmp_path, monkeypatch)
-    member = batch / "bill_sections" / "congress=119" / "part-000000.parquet"
+    member = batch / "fixture_bill_sections" / "congress=119" / "part-000000.parquet"
     raw = member.read_bytes()
     if damage == "tampered":
         member.write_bytes(raw[:-1] + bytes([raw[-1] ^ 1]))
@@ -399,7 +401,7 @@ def test_a_split_download_whose_files_differ_from_its_members_refuses(tmp_path, 
 # Building a split table from its published prior, through the rollup (multi-file design §4.3).
 # --------------------------------------------------------------------------- #
 class _SplitFamily(RollupPipeline):
-    """A family storing ``sections`` one file per Congress, the way the bill family stores ``bill_sections``."""
+    """A family storing ``sections`` one file per Congress, the way the bill family stores ``fixture_bill_sections``."""
 
     name: ClassVar[str] = "split-family"
     outputs: ClassVar[tuple[str, ...]] = ("sections.parquet", "bills.parquet")
@@ -467,10 +469,10 @@ def test_a_prior_split_table_is_read_member_by_member_and_an_unpublished_one_is_
     store = Store()
     _publish(tmp_path, store, "first", _outputs(tmp_path / "out1", {"118": ["118-hr1"], "119": ["119-s5"]}))
     _serve(monkeypatch, store)
-    paths = published_members(tmp_path / "build", "bill_sections")
+    paths = published_members(tmp_path / "build", "fixture_bill_sections")
     assert paths is not None
-    assert [path.relative_to(prior_members_path(tmp_path / "build", "bill_sections")).as_posix() for path in paths] == [
-        "bill_sections/congress=118/part-000000.parquet", "bill_sections/congress=119/part-000000.parquet"]
+    assert [path.relative_to(prior_members_path(tmp_path / "build", "fixture_bill_sections")).as_posix() for path in paths] == [
+        "fixture_bill_sections/congress=118/part-000000.parquet", "fixture_bill_sections/congress=119/part-000000.parquet"]
     assert published_members(tmp_path / "build", "never_published") is None
     monkeypatch.delenv("R2_PUBLIC_URL")
-    assert published_members(tmp_path / "unconfigured", "bill_sections") is None
+    assert published_members(tmp_path / "unconfigured", "fixture_bill_sections") is None

@@ -294,11 +294,9 @@ def test_rollup_defaults_to_local_generation_and_publishes_complete_family(tmp_p
     monkeypatch.setenv("R2_PUBLIC_URL", "https://example.test")
     FecObservationsRollup(manifest=manifest, output_dir=tmp_path / "outputs", skip_upload=False).run()
     index = publication.parse_index(store.objects[publication.INDEX_KEY])
-    assert set(index["families"]["fec-observations"]["tables"]) == {
-        "fec_source_records.parquet",
-        "fec_collections.parquet",
-        "fec_relationships.parquet",
-    }
+    family = index["families"]["fec-observations"]
+    assert set(family["tables"]) == {"fec_relationships.parquet"}
+    assert set(family["etlReceipts"]["datasets"]) == {"fec_source_records", "fec_collections", "fec_relationships"}
     assert store.writes[-1] == publication.INDEX_KEY
     # The second run retains its own observation receipt; table bytes remain identical.
     assert local_generation.is_dir()

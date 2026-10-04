@@ -6,6 +6,8 @@
 
 One row per Regulations.gov docket, keyed by `docket_id`, with the attributes the thin `dockets` table does not carry: keywords, short title, program, organization, subtypes, status, effective date and the agency's display properties. `effective_date` is TIMESTAMPTZ and `keywords` a string list (decision 67). Projected from each record's API attributes by SpicyDocs' contract.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='docket_attributes'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** True range. Every docket record in the Mirrulations mirror, read whole by `run-attributes-sweep` and kept current by the daily regulations ETL. DocSpec's API capture of 2026-09-02 held 278,607 of them (receipt `regulations-attributes-20260926/`); the published count is measured at the first sweep. *(measured 2026-09-27)*
 
 - **Parquet file:** `docket_attributes.parquet`
@@ -17,12 +19,12 @@ One row per Regulations.gov docket, keyed by `docket_id`, with the attributes th
 | --- | --- | --- |
 | `docket_id` | `VARCHAR` | The docket's id; its API record is https://api.regulations.gov/v4/dockets/{docket_id}. |
 | `category` | `VARCHAR` | The docket's status (labelled “Disposition”): Pending, Closed and others. |
-| `display_properties_json` | `VARCHAR` | The agency's labels for this docket's fields: a JSON array of {label, name, tooltip}; [] when none; json_column spelling. |
+| `display_properties` | `STRUCT("name" VARCHAR, "label" VARCHAR, tooltip VARCHAR)[]` | The agency's labels for this docket's fields: a Native list of {label, name, tooltip}; [] when none; json_column spelling. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `effective_date` | `TIMESTAMP WITH TIME ZONE` | Mostly the docket's close date (usually labelled “Docket Close Date”), a UTC instant. |
 | `field1` | `VARCHAR` | An agency-defined field (“Related Docket's RIN”, “Related To”, …); see display_properties_json. |
 | `field2` | `VARCHAR` | An agency-defined field (usually “Docket Status”); see display_properties_json. |
 | `generic` | `VARCHAR` | An agency program code (“Docket Item Code”, “Location”, “Program Area”). |
-| `keywords` | `VARCHAR[]` | The docket's keywords, in the publisher's order. |
+| `keywords` | `VARCHAR[]` | The docket's keywords, in the publisher's order. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `legacy_id` | `VARCHAR` | The docket's id in a predecessor system. |
 | `object_id` | `VARCHAR` | The publisher's internal object handle. |
 | `organization` | `VARCHAR` | Labelled “Pre-EDOCKET ID” or “Organization”; see display_properties_json. |

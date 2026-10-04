@@ -6,6 +6,8 @@
 
 One row per dated Federal Register record, keyed by (`document_number`, `publication_date`), ingested from the federalregister.gov REST API by `build_federal_register`. The authoritative rule-publication record — proposed rules, final rules, and notices — complementary to the regulations.gov `dockets`/`documents` view. `regulation_id_numbers_json` (RIN) and `cfr_references_json` are the join keys to the Unified Agenda and the CFR. All columns are stored as VARCHAR; array-valued fields are JSON.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='federal_register'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** True range: dated records published from 1994-01-03 on, the whole span the API serves. On 2026-09-23 every month's row count equalled the publisher's monthly facet, and 74 whole days (8,683 documents) matched the API in identity and every cell. *(measured 2026-09-23)*
 
 **Data quality.** Document numbers are not globally unique: `00-111` names different records on 2000-01-14 and 2000-01-18. Current merging preserves both dates and replaces only the same dated record on a later successful fetch. This code correction does not restore historical records already lost from published files; those require a pinned historical replay and publication. A number-only source reference remains ambiguous when its input generation supplies multiple dated candidates.
@@ -25,15 +27,12 @@ One row per dated Federal Register record, keyed by (`document_number`, `publica
 | `effective_on` | `VARCHAR` | The date the action takes effect, when stated; often NULL. |
 | `comments_close_on` | `VARCHAR` | The public comment deadline, for a document that opens a comment period; often NULL. |
 | `signing_date` | `VARCHAR` | The date a presidential document was signed; NULL for other documents. |
-| `agencies_json` | `VARCHAR` | The issuing agencies as the Register's agency objects, a JSON array. |
-| `agency_slugs` | `VARCHAR` | The issuing agencies' Register slugs, comma-separated; NULL when none. |
-| `docket_ids_json` | `VARCHAR` | The docket labels the document states, a JSON array, as printed (many are agency numbers). |
-| `regulation_id_numbers_json` | `VARCHAR` | The Regulation Identifier Numbers the document states, a JSON array; often `[]`. |
-| `cfr_references_json` | `VARCHAR` | The CFR citations the document affects, a JSON array of `{title, part, chapter, citation_url}`. |
-| `topics_json` | `VARCHAR` | The Register's CFR index terms for the document (`topics`), a JSON array; `[]` when it lists none. |
-| `html_url` | `VARCHAR` | The document's page on federalregister.gov. |
-| `pdf_url` | `VARCHAR` | The document's PDF rendition. |
-| `body_html_url` | `VARCHAR` | The document's full-text HTML body; the XML body the Register also serves carries no boilerplate. |
+| `agencies` | `STRUCT(id BIGINT, "name" VARCHAR, raw_name VARCHAR, parent_id BIGINT, slug VARCHAR)[]` | The issuing agencies as the Register's agency objects, a Native list. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `agency_slugs` | `VARCHAR[]` | The issuing agencies' Register slugs, comma-separated; NULL when none. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `docket_ids` | `VARCHAR[]` | The docket labels the document states, a Native list, as printed (many are agency numbers). Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `regulation_id_numbers` | `VARCHAR[]` | The Regulation Identifier Numbers the document states, a Native list; often `[]`. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `cfr_references` | `STRUCT(title BIGINT, part VARCHAR, chapter VARCHAR)[]` | The CFR citations the document affects, a Native list of `{title, part, chapter, citation_url}`. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `topics` | `VARCHAR[]` | The Register's CFR index terms for the document (`topics`), a Native list; `[]` when it lists none. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `volume` | `VARCHAR` | The Federal Register volume. |
 | `start_page` | `VARCHAR` | The document's first page. |
 | `end_page` | `VARCHAR` | The document's last page. |

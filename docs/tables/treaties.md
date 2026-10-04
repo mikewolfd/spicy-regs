@@ -6,6 +6,8 @@
 
 One row per treaty document, as the Congress.gov treaty list and detail routes state it, keyed `(congress_received, number, suffix)`. `package_id` is the GovInfo CDOC id by the `CDOC-{congress}tdoc{number}` rule on an unpartitioned treaty. All columns are stored as VARCHAR.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='treaties'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled. The 119th Congress's treaty documents from the retained list and their details; on 2026-09-21 the list's stated total agreed with the capture. Not treaty bodies, action histories, older Congresses, suffixed parts or interpreted legal/in-force effects. Receipts: fork-execution-2026-09-21/legislative-publication-summary.json, legislative-seeds/sealed-candidates.json and legislative-mcp-audit/. *(measured 2026-09-21)*
 
 **Data quality.** A row whose `titles_json` is NULL is list-only. A partitioned treaty (a non-empty `suffix`) is always list-only: the publisher's suffixed detail address has no route in spicy-docs' `LIST_ROUTES`, so its detail is never asked for and its `package_id` is NULL by the contract's own rule.
@@ -30,14 +32,11 @@ One row per treaty document, as the Congress.gov treaty list and detail routes s
 | `resolution_text` | `VARCHAR` | The resolution of ratification text, where the detail states one. |
 | `formal_title` | `VARCHAR` | The detail's `Treaty - Formal Title` entry. |
 | `short_title` | `VARCHAR` | The detail's `Treaty - Short Title` entry. |
-| `titles_json` | `VARCHAR` | Every title the detail lists, as a JSON array of the publisher's objects. |
-| `countries_json` | `VARCHAR` | Every country party the detail names, as a JSON array of names. |
-| `index_terms_json` | `VARCHAR` | Every index term the detail names, as a JSON array of names. |
-| `related_docs_json` | `VARCHAR` | Every related document the detail lists, as a JSON array of the publisher's objects. |
-| `parts_json` | `VARCHAR` | The publisher's parts object, as JSON. |
-| `action_count` | `VARCHAR` | How many actions the detail says the treaty has. |
-| `actions_url` | `VARCHAR` | The publisher's URL for the treaty's action list. |
+| `titles` | `STRUCT(title VARCHAR, titleType VARCHAR)[]` | Every title the detail lists, as a Native list of the publisher's objects. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `countries` | `VARCHAR[]` | Every country party the detail names, as a Native list of names. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `index_terms` | `VARCHAR[]` | Every index term the detail names, as a Native list of names. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `related_docs` | `STRUCT(congress VARCHAR, congressReceived VARCHAR, number VARCHAR, suffix VARCHAR, title VARCHAR, url VARCHAR)[]` | Every related document the detail lists, as a Native list of the publisher's objects. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `parts_count` | `BIGINT` | The publisher's parts object, as JSON. This column retains the source property count. |
+| `action_count` | `BIGINT` | How many actions the detail says the treaty has. |
 | `package_id` | `VARCHAR` | The GovInfo CDOC package id derived from the treaty number, on a treaty with no suffix. |
-| `package_id_rule` | `VARCHAR` | How package_id was derived: `cdoc_tdoc_number`. |
 | `update_date` | `VARCHAR` | The publisher's updateDate; the merge prefers the larger value. |
-| `url` | `VARCHAR` | The publisher's own URL for this treaty, which only the list row states. |
