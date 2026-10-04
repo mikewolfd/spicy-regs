@@ -201,7 +201,8 @@ def _prior_tables(
             digest = "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest()
         if pin.get("sha256") != digest or pin.get("byteSize") != path.stat().st_size:
             raise ScorecardRefreshError("Managed prior scorecard table differs from its immutable pin")
-        result[path.stem] = pq.ParquetFile(path).read().to_pylist()
+        if not native:
+            result[path.stem] = pq.ParquetFile(path).read().to_pylist()
     if native:
         if download_prior_receipts is not None and not download_prior_receipts(directory / "etl_receipts.parquet"):
             raise ScorecardRefreshError("Pinned prior receipts are unavailable")
@@ -302,12 +303,16 @@ def build_scorecards(
     max_bytes: int = MAX_BYTES,
     max_requests: int = MAX_REQUESTS,
     validate_acquisitions: Callable | None = None,
+    validate_readback: Callable | None = None,
 ) -> tuple[Path, ...]:
     """Acquire explicit selected scopes and construct one complete source family.
 
     A PDF host injects the existing SpicyDocs extractor and private observation
     retention together. These objects never enter public evidence or table rows.
     The host owns the model choice and private storage outside publication trees.
+    A synchronous readback validator may inspect the already receipt-checked
+    prior and persisted current rows before success; rows are not reused across
+    a later filesystem or generation admission boundary.
     """
     validate_limits(max_bytes, max_requests)
     if (pdf_extractor is None) != (retain_extraction is None):
@@ -494,6 +499,8 @@ def build_scorecards(
     )
     readback = read_family(output_dir, TABLE_NAMES)
     provider.validate(readback)
+    if validate_readback is not None:
+        validate_readback(prior_rows, readback)
     evidence.event(
         "scorecard-refresh",
         accepted_scopes=sorted(accepted),

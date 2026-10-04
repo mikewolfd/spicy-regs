@@ -14,12 +14,11 @@ import json
 from pathlib import Path
 from uuid import UUID, uuid4
 
-import pyarrow.parquet as pq
 from rulespec_artifacts import LocalMemberSource, iter_member_descriptors
 import yaml
 
 from spicy_regs.generations import build_generation, implementation_id, verify_generation
-from spicy_regs.scorecards.etl import SOURCE_NAMES, generation_options, read_family, read_indexed_family
+from spicy_regs.scorecards.etl import SOURCE_NAMES, generation_options
 from spicy_regs.scorecards.registry import REGISTRY
 from spicy_regs.scorecards.acquisition import MAX_BYTES, MAX_REQUESTS, validate_limits
 from spicy_regs.scorecards.extraction_replay import PageObservationReplay, page_bytes, read_page
@@ -126,15 +125,11 @@ def prepare(args):
     provider.get_adapter = lambda name: adapter_batches.get(name) or original_get(name)
     selected_registry = args.output / "selected-registry.yaml"
     selected_registry.write_text(yaml.safe_dump(dict(version=1, sources=selected_rows), sort_keys=False))
-    prior_rows, prior_directory = {}, None
 
     def download_prior(key, destination):
-        nonlocal prior_directory
-        prior_directory = destination.parent
         member = publication.single_member(index, key)
         if not publication.fetch_member(args.public_url, member, destination):
             raise ValueError("A pinned prior scorecard table is unavailable")
-        prior_rows[key.removesuffix(".parquet")] = pq.ParquetFile(destination).read().to_pylist()
         return True
 
     @contextmanager
@@ -153,6 +148,18 @@ def prepare(args):
         ),
         publisher_network_requests=0,
     )
+    editions = {key for batch in batches.values() for key in batch.entries}
+    assessment = None
+
+    def validate_readback(prior_rows, current):
+        nonlocal assessment
+        expected_publishers = [row for batch in batches.values() for row in batch.reference_publishers.values()]
+        preserved = check_preserved(prior_rows, current, scorecard_ids=editions, publisher_ids=set(batches))
+        actual_publishers = [row for row in current["scorecard_publishers"] if row["publisher_id"] in batches]
+        if canonical(actual_publishers, observation_ids=True) != canonical(expected_publishers, observation_ids=True):
+            raise ValueError("Latest publisher observations differ from their qualified references")
+        assessment = dict(preserved_row_counts=preserved, counts={name: len(rows) for name, rows in current.items()})
+
     try:
         files = build_scorecards(
             args.output,
@@ -170,24 +177,14 @@ def prepare(args):
             pdf_extractor=extractor,
             retain_extraction=retain_extraction if extractor else None,
             validate_acquisitions=lambda: [batch.complete() for batch in batches.values()],
+            validate_readback=validate_readback,
         )
         for batch in batches.values():
             batch.complete()
         if extractor:
             extractor.complete()
-        current = read_family(args.output, SOURCE_NAMES)
-        if index["families"].get("scorecards", {}).get("etlReceipts"):
-            if prior_directory is None:
-                raise ValueError("Prior source family was not retained before its receipt verification")
-            prior_rows = read_indexed_family(prior_directory, SOURCE_NAMES, index["families"]["scorecards"])
-        elif "scorecards" not in index["families"]:
-            prior_rows = {name: [] for name in SOURCE_NAMES}
-        editions = {key for batch in batches.values() for key in batch.entries}
-        preserved = check_preserved(prior_rows, current, scorecard_ids=editions, publisher_ids=set(batches))
-        expected_publishers = [row for batch in batches.values() for row in batch.reference_publishers.values()]
-        actual_publishers = [row for row in current["scorecard_publishers"] if row["publisher_id"] in batches]
-        if canonical(actual_publishers, observation_ids=True) != canonical(expected_publishers, observation_ids=True):
-            raise ValueError("Latest publisher observations differ from their qualified references")
+        if assessment is None:
+            raise ValueError("Preparation did not receive its verified row assessment")
         generation = build_generation(
             args.output / "generation",
             family="scorecards",
@@ -219,8 +216,7 @@ def prepare(args):
             provider_version=version("spicy-docs"),
             implementation_id=implementation_id(),
             accepted_scopes=sorted(editions),
-            preserved_row_counts=preserved,
-            counts={name: len(rows) for name, rows in current.items()},
+            **assessment,
             source_evidence=source_evidence.pin.as_dict(),
             plan_sha256=args.plan_sha256,
             hash_only_capture_observations=len(captures),
