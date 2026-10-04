@@ -57,10 +57,12 @@ an explicit generation. The filing and quality-notice wrappers in
 financial checks. They do not select amendments, infer donor identity, exclude
 transactions automatically or turn captured previews into financial totals.
 
-The new local entrypoints are implemented and tested. Switching the older
-scheduled rollup entrypoints to receipt-aware generation admission, regenerating
-the shared dictionary, and changing the public MCP/view catalog remain an
-integration step. The old array-expansion and processing-control views must not
-be exposed against the migrated subjects. Use native list columns and explicit
-internal receipt reads. A receipt-only local bundle can be written and checked;
-the shared generation builder currently requires a subject table to seal it.
+The scheduled committee, candidate-history, committee-history, source-catalog
+and organization-link rollups build through this receipt writer
+(`FecReceiptRollup`), and `build-fec-observations` writes its subjects and
+receipts the same way. The shared dictionary and the public MCP/view catalog
+describe the migrated subjects: native list columns replace the old
+array-expansion views, and the old processing-control views are not registered
+against them. Read processing values through explicit internal receipt reads.
+A receipt-only dataset such as `fec_source_catalog` emits only receipt rows and
+seals as a generation with no subject table.

@@ -31,6 +31,18 @@ This creates a new `fec-observations-<run-id>` directory containing:
 | `fec_collections` | One selected collection or explicit caller coverage disposition. Parsed collections preserve requested scope, verified counts, coverage limits and source outcome; metadata-only rows have NULL provider fields. |
 | `fec_relationships` | Source-reported assertions and absence states from supported committee API, original statement and explicitly mapped bulk inputs. |
 
+Since the October 3 [subject and receipt split](fec-subject-receipts.md), only
+`fec_relationships` is a table in the command's output. Its file holds
+`record_id`, the subject and object identifiers, types and name, the
+relationship type, `cycle` and `candidate_election_year`. `fec_source_records`
+and `fec_collections` are receipt-only datasets in the generation's shared
+`etl_receipts.parquet`. Each relationship row's `value_status`, identifier
+statuses, `source_family`, `source_sha256`, `source_url`, `observed_at`,
+`source_locator_json` and `source_fields_json` are fields of its receipt. The
+other column names on this page are those receipt fields, or the mapper's output
+from the Python `build_fec_observations` API; generations published before the
+split carry them as table columns.
+
 The manifest is JSON with `version: 1` and a nonempty `collections` list. Each
 collection names a unique `collection_id`, a `source_family` ID from the official
 FEC source catalog, a `profile`, and a `blob_root`. Relative filesystem paths
@@ -206,7 +218,8 @@ membership and bytes, not complete source coverage. Overlapping selections remai
 separate observations.
 
 Relationship locators include their exact companion identity. A consumer can
-join without guessing from names or choosing a current amendment:
+join without guessing from names or choosing a current amendment. In a generation
+published before the split:
 
 ```sql
 SELECT r.relationship_type, r.value_status, m.metadata_json
@@ -216,6 +229,10 @@ JOIN fec_source_records AS m
  AND m.source_record_id = json_extract_string(r.source_locator_json, '$.source_record_id')
  AND m.source_sha256 = r.source_sha256;
 ```
+
+In the receipt layout the same fields sit in each receipt's `processing_json`,
+and internal consumers read them with `read_identity_processing` for the
+selected generation.
 
 The native relationships mapper also remains available directly:
 

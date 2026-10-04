@@ -7,6 +7,12 @@ it needs no FEC acquisition. The observation workflow consumes an explicit,
 already retained selection. Neither workflow discovers or downloads new FEC
 source data.
 
+Since the October 3 [subject and receipt split](fec-subject-receipts.md), the
+catalog build writes only the shared `etl_receipts.parquet`, because
+`fec_source_catalog` is a receipt-only dataset. The observation build writes
+`fec_relationships.parquet` and one `etl_receipts.parquet` that holds
+`fec_source_records`, `fec_collections` and the relationships' evidence fields.
+
 For data already on the current machine, keep using the direct invocation:
 
 ```sh
@@ -101,9 +107,10 @@ the transferred bytes.
 
 Keep `skip_upload: true` for a build-only run. A successful run retains its
 `output/` directory as an Actions artifact for 30 days. This includes the sealed
-`generations/<digest>/artifact.json`, member manifest and Parquet tables, plus
-available build/audit files. Failed runs also retain available outputs. Every
-run retains `invocation.json` with code revision, run identity and explicit scope;
+`generations/<digest>/artifact.json`, member manifest, subject Parquet tables and
+`etl_receipts.parquet`, plus available build/audit files. Failed runs also retain
+available outputs. Every run retains `invocation.json` with code revision, run
+identity and explicit scope;
 retained-input runs additionally preserve:
 
 - `fec-inputs/source-manifest.json`: unchanged original manifest bytes.
