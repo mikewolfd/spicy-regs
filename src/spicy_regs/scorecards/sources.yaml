@@ -315,3 +315,39 @@ sources:
     rights_status: unreviewed
     policy_decision_id: scorecards-research-hash-only-v1
     qualification_id: null
+  - publisher_id: goa
+    adapter: goa
+    enabled: false
+    cadence: weekly
+    historical_backfill: false
+    evidence_policy: hash_only
+    rights_status: unreviewed
+    policy_decision_id: scorecards-research-hash-only-v1
+    qualification_id: null
+  - publisher_id: planned_parenthood
+    adapter: planned_parenthood
+    enabled: false
+    cadence: weekly
+    historical_backfill: false
+    evidence_policy: hash_only
+    rights_status: unreviewed
+    policy_decision_id: scorecards-research-hash-only-v1
+    qualification_id: null
+  - publisher_id: nrf
+    adapter: nrf
+    enabled: false
+    cadence: weekly
+    historical_backfill: false
+    evidence_policy: hash_only
+    rights_status: unreviewed
+    policy_decision_id: scorecards-research-hash-only-v1
+    qualification_id: null
+  - publisher_id: network
+    adapter: network
+    enabled: false
+    cadence: weekly
+    historical_backfill: false
+    evidence_policy: hash_only
+    rights_status: unreviewed
+    policy_decision_id: scorecards-research-hash-only-v1
+    qualification_id: null

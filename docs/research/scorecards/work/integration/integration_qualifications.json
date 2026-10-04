@@ -1,7 +1,7 @@
 {
   "schema_version": "1",
-  "observed_at": "2026-10-04T08:23:00Z",
-  "input_plan_sha256": "925a602773b0165e94cfb8e4d8ffb29e4001aa2d92ad388b748304ca070e1b81",
+  "observed_at": "2026-10-04T09:06:00.112039+00:00",
+  "input_plan_sha256": "363ffb8284aad52a0f5a663a1aa3a2ae64cef65dc28d42fa9d3aa5c31bc0677c",
   "readers": {
     "heritage_action": "heritage_action",
     "afl_cio": "afl_cio",
@@ -34,6 +34,10 @@
     "childrens_defense": "childrens_defense",
     "new_american": "new_american",
     "us_chamber": "us_chamber_archive",
+    "goa": "goa",
+    "planned_parenthood": "planned_parenthood",
+    "nrf": "nrf",
+    "network": "network",
     "afp": "afp",
     "ijm": "ijm",
     "lcv": "lcv",
@@ -1109,7 +1113,133 @@
       "scorecard_id": "us_chamber:2018",
       "state": "qualified",
       "receipt": "qualifications/us_chamber--2018.json",
-      "receipt_sha256": "d8fd6125cbef1d95f283916672b697e0d3ba9fe953c4d3fe6bdf63dfcf5a8155"
+      "receipt_sha256": "79f8ecda8bf90282d17414bf7e3099cec0c0ef27f8a495401166afa5f82a6aee"
+    },
+    {
+      "publisher_id": "goa",
+      "scorecard_id": "goa:4358-1848",
+      "state": "qualified",
+      "receipt": "qualifications/goa--4358-1848.json",
+      "receipt_sha256": "96c6a69e1cd335b276e7295c984c774c5e269d37c282ecf33f92aa52282dc6b2"
+    },
+    {
+      "publisher_id": "goa",
+      "scorecard_id": "goa:4358-1729",
+      "state": "qualified",
+      "receipt": "qualifications/goa--4358-1729.json",
+      "receipt_sha256": "fc86691c6576a26e80f93738d29c8c15f55ba2a137a270e1a010e55c8497b820"
+    },
+    {
+      "publisher_id": "goa",
+      "scorecard_id": "goa:4358-1541",
+      "state": "qualified",
+      "receipt": "qualifications/goa--4358-1541.json",
+      "receipt_sha256": "4a71591cd455ffa5a5b7022e9d84eebbd8d6abbd8779a5064a86e94dcc291a6f"
+    },
+    {
+      "publisher_id": "goa",
+      "scorecard_id": "goa:4358-1413",
+      "state": "qualified",
+      "receipt": "qualifications/goa--4358-1413.json",
+      "receipt_sha256": "e1d23af75d84302221176535a40d2c3d191005653f6b741d5a764e9589c91dbb"
+    },
+    {
+      "publisher_id": "goa",
+      "scorecard_id": "goa:4358-307",
+      "state": "qualified",
+      "receipt": "qualifications/goa--4358-307.json",
+      "receipt_sha256": "7cb794dac494ff1559ab574eff04f92321219acebe870c5d75ad5f55800c6c03"
+    },
+    {
+      "publisher_id": "planned_parenthood",
+      "scorecard_id": "planned_parenthood:4473-1848",
+      "state": "qualified",
+      "receipt": "qualifications/planned_parenthood--4473-1848.json",
+      "receipt_sha256": "fc80fbeef5dff2e60970d7e56ae0abbefd85622a0315a8006a8a8bbbe00b7fcc"
+    },
+    {
+      "publisher_id": "planned_parenthood",
+      "scorecard_id": "planned_parenthood:4473-1729",
+      "state": "qualified",
+      "receipt": "qualifications/planned_parenthood--4473-1729.json",
+      "receipt_sha256": "5aa435183ae3826ecb6c00c669800d248b5ce8142cd9ae8fedc75e81a84c51f6"
+    },
+    {
+      "publisher_id": "planned_parenthood",
+      "scorecard_id": "planned_parenthood:4473-1541",
+      "state": "qualified",
+      "receipt": "qualifications/planned_parenthood--4473-1541.json",
+      "receipt_sha256": "95bb0e70956763c73e328bffcf6150349da1bbda8c7ed70ee7ca5eaa43b24cc5"
+    },
+    {
+      "publisher_id": "planned_parenthood",
+      "scorecard_id": "planned_parenthood:4473-1413",
+      "state": "qualified",
+      "receipt": "qualifications/planned_parenthood--4473-1413.json",
+      "receipt_sha256": "dc623003ef84950ea3b8a4f9f1e1b5fa31856e177db62dd791243e21da2e9d73"
+    },
+    {
+      "publisher_id": "planned_parenthood",
+      "scorecard_id": "planned_parenthood:4473-307%3Acriteria",
+      "state": "qualified",
+      "receipt": "qualifications/planned_parenthood--4473-307%3Acriteria.json",
+      "receipt_sha256": "4ee5f107c1a097d21bd76d80f2f7c131c160ae8075b7821d167cf6cb2b2030b7"
+    },
+    {
+      "publisher_id": "nrf",
+      "scorecard_id": "nrf:114",
+      "state": "qualified",
+      "receipt": "qualifications/nrf--114.json",
+      "receipt_sha256": "ddb0affb3ec0d15830333dbf86b5f075718f625521d8cc59210c158e4b3c8249"
+    },
+    {
+      "publisher_id": "nrf",
+      "scorecard_id": "nrf:115",
+      "state": "qualified",
+      "receipt": "qualifications/nrf--115.json",
+      "receipt_sha256": "182bcbdde3e20b3b175a9ae10cb4d48c626055570f83f34e478dad0ecffcb97a"
+    },
+    {
+      "publisher_id": "nrf",
+      "scorecard_id": "nrf:116",
+      "state": "qualified",
+      "receipt": "qualifications/nrf--116.json",
+      "receipt_sha256": "dfe80d138f8ec1940d56d768c61f74c428b896f98756c315763b3f85012319a4"
+    },
+    {
+      "publisher_id": "nrf",
+      "scorecard_id": "nrf:117",
+      "state": "qualified",
+      "receipt": "qualifications/nrf--117.json",
+      "receipt_sha256": "272c830e63268e602670ee8b25132f212ab33a97c449fafb96624d216fd51927"
+    },
+    {
+      "publisher_id": "nrf",
+      "scorecard_id": "nrf:118",
+      "state": "qualified",
+      "receipt": "qualifications/nrf--118.json",
+      "receipt_sha256": "8d548bbf13c8afd295e80eeafa612a84a25b5d959e0e271d21fafd3a0f97e4ab"
+    },
+    {
+      "publisher_id": "nrf",
+      "scorecard_id": "nrf:119",
+      "state": "qualified",
+      "receipt": "qualifications/nrf--119.json",
+      "receipt_sha256": "2dd2ed8bc017a5fe4fedcb94ecd9598982bf97fa29e9737469442ed83053ca6e"
+    },
+    {
+      "publisher_id": "network",
+      "scorecard_id": "network:2025-pdf",
+      "state": "qualified",
+      "receipt": "qualifications/network--2025-pdf.json",
+      "receipt_sha256": "ad7b9bea9133f79d08751999936d6f5ac6ea976f5f3b231ccda424deb50d901b"
+    },
+    {
+      "publisher_id": "us_chamber",
+      "scorecard_id": "us_chamber:2019",
+      "state": "qualified",
+      "receipt": "qualifications/us_chamber--2019.json",
+      "receipt_sha256": "31d603556b5692298327a7130cca68c76be5b5f70a8276aff5c585c4bc7b4897"
     },
     {
       "publisher_id": "afp",
