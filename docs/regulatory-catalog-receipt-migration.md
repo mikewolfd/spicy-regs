@@ -1,14 +1,14 @@
 # Regulatory catalog subject and receipt writes
 
 Regulatory catalog writes use native business fields in the configured namespace
-with `_native` appended. The prior namespace remains a retained migration input.
-`regulatory_catalog.ensure_native` first prepares empty physical tables. It then
-converts existing rows, validates every subject against its receipt, and commits
-the populated pair with a shared initialization receipt. Until that checked
-receipt exists, reads continue using the retained legacy source. A crash after
-empty preparation therefore cannot select an empty dataset. A retry resumes the
-atomic population step. Invalid source values
-refuse migration without changing the retained source table.
+with `_native` appended. The prior namespace is retained but never read.
+`regulatory_catalog.ensure_native` prepares empty physical tables, then commits a
+checked initialization receipt; reads require that receipt, so a crash after
+preparation cannot select a half-initialized dataset. It does not convert the
+prior namespace's rows: that conversion was removed on 2026-10-03 with the other
+legacy paths. The first writer to reach an uninitialized catalog therefore starts
+an empty dataset. Populating it from retained rows is an explicit operator step,
+done through `replace_native` before any scheduled writer runs.
 
 `replace_native` reads the prior subject and receipt in one transaction, compares
 any caller-provided prior and snapshot, converts the replacement, and writes the
