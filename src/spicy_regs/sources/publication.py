@@ -699,7 +699,7 @@ def _get_bounded(client, bucket: str, key: str) -> tuple[bytes, str] | None:
 
 def derive_v1(index: Mapping) -> dict:
     """The version-1 view of ``index``: split tables omitted, a family left with none omitted too, and no
-    ``publishedAt``, which version-1 readers predate and refuse."""
+    ``publishedAt`` or ``etlReceipts``, which version-1 readers predate and refuse."""
     families = {}
     for name, entry in index["families"].items():
         tables = {key: table for key, table in entry["tables"].items() if "members" not in table}

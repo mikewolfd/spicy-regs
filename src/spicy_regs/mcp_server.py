@@ -755,7 +755,8 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
     from spicy_regs.sources.publication import receipt_members
 
     receipts = receipt_members(publication_index)
-    urls = (list(map(str, local.receipts.values())) if local is not None
+    local_receipts = local.receipts if local is not None else None
+    urls = (list(map(str, local_receipts.values())) if local_receipts is not None
             else [f"{R2_BASE_URL}/{member.path}" for member in receipts])
     if urls:
         try:
@@ -771,7 +772,7 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
                 con.execute(f'CREATE VIEW etl_receipts AS SELECT * FROM {parquet_scan(urls)}')
             actual = [[row[0], row[1]] for row in con.execute('DESCRIBE etl_receipts').fetchall()]
             # Only the members this view reads: an unselected family's receipts do not gate a local download.
-            selected = set(local.receipts) if local is not None else {member.path for member in receipts}
+            selected = set(local_receipts) if local_receipts is not None else {member.path for member in receipts}
             if any(entry["etlReceipts"]["columns"] != actual for entry in publication_index["families"].values()
                    if "etlReceipts" in entry and f"{entry['prefix']}/{entry['etlReceipts']['key']}" in selected):
                 raise RuntimeError("Published ETL receipt schema differs from the admitted generation")
@@ -942,19 +943,9 @@ def _publication_status(cursor: duckdb.DuckDBPyConnection) -> dict:
         managed.update({name: {"status": "native_selected", "generation_id": value["generation_id"],
                                "verification": "Selected bytes and exact receipt joins verified; file changes checked around statements."}
                         for name, value in local.get("native", {}).items()})
-    if "etl_receipts" in available:
-        managed["etl_receipts"] = {
-            "status": "managed_receipts",
-            "families": {family: {
-                "artifact_digest": entry["artifactDigest"],
-                "generation_id": entry["etlReceipts"]["generationId"],
-                "sha256": entry["etlReceipts"]["sha256"],
-                "rows": entry["etlReceipts"]["rows"],
-                "datasets": entry["etlReceipts"]["datasets"],
-            } for family, entry in index["families"].items() if "etlReceipts" in entry
-                and (local is None or any(key.removesuffix(".parquet") in local["selected_tables"]
-                                         for key in entry["tables"]))},
-        }
+    receipt_families = _receipt_families(index, local)
+    if "etl_receipts" in available and receipt_families:
+        managed["etl_receipts"] = {"status": "managed_receipts", "families": receipt_families}
     snapshot = {
         key.removesuffix(".parquet"): {
             "status": "rulemaking_snapshot",
@@ -995,13 +986,31 @@ def _publication_status(cursor: duckdb.DuckDBPyConnection) -> dict:
     }
 
 
+def _receipt_families(index: dict, local: dict | None) -> dict[str, dict]:
+    """Each family whose receipt member this connection's etl_receipts view reads, with its generation pins.
+
+    A local download reads only its selected families' members; a native build root
+    pins no publication index, so it has none.
+    """
+    selected = None if local is None else local.get("receipt_members", {})
+    return {
+        family: {
+            "artifact_digest": entry["artifactDigest"],
+            "generation_id": receipt["generationId"],
+            "sha256": receipt["sha256"],
+            "rows": receipt["rows"],
+            "datasets": receipt["datasets"],
+        }
+        for family, entry in index["families"].items()
+        if (receipt := entry.get("etlReceipts")) and (selected is None or f"{entry['prefix']}/{receipt['key']}" in selected)
+    }
+
+
 def _pinned_rows(index: dict, rulemaking: dict, name: str) -> int | None:
     """The row count the pinned index or snapshot manifest states for ``name``; None for a table neither pins."""
     from spicy_regs.sources.publication import table_descriptor
 
     descriptor = table_descriptor(index, f"{name}.parquet")
-    if name == "etl_receipts":
-        return sum(entry["etlReceipts"]["rows"] for entry in index["families"].values() if "etlReceipts" in entry)
     if descriptor is not None:
         return descriptor["rows"]
     pinned = rulemaking["tables"].get(f"{name}.parquet")
@@ -1925,6 +1934,7 @@ def _tools() -> list[Tool]:
         metadata = _table_metadata()
         relationships = _connection_relationships(cursor)
         index, rulemaking, exports = _connection_index(cursor), _connection_rulemaking(cursor), _export_rows(cursor)
+        local = _connection_local_selection(cursor) if DATA_DIR is not None else None
         # A relationship family's occurrence, pair and field-state views share one summary; list it once.
         views: dict[str, list[str]] = {}
         for name, entry in relationships.items():
@@ -1932,9 +1942,8 @@ def _tools() -> list[Tool]:
                 views.setdefault(entry["metadata"]["summary"], []).append(name)
 
         def rows(name: str) -> dict[str, Any]:
-            if name == "etl_receipts":
-                pin = _publication_status(cursor)["publication"][name]
-                return {"rows": sum(entry["rows"] for entry in pin["families"].values())}
+            if name == "etl_receipts" and (families := _receipt_families(index, local)):
+                return {"rows": sum(entry["rows"] for entry in families.values())}
             export = exports.get(name)
             if export is None:
                 return {"rows": _pinned_rows(index, rulemaking, name)}

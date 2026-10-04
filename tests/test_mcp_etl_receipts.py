@@ -111,9 +111,9 @@ def test_remote_receipt_failure_refuses_entire_connection(tmp_path, monkeypatch,
         mcp_server._build_connection()
 
 
-def test_local_receipts_are_rehashed_and_never_fetched_remotely(tmp_path, monkeypatch):
-    value, source, receipts = retained(tmp_path)
-    member = pub.receipt_members(value)[0]
+def downloaded(tmp_path, monkeypatch, value, receipts):
+    """A complete local download of ``members`` holding its family's receipt member; returns that member's path."""
+    member = next(m for m in pub.receipt_members(value) if m.path.startswith(value["families"]["members"]["prefix"]))
     local = tmp_path / receipt_local_key(member)
     local.parent.mkdir(parents=True)
     local.write_bytes(receipts.read_bytes())
@@ -124,9 +124,37 @@ def test_local_receipts_are_rehashed_and_never_fetched_remotely(tmp_path, monkey
     monkeypatch.setattr(mcp_server, "DATA_DIR", tmp_path)
     monkeypatch.setattr(mcp_server, "TABLES", ("members",))
     monkeypatch.setattr(pub, "load_index", lambda _: pytest.fail("Local receipts fetched a remote index"))
+    return local
+
+
+def test_local_receipts_are_rehashed_and_never_fetched_remotely(tmp_path, monkeypatch):
+    value, source, receipts = retained(tmp_path)
+    local = downloaded(tmp_path, monkeypatch, value, receipts)
     con = mcp_server._build_connection()
     assert con.execute("SELECT count(*) FROM etl_receipts").fetchone() == (2,)
     con.close()
     local.write_bytes(b"changed evidence")
     with pytest.raises(RuntimeError, match="receipt member differs"):
         mcp_server._build_connection()
+
+
+def test_local_receipt_pin_and_schema_check_cover_only_selected_families(tmp_path, monkeypatch):
+    value, source, receipts = retained(tmp_path)
+    other = deepcopy(value["families"]["members"])
+    other.update(prefix="generations/other/" + "c" * 64, logicalId="urn:test:other",
+                 artifactDigest="sha256:" + "c" * 64,
+                 tables={"other_rows.parquet": dict(value["families"]["members"]["tables"]["members.parquet"])})
+    other["etlReceipts"].update(columns=[["unrelated", "VARCHAR"]], datasets=["other_rows"], generationId="other")
+    value["families"]["other"] = other
+    downloaded(tmp_path, monkeypatch, value, receipts)
+    con = mcp_server._build_connection()
+    monkeypatch.setattr(mcp_server, "_get_connection", lambda: con)
+    server = mcp_server.build_server()
+    try:
+        pin = _tool_data(server, "describe_table", {"table": "etl_receipts"})["publication"]
+        assert pin["status"] == "managed_receipts"
+        assert set(pin["families"]) == {"members"}
+        listed = {row["table"]: row for row in _listed(_tool_data(server, "list_sources", {}))}
+        assert listed["etl_receipts"]["rows"] == 2
+    finally:
+        con.close()

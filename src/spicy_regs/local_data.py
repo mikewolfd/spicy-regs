@@ -31,7 +31,7 @@ class LocalSelection:
     native_signatures: dict = field(default_factory=dict)
 
     @property
-    def receipts(self):
+    def receipts(self) -> dict[str, Path]:
         if self.native:
             return {str(value.receipts): value.receipts for value in self.native.values()}
         return {member.path: self.directory / receipt_local_key(member)
@@ -42,12 +42,12 @@ class LocalSelection:
         return self.split[name] if name in self.split else (self.files[name][0],)
 
 
-def receipt_local_key(member):
+def receipt_local_key(member) -> Path:
     """Family and generation stay in the local key, avoiding shared-name collisions."""
     return Path(".etl-receipts") / member.path
 
 
-def selected_receipt_members(index, selected):
+def selected_receipt_members(index: Mapping, selected) -> tuple:
     members = {}
     for name in selected:
         owner = table_owner(index, name + ".parquet")
@@ -206,7 +206,7 @@ def verify_local_members(selection: LocalSelection) -> dict[str, list[int]]:
                 raise RuntimeError(f"Local download member changed during verification: {name}")
             signatures[str(path)] = before
     for member in selected_receipt_members(selection.publication, selection.files):
-        path = selection.receipts[member.path]
+        path = selection.directory / receipt_local_key(member)
         before = file_signature(path)
         with path.open("rb") as stream:
             digest = "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest()
