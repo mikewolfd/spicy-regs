@@ -12,7 +12,7 @@ receive the same typed facts. Do not introduce another table name merely to
 hide columns or convert values from an existing table.
 
 This follows the [FEC data model](fec-data-model.md#how-the-data-becomes-useful)
-and the [delivery plan](fec-delivery-plan.md#scope-and-release-choice): preserve
+and the [delivery plan](fec-delivery-plan.md): preserve
 source evidence, build useful typed subject records, and keep financial
 qualification separate. Original source records and collection context remain
 accessible through exact evidence references.
