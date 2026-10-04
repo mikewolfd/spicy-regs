@@ -2,6 +2,7 @@
 
 from collections import Counter
 from hashlib import sha256
+from inspect import signature
 import json
 from pathlib import Path
 import re
@@ -33,10 +34,32 @@ def qualified_reference(entry, resolve_path):
     return json.loads(pinned_bytes(resolve_path(entry["reference_file"]), entry["reference_sha256"], max_bytes=limit))
 
 
-def qualified_reader_class(adapter, name):
+def qualified_reader_class(adapter, name, *, entry=None):
     constructor = getattr(adapter, name, None)
     if not re.fullmatch(r"[A-Z][A-Za-z0-9_]*Reader", name) or not isinstance(constructor, type):
         raise ScorecardReplayError("Unknown qualified named reader injection")
+    if entry is not None:
+        # Metadata generation and replay use the same constructor shape. Bind
+        # placeholders without executing a reader or exposing private assets.
+        inputs, observations = entry.get("reader_inputs"), entry.get("observations_file")
+        if inputs and observations:
+            raise ScorecardReplayError("Qualified reader inputs must select one explicit asset shape")
+        args: tuple[object, ...] = ()
+        kwargs: dict[str, object] = {}
+        if inputs:
+            if not isinstance(inputs, dict):
+                raise ScorecardReplayError("Qualified reader inputs must be a named asset mapping")
+            for field in inputs:
+                if not isinstance(field, str):
+                    raise ScorecardReplayError("Qualified reader inputs must have text names")
+                kwargs[field] = None
+            kwargs["retain_observations"] = None
+        elif observations:
+            args = (None, None)
+        try:
+            signature(constructor).bind(*args, **kwargs)
+        except (TypeError, ValueError):
+            raise ScorecardReplayError("Qualified reader inputs do not bind to the selected reader") from None
     return constructor
 
 
@@ -190,10 +213,10 @@ class RetainedScorecardBatch:
             if total > max_requests:
                 raise ScorecardReplayError("Qualified publisher batch exceeds the shared acquisition budget")
             if entry.get("reader_class"):
-                constructor = qualified_reader_class(adapter, entry["reader_class"])
                 if entry.get("reader_inputs") or entry.get("observations_file"):
                     if retain_observations is None:
                         raise ScorecardReplayError("Qualified semantic readers require private observation retention")
+                constructor = qualified_reader_class(adapter, entry["reader_class"], entry=entry)
                 if entry.get("reader_inputs"):
                     adapter = constructor(
                         **qualified_reader_inputs(entry, self.path), retain_observations=retain_observations

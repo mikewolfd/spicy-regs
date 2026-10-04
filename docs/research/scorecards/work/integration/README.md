@@ -26,6 +26,10 @@ then pins the reader module, ordered capture manifest, source qualification and
 complete native table reference. Reviewed PDF readers additionally pin their
 semantic observations or named `reader_inputs`. Shared extraction observations
 use the lossless page JSON format; normal replay does not load pickle files.
+Use `observations_file` and `observations_sha256` for a single semantic asset.
+Both coverage generation and replay check that these arguments, or the named
+`reader_inputs`, bind to the selected reader's constructor. Missing or mismatched
+inputs refuse before coverage advances; this check does not execute the reader.
 Native API readers can select a named `reader_class` without private semantic
 assets. Each still runs the source's completeness checks and exact reference
 comparison; semantic readers continue to require private observation retention.

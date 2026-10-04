@@ -40,7 +40,7 @@ def build(plan_path, plan_sha256, corpus, directory, *, observed_at, published_l
         if ADAPTER_PUBLISHERS[entry["adapter"]] != edition.publisher_id:
             raise ValueError("Qualified scope and installed reader publisher differ")
         pinned_bytes(Path(adapter.__file__), entry["reader_sha256"], max_bytes=1024**2)
-        reader = qualified_reader_class(adapter, entry["reader_class"]) if entry.get("reader_class") else adapter
+        reader = qualified_reader_class(adapter, entry["reader_class"], entry=entry) if entry.get("reader_class") else adapter
         if entry.get("observations_file"):
             pinned_bytes(private_path(entry["observations_file"]), entry["observations_sha256"])
         if entry.get("reader_inputs"):

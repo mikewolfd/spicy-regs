@@ -54,6 +54,9 @@ def inputs(tmp_path, monkeypatch, *, complete=True, counts=None):
     class SourceReader:
         parser_version = "semantic/2"
 
+        def __init__(self, qualified_observations, retain_observations):
+            raise AssertionError("Coverage preflight must not execute the reader")
+
     adapter = SimpleNamespace(__file__=str(corpus / "reader.py"), parser_version="native/1", SourceReader=SourceReader)
     monkeypatch.setattr(qualifications, "get_adapter", lambda name: adapter)
 
@@ -107,6 +110,44 @@ def test_changed_private_semantic_asset_cannot_advance_coverage(tmp_path, monkey
     (args[2] / "observations.json").write_bytes(b'{"reviewed": false}')
     with pytest.raises(ValueError, match="pin"):
         qualifications.build(*args, observed_at="2026-10-04T04:00:00Z")
+
+
+@pytest.mark.parametrize("legacy_keys", [False, True])
+def test_required_reader_assets_must_bind_before_coverage_advances(tmp_path, monkeypatch, legacy_keys):
+    args = inputs(tmp_path, monkeypatch)
+    adapter = qualifications.get_adapter("lcv")
+
+    class SourceReader:
+        parser_version = "semantic/2"
+
+        def __init__(self, qualified_observations, retain_observations):
+            raise AssertionError("Coverage preflight must not execute the reader")
+
+    adapter.SourceReader = SourceReader
+    document = json.loads(args[0].read_bytes())
+    entry = document["entries"][0]
+    for field in ("observations_file", "observations_sha256"):
+        value = entry.pop(field)
+        if legacy_keys:
+            entry["qualified_" + field] = value
+    args[0].write_text(json.dumps(document))
+    with pytest.raises(ValueError, match="reader inputs"):
+        qualifications.build(args[0], sha256(args[0].read_bytes()).hexdigest(), *args[2:],
+                             observed_at="2026-10-04T04:00:00Z")
+    assert not (args[-1] / "integration_qualifications.json").exists()
+
+
+def test_named_assets_must_match_the_selected_reader_parameters(tmp_path, monkeypatch):
+    args = inputs(tmp_path, monkeypatch)
+    document = json.loads(args[0].read_bytes())
+    entry = document["entries"][0]
+    entry["reader_inputs"] = {"wrong_asset_name": {
+        "file": entry.pop("observations_file"), "sha256": entry.pop("observations_sha256")}}
+    args[0].write_text(json.dumps(document))
+    with pytest.raises(ValueError, match="reader inputs"):
+        qualifications.build(args[0], sha256(args[0].read_bytes()).hexdigest(), *args[2:],
+                             observed_at="2026-10-04T04:00:00Z")
+    assert not (args[-1] / "integration_qualifications.json").exists()
 
 
 @pytest.mark.parametrize("limit", [1, 1024])
