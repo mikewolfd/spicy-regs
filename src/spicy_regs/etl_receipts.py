@@ -474,7 +474,7 @@ def _load_receipts(connection, receipt_paths, policies, generation_id):
                 raise ValueError("Duplicate or ambiguous receipt join") from exc
 
 
-def _match_subjects(connection, subjects, policies):
+def _joined_subjects(connection, subjects, policies):
     for dataset, paths in subjects.items():
         policy = policies[dataset]
         if policy.receipt_only and paths:
@@ -494,9 +494,21 @@ def _match_subjects(connection, subjects, policies):
                 if found is None or found[2]:
                     raise ValueError(f"Missing, ambiguous or reused subject receipt: {dataset}")
                 connection.execute("UPDATE receipts SET used=1 WHERE receipt_id=?", [found[0]])
-                yield row, _unpack(json.loads(found[1]))
+                yield dataset, row, _unpack(json.loads(found[1]))
     if connection.execute("SELECT 1 FROM receipts WHERE outcome='accepted' AND used=0 LIMIT 1").fetchone():
         raise ValueError("Accepted receipt has no matching subject")
+
+
+def _match_subjects(connection, subjects, policies):
+    for _, subject, processing in _joined_subjects(connection, subjects, policies):
+        yield subject, processing
+
+
+def _bundle_policies(subjects, receipt_paths, policies):
+    registered = {p.dataset: p for p in policies}
+    if len(registered) != len(policies) or set(subjects) != set(registered) or not receipt_paths:
+        raise ValueError("Bundle datasets differ from explicit policies or receipts are missing")
+    return registered
 
 
 def validate_receipt_bundle(
@@ -511,13 +523,45 @@ def validate_receipt_bundle(
     Includes failures with no subjects. A generation may contain no records;
     callers still bind its explicit generation id in artifact metadata.
     """
-    registered = {p.dataset: p for p in policies}
-    if len(registered) != len(policies) or set(subjects) != set(registered) or not receipt_paths:
-        raise ValueError("Bundle datasets differ from explicit policies or receipts are missing")
+    registered = _bundle_policies(subjects, receipt_paths, policies)
     with TemporaryDirectory(prefix="etl-joins-") as temp, sqlite3.connect(str(Path(temp) / "joins.db")) as con:
         _load_receipts(con, receipt_paths, registered, generation_id)
         for _ in _match_subjects(con, subjects, registered):
             pass
+
+
+def read_receipt_bundle(
+    subjects: Mapping[str, Sequence[ParquetInput]],
+    receipt_paths: Sequence[ParquetInput],
+    policies: Sequence[DatasetPolicy],
+    *,
+    generation_id: str,
+    processing_outcomes: Mapping[str, frozenset[str]] | None = None,
+) -> dict[str, list[dict]]:
+    """Reconstruct a complete family after one receipt load and subject join.
+
+    Materialize all rows internally so a late join failure returns no partial
+    result. Every receipt, including omitted failed attempts, is validated.
+    Callers explicitly select nonaccepted processing outcomes for internal replay;
+    accepted subjects always retain their exact processing fields.
+    """
+    registered = _bundle_policies(subjects, receipt_paths, policies)
+    outcomes = processing_outcomes or {}
+    if set(outcomes) - set(registered) or any(
+        not selected <= OUTCOMES - {"accepted"} for selected in outcomes.values()
+    ):
+        raise ValueError("Unknown dataset or nonaccepted processing outcome")
+    result = {name: [] for name in subjects}
+    with TemporaryDirectory(prefix="etl-bundle-read-") as temp, sqlite3.connect(str(Path(temp) / "joins.db")) as con:
+        _load_receipts(con, receipt_paths, registered, generation_id)
+        for dataset, subject, processing in _joined_subjects(con, subjects, registered):
+            result[dataset].append(subject | processing)
+        for dataset, outcome, processing in con.execute(
+            "SELECT dataset, outcome, processing FROM receipts WHERE outcome<>'accepted' ORDER BY rowid"
+        ):
+            if outcome in outcomes.get(dataset, ()):
+                result[dataset].append(_unpack(json.loads(processing)))
+    return result
 
 
 def read_with_receipts(

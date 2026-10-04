@@ -20,7 +20,7 @@ from spicy_regs.etl_receipts import (
     RECEIPT_SCHEMA,
     combine_receipts,
     failure_receipt,
-    read_attempts,
+    read_receipt_bundle,
     rebind_receipt,
     read_with_receipts,
     select_receipts,
@@ -217,19 +217,16 @@ def read_family(directory: Path, names, *, receipt_path: Path | None = None, gen
     if generation_id is None:
         generation_id = generation_options(directory, names)["receipt_generation_id"]
     subjects = {n: [] if POLICIES[n].receipt_only else [directory / (n + ".parquet")] for n in names}
-    validate_receipt_bundle(subjects, [receipt_path], [POLICIES[n] for n in names], generation_id=generation_id)
-    result = {}
-    with TemporaryDirectory(prefix="scorecard-receipt-read-") as temporary:
-        for name in names:
-            selected = select_receipts(receipt_path, Path(temporary) / (name + ".parquet"), dataset=name)
-            joined = list(read_with_receipts(subjects[name], [selected], POLICIES[name], generation_id=generation_id))
-            # The shared reader yields accepted subjects. Observed processing-only
-            # records and explicit resolver refusals still need exact internal replay.
-            outcomes = frozenset({"observed", "refused"} if name in LINK_NAMES else {"observed"})
-            for row in read_attempts([selected], POLICIES[name], generation_id=generation_id, outcomes=outcomes):
-                joined.append(row["processing_fields"])
-            result[name] = [restore_source_row(name, row) for row in joined]
-    return result
+    joined = read_receipt_bundle(
+        subjects,
+        [receipt_path],
+        [POLICIES[n] for n in names],
+        generation_id=generation_id,
+        processing_outcomes={
+            name: frozenset({"observed", "refused"} if name in LINK_NAMES else {"observed"}) for name in names
+        },
+    )
+    return {name: [restore_source_row(name, row) for row in rows] for name, rows in joined.items()}
 
 
 def read_source_inputs(paths, receipt_path: Path, *, generation_id: str) -> dict:

@@ -22,6 +22,7 @@ from spicy_regs.etl_receipts import (
     combine_receipts,
     subject_identity,
     exact_json,
+    read_receipt_bundle,
 )
 from spicy_regs.generations import build_generation, verify_generation
 from spicy_regs.sources.publication import empty_index, publish_generation, receipt_members, PublicationError
@@ -85,6 +86,68 @@ def test_native_roundtrip_and_internal_read(tmp_path, policy, context, row):
     receipt_row = pq.read_table(receipt).to_pylist()[0]
     assert receipt_row["witnesses"] == list(context.witnesses)
     assert list(read_with_receipts([subject], [receipt], policy, generation_id="build-1")) == [row]
+
+
+def test_complete_bundle_read_preserves_exact_values_and_explicit_attempts(tmp_path, policy, context, row):
+    reads = DatasetPolicy("parser_reads", pa.schema([]), (), ("checkpoint",), receipt_only=True)
+    failed = failure_receipt(policy, replace(context, attempt_id="refused"), outcome="refused", raw_fields=row)
+    subject, receipts = write_dataset([(row, context)], tmp_path / "payments", policy, failures=[failed])
+    _, observed = write_dataset([({"checkpoint": [None, "", 0]}, context)], tmp_path / "reads", reads)
+    shared = combine_receipts([receipts, observed], tmp_path / "shared.parquet")
+    subjects, policies = {policy.dataset: [subject], reads.dataset: []}, [policy, reads]
+    assert read_receipt_bundle(subjects, [shared], policies, generation_id="build-1") == {
+        "payments": [row], "parser_reads": []
+    }
+    result = read_receipt_bundle(
+        subjects, [shared], policies, generation_id="build-1",
+        processing_outcomes={"payments": frozenset({"refused"}), "parser_reads": frozenset({"observed"})},
+    )
+    assert result == {"payments": [row, row], "parser_reads": [{"checkpoint": [None, "", 0]}]}
+
+
+@pytest.mark.parametrize("fault", ["late-subject", "orphan", "duplicate", "generation", "receipt", "schema"])
+def test_complete_bundle_read_refuses_inconsistent_later_dataset(tmp_path, policy, context, row, fault):
+    other = replace(policy, dataset="refunds")
+    first, first_receipt = write_dataset([(row, context)], tmp_path / "payments", policy)
+    second, second_receipt = write_dataset([(row, context)], tmp_path / "refunds", other)
+    shared = combine_receipts([first_receipt, second_receipt], tmp_path / "shared.parquet")
+    subjects = {"payments": [first], "refunds": [second]}
+    selected_generation = "build-1"
+    if fault == "late-subject":
+        changed = split_record(other, row | {"amount": Decimal("1.00")}, context)[0]
+        pq.write_table(pa.Table.from_pylist([changed], schema=other.subject_schema), second)
+    elif fault == "orphan":
+        subjects["refunds"] = []
+    elif fault in {"duplicate", "receipt"}:
+        receipts = pq.read_table(shared).to_pylist()
+        if fault == "duplicate":
+            receipts.append(receipts[-1])
+        else:
+            receipts[-1]["processor"] = "altered"
+        pq.write_table(pa.Table.from_pylist(receipts, schema=RECEIPT_SCHEMA), shared)
+    elif fault == "generation":
+        selected_generation = "other-generation"
+    else:
+        pq.write_table(pq.read_table(second).append_column("extra", pa.array(["x"])), second)
+    with pytest.raises(ValueError):
+        read_receipt_bundle(subjects, [shared], [policy, other], generation_id=selected_generation)
+
+
+@pytest.mark.parametrize("outcomes", [{"missing": frozenset({"observed"})}, {"payments": frozenset({"accepted"})}, {"payments": frozenset({"unknown"})}])
+def test_complete_bundle_read_requires_explicit_nonaccepted_outcome_selection(tmp_path, policy, context, row, outcomes):
+    subject, receipt = write_dataset([(row, context)], tmp_path / "payments", policy)
+    with pytest.raises(ValueError, match="nonaccepted"):
+        read_receipt_bundle({"payments": [subject]}, [receipt], [policy], generation_id="build-1", processing_outcomes=outcomes)
+
+
+def test_complete_bundle_read_checks_unselected_failed_receipts(tmp_path, policy, context, row):
+    failed = failure_receipt(policy, replace(context, attempt_id="refused"), outcome="refused", raw_fields=row)
+    subject, receipt = write_dataset([(row, context)], tmp_path / "payments", policy, failures=[failed])
+    receipts = pq.read_table(receipt).to_pylist()
+    receipts[-1]["processor"] = "altered"
+    pq.write_table(pa.Table.from_pylist(receipts, schema=RECEIPT_SCHEMA), receipt)
+    with pytest.raises(ValueError, match="digest"):
+        read_receipt_bundle({"payments": [subject]}, [receipt], [policy], generation_id="build-1")
 
 
 @pytest.mark.parametrize(

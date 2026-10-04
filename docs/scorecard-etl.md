@@ -26,6 +26,19 @@ resolved links belong in subject tables. Internal validation and incremental rea
 must reconstruct the provider rows from verified receipts; missing or ambiguous
 receipt joins must stop the read.
 
+`read_family` uses the shared `read_receipt_bundle` API to reconstruct the selected
+family with one receipt load and one subject join. The reader checks every receipt,
+including failed attempts omitted from its result, and verifies all accepted
+subjects before returning any rows. Callers explicitly select processing-only
+observations and resolver refusals for internal replay. Exact decimals, nested
+values, witnesses, generation identities and one-to-one joins use the same shared
+validation rules as individual-dataset reads.
+
+The bounded LCV replay comparison and its original input hashes are retained in
+`receipts/scorecards-expansion-20261004/receipt-read-optimization-benchmark/`.
+Its baseline and candidate reports agree on the exact reconstructed row digest;
+the measurement covers that captured edition rather than full-corpus throughput.
+
 See `src/spicy_regs/etl_policies/scorecard*.json` for installed receipt requirements.
 Both rollups use the shared `receipt_policies` path and its build identity.
 Unchanged prior observations retain their original witnesses and attempt through
