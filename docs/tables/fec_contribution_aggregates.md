@@ -19,7 +19,7 @@ Processing fields, source witnesses, conversion inputs and diagnostics reference
 | --- | --- | --- |
 | `record_id` | `VARCHAR` | Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event. |
 | `correction_operation` | `VARCHAR` | Source-supported correction operation, when applicable; a positive amount in a deletion stream is not a new receipt or an inferred refund. |
-| `filing_key` | `VARCHAR` | Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. |
+| `filing_key` | `VARCHAR` | Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. It does not by itself say whether the row's filing is held: where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`). `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist. |
 | `aggregate_type` | `VARCHAR` | Source-defined aggregation class, such as geographic bucket, contribution-size band or inaugural contributor group. |
 | `candidate_native_id` | `VARCHAR` | Literal candidate-like reference as reported. Aggregate codes or unresolved references do not establish a person. |
 | `candidate_name` | `VARCHAR` | The candidate's name as reported, without a name-based identity merge. |
