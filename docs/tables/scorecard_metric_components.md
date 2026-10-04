@@ -6,7 +6,7 @@
 
 One source-stated relationship between a component metric and its parent metric. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy.
 
-**Coverage.** Sampled publisher editions selected by the scorecard source registry. Complete edition reads replace that edition; failed or incomplete reads preserve prior observations. Coverage varies by publisher and historical source format. *(measured 2026-10-03)*
+**Coverage.** Empty in the currently published scorecard editions: no component-to-parent metric relationships are present. This does not establish that other publisher editions lack such relationships. *(measured 2026-10-03)*
 
 - **Parquet file:** `scorecard_metric_components.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
