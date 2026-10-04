@@ -92,6 +92,7 @@ def test_complete_bundle_read_preserves_exact_values_and_explicit_attempts(tmp_p
     reads = DatasetPolicy("parser_reads", pa.schema([]), (), ("checkpoint",), receipt_only=True)
     failed = failure_receipt(policy, replace(context, attempt_id="refused"), outcome="refused", raw_fields=row)
     subject, receipts = write_dataset([(row, context)], tmp_path / "payments", policy, failures=[failed])
+    assert subject is not None
     _, observed = write_dataset([({"checkpoint": [None, "", 0]}, context)], tmp_path / "reads", reads)
     shared = combine_receipts([receipts, observed], tmp_path / "shared.parquet")
     subjects, policies = {policy.dataset: [subject], reads.dataset: []}, [policy, reads]
@@ -110,6 +111,7 @@ def test_complete_bundle_read_refuses_inconsistent_later_dataset(tmp_path, polic
     other = replace(policy, dataset="refunds")
     first, first_receipt = write_dataset([(row, context)], tmp_path / "payments", policy)
     second, second_receipt = write_dataset([(row, context)], tmp_path / "refunds", other)
+    assert first is not None and second is not None
     shared = combine_receipts([first_receipt, second_receipt], tmp_path / "shared.parquet")
     subjects = {"payments": [first], "refunds": [second]}
     selected_generation = "build-1"
@@ -136,6 +138,7 @@ def test_complete_bundle_read_refuses_inconsistent_later_dataset(tmp_path, polic
 @pytest.mark.parametrize("outcomes", [{"missing": frozenset({"observed"})}, {"payments": frozenset({"accepted"})}, {"payments": frozenset({"unknown"})}])
 def test_complete_bundle_read_requires_explicit_nonaccepted_outcome_selection(tmp_path, policy, context, row, outcomes):
     subject, receipt = write_dataset([(row, context)], tmp_path / "payments", policy)
+    assert subject is not None
     with pytest.raises(ValueError, match="nonaccepted"):
         read_receipt_bundle({"payments": [subject]}, [receipt], [policy], generation_id="build-1", processing_outcomes=outcomes)
 
@@ -143,6 +146,7 @@ def test_complete_bundle_read_requires_explicit_nonaccepted_outcome_selection(tm
 def test_complete_bundle_read_checks_unselected_failed_receipts(tmp_path, policy, context, row):
     failed = failure_receipt(policy, replace(context, attempt_id="refused"), outcome="refused", raw_fields=row)
     subject, receipt = write_dataset([(row, context)], tmp_path / "payments", policy, failures=[failed])
+    assert subject is not None
     receipts = pq.read_table(receipt).to_pylist()
     receipts[-1]["processor"] = "altered"
     pq.write_table(pa.Table.from_pylist(receipts, schema=RECEIPT_SCHEMA), receipt)
