@@ -6,6 +6,7 @@ the Integration workflow runs them, and a missing Docker fails rather than skips
 """
 
 import json
+import os
 import shutil
 import subprocess
 import time
@@ -33,9 +34,16 @@ def rest_uri():
     # Under the home directory: Docker VMs on macOS (Colima, Docker Desktop) share it, not the system temp dir.
     root = (Path.home() / ".cache" / "spicy-regs-iceberg-tests" / uuid4().hex[:8]).resolve()
     root.mkdir(parents=True)
+    # The catalog creates each table's directory and DuckDB, on this host, writes the table's data files into it. A
+    # Linux bind mount keeps the container's uid, so the catalog runs as this user (as root it left directories the
+    # runner could not write into). Hadoop refuses a uid with no account name, hence the one-entry passwd.
+    user = f"{os.getuid()}:{os.getgid()}"
+    passwd = root / "passwd"
+    passwd.write_text(f"fixture:x:{user}::/tmp:/usr/sbin/nologin\n")
     name = "spicy-regs-fill-" + uuid4().hex[:8]
-    subprocess.run(["docker", "run", "--detach", "--rm", "--name", name, "--user", "0", "--publish", "127.0.0.1::8181",
-                    "--volume", f"{root}:{root}", "--env", f"CATALOG_WAREHOUSE={root}/warehouse",
+    subprocess.run(["docker", "run", "--detach", "--rm", "--name", name, "--user", user, "--publish", "127.0.0.1::8181",
+                    "--volume", f"{root}:{root}", "--volume", f"{passwd}:/etc/passwd:ro",
+                    "--env", f"CATALOG_WAREHOUSE={root}/warehouse",
                     "--env", f"CATALOG_URI=jdbc:sqlite:{root}/catalog.sqlite", IMAGE], check=True, stdout=subprocess.DEVNULL)
     try:
         port = subprocess.check_output(["docker", "port", name, "8181/tcp"], text=True).strip().splitlines()[0]
