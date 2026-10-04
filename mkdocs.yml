@@ -52,11 +52,11 @@ nav:
   - FEC:
       - FEC tables and child rows: fec-query-views.md
       - Integration: fec-integration.md
-      - Delivery plan and tasks: fec-delivery-plan.md
+      - R2 delivery checklist: fec-delivery-plan.md
       - Table ontology and relationships: fec-data-model.md
       - Reported relationships: fec-relationships.md
       - Retained-input workflows: fec-retained-workflows.md
-      - Remaining work: fec-gaps.md
+      - Coverage limits and backlog: fec-gaps.md
       - Coverage census: research/fec-coverage-2026-09-21.md
   - Tables:
       - ETL receipts: tables/etl_receipts.md

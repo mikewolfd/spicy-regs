@@ -86,9 +86,11 @@ reads the snapshot that pointer names.
 | [`org_committee_links`](tables/org_committee_links.md) | one row per (commenter org name, FEC committee) match | `organization` + `committee_id` |
 
 For selected native FEC records, collection coverage and reported relationships,
-see [FEC integration](fec-integration.md). The [FEC gap register](fec-gaps.md)
-and [coverage census](research/fec-coverage-2026-09-21.md) distinguish supported
-schemas, acquired selections, remaining history and external publication.
+see [FEC integration](fec-integration.md) and the
+[R2 delivery checklist](fec-delivery-plan.md). The
+[coverage limits and backlog](fec-gaps.md) and
+[coverage census](research/fec-coverage-2026-09-21.md) preserve source gaps and
+optional expansion separately from the delivered selection.
 
 For the complete fork delivery, see the [generation plan](fork-generation.md)
 and [local reuse inventory](research/local-data-reuse-2026-09-21.md), which cover

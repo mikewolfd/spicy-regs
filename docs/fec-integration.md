@@ -5,16 +5,17 @@ across investigations. SpicyDocs supplies the FEC source inventory, acquisition
 and parsing. SpicyRegs builds queryable tables and serves their meaning through
 MCP. Each collection retains its own selection, dates and evidence.
 
-The [remaining-work register](fec-gaps.md) records open gaps, owners, evidence
-and completion checks. Its [coverage census](research/fec-coverage-2026-09-21.md)
-separates all 26 broad source families from all 26 official bulk-page groups and
-reconciles the original research backlog with the selected delivery.
+The [R2 delivery checklist](fec-delivery-plan.md) focuses on useful retained
+non-PDF data, validated table shapes and verified remote delivery. The
+[reviewed release](research/fec-reviewed-release-2026-10-01.md) records the
+published tables and successful hosted queries.
 
-The [delivery plan and tasks](fec-delivery-plan.md) sequence the retained-data
-release, recoverable R2 archive, local cleanup and later historical expansion.
-The [table ontology and relationships](fec-data-model.md) distinguish the
-existing evidence/history foundation from proposed financial, filing, legal
-and agency query tables. Both are implementation plans, not publication claims.
+The [coverage limits and backlog](fec-gaps.md) preserve source gaps and optional
+expansion. The [coverage census](research/fec-coverage-2026-09-21.md) records the
+earlier source-family and bulk-group inventory. The
+[table ontology and relationships](fec-data-model.md) explain row meanings and
+design choices; table dictionaries and release receipts identify what is
+implemented and published.
 
 ## Outputs
 

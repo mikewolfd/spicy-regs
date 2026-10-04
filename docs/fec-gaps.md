@@ -1,51 +1,25 @@
-# FEC remaining work and discovered gaps
+# FEC coverage limits and optional backlog
 
-Updated October 1, 2026 for the committed retained-data implementation and its
-[completed local validation](research/fec-retained-delivery-execution-2026-09-30.md#complete-local-validation-2026-10-01).
-The [September 30 retained non-PDF qualification](research/fec-retained-corpus-qualification-2026-09-30.md)
-still owns the baseline input selection.
-The dated September 21 delivery at SpicyRegs `7b174f1` and its receipts remain
-the historical publication baseline. The user deferred PDF processing; retained
-PDF originals and pre-deferral native/OCR evidence remain inventoried. Retained
-FEC PDF corpus processing remains paused, and the combined generation
-excludes PDF parsing and ingestion. Filtered test suites inadvertently exercised
-PDF fixtures after the deferral; the dated qualification records those misses.
-This is the canonical remaining-work register. Dated research reports preserve
-what was known at the time; the newer evidence referenced here takes precedence
-over their older open/closed status sentences.
+Updated October 1, 2026. The active goal is useful retained non-PDF FEC data
+on R2 in validated tables. The [R2 delivery checklist](fec-delivery-plan.md)
+owns that work. This register preserves source limits, historical findings and
+optional expansion; an open FG item is not automatically a release blocker.
 
-The later [research correction](research/fec-retained-corpus-qualification-2026-09-30.md#research-correction-after-the-initial-qualification)
-closes omitted retained FEC captures from previously excluded directories and
-adds the loose bulk-download page and retained range evidence. Its receipt owns
-the current local selection and counts. One historical API original remains
-explicitly unavailable; PDF processing and external delivery remain separate.
+The selected source, typed query, candidate-history and catalog generations are
+published. Complete remote byte verification, public reads and the reviewed
+consumer are recorded in the
+[release checkpoint](research/fec-reviewed-release-2026-10-01.md).
+Those results supersede older pending-publication and hosting statements below.
 
-The [delivery plan and tasks](fec-delivery-plan.md) save the retained-data release
-sequence, R2 archive and cleanup checks, and later historical backfill. Its FR
-and FH task IDs map to this register without changing FG identifiers or marking
-unimplemented work complete. The [data model](fec-data-model.md) defines the
-proposed table grains, keys, relationships and interpretation rules.
+Only a concrete defect in the selected data's accuracy, useful shape, evidence
+or remote availability belongs on the active checklist. Historical acquisition,
+broader financial interpretation, refresh automation, search, legislative joins
+and deployment drills remain separately scoped. PDFs remain deferred.
+Full restore and deletion checks become prerequisites when local cleanup resumes.
 
-The implementation and subsequent review fixes are committed; see the [reviewed release checkpoint](research/fec-reviewed-release-2026-10-01.md). Complete bulk
-recovery, final composition, keys, evidence,
-financial checks and actual local MCP acceptance now pass under the
-[FR08 combined receipt](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/fr08-validation-finish-20261001/fr08-complete.json). Missing or advanced evidence parents now disable
-qualified views, and actual refresh/rollback checks pass. Candidate history and
-the retained catalog are included through their existing local family owners.
-
-The expanded tables are now [published and verified](research/fec-retained-delivery-execution-2026-09-30.md#query-table-publication-2026-10-01) through `fec-query`, the exact source parent, candidate history and the retained catalog. FR09/FR10 archive admission and full public byte readback pass, and the requested sample restore/replay smoke passed. Image/receipt binding and public hosted activation pass. Full recovery, the live mutation/rollback drill and source deletion remain open. Follow the
-[execution list](fec-delivery-plan.md#next-execution-checkpoint) and
-[completion checkpoint](research/fec-retained-delivery-execution-2026-09-30.md#complete-local-validation-2026-10-01). Current financial totals and unsupported
-amendment/correction meanings remain source-limited despite successful local
-validation.
-
-The reusable path works for the selected inputs: source discovery, retained
-records, reported relationships, verified table generations, CLI downloads and
-local Model Context Protocol (MCP) queries. Remaining work concerns coverage,
-interpretation, portable evidence, refresh and external delivery. The product
-goal remains one place to discover and use relationships across many sources.
-FEC financial analysis and legislative scorecards are possible consumers of that
-foundation, each with its own inclusion and scoring rules.
+The [earlier roadmap](research/fec-delivery-roadmap-2026-10-01.md) preserves FR/FH
+tasks, and the [data model](fec-data-model.md) preserves row meanings and
+relationship rules. FG identifiers and dated evidence below remain stable.
 
 ## Historical published selection — September 21, 2026
 
@@ -320,7 +294,8 @@ supporting-document history remains a separate collection selection under FG13.
 
 **October 1 update:** selected typed agency report, metric, document and narrative
 tables pass complete local replay, assembly and evidence checks. This advances
-FR06; combined release acceptance and public delivery remain open. The
+FR06; the later reviewed release also completes combined acceptance and public
+delivery for the selected retained tables. The
 [execution checkpoint](research/fec-retained-delivery-execution-2026-09-30.md)
 records the selected scope and preserves deferred PDF and source limits.
 
@@ -588,7 +563,11 @@ evidence, not an FEC parser defect. Evidence: E8 `invalid-family-withdrawal.json
 
 ### FG23 — Resolve documentation hosting separately from data delivery
 
-**Open at the recorded check · Fork operator.** Core CI passed for the pushed
+**Complete at the October 1 release checkpoint.** The strict documentation
+site build, fork Pages deployment and public readback passed. The older failed
+run below remains historical evidence.
+
+**Historical check · Fork operator.** Core CI passed for the pushed
 generation changes. The documentation deployment returned Pages HTTP 404 in
 the retained run. A local docs build cannot establish hosted Pages availability.
 
@@ -660,22 +639,12 @@ Base regulations.gov data, partitioned comments, Iceberg and docket-search gzip
 publication have their own delivery paths; migrating all of them is not an FEC
 completion criterion.
 
-## Suggested execution order
+## Selecting further work
 
-Follow the [retained-data task sequence](fec-delivery-plan.md#next-execution-checkpoint)
-for the active delivery:
-
-1. Finish whole-release evidence, financial and local MCP acceptance using the
-   completed composition and key checks (FG01, FG03–FG05, FG07, FG11, FG14–FG15).
-2. Complete archive dependencies, admission, remote full hashes and clean
-   restore with semantic replay (FG02, FG08, FG16).
-3. Seal and publish the typed family and required parent, deploy the matching
-   consumer, and verify public queries, refusal and rollback (FG16, FG21).
-4. Remove only eligible verified source copies and save the recovery handoff.
-
-Historical acquisition, PDF processing, further cross-source joins, search
-adoption and separately scoped shared repairs remain distinct follow-up work.
-Their presence in this register does not expand the retained-data release.
+Use the [R2 delivery checklist](fec-delivery-plan.md#next-execution-checkpoint)
+for the current selection. The earlier roadmap preserves historical acquisition
+and operational tasks. Select those separately when they deliver an identified
+user need; source limitations remain visible in the delivered tables meanwhile.
 
 ## Evidence index
 

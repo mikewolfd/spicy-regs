@@ -12,10 +12,14 @@ of implemented schemas, populated files or public availability. Start with
 views or small adapters over existing structures. Materialize new Parquet tables
 only when the row meaning or measured query need warrants it.
 
-The [delivery plan and tasks](fec-delivery-plan.md) sequence implementation,
-historical expansion, R2 publication and cleanup. The immediate input scope is
-retained non-PDF data. Proposed families that lack retained inputs belong to the
-later backlog. PDF body processing remains deferred.
+**October 1 delivery update:** the selected retained subject tables are now
+published; see the [reviewed release](research/fec-reviewed-release-2026-10-01.md).
+This design retains proposed names and future semantics alongside implemented
+concepts. Use the published manifests and table dictionaries for exact schemas.
+
+The [R2 delivery checklist](fec-delivery-plan.md) owns the active retained
+non-PDF scope. Additional acquisition, storage redesign and unqualified financial
+semantics remain separate choices. PDF body processing remains deferred.
 
 The September 30 review revisions add explicit correction/replacement rules,
 record and collection-context evidence endpoints, and a compatible-release rule.
