@@ -95,6 +95,12 @@ Record authenticated and public readback separately. Download and inspect the
 published tables and query the hosted MCP before recording a published scope in
 the ledger.
 
+When the prior generation still has `scorecard_snapshots.parquet`, declare its
+existing receipt-only migration with
+`--receipt-only-table scorecard_snapshots.parquet`. The publisher checks the
+registered receipt-only policy and keeps the original immutable generation.
+The complete snapshot observations remain in the shared ETL receipt member.
+
 Prepare `scorecard-analysis` against the accepted source generation and the
 already published congressional tables. Member and legislative-item resolution
 remain downstream, use exact versioned rules, and retain every unresolved or

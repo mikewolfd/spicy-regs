@@ -27,6 +27,10 @@ def main():
     parser.add_argument("--implementation-commit", required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--env-file", type=Path, default=Path(".env"))
+    parser.add_argument(
+        "--receipt-only-table", action="append", default=[],
+        help="Explicitly move a processing table into its registered receipt-only dataset",
+    )
     args = parser.parse_args()
     subprocess.run(
         [
@@ -68,7 +72,8 @@ def main():
     (args.output / "before.json").write_text(json.dumps(before, indent=2) + "\n")
     evidence = (Path(prepared["evidence_directory"]),) if prepared.get("evidence_directory") else ()
     after = publication.publish_generation(
-        directory, client=client, bucket=bucket, prior_index=prior, evidence_directories=evidence
+        directory, client=client, bucket=bucket, prior_index=prior, evidence_directories=evidence,
+        receipt_only_tables=frozenset(args.receipt_only_table),
     )
     observed, _, _ = publication._stored_index(client, bucket)
     if observed["families"][family] != after["families"][family]:
@@ -89,6 +94,7 @@ def main():
         "other_family_changes_during_publication": unexpected,
         "public_index_url": "https://data.spicygov.ai/publication.v2.json",
         "source_network_requests": 0,
+        "receipt_only_table_migrations": sorted(set(args.receipt_only_table)),
     }
     (args.output / "receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
     print(
