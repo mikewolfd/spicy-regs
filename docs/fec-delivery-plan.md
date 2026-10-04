@@ -1,14 +1,17 @@
 # FEC data delivery to R2
 
-Updated October 1, 2026. **Deliver useful retained non-PDF FEC data as
+Updated October 4, 2026. **Deliver useful retained non-PDF FEC data as
 source-faithful, queryable Parquet tables in the `spicy-regs` R2 bucket.**
 Keep the exact source evidence and enough metadata to explain each table.
 
-The selected retained release is already published. Its
+The selected retained release was published October 1. Its
 [publication checkpoint](research/fec-retained-delivery-execution-2026-09-30.md#query-table-publication-2026-10-01)
 records complete remote byte verification and public table queries. The
 [reviewed release](research/fec-reviewed-release-2026-10-01.md) records the
-matching consumer and successful hosted queries.
+matching consumer and successful hosted queries. Later corrections regenerated
+the typed `fec-query` generation and bound a new release receipt to each new
+consumer image; the [round-6 release record](research/mcp-chaos-2026-10-03-round6.md#deployment)
+names the current generation, receipt and rollback target.
 
 This is the active checklist. The
 [earlier roadmap](research/fec-delivery-roadmap-2026-10-01.md) preserves the full
@@ -38,18 +41,26 @@ Keep these rules:
   record identities and the declared meaning of each row.
 - Keep identifiers as strings. Use exact decimal amounts and source-specific
   dates where mappings are qualified. Preserve raw values and reasons when a
-  value is missing, unsupported or ambiguous.
+  value is missing, unsupported or ambiguous; the receipt layout keeps them in
+  the shared ETL receipt.
 - Keep filing, amendment, memo, correction and interpretation flags needed to
   read a financial row correctly. Distinguish source observations from unique
   economic events; current/net totals remain unqualified.
-- Keep shared definitions, full source records and detailed evidence in their
-  existing tables or views. Reuse shared evidence rather than copying full
-  native JSON into every subject table.
+- Keep shared definitions, full source records and detailed evidence in shared
+  evidence datasets rather than copying full native JSON into every subject
+  table.
 - Retain source-limited records with explicit dispositions. An unresolved
   field or missing body does not justify discarding the supported data.
 
-The existing layout satisfies this release. Rewriting IDs, moving every evidence
-column or redesigning storage requires a measured benefit and is outside this
+The October 1 layout satisfied that release. The October 3
+[subject and receipt decision](fec-subject-receipts.md) then moved processing
+fields out of subject tables. Current builds write domain values and stable keys
+to each subject table and processing evidence to the generation's
+`etl_receipts.parquet`; `fec_source_catalog`, `fec_collections` and
+`fec_source_records` become receipt-only datasets. Generations published earlier
+keep their original layout until rebuilt. In the publication index, a family
+with an `etlReceipts` member uses the receipt layout. Rewriting record IDs or
+further storage redesign requires a measured benefit and is outside this
 checklist.
 
 ## R2 contents
@@ -58,6 +69,7 @@ checklist.
 | --- | --- |
 | Current family and table membership | [publication.v2.json](https://data.spicygov.ai/publication.v2.json) |
 | Typed subject tables and their manifests | `generations/fec-query/<generation-digest>/` |
+| Processing evidence of a receipt-layout generation | `etl_receipts.parquet` under that generation's prefix |
 | Complete source observations, collections and reported relationships | `generations/fec-observations/<generation-digest>/` |
 | Candidate history and source catalog | Their existing `fec-candidate-history` and `fec-source-catalog` generation paths |
 | Selected original bytes and supporting evidence | `source-evidence/blobs/sha256/<digest>` and artifact manifests under `source-evidence/<artifact-digest>/` |
@@ -77,15 +89,19 @@ the exact object keys. Follow the existing
 | Leave a usable handoff | Record the index, table meanings, evidence locations and known limits | This page and the linked release receipts |
 
 Completed work maps to FR01–FR10, FR12 and the positive public-read portion of
-FR13. The current release's existing reviews, pins and deployment remain valid.
-No additional upload or schema rewrite is identified by the accepted release.
+FR13. Each later release binds its own receipt and image; see the round-6 record
+above. FEC families rebuilt in the receipt layout need a newly sealed generation
+and a newly bound release receipt before the qualified views can read them: a
+prior receipt cannot authorize changed interpretation code
+([qualified serving](fec-subject-receipts.md#qualified-serving)).
 
 ## Next execution checkpoint
 
 **The selected retained R2 delivery is complete.** The fresh public check passed
 for every table in the selected families: generation pins and control bytes
 match, schemas and footer counts agree, and representative data reads succeed.
-No additional data upload or table-shape repair was identified.
+That check identified no additional upload or table-shape repair; corrections
+found afterwards are recorded with their releases.
 
 Fresh check evidence:
 [public-check.json](/Users/mikewolfd/Work/corpora/fec-corpus-completion-20260930/retained-delivery-20260930/r2-delivery-scope-check-20261002T010948Z/public-check.json).
@@ -95,7 +111,8 @@ schemas, footer counts and sample data; full object hashes remain established
 by the earlier publication receipts.
 
 Resume delivery work when a concrete missing object, schema mismatch, broken
-evidence link or useful retained mapping needs repair.
+evidence link or useful retained mapping needs repair, or when the FEC families
+are rebuilt in the receipt layout.
 
 ## Separate follow-up work
 

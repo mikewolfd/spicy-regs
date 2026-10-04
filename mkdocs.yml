@@ -54,6 +54,8 @@ nav:
       - Integration: fec-integration.md
       - R2 delivery checklist: fec-delivery-plan.md
       - Table ontology and relationships: fec-data-model.md
+      - Subjects and ETL receipts: fec-subject-receipts.md
+      - Identity and context receipts: fec-identity-receipts.md
       - Reported relationships: fec-relationships.md
       - Retained-input workflows: fec-retained-workflows.md
       - Coverage limits and backlog: fec-gaps.md

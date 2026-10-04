@@ -1,6 +1,6 @@
 # FEC coverage limits and optional backlog
 
-Updated October 1, 2026. The active goal is useful retained non-PDF FEC data
+Updated October 4, 2026. The active goal is useful retained non-PDF FEC data
 on R2 in validated tables. The [R2 delivery checklist](fec-delivery-plan.md)
 owns that work. This register preserves source limits, historical findings and
 optional expansion; an open FG item is not automatically a release blocker.
@@ -10,6 +10,9 @@ published. Complete remote byte verification, public reads and the reviewed
 consumer are recorded in the
 [release checkpoint](research/fec-reviewed-release-2026-10-01.md).
 Those results supersede older pending-publication and hosting statements below.
+Later releases regenerated `fec-query`, and current builds write processing
+evidence to shared ETL receipts; the [delivery checklist](fec-delivery-plan.md)
+points to the current release record and that layout change.
 
 Only a concrete defect in the selected data's accuracy, useful shape, evidence
 or remote availability belongs on the active checklist. Historical acquisition,
@@ -462,8 +465,9 @@ provider FEC10, research T19 and E4/E5 capacity receipts.
 ### FG18 — Qualify an existing cross-source join end to end
 
 **Open integration qualification · SpicyRegs.** The identity bridge already
-exists: `members.fec_ids_json` maps candidate IDs to `bioguide_id`, which also
-appears in `member_votes`. The four-table FEC batch does not include those
+exists: `members.fec_ids` (`fec_ids_json` in generations published before the
+receipt split) maps candidate IDs to `bioguide_id`, which also appears in
+`member_votes`. The four-table FEC batch does not include those
 legislative tables or establish a combined query's coverage.
 
 **Complete when:** a selected compatible bundle and reproducible SQL join FEC,
@@ -564,8 +568,9 @@ evidence, not an FEC parser defect. Evidence: E8 `invalid-family-withdrawal.json
 ### FG23 — Resolve documentation hosting separately from data delivery
 
 **Complete at the October 1 release checkpoint.** The strict documentation
-site build, fork Pages deployment and public readback passed. The older failed
-run below remains historical evidence.
+site build and fork Pages deployment passed, and public readback of the served
+table and release pages succeeded; no full link crawl was performed. The older
+failed run below remains historical evidence.
 
 **Historical check · Fork operator.** Core CI passed for the pushed
 generation changes. The documentation deployment returned Pages HTTP 404 in

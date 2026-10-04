@@ -25,10 +25,18 @@ implemented and published.
 | `fec_collections` | One explicitly selected, verified input collection | Read its requested scope, record and relationship counts, coverage limits and empty-result status before combining records. |
 | `fec_source_records` | One source record within a collection | Query identifiers and complete native metadata; follow its digest and exact locator to evidence. Join on `(collection_id, source_record_id)`. |
 | `fec_relationships` | One source-reported relationship value or explicit missing/empty observation | Filter `value_status`; join its locator's `collection_id` and `source_record_id` to the complete source record. Preserve name-only targets and conflicting observations. |
-| `fec_committees` | One committee ID in the accumulated reference table | Use the existing 16-column identity table. Its default acquisition uses SpicyDocs and merges a completed unfiltered traversal with prior observations. |
+| `fec_committees` | One committee ID in the accumulated reference table | Use the existing 16-column identity table. Its default acquisition uses SpicyDocs and merges a completed unfiltered traversal with prior observations. For the connected organization, join `fec_committee_history` on `committee_id`. |
 
 `org_committee_links` continues to contain candidates produced by name matching.
 Those matches have different evidence from source-reported FEC relationships.
+
+Since the October 3 [subject and receipt split](fec-subject-receipts.md), current
+builds write `fec_source_catalog`, `fec_collections` and `fec_source_records` as
+processing evidence in the generation's shared `etl_receipts.parquet`, selected by
+`dataset`. `fec_relationships` keeps its subject columns; its status, locator and
+source fields move to the receipt. Generations published before the split carry
+the evidence tables and columns used in the examples below. In the publication
+index, a family with an `etlReceipts` member uses the receipt layout.
 
 The source catalog covers all 26 researched official families. A route in the
 catalog does not establish that its records, full history or linked documents
@@ -72,11 +80,12 @@ SPICY_REGS_DATA_DIR=/absolute/path/to/fec-tables uv run --frozen spicy-regs-mcp
 ```
 
 Local mode does not fill absent files from the public service. Keep related
-tables from one generation together. The observation rollup now seals its three
-outputs as a [complete table generation](generation-publication.md), verifies
-uploaded bytes and conditionally switches `publication.json` after every member
-passes. The source catalog has its own generation; a reader captures one index
-containing both families. Complete family membership does not establish complete
+tables from one generation together. The observation rollup now seals its
+outputs, `fec_relationships` and the shared receipt member, as a
+[complete table generation](generation-publication.md), verifies uploaded bytes
+and conditionally switches the publication index after every member passes. The
+source catalog has its own generation; a reader captures one index containing
+both families. Complete family membership does not establish complete
 FEC history or make these local tables publicly available.
 
 The same `SPICY_REGS_DATA_DIR` setting accepts a normal CLI download directory

@@ -18,7 +18,8 @@ This design retains proposed names and future semantics alongside implemented
 concepts. Use the published manifests and table dictionaries for exact schemas.
 
 The [R2 delivery checklist](fec-delivery-plan.md) owns the active retained
-non-PDF scope. Additional acquisition, storage redesign and unqualified financial
+non-PDF scope. Additional acquisition, storage redesign beyond the October 3
+[subject and receipt split](fec-subject-receipts.md) and unqualified financial
 semantics remain separate choices. PDF body processing remains deferred.
 
 The September 30 review revisions add explicit correction/replacement rules,
@@ -57,13 +58,18 @@ physical table per year or per download route when the same logical grain fits.
 | `fec_collections` | Explicitly selected collection or caller coverage disposition; `collection_id` | Scope, profile, counts, outcomes, coverage limits and evidence pins. Preserve provider results separately from caller dispositions. |
 | `fec_source_records` | Source observation identified through collection, source record and exact locator | Complete provider JSON, metadata, assets, embedded bodies, digest, URL and observation time. Keep all source fields and physical multiplicities. |
 | `fec_relationships` | Source-reported role/association or explicit absence observation | Keep source and target identifier status, name-only values, cycle, field evidence and conflicting statements. Empty states are not graph edges. |
-| `fec_committees` | Observed current committee profile keyed by committee ID in a selected generation | Current reference lookup; not a dated history or a universal assertion about every committee. |
+| `fec_committees` | Observed current committee profile keyed by committee ID in a selected generation | Current reference lookup; not a dated history or a universal assertion about every committee. Join `fec_committee_history` on `committee_id` for per-cycle names and the connected organization. |
 | `fec_committee_history` | Committee × source cycle in a selected generation | Names, type, treasurer, address, organization, candidate and other literal attributes as reported in that cycle's master. |
 | `fec_candidate_history` | Candidate × source cycle in a selected generation | Name, party, office, district, election year, status, address and principal committee. |
 | `fec_collection_cycles` | Collection with a cycle derived from its captured bulk-directory URLs | Existing view only identifies cycles stated by `bulk-downloads/<year>/`. It does not resolve every API, legal or agency period. |
 | `fec_relationship_evidence` | Relationship observation with possible companion matches | Existing view exposes lookup ambiguity and digest comparisons. A matching recorded digest is not a fresh verification of the original bytes. |
 
-The implemented source-record columns are:
+Current builds write `fec_source_catalog`, `fec_collections` and
+`fec_source_records` as receipt-only datasets in the generation's shared
+`etl_receipts.parquet`; see [FEC subjects and ETL receipts](fec-subject-receipts.md).
+The two existing views read the earlier evidence-table columns and report
+themselves unavailable when those tables are absent. In generations published
+before the split, the source-record columns are:
 
 ```text
 collection_id, source_family, profile, source_record_id,
@@ -73,9 +79,10 @@ source_locator_json, metadata_json, assets_json,
 embedded_bodies_json, source_record_json
 ```
 
-These are currently string-oriented fields. Financial values often remain in
-JSON. Existing candidate and committee history columns are also VARCHAR; this
-proposal does not silently migrate them to a new storage type.
+The receipt layout keeps the same fields. They are string-oriented, and
+financial values often remain in JSON there. Candidate and committee history keep
+string identifiers; their native layout types `cycle`, and the candidate's
+`election_year`, as integers.
 
 Three existing details constrain new joins:
 
@@ -138,7 +145,7 @@ tables with evidence links over copying full native JSON into every output.
 | Row identity | `record_id`, `identity_version` | Unique within the declared table and generation; stable for unchanged selected observations |
 | Native identity | `source_record_identifier`, `report_number`, `transaction_id`, `source_namespace` | Strings; preserve native values separately; only fields that apply to the family |
 | Evidence | `evidence_endpoint_kind`, `collection_id`, conditional `source_record_id`, exact locator and witness digest; resolved generation pin in publication metadata | Use kind-specific requirements below; dictionary/context witnesses do not require a source-record row |
-| Filing association | `filing_key`, `filing_link_status`, `form_type`, `schedule_type` | Nullable when the filing is not resolvable; absence never drops an otherwise valid record |
+| Filing association | `filing_key`, `filing_link_status`, `form_type`, `schedule_type` | Nullable when the filing is not resolvable; absence never drops an otherwise valid record. A key alone does not say whether the filing is held: a table's `<table>_filing_associations` (header record) and `<table>_native_filing_associations` (FEC file number) views decide that per row |
 | Reporting party | `reporting_committee_id` or reported entity fields, `reporting_party_status` | Do not force every spender, inaugural entity or legal party into a committee ID |
 | Period | `source_cycle`, `candidate_election_year`, `reporting_period_start`, `reporting_period_end` | Separate source concepts; do not populate unrelated fields from a guessed year |
 | Amount and date | Named date fields, `amount`, `currency`, `amount_kind`; raw values reachable through evidence | Use a transaction date only where the source has one; balances, awards, allocations and aggregates retain their own meanings |
@@ -502,7 +509,7 @@ versioned mappings rather than one latest header applied to every year.
 | Spending record to candidate | Many to many through target associations | Aggregate at the spend grain or an explicit allocation grain |
 | Loan state to guarantor | One to many | Loan amount stays on the loan state; each guaranteed amount retains its own meaning |
 | Matter to document | Many to many through evidenced links | Preserve document edition and matter namespace |
-| FEC candidate to legislative member | Evidence-backed crosswalk, potentially temporal or ambiguous | Use existing `members.fec_ids_json` and `bioguide_id` only with its source authority and coverage |
+| FEC candidate to legislative member | Evidence-backed crosswalk, potentially temporal or ambiguous | Use existing `members.fec_ids` and `bioguide_id` only with its source authority and coverage |
 | Legislative member to vote | One to many in the selected legislative population | Do not imply full House/Senate or historical coverage from a bounded existing vote selection |
 
 The candidate-to-member bridge can support a money-and-votes investigation, but
