@@ -13,7 +13,8 @@
       "sha256": "sha256:59fc1b2d1a8868ff1a74ec3eb2ced76fd40610f3dc6530e7f575d09433823fa4",
       "capture_receipt_sha256": "sha256:93ee2051f778efc87abc01c7102cdb56270a84a83faedfdd244ffe3230ecbcf5",
       "interface": "publisher_application_json",
-      "adapter_qualification": "recorded separately from route discovery"
+      "adapter_qualification": "recorded separately from route discovery",
+      "request_method": "GET"
     },
     {
       "publisher_id": "frc_action",
@@ -26,7 +27,8 @@
       "sha256": "sha256:ca09bb844acb810ab2ba9e24f0c5b17f83dd9c1f81b85ad50614d9d3a64e39fc",
       "capture_receipt_sha256": "sha256:067e5f8668cdd4c4945c61ce11b01465252601a8f9c558b66a10895c4b380597",
       "interface": "publisher_application_json",
-      "adapter_qualification": "recorded separately from route discovery"
+      "adapter_qualification": "recorded separately from route discovery",
+      "request_method": "GET"
     },
     {
       "publisher_id": "ffrf_action",
@@ -39,7 +41,8 @@
       "sha256": "sha256:795cba5fe9deabaf71187959d299fe8b4da03cc75e5a49e4c2f746b2e819c21c",
       "capture_receipt_sha256": "sha256:530b3d52f2f9f16c849207ed411a01438318b527950e3f10c29a539917abf261",
       "interface": "publisher_application_json",
-      "adapter_qualification": "recorded separately from route discovery"
+      "adapter_qualification": "recorded separately from route discovery",
+      "request_method": "GET"
     },
     {
       "publisher_id": "ffrf_action",
@@ -52,7 +55,8 @@
       "sha256": "sha256:1ca86d21faa67b3c6f2bd24e5dc7e70b7526f42ca5cb034533effe52289a6e33",
       "capture_receipt_sha256": "sha256:57687f3a812fee978e5427294862ca3cfe96cfaf0dddccae36c1131cdb78f63e",
       "interface": "publisher_application_json",
-      "adapter_qualification": "recorded separately from route discovery"
+      "adapter_qualification": "recorded separately from route discovery",
+      "request_method": "GET"
     },
     {
       "publisher_id": "nfib",
@@ -65,7 +69,8 @@
       "sha256": "sha256:c38702994e16d283c0bfecb68b9700867fb07460234a3eaa7b79471497fa1b48",
       "capture_receipt_sha256": "sha256:53689ab7d1c171c6ff5f9156397b6c990529fcd525ef979c24feed25bd20ccb7",
       "interface": "publisher_application_json",
-      "adapter_qualification": "recorded separately from route discovery"
+      "adapter_qualification": "recorded separately from route discovery",
+      "request_method": "GET"
     },
     {
       "publisher_id": "nfib",
@@ -78,7 +83,8 @@
       "sha256": "sha256:00f80e9f612af600f535fba0e736d7fa4c7dfa7e20ae68fd8f80706d1b55bd66",
       "capture_receipt_sha256": "sha256:8ffb693992e6b105f970924558d5870caf593f3761518c992e52807d67f0c126",
       "interface": "publisher_application_json",
-      "adapter_qualification": "recorded separately from route discovery"
+      "adapter_qualification": "recorded separately from route discovery",
+      "request_method": "GET"
     },
     {
       "publisher_id": "national_parks_action",
@@ -91,7 +97,8 @@
       "sha256": "sha256:4c9f81b492170195a5a8357d5b3056760d51ab4f90171539e0e9b4bfbdfcdcd6",
       "capture_receipt_sha256": "sha256:f2b614c1616d07e0242e35033f376712c1fff3170b1f87686008dc2f6cab745a",
       "interface": "publisher_application_json",
-      "adapter_qualification": "recorded separately from route discovery"
+      "adapter_qualification": "recorded separately from route discovery",
+      "request_method": "GET"
     },
     {
       "publisher_id": "national_parks_action",
@@ -104,7 +111,8 @@
       "sha256": "sha256:d8837396ec672e0411a3e18b6cfacd0391f4e1576d8a3c5038c5071efde0033f",
       "capture_receipt_sha256": "sha256:58988fca394412fabe1f8d9f3ca3c80aa3915602165f33c627a219eba60cf13f",
       "interface": "publisher_application_json",
-      "adapter_qualification": "recorded separately from route discovery"
+      "adapter_qualification": "recorded separately from route discovery",
+      "request_method": "GET"
     },
     {
       "publisher_id": "national_parks_action",
@@ -117,7 +125,8 @@
       "sha256": "sha256:62e9ec605eba4d9a63f37fde31d15f487c23da4e2e186facee1e29a153d3644a",
       "capture_receipt_sha256": "sha256:deb390797991d3c0a453285a5f20653b61c305e0aae8f36172cf52fd328b2169",
       "interface": "publisher_application_json",
-      "adapter_qualification": "recorded separately from route discovery"
+      "adapter_qualification": "recorded separately from route discovery",
+      "request_method": "GET"
     },
     {
       "publisher_id": "national_parks_action",
@@ -130,7 +139,136 @@
       "sha256": "sha256:186426279703055ede119d910e700e65ab8191f494f3d6cadd4a6d01bddf39e6",
       "capture_receipt_sha256": "sha256:4399a4f5d700cf8ef9117e3a4b55d0bc0805c8ecee773806aad0bf0c776b9e99",
       "interface": "publisher_application_json",
-      "adapter_qualification": "recorded separately from route discovery"
+      "adapter_qualification": "recorded separately from route discovery",
+      "request_method": "GET"
+    },
+    {
+      "requested_url": "https://www.votervoice.net/Api/Scorecards?association=GunOwners&government=./USA&active=true",
+      "resolved_url": "https://www.votervoice.net/Api/Scorecards?association=GunOwners&government=./USA&active=true",
+      "http_status": 200,
+      "content_type": "application/json; charset=utf-8",
+      "observed_at": "2026-10-04T07:42:42.222061Z",
+      "byte_size": 15008,
+      "sha256": "bbf056e1f3406a0b140e25785bc78ead7d3ab32020c421bc0e8448e4c7e9291b",
+      "publisher_id": "goa",
+      "capture_receipt_sha256": "sha256:ea88cadc8f8d95764474dfb00b5f28d6765aee3807508897fe4873019e6f3702",
+      "interface": "publisher_application_json",
+      "adapter_qualification": "recorded separately from route discovery",
+      "request_method": "GET"
+    },
+    {
+      "requested_url": "https://www.votervoice.net/Api/Scorecards/4358-1848/Scorings",
+      "resolved_url": "https://www.votervoice.net/Api/Scorecards/4358-1848/Scorings",
+      "http_status": 200,
+      "content_type": "application/json; charset=utf-8",
+      "observed_at": "2026-10-04T07:43:15.719901Z",
+      "byte_size": 553650,
+      "sha256": "309713afaf5935a261cf2fd9d5c972401308f3f8a53323bc90682bd8c9960ac8",
+      "publisher_id": "goa",
+      "capture_receipt_sha256": "sha256:0314133ce373d1bb1ee53498cc8736d8be0da3b01d95d7b6d63dd2195fa87770",
+      "interface": "publisher_application_json",
+      "adapter_qualification": "recorded separately from route discovery",
+      "request_method": "GET"
+    },
+    {
+      "requested_url": "https://www.votervoice.net/Api/Scorecards/Criteria/S-4358-12835?association=GunOwners",
+      "resolved_url": "https://www.votervoice.net/Api/Scorecards/Criteria/S-4358-12835?association=GunOwners",
+      "http_status": 200,
+      "content_type": "application/json; charset=utf-8",
+      "observed_at": "2026-10-04T07:43:15.715217Z",
+      "byte_size": 6485,
+      "sha256": "ef8f8f36eac1da00bacd455494cf906769df28c738f656693148ea9db8b046c3",
+      "publisher_id": "goa",
+      "capture_receipt_sha256": "sha256:43b5698c77742d5123bd1ea9b92984d7bed76a6195f5123789d2ff55bfd9d724",
+      "interface": "publisher_application_json",
+      "adapter_qualification": "recorded separately from route discovery",
+      "request_method": "GET"
+    },
+    {
+      "requested_url": "https://freedomindex.us/wp-admin/admin-ajax.php",
+      "resolved_url": "https://freedomindex.us/wp-admin/admin-ajax.php",
+      "http_status": 200,
+      "content_type": "application/json; charset=UTF-8",
+      "observed_at": "2026-10-04T07:38:28.653535Z",
+      "byte_size": 1334,
+      "sha256": "b0f06fdd8da55ab273292c08464d80738e269d53ed4e3b70aa3a613d41d7815b",
+      "publisher_id": "new_american",
+      "capture_receipt_sha256": "sha256:f2fd0e2d8396ade5a001c62c52cfb6967712f838dc45944030c6a71d07a1879c",
+      "interface": "search_json_with_member_ratings",
+      "adapter_qualification": "recorded separately from route discovery",
+      "request_method": "POST",
+      "public_action": "fi_unified_search"
+    },
+    {
+      "requested_url": "https://web.archive.org/web/20191107202657id_/https://www.uschamber.com/sites/all/modules/custom/htv_vue/json/2018/house.json",
+      "resolved_url": "https://web.archive.org/web/20200508091656id_/https://www.uschamber.com/sites/all/modules/custom/htv_vue/json/2018/house.json",
+      "http_status": 200,
+      "content_type": "application/json",
+      "observed_at": "2026-10-04T07:21:24.620235+00:00",
+      "byte_size": 166071,
+      "sha256": "55bc3740fb3b084e489995ff6f7c0a2cf197cb776104cc6fd6e91b50953ad17f",
+      "publisher_id": "us_chamber",
+      "capture_manifest_sha256": "sha256:1aa807d39703350fdd0be26b5bb20ce364764c3e64f7610a77db0aaa17f297c8",
+      "interface": "archived_publisher_json_file",
+      "adapter_qualification": "complete archived 2018 native rendition qualified separately",
+      "request_method": "GET"
+    },
+    {
+      "requested_url": "https://web.archive.org/web/20191107202657id_/https://www.uschamber.com/sites/all/modules/custom/htv_vue/json/2018/senate.json",
+      "resolved_url": "https://web.archive.org/web/20200508091707id_/https://www.uschamber.com/sites/all/modules/custom/htv_vue/json/2018/senate.json",
+      "http_status": 200,
+      "content_type": "application/json",
+      "observed_at": "2026-10-04T07:21:24.377108+00:00",
+      "byte_size": 33570,
+      "sha256": "1be2e1cb8aabfbbf4b9c38d067baab4cf39ec85c373247c526be3879d190f3d7",
+      "publisher_id": "us_chamber",
+      "capture_manifest_sha256": "sha256:1aa807d39703350fdd0be26b5bb20ce364764c3e64f7610a77db0aaa17f297c8",
+      "interface": "archived_publisher_json_file",
+      "adapter_qualification": "complete archived 2018 native rendition qualified separately",
+      "request_method": "GET"
+    },
+    {
+      "requested_url": "https://web.archive.org/web/20191107202657id_/https://www.uschamber.com/sites/all/modules/custom/htv_vue/json/2018/bills/house.json",
+      "resolved_url": "https://web.archive.org/web/20200508091717id_/https://www.uschamber.com/sites/all/modules/custom/htv_vue/json/2018/bills/house.json",
+      "http_status": 200,
+      "content_type": "application/json",
+      "observed_at": "2026-10-04T07:21:24.409827+00:00",
+      "byte_size": 6610,
+      "sha256": "462b02302cc51f4a7274893694c4344e4ed8b3af45683f08ebc09c986ce40578",
+      "publisher_id": "us_chamber",
+      "capture_manifest_sha256": "sha256:1aa807d39703350fdd0be26b5bb20ce364764c3e64f7610a77db0aaa17f297c8",
+      "interface": "archived_publisher_json_file",
+      "adapter_qualification": "complete archived 2018 native rendition qualified separately",
+      "request_method": "GET"
+    },
+    {
+      "requested_url": "https://web.archive.org/web/20191107202657id_/https://www.uschamber.com/sites/all/modules/custom/htv_vue/json/2018/bills/senate.json",
+      "resolved_url": "https://web.archive.org/web/20200508091728id_/https://www.uschamber.com/sites/all/modules/custom/htv_vue/json/2018/bills/senate.json",
+      "http_status": 200,
+      "content_type": "application/json",
+      "observed_at": "2026-10-04T07:21:24.180590+00:00",
+      "byte_size": 6595,
+      "sha256": "6186058e6fe45a21bb265c19a1f23dec8ec0d101e4007ead79b0fa0b34b11d7e",
+      "publisher_id": "us_chamber",
+      "capture_manifest_sha256": "sha256:1aa807d39703350fdd0be26b5bb20ce364764c3e64f7610a77db0aaa17f297c8",
+      "interface": "archived_publisher_json_file",
+      "adapter_qualification": "complete archived 2018 native rendition qualified separately",
+      "request_method": "GET"
+    },
+    {
+      "requested_url": "https://freedomindex.us/wp-admin/admin-ajax.php",
+      "resolved_url": "https://freedomindex.us/wp-admin/admin-ajax.php",
+      "http_status": 200,
+      "content_type": "application/json; charset=UTF-8",
+      "observed_at": "2026-10-04T07:38:27.913109Z",
+      "byte_size": 156,
+      "sha256": "574a4a3f2594b7f8167fee16a849a1380be9700ce3a059339dc9830f29777d8b",
+      "publisher_id": "new_american",
+      "request_method": "POST",
+      "public_action": "fi_search_autocomplete",
+      "capture_receipt_sha256": "sha256:40ef5f11dfae092dbce70ac439eb55fa3414e0781386d77214480eea18fae295",
+      "interface": "member_search_navigation_json",
+      "adapter_qualification": "search helps discovery; complete native reports and rosters are qualified separately"
     }
   ]
 }

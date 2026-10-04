@@ -1,22 +1,21 @@
 {
   "dataset": "scorecard_integration_progress",
   "schema_version": "1",
-  "observed_at": "2026-10-04T07:20:00Z",
+  "observed_at": "2026-10-04T08:05:00Z",
   "input_pins": {
     "adapter_inventory.json": "656a6a93f6b21733e61aae3ed54fc0a69e3dafcf900eaf44fa22cbf1f37c1b98",
     "publisher_api_inventory.json": "c776ad48df5fe970f812d16e8b7464a45a57c177d7c1cf2dde6049870104061a",
-    "integration_qualifications.json": "c42796b0f8984815a085c958ce5b0afd10aae46ca0ade846fb24ec8f431929d4"
+    "integration_qualifications.json": "2f001b1c73bfdc627ef6e4ba211401d564397569b7e6c2c318a1b0e21820199e"
   },
   "scope": "Every publisher candidate in both inventories; all available editions and renditions remain in scope",
   "states": {
     "blocked_authority": 1,
     "identity_review": 1,
     "published_scope": 19,
-    "qualified_scope": 11,
+    "qualified_scope": 16,
     "scope_filter_required": 2,
-    "unavailable_original": 1,
     "unverified_lead": 72,
-    "verified_unimplemented": 18
+    "verified_unimplemented": 14
   },
   "publishers": [
     {
@@ -71,16 +70,24 @@
       "publisher_id": "aclu",
       "publisher_name": "American Civil Liberties Union",
       "task_id": "ss-zeen",
-      "state": "verified_unimplemented",
-      "reader": null,
-      "qualified_editions": [],
+      "state": "qualified_scope",
+      "reader": "aclu",
+      "qualified_editions": [
+        {
+          "publisher_id": "aclu",
+          "scorecard_id": "aclu:119",
+          "state": "qualified",
+          "receipt": "qualifications/aclu--119.json",
+          "receipt_sha256": "d57d8721cbaf6b1c5d5f2cd5d981db2cd33c40759394dbda17a9c8d42a566991"
+        }
+      ],
       "verified_api_endpoints": [],
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "verified_unimplemented",
       "original_source_urls": [
         "https://www.aclu.org/congressional-scorecards"
       ],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Integrate remaining available editions and renditions"
     },
     {
       "publisher_id": "ada",
@@ -377,16 +384,24 @@
       "publisher_id": "childrens_defense",
       "publisher_name": "Children's Defense Fund",
       "task_id": "ss-lbl4",
-      "state": "verified_unimplemented",
-      "reader": null,
-      "qualified_editions": [],
+      "state": "qualified_scope",
+      "reader": "childrens_defense",
+      "qualified_editions": [
+        {
+          "publisher_id": "childrens_defense",
+          "scorecard_id": "childrens_defense:117",
+          "state": "qualified",
+          "receipt": "qualifications/childrens_defense--117.json",
+          "receipt_sha256": "ce2b9cdbdf27db65fe4c4c4c64ec27b2a5b1a03250359ab829ec45f45d482977"
+        }
+      ],
       "verified_api_endpoints": [],
       "discovery_api_status": "html_pdf_only_observed",
       "discovery_support_status": "verified_unimplemented",
       "original_source_urls": [
         "https://www.childrensdefense.org/cdf-action-council-releases-report/"
       ],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Integrate remaining available editions and renditions"
     },
     {
       "publisher_id": "club_for_growth",
@@ -952,16 +967,31 @@
       "publisher_id": "first_focus",
       "publisher_name": "First Focus Campaign for Children",
       "task_id": "ss-wjwd",
-      "state": "unavailable_original",
-      "reader": null,
-      "qualified_editions": [],
+      "state": "qualified_scope",
+      "reader": "first_focus",
+      "qualified_editions": [
+        {
+          "publisher_id": "first_focus",
+          "scorecard_id": "first_focus:2026",
+          "state": "qualified",
+          "receipt": "qualifications/first_focus--2026.json",
+          "receipt_sha256": "4edbef02d5486328a206127f35dd9fa9b803d8bb6459a98eaff5c3b76b2495ef"
+        },
+        {
+          "publisher_id": "first_focus",
+          "scorecard_id": "first_focus:2025",
+          "state": "qualified",
+          "receipt": "qualifications/first_focus--2025.json",
+          "receipt_sha256": "90cec23e773028d009d83c32acac5326a7866f9b910ae99d2588c1757fd33a69"
+        }
+      ],
       "verified_api_endpoints": [],
       "discovery_api_status": "blocked",
       "discovery_support_status": "unavailable_original",
       "original_source_urls": [
         "https://www.ffccscorecard.org/"
       ],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Integrate remaining available editions and renditions"
     },
     {
       "publisher_id": "flyersrights",
@@ -1370,6 +1400,41 @@
           "state": "qualified",
           "receipt": "qualifications/national_parks_action--api-catalogue%3A2090.json",
           "receipt_sha256": "a1156d6510b83b842bb4154e837e8d775110006a2d16a2202aceb5dcb4372444"
+        },
+        {
+          "publisher_id": "national_parks_action",
+          "scorecard_id": "national_parks_action:2020-pdf",
+          "state": "qualified",
+          "receipt": "qualifications/national_parks_action--2020-pdf.json",
+          "receipt_sha256": "d037e3a4ef65f6e37e58d529f696cdbf66072f65826b9cff13a64c797c454f32"
+        },
+        {
+          "publisher_id": "national_parks_action",
+          "scorecard_id": "national_parks_action:api-details%3A3260",
+          "state": "qualified",
+          "receipt": "qualifications/national_parks_action--api-details%3A3260.json",
+          "receipt_sha256": "810cf1d217220cf38ea7da6677947dec5ef70bbffc5920ecf7397b04205d58c2"
+        },
+        {
+          "publisher_id": "national_parks_action",
+          "scorecard_id": "national_parks_action:api-details%3A2404",
+          "state": "qualified",
+          "receipt": "qualifications/national_parks_action--api-details%3A2404.json",
+          "receipt_sha256": "08abf77e36e0ec0f393af2af3a0a1f4b6a931998daabbfcd5af02a5b3219baaa"
+        },
+        {
+          "publisher_id": "national_parks_action",
+          "scorecard_id": "national_parks_action:api-details%3A2093",
+          "state": "qualified",
+          "receipt": "qualifications/national_parks_action--api-details%3A2093.json",
+          "receipt_sha256": "4a5c4d7543be13f30eb183f5d77fddb99c3ae2efce2e876ab6009cfc932a816a"
+        },
+        {
+          "publisher_id": "national_parks_action",
+          "scorecard_id": "national_parks_action:api-details%3A2090",
+          "state": "qualified",
+          "receipt": "qualifications/national_parks_action--api-details%3A2090.json",
+          "receipt_sha256": "3b374c7ab1ef19e5d1546bba467da093f133aa1df9313fd4e3a8ebbf8a499a85"
         }
       ],
       "verified_api_endpoints": [
@@ -1510,16 +1575,388 @@
       "publisher_id": "new_american",
       "publisher_name": "The New American",
       "task_id": "ss-2gxg",
-      "state": "verified_unimplemented",
-      "reader": null,
-      "qualified_editions": [],
+      "state": "qualified_scope",
+      "reader": "new_american",
+      "qualified_editions": [
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A255",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--report%3A255.json",
+          "receipt_sha256": "0ec7e5c608067ded7646c9ab9b5be7102ca7f6e64b1b3e43763d43a020b6ebb1"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A254",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--report%3A254.json",
+          "receipt_sha256": "94ceb1e1162de715c546c4696805de7eee1429b813f1a8e51237660127441924"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A231",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--report%3A231.json",
+          "receipt_sha256": "78b2205a04cf8df03f3ebbe517416e6c628ad69bb99cb398057f4ea4d960c970"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A230",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--report%3A230.json",
+          "receipt_sha256": "477bc6bd8c3e277a840d39f77135e506459d46c488a0ec28cc5f478c5841ff53"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A37",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--report%3A37.json",
+          "receipt_sha256": "1f05c84205bc40e236196d934eb47b5f70768a0155626e641a9fdccf79d3b539"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A36",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--report%3A36.json",
+          "receipt_sha256": "4b1af91ea83d06e0d9b84891c3df2d988a25d9f13e272e2a8b1159abd282b6b2"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A35",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--report%3A35.json",
+          "receipt_sha256": "9e4008e90fd4c8a2a398bf0a34b37b2a61cf44709c0b1ee5b9bc4e9408950acf"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A34",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--report%3A34.json",
+          "receipt_sha256": "a1f2e2fd264a062b3819d5fd93cca2799c7af1252ed8479d9e766bda9d11b6b4"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A33",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--report%3A33.json",
+          "receipt_sha256": "703dec892d98590a807c018d0d9d96a80924f7212525655613af56ad8d8bf40a"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A32",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--report%3A32.json",
+          "receipt_sha256": "5916f31ce1ba7e35829a41c4eac0526930c964743ac8a46e27d22ed12c66b7ed"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A31",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--report%3A31.json",
+          "receipt_sha256": "5fb54b91bfdd13ab9ec263bae43ac072f96c937673121f4b814275aa13815506"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A30",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--report%3A30.json",
+          "receipt_sha256": "616e059e20a7ab87319e70a79cbc1f3c252b3699eb52baa499a25ebdb838bbcc"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A29",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--report%3A29.json",
+          "receipt_sha256": "797050dd893758c26368a79d1c8a3fa3eb2d865e8f013d14099719a03a42340c"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A28",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--report%3A28.json",
+          "receipt_sha256": "c238b98e703ccfec35fc703f3cb047d8531be0907d252130ddc289d03dddf3ab"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A11",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--report%3A11.json",
+          "receipt_sha256": "5f95dc55273cbdd7d7f01257f7bdfc49de8ca8bfcf6653b695f136dee34c98ce"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A10",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--report%3A10.json",
+          "receipt_sha256": "6c057a015130e487b56106fa05d93a2cd9237a88b5252404bf8a198154db6d9e"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A9",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--report%3A9.json",
+          "receipt_sha256": "533f5694dee996201e772aaf7f46aad379599c762cad8ea07bf01839bdacaa7f"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A8",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--report%3A8.json",
+          "receipt_sha256": "8a1a909ff85dce405ac197d5620b24230ad88d46e29eefaac8bfc7151f7733d2"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A6",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--report%3A6.json",
+          "receipt_sha256": "f3c9bbe7d74e1140f59afdd33a49da45b3308708734b8673db15902604afe28c"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A5",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--report%3A5.json",
+          "receipt_sha256": "8049bfe14446f00762d2d4de0c338d925d6ba2118267bad88a5a0af8a30553e4"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A2",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--report%3A2.json",
+          "receipt_sha256": "5a364ed2a96968adac0b3ba3535eff22ebb9920c44255d37f2124c31e90415b2"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A1",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--report%3A1.json",
+          "receipt_sha256": "d0e5d0f67e02e48a75938370c047c51a1f82043f28710431c79dc11f07c9cca8"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A3",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--report%3A3.json",
+          "receipt_sha256": "a9f1016ed0e6886d2151827a79e7c39bd985fa000951ebbdb3a9d532defc4fe3"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A23",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--report%3A23.json",
+          "receipt_sha256": "9c6bcd474777fe0ef8015bb0d94d9870095351ad73eab1bcd0ff9cae193c355d"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A22",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--report%3A22.json",
+          "receipt_sha256": "387884210643fbed6d3beb3fb0646d08b55c278687a75318f78b3649f9d6a7ac"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A19",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--report%3A19.json",
+          "receipt_sha256": "1dc5c2480940ee89079b9edafbeedf9180167a2ef81b871ef071b9bc88c3f018"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A18",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--report%3A18.json",
+          "receipt_sha256": "1923f4ce2b1f6c673dcd31521e75d2271978b93bda60958e879256b745a86c34"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A15",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--report%3A15.json",
+          "receipt_sha256": "8fd6163bd34f1779ec85732e45a8cf05f1f684bfe6a0b8c013f5648f00e1fad5"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A13",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--report%3A13.json",
+          "receipt_sha256": "6ce7222ce19e97bad39f21a27abd2eb0061010e837e2972b71611537d39af1f3"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A12",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--report%3A12.json",
+          "receipt_sha256": "44d62140be9132c5fa19591592dccc34724707ca6acbdf201326aba5d39a806d"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A7",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--report%3A7.json",
+          "receipt_sha256": "6bf73a95b79835f07dd848a5c0e653dc64f519a29da8a6d6d1c33e93c6f80e5a"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A21",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--report%3A21.json",
+          "receipt_sha256": "96f5c5bceec2a7126372caac7c64a4aab918b1e2b5e21021f1996345d546fedb"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A20",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--report%3A20.json",
+          "receipt_sha256": "0e0993c4a6c48fef5630b27bed6a2c256db35185fa50ca86dfae5d41e4c934d9"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A17",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--report%3A17.json",
+          "receipt_sha256": "37e1adf446558c5c6e6f3750dd794b4701c7430c06fb378952f36d29d860675d"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A16",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--report%3A16.json",
+          "receipt_sha256": "d5cabf83c84c59c31d0583cb7d05ce622368214c9df53acbd076fffebb6a8605"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A14",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--report%3A14.json",
+          "receipt_sha256": "c856b2fa1a8ff9b751b0406bbf987d69876f4e7c60c8e4e6800d9548f65e6b73"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A24",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--report%3A24.json",
+          "receipt_sha256": "548c9646a1bcfa26372b8583527eb3423740a450e873af63e21e5cf8326ac7e3"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A25",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--report%3A25.json",
+          "receipt_sha256": "dc72eb24d8afebfcf992ec60b386cdfd935904cdaad8322271d77115d8b17ad1"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:report%3A26",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--report%3A26.json",
+          "receipt_sha256": "484dd486a7365d13dd7bdc120bdd8d54c611e36b6b30916ffe5c7fb9fc8d646c"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:roster%3Asession%3A14",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--roster%3Asession%3A14.json",
+          "receipt_sha256": "c3e8fb36c39379ebcf9c876cbe6b18ccaa1b1aa3de3af893b43a366470db4e5e"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:roster%3Asession%3A13",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--roster%3Asession%3A13.json",
+          "receipt_sha256": "79b9b0ff2f8372b84353c793e05bbb585496f383341e8cdbaa1990fd86605147"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:roster%3Asession%3A12",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--roster%3Asession%3A12.json",
+          "receipt_sha256": "45153d2e8e6585819eba774076dcb19af4a7741c6e1da3803742f4464dde3417"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:roster%3Asession%3A11",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--roster%3Asession%3A11.json",
+          "receipt_sha256": "1c91559afba6a8d2275f04559bc274ea3cf491fd8db614629f7062de57e7d6e0"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:roster%3Asession%3A10",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--roster%3Asession%3A10.json",
+          "receipt_sha256": "efb1bdf5a32191922aeea95aa470faa721c007b081b34923daeea2f2fe73abce"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:roster%3Asession%3A9",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--roster%3Asession%3A9.json",
+          "receipt_sha256": "1bdbb406c76d74606f7adb41f6d867b4c9337e174cbd28fe281f035101b71aed"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:roster%3Asession%3A8",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--roster%3Asession%3A8.json",
+          "receipt_sha256": "1176dd334eb82b68d90889ab8f5ba3e3329165950f8fe62909b46e3c9f4f34f8"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:roster%3Asession%3A7",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--roster%3Asession%3A7.json",
+          "receipt_sha256": "39cd9a4884dd15fc80df9939ae64322beb104556e0be81998d15481ca85de93b"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:roster%3Asession%3A6",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--roster%3Asession%3A6.json",
+          "receipt_sha256": "42956f6a02e64e26dd47251c0db4fd288115a266b19fcec45955fe6476a2e1d2"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:roster%3Asession%3A5",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--roster%3Asession%3A5.json",
+          "receipt_sha256": "e8fb987c46538df35eabc7318f34f165c0a1a4b9b7e7ce0ff9c20ac4f65512dd"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:roster%3Asession%3A4",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--roster%3Asession%3A4.json",
+          "receipt_sha256": "6761d1980f108e83a52c927690f59765e84d2f1019d4fbdd942df64bc7bfba42"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:roster%3Asession%3A3",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--roster%3Asession%3A3.json",
+          "receipt_sha256": "635e703c72052920916efd34d5801f41873d290c596350d7e59f8d0afceed4d8"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:roster%3Asession%3A2",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--roster%3Asession%3A2.json",
+          "receipt_sha256": "cf17b930e82b1dc0c2c2d3938b132f078e71b26d303ca998fe37006200f5307f"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:roster%3Asession%3A1",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--roster%3Asession%3A1.json",
+          "receipt_sha256": "53498feadab703511ba22f3ca2a2bc25f9102cecb57f7a2beb54d0ac1c328814"
+        }
+      ],
       "verified_api_endpoints": [],
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "verified_unimplemented",
       "original_source_urls": [
         "https://thenewamerican.com/freedom%20index/"
       ],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Integrate remaining available editions and renditions"
     },
     {
       "publisher_id": "nfib",
@@ -1814,16 +2251,24 @@
       "publisher_id": "us_chamber",
       "publisher_name": "U.S. Chamber of Commerce",
       "task_id": "ss-f1u2",
-      "state": "verified_unimplemented",
-      "reader": null,
-      "qualified_editions": [],
+      "state": "qualified_scope",
+      "reader": "us_chamber_archive",
+      "qualified_editions": [
+        {
+          "publisher_id": "us_chamber",
+          "scorecard_id": "us_chamber:2018",
+          "state": "qualified",
+          "receipt": "qualifications/us_chamber--2018.json",
+          "receipt_sha256": "d8fd6125cbef1d95f283916672b697e0d3ba9fe953c4d3fe6bdf63dfcf5a8155"
+        }
+      ],
       "verified_api_endpoints": [],
       "discovery_api_status": "html_pdf_only_observed",
       "discovery_support_status": "verified_unimplemented",
       "original_source_urls": [
         "https://www.uschamber.com/congressional-scorecard-and-legislative-leadership-list"
       ],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Integrate remaining available editions and renditions"
     },
     {
       "publisher_id": "wilberforce",
