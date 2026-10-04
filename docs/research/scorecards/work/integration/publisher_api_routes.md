@@ -25,6 +25,19 @@ to each named edition and rendition, not an entire historical archive.
 | Susan B. Anthony Pro-Life America | Form POST returning JSON at `https://sbaprolife.org/wp-admin/admin-ajax.php`, with `action=get_senator_data` or `action=get_representative_data` | Current and past term ratings, vote/activity subscores, source items and preferred positions. Requests use the public profile page's nonce and exact publisher member ID. Senate term spans can cross several Congresses. | [Original route observations](publisher_api_route_additions.json); full rendition qualification remains separate |
 | Institute for Legislative Analysis | GET JSON at `https://analysis.limitedgov.org/api/leaderboardPage/leaderboardData`, `/legislationPage/articles`, `/legislatorScorecard/categories` and `/lawmakerPage/personDetail` | Publisher organization, state and year selectors supply ratings, legislation, categories and member details. A native numeric score can coexist with a below-threshold display of `N/A`; both observations require retention. | [Original route observations](publisher_api_route_additions.json); the publisher's former scorecard host explicitly redirects to this application; full rendition qualification remains separate |
 
+## Additional observed JSON
+
+**Peace Action:** the original page selects `wp-congress.min.js`, which requests
+JSON at `https://www.peaceaction.org/wp-json/wp/v2/legislators/`,
+`/wp-json/wp/v2/votes/` and `/wp-json/wp-congress/v1/honor-roll/`. Original direct
+GET responses contain native member IDs, stored scores and counts, item
+positions, roll-call URIs and member result groups. The honor-roll route selects
+a requested year/percentage cohort. Vote responses require pagination;
+`nopaging=true` does not establish complete item coverage. The original page
+states that scoring extends only through summer 2024. See the
+[retained route observations](publisher_api_route_additions.json). Full source
+qualification continues separately from this API discovery.
+
 ## Archived publisher JSON
 
 **U.S. Chamber:** the original application selected House, Senate and bill JSON
