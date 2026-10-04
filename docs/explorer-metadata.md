@@ -40,7 +40,10 @@ only Parquet data read by the metadata publisher.
 All table descriptions, including scorecards, come from the primary dictionary.
 All relationships are authored in `table_joins.py` and generated into
 `table_joins.json`. Both the explorer and MCP read this one generated registry.
-There is no supplemental description or navigation registry.
+There is no supplemental description or navigation registry. Detailed MCP
+descriptions include full measurements on outgoing joins. Incoming joins retain
+their keys, reasons and baseline counts, and point to the child description for
+full measurement evidence so heavily connected tables stay within reply limits.
 
 Every declared join uses the same checks. Pull requests measure added or changed
 joins against published data; the scheduled check measures the whole registry.

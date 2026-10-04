@@ -286,3 +286,26 @@ def test_a_guarantor_reaches_its_loan_by_its_back_reference():
 
 def test_no_join_reason_names_a_path_on_a_maintainers_machine():
     assert [join.name for join in table_joins.JOINS if table_joins.maintainer_path(join.reason)] == []
+
+
+def test_incoming_measurement_evidence_is_retrievable_from_the_child(monkeypatch):
+    from spicy_regs import mcp_server
+
+    monkeypatch.setattr(mcp_server, "_joins", table_joins.joins_record)
+    record = table_joins.joins_record()
+    for declared in record["joins"]:
+        parent = mcp_server._table_joins(declared["parent"], measurements=True)
+        incoming = next(j for j in parent["incoming"]
+                        if (j["child"], j["child_columns"], j["parent_columns"]) ==
+                        (declared["child"], declared["child_columns"], declared["parent_columns"]))
+        if declared["measurement"]:
+            detail = incoming["measurement"]
+            assert detail["status"] == "see_child_description" and detail["tool"] == "describe_table"
+            child = mcp_server._table_joins(detail["arguments"]["table"], measurements=detail["arguments"]["detail"])
+            assert declared in child["outgoing"]
+        else:
+            assert "measurement" not in incoming
+        for key in ("kind", "reason", "baseline_keys", "baseline_missing", "floor_pct"):
+            assert incoming[key] == declared[key]
+        assert incoming.get("measured_via") == declared["measured_via"]
+        assert incoming.get("expected_cardinality", "unspecified") == declared["expected_cardinality"]

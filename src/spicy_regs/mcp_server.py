@@ -1327,20 +1327,36 @@ def _joins() -> dict:
 def _table_joins(table: str, *, measurements: bool) -> dict:
     """The declared joins where ``table`` is the child or the parent, with their baseline.
 
-    ``measurements`` keeps each join's measurement record (immutable input URLs,
-    SQL and cardinality); without it the join still states its kind, reason,
-    baseline counts and floor.
+    Detailed outgoing joins retain complete measurements. Incoming joins retain
+    baseline counts and declared cardinality, with an explicit reference to the
+    child's detailed description for measurement evidence. Without measurements, every
+    join still states its kind, reason, baseline counts and floor.
     """
     record = _joins()
 
-    def shaped(join: dict) -> dict:
-        return join if measurements else {key: value for key, value in join.items() if key != "measurement"}
+    def shaped(join: dict, *, incoming: bool = False) -> dict:
+        shaped = {key: value for key, value in join.items() if measurements or key != "measurement"}
+        if not incoming:
+            return shaped
+        # Missing optional fields retain their defaults; all keys, scope reasons,
+        # baseline counts and floors stay present in both directions.
+        if shaped.get("measured_via") is None:
+            shaped.pop("measured_via", None)
+        if shaped.get("expected_cardinality") == "unspecified":
+            shaped.pop("expected_cardinality")
+        if measurements:
+            if join.get("measurement"):
+                shaped["measurement"] = {"status": "see_child_description", "tool": "describe_table",
+                                         "arguments": {"table": join["child"], "detail": True}}
+            else:
+                shaped.pop("measurement", None)
+        return shaped
 
     return {
         "basis": record["basis"],
         "baseline": record["baseline"],
         "outgoing": [shaped(join) for join in record["joins"] if join["child"] == table],
-        "incoming": [shaped(join) for join in record["joins"] if join["parent"] == table],
+        "incoming": [shaped(join, incoming=True) for join in record["joins"] if join["parent"] == table],
     }
 
 
@@ -1830,8 +1846,11 @@ def _tools() -> list[Tool]:
         date and disposition, for the ledger's publisher only; not_in_ledger:
         absent from the bundled output ledger, not unevidenced. joins: the
         declared joins it makes (outgoing) and receives (incoming).
-        detail=true adds each join's measurement record and the ledger's
-        statements, which detail=false (default) names in detail.omitted.
+        detail=true adds outgoing join measurements and the ledger's statements.
+        Incoming measurements reference the child's detailed description; baseline
+        counts and floors remain here. Missing expected_cardinality means unspecified,
+        and missing measured_via means the child is measured directly. detail=false
+        (default) names omitted measurements and statements in detail.omitted.
         A view column projecting a source column unchanged carries its
         meaning, else its declared one or null. A FEC view's
         release_compatibility appears once, in publication (relationship when

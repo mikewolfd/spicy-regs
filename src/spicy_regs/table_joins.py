@@ -53,7 +53,8 @@ BASIS = (
     "baseline_missing count distinct non-null child keys and those absent from the parent on the baseline "
     "date; floor_pct is the resolution rate scripts/check_table_joins.py holds the live tables to. "
     "'complete' says every non-null child key names a parent row; it does not check that the publisher paired "
-    "them correctly. A 'scope' or 'design' join resolves partly for the stated reason; it is not a defect. "
+    "them correctly. A 'scope' or 'design' join may resolve partly; its reason documents the intended scope "
+    "or known gap. A measured baseline does not establish that missing matches are correct. "
     "This is not an exhaustive relationship catalog: JSON-array joins and other undeclared relationships "
     "may be described in the column meanings. An empty join list does not establish that no relationship exists."
 )
