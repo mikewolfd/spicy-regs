@@ -104,25 +104,26 @@ def test_only_explicit_publisher_uses_proxy(tmp_path, monkeypatch):
     used = []
 
     @contextmanager
-    def selected(source):
-        used.append("proxy")
+    def selected(source, **options):
+        used.append(("proxy", options))
         yield "proxy"
 
     @contextmanager
-    def direct(source):
-        used.append("direct")
+    def direct(source, **options):
+        used.append(("direct", options))
         yield "direct"
 
     monkeypatch.setattr(acquisition, "zyte_fetch", selected)
     monkeypatch.setattr(build_scorecards, "bounded_fetch", direct)
-    factory = fetch_for_publishers(["ijm"])
+    factory = fetch_for_publishers(["ijm"], max_bytes=40 * 1024**2, max_requests=5000)
     source = scope(tmp_path, monkeypatch)
     with factory(source) as fetch:
         assert fetch == "proxy"
     afp = source.root.for_source("afp", "hash_only", parser_version="test/1", policy_decision_id="test-policy")
     with factory(afp) as fetch:
         assert fetch == "direct"
-    assert used == ["proxy", "direct"]
+    limits = dict(max_bytes=40 * 1024**2, max_requests=5000)
+    assert used == [("proxy", limits), ("direct", limits)]
     with pytest.raises(ValueError, match="Unknown publisher"):
         fetch_for_publishers(["typo"])
 
@@ -167,3 +168,29 @@ def test_rollup_rejects_custom_fetch_combined_with_browser_selection():
 
     with pytest.raises(ValueError, match="injected fetch factory"):
         ScorecardsRollup(fetch_factory=object(), zyte_browser_publishers=["ijm"])
+
+
+def test_public_app_headers_reach_only_the_selected_c4ip_api_request(tmp_path, monkeypatch):
+    original = scope(tmp_path, monkeypatch)
+    source = original.root.for_source("c4ip", "hash_only", parser_version="test/1", policy_decision_id="test-policy")
+    fetcher = Fetcher()
+    api = "https://cscp.c4ip.org/public/members/browse?skip=0&limit=100"
+    headers = {"X-API-Key": "synthetic-app-key", "Origin": "https://c4ip.org"}
+    with zyte_fetch(source, fetcher=fetcher, max_requests=2) as fetch:
+        captured = fetch.request(api, method="GET", content=None, request_headers=headers)
+        source.capture(captured, stage="catalog")
+        fetch("https://c4ip.org/interactive-scorecard/")
+    assert fetcher.calls[0][1]["target_headers"] == tuple(headers.items())
+    assert fetcher.calls[0][1]["extra_secrets"] == ("synthetic-app-key",)
+    assert "target_headers" not in fetcher.calls[1][1]
+    assert "synthetic-app-key" not in json.dumps(journal(source.root))
+
+
+@pytest.mark.parametrize("url", ["https://c4ip.org/public/test", "https://other.test/public/test"])
+def test_public_app_headers_refuse_an_unselected_target_before_paid_request(tmp_path, monkeypatch, url):
+    original = scope(tmp_path, monkeypatch)
+    source = original.root.for_source("c4ip", "hash_only", parser_version="test/1", policy_decision_id="test-policy")
+    fetcher = Fetcher()
+    with zyte_fetch(source, fetcher=fetcher) as fetch, pytest.raises(ScorecardTransportError, match="original API"):
+        fetch.request(url, method="GET", content=None, request_headers={"X-API-Key": "synthetic-app-key"})
+    assert fetcher.calls == []

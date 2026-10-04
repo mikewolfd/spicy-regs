@@ -5,11 +5,12 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import yaml
+from spicy_docs.sources.scorecards import ADAPTER_PUBLISHERS
 
 from spicy_regs.source_evidence import POLICIES
 
 REGISTRY = Path(__file__).with_name("sources.yaml")
-ADAPTERS = frozenset({"lcv", "afl_cio", "heritage_action", "humane_world_action", "nea", "c4ip", "afp", "ijm", "hrc"})
+ADAPTERS = frozenset(ADAPTER_PUBLISHERS.values())
 CADENCES = {"daily": timedelta(days=1), "weekly": timedelta(days=7), "monthly": timedelta(days=30)}
 
 
@@ -62,8 +63,7 @@ def load_registry(path: Path = REGISTRY) -> tuple[ScorecardSource, ...]:
             raise RegistryError("Registry source text fields must be strings")
         source = ScorecardSource(**row)
         if (
-            source.publisher_id not in ADAPTERS
-            or source.adapter != source.publisher_id
+            ADAPTER_PUBLISHERS.get(source.adapter) != source.publisher_id
             or source.publisher_id in seen
             or source.cadence not in CADENCES
             or source.evidence_policy not in POLICIES

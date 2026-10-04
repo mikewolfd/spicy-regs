@@ -44,3 +44,10 @@ locators and values against them. A returned page or PDF establishes access;
 it does not establish a complete supported scorecard. See the
 [blocked-source retry receipts](research/scorecards/work/integration/zyte_retry/)
 and [API qualification](research/scorecards/work/integration/api_adapters/README.md).
+
+An offline integration plan can set `reference_max_bytes` for a large pinned
+table reference. The reference combines parsed rows from many captures and can
+exceed the size of any source response. Replay and qualification metadata use
+the same positive-integer bound and verify the exact reference SHA-256. An
+omitted bound retains the existing 200 MiB limit. This setting does not change
+HTTP response limits, publisher request budgets or source completeness checks.

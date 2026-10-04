@@ -13,11 +13,20 @@ distinct. Reference and period locators remain in receipt evidence, alongside th
 exact original JSON, so absent object properties remain distinguishable from
 explicit null properties during replay.
 
-Boolean flags retain unknown values as null. Exact numeric text becomes
-`DECIMAL(38,18)`; a value outside that bound refuses instead of rounding. Publisher
-display text remains independently available. Grade letters never become numbers.
+Boolean flags retain unknown values as null. Exact rating numbers become
+`DECIMAL(38,19)`, which permits nineteen integer digits and nineteen fractional
+digits. Weights and contributions retain `DECIMAL(38,18)`. A value outside its
+declared bound refuses instead of rounding. Publisher display text remains
+independently available. Grade letters never become numbers.
 The retained-row census and exact-roundtrip checks are in
 `/Users/mikewolfd/Work/corpora/spicy-regs-etl-split-20261003/scorecards-report.json`.
+The additional ILA precision census and exact Arrow/DuckDB comparisons are in
+`receipts/scorecards-expansion-20261004/etl-conversion-review/diagnosis.json`.
+Historical rating generations retain their pinned scale and receipt policy.
+Reads admit only the exact known historical or current declarations and verify
+the original schema, subject hashes and receipt joins before restoring source
+strings. A subsequent build generates current rating receipts from those exact
+source strings; it never reinterprets an old receipt under a different policy.
 
 Snapshot records describe capture, parsing, completeness and evidence policy.
 They belong entirely in receipts. Resolver receipts retain input pins, candidate
@@ -25,6 +34,19 @@ identities, ambiguity, refusal reasons, source context and rule versions. Only
 resolved links belong in subject tables. Internal validation and incremental reads
 must reconstruct the provider rows from verified receipts; missing or ambiguous
 receipt joins must stop the read.
+
+`read_family` uses the shared `read_receipt_bundle` API to reconstruct the selected
+family with one receipt load and one subject join. The reader checks every receipt,
+including failed attempts omitted from its result, and verifies all accepted
+subjects before returning any rows. Callers explicitly select processing-only
+observations and resolver refusals for internal replay. Exact decimals, nested
+values, witnesses, generation identities and one-to-one joins use the same shared
+validation rules as individual-dataset reads.
+
+The bounded LCV replay comparison and its original input hashes are retained in
+`receipts/scorecards-expansion-20261004/receipt-read-optimization-benchmark/`.
+Its baseline and candidate reports agree on the exact reconstructed row digest;
+the measurement covers that captured edition rather than full-corpus throughput.
 
 See `src/spicy_regs/etl_policies/scorecard*.json` for installed receipt requirements.
 Both rollups use the shared `receipt_policies` path and its build identity.

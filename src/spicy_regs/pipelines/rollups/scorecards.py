@@ -10,7 +10,7 @@ from loguru import logger
 from spicy_regs.pipelines.rollups.base import RollupPipeline
 from spicy_regs.scorecards.etl import POLICIES, SOURCE_NAMES
 from spicy_regs.scorecards.registry import REGISTRY
-from spicy_regs.scorecards.acquisition import fetch_for_publishers
+from spicy_regs.scorecards.acquisition import MAX_BYTES, MAX_REQUESTS, fetch_for_publishers, validate_limits
 from spicy_regs.transforms.build_scorecards import OUTPUTS, NoScorecardsDue, build_scorecards
 
 
@@ -40,15 +40,24 @@ class ScorecardsRollup(RollupPipeline):
         zyte_browser_publishers=(),
         pdf_extractor=None,
         retain_extraction=None,
+        max_bytes=MAX_BYTES,
+        max_requests=MAX_REQUESTS,
     ):
         super().__init__(output_dir=output_dir, skip_upload=skip_upload)
+        validate_limits(max_bytes, max_requests)
+        self.max_bytes, self.max_requests = max_bytes, max_requests
         self.registry, self.publishers, self.editions = registry, tuple(publishers), tuple(editions)
         self.historical_backfill, self.force = historical_backfill, force
         if fetch_factory is not None and (zyte_publishers or zyte_browser_publishers):
             raise ValueError("Choose an injected fetch factory or explicit Zyte publishers")
         self.provider = provider
         self.fetch_factory = (
-            fetch_for_publishers(zyte_publishers, browser_publishers=zyte_browser_publishers)
+            fetch_for_publishers(
+                zyte_publishers,
+                browser_publishers=zyte_browser_publishers,
+                max_bytes=max_bytes,
+                max_requests=max_requests,
+            )
             if zyte_publishers or zyte_browser_publishers
             else fetch_factory
         )
@@ -71,6 +80,8 @@ class ScorecardsRollup(RollupPipeline):
             pdf_extractor=self.pdf_extractor,
             retain_extraction=self.retain_extraction,
             receipt_generation_id=self.receipt_generation_id,
+            max_bytes=self.max_bytes,
+            max_requests=self.max_requests,
             **options,
         )
 
@@ -112,6 +123,8 @@ def main(
             name="--zyte-browser-publisher", help="Use explicit browser API rendition for IJM; requires ZYTE_TOKEN"
         ),
     ] = None,
+    max_response_bytes: Annotated[int, Parameter(help="Maximum bytes per publisher response")] = MAX_BYTES,
+    max_requests: Annotated[int, Parameter(help="Maximum requests per publisher in this run")] = MAX_REQUESTS,
 ) -> None:
     load_dotenv()
     ScorecardsRollup(
@@ -124,6 +137,8 @@ def main(
         force=force,
         zyte_publishers=zyte_publishers or (),
         zyte_browser_publishers=zyte_browser_publishers or (),
+        max_bytes=max_response_bytes,
+        max_requests=max_requests,
     ).run()
 
 

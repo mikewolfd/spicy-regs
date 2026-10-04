@@ -2,6 +2,9 @@
 
 Generated from `publisher_api_inventory.json` on 2026-10-03T19:50:42Z. Counts below are measurements of this pinned pass, not maintained workspace totals.
 
+For later verified original routes, see the [publisher API route observations](publisher_api_routes.md).
+This inventory preserves the findings of its dated discovery pass.
+
 The catalog and inventory match exactly: **125 publisher candidates**. Every candidate received a bounded original-surface or search-result review. Search-only reviews do not establish original publisher authority. No complete scorecard edition was qualified by this pass.
 
 | Discovery result | Publishers |

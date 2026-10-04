@@ -1,0 +1,32 @@
+{
+  "format_version": "scorecard-integration-qualified-scope/1",
+  "qualified": true,
+  "publisher_id": "nfib",
+  "scorecard_id": "nfib:119-pre-election",
+  "source_url": "https://www.nfib.com/wp-content/uploads/2026/09/HCV-119-Pre-Election-Digital.pdf",
+  "parser_version": "nfib-named-qualified-rendered-pdf/1",
+  "reader_sha256": "dc04dcb438c92fccfebdaead6332a2923e6f2219e868204ca57b9684466fd93a",
+  "capture_manifest_sha256": "ac7d4e70efa73ebb76021df4bbf1a67288898d6fb11b02b63c5f2309768fff97",
+  "native_reference_sha256": "8c83f0ea748c30ae82b17f9842daac158bcf76374ce29fc4a92f5da9787793cc",
+  "native_reference_kind": "source_table_family",
+  "source_qualification_sha256": "f6098499e4fc646c1f54875391b6edd738087e19fd542d81afa7b8a38e961fac",
+  "completeness_rule": "Complete named original PDF; every printed member and source-defined key vote, current/prior score, footnote and available member glyph reconciles independent original observations; stable source reread",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 17,
+    "scorecard_metrics": 4,
+    "scorecard_items": 15,
+    "scorecard_metric_items": 15,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 544,
+    "scorecard_member_ratings": 1088,
+    "scorecard_member_item_results": 0
+  },
+  "capture_count": 2,
+  "evidence_policy": "hash_only",
+  "qualification_boundary": "Named source rendition; remaining editions and renditions stay in scope",
+  "published": false,
+  "qualified_reader_input_sha256": "fed7ed24d00def0c6ec30b8329900171c2731148cc79822aaa8ec3bef4afaa0a"
+}

@@ -20,7 +20,7 @@ from spicy_regs.etl_receipts import (
     RECEIPT_SCHEMA,
     combine_receipts,
     failure_receipt,
-    read_attempts,
+    read_receipt_bundle,
     rebind_receipt,
     read_with_receipts,
     select_receipts,
@@ -34,6 +34,8 @@ from spicy_regs.scorecards.subject_shapes import (
     IDENTITIES,
     INTEGER_FIELDS,
     POLICY_VERSION,
+    RATING_POLICY_VERSION,
+    DECIMAL_TYPE,
     SOURCE_COLUMNS,
     map_source_row,
     restore_source_row,
@@ -54,12 +56,48 @@ def policy(name):
         schema,
         IDENTITIES[name] if schema.names else (),
         fields + ("raw_source",),
-        policy_version=POLICY_VERSION,
+        policy_version=RATING_POLICY_VERSION if name == "scorecard_member_ratings" else POLICY_VERSION,
         receipt_only=not schema.names,
     )
 
 
 POLICIES = {name: policy(name) for name in SOURCE_COLUMNS}
+_rating = POLICIES["scorecard_member_ratings"]
+_rating_field = _rating.subject_schema.field("value_number")
+LEGACY_RATING_POLICY = replace(
+    _rating,
+    subject_schema=_rating.subject_schema.set(
+        _rating.subject_schema.get_field_index("value_number"),
+        _rating_field.with_type(DECIMAL_TYPE),
+    ),
+    policy_version=POLICY_VERSION,
+)
+
+
+def admitted_read_policies(names, *, descriptors=None, columns=None):
+    """Select only known exact policies from a verified artifact or pinned table declarations."""
+    from spicy_regs.contract_types import described_schema
+
+    if (descriptors is None) == (columns is None):
+        raise ValueError("Scorecard reads require exactly one admitted policy declaration")
+    current = {name: POLICIES[name] for name in names}
+    legacy = dict(current)
+    if "scorecard_member_ratings" in legacy:
+        legacy["scorecard_member_ratings"] = LEGACY_RATING_POLICY
+    for selected in (current, legacy):
+        if descriptors is not None:
+            if not isinstance(descriptors, list) or len(descriptors) != len(selected):
+                continue
+            declared = {value.get("dataset"): value for value in descriptors if isinstance(value, dict)}
+            if declared == {name: p.descriptor() for name, p in selected.items()}:
+                return selected
+        elif columns is not None:
+            expected = {name: described_schema(p.subject_schema) for name, p in selected.items() if not p.receipt_only}
+            if set(columns) == set(expected) and all(
+                [tuple(column) for column in columns[name]] == shape for name, shape in expected.items()
+            ):
+                return selected
+    raise ValueError("Scorecard input differs from the supported exact historical or current policies")
 
 
 def _witnesses(row):
@@ -127,7 +165,7 @@ def write_family(
             context = ReceiptContext(
                 generation_id,
                 f"{name}:{index}",
-                raw.get("rule_version") or raw.get("parser_version") or POLICY_VERSION,
+                raw.get("rule_version") or raw.get("parser_version") or POLICIES[name].policy_version,
                 _witnesses(raw),
             )
             try:
@@ -175,7 +213,7 @@ def write_family(
 
         def observation_key(receipt):
             return tuple(receipt[k] for k in (
-                "dataset", "record_id", "subject_version", "outcome", "processing_json"
+                "dataset", "policy_version", "record_id", "subject_version", "outcome", "processing_json"
             ))
 
         previous = defaultdict(deque)
@@ -211,25 +249,46 @@ def write_family(
     return tuple(paths)
 
 
-def read_family(directory: Path, names, *, receipt_path: Path | None = None, generation_id: str | None = None) -> dict:
+def read_family(
+    directory: Path, names, *, receipt_path: Path | None = None, generation_id: str | None = None,
+    policies: Mapping[str, DatasetPolicy] | None = None,
+) -> dict:
     """Reconstruct provider rows only after validating the entire selected native family."""
     receipt_path = receipt_path or directory / RECEIPT_KEY
     if generation_id is None:
         generation_id = generation_options(directory, names)["receipt_generation_id"]
-    subjects = {n: [] if POLICIES[n].receipt_only else [directory / (n + ".parquet")] for n in names}
-    validate_receipt_bundle(subjects, [receipt_path], [POLICIES[n] for n in names], generation_id=generation_id)
-    result = {}
-    with TemporaryDirectory(prefix="scorecard-receipt-read-") as temporary:
-        for name in names:
-            selected = select_receipts(receipt_path, Path(temporary) / (name + ".parquet"), dataset=name)
-            joined = list(read_with_receipts(subjects[name], [selected], POLICIES[name], generation_id=generation_id))
-            # The shared reader yields accepted subjects. Observed processing-only
-            # records and explicit resolver refusals still need exact internal replay.
-            outcomes = frozenset({"observed", "refused"} if name in LINK_NAMES else {"observed"})
-            for row in read_attempts([selected], POLICIES[name], generation_id=generation_id, outcomes=outcomes):
-                joined.append(row["processing_fields"])
-            result[name] = [restore_source_row(name, row) for row in joined]
-    return result
+    if policies is not None and (
+        set(policies) != set(names) or any(p.dataset != name for name, p in policies.items())
+    ):
+        raise ValueError("Scorecard read policy keys differ from their selected datasets")
+    selected = {n: POLICIES[n] for n in names} if policies is None else admitted_read_policies(
+        names, descriptors=[p.descriptor() for p in policies.values()]
+    )
+    subjects = {n: [] if selected[n].receipt_only else [directory / (n + ".parquet")] for n in names}
+    joined = read_receipt_bundle(
+        subjects,
+        [receipt_path],
+        [selected[n] for n in names],
+        generation_id=generation_id,
+        processing_outcomes={
+            name: frozenset({"observed", "refused"} if name in LINK_NAMES else {"observed"}) for name in names
+        },
+    )
+    return {name: [restore_source_row(name, row) for row in rows] for name, rows in joined.items()}
+
+
+def read_indexed_family(directory: Path, names, family: Mapping, *, receipt_path: Path | None = None) -> dict:
+    """Read caller-pinned downloads under the index's exact supported schema and receipt generation."""
+    return read_family(
+        directory,
+        names,
+        receipt_path=receipt_path,
+        generation_id=family["etlReceipts"]["generationId"],
+        policies=admitted_read_policies(
+            names,
+            columns={key.removesuffix(".parquet"): pin["columns"] for key, pin in family["tables"].items()},
+        ),
+    )
 
 
 def read_source_inputs(paths, receipt_path: Path, *, generation_id: str) -> dict:
@@ -275,7 +334,10 @@ def read_source_generation(directory: Path) -> dict:
     if spec["family"] != "scorecards":
         raise ValueError("Expected a scorecard source generation")
     if "etlReceipts" in spec:
-        rows = read_family(directory, SOURCE_NAMES, generation_id=spec["etlReceipts"]["generationId"])
+        selected = admitted_read_policies(SOURCE_NAMES, descriptors=spec["etlReceipts"]["policies"])
+        rows = read_family(
+            directory, SOURCE_NAMES, generation_id=spec["etlReceipts"]["generationId"], policies=selected
+        )
     else:
         if set(spec["tables"]) != {name + ".parquet" for name in SOURCE_NAMES}:
             raise ValueError("Incomplete legacy scorecard source generation")
