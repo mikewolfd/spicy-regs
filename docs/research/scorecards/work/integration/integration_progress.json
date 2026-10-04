@@ -238,7 +238,7 @@
       "discovery_api_status": "blocked",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Follow the catalog discovery reference for Alaska Wilderness Action, find an original publisher edition or attributable archive, and establish federal member-scorecard scope before writing a parser."
     },
     {
       "publisher_id": "animal_welfare_institute",
@@ -910,7 +910,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Follow the catalog discovery reference for Disabled American Veterans, find an original publisher edition or attributable archive, and establish federal member-scorecard scope before writing a parser."
     },
     {
       "publisher_id": "defenders_action",
@@ -923,7 +923,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Follow the catalog discovery reference for Defenders of Wildlife Action Fund, find an original publisher edition or attributable archive, and establish federal member-scorecard scope before writing a parser."
     },
     {
       "publisher_id": "drug_policy_action",
@@ -936,7 +936,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Follow the catalog discovery reference for Drug Policy Action, find an original publisher edition or attributable archive, and establish federal member-scorecard scope before writing a parser."
     },
     {
       "publisher_id": "drum_major",
@@ -949,7 +949,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Follow the catalog discovery reference for Drum Major Institute for Public Policy, find an original publisher edition or attributable archive, and establish federal member-scorecard scope before writing a parser."
     },
     {
       "publisher_id": "end_citizens_united",
@@ -985,7 +985,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Follow the catalog discovery reference for Environment America, find an original publisher edition or attributable archive, and establish federal member-scorecard scope before writing a parser."
     },
     {
       "publisher_id": "few",
@@ -998,7 +998,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Follow the catalog discovery reference for Federally Employed Women, find an original publisher edition or attributable archive, and establish federal member-scorecard scope before writing a parser."
     },
     {
       "publisher_id": "ffrf_action",
@@ -1067,7 +1067,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Follow the catalog discovery reference for FlyersRights.org, find an original publisher edition or attributable archive, and establish federal member-scorecard scope before writing a parser."
     },
     {
       "publisher_id": "food_policy_action",
@@ -1080,7 +1080,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Follow the catalog discovery reference for Food Policy Action, find an original publisher edition or attributable archive, and establish federal member-scorecard scope before writing a parser."
     },
     {
       "publisher_id": "foreign_policy_america",
@@ -1415,7 +1415,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Follow the catalog discovery reference for Citizens for Global Solutions, find an original publisher edition or attributable archive, and establish federal member-scorecard scope before writing a parser."
     },
     {
       "publisher_id": "goa",
@@ -1575,7 +1575,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Follow the catalog discovery reference for Iraq and Afghanistan Veterans of America, find an original publisher edition or attributable archive, and establish federal member-scorecard scope before writing a parser."
     },
     {
       "publisher_id": "ila",
@@ -2609,7 +2609,7 @@
       "original_source_urls": [
         "https://www.nrapvf.org/grades/texas"
       ],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Separate current federal-incumbent records from mixed state/candidate guides; establish an edition and public complete scope without bypassing access restrictions."
     },
     {
       "publisher_id": "nrf",
@@ -3083,7 +3083,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Follow the catalog discovery reference for Sargent Shriver National Center on Poverty Law, find an original publisher edition or attributable archive, and establish federal member-scorecard scope before writing a parser."
     },
     {
       "publisher_id": "us_chamber",
@@ -3179,7 +3179,7 @@
         "https://irfscorecard.org/wp-content/uploads/2021/04/2021_IRFSC_4.30.21-1.pdf",
         "https://irfscorecard.org/"
       ],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Obtain an attributable archived original or publisher replacement location; retain nonlegislative caucus/advocacy actions and member exclusions when profiling. Never treat redirected HTML as PDF or a zero-scorecard result."
     },
     {
       "publisher_id": "amalgamated_clothing_workers",
@@ -3192,7 +3192,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'The Record of the Congress' attributed to Amalgamated Clothing Workers of America; the CRS locator Printed CRS-1; physical PDF page 9 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "american_bakers",
@@ -3205,7 +3205,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'Congress Voting Record' attributed to American Bakers Association; the CRS locator Printed CRS-2; physical PDF page 10 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "american_cause",
@@ -3218,7 +3218,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'American Cause Rates the Members of Congress Based on Their Political Philosophy' attributed to American Cause, Inc.; the CRS locator Printed CRS-2; physical PDF page 10 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "farm_bureau",
@@ -3231,7 +3231,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'How Your Congressman/Senator Voted on Major Issues in the Congress' attributed to American Farm Bureau Federation; the CRS locator Printed CRS-3; physical PDF page 11 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "afge",
@@ -3297,7 +3297,7 @@
       "original_source_urls": [
         "https://www.aft.org/sites/default/files/media/2014/oc_fall2014.pdf"
       ],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Find the underlying AFT congressional voting record used by the magazine, then profile its edition/member completeness; do not turn campaign narrative into a national snapshot."
     },
     {
       "publisher_id": "aia",
@@ -3310,7 +3310,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'Congressional Punch List' attributed to American Institute of Architects; the CRS locator Printed CRS-4; physical PDF page 12 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "american_parents",
@@ -3323,7 +3323,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'How Members of the U.S. Senate and House of Representatives Voted in (year) on Legislation Affecting Children' attributed to American Parents Committee, Inc.; the CRS locator Printed CRS-4; physical PDF page 12 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "american_security_council",
@@ -3336,7 +3336,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'National Security Voting Index' attributed to American Security Council; the CRS locator Printed CRS-4; physical PDF page 12 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "americans_constitutional_action",
@@ -3349,7 +3349,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'The ACA Index' attributed to Americans for Constitutional Action; the CRS locator Printed CRS-4; physical PDF page 12 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "agc",
@@ -3362,7 +3362,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'AGC Rates Congress' attributed to Associated General Contractors of America; the CRS locator Printed CRS-5; physical PDF page 13 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "atlantic_richfield",
@@ -3375,7 +3375,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'No established title' attributed to Atlantic Richfield Civic Action Program; the CRS locator Printed CRS-5; physical PDF page 13 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "bread_world",
@@ -3388,7 +3388,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'Congressional Votes on Hunger Related Issues' attributed to Bread for the World; the CRS locator Printed CRS-5; physical PDF page 13 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "railway_clerks",
@@ -3401,7 +3401,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'RCPL Voting Record' attributed to Brotherhood of Railway, Airline and Steamship Clerks, Freight Handlers, Express and Station Employes; the CRS locator Printed CRS-6; physical PDF page 14 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "bipac",
@@ -3414,7 +3414,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'Review of the Congress' attributed to Business-Industry Political Action Committee; the CRS locator Printed CRS-6; physical PDF page 14 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "ccrkba",
@@ -3427,7 +3427,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'CCRKBA Congressional Ratings' attributed to Citizens Committee for the Right to Keep and Bear Arms; the CRS locator Printed CRS-7; physical PDF page 15 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "coalition_foreign_military",
@@ -3440,7 +3440,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'Voting Record: Foreign & Military Policy' attributed to Coalition for a New Foreign and Military Policy; the CRS locator Printed CRS-7; physical PDF page 15 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "committee_education_funding",
@@ -3453,7 +3453,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'The House-Senate Education Funding Voting Record' attributed to Committee for Full Funding of Education Programs; the CRS locator Printed CRS-7; physical PDF page 15 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "free_congress_survival",
@@ -3466,7 +3466,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'C.S.F.C. Conservative Register' attributed to Committee for the Survival of a Free Congress; the CRS locator Printed CRS-7; physical PDF page 15 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "common_cause",
@@ -3485,7 +3485,7 @@
         "https://democracyscorecard.org/",
         "https://democracyscorecard.org/wp-content/uploads/2024/09/DemocracyScorecard_2024v6.pdf"
       ],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Start with the original-domain 2016 PDF and checked action/score tables; separately establish publisher authority or an attributable archived capture for 2024."
     },
     {
       "publisher_id": "communication_workers",
@@ -3498,7 +3498,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'CWA Rates Congress' attributed to Communication Workers of America; the CRS locator Printed CRS-8; physical PDF page 16 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "congressional_quarterly",
@@ -3511,7 +3511,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'Group Ratings; Key Votes; Presidential Support and Opposition; Conservative Coalition; Party Unity and Party Opposition; Bipartisan Support and Opposition' attributed to Congressional Quarterly, Inc.; the CRS locator Printed CRS-8; physical PDF page 16 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "consumer_federation",
@@ -3524,7 +3524,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'CFA Voting Record' attributed to Consumer Federation of America; the CRS locator Printed CRS-8; physical PDF page 16 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "environmental_action",
@@ -3537,7 +3537,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'Dirty Dozen' attributed to Environmental Action; the CRS locator Printed CRS-9; physical PDF page 17 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "food_beverage_trades",
@@ -3550,7 +3550,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'Voting Record (year)' attributed to Food and Beverage Trades Department AFL-CIO; the CRS locator Printed CRS-9; physical PDF page 17 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "fcnl",
@@ -3565,7 +3565,7 @@
       "original_source_urls": [
         "https://www.fcnl.org/congress"
       ],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Find a dated FCNL publisher voting-record publication and determine whether it contains ratings or selected action results; do not ingest generic official voting data again."
     },
     {
       "publisher_id": "human_events",
@@ -3578,7 +3578,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'Conservatives and Liberals Rate Congress' attributed to Human Events; the CRS locator Printed CRS-10; physical PDF page 18 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "ipaa",
@@ -3591,7 +3591,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'Senate/House Votes on Key Energy Legislation' attributed to Independent Petroleum Association of America; the CRS locator Printed CRS-10; physical PDF page 18 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "machinists",
@@ -3604,7 +3604,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'Report Card' attributed to International Association of Machinists & Aerospace Workers; the CRS locator Printed CRS-10; physical PDF page 18 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "teamsters",
@@ -3617,7 +3617,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'House/Senate Voting Records' attributed to International Brotherhood of Teamsters; the CRS locator Printed CRS-11; physical PDF page 19 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "interreligious_food",
@@ -3630,7 +3630,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'Hunger Issues in the Congress: How Members Voted' attributed to Interreligious Taskforce on US Food Policy; the CRS locator Printed CRS-11; physical PDF page 19 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "john_birch_historical",
@@ -3645,7 +3645,7 @@
       "original_source_urls": [
         "https://jbs.org/uncategorized/2202-the-new-american/"
       ],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Coordinate this task with new_american: preserve historical publisher/series names, map overlapping editions explicitly, and qualify separate old layouts. Recommend one reader family only after identity review."
     },
     {
       "publisher_id": "joint_center",
@@ -3658,7 +3658,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'Congressional Votes on Issues of Importance to Blacks' attributed to Joint Center for Political Studies; the CRS locator Printed CRS-11; physical PDF page 19 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "league_women_voters",
@@ -3671,7 +3671,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'Political Accountability Rating' attributed to League of Women Voters of the United States; the CRS locator Printed CRS-12; physical PDF page 20 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "liberty_lobby",
@@ -3684,7 +3684,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'Liberty Ledger' attributed to Liberty Lobby; the CRS locator Printed CRS-12; physical PDF page 20 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "march_for_life",
@@ -3697,7 +3697,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'Congressional Voting Records' attributed to March for Life, Inc.; the CRS locator Printed CRS-13; physical PDF page 21 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "national_alliance_seniors",
@@ -3710,7 +3710,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'Golden Age Index' attributed to National Alliance of Senior Citizens; the CRS locator Printed CRS-14; physical PDF page 22 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "national_associated_businessmen",
@@ -3723,7 +3723,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'Economy Voting Record' attributed to National Associated Businessmen, Inc.; the CRS locator Printed CRS-14; physical PDF page 22 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "life_underwriters",
@@ -3736,7 +3736,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'Voting Report' attributed to National Association of Life Underwriters; the CRS locator Printed CRS-14; physical PDF page 22 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "nam",
@@ -3773,7 +3773,7 @@
       "discovery_api_status": "blocked",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'Senate/House Votes Compiled on Key Issues' attributed to National Association of Social Workers; the CRS locator Printed CRS-14; physical PDF page 22 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "national_audiovisual",
@@ -3786,7 +3786,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'House-Senate Education Funding Voting Record' attributed to National Audio-Visual Association, Inc.; the CRS locator Printed CRS-15; physical PDF page 23 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "national_council_seniors",
@@ -3799,7 +3799,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'Voting Record Congress' attributed to National Council of Senior Citizens, Inc.; the CRS locator Printed CRS-15; physical PDF page 23 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "national_farmers_organization",
@@ -3812,7 +3812,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'NFO Voting Record' attributed to National Farmers Organization; the CRS locator Printed CRS-15; physical PDF page 23 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "now",
@@ -3825,7 +3825,7 @@
       "discovery_api_status": "blocked",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'House/Senate Voting Record' attributed to National Organization for Women; the CRS locator Printed CRS-16; physical PDF page 24 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "national_womens_caucus",
@@ -3838,7 +3838,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of \"Voting Chart on Women's Issues\" attributed to National Women's Political Caucus; the CRS locator Printed CRS-17; physical PDF page 25 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "write_congressman",
@@ -3851,7 +3851,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'Voting Records of U.S. Representatives/Senators' attributed to National Write Your Congressman Club, Inc.; the CRS locator Printed CRS-17; physical PDF page 25 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "public_citizen",
@@ -3867,7 +3867,7 @@
         "https://www.citizen.org/news/public-citizen-vote-analysis-shows/",
         "https://www.citizen.org/vchart00/map.htm"
       ],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Recover the original 1999–2000 congressional vote chart through publisher/archive evidence; preserve consumer-rating scope and exclude bill-only scorecards."
     },
     {
       "publisher_id": "retail_clerks",
@@ -3880,7 +3880,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'Voting Records of U.S. Senators and Representatives' attributed to Retail Clerks International Union; the CRS locator Printed CRS-18; physical PDF page 26 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "ripon_society",
@@ -3893,7 +3893,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'Ripon Ratings' attributed to Ripon Society; the CRS locator Printed CRS-18; physical PDF page 26 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "sane_historical",
@@ -3906,7 +3906,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'Key (year) Military Votes in the House/Senate' attributed to SANE; the CRS locator Printed CRS-18; physical PDF page 26 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "taxation_representation",
@@ -3919,7 +3919,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'House/Senate Rated' attributed to Taxation with Representation; the CRS locator Printed CRS-19; physical PDF page 27 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "us_student_association",
@@ -3932,7 +3932,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'Legislative Scorecard' attributed to US National Student Association; the CRS locator Printed CRS-19; physical PDF page 27 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "uaw",
@@ -3945,7 +3945,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'Voting Record of the Congress' attributed to United Auto Workers; the CRS locator Printed CRS-19; physical PDF page 27 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "carpenters",
@@ -3958,7 +3958,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'House/Senate Votes' attributed to United Brotherhood of Carpenters and Joiners of America; the CRS locator Printed CRS-20; physical PDF page 28 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "united_church_christ",
@@ -3971,7 +3971,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'Voting Record' attributed to United Church of Christ; the CRS locator Printed CRS-20; physical PDF page 28 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "united_mine_workers",
@@ -3984,7 +3984,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'The U.S. Congress: (year)' attributed to United Mine Workers of America; the CRS locator Printed CRS-20; physical PDF page 28 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "united_transportation",
@@ -3997,7 +3997,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'UTU Washington Report' attributed to United Transportation Union; the CRS locator Printed CRS-20; physical PDF page 28 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "woman_activist",
@@ -4010,7 +4010,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of 'Votes of Women Members of Congress on National Issues' attributed to The Woman Activist; the CRS locator Printed CRS-21; physical PDF page 29 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "womens_lobby",
@@ -4023,7 +4023,7 @@
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Locate an original edition of \"Women's Lobby Voting Chart\" attributed to Women's Lobby; the CRS locator Printed CRS-21; physical PDF page 29 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
     },
     {
       "publisher_id": "american_energy_alliance",

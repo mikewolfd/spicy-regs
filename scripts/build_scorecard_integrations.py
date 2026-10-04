@@ -191,9 +191,12 @@ def generate(directory: Path):
                 if editions
                 else "Qualify original source through the implemented reader"
                 if publisher in readers
-                else "Implement source-specific reader using verified endpoints"
-                if endpoints and publisher != "nra_pvf"
-                else "Acquire and profile original source; implement explicit reader",
+                else source.get("next_action")
+                or (
+                    "Implement source-specific reader using verified endpoints"
+                    if endpoints and publisher != "nra_pvf"
+                    else "Acquire and profile original source; implement explicit reader"
+                ),
             }
         )
     report = {
