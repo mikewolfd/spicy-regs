@@ -16,11 +16,11 @@ were inferred from matching column names, titles or person names.
   50 of the 53 FEC tables that the old website left unconnected.
 - Preserve the website's 36 scorecard relationships and their recorded origin.
 - Consolidate all 220 relationships in
-  [`table_joins.py`](../src/spicy_regs/table_joins.py), including the 40 audited
+  `table_joins.py` (`../src/spicy_regs/table_joins.py`), including the 40 audited
   additions. Their measured resolution rates and parent cardinality feed the
   same CI checks as the existing declarations.
 - Keep a disposition for every published table in
-  [`join_audit.json`](../src/spicy_regs/join_audit.json).
+  `join_audit.json` (`../src/spicy_regs/join_audit.json`).
 
 There are 220 declarations in total. Sixteen whose endpoints are outside the
 current publication index are omitted from usable navigation and explained by

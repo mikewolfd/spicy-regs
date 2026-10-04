@@ -1833,13 +1833,14 @@ def _tools() -> list[Tool]:
         if unavailable); schema_differences compares them. publication gives
         pinned rows, coverage kind and published_at: pointer move, not source
         read; last_object_write is a lower bound on that move.
-        inputs are recorded producer parents, built_from beside live. Absent
-        inputs do not prove none were used. input_table_current compares parent
+        inputs: the parents its producer recorded (none recorded is not none;
+        a read that bypassed the download helper is not recorded), built_from
+        beside live. input_table_current compares parent
         bytes; a family may move for another table. inputs_current is false if
         any lags, else null if any is unknown. prior_generation is earlier output,
         not an input; snapshot_inputs are rulemaking snapshot sources.
         qualification compares live and audited pins, date and disposition for
-        the ledger's publisher only. not_in_ledger means absent from that ledger,
+        the ledger's publisher only. not_in_ledger means absent from the bundled output ledger,
         not unevidenced. joins lists outgoing and incoming declarations.
         detail=true adds full outgoing measurements and ledger statements;
         incoming measurements link to the child's detailed description, keeping
