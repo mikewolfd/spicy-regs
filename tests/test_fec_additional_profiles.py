@@ -144,7 +144,9 @@ def test_partial_api_document_keeps_native_fields_bodies_assets_and_source_ident
     records, collections, relationships = _rows(build_fec_observations(_manifest(tmp_path, [item]), tmp_path / "out"))
     assert collections[0]["record_count"] == len(records) and relationships == []
     native = [json.loads(r["metadata_json"]) for r in records]
-    assert {r["field"]: r["value"] for r in native if r["kind"] == "api-response-field"} == value
+    assert {r["field"]: r["value"] for r in native if r["kind"] == "api-response-field"} == {
+        "pagination": value["pagination"]
+    }
     assert all(r["query_completeness"] == "not-asserted" for r in native)
     selected = next(r for r in records if json.loads(r["metadata_json"])["kind"] == "api-record-observation")
     assert selected["committee_id"] == "C00000001"

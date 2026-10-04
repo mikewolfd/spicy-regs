@@ -107,12 +107,11 @@ def test_distinct_pdf_bodies_keep_distinct_business_keys_and_valid_receipt_gener
     assert artifact.root['spec']['etlReceipts']['generationId'] == 'chosen-build'
 
 
-def test_legacy_processing_inputs_require_explicit_import(tmp_path):
+def test_processing_inputs_cannot_be_used_as_native_prior(tmp_path):
     path = tmp_path / 'old.parquet'
     pq.write_table(pa.Table.from_pylist([{'cluster_id': '1', 'ingest_source': 'bulk'}]), path)
-    with pytest.raises(ValueError, match='explicit migration'):
+    with pytest.raises(ValueError, match='native subject schema'):
         list(read_court_rows(path, dataset='court_opinion_clusters'))
-    assert list(read_court_rows(path, dataset='court_opinion_clusters', allow_legacy=True))[0]['ingest_source'] == 'bulk'
 
 
 def test_installed_court_policies_refuse_generation_without_receipts(tmp_path):

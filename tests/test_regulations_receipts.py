@@ -14,7 +14,7 @@ from spicy_regs.transforms.regulations_receipts import (
     read_internal,
     write_records,
 )
-from spicy_regs.transforms.regulations_shape import IDENTITIES, LEGACY_COLUMNS, subject_schema
+from spicy_regs.transforms.regulations_shape import IDENTITIES, SOURCE_COLUMNS, subject_schema
 
 
 def context(generation="g1", attempt="row1"):
@@ -41,7 +41,7 @@ def write(tmp_path, dataset, rows, generation="g1", label="input"):
     return ReceiptInput(dataset, (subjects,), receipts, generation)
 
 
-@pytest.mark.parametrize("dataset", list(LEGACY_COLUMNS))
+@pytest.mark.parametrize("dataset", list(SOURCE_COLUMNS))
 def test_every_assigned_policy_can_round_trip_a_qualified_row(tmp_path, dataset):
     row: dict = {k: "1" for k in IDENTITIES[dataset] if k not in ("rule_target_id", "lifecycle_event_id")}
     row.update({k: 1 for k in row if k in ("year", "month", "docket_source_ordinal")})
@@ -146,6 +146,11 @@ def test_receipt_pdf_retries_skip_prior_status_and_keep_global_limit(tmp_path):
     assert byid["1"]["text_extraction_status"] == "ok"
     assert byid["2"]["text_extraction_status"] is None
     assert len(restored) == 4
+    from spicy_regs.etl_receipts import resolve_receipt_witness
+    for receipt in pq.read_table(receipts).to_pylist():
+        if receipt['outcome'] == 'accepted':
+            inherited = [w for w in receipt['witnesses'] if (w['source_uri'] or '').startswith('receipt-processing:')]
+            assert inherited and all(resolve_receipt_witness(receipt, w) for w in inherited)
     assert "text_extraction_status" not in pq.read_schema(subject).names
 
 
@@ -203,6 +208,11 @@ def test_correction_keeps_text_status_and_diagnostics_together(tmp_path):
         '[{"status":"ok"}]',
     )
     assert "pdf_extraction_results_json" not in pq.read_schema(subject).names
+    from spicy_regs.etl_receipts import resolve_receipt_witness
+    [receipt] = [r for r in pq.read_table(receipts).to_pylist() if r['outcome'] == 'accepted']
+    inherited = [w for w in receipt['witnesses'] if (w['source_uri'] or '').startswith('receipt-processing:')]
+    assert len(inherited) == 2
+    assert all(resolve_receipt_witness(receipt, w) for w in inherited)
 
 
 def test_real_rulemaking_producers_build_native_outputs_from_qualified_inputs(tmp_path):
@@ -597,3 +607,28 @@ def test_attribute_successful_empty_scan_has_receipt_without_a_subject(tmp_path)
     assert pq.read_table(target / "docket_attributes.parquet").num_rows == 0
     [attempt] = pq.read_table(target / "etl_receipts.parquet").to_pylist()
     assert attempt["outcome"] == "observed"
+
+
+@pytest.mark.parametrize('dataset,original,altered', [
+    ('documents', {'document_id': 'D', 'title': 'selected'}, {'document_id': 'D'}),
+    ('documents', {'document_id': 'D', 'title': 'selected'}, {'document_id': 'D', 'title': 'different'}),
+    ('rule_targets', {'docket_id': 'D', 'source': 'docket_rin', 'rin': '1000-AA00'}, {}),
+])
+def test_resealed_inconsistent_processor_input_refuses_before_processing(tmp_path, dataset, original, altered):
+    from hashlib import sha256
+    from spicy_regs.etl_receipts import exact_json, RECEIPT_SCHEMA
+
+    originals = ([{"document_id": "early", "title": "safe"}] if dataset == "documents" else []) + [original]
+    selected = write(tmp_path, dataset, originals)
+    receipts = pq.read_table(selected.receipts).to_pylist()
+    receipt = receipts[-1]
+    from spicy_regs.etl_receipts import _unpack
+    processing = _unpack(json.loads(receipt['processing_json']))
+    processing['raw_conversion_inputs'] = altered
+    receipt['processing_json'] = exact_json(processing)
+    receipt['receipt_id'] = 'sha256:' + sha256(exact_json({k: v for k, v in receipt.items() if k != 'receipt_id'}).encode()).hexdigest()
+    pq.write_table(pa.Table.from_pylist(receipts, schema=RECEIPT_SCHEMA), selected.receipts)
+    # The subject hash, receipt digest and row join are all valid; source replay is not.
+    validate_receipt_bundle({dataset: list(selected.subjects)}, [selected.receipts], [policy(dataset)], generation_id='g1')
+    with pytest.raises(ValueError, match='retained processor input differs'):
+        next(iter(read_internal(selected)))

@@ -72,34 +72,24 @@ def build_scorecard_analysis(
     expected = set((*SOURCE_TABLES, *OFFICIAL_TABLES))
     if set(input_pins) != expected or set(input_paths) != expected:
         raise ValueError("Scorecard analysis requires every source and official input pin")
-    if source_receipt_path is not None:
-        if not source_generation_id:
-            raise ValueError("Native scorecard inputs require their selected receipt generation")
-        source = read_source_inputs(
-            {name: input_paths[name] for name in SOURCE_TABLES}, source_receipt_path, generation_id=source_generation_id
-        )
-    else:
-        source = {name: _read(input_paths[name]) for name in SOURCE_TABLES}
-        if any("snapshot_id" not in row for rows in source.values() for row in rows):
-            raise ValueError("Native scorecard inputs require pinned source receipts")
+    if source_receipt_path is None or not source_generation_id:
+        raise ValueError("Scorecard inputs require their selected native receipts and generation")
+    source = read_source_inputs(
+        {name: input_paths[name] for name in SOURCE_TABLES}, source_receipt_path, generation_id=source_generation_id
+    )
     if not source["scorecards"]:
         raise ValueError("An empty scorecard corpus cannot qualify an analysis generation")
-    official_receipts = official_receipts or {}
-    if set(official_receipts) - set(OFFICIAL_TABLES):
-        raise ValueError("Official receipts name an unknown analysis input")
+    if official_receipts is None or set(official_receipts) != set(OFFICIAL_TABLES):
+        raise ValueError("Every official analysis input requires its selected native receipts")
+    from spicy_regs.congress_receipts import CongressInput
+
     official = {}
     with TemporaryDirectory(prefix="scorecard-official-inputs-") as temporary:
         for name in OFFICIAL_TABLES:
-            paths = input_paths[name]
-            if name in official_receipts:
-                from spicy_regs.congress_receipts import CongressInput
-
-                if len(paths) != 1:
-                    raise ValueError("Native partitioned official inputs require their owner's complete receipt reader")
-                receipts, generation_id = official_receipts[name]
-                selected = CongressInput(paths[0], receipts, generation_id)
-                paths = [selected.materialize(name, Path(temporary) / (name + ".parquet"))]
-            official[name] = _read(paths, OFFICIAL_COLUMNS[name])
+            receipts, generation_id = official_receipts[name]
+            selected = CongressInput(tuple(input_paths[name]), receipts, generation_id)
+            path = selected.materialize(name, Path(temporary) / (name + ".parquet"))
+            official[name] = _read([path], OFFICIAL_COLUMNS[name])
     results = resolve_scorecard_links(source, official, input_pins, member_overrides=member_overrides)
     definitions = (
         ("scorecard_member_links", MEMBER_LINK_COLUMNS, ("scorecard_id", "publisher_member_key")),

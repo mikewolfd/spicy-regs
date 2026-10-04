@@ -300,10 +300,12 @@ def test_search_catchup_failure_after_flush_preserves_prior_and_output(tmp_path,
     monkeypatch.setattr(module, "BATCH_ROWS", 1)
     monkeypatch.setattr(source, "_MAX_REQUESTS_PER_PAGE", 1)
     monkeypatch.delenv(source.API_TOKEN_ENV_VAR, raising=False)
-    prior, output = tmp_path / "_clusters_prior.parquet", tmp_path / module.OUTPUT
-    table = pa.Table.from_pylist([module._shape_bulk({"id": "99", "case_name": "Prior case"})], schema=module._SCHEMA)
-    pq.write_table(table, prior)
-    pq.write_table(table, output)
+    from spicy_regs.court_receipts import write_court_rows
+    witness = dict(source_id='fixture', source_uri=None, sha256='sha256:' + 'a' * 64,
+                   locator=None, body_version=None)
+    prior = write_court_rows('court_opinion_clusters',
+        [module._shape_bulk({'id': '99', 'case_name': 'Prior case'})], tmp_path, witnesses=[witness])
+    output = tmp_path / module.OUTPUT
     before = prior.read_bytes(), output.read_bytes()
     dump = _dump(tmp_path, b'id,docket_id,case_name\n"1","101","Bulk case"\n')
     written, closed, requests = [], [], []
@@ -312,14 +314,23 @@ def test_search_catchup_failure_after_flush_preserves_prior_and_output(tmp_path,
     class Writer:
         def __init__(self, *args, **kwargs):
             self.writer = original_writer(*args, **kwargs)
+            self.track = Path(args[0]).name.startswith('.clusters-new-')
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            self.close()
 
         def write_table(self, table):
             self.writer.write_table(table)
-            written.extend(table.to_pylist())
+            if self.track:
+                written.extend(table.to_pylist())
 
         def close(self):
             self.writer.close()
-            closed.append(True)
+            if self.track:
+                closed.append(True)
 
     monkeypatch.setattr(module.pq, "ParquetWriter", Writer)
     next_url = f"{source.API_BASE}/search/?cursor=catchup-second"
@@ -351,7 +362,7 @@ def test_search_catchup_failure_after_flush_preserves_prior_and_output(tmp_path,
         (httpx.HTTPStatusError, "HTTP 500") if failure == "http" else (ValueError, "declared count changed")
     )
     with pytest.raises(error_type, match=message):
-        module.build_court_opinion_clusters(tmp_path, local_file=dump, dump_date=DUMP_DATE, skip_court_scope=True, allow_legacy_prior=True)
+        module.build_court_opinion_clusters(tmp_path, local_file=dump, dump_date=DUMP_DATE, skip_court_scope=True)
 
     assert len(requests) == 2
     assert requests[0].url.params["type"] == "o"
@@ -382,8 +393,11 @@ def test_a_prior_holding_the_newest_export_is_only_caught_up(
 
     module = importlib.import_module("spicy_regs.transforms.build_court_opinion_clusters")
     prior = {**_shape_bulk({"id": "5", "docket_id": "1", "date_created": prior_created}), "court_id": "dcd"}
-    pq.write_table(pa.Table.from_pylist([prior], schema=module._SCHEMA), tmp_path / "_clusters_prior.parquet")
-    assert module.held_export(tmp_path / "_clusters_prior.parquet", allow_legacy=True) == (5, prior_created[:10])
+    from spicy_regs.court_receipts import write_court_rows
+    witness = dict(source_id='fixture', source_uri=None, sha256='sha256:' + 'a' * 64,
+                   locator=None, body_version=None)
+    prior_path = write_court_rows('court_opinion_clusters', [prior], tmp_path, witnesses=[witness])
+    assert module.held_export(prior_path) == (5, prior_created[:10])
     monkeypatch.setattr(bulk, "list_bulk_dumps", lambda: [])
     monkeypatch.setattr(bulk, "latest_dump_date", lambda objects, dataset: DUMP_DATE)
     listed = BulkObject("bulk-data/opinion-clusters-2026-06-30.csv.bz2", 1, '"etag"', "2026-06-30T12:00:00Z")
@@ -409,7 +423,7 @@ def test_a_prior_holding_the_newest_export_is_only_caught_up(
             yield {"cluster_id": 9, "court_id": "dcd", "caseName": "Created after the export"}
 
     monkeypatch.setattr(module, "CourtListenerOpinionSearchReader", Search)
-    out = module.build_court_opinion_clusters(tmp_path, dump_date=DUMP_DATE if named_edition else None, allow_legacy_prior=True)
+    out = module.build_court_opinion_clusters(tmp_path, dump_date=DUMP_DATE if named_edition else None)
 
     from spicy_regs.court_receipts import read_court_rows
     rows = {row["cluster_id"]: row for row in read_court_rows(out, dataset="court_opinion_clusters")}
@@ -614,3 +628,23 @@ def test_access_refusal_closes_without_retry(monkeypatch, status):
         list(CourtListenerBulkReader("courts", dump_date=DUMP_DATE).iter_records())
     assert len(calls) == 1
     assert body.closed
+
+
+def test_cluster_refused_update_keeps_valid_native_prior(tmp_path, monkeypatch, ample_disk_space):
+    from spicy_regs.court_receipts import write_court_rows, local_receipt_selection
+    module = importlib.import_module('spicy_regs.transforms.build_court_opinion_clusters')
+    witness = dict(source_id='fixture', source_uri=None, sha256='sha256:' + 'a' * 64,
+                   locator=None, body_version=None)
+    prior = write_court_rows('court_opinion_clusters',
+        [module._shape_bulk({'id': '5', 'case_name': 'Held', 'citation_count': '2'})],
+        tmp_path, witnesses=[witness])
+    before = pq.read_table(prior).to_pylist()[0]
+    dump = _dump(tmp_path, b'id,docket_id,case_name,citation_count\n"5","101","Rejected","invalid"\n"6","102","New","1"\n')
+    result = module.build_court_opinion_clusters(tmp_path, local_file=dump, dump_date=DUMP_DATE,
+                                               skip_court_scope=True, skip_search_catchup=True)
+    rows = {row['cluster_id']: row for row in pq.read_table(result).to_pylist()}
+    assert rows['5'] == before
+    assert rows['6']['case_name'] == 'New'
+    receipts = pq.read_table(local_receipt_selection(result)[0]).to_pylist()
+    failed = [r for r in receipts if r['outcome'] == 'refused']
+    assert len(failed) == 1 and 'Rejected' in failed[0]['processing_json']

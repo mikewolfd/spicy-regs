@@ -77,7 +77,7 @@ def correct_receipted_dataset(prior, fresh, destination, *, generation_id: str):
 
     from spicy_regs.etl_receipts import ReceiptContext
     from spicy_regs.transforms.regulations_receipts import materialize_internal, write_records
-    from spicy_regs.transforms.regulations_shape import LEGACY_COLUMNS
+    from spicy_regs.transforms.regulations_shape import SOURCE_COLUMNS
 
     if prior.dataset != fresh.dataset or prior.dataset not in ("documents", "comments"):
         raise ValueError("Correction inputs must name the same documents/comments dataset")
@@ -107,7 +107,7 @@ def correct_receipted_dataset(prior, fresh, destination, *, generation_id: str):
             con,
             fresh_sql="SELECT * FROM fresh_input",
             prior_sql="SELECT * FROM prior_input",
-            columns=[c for c, _ in LEGACY_COLUMNS[dataset]],
+            columns=[c for c, _ in SOURCE_COLUMNS[dataset]],
             key="document_id" if dataset == "documents" else "comment_id",
         )
 
@@ -127,4 +127,4 @@ def correct_receipted_dataset(prior, fresh, destination, *, generation_id: str):
                     )
                     ordinal += 1
 
-        return write_records(dataset, records(), destination)
+        return write_records(dataset, records(), destination, prior_receipts=[prior.receipts, fresh.receipts])

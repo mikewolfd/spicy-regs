@@ -5,10 +5,9 @@ import pytest
 
 from spicy_regs.transforms.regulations_shape import (
     IDENTITIES,
-    LEGACY_COLUMNS,
+    SOURCE_COLUMNS,
     RECEIPT_COLUMNS,
     RegulationsShapeError,
-    restore_legacy_record,
     shape_record,
     subject_schema,
 )
@@ -20,13 +19,13 @@ def test_null_empty_duplicates_and_raw_conversion_are_distinct():
         shaped = shape_record("federal_register", row)
         assert shaped["docket_ids"] == native
         assert shaped["raw_conversion_inputs"]["docket_ids_json"] == value
-        assert restore_legacy_record("federal_register", shaped)["docket_ids_json"] == value
+        assert shaped["raw_conversion_inputs"]["docket_ids_json"] == value
 
 
 def test_missing_conversion_is_not_invented_as_explicit_null():
     shaped = shape_record("documents", {"document_id": "D"})
     assert "attachments_json" not in shaped["raw_conversion_inputs"]
-    assert "attachments_json" not in restore_legacy_record("documents", shaped)
+    assert "attachments_json" not in shaped["raw_conversion_inputs"]
 
 
 @pytest.mark.parametrize("raw", ["", "{", "{}", '[{"part":1,"part":2}]', "NaN"])
@@ -151,8 +150,8 @@ def test_statistical_cells_keep_null_agency_and_estimand_fields():
 
 
 def test_each_assigned_table_has_explicit_columns_schema_and_identity():
-    assert set(LEGACY_COLUMNS) == set(RECEIPT_COLUMNS) == set(IDENTITIES)
-    for table in LEGACY_COLUMNS:
+    assert set(SOURCE_COLUMNS) == set(RECEIPT_COLUMNS) == set(IDENTITIES)
+    for table in SOURCE_COLUMNS:
         schema = subject_schema(table)
         assert set(IDENTITIES[table]) <= set(schema.names)
         assert not set(RECEIPT_COLUMNS[table]) & set(schema.names)
@@ -167,11 +166,6 @@ def test_wrong_native_values_do_not_coerce_to_strings_or_integers():
         shape_record("regulatory_agenda_items", {"linked_proceeding_count": "1.0"})
     with pytest.raises(RegulationsShapeError):
         shape_record("dockets", {"docket_id": 42})
-
-
-def test_restore_requires_a_qualified_receipt():
-    with pytest.raises(RegulationsShapeError):
-        restore_legacy_record("comments", {"comment_id": "C"})
 
 
 def test_rule_target_dated_references_preserve_repeats_without_promoting_ambiguity():

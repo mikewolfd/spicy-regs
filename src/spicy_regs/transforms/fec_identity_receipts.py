@@ -106,11 +106,15 @@ class IdentityReceiptWriter:
         self.buffer_bytes = 0
         return self
 
-    def emit(self, table, row, *, input_witness, evidence=(), source_input=None, outcome=None, diagnostic=None):
+    def emit(
+        self, table, row, *, input_witness, evidence=(), source_input=None, outcome=None, diagnostic=None, lineage=None
+    ):
         if table not in self.policies:
             raise ValueError(f"Output outside explicitly selected identity tables: {table}")
         policy = self.policies[table]
         mapped = normalize_record(table, row, source_input=source_input)
+        if table == "fec_committees":
+            mapped["conversion_inputs"] = dict(row)
         self.attempts += 1
         diagnostics = dict(mapped["conversion_diagnostics"])
         if diagnostic is not None:
@@ -122,6 +126,8 @@ class IdentityReceiptWriter:
             witnesses_for(mapped, evidence, input_witness),
             diagnostics,
         )
+        if lineage is not None and not policy.receipt_only:
+            context = lineage.inherit(context, policy, mapped)
         if table == "fec_research_source_pages" and row.get("content_status") != "body_extracted":
             outcome = "refused"
             context = replace(context, diagnostics={**diagnostics, "content_status": row.get("content_status")})

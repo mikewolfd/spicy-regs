@@ -29,7 +29,10 @@ def _publish_source(tmp_path, ids):
     root.mkdir(exist_ok=True)
     path = root / "input.parquet"
     _dockets(ids).write_parquet(path)
-    return finish_dataset(root, "dockets", path, publish=True)
+    from spicy_regs.selected_generations import SelectedInputs, unique_build_directory
+
+    inputs = SelectedInputs(root, unique_build_directory(root))
+    return finish_dataset(root, "dockets", path, publish=True, inputs=inputs)
 
 
 def _published_ids(store: Store) -> list[str]:

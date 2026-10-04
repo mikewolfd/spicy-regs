@@ -645,7 +645,7 @@ the remaining work.
   public/catalog readback before restoring scheduled ETL and its checks. A
   failed check or changed fork revision stops that handoff for reconciliation.
   This is a prepared continuation; catch-up and the full refresh have not yet
-  completed. Follow the [runbook](../etl-catalog-seed.md) and retained status files.
+  completed. Follow the [runbook](https://github.com/mikewolfd/spicy-regs/blob/7bd285a189f997501159abbf7bed8cd19be90402/docs/etl-catalog-seed.md) and retained status files.
 
 Receipts under `~/Work/corpora/fork-execution-2026-09-21/`:
 

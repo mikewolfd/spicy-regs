@@ -24,7 +24,9 @@ from tests.regulatory_publication_fakes import install as install_publication
 
 @pytest.fixture(autouse=True)
 def native_publication(monkeypatch):
-    return install_publication(monkeypatch)
+    remote = install_publication(monkeypatch)
+    monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
+    return remote
 
 
 PREFIX = "raw-data"
@@ -576,6 +578,7 @@ def test_run_does_not_advance_manifest_after_base_upload_failure(
     tmp_output: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A failed base-table publication must leave the remote retry checkpoint unchanged."""
+    monkeypatch.setenv("R2_PUBLIC_URL", "https://test.invalid")
     store = {
         _docket_key("EPA-2024-0001"): dumps(_docket_payload("EPA-2024-0001", "2024-01-01")).encode(),
     }
@@ -606,6 +609,7 @@ def test_run_does_not_advance_manifest_after_base_upload_failure(
 
 def test_run_preflight_failure_stops_all_publication(tmp_output: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Every planned public object must pass its guard before the first write."""
+    monkeypatch.setenv("R2_PUBLIC_URL", "https://test.invalid")
     store = {
         _comment_key("c1", "EPA-2024-0001"): dumps(
             _comment_payload("c1", "EPA-2024-0001", "2024-01-01T00:00:00Z")
@@ -648,6 +652,7 @@ def test_run_preflight_failure_stops_all_publication(tmp_output: Path, monkeypat
 
 
 def test_catalog_ingestion_defers_index_until_mirror(tmp_output, monkeypatch):
+    monkeypatch.setenv("R2_PUBLIC_URL", "https://test.invalid")
     store = {
         _comment_key("c1", "EPA-2024-0001"): dumps(
             _comment_payload("c1", "EPA-2024-0001", "2024-01-01T00:00:00Z")
@@ -856,6 +861,7 @@ def test_failed_sweep_stops_before_later_batch_can_retire_pending_keys(tmp_outpu
 
 @pytest.mark.parametrize("defer", [False, True])
 def test_manual_cli_finalizes_once_unless_workflow_owns_finalization(tmp_output, monkeypatch, defer):
+    monkeypatch.setenv("R2_PUBLIC_URL", "https://test.invalid")
     from spicy_regs.pipelines import comments_mirror
 
     calls = []
@@ -863,3 +869,21 @@ def test_manual_cli_finalizes_once_unless_workflow_owns_finalization(tmp_output,
     monkeypatch.setattr(comments_mirror, "publish_comments_mirror", lambda out: calls.append("mirror"))
     regulations.main(output_dir=tmp_output, use_iceberg=True, skip_upload=False, defer_comments_publication=defer)
     assert calls == (["ingest"] if defer else ["ingest", "mirror"])
+
+
+def test_skip_upload_keeps_configured_remote_input_authority(tmp_output, monkeypatch, native_publication):
+    from spicy_regs.pipelines.regulatory_publication import finish_checkpoints
+    from spicy_regs.selected_generations import SelectedInputs
+    from spicy_regs.sources import publication
+
+    monkeypatch.setenv('R2_PUBLIC_URL', 'https://test.invalid')
+    remote_root = tmp_output / 'publisher'
+    inputs = SelectedInputs(remote_root, remote_root / 'selected')
+    finish_checkpoints(remote_root, {'failed_keys': [], 'pending_comment_text': []}, publish=True, inputs=inputs)
+    before = native_publication.objects[publication.INDEX_V2_KEY]
+    pipeline = RegulationsPipeline(output_dir=tmp_output, skip_upload=True, skip_comments=True, enrich_text=False, allow_fresh_start=True)
+    observed = []
+    monkeypatch.setattr(pipeline, '_run', lambda manifest: observed.append(pipeline._selected_inputs.index))
+    pipeline.run()
+    assert observed == [publication.parse_index(before)]
+    assert native_publication.objects[publication.INDEX_V2_KEY] == before

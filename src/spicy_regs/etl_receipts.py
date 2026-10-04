@@ -3,6 +3,7 @@
 Source acquisition stays in SpicyDocs. Family mappers own domain decisions and
 native conversion; this module refuses unknown fields and ambiguous joins.
 """
+
 from __future__ import annotations
 
 import base64
@@ -26,17 +27,32 @@ import pyarrow.parquet as pq
 ParquetInput = Path | Callable[[], AbstractContextManager[BinaryIO]]
 
 RECEIPT_KEY = "etl_receipts.parquet"
-WITNESS_TYPE = pa.struct([
-    ("source_id", pa.string()), ("source_uri", pa.string()),
-    ("sha256", pa.string()), ("locator", pa.string()), ("body_version", pa.string()),
-])
-RECEIPT_SCHEMA = pa.schema([
-    ("receipt_id", pa.string()), ("dataset", pa.string()), ("policy_version", pa.string()),
-    ("generation_id", pa.string()), ("record_id", pa.string()), ("subject_version", pa.string()),
-    ("identity_json", pa.string()), ("attempt_id", pa.string()), ("outcome", pa.string()),
-    ("processor", pa.string()), ("witnesses", pa.list_(WITNESS_TYPE)),
-    ("processing_json", pa.string()), ("diagnostic_json", pa.string()),
-])
+WITNESS_TYPE = pa.struct(
+    [
+        ("source_id", pa.string()),
+        ("source_uri", pa.string()),
+        ("sha256", pa.string()),
+        ("locator", pa.string()),
+        ("body_version", pa.string()),
+    ]
+)
+RECEIPT_SCHEMA = pa.schema(
+    [
+        ("receipt_id", pa.string()),
+        ("dataset", pa.string()),
+        ("policy_version", pa.string()),
+        ("generation_id", pa.string()),
+        ("record_id", pa.string()),
+        ("subject_version", pa.string()),
+        ("identity_json", pa.string()),
+        ("attempt_id", pa.string()),
+        ("outcome", pa.string()),
+        ("processor", pa.string()),
+        ("witnesses", pa.list_(WITNESS_TYPE)),
+        ("processing_json", pa.string()),
+        ("diagnostic_json", pa.string()),
+    ]
+)
 OUTCOMES = frozenset({"accepted", "rejected", "refused", "error", "observed"})
 _NAME = re.compile(r"[a-z][a-z0-9_]*\Z")
 
@@ -72,8 +88,13 @@ def _unpack(value: Any) -> Any:
         return {k: _unpack(v) for k, v in body}
     if tag == "list":
         return [_unpack(v) for v in body]
-    return {"decimal": Decimal, "datetime": datetime.fromisoformat,
-            "date": date.fromisoformat, "bytes": base64.b64decode, "float": float.fromhex}[tag](body)
+    return {
+        "decimal": Decimal,
+        "datetime": datetime.fromisoformat,
+        "date": date.fromisoformat,
+        "bytes": base64.b64decode,
+        "float": float.fromhex,
+    }[tag](body)
 
 
 def exact_json(value: Any) -> str:
@@ -93,6 +114,7 @@ class DatasetPolicy:
     Null identity components must be individually authorized; the complete tuple
     still identifies one row and duplicate identities are always refused.
     """
+
     dataset: str
     subject_schema: pa.Schema
     identity_fields: tuple[str, ...]
@@ -103,16 +125,19 @@ class DatasetPolicy:
 
     def __post_init__(self):
         names = self.subject_schema.names
-        if (not _NAME.fullmatch(self.dataset) or not self.policy_version
-                or len({name.casefold() for name in names}) != len(names)
-                or any(not name or "\0" in name for name in names)
-                or len(set(self.receipt_fields)) != len(self.receipt_fields)
-                or set(names) & set(self.receipt_fields)
-                or len(set(self.identity_fields)) != len(self.identity_fields)
-                or not set(self.identity_fields) <= set(names)
-                or not set(self.nullable_identity_fields) <= set(self.identity_fields)
-                or self.receipt_only != (not names)
-                or (not self.receipt_only and not self.identity_fields)):
+        if (
+            not _NAME.fullmatch(self.dataset)
+            or not self.policy_version
+            or len({name.casefold() for name in names}) != len(names)
+            or any(not name or "\0" in name for name in names)
+            or len(set(self.receipt_fields)) != len(self.receipt_fields)
+            or set(names) & set(self.receipt_fields)
+            or len(set(self.identity_fields)) != len(self.identity_fields)
+            or not set(self.identity_fields) <= set(names)
+            or not set(self.nullable_identity_fields) <= set(self.identity_fields)
+            or self.receipt_only != (not names)
+            or (not self.receipt_only and not self.identity_fields)
+        ):
             raise ValueError(f"Invalid explicit field policy: {self.dataset}")
 
     @property
@@ -124,18 +149,32 @@ class DatasetPolicy:
             raise ValueError(f"{self.dataset}: unclassified fields {sorted(extra)}")
 
     def descriptor(self) -> dict:
-        return {"dataset": self.dataset, "policy_version": self.policy_version,
-                "subject_schema": base64.b64encode(self.subject_schema.serialize()).decode(),
-                "identity_fields": list(self.identity_fields), "receipt_fields": list(self.receipt_fields),
-                "receipt_only": self.receipt_only, "nullable_identity_fields": list(self.nullable_identity_fields)}
+        return {
+            "dataset": self.dataset,
+            "policy_version": self.policy_version,
+            "subject_schema": base64.b64encode(self.subject_schema.serialize()).decode(),
+            "identity_fields": list(self.identity_fields),
+            "receipt_fields": list(self.receipt_fields),
+            "receipt_only": self.receipt_only,
+            "nullable_identity_fields": list(self.nullable_identity_fields),
+        }
 
     @classmethod
     def from_descriptor(cls, value: Mapping) -> DatasetPolicy:
-        if set(value) != {"dataset", "policy_version", "subject_schema", "identity_fields", "receipt_fields",
-                          "receipt_only", "nullable_identity_fields"}:
+        if set(value) != {
+            "dataset",
+            "policy_version",
+            "subject_schema",
+            "identity_fields",
+            "receipt_fields",
+            "receipt_only",
+            "nullable_identity_fields",
+        }:
             raise ValueError("Invalid stored dataset field policy")
         args = dict(value)
-        args["subject_schema"] = pa.ipc.read_schema(pa.BufferReader(base64.b64decode(args["subject_schema"], validate=True)))
+        args["subject_schema"] = pa.ipc.read_schema(
+            pa.BufferReader(base64.b64decode(args["subject_schema"], validate=True))
+        )
         for name in ("identity_fields", "receipt_fields", "nullable_identity_fields"):
             args[name] = tuple(args[name])
         return cls(**args)
@@ -226,12 +265,20 @@ def _receipt(policy, context, *, subject, processing, outcome, identity=None):
         if set(identity) != set(policy.identity_fields):
             raise ValueError("Failed attempt identity differs from the declared key")
         record_id, _, identity_json = subject_identity(policy, identity)
-    receipt = {"dataset": policy.dataset, "policy_version": policy.policy_version,
-               "generation_id": context.generation_id, "record_id": record_id, "subject_version": version,
-               "identity_json": identity_json, "attempt_id": context.attempt_id, "outcome": outcome,
-               "processor": context.processor,
-               "witnesses": pa.array([context.witnesses], type=pa.list_(WITNESS_TYPE)).to_pylist()[0],
-               "processing_json": exact_json(processing), "diagnostic_json": exact_json(context.diagnostics)}
+    receipt = {
+        "dataset": policy.dataset,
+        "policy_version": policy.policy_version,
+        "generation_id": context.generation_id,
+        "record_id": record_id,
+        "subject_version": version,
+        "identity_json": identity_json,
+        "attempt_id": context.attempt_id,
+        "outcome": outcome,
+        "processor": context.processor,
+        "witnesses": pa.array([context.witnesses], type=pa.list_(WITNESS_TYPE)).to_pylist()[0],
+        "processing_json": exact_json(processing),
+        "diagnostic_json": exact_json(context.diagnostics),
+    }
     return {"receipt_id": _digest(receipt), **receipt}
 
 
@@ -240,12 +287,23 @@ def split_record(policy: DatasetPolicy, row: Mapping, context: ReceiptContext) -
     policy.check_fields(row)
     subject = None if policy.receipt_only else _subject(policy, row)
     processing = {key: row[key] for key in policy.receipt_fields if key in row}
-    return subject, _receipt(policy, context, subject=subject, processing=processing,
-                             outcome="observed" if policy.receipt_only else "accepted")
+    return subject, _receipt(
+        policy,
+        context,
+        subject=subject,
+        processing=processing,
+        outcome="observed" if policy.receipt_only else "accepted",
+    )
 
 
-def failure_receipt(policy: DatasetPolicy, context: ReceiptContext, *, outcome: str,
-                    raw_fields: Mapping, identity: Mapping | None = None) -> dict:
+def failure_receipt(
+    policy: DatasetPolicy,
+    context: ReceiptContext,
+    *,
+    outcome: str,
+    raw_fields: Mapping,
+    identity: Mapping | None = None,
+) -> dict:
     """Retain a failed conversion/refusal without fabricating a subject row."""
     if outcome not in {"error", "rejected", "refused"}:
         raise ValueError("Failure receipt needs a failure outcome")
@@ -253,8 +311,14 @@ def failure_receipt(policy: DatasetPolicy, context: ReceiptContext, *, outcome: 
     return _receipt(policy, context, subject=None, processing=raw_fields, outcome=outcome, identity=identity)
 
 
-def write_dataset(records: Iterable[tuple[Mapping, ReceiptContext]], directory: Path, policy: DatasetPolicy,
-                  *, failures: Iterable[dict] = (), batch_size: int = 2000) -> tuple[Path | None, Path]:
+def write_dataset(
+    records: Iterable[tuple[Mapping, ReceiptContext]],
+    directory: Path,
+    policy: DatasetPolicy,
+    *,
+    failures: Iterable[dict] = (),
+    batch_size: int = 2000,
+) -> tuple[Path | None, Path]:
     """Atomically expose a new local directory with subject data and receipts.
 
     Accepts mappings from Arrow batches or Polars ``iter_rows(named=True)``.
@@ -273,9 +337,13 @@ def write_dataset(records: Iterable[tuple[Mapping, ReceiptContext]], directory: 
         subject_path = stage / f"{policy.dataset}.parquet"
         receipt_path = stage / RECEIPT_KEY
         from contextlib import ExitStack
+
         with ExitStack() as stack:
-            subject_writer = None if policy.receipt_only else stack.enter_context(
-                pq.ParquetWriter(subject_path, policy.subject_schema, compression="zstd"))
+            subject_writer = (
+                None
+                if policy.receipt_only
+                else stack.enter_context(pq.ParquetWriter(subject_path, policy.subject_schema, compression="zstd"))
+            )
             receipt_writer = stack.enter_context(pq.ParquetWriter(receipt_path, RECEIPT_SCHEMA, compression="zstd"))
             subjects, receipts = [], []
 
@@ -300,9 +368,11 @@ def write_dataset(records: Iterable[tuple[Mapping, ReceiptContext]], directory: 
                 if len(receipts) >= batch_size:
                     flush()
             flush()
-        validate_receipt_bundle({policy.dataset: [] if policy.receipt_only else [subject_path]},
-                                [receipt_path], [policy])
+        validate_receipt_bundle(
+            {policy.dataset: [] if policy.receipt_only else [subject_path]}, [receipt_path], [policy]
+        )
         from rulespec_artifacts import publish_directory_no_replace
+
         publish_directory_no_replace(stage, directory)
     return (None if policy.receipt_only else directory / subject_path.name, directory / RECEIPT_KEY)
 
@@ -310,6 +380,7 @@ def write_dataset(records: Iterable[tuple[Mapping, ReceiptContext]], directory: 
 def combine_receipts(paths: Sequence[Path], destination: Path) -> Path:
     """Combine dataset shards, keeping every row and witness, with the shared schema."""
     from spicy_regs.transforms.parquet_rows import write_rows
+
     return write_rows((row for path in paths for row in _rows(path)), destination, RECEIPT_SCHEMA)
 
 
@@ -331,8 +402,10 @@ def _rows(path):
 
 
 def _load_receipts(connection, receipt_paths, policies, generation_id):
-    connection.execute("CREATE TABLE receipts (dataset TEXT, record_id TEXT, version TEXT, identity_json TEXT, "
-                       "receipt_id TEXT UNIQUE, outcome TEXT, processing TEXT, used INTEGER DEFAULT 0)")
+    connection.execute(
+        "CREATE TABLE receipts (dataset TEXT, record_id TEXT, version TEXT, identity_json TEXT, "
+        "receipt_id TEXT UNIQUE, outcome TEXT, processing TEXT, used INTEGER DEFAULT 0)"
+    )
     connection.execute("CREATE UNIQUE INDEX accepted_identity ON receipts(dataset, record_id) WHERE outcome='accepted'")
     generations = set()
     for path in receipt_paths:
@@ -345,25 +418,50 @@ def _load_receipts(connection, receipt_paths, policies, generation_id):
                 raise ValueError("Receipt has no matching dataset policy")
             if _digest({k: v for k, v in receipt.items() if k != "receipt_id"}) != receipt["receipt_id"]:
                 raise ValueError("Receipt digest differs from its contents")
-            ReceiptContext(receipt["generation_id"], receipt["attempt_id"], receipt["processor"],
-                           receipt["witnesses"], _unpack(json.loads(receipt["diagnostic_json"])))
+            ReceiptContext(
+                receipt["generation_id"],
+                receipt["attempt_id"],
+                receipt["processor"],
+                receipt["witnesses"],
+                _unpack(json.loads(receipt["diagnostic_json"])),
+            )
             generations.add(receipt["generation_id"])
             if len(generations) > 1 or (generation_id is not None and generations != {generation_id}):
                 raise ValueError("Receipts mix or differ from the selected generation")
             accepted = receipt["outcome"] == "accepted"
-            if (receipt["outcome"] not in OUTCOMES
-                    or accepted and policy.receipt_only
-                    or accepted != (receipt["subject_version"] is not None)
-                    or accepted and (not receipt["record_id"] or not receipt["identity_json"])):
+            if (
+                receipt["outcome"] not in OUTCOMES
+                or accepted
+                and policy.receipt_only
+                or accepted != (receipt["subject_version"] is not None)
+                or accepted
+                and (not receipt["record_id"] or not receipt["identity_json"])
+            ):
                 raise ValueError("Invalid receipt outcome or subject identity")
             processing = _unpack(json.loads(receipt["processing_json"]))
-            allowed = policy.input_fields if receipt["outcome"] in {"error", "rejected", "refused"} else set(policy.receipt_fields)
+            allowed = (
+                policy.input_fields
+                if receipt["outcome"] in {"error", "rejected", "refused"}
+                else set(policy.receipt_fields)
+            )
             if not isinstance(processing, dict) or set(processing) - allowed:
                 raise ValueError("Receipt contains unclassified processing fields")
             try:
-                connection.execute("INSERT INTO receipts VALUES (?,?,?,?,?,?,?,0)",
-                                   [receipt[k] for k in ("dataset", "record_id", "subject_version", "identity_json",
-                                                        "receipt_id", "outcome", "processing_json")])
+                connection.execute(
+                    "INSERT INTO receipts VALUES (?,?,?,?,?,?,?,0)",
+                    [
+                        receipt[k]
+                        for k in (
+                            "dataset",
+                            "record_id",
+                            "subject_version",
+                            "identity_json",
+                            "receipt_id",
+                            "outcome",
+                            "processing_json",
+                        )
+                    ],
+                )
             except sqlite3.IntegrityError as exc:
                 raise ValueError("Duplicate or ambiguous receipt join") from exc
 
@@ -380,9 +478,11 @@ def _match_subjects(connection, subjects, policies):
             for row in _rows(path):
                 row = _subject(policy, row)
                 record_id, version, identity = subject_identity(policy, row)
-                found = connection.execute("SELECT receipt_id, processing, used FROM receipts WHERE dataset=? "
-                                           "AND record_id=? AND version=? AND identity_json=? AND outcome='accepted'",
-                                           [dataset, record_id, version, identity]).fetchone()
+                found = connection.execute(
+                    "SELECT receipt_id, processing, used FROM receipts WHERE dataset=? "
+                    "AND record_id=? AND version=? AND identity_json=? AND outcome='accepted'",
+                    [dataset, record_id, version, identity],
+                ).fetchone()
                 if found is None or found[2]:
                     raise ValueError(f"Missing, ambiguous or reused subject receipt: {dataset}")
                 connection.execute("UPDATE receipts SET used=1 WHERE receipt_id=?", [found[0]])
@@ -391,8 +491,13 @@ def _match_subjects(connection, subjects, policies):
         raise ValueError("Accepted receipt has no matching subject")
 
 
-def validate_receipt_bundle(subjects: Mapping[str, Sequence[ParquetInput]], receipt_paths: Sequence[ParquetInput],
-                            policies: Sequence[DatasetPolicy], *, generation_id: str | None = None) -> None:
+def validate_receipt_bundle(
+    subjects: Mapping[str, Sequence[ParquetInput]],
+    receipt_paths: Sequence[ParquetInput],
+    policies: Sequence[DatasetPolicy],
+    *,
+    generation_id: str | None = None,
+) -> None:
     """Check native schemas and exact one-to-one accepted joins using a disk index.
 
     Includes failures with no subjects. A generation may contain no records;
@@ -407,8 +512,13 @@ def validate_receipt_bundle(subjects: Mapping[str, Sequence[ParquetInput]], rece
             pass
 
 
-def read_with_receipts(subject_paths: Sequence[ParquetInput], receipt_paths: Sequence[ParquetInput], policy: DatasetPolicy,
-                       *, generation_id: str) -> Iterable[dict]:
+def read_with_receipts(
+    subject_paths: Sequence[ParquetInput],
+    receipt_paths: Sequence[ParquetInput],
+    policy: DatasetPolicy,
+    *,
+    generation_id: str,
+) -> Iterable[dict]:
     """Reconstruct internal processing columns after complete validation; no legacy fallback.
 
     Receipt inputs here must be scoped to this dataset. Use ``select_receipts``
@@ -428,6 +538,7 @@ def read_with_receipts(subject_paths: Sequence[ParquetInput], receipt_paths: Seq
 def select_receipts(path: Path, destination: Path, *, dataset: str) -> Path:
     """Select a dataset's receipt rows without losing failed attempts."""
     from spicy_regs.transforms.parquet_rows import write_rows
+
     return write_rows((row for row in _rows(path) if row["dataset"] == dataset), destination, RECEIPT_SCHEMA)
 
 
@@ -446,8 +557,13 @@ def rebind_receipt(receipt: Mapping, *, generation_id: str) -> dict:
         raise ValueError("Carried receipt digest differs from its contents")
     if generation_id == receipt["generation_id"]:
         return dict(receipt)
-    diagnostics = {"prior_diagnostics": _unpack(json.loads(receipt["diagnostic_json"])),
-                   "carried_from": {"receipt_id": receipt["receipt_id"], "generation_id": receipt["generation_id"]}}
+    diagnostics = _retain_history(
+        receipt,
+        {
+            **_unpack(json.loads(receipt["diagnostic_json"])),
+            "carried_from": {"receipt_id": receipt["receipt_id"], "generation_id": receipt["generation_id"]},
+        },
+    )
     updated = {**receipt, "generation_id": generation_id, "diagnostic_json": exact_json(diagnostics)}
     updated["receipt_id"] = _digest({k: v for k, v in updated.items() if k != "receipt_id"})
     return updated
@@ -460,8 +576,9 @@ def observation_receipt(policy: DatasetPolicy, context: ReceiptContext, *, proce
     return _receipt(policy, context, subject=None, processing=processing_fields, outcome="observed")
 
 
-def read_attempts(receipt_paths: Sequence[Path], policy: DatasetPolicy, *, generation_id: str,
-                  outcomes: frozenset[str] | None = None) -> Iterable[dict]:
+def read_attempts(
+    receipt_paths: Sequence[Path], policy: DatasetPolicy, *, generation_id: str, outcomes: frozenset[str] | None = None
+) -> Iterable[dict]:
     """Read decoded processing evidence including successful-empty and failed reads.
 
     Inputs must be scoped to the dataset and come from an admitted generation;
@@ -474,5 +591,157 @@ def read_attempts(receipt_paths: Sequence[Path], policy: DatasetPolicy, *, gener
         for path in receipt_paths:
             for receipt in _rows(path):
                 if outcomes is None or receipt["outcome"] in outcomes:
-                    yield {**receipt, "processing_fields": _unpack(json.loads(receipt["processing_json"])),
-                           "diagnostics": _unpack(json.loads(receipt["diagnostic_json"]))}
+                    yield {
+                        **receipt,
+                        "processing_fields": _unpack(json.loads(receipt["processing_json"])),
+                        "diagnostics": _unpack(json.loads(receipt["diagnostic_json"])),
+                    }
+
+
+def _retain_history(prior: Mapping, diagnostics: Mapping) -> dict:
+    """Retain source values once by digest, and prior receipt identities as references."""
+    body = {k: v for k, v in prior.items() if k != "receipt_id"}
+    if set(prior) != set(RECEIPT_SCHEMA.names) or _digest(body) != prior["receipt_id"]:
+        raise ValueError("Prior receipt digest differs from its contents")
+    previous = _unpack(json.loads(prior["diagnostic_json"]))
+    retained = dict(diagnostics.get("retained_processing", {}))
+    retained.update(previous.get("retained_processing", {}))
+    processing = _unpack(json.loads(prior["processing_json"]))
+    digest = _digest(processing)
+    retained[digest] = processing
+    if any(_digest(value) != key for key, value in retained.items()):
+        raise ValueError("Retained processing digest differs")
+    references = [
+        *diagnostics.get("prior_receipts", ()),
+        *previous.get("prior_receipts", ()),
+        {
+            "receipt_id": prior["receipt_id"],
+            "generation_id": prior["generation_id"],
+            "processing_sha256": digest,
+            "processor": prior["processor"],
+            "attempt_id": prior["attempt_id"],
+            "outcome": prior["outcome"],
+            "diagnostics": {k: v for k, v in previous.items() if k not in {"prior_receipts", "retained_processing"}},
+        },
+    ]
+    references = list({(r["generation_id"], r["receipt_id"]): r for r in references}.values())
+    return {**diagnostics, "prior_receipts": references, "retained_processing": retained}
+
+
+def inherit_receipt(context: ReceiptContext, prior: Mapping | None) -> ReceiptContext:
+    """Preserve witnesses, prior receipt identities and exact source/processing values.
+
+    Digest-keyed processing payloads are flat and deduplicated. Receipt history
+    stores identities, not recursively serialized prior receipts.
+    """
+    if prior is None:
+        return context
+    from dataclasses import replace
+
+    retained = _retain_history(prior, context.diagnostics)
+    digest = _digest(_unpack(json.loads(prior["processing_json"])))
+    reference = {
+        "source_id": "prior-etl-processing",
+        "source_uri": "receipt-processing:" + digest,
+        "sha256": digest,
+        "locator": "/",
+        "body_version": prior["receipt_id"],
+    }
+    return replace(context, witnesses=[*prior["witnesses"], reference, *context.witnesses], diagnostics=retained)
+
+
+def resolve_receipt_witness(receipt: Mapping, witness: Mapping) -> bytes:
+    """Resolve current or retained source/processing values and verify their digest."""
+    body = {k: v for k, v in receipt.items() if k != "receipt_id"}
+    if _digest(body) != receipt["receipt_id"]:
+        raise ValueError("Retained receipt digest differs")
+    processing = _unpack(json.loads(receipt["processing_json"]))
+    retained = _unpack(json.loads(receipt["diagnostic_json"])).get("retained_processing", {})
+    if any(_digest(value) != key for key, value in retained.items()):
+        raise ValueError("Retained processing digest differs")
+    values = {_digest(processing): processing, **retained}
+    uri = witness.get("source_uri") or ""
+    if uri.startswith("receipt-processing:"):
+        key = uri.removeprefix("receipt-processing:")
+        if key in values and key.removeprefix("sha256:") == str(witness.get("sha256", "")).removeprefix("sha256:"):
+            return exact_json(values[key]).encode()
+    if str(witness.get("locator", "")).startswith("receipt.values."):
+        field = witness["locator"].removeprefix("receipt.values.").split(" ", 1)[0]
+        for current in values.values():
+            if field in current:
+                encoded = exact_json(current[field]).encode()
+                if hashlib.sha256(encoded).hexdigest() == str(witness.get("sha256", "")).removeprefix("sha256:"):
+                    return encoded
+    raise ValueError("Receipt witness has no retained payload")
+
+
+class ReceiptLineage:
+    """Disk-backed accepted-prior lookup shared by family writers."""
+
+    def __init__(self, paths, *, dataset):
+        self._temporary = TemporaryDirectory(prefix="receipt-lineage-")
+        self.connection = sqlite3.connect(str(Path(self._temporary.name) / "prior.db"))
+        self.connection.execute("CREATE TABLE prior (record_id TEXT PRIMARY KEY, receipt TEXT)")
+        self.connection.execute(
+            "CREATE TABLE observations (processing TEXT, receipt_id TEXT PRIMARY KEY, receipt TEXT)"
+        )
+        for path in paths:
+            for receipt in _rows(path):
+                if receipt["dataset"] == dataset and receipt["outcome"] == "observed":
+                    self.connection.execute(
+                        "INSERT OR IGNORE INTO observations VALUES (?, ?, ?)",
+                        [receipt["processing_json"], receipt["receipt_id"], exact_json(receipt)],
+                    )
+                if receipt["dataset"] == dataset and receipt["outcome"] == "accepted":
+                    encoded = exact_json(receipt)
+                    existing = self.connection.execute(
+                        "SELECT receipt FROM prior WHERE record_id=?", [receipt["record_id"]]
+                    ).fetchone()
+                    if existing is not None and existing[0] != encoded:
+                        raise ValueError("Conflicting selected prior receipts")
+                    self.connection.execute(
+                        "INSERT OR IGNORE INTO prior VALUES (?, ?)", [receipt["record_id"], encoded]
+                    )
+
+    def inherit(self, context, policy, subject):
+        identity = subject_identity(policy, subject)[0]
+        row = self.connection.execute("SELECT receipt FROM prior WHERE record_id=?", [identity]).fetchone()
+        return inherit_receipt(context, None if row is None else _unpack(json.loads(row[0])))
+
+    def inherit_processing(self, context, processing):
+        rows = self.connection.execute("SELECT receipt FROM observations WHERE processing=?", [exact_json(processing)])
+        for row in rows:
+            context = inherit_receipt(context, _unpack(json.loads(row[0])))
+        return context
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        self.connection.close()
+        self._temporary.cleanup()
+
+
+def retire_receipt(receipt: Mapping, *, generation_id: str, reason: str) -> dict:
+    """Retain a removed subject's evidence as an observed historical attempt."""
+    context = inherit_receipt(
+        ReceiptContext(
+            generation_id,
+            receipt["attempt_id"] + ":retired",
+            receipt["processor"],
+            receipt["witnesses"],
+            {"retired_reason": reason},
+        ),
+        receipt,
+    )
+    result = dict(
+        receipt,
+        generation_id=generation_id,
+        outcome="observed",
+        subject_version=None,
+        attempt_id=context.attempt_id,
+        witnesses=list(context.witnesses),
+        diagnostic_json=exact_json(context.diagnostics),
+    )
+    result["receipt_id"] = _digest({k: v for k, v in result.items() if k != "receipt_id"})
+    return result

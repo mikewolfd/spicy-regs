@@ -253,3 +253,10 @@ def test_committee_increment_requires_exact_prior_receipts_before_producer(tmp_p
     subject = pq.read_table(output / "fec_committees.parquet").to_pylist()[0]
     assert subject["cycles"] == [2024, 2024]
     assert subject["candidate_ids"] is None
+    from spicy_regs.etl_receipts import resolve_receipt_witness
+
+    [before] = pq.read_table(prior / "etl_receipts.parquet").to_pylist()
+    [after] = pq.read_table(output / "etl_receipts.parquet").to_pylist()
+    assert after["witnesses"][: len(before["witnesses"])] == before["witnesses"]
+    reference = next(w for w in after["witnesses"] if w["body_version"] == before["receipt_id"])
+    assert resolve_receipt_witness(after, reference)

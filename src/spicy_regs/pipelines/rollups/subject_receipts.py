@@ -7,10 +7,12 @@ native subjects and one generation-bound receipt member; no public mirrors.
 from __future__ import annotations
 
 import inspect
-import json
+import hashlib
 import os
+import json
 import shutil
 from pathlib import Path
+from typing import ClassVar
 
 import pyarrow.parquet as pq
 
@@ -23,20 +25,19 @@ from spicy_regs.congress_receipts import (
     restore_processing_input,
     write_congress_dataset,
 )
-from spicy_regs.etl_receipts import combine_receipts, select_receipts, validate_receipt_bundle
+from spicy_regs.etl_receipts import combine_receipts, read_with_receipts, select_receipts, validate_receipt_bundle
 from spicy_regs.legislative_documents import field_registry
 from spicy_regs.legislative_receipts import (
     FILE_POLICY,
     FILE_STATES,
-    migrate_outputs,
+    write_legislative_outputs,
     policy as legislative_policy,
     restore_prior,
 )
 from spicy_regs.native_types import described_schema
 from spicy_regs.pipelines.rollups.base import RollupPipeline
-from spicy_regs.sources import publication
-from spicy_regs.transforms.regulations_shape import LEGACY_COLUMNS as REGULATIONS
-from spicy_regs.transforms.fec_identity_receipts import dataset_policy as fec_policy, read_identity_rows
+from spicy_regs.transforms.regulations_shape import SOURCE_COLUMNS as REGULATIONS
+from spicy_regs.transforms.fec_identity_receipts import dataset_policy as fec_policy
 from spicy_regs.transforms.fec_identity_context_fields import REGISTRY as FEC
 from spicy_regs.transforms.regulations_receipts import (
     ReceiptInput,
@@ -61,14 +62,13 @@ def dataset_policy(name):
 class SelectedPriors:
     """Capture one publication index and fetch only its pinned subject/receipt pairs."""
 
-    def __init__(self, directory, *, index=None, public_url=None):
+    def __init__(self, directory, *, index=None, public_url=None, root=None):
+        from spicy_regs.selected_generations import SelectedInputs
+
         self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True)
-        self.public_url = public_url if public_url is not None else os.getenv("R2_PUBLIC_URL")
-        self.index = (
-            index
-            if index is not None
-            else (publication.current_index(self.public_url) if self.public_url else publication.empty_index())
+        self.selected = SelectedInputs(
+            root or self.directory, self.directory / "native", index=index, public_url=public_url
         )
         self.restored = {}
         self.selections = {}
@@ -77,46 +77,20 @@ class SelectedPriors:
         if dataset in self.restored:
             return self.restored[dataset]
         selected_policy = dataset_policy(dataset)
-        owner = publication.table_owner(self.index, dataset + ".parquet")
-        receipt_owners = [
-            f for f in self.index["families"].values() if dataset in f.get("etlReceipts", {}).get("datasets", ())
-        ]
-        if not receipt_owners and owner is None:
+        selection = self.selected.select(dataset)
+        if selection is None:
             self.restored[dataset] = None
             return None
-        if not isinstance(self.public_url, str):
-            raise ValueError("Selected remote inputs require their public base URL")
+        subjects, receipt_path, generation = list(selection.subjects), selection.receipts, selection.generation_id
         directory = self.directory / dataset
         directory.mkdir()
-        subjects = []
-        for member in publication.table_members(self.index, dataset + ".parquet") if owner else ():
-            target = directory / "selected" / member.key
-            target.parent.mkdir(parents=True, exist_ok=True)
-            if not publication.fetch_member(self.public_url, member, target, member.path):
-                raise ValueError(f"{dataset}: selected subject unavailable")
-            subjects.append(target)
-        if not receipt_owners:
-            subjects, receipt_path, generation = self._migrate_legacy(dataset, directory, subjects, owner)
-        else:
-            receipts = publication.receipt_members(self.index, dataset=dataset)
-            if len(receipts) != 1 or len(receipt_owners) != 1:
-                raise ValueError(f"{dataset}: ambiguous selected receipt generation")
-            receipt = receipts[0]
-            receipt_path = directory / "etl_receipts.parquet"
-            if not publication.fetch_member(self.public_url, receipt, receipt_path, receipt.path):
-                raise ValueError(f"{dataset}: selected receipts unavailable")
-            generation = receipt_owners[0]["etlReceipts"]["generationId"]
         scoped = select_receipts(receipt_path, directory / "scoped.parquet", dataset=dataset)
         validate_receipt_bundle({dataset: subjects}, [scoped], [selected_policy], generation_id=generation)
         self.selections[dataset] = (subjects, receipt_path, generation)
         output = directory / "processing" / (dataset + ".parquet")
         if dataset in CONGRESS:
             output.parent.mkdir(parents=True, exist_ok=True)
-            if len(subjects) > 1:
-                raise ValueError("Congress processing input unexpectedly partitioned")
-            restore_processing_input(
-                subjects[0] if subjects else None, receipt_path, output, dataset=dataset, generation_id=generation
-            )
+            restore_processing_input(tuple(subjects), receipt_path, output, dataset=dataset, generation_id=generation)
         elif dataset in field_registry():
             files = select_receipts(receipt_path, directory / "file-receipts.parquet", dataset=FILE_STATES)
             bundle = directory / "legislative"
@@ -138,15 +112,13 @@ class SelectedPriors:
             (bundle / "legislative-bundle.json").write_text(json.dumps(manifest))
             output = restore_prior(bundle, directory / "processing")[dataset]
         elif dataset == "fec_committees":
-            if subjects and subjects[0].parent != receipt_path.parent:
-                shutil.copyfile(subjects[0], receipt_path.parent / (dataset + ".parquet"))
             from spicy_regs.transforms.build_fec_committees import COLUMNS, _SCHEMA
             from spicy_regs.transforms.parquet_rows import write_rows
 
             def original_rows():
-                for row in read_identity_rows(receipt_path.parent, dataset, generation_id=generation):
+                for row in read_with_receipts(subjects, [scoped], selected_policy, generation_id=generation):
                     original = row["conversion_inputs"]
-                    yield {name: original.get(name, row.get(name)) for name in COLUMNS}
+                    yield {name: original[name] for name in COLUMNS}
 
             output.parent.mkdir(parents=True, exist_ok=True)
             write_rows(original_rows(), output, _SCHEMA)
@@ -157,63 +129,6 @@ class SelectedPriors:
             materialize_internal(ReceiptInput(dataset, tuple(subjects), receipt_path, generation), output)
         self.restored[dataset] = output
         return output
-
-    def _migrate_legacy(self, dataset, directory, sources, owner):
-        """Qualify pinned old-generation bytes once, then use the ordinary receipt reader."""
-        from hashlib import sha256
-        from uuid import uuid4
-
-        generation = "prior-migration-" + uuid4().hex
-        witnesses = [
-            {
-                "source_id": dataset + ":selected-generation",
-                "source_uri": str(path.resolve()),
-                "sha256": "sha256:" + sha256(path.read_bytes()).hexdigest(),
-                "locator": None,
-                "body_version": owner[1].get("artifactDigest"),
-            }
-            for path in sources
-        ]
-        destination = directory / "migrated"
-        if dataset in field_registry():
-            source = (
-                directory / "selected" / dataset
-                if len(sources) > 1 or sources[0].parent.name.startswith("congress=")
-                else sources[0]
-            )
-            manifest = migrate_outputs([source], destination, generation_id=generation, source_witnesses=witnesses)
-            if manifest["unowned_outputs"] or any(manifest["refused_rows"].values()):
-                raise ValueError(f"{dataset}: selected legacy input conversion refused")
-            subjects = [destination / member for member in manifest["subjects"].get(dataset, ())]
-            receipt = destination / "etl_receipts.parquet"
-        elif dataset in CONGRESS:
-            if len(sources) != 1:
-                raise ValueError("Congress legacy input unexpectedly partitioned")
-            subject, receipt = write_congress_dataset(
-                sources[0], destination, dataset=dataset, generation_id=generation, witnesses=witnesses
-            )
-            subjects = [] if subject is None else [subject]
-        elif dataset in REGULATIONS:
-            if len(sources) != 1:
-                raise ValueError("Regulatory legacy input unexpectedly partitioned")
-            subject, receipt = write_held_dataset(
-                dataset, sources[0], destination, generation_id=generation, witnesses=witnesses
-            )
-            subjects = [subject]
-        else:
-            from spicy_regs.transforms.fec_identity_receipts import IdentityReceiptWriter
-
-            with IdentityReceiptWriter(destination, generation_id=generation, tables=[dataset]) as writer:
-                for path, witness in zip(sources, witnesses, strict=True):
-                    for batch in pq.ParquetFile(path).iter_batches():
-                        for row in batch.to_pylist():
-                            writer.emit(dataset, row, input_witness=witness)
-            subjects = [] if fec_policy(dataset).receipt_only else [destination / (dataset + ".parquet")]
-            receipt = destination / "etl_receipts.parquet"
-        for batch in pq.ParquetFile(receipt).iter_batches(columns=["outcome"]):
-            if any(value in {"refused", "error"} for value in batch.column(0).to_pylist()):
-                raise ValueError(f"{dataset}: selected legacy input conversion refused")
-        return subjects, receipt, generation
 
     def download(self, key, target):
         source = self.get(key.removesuffix(".parquet"))
@@ -240,7 +155,63 @@ class SelectedPriors:
         return tuple(result)
 
 
-class SubjectReceiptRollup(RollupPipeline):
+class NativeReceiptLifecycle:
+    """Prime and build from the same captured native inputs, never convenience copies."""
+
+    output_dir: Path | None
+    inputs: ClassVar[tuple[str, ...]]
+
+    def _new_receipt_work(self, output_dir, snapshot=None):
+        from spicy_regs.selected_generations import unique_build_directory
+
+        private = unique_build_directory(output_dir)
+        prior = SelectedPriors(
+            private / "selected-priors",
+            root=self.output_dir or output_dir,
+            index=snapshot if os.getenv("R2_PUBLIC_URL") else None,
+        )
+        return private, prior
+
+    def _receipt_work(self, output_dir):
+        selected = getattr(self, "_primed_receipt_work", None)
+        self._primed_receipt_work = None
+        if selected is not None:
+            directory, private, prior = selected
+            if directory != output_dir:
+                raise ValueError("Primed native inputs belong to a different build directory")
+            return private, prior
+        return self._new_receipt_work(output_dir)
+
+    def _prime(self, output_dir, snapshot=None):
+        from spicy_regs.sources import publication
+
+        private, prior = self._new_receipt_work(output_dir, snapshot)
+        parents = {}
+        for key in self.inputs:
+            dataset = key.removesuffix(".parquet")
+            if prior.get(dataset) is None:
+                raise ValueError(f"Required selected processing input unavailable: {key}")
+            selection = prior.selected.select(dataset)
+            index = prior.selected.index
+            if index is not None and publication.table_owner(index, key):
+                parents[key] = publication.table_pin(index, key)
+            else:
+                for ordinal, path in enumerate(selection.subjects):
+                    with path.open("rb") as stream:
+                        parents[f"{dataset}/subjects/{ordinal}.parquet"] = {
+                            "sha256": "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest(),
+                            "byteSize": path.stat().st_size,
+                        }
+            with selection.receipts.open("rb") as stream:
+                parents[f"{dataset}/etl_receipts.parquet"] = {
+                    "sha256": "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest(),
+                    "byteSize": selection.receipts.stat().st_size,
+                }
+        self._primed_receipt_work = output_dir, private, prior
+        return parents
+
+
+class SubjectReceiptRollup(NativeReceiptLifecycle, RollupPipeline):
     """Congress, legislative and regulatory producers sharing a complete family."""
 
     def __init_subclass__(cls, **kwargs):
@@ -269,18 +240,18 @@ class SubjectReceiptRollup(RollupPipeline):
         return {p.dataset: described_schema(p.subject_schema) for p in self.receipt_policies if not p.receipt_only}
 
     def build_receipts(self, output_dir, builder, **kwargs):
-        from uuid import uuid4
+        from spicy_regs.selected_generations import remember_selection, SelectedDataset
 
-        private = output_dir / ".builds" / uuid4().hex
-        private.mkdir(parents=True)
-        prior = SelectedPriors(private / "selected-priors")
+        private, prior = self._receipt_work(output_dir)
         work = private / "source-output"
         work.mkdir()
+        candidate = private / "candidate"
+        candidate.mkdir()
         for key in self.inputs:
             if not prior.download(key, work / key):
                 raise ValueError(f"Required selected processing input unavailable: {key}")
         parameters = inspect.signature(builder).parameters
-        if "download_prior" in parameters:
+        if "download_prior" in parameters or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in parameters.values()):
             kwargs["download_prior"] = prior.download
         if "download_members" in parameters:
             kwargs["download_members"] = prior.download_members
@@ -288,7 +259,7 @@ class SubjectReceiptRollup(RollupPipeline):
             built = builder(work, **kwargs)
         except Exception as error:
             if any(p.dataset == ACQUISITION_POLICY.dataset for p in self.receipt_policies):
-                _build_events(output_dir, self.receipt_generation_id, builder.__name__, self.source_evidence, error)
+                _build_events(candidate, self.receipt_generation_id, builder.__name__, self.source_evidence, error)
             raise
         paths = built if isinstance(built, tuple) else (built,)
         observed = {path.name if path.is_dir() else path.stem for path in paths}
@@ -303,11 +274,7 @@ class SubjectReceiptRollup(RollupPipeline):
             destination = private / "datasets" / dataset
             if dataset in CONGRESS:
                 selection = prior.selections.get(dataset)
-                held = (
-                    None
-                    if selection is None
-                    else CongressInput(selection[0][0] if selection[0] else None, selection[1], selection[2])
-                )
+                held = None if selection is None else CongressInput(tuple(selection[0]), selection[1], selection[2])
                 subject, receipt = write_congress_dataset(
                     path, destination, dataset=dataset, generation_id=self.receipt_generation_id, prior=held
                 )
@@ -317,12 +284,17 @@ class SubjectReceiptRollup(RollupPipeline):
                 )
             receipts.append(receipt)
             if subject is not None:
-                target = output_dir / subject.name
+                target = candidate / subject.name
                 shutil.copyfile(subject, target)
                 subjects.append(target)
         if legislative:
             bundle = private / "legislative-bundle"
-            manifest = migrate_outputs(legislative, bundle, generation_id=self.receipt_generation_id)
+            manifest = write_legislative_outputs(
+                legislative,
+                bundle,
+                generation_id=self.receipt_generation_id,
+                prior_receipts=list(dict.fromkeys(v[1] for v in prior.selections.values())),
+            )
             if manifest["unowned_outputs"] or any(manifest["refused_rows"].values()):
                 raise ValueError("Legislative output conversion refused")
             receipts.append(bundle / "etl_receipts.parquet")
@@ -330,21 +302,17 @@ class SubjectReceiptRollup(RollupPipeline):
                 if legislative_policy(name).receipt_only:
                     continue
                 if (bundle / name).is_dir():
-                    target = output_dir / name
-                    if target.exists():
-                        previous = private / "previous" / name
-                        previous.parent.mkdir(parents=True, exist_ok=True)
-                        target.rename(previous)
+                    target = candidate / name
                     shutil.copytree(bundle / name, target)
                 else:
-                    target = output_dir / (name + ".parquet")
+                    target = candidate / (name + ".parquet")
                     shutil.copyfile(bundle / members[0], target)
                 subjects.append(target)
         if any(p.dataset == ACQUISITION_POLICY.dataset for p in self.receipt_policies):
             receipts.append(
-                _build_events(output_dir, self.receipt_generation_id, builder.__name__, self.source_evidence)
+                _build_events(candidate, self.receipt_generation_id, builder.__name__, self.source_evidence)
             )
-        combined = combine_receipts(receipts, output_dir / "etl_receipts.parquet")
+        combined = combine_receipts(receipts, candidate / "etl_receipts.parquet")
         for batch in pq.ParquetFile(combined).iter_batches(columns=["outcome"]):
             if any(value in {"refused", "error"} for value in batch.column(0).to_pylist()):
                 raise ValueError("Subject conversion refused; retained receipts require review")
@@ -354,4 +322,29 @@ class SubjectReceiptRollup(RollupPipeline):
                 sorted(path.rglob("*.parquet")) if path.is_dir() else [path]
             )
         validate_receipt_bundle(by_dataset, [combined], self.receipt_policies, generation_id=self.receipt_generation_id)
-        return tuple(subjects) if self.outputs else subjects[0]
+        # The entire candidate is immutable and validated before any visible
+        # output or selected pointer changes. Failed attempts stay private.
+        visible = []
+        for source in subjects:
+            target = output_dir / source.name
+            if source.is_dir():
+                if target.exists():
+                    previous = private / "previous" / source.name
+                    previous.parent.mkdir(parents=True, exist_ok=True)
+                    target.rename(previous)
+                shutil.copytree(source, target)
+            else:
+                shutil.copyfile(source, target)
+            visible.append(target)
+        shutil.copyfile(combined, output_dir / "etl_receipts.parquet")
+        if not getattr(self, "_defer_native_selection", False):
+            remember_selection(
+                self.output_dir or output_dir,
+                [
+                    SelectedDataset(
+                        policy.dataset, tuple(by_dataset[policy.dataset]), combined, self.receipt_generation_id
+                    )
+                    for policy in self.receipt_policies
+                ],
+            )
+        return tuple(visible) if self.outputs else visible[0]

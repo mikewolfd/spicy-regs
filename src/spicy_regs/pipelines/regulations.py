@@ -105,6 +105,7 @@ class RegulationsPipeline(Pipeline):
         self._merged_attributes: list[str] = []
         self._unresolved: UnresolvedKeys | None = None
         self._publication_index = None
+        self._selected_inputs = None
 
     def _refuse_comments_without_catalog(self) -> None:
         """Comments merge only into the catalog (decision 40), so refuse before any manifest is read."""
@@ -118,10 +119,9 @@ class RegulationsPipeline(Pipeline):
             raise ValueError("A reused manifest cannot be combined with full_refresh")
         output_dir = self.output_dir or (Path.cwd() / "output")
         output_dir.mkdir(parents=True, exist_ok=True)
-        from spicy_regs.sources import publication
-
-        public_url = getenv("R2_PUBLIC_URL")
-        self._publication_index = publication.current_index(public_url) if public_url else publication.empty_index()
+        from spicy_regs.selected_generations import SelectedInputs, unique_build_directory
+        self._selected_inputs = SelectedInputs(output_dir, unique_build_directory(output_dir))
+        self._publication_index = self._selected_inputs.index
         self._pending_text: PendingCommentText | None = None
         self._text_pool: DerivedTextPool | None = None
         started = monotonic()
@@ -173,7 +173,9 @@ class RegulationsPipeline(Pipeline):
 
     def _run(self, manifest: Manifest) -> None:
         state_dir = self.output_dir or (Path.cwd() / "output")
-        output_dir = state_dir / ".processing"
+        from spicy_regs.selected_generations import unique_build_directory
+        build_dir = self._selected_inputs.directory if self._selected_inputs is not None else unique_build_directory(state_dir)
+        output_dir = build_dir / "processing"
         output_dir.mkdir(parents=True, exist_ok=True)
         staging_dir = output_dir / "staging"
         staging_dir.mkdir(parents=True, exist_ok=True)
@@ -296,18 +298,13 @@ class RegulationsPipeline(Pipeline):
         checkpoints = {
             "failed_keys": list(self._unresolved.rows.values())
             if self._unresolved is not None
-            else restore_checkpoint(root, "failed_keys"),
+            else restore_checkpoint(root, "failed_keys", inputs=self._selected_inputs),
             "pending_comment_text": list(self._pending_text.rows.values())
             if self._pending_text is not None
-            else restore_checkpoint(root, "pending_comment_text"),
+            else restore_checkpoint(root, "pending_comment_text", inputs=self._selected_inputs),
         }
-        finish_checkpoints(root, checkpoints, publish=publish, index=self._publication_index)
-        if publish:
-            from spicy_regs.sources import publication
-
-            public_url = getenv("R2_PUBLIC_URL")
-            assert public_url is not None
-            self._publication_index = publication.current_index(public_url)
+        finish_checkpoints(root, checkpoints, publish=publish, inputs=self._selected_inputs)
+        self._publication_index = self._selected_inputs.index if self._selected_inputs is not None else None
 
     def _ingest_comments_chunked(self, agency: str, output_dir: Path, staging_dir: Path, manifest: Manifest) -> None:
         """Ingest one agency's comments in bounded key-chunks, committing each.
@@ -434,10 +431,10 @@ class RegulationsPipeline(Pipeline):
         root = self.output_dir or Path.cwd() / "output"
         for rt in record_types:
             if rt.name != "comments":
-                restore_dataset(root, rt.name, output_dir / f"{rt.name}.parquet", index=self._publication_index)
+                restore_dataset(root, rt.name, output_dir / f"{rt.name}.parquet", inputs=self._selected_inputs)
             table = ATTRIBUTE_TABLES.get(rt.name)
             if table is not None:
-                restore_dataset(root, table, output_dir / f"{table}.parquet", index=self._publication_index)
+                restore_dataset(root, table, output_dir / f"{table}.parquet", inputs=self._selected_inputs)
 
     def _merge_attributes(self, staging_dir: Path, output_dir: Path, table: str) -> bool:
         """Merge this run's attribute rows into the table's working copy, once the full sweep has seeded it.
@@ -512,7 +509,7 @@ class RegulationsPipeline(Pipeline):
         for name in [*non_comment, *iceberg_names, *self._merged_attributes]:
             source = output_dir / f"{name}.parquet"
             if source.exists():
-                finish_dataset(root, name, source, publish=not self.skip_upload, index=self._publication_index)
+                finish_dataset(root, name, source, publish=not self.skip_upload, inputs=self._selected_inputs)
 
         if "comments" in names and staged.get("comments", 0) > 0:
             # Finalization owns the one mirror/index build after the sweep.

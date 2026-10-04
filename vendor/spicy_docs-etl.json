@@ -1,9 +1,7 @@
 {
-  "source_commit": "61425a808877e99bc35aa07f3026349393c5a942",
-  "version": "0.53.0+etl.61425a808877",
-  "wheel": "/Users/mikewolfd/Work/corpora/spicy-regs-etl-split-20261003/merge-source-wheel/dist/spicy_docs-0.53.0+etl.61425a808877-py3-none-any.whl",
-  "sha256": "c97798e2146e61f5b012623411f33e7d394e76b4ddc2ea29398a1ebd8f3d0414",
-  "build_command": "uv build --wheel",
-  "source_stage": "/Users/mikewolfd/Work/corpora/spicy-regs-etl-split-20261003/merge-source-wheel/61425a808877",
-  "published": false
+  "source_commit": "d830f1a9b0296a0866ace51ee70a00f7c7c05cf6",
+  "version": "0.53.0+etl.d830f1a9b029",
+  "filename": "spicy_docs-0.53.0+etl.d830f1a9b029-py3-none-any.whl",
+  "sha256": "754fa3eb05d897f2649f418835c6861aacdd71e9180d28aad89b0d090c28244d",
+  "source_state": "Committed source; local build, not published"
 }

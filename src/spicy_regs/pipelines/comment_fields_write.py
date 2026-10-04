@@ -50,7 +50,10 @@ from spicy_regs.schemas import COMMENT
 from spicy_regs.sources import iceberg
 
 #: The columns a fill writes: the nullable columns added after the catalog table was created, and attachments_json.
-FILL_COLUMNS = (*iceberg._COMMENT_ADDED_COLUMNS, "attachments_json")
+FILL_COLUMNS = (
+    "comment_on_document_id", "comment_on_object_id", "original_document_id", "comment_reference_values_json",
+    "subtype", "duplicate_comments", "attachments_json",
+)
 #: What :func:`prepare` reads of each read copy: the object key naming the copy, the version, and the fill values.
 #: The staged fill input (runbook) holds exactly these.
 READ_COLUMNS = ("key", "comment_id", "modify_date", *FILL_COLUMNS)
@@ -407,8 +410,8 @@ def write(
     resources.configure(con, out / "spill")
     storage_access(con)
     table = iceberg._qualified(COMMENT)
-    from spicy_regs.transforms.regulations_shape import LEGACY_COLUMNS
-    missing = [c for c in FILL_COLUMNS if c not in dict(LEGACY_COLUMNS[COMMENT.name])]
+    from spicy_regs.transforms.regulations_shape import SOURCE_COLUMNS
+    missing = [c for c in FILL_COLUMNS if c not in dict(SOURCE_COLUMNS[COMMENT.name])]
     if missing:
         raise RuntimeError(f"the comments catalog lacks {missing}; the fill never migrates it")
     totals = {"batches": 0, "rows_changed": 0, "files_skipped_verified": len(done)}

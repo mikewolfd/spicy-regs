@@ -6,7 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import duckdb
-import pyarrow as pa
+import polars as pl
 import pyarrow.parquet as pq
 import pytest
 
@@ -25,17 +25,19 @@ def raw(identity="ACF-2006-0058-0001"):
 
 def write(path, rows, table="documents"):
     path.parent.mkdir(parents=True, exist_ok=True)
-    pq.write_table(
-        pa.Table.from_pylist(rows, schema=pa.schema([(c, pa.string()) for c in RECORD_TYPES[table].schema])), path
-    )
+    from tempfile import TemporaryDirectory
+    from spicy_regs.pipelines.regulatory_publication import finish_dataset
+
+    with TemporaryDirectory(dir=path.parent) as temporary:
+        source = Path(temporary) / path.name
+        pl.DataFrame(rows, schema=RECORD_TYPES[table].schema, strict=False).write_parquet(source)
+        finish_dataset(path.parent, table, source, publish=False)
 
 
 def processing_rows(path):
     from tempfile import TemporaryDirectory
     from spicy_regs.pipelines.regulatory_publication import restore_dataset
 
-    if not (path.parent / ".native-state" / (path.stem + ".json")).exists():
-        return pq.read_table(path).to_pylist()
     with TemporaryDirectory(dir=path.parent) as temporary:
         destination = Path(temporary) / path.name
         assert restore_dataset(path.parent, path.stem, destination)
@@ -127,7 +129,11 @@ def test_failed_input_preserves_prior_and_can_retry(tmp_path, fault):
     prior = {**shaped(value), "fr_doc_num": None}
     write(path, [prior])
     if fault == "corrupt_prior":
-        path.write_bytes(b"damaged retained file")
+        selection = json.loads((tmp_path / ".native-state" / "selection.json").read_text())
+        selected_path = Path(selection["documents"]["subjects"][0]["path"])
+        selected_path.write_bytes(b"damaged retained file")
+    selection_path = tmp_path / ".native-state" / "selection.json"
+    selected_before = selection_path.read_bytes()
     before = path.read_bytes()
     values = [deepcopy(value)]
     if fault == "date":
@@ -144,7 +150,24 @@ def test_failed_input_preserves_prior_and_can_retry(tmp_path, fault):
         repair_records(records(), table="documents", output_dir=tmp_path)
     assert path.read_bytes() == before
     assert not (tmp_path / "manifest.parquet").exists()
-    write(path, [prior])
+    assert selection_path.read_bytes() == selected_before
+    if fault == "corrupt_prior":
+        # A fresh source record cannot bypass admission of the selected prior.
+        with pytest.raises(ValueError, match="Selected local native member changed"):
+            repair_records([value], table="documents", output_dir=tmp_path)
+        assert path.read_bytes() == before
+        assert selection_path.read_bytes() == selected_before
+
+        # Recover by explicitly selecting a separately qualified generation;
+        # never repair bytes inside the damaged immutable generation.
+        from spicy_regs.selected_generations import SelectedInputs, remember_selection
+
+        recovery_root = tmp_path / "recovered"
+        write(recovery_root / "documents.parquet", [prior])
+        recovered = SelectedInputs(recovery_root, tmp_path / "recovery-input", public_url="").select("documents")
+        assert recovered is not None
+        remember_selection(tmp_path, [recovered])
+        assert selected_path.read_bytes() == b"damaged retained file"
     repair_records([value], table="documents", output_dir=tmp_path)
     assert processing_rows(path)[0]["fr_doc_num"] == "06-04731"
 
@@ -175,11 +198,8 @@ def catalog(tmp_path, monkeypatch):
 
     def seed(rows):
         with connect() as con:
-            con.execute(f"CREATE SCHEMA IF NOT EXISTS {iceberg._schema_ref()}")
-            con.register(
-                "seed", pa.Table.from_pylist(rows, schema=pa.schema([(c, pa.string()) for c in COMMENT.schema]))
-            )
-            con.execute(f'CREATE TABLE {iceberg._schema_ref()}."comments" AS SELECT * FROM seed')
+            con.register("seed", pl.DataFrame(rows, schema=COMMENT.schema, strict=False).to_arrow())
+            real_replace(con, COMMENT, "seed")
 
     def rows():
         with connect() as con:
@@ -258,23 +278,6 @@ def test_comment_apply_corrects_at_an_equal_timestamp_and_keeps_enrichment(tmp_p
     # A rerun finds nothing left to correct and commits nothing.
     repair_records([raw(COMMENT_ID)], table="comments", output_dir=tmp_path, apply=True)
     assert receipt(tmp_path)["rows"] == [] and receipt(tmp_path)["applied_snapshot"] is None
-
-
-def test_comment_legacy_nullable_fields_migrate_with_native_receipts(tmp_path, catalog):
-    catalog.seed([comment_prior()])
-    with iceberg._connect() as con:
-        for column in iceberg._COMMENT_ADDED_COLUMNS:
-            con.execute(f'ALTER TABLE {iceberg._schema_ref()}."comments" DROP COLUMN "{column}"')
-    before = catalog.rows()
-    repair_records([raw(COMMENT_ID)], table="comments", output_dir=tmp_path)
-    assert receipt(tmp_path)["rows"][0]["comment_reference_values_json"] is not None
-    assert catalog.rows() == before
-    repair_records([raw(COMMENT_ID)], table="comments", output_dir=tmp_path, apply=True, expected_snapshot=1)
-    assert catalog.rows()[0]["comment_reference_values_json"] is not None
-    with iceberg._connect() as con:
-        from spicy_regs.sources.regulatory_catalog import receipts_table
-
-        assert con.execute(f"SELECT count(*) FROM {receipts_table()} WHERE dataset='comments' AND outcome='accepted'").fetchone()[0] == 1
 
 
 def test_comment_repair_keeps_a_newer_prior(tmp_path, catalog):
@@ -371,35 +374,16 @@ def test_correction_takes_the_text_columns_together(fresh_text, expected):
     assert row is not None and row[2:] == expected
 
 
-def test_comment_migrated_write_schema_with_older_snapshot_applies(tmp_path, catalog, monkeypatch):
-    # A genuine nullable-column migration leaves new fields NULL. Non-NULL
-    # current values absent from the historical snapshot are an intervening edit.
-    catalog.seed([{**comment_prior(), **dict.fromkeys(iceberg._COMMENT_ADDED_COLUMNS)}])
-    historical_columns = [c for c in COMMENT.schema if c not in iceberg._COMMENT_ADDED_COLUMNS]
-    projection = ", ".join(f'"{c}"' for c in historical_columns)
-    monkeypatch.setattr(
-        iceberg, "_snapshot_query", lambda rt, snapshot: f"SELECT {projection} FROM {iceberg._qualified(rt)}"
-    )
-    repair_records([raw(COMMENT_ID)], table="comments", output_dir=tmp_path)
-    preview = receipt(tmp_path)
-    assert preview["schema_migration_required"] == []
-    assert preview["snapshot_columns_null_filled"] == []
-    assert preview["changes"][0]["cells"]["comment_reference_values_json"]["before"] is None
-    repair_records([raw(COMMENT_ID)], table="comments", output_dir=tmp_path, apply=True, expected_snapshot=1)
-    assert receipt(tmp_path)["applied_snapshot"]["snapshot_id"] == 2
-    assert catalog.rows()[0]["comment_reference_values_json"] is not None
-
-
 def test_comment_repair_refuses_wrong_current_reference_type(tmp_path, catalog):
     catalog.seed([comment_prior(comment_on_document_id=None)])
     with iceberg._connect() as con:
-        con.execute(f'ALTER TABLE {iceberg._schema_ref()}."comments" ALTER COLUMN comment_on_document_id TYPE INTEGER')
+        con.execute(f"ALTER TABLE {iceberg._qualified(COMMENT)} ALTER COLUMN comment_on_document_id TYPE INTEGER")
     with iceberg._connect() as con:
-        before = con.execute(f'SELECT * FROM {iceberg._schema_ref()}."comments"').fetchall()
-    with pytest.raises(ValueError, match="incompatible types"):
+        before = con.execute(f"SELECT * FROM {iceberg._qualified(COMMENT)}").fetchall()
+    with pytest.raises(ValueError, match="incompatible types|schema"):
         repair_records([raw(COMMENT_ID)], table="comments", output_dir=tmp_path, apply=True)
     with iceberg._connect() as con:
-        assert con.execute(f'SELECT * FROM {iceberg._schema_ref()}."comments"').fetchall() == before
+        assert con.execute(f"SELECT * FROM {iceberg._qualified(COMMENT)}").fetchall() == before
 
 
 def test_comment_repair_refuses_write_after_snapshot_check(tmp_path, catalog, monkeypatch):
@@ -427,7 +411,13 @@ def test_explicit_attachment_relationship_repair_clears_and_preserves_enrichment
     expected = shaped(value)
     write(
         tmp_path / "documents.parquet",
-        [{**expected, "attachment_records_json": '[{"id":"old"}]', "text_content": "retained text"}],
+        [
+            {
+                **expected,
+                "attachment_records_json": '[{"id":"old","type":"attachments","attributes":{}}]',
+                "text_content": "retained text",
+            }
+        ],
     )
     url = document_attachments_url(identity)
     capture = CapturedBodyResponse(

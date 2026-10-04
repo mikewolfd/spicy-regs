@@ -21,11 +21,23 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from spicy_regs.etl_receipts import (
-    DatasetPolicy, ReceiptContext, combine_receipts, failure_receipt,
-    read_attempts, read_with_receipts, select_receipts, split_record, validate_receipt_bundle, write_dataset,
+    DatasetPolicy,
+    ReceiptContext,
+    ReceiptLineage,
+    combine_receipts,
+    failure_receipt,
+    read_attempts,
+    read_with_receipts,
+    select_receipts,
+    split_record,
+    validate_receipt_bundle,
+    write_dataset,
 )
 from spicy_regs.legislative_documents import (
-    LegislativeShapeError, field_registry, map_subject, subject_schema,
+    LegislativeShapeError,
+    field_registry,
+    map_subject,
+    subject_schema,
 )
 from spicy_regs.transforms.parquet_rows import write_rows
 
@@ -38,8 +50,12 @@ FILE_POLICY = DatasetPolicy(FILE_STATES, pa.schema([]), (), ("file_state",), rec
 def policy(dataset: str) -> DatasetPolicy:
     spec = field_registry()[dataset]
     return DatasetPolicy(
-        dataset, subject_schema(dataset), () if spec["processing_only"] else tuple(spec["identity_fields"]),
-        (RAW,), policy_version="legislative-documents/1", receipt_only=spec["processing_only"],
+        dataset,
+        subject_schema(dataset),
+        () if spec["processing_only"] else tuple(spec["identity_fields"]),
+        (RAW,),
+        policy_version="legislative-documents/1",
+        receipt_only=spec["processing_only"],
     )
 
 
@@ -53,6 +69,7 @@ def split_source_row(dataset: str, row: Mapping[str, Any], context: ReceiptConte
         mapped = mapped_record(dataset, row)
     except LegislativeShapeError as error:
         from dataclasses import replace
+
         failed_context = replace(context, diagnostics=dict(context.diagnostics) | {"conversion_error": str(error)})
         return None, failure_receipt(policy(dataset), failed_context, outcome="refused", raw_fields={RAW: dict(row)})
     return split_record(policy(dataset), mapped, context)
@@ -74,9 +91,13 @@ def _members(path: Path) -> list[Path]:
     return sorted(path.rglob("*.parquet")) if path.is_dir() else [path]
 
 
-def migrate_outputs(
-    outputs: Sequence[Path], destination: Path, *, generation_id: str,
+def write_legislative_outputs(
+    outputs: Sequence[Path],
+    destination: Path,
+    *,
+    generation_id: str,
     source_witnesses: Sequence[Mapping] = (),
+    prior_receipts: Sequence[Path] = (),
 ) -> dict:
     """Create a new local bundle from explicit producer outputs, preserving partitions.
 
@@ -88,8 +109,13 @@ def migrate_outputs(
         raise FileExistsError(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
     manifest: dict[str, Any] = {
-        "generation_id": generation_id, "subjects": {}, "datasets": [], "source_outputs": {},
-        "unowned_outputs": [], "refused_rows": {}, "receipt_file": "etl_receipts.parquet",
+        "generation_id": generation_id,
+        "subjects": {},
+        "datasets": [],
+        "source_outputs": {},
+        "unowned_outputs": [],
+        "refused_rows": {},
+        "receipt_file": "etl_receipts.parquet",
     }
     with TemporaryDirectory(prefix=".legislative-", dir=destination.parent) as temporary:
         stage = Path(temporary) / "bundle"
@@ -107,39 +133,91 @@ def migrate_outputs(
             manifest["subjects"][dataset] = []
             manifest["source_outputs"][dataset] = str(output.resolve())
             manifest["refused_rows"][dataset] = 0
-            for member_index, member in enumerate(_members(output)):
+            members = _members(output)
+            if output.is_dir() and not members:
+                # An empty partitioned table has no physical member. Its receipt
+                # records successful emptiness, without inventing a partition key.
+                from spicy_regs.etl_receipts import exact_json
+
+                state = {"dataset": dataset, "relative_path": None, "partitioned": True, "rows": 0}
+                witness = {
+                    "source_id": dataset,
+                    "source_uri": None,
+                    "sha256": "sha256:" + hashlib.sha256(exact_json(state).encode()).hexdigest(),
+                    "locator": "receipt.values.file_state",
+                    "body_version": None,
+                }
+                states.append(
+                    (
+                        {"file_state": state},
+                        ReceiptContext(generation_id, f"{dataset}/empty", "legislative-documents/1", [witness]),
+                    )
+                )
+                (stage / dataset).mkdir()
+            for member_index, member in enumerate(members):
                 digest = _sha(member)
-                relative = str(member.relative_to(output)) if output.is_dir() else member.name
-                witness = {"source_id": dataset, "source_uri": member.resolve().as_uri(), "sha256": digest,
-                           "locator": None, "body_version": None}
-                member_context = ReceiptContext(generation_id, f"{dataset}/member/{member_index}",
-                                                "legislative-documents/1", [witness, *source_witnesses])
+                relative = (
+                    str(member.relative_to(output))
+                    if output.is_dir() and member.is_relative_to(output)
+                    else member.name
+                )
+                retained_member = destination / member.relative_to(stage) if member.is_relative_to(stage) else member
+                witness = {
+                    "source_id": dataset,
+                    "source_uri": retained_member.resolve().as_uri(),
+                    "sha256": digest,
+                    "locator": None,
+                    "body_version": None,
+                }
+                member_context = ReceiptContext(
+                    generation_id,
+                    f"{dataset}/member/{member_index}",
+                    "legislative-documents/1",
+                    [witness, *source_witnesses],
+                )
                 with pq.ParquetFile(member) as source:
-                    file_state = {"dataset": dataset, "relative_path": relative, "partitioned": output.is_dir(),
-                                  "schema": source.schema_arrow.serialize().to_pybytes(),
-                                  "metadata": list((source.metadata.metadata or {}).items()), "sha256": digest,
-                                  "source_path": str(member.resolve()), "rows": source.metadata.num_rows}
+                    file_state = {
+                        "dataset": dataset,
+                        "relative_path": relative,
+                        "partitioned": output.is_dir(),
+                        "schema": source.schema_arrow.serialize().to_pybytes(),
+                        "metadata": list((source.metadata.metadata or {}).items()),
+                        "sha256": digest,
+                        "source_path": str(retained_member.resolve()),
+                        "rows": source.metadata.num_rows,
+                    }
                 states.append(({"file_state": file_state}, member_context))
                 failures = []
 
                 def records():
                     for row_index, row in enumerate(_rows(member)):
                         context = ReceiptContext(
-                            generation_id, f"{dataset}/{member_index}/{row_index}", "legislative-documents/1",
+                            generation_id,
+                            f"{dataset}/{member_index}/{row_index}",
+                            "legislative-documents/1",
                             [dict(witness, locator=f"row:{row_index}"), *source_witnesses],
                         )
                         try:
                             mapped = mapped_record(dataset, row)
                         except LegislativeShapeError as error:
                             from dataclasses import replace
+
                             failed = replace(context, diagnostics={"conversion_error": str(error)})
-                            failures.append(failure_receipt(policy(dataset), failed, outcome="refused", raw_fields={RAW: row}))
+                            failures.append(
+                                failure_receipt(policy(dataset), failed, outcome="refused", raw_fields={RAW: row})
+                            )
                             manifest["refused_rows"][dataset] += 1
                             continue
-                        yield mapped, context
+                        yield (
+                            mapped,
+                            lineage.inherit(context, policy(dataset), mapped)
+                            if not policy(dataset).receipt_only
+                            else lineage.inherit_processing(context, mapped),
+                        )
 
                 shard_dir = stage / ".shards" / dataset / str(member_index)
-                subject, receipts = write_dataset(records(), shard_dir, policy(dataset), failures=failures)
+                with ReceiptLineage(prior_receipts, dataset=dataset) as lineage:
+                    subject, receipts = write_dataset(records(), shard_dir, policy(dataset), failures=failures)
                 receipt_shards.append(receipts)
                 if subject is not None:
                     final_relative = f"{dataset}/{relative}" if output.is_dir() else f"{dataset}.parquet"
@@ -154,13 +232,15 @@ def migrate_outputs(
         combine_receipts(receipt_shards, stage / manifest["receipt_file"])
         validate_receipt_bundle(
             {name: [stage / f for f in paths] for name, paths in manifest["subjects"].items()} | {FILE_STATES: []},
-            [stage / manifest["receipt_file"]], [policy(n) for n in manifest["datasets"]] + [FILE_POLICY],
+            [stage / manifest["receipt_file"]],
+            [policy(n) for n in manifest["datasets"]] + [FILE_POLICY],
             generation_id=generation_id,
         )
         # Staging shards are private duplicates; the admitted bundle has one shared receipt member.
         shutil.rmtree(stage / ".shards")
         (stage / "legislative-bundle.json").write_text(json.dumps(manifest, indent=2) + "\n")
         from rulespec_artifacts import publish_directory_no_replace
+
         publish_directory_no_replace(stage, destination)
     return manifest
 
@@ -168,7 +248,9 @@ def migrate_outputs(
 def _processing_rows(receipts: Path, dataset_policy: DatasetPolicy, generation_id: str) -> Iterable[dict]:
     """Read receipt-only source observations through the shared verified API."""
     validate_receipt_bundle({dataset_policy.dataset: []}, [receipts], [dataset_policy], generation_id=generation_id)
-    for receipt in read_attempts([receipts], dataset_policy, generation_id=generation_id, outcomes=frozenset({"observed"})):
+    for receipt in read_attempts(
+        [receipts], dataset_policy, generation_id=generation_id, outcomes=frozenset({"observed"})
+    ):
         yield receipt["processing_fields"]
 
 
@@ -189,7 +271,9 @@ def restore_prior(bundle: Path, destination: Path) -> dict[str, Path]:
         receipts = bundle / manifest["receipt_file"]
         validate_receipt_bundle(
             {n: [bundle / p for p in paths] for n, paths in manifest["subjects"].items()} | {FILE_STATES: []},
-            [receipts], [policy(n) for n in manifest["datasets"]] + [FILE_POLICY], generation_id=generation,
+            [receipts],
+            [policy(n) for n in manifest["datasets"]] + [FILE_POLICY],
+            generation_id=generation,
         )
         file_receipts = select_receipts(receipts, selected / "files.parquet", dataset=FILE_STATES)
         file_states = [r["file_state"] for r in _processing_rows(file_receipts, FILE_POLICY, generation)]
@@ -200,6 +284,7 @@ def restore_prior(bundle: Path, destination: Path) -> dict[str, Path]:
             states = [s for s in file_states if s["dataset"] == dataset]
             if not states or len({s["relative_path"] for s in states}) != len(states):
                 raise ValueError("Missing or duplicate retained source file state")
+
             # Receipt inputs retain the exact source spelling, including native
             # null versus absent JSON properties. File-state receipts preserve
             # processing footer metadata even for successful empty tables.
@@ -216,7 +301,9 @@ def restore_prior(bundle: Path, destination: Path) -> dict[str, Path]:
                         yield raw
                 else:
                     for record in read_with_receipts(
-                        [bundle / p for p in manifest["subjects"][dataset]], [dataset_receipts], dataset_policy,
+                        [bundle / p for p in manifest["subjects"][dataset]],
+                        [dataset_receipts],
+                        dataset_policy,
                         generation_id=generation,
                     ):
                         raw = record[RAW]
@@ -226,7 +313,16 @@ def restore_prior(bundle: Path, destination: Path) -> dict[str, Path]:
 
             expected = iter(source_rows())
             for state in states:
-                relative = Path(dataset) / state["relative_path"] if state["partitioned"] else Path(f"{dataset}.parquet")
+                if state["relative_path"] is None:
+                    if len(states) != 1 or not state["partitioned"] or state["rows"] != 0:
+                        raise ValueError("Invalid empty partitioned source state")
+                    target = destination / dataset
+                    target.mkdir(parents=True)
+                    outputs[dataset] = target
+                    continue
+                relative = (
+                    Path(dataset) / state["relative_path"] if state["partitioned"] else Path(f"{dataset}.parquet")
+                )
                 if relative.is_absolute() or ".." in relative.parts:
                     raise ValueError("Invalid retained member path")
                 target = destination / relative
@@ -242,8 +338,13 @@ def restore_prior(bundle: Path, destination: Path) -> dict[str, Path]:
 
 
 def build_with_receipts(
-    builder: Callable[..., Path | tuple[Path, ...]], source_directory: Path, destination: Path,
-    *, generation_id: str, prior_bundle: Path | None = None, builder_kwargs: Mapping[str, Any] | None = None,
+    builder: Callable[..., Path | tuple[Path, ...]],
+    source_directory: Path,
+    destination: Path,
+    *,
+    generation_id: str,
+    prior_bundle: Path | None = None,
+    builder_kwargs: Mapping[str, Any] | None = None,
     source_witnesses: Sequence[Mapping] = (),
 ) -> dict:
     """Run an actual family producer with verified priors, then split its outputs.
@@ -259,7 +360,9 @@ def build_with_receipts(
     if prior_bundle is not None:
         prior_manifest = json.loads((prior_bundle / "legislative-bundle.json").read_text())
         if prior_manifest["unowned_outputs"]:
-            raise ValueError("Mixed-owner producer requires the integrated family prior; owned-only rows cannot qualify it")
+            raise ValueError(
+                "Mixed-owner producer requires the integrated family prior; owned-only rows cannot qualify it"
+            )
     priors = {} if prior_bundle is None else restore_prior(prior_bundle, source_directory / ".verified-prior")
 
     def download_prior(key: str, target: Path) -> bool:
@@ -290,8 +393,13 @@ def build_with_receipts(
     if "download_members" in inspect.signature(builder).parameters:
         kwargs["download_members"] = download_members
     built = builder(source_directory, download_prior=download_prior, **kwargs)
-    return migrate_outputs(built if isinstance(built, tuple) else (built,), destination,
-                           generation_id=generation_id, source_witnesses=source_witnesses)
+    return write_legislative_outputs(
+        built if isinstance(built, tuple) else (built,),
+        destination,
+        generation_id=generation_id,
+        source_witnesses=source_witnesses,
+        prior_receipts=() if prior_bundle is None else (prior_bundle / "etl_receipts.parquet",),
+    )
 
 
 def admit_bundle(bundle: Path, destination: Path, *, family: str = "legislative-documents"):
@@ -315,11 +423,15 @@ def admit_bundle(bundle: Path, destination: Path, *, family: str = "legislative-
             files.append(bundle / f"{dataset}.parquet")
     policies = [policy(n) for n in manifest["datasets"]] + [FILE_POLICY]
     artifact = build_generation(
-        destination, family=family, files=files,
+        destination,
+        family=family,
+        files=files,
         expected_keys=tuple(p.dataset + ".parquet" for p in policies if not p.receipt_only),
         schemas={p.dataset: described_schema(p.subject_schema) for p in policies if not p.receipt_only},
-        partitioned=partitions, publication_status="local-partial",
-        receipt_path=bundle / manifest["receipt_file"], receipt_policies=policies,
+        partitioned=partitions,
+        publication_status="local-partial",
+        receipt_path=bundle / manifest["receipt_file"],
+        receipt_policies=policies,
         receipt_generation_id=manifest["generation_id"],
     )
     verify_generation(destination, expected_pin=artifact.pin)

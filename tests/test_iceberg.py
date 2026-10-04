@@ -1,31 +1,38 @@
-"""Tests for the R2 Data Catalog (Iceberg) connector.
+"""Native regulatory catalog merge, rollback, paired export, and text updates.
 
-The live ``merge_and_export`` needs a real R2 Data Catalog, so these tests
-exercise the catalog-independent pieces — the SQL building / dedup / export
-logic — against a *local* in-memory DuckDB attached under the same alias the
-connector uses. ``_ensure_table``, ``_merge``, and ``_export_parquet`` all take
-the connection as an argument precisely so this is possible without network.
-
-A genuinely end-to-end run against R2 is covered by the manual
-"ETL (new pipeline – vetting)" workflow with ``--use-iceberg``.
+A local DuckDB catalog exercises actual subject and receipt writes. REST-engine
+transactions remain covered separately by catalog integration tests.
 """
 
 from pathlib import Path
-from dataclasses import replace
 
 import duckdb
 import polars as pl
 import pytest
 
-from spicy_regs.schemas import COMMENT as SOURCE_COMMENT, DOCKET as SOURCE_DOCKET
+from spicy_regs.schemas import COMMENT, DOCKET
 from spicy_regs.sources import iceberg
+from spicy_regs.sources import regulatory_catalog as native
 
-# These tests exercise the reusable legacy catalog algorithms on unregistered fixtures.
-# Production regulatory policies and atomic pairs are covered in test_regulatory_native_catalog.
-COMMENT = replace(SOURCE_COMMENT, name="fixture_comments")
-DOCKET = replace(SOURCE_DOCKET, name="fixture_dockets")
+def _source(con, record_type, rows, name='incoming'):
+    full = [{c: row.get(c) for c in record_type.schema} for row in rows]
+    con.register('_test_source', pl.DataFrame(full, schema=record_type.schema).to_arrow())
+    try:
+        con.execute(f'CREATE OR REPLACE TEMP TABLE {name} AS SELECT * FROM _test_source')
+    finally:
+        con.unregister('_test_source')
+    return name
 
 
+def _put(con, record_type, rows):
+    iceberg.replace_rows(con, record_type, _source(con, record_type, rows))
+
+
+def _fresh(con, record_type, *, where='TRUE', name='fresh'):
+    prior = native.processing_table(con, record_type)
+    con.execute(f'CREATE TEMP TABLE {name} AS SELECT * FROM {prior} WHERE {where}')
+    con.execute(f'DROP TABLE {prior}')
+    return name
 
 
 def _write_staging(staging_dir: Path, agency: str, rows: list[dict]) -> None:
@@ -155,8 +162,10 @@ def test_replacement_failure_after_write_rolls_back(local_catalog) -> None:
     con = local_catalog
     iceberg._ensure_table(con, DOCKET)
     table = iceberg._qualified(DOCKET)
-    con.execute(f"INSERT INTO {table} (docket_id,title) VALUES ('D','old')")
-    con.execute(f"CREATE TEMP TABLE fresh AS SELECT * REPLACE ('new' AS title) FROM {table}")
+    _put(con, DOCKET, [dict(docket_id='D', title='old')])
+    _fresh(con, DOCKET)
+    con.execute("UPDATE fresh SET title='new'")
+    prior_receipts = con.execute(f'SELECT * FROM {native.receipts_table()}').fetchall()
 
     class FailingCon:
         def execute(self, sql, *args, **kwargs):
@@ -168,48 +177,27 @@ def test_replacement_failure_after_write_rolls_back(local_catalog) -> None:
     with pytest.raises(RuntimeError, match="readback failure"):
         iceberg.replace_rows(FailingCon(), DOCKET, "fresh")
     assert con.execute(f"SELECT docket_id,title FROM {table}").fetchall() == [('D', 'old')]
+    assert con.execute(f'SELECT * FROM {native.receipts_table()}').fetchall() == prior_receipts
     iceberg.replace_rows(con, DOCKET, "fresh")
     assert con.execute(f"SELECT docket_id,title FROM {table}").fetchall() == [('D', 'new')]
 
 
-def test_replacement_reads_the_catalog_table_once_before_merging(local_catalog) -> None:
-    """The prior and duplicate checks read one in-transaction copy, not the live table."""
+def test_scoped_replacement_preserves_other_agency_and_refuses_collision(local_catalog):
     con = local_catalog
-    iceberg._ensure_table(con, DOCKET)
-    table = iceberg._qualified(DOCKET)
-    con.execute(f"INSERT INTO {table} (docket_id,title) VALUES ('D','old'),('E','other')")
-    con.execute(f"CREATE TEMP TABLE prior AS SELECT * FROM {table} WHERE docket_id='D'")
-    con.execute("CREATE TEMP TABLE fresh AS SELECT * REPLACE ('new' AS title) FROM prior")
-    statements: list[str] = []
-
-    class Recording:
-        def execute(self, sql, *args, **kwargs):
-            statements.append(sql)
-            return con.execute(sql, *args, **kwargs)
-
-    iceberg.replace_rows(Recording(), DOCKET, "fresh", expected_prior="prior")
-    begin, commit = statements.index("BEGIN"), statements.index("COMMIT")
-    reads = [sql.split()[0] for sql in statements[begin:commit] if table in sql]
-    assert reads == ["CREATE", "MERGE", "SELECT"]
-    assert con.execute(f"SELECT docket_id,title FROM {table} ORDER BY 1").fetchall() == [("D", "new"), ("E", "other")]
-    assert not con.execute("SELECT 1 FROM duckdb_tables() WHERE table_name LIKE '_replace_target%'").fetchall()
-
-
-def test_scoped_replacement_leaves_same_key_outside_scope(local_catalog) -> None:
-    con = local_catalog
-    iceberg._ensure_table(con, COMMENT)
-    table = iceberg._qualified(COMMENT)
-    con.execute(f"INSERT INTO {table} (comment_id,agency_code,text_content) VALUES ('c1','EPA',NULL),('c1','FAA','kept')")
-    con.execute(f"CREATE TEMP TABLE prior AS SELECT * FROM {table} WHERE agency_code='EPA'")
+    _put(con, COMMENT, [dict(comment_id='c1', agency_code='EPA'),
+                        dict(comment_id='c2', agency_code='FAA', text_content='kept')])
+    _fresh(con, COMMENT, where="agency_code='EPA'", name='prior')
     con.execute("CREATE TEMP TABLE fresh AS SELECT * REPLACE ('filled' AS text_content) FROM prior")
-    iceberg.replace_rows(con, COMMENT, "fresh", expected_prior="prior", scope={"agency_code": "EPA"})
-    assert con.execute(f"SELECT agency_code,text_content FROM {table} ORDER BY 1").fetchall() == [
-        ("EPA", "filled"), ("FAA", "kept"),
-    ]
-    with pytest.raises(ValueError, match="outside the requested scope"):
-        iceberg.replace_rows(con, COMMENT, "fresh", scope={"agency_code": "FAA"})
-    with pytest.raises(ValueError, match="unknown columns"):
-        iceberg.replace_rows(con, COMMENT, "fresh", scope={"agency": "EPA"})
+    iceberg.replace_rows(con, COMMENT, 'fresh', expected_prior='prior', scope={'agency_code': 'EPA'})
+    assert con.execute(f'SELECT agency_code,text_content FROM {iceberg._qualified(COMMENT)} ORDER BY 1').fetchall() == [
+        ('EPA', 'filled'), ('FAA', 'kept')]
+    with pytest.raises(ValueError, match='within scope'):
+        iceberg.replace_rows(con, COMMENT, 'fresh', scope={'agency_code': 'FAA'})
+    with pytest.raises(ValueError, match='unknown columns'):
+        iceberg.replace_rows(con, COMMENT, 'fresh', scope={'agency': 'EPA'})
+    con.execute("UPDATE fresh SET agency_code='FAA'")
+    with pytest.raises(ValueError, match='another scope'):
+        iceberg.replace_rows(con, COMMENT, 'fresh', scope={'agency_code': 'FAA'})
 
 
 def test_unlocked_catalog_write_warns_once(local_catalog, monkeypatch) -> None:
@@ -217,9 +205,7 @@ def test_unlocked_catalog_write_warns_once(local_catalog, monkeypatch) -> None:
 
     con = local_catalog
     iceberg._ensure_table(con, DOCKET)
-    con.execute("CREATE TEMP TABLE fresh AS SELECT 'D' AS docket_id")
-    con.execute(f"CREATE TEMP TABLE fresh_full AS SELECT * FROM {iceberg._qualified(DOCKET)} UNION ALL "
-                "BY NAME SELECT * FROM fresh")
+    _source(con, DOCKET, [dict(docket_id='D')], 'fresh_full')
     monkeypatch.setattr(iceberg, "_warned_unlocked", set())
     messages: list[str] = []
     sink = logger.add(messages.append, level="WARNING", format="{message}")
@@ -241,12 +227,13 @@ def test_replacement_refuses_duplicate_identities_before_writing(local_catalog, 
     con = local_catalog
     iceberg._ensure_table(con, DOCKET)
     table = iceberg._qualified(DOCKET)
-    con.execute(f"INSERT INTO {table} (docket_id,title) VALUES ('D','old')")
-    con.execute(f"CREATE TEMP TABLE fresh AS SELECT * REPLACE ('new' AS title) FROM {table}")
+    _put(con, DOCKET, [dict(docket_id='D', title='old')])
+    _fresh(con, DOCKET)
+    con.execute("UPDATE fresh SET title='new'")
     duplicate_table = "fresh" if side == "source" else table
     con.execute(f"INSERT INTO {duplicate_table} SELECT * FROM {duplicate_table}")
     before = con.execute(f"SELECT * FROM {table}").fetchall()
-    with pytest.raises(ValueError, match="identities"):
+    with pytest.raises(ValueError, match="identities|reused subject receipt"):
         iceberg.replace_rows(con, DOCKET, "fresh")
     assert con.execute(f"SELECT * FROM {table}").fetchall() == before
 
@@ -271,8 +258,14 @@ def test_export_parquet_matches_published_shape(tmp_path, local_catalog) -> None
 
     df = pl.read_parquet(out_file)
     # Same columns as the published schema, sorted by (agency_code, modify_date).
-    assert df.columns == list(DOCKET.schema)
-    assert df["docket_id"].to_list() == ["EPA-1", "EPA-2"]
+    assert df.columns == native.policy('dockets').subject_schema.names
+    assert sorted(df["docket_id"].to_list()) == ["EPA-1", "EPA-2"]
+    from spicy_regs.etl_receipts import validate_receipt_bundle
+    import json
+    pair = out / '.catalog-pairs/dockets'
+    generation = json.loads((pair / 'generation.json').read_text())['generation_id']
+    validate_receipt_bundle({'dockets': [out_file]}, [pair / 'etl_receipts.parquet'],
+                           [native.policy('dockets')], generation_id=generation)
 
 
 def test_merge_and_export_noop_without_staging(tmp_path) -> None:
@@ -356,147 +349,6 @@ def test_merge_comments_noop_without_staging(tmp_path) -> None:
     assert iceberg.merge_comments(tmp_path / "empty", COMMENT) == 0
 
 
-# --- catalog seed loader ---------------------------------------------------
-
-
-def _write_partition(comments_dir: Path, agency: str, docket: str, year: int, month: int, rows: list[dict]) -> None:
-    """Write a published-layout partition file: agency_code=/docket_id=/year=/month=/part-0.parquet."""
-    part = comments_dir / f"agency_code={agency}" / f"docket_id={docket}" / f"year={year}" / f"month={month}"
-    part.mkdir(parents=True, exist_ok=True)
-    pl.DataFrame(rows, schema=COMMENT.schema).write_parquet(part / "part-0.parquet")
-
-
-def test_seed_comments_from_parquet_loads_partition_tree(tmp_path, local_catalog) -> None:
-    """The seed loader copies the published partition tree into the catalog table."""
-    con = local_catalog
-    iceberg._ensure_table(con, COMMENT)
-
-    comments_dir = tmp_path / "comments"
-    _write_partition(
-        comments_dir,
-        "EPA",
-        "EPA-1",
-        2025,
-        1,
-        [
-            _comment("c1", "EPA-1", "EPA", "2025-01-15T00:00:00Z"),
-            _comment("c2", "EPA-1", "EPA", "2025-01-20T00:00:00Z"),
-        ],
-    )
-    _write_partition(
-        comments_dir,
-        "EPA",
-        "EPA-1",
-        2025,
-        2,
-        [_comment("c3", "EPA-1", "EPA", "2025-02-03T00:00:00Z")],
-    )
-
-    glob = str(comments_dir / "agency_code=EPA/docket_id=*/year=*/month=*/part-0.parquet")
-    total = iceberg.seed_comments_from_parquet(con, glob, COMMENT)
-    assert total == 3
-
-    # agency_code / docket_id survive as real columns (read with hive off).
-    rows = con.execute(
-        f"SELECT comment_id, agency_code, docket_id FROM {iceberg._qualified(COMMENT)} ORDER BY comment_id"
-    ).fetchall()
-    assert rows == [
-        ("c1", "EPA", "EPA-1"),
-        ("c2", "EPA", "EPA-1"),
-        ("c3", "EPA", "EPA-1"),
-    ]
-
-
-def test_seed_comments_replace_agency_is_idempotent(tmp_path, local_catalog) -> None:
-    """Loading the same agency twice with replace must not duplicate rows."""
-    con = local_catalog
-    iceberg._ensure_table(con, COMMENT)
-
-    comments_dir = tmp_path / "comments"
-    _write_partition(
-        comments_dir,
-        "EPA",
-        "EPA-1",
-        2025,
-        1,
-        [
-            _comment("c1", "EPA-1", "EPA", "2025-01-15T00:00:00Z"),
-            _comment("c2", "EPA-1", "EPA", "2025-01-20T00:00:00Z"),
-        ],
-    )
-    glob = str(comments_dir / "agency_code=EPA/docket_id=*/year=*/month=*/part-0.parquet")
-
-    first = iceberg.seed_comments_from_parquet(con, glob, COMMENT, "EPA", replace=True)
-    assert first == 2
-    # Re-running the same agency replaces, not appends.
-    second = iceberg.seed_comments_from_parquet(con, glob, COMMENT, "EPA", replace=True)
-    assert second == 2
-
-    # A different agency present in the table is untouched by replacing EPA.
-    _write_partition(
-        comments_dir,
-        "DOL",
-        "DOL-1",
-        2025,
-        3,
-        [_comment("d1", "DOL-1", "DOL", "2025-03-01T00:00:00Z")],
-    )
-    dol_glob = str(comments_dir / "agency_code=DOL/docket_id=*/year=*/month=*/part-0.parquet")
-    iceberg.seed_comments_from_parquet(con, dol_glob, COMMENT, "DOL", replace=True)
-    iceberg.seed_comments_from_parquet(con, glob, COMMENT, "EPA", replace=True)  # again
-    counts = dict(
-        con.execute(f"SELECT agency_code, count(*) FROM {iceberg._qualified(COMMENT)} GROUP BY agency_code").fetchall()
-    )
-    assert counts == {"EPA": 2, "DOL": 1}
-
-
-def test_seed_comments_loads_one_agency_from_a_monolithic_source(tmp_path, local_catalog) -> None:
-    """The fork has no partition tree: each agency loads from comments.parquet alone."""
-    con = local_catalog
-    iceberg._ensure_table(con, COMMENT)
-    source = tmp_path / "comments.parquet"
-    pl.DataFrame(
-        [
-            _comment("c1", "EPA-1", "EPA", "2025-01-15T00:00:00Z"),
-            _comment("d1", "DOL-1", "DOL", "2025-03-01T00:00:00Z"),
-            _comment("c2", "EPA-1", "EPA", "2025-01-20T00:00:00Z"),
-        ],
-        schema=COMMENT.schema,
-    ).write_parquet(source)
-
-    assert iceberg.seed_comments_from_parquet(con, str(source), COMMENT, "EPA") == 2
-    assert iceberg.seed_comments_from_parquet(con, str(source), COMMENT, "EPA", replace=True) == 2
-    assert iceberg.seed_comments_from_parquet(con, str(source), COMMENT, "DOL") == 3
-    rows = con.execute(f"SELECT comment_id FROM {iceberg._qualified(COMMENT)} ORDER BY comment_id").fetchall()
-    assert rows == [("c1",), ("c2",), ("d1",)]
-    with pytest.raises(ValueError, match="agency"):
-        iceberg.seed_comments_from_parquet(con, str(source), COMMENT, replace=True)
-
-
-def test_seed_comments_tolerates_missing_columns(tmp_path, local_catalog) -> None:
-    """An older partition missing a later-added column loads with NULLs, not an error."""
-    con = local_catalog
-    iceberg._ensure_table(con, COMMENT)
-
-    # A partition file written with a reduced (older) schema — no text_content etc.
-    reduced = {"comment_id": pl.Utf8, "docket_id": pl.Utf8, "agency_code": pl.Utf8, "posted_date": pl.Utf8}
-    part = tmp_path / "comments" / "agency_code=EPA" / "docket_id=EPA-9" / "year=2024" / "month=5"
-    part.mkdir(parents=True, exist_ok=True)
-    pl.DataFrame(
-        [{"comment_id": "old1", "docket_id": "EPA-9", "agency_code": "EPA", "posted_date": "2024-05-01T00:00:00Z"}],
-        schema=reduced,
-    ).write_parquet(part / "part-0.parquet")
-
-    glob = str(tmp_path / "comments" / "agency_code=*/docket_id=*/year=*/month=*/part-0.parquet")
-    total = iceberg.seed_comments_from_parquet(con, glob, COMMENT)
-    assert total == 1
-
-    text_content = con.execute(
-        f"SELECT text_content FROM {iceberg._qualified(COMMENT)} WHERE comment_id = 'old1'"
-    ).fetchone()[0]
-    assert text_content is None
-
-
 @pytest.mark.parametrize("options", [{}, {"memory_limit": "64MB", "threads": 1}])
 def test_export_public_comments_rebuilds_mirror(tmp_path, local_catalog, monkeypatch, options) -> None:
     """export_public_comments writes the public monolith + index straight from the
@@ -531,7 +383,6 @@ def test_export_public_comments_rebuilds_mirror(tmp_path, local_catalog, monkeyp
 
     out = tmp_path / "output"
     monkeypatch.setattr(iceberg, "_read_snapshot", lambda *_: iceberg.CatalogSnapshot("local", 1, 0))
-    monkeypatch.setattr(iceberg, "_snapshot_query", lambda rt, snap: f"SELECT * FROM {iceberg._qualified(rt)}")
     result = iceberg.export_public_comments(out, COMMENT, **options)
 
     assert result["comments"] == out / "comments.parquet"
@@ -539,90 +390,17 @@ def test_export_public_comments_rebuilds_mirror(tmp_path, local_catalog, monkeyp
     monolith = pl.read_parquet(result["comments"])
     assert monolith.height == 3
     assert set(monolith["agency_code"].to_list()) == {"EPA", "OMB"}
+    from spicy_regs.etl_receipts import validate_receipt_bundle
+    import json
+    generation = json.loads(result['generation'].read_text())['generation_id']
+    validate_receipt_bundle({'comments': [result['comments']]}, [result['receipts']],
+                           [native.policy('comments')], generation_id=generation)
 
     # The monolith drives the coarse per-agency tree the UI reads for scoped queries.
     partition_dir = partition_comments(out)
     omb_part = partition_dir / "agency_code=OMB" / "part-0.parquet"
     assert omb_part.exists()
     assert pl.read_parquet(omb_part).height == 1
-
-
-def test_audit_and_dedupe_table(tmp_path, local_catalog) -> None:
-    """audit_duplicates flags agencies with duplicate keys; dedupe_table collapses
-    the table to one row per comment_id, keeping the latest modify_date."""
-    con = local_catalog
-    iceberg._ensure_table(con, COMMENT)
-
-    base = tmp_path / "seed.parquet"
-    pl.DataFrame(
-        [
-            _comment("c1", "EPA-1", "EPA", "2025-01-01T00:00:00Z", modify_date="2025-01-01T00:00:00Z"),
-            _comment("c2", "EPA-1", "EPA", "2025-01-02T00:00:00Z", modify_date="2025-01-02T00:00:00Z"),
-            _comment("c3", "OMB-1", "OMB", "2025-02-01T00:00:00Z", modify_date="2025-02-01T00:00:00Z"),
-        ],
-        schema=COMMENT.schema,
-    ).write_parquet(base)
-
-    # seed_comments_from_parquet is a plain INSERT (no dedup) — loading twice
-    # duplicates every row, mimicking the historical seed-into-catalog bug.
-    iceberg.seed_comments_from_parquet(con, str(base), COMMENT)
-    iceberg.seed_comments_from_parquet(con, str(base), COMMENT)
-
-    # A newer version of c1 so dedupe must keep the latest modify_date, not just any copy.
-    newer = tmp_path / "newer.parquet"
-    pl.DataFrame(
-        [_comment("c1", "EPA-1", "EPA", "2025-03-09T00:00:00Z", modify_date="2025-03-09T00:00:00Z")],
-        schema=COMMENT.schema,
-    ).write_parquet(newer)
-    iceberg.seed_comments_from_parquet(con, str(newer), COMMENT)
-
-    # State: c1 x3 (two old + one newer), c2 x2, c3 x2 = 7 rows, 3 distinct ids.
-    audit = {a: (rows, distinct) for a, rows, distinct in iceberg.audit_duplicates(con, COMMENT)}
-    assert audit == {"EPA": (5, 2), "OMB": (2, 1)}
-
-    before, after = iceberg.dedupe_table(con, COMMENT)
-    assert before == 7
-    assert after == 3
-
-    # Clean afterward, and c1 kept its latest modify_date.
-    assert iceberg.audit_duplicates(con, COMMENT) == []
-    kept = con.execute(f"SELECT modify_date FROM {iceberg._qualified(COMMENT)} WHERE comment_id = 'c1'").fetchone()[0]
-    assert kept == "2025-03-09T00:00:00Z"
-
-
-def test_dedupe_table_sub_batches_large_agency(tmp_path, local_catalog, monkeypatch) -> None:
-    """With DEDUP_ROWS_PER_BATCH forcing multiple hash buckets per agency, the
-    rebuild must still collapse to one row per comment_id (keeping the latest
-    modify_date) — bucketing by the key must not drop or duplicate any comment."""
-    con = local_catalog
-    iceberg._ensure_table(con, COMMENT)
-
-    # 20 distinct comments, each seeded twice (a duplicate copy) plus a newer
-    # version of one, so the dedup has real work per bucket.
-    rows = []
-    for i in range(20):
-        rows.append(_comment(f"c{i}", "EPA-1", "EPA", "2025-01-01T00:00:00Z", modify_date="2025-01-01T00:00:00Z"))
-    base = tmp_path / "seed.parquet"
-    pl.DataFrame(rows, schema=COMMENT.schema).write_parquet(base)
-    iceberg.seed_comments_from_parquet(con, str(base), COMMENT)
-    iceberg.seed_comments_from_parquet(con, str(base), COMMENT)  # duplicate every row
-
-    newer = tmp_path / "newer.parquet"
-    pl.DataFrame(
-        [_comment("c0", "EPA-1", "EPA", "2025-06-01T00:00:00Z", modify_date="2025-06-01T00:00:00Z")],
-        schema=COMMENT.schema,
-    ).write_parquet(newer)
-    iceberg.seed_comments_from_parquet(con, str(newer), COMMENT)
-
-    # Force several buckets per agency (41 rows / 5 -> 9 buckets) so the split path runs.
-    monkeypatch.setenv("DEDUP_ROWS_PER_BATCH", "5")
-    before, after = iceberg.dedupe_table(con, COMMENT)
-    assert before == 41  # 20*2 duplicates + 1 newer c0
-    assert after == 20  # one row per distinct comment_id
-
-    assert iceberg.audit_duplicates(con, COMMENT) == []
-    kept = con.execute(f"SELECT modify_date FROM {iceberg._qualified(COMMENT)} WHERE comment_id = 'c0'").fetchone()[0]
-    assert kept == "2025-06-01T00:00:00Z"  # newest version survived the bucketed dedup
 
 
 def test_upsert_comment_text_fills_in_place(tmp_path, local_catalog) -> None:
@@ -632,7 +410,6 @@ def test_upsert_comment_text_fills_in_place(tmp_path, local_catalog) -> None:
     con = local_catalog
     iceberg._ensure_table(con, COMMENT)
 
-    base = tmp_path / "seed.parquet"
     rows = [
         _comment("c1", "EPA-1", "EPA", "2025-01-01T00:00:00Z"),
         _comment("c2", "EPA-1", "EPA", "2025-01-02T00:00:00Z"),
@@ -643,8 +420,7 @@ def test_upsert_comment_text_fills_in_place(tmp_path, local_catalog) -> None:
     ]
     rows[2]["text_content"] = "existing text"
     rows[2]["text_extraction_status"] = "ok"
-    pl.DataFrame(rows, schema=COMMENT.schema).write_parquet(base)
-    iceberg.seed_comments_from_parquet(con, str(base), COMMENT)
+    _put(con, COMMENT, rows)
 
     updates = pl.DataFrame(
         {
@@ -668,7 +444,8 @@ def test_upsert_comment_text_fills_in_place(tmp_path, local_catalog) -> None:
         "d1": None,  # other agency untouched
     }
 
-    statuses = dict(con.execute(f"SELECT comment_id, text_extraction_status FROM {tbl} ORDER BY comment_id").fetchall())
+    processing = native.processing_table(con, COMMENT)
+    statuses = dict(con.execute(f"SELECT comment_id, text_extraction_status FROM {processing} ORDER BY comment_id").fetchall())
     assert statuses == {"c1": "ok", "c2": "ok", "c3": "ok", "d1": None}
 
     # Other columns preserved (posted_date on a filled row).
@@ -680,9 +457,7 @@ def test_upsert_comment_text_noop_on_empty(tmp_path, local_catalog) -> None:
     """An empty updates frame leaves the table untouched (and creates no temp tables)."""
     con = local_catalog
     iceberg._ensure_table(con, COMMENT)
-    base = tmp_path / "seed.parquet"
-    pl.DataFrame([_comment("c1", "EPA-1", "EPA", "2025-01-01T00:00:00Z")], schema=COMMENT.schema).write_parquet(base)
-    iceberg.seed_comments_from_parquet(con, str(base), COMMENT)
+    _put(con, COMMENT, [_comment("c1", "EPA-1", "EPA", "2025-01-01T00:00:00Z")])
 
     empty = pl.DataFrame(schema={"comment_id": pl.Utf8, "_new_text": pl.Utf8, "_new_status": pl.Utf8})
     iceberg.upsert_comment_text(con, COMMENT, "EPA", empty)
@@ -691,259 +466,19 @@ def test_upsert_comment_text_noop_on_empty(tmp_path, local_catalog) -> None:
     assert con.execute(f"SELECT count(*) FROM {tbl}").fetchone()[0] == 1
 
 
-def test_dedupe_table_resumes_interrupted_swap(tmp_path, local_catalog) -> None:
-    """If a prior run built the deduped sibling but died before the swap finished
-    (live table dropped), dedupe_table rebuilds the live table from the sibling
-    instead of rebuilding the sibling from a table that no longer exists."""
-    con = local_catalog
-    iceberg._ensure_table(con, COMMENT)
-
-    base = tmp_path / "seed.parquet"
-    pl.DataFrame(
-        [
-            _comment("c1", "EPA-1", "EPA", "2025-01-01T00:00:00Z", modify_date="2025-01-01T00:00:00Z"),
-            _comment("c2", "EPA-1", "EPA", "2025-01-02T00:00:00Z", modify_date="2025-01-02T00:00:00Z"),
-            _comment("c3", "OMB-1", "OMB", "2025-02-01T00:00:00Z", modify_date="2025-02-01T00:00:00Z"),
-        ],
-        schema=COMMENT.schema,
-    ).write_parquet(base)
-    iceberg.seed_comments_from_parquet(con, str(base), COMMENT)
-
-    # Simulate the interrupted-swap state: a complete deduped sibling exists but
-    # the live table has already been dropped (as happens after DROP + before the
-    # per-agency INSERTs finish).
-    tbl = iceberg._qualified(COMMENT)
-    dedup_tbl = f'{iceberg._schema_ref()}."{COMMENT.name}_dedup"'
-    col_defs = ", ".join(f'"{c}" VARCHAR' for c in COMMENT.schema)
-    col_list = ", ".join(f'"{c}"' for c in COMMENT.schema)
-    con.execute(f"CREATE TABLE {dedup_tbl} ({col_defs});")
-    con.execute(f"INSERT INTO {dedup_tbl} ({col_list}) SELECT {col_list} FROM {tbl};")
-    state_tbl = f'{iceberg._schema_ref()}."{COMMENT.name}_dedup_state"'
-    con.execute(f"CREATE TABLE {state_tbl} (phase VARCHAR, row_count BIGINT)")
-    con.execute(f"INSERT INTO {state_tbl} VALUES ('building', 3), ('ready', 3)")
-    con.execute(f"DROP TABLE {tbl};")
-
-    before, after = iceberg.dedupe_table(con, COMMENT)
-    assert (before, after) == (3, 3)
-
-    # Live table restored, clean, and the sibling consumed.
-    assert iceberg.audit_duplicates(con, COMMENT) == []
-    assert con.execute(f"SELECT count(*) FROM {tbl}").fetchone()[0] == 3
-    with pytest.raises(duckdb.Error):
-        con.execute(f"SELECT 1 FROM {dedup_tbl} LIMIT 1")
-
-
-@pytest.mark.parametrize("statement,occurrence", [
-    ('INSERT INTO {sibling}', 1),
-    ("INSERT INTO {state} VALUES ('ready'", 1),
-    ('DROP TABLE IF EXISTS {live}', 1),
-    ('CREATE TABLE {live}', 1),
-    ('INSERT INTO {live}', 1),
-    ('DROP TABLE IF EXISTS {sibling}', 2),
-])
-def test_dedupe_recovers_after_each_durable_phase(tmp_path, local_catalog, statement, occurrence):
-    con = local_catalog
-    iceberg._ensure_table(con, COMMENT)
-    base = tmp_path / 'seed.parquet'
-    rows = [_comment('a', 'EPA-1', 'EPA', '2025-01-01'), _comment('b', 'OMB-1', 'OMB', '2025-01-01')]
-    pl.DataFrame(rows + rows, schema=COMMENT.schema).write_parquet(base)
-    iceberg.seed_comments_from_parquet(con, str(base), COMMENT)
-    live = iceberg._qualified(COMMENT)
-    prefix = statement.format(live=live, sibling=f'{iceberg._schema_ref()}."{COMMENT.name}_dedup"',
-                              state=f'{iceberg._schema_ref()}."{COMMENT.name}_dedup_state"')
-
-    class InterruptedConnection:
-        seen = 0
-
-        def execute(self, sql, parameters=None):
-            result = con.execute(sql, parameters) if parameters is not None else con.execute(sql)
-            if sql.lstrip().startswith(prefix):
-                self.seen += 1
-                if self.seen == occurrence:
-                    raise RuntimeError('injected interruption after durable statement')
-            return result
-
-    with pytest.raises(RuntimeError, match='injected interruption'):
-        iceberg.dedupe_table(InterruptedConnection(), COMMENT)
-    assert iceberg.dedupe_recovery_pending(con, COMMENT)
-    assert iceberg.dedupe_table(con, COMMENT) == (4, 2)
-    assert con.execute(f'SELECT comment_id FROM {live} ORDER BY comment_id').fetchall() == [('a',), ('b',)]
-    assert not iceberg.dedupe_recovery_pending(con, COMMENT)
-
-
-def test_dedupe_preserves_unjournaled_legacy_candidate(local_catalog):
-    con = local_catalog
-    iceberg._ensure_table(con, COMMENT)
-    sibling = f'{iceberg._schema_ref()}."{COMMENT.name}_dedup"'
-    con.execute(f'CREATE TABLE {sibling} AS SELECT * FROM {iceberg._qualified(COMMENT)}')
-    with pytest.raises(RuntimeError, match='Unjournaled'):
-        iceberg.dedupe_table(con, COMMENT)
-    assert iceberg.dedupe_recovery_pending(con, COMMENT)
-
-
-def _write_snapshot(path: Path, rows: list[dict]) -> None:
-    """A published monolithic {name}.parquet snapshot."""
-    pl.DataFrame(rows, schema={c: pl.Utf8 for c in DOCKET.schema}).write_parquet(path)
-
-
-def test_backfill_inserts_only_missing_keys(tmp_path, local_catalog) -> None:
-    """The cutover repair: historical rows land, post-cutover rows are untouched."""
-    con = local_catalog
-    iceberg._ensure_table(con, DOCKET)
-
-    # The catalog holds only post-cutover rows - the production failure shape.
-    _write_staging(tmp_path / "staging", "EPA", [_docket("EPA-NEW", "EPA", "post-cutover", "2026-08-01T00:00:00Z")])
-    iceberg._merge(con, iceberg._staging_files(tmp_path / "staging", DOCKET), DOCKET)
-
-    snapshot = tmp_path / "dockets.parquet"
-    _write_snapshot(
-        snapshot,
-        [
-            _docket("EPA-OLD", "EPA", "historical", "2015-01-01T00:00:00Z"),
-            _docket("EPA-NEW", "EPA", "STALE SNAPSHOT COPY", "2026-07-02T00:00:00Z"),
-        ],
-    )
-
-    inserted, total = iceberg.backfill_missing_from_parquet(con, str(snapshot), DOCKET)
-    assert (inserted, total) == (1, 2)
-
-    rows = dict(con.execute(f"SELECT docket_id, title FROM {iceberg._qualified(DOCKET)} ORDER BY docket_id").fetchall())
-    assert rows["EPA-OLD"] == "historical"
-    # The newer catalog row must win - backfilling must never roll it back.
-    assert rows["EPA-NEW"] == "post-cutover"
-
-
-def test_backfill_is_idempotent(tmp_path, local_catalog) -> None:
-    """A re-run inserts nothing: the backfill does a plain INSERT with no dedup."""
-    con = local_catalog
-    iceberg._ensure_table(con, DOCKET)
-
-    snapshot = tmp_path / "dockets.parquet"
-    _write_snapshot(snapshot, [_docket("EPA-1", "EPA", "one", "2025-01-01T00:00:00Z")])
-
-    assert iceberg.backfill_missing_from_parquet(con, str(snapshot), DOCKET) == (1, 1)
-    assert iceberg.backfill_missing_from_parquet(con, str(snapshot), DOCKET) == (0, 1)
-
-
-def test_backfill_dedups_a_repeated_source_key(tmp_path, local_catalog) -> None:
-    """A snapshot with repeats cannot fan out into duplicate catalog rows."""
-    con = local_catalog
-    iceberg._ensure_table(con, DOCKET)
-
-    snapshot = tmp_path / "dockets.parquet"
-    _write_snapshot(
-        snapshot,
-        [
-            _docket("EPA-1", "EPA", "older", "2025-01-01T00:00:00Z"),
-            _docket("EPA-1", "EPA", "newer", "2025-06-01T00:00:00Z"),
-        ],
-    )
-
-    inserted, total = iceberg.backfill_missing_from_parquet(con, str(snapshot), DOCKET)
-    assert (inserted, total) == (1, 1)
-    title = con.execute(f"SELECT title FROM {iceberg._qualified(DOCKET)}").fetchone()[0]
-    assert title == "newer"
-
-
-def test_backfill_survives_a_null_key_in_the_catalog(tmp_path, local_catalog) -> None:
-    """NOT IN would return NULL for every row here and insert nothing; the anti-join must not."""
-    con = local_catalog
-    iceberg._ensure_table(con, DOCKET)
-    con.execute(f"INSERT INTO {iceberg._qualified(DOCKET)} (docket_id) VALUES (NULL);")
-
-    snapshot = tmp_path / "dockets.parquet"
-    _write_snapshot(snapshot, [_docket("EPA-1", "EPA", "one", "2025-01-01T00:00:00Z")])
-
-    inserted, _total = iceberg.backfill_missing_from_parquet(con, str(snapshot), DOCKET)
-    assert inserted == 1
-
-
-def test_backfill_skips_null_keys_in_the_source(tmp_path, local_catalog) -> None:
-    con = local_catalog
-    iceberg._ensure_table(con, DOCKET)
-
-    snapshot = tmp_path / "dockets.parquet"
-    _write_snapshot(
-        snapshot,
-        [
-            _docket("EPA-1", "EPA", "one", "2025-01-01T00:00:00Z"),
-            {col: None for col in DOCKET.schema},
-        ],
-    )
-
-    inserted, total = iceberg.backfill_missing_from_parquet(con, str(snapshot), DOCKET)
-    assert (inserted, total) == (1, 1)
-
-
-def test_backfill_rejects_a_source_without_the_key_column(tmp_path, local_catalog) -> None:
-    con = local_catalog
-    iceberg._ensure_table(con, DOCKET)
-
-    snapshot = tmp_path / "wrong.parquet"
-    pl.DataFrame({"agency_code": ["EPA"], "modify_date": ["2025-01-01T00:00:00Z"]}).write_parquet(snapshot)
-
-    with pytest.raises(RuntimeError, match="docket_id"):
-        iceberg.backfill_missing_from_parquet(con, str(snapshot), DOCKET)
-
-
 def test_comments_index_retains_unknown_dates_and_refuses_malformed_rows(tmp_path, local_catalog):
     con = local_catalog
     iceberg._ensure_table(con, COMMENT)
-    table = iceberg._qualified(COMMENT)
-    con.execute(
-        f"INSERT INTO {table} (comment_id,agency_code,docket_id,posted_date) VALUES ('unknown','EPA','EPA-1',NULL),('known','EPA','EPA-1','2025-01-01')"
-    )
+    _put(con, COMMENT, [dict(comment_id='unknown', agency_code='EPA', docket_id='EPA-1'),
+                        dict(comment_id='known', agency_code='EPA', docket_id='EPA-1', posted_date='2025-01-01')])
     index = iceberg._build_comments_index(con, COMMENT, tmp_path)
     got = {(r["year"], r["month"]): r["row_count"] for r in pl.read_parquet(index).to_dicts()}
     assert got == {(None, None): 1, (2025, 1): 1}
     before = index.read_bytes()
-    con.execute(
-        f"INSERT INTO {table} (comment_id,agency_code,docket_id,posted_date) VALUES ('broken','EPA','EPA-1','not-a-date')"
-    )
+    _put(con, COMMENT, [dict(comment_id='broken', agency_code='EPA', docket_id='EPA-1', posted_date='not-a-date')])
     with pytest.raises(ValueError, match="invalid coordinates"):
         iceberg._build_comments_index(con, COMMENT, tmp_path)
     assert index.read_bytes() == before
-
-
-def test_row_group_touches_separates_sorted_from_unsorted_sources(tmp_path) -> None:
-    """The monolithic comments seed reads about one pass only when sorted by agency_code."""
-    import duckdb
-    import pyarrow as pa
-    import pyarrow.parquet as pq
-
-    from scripts.seed_comments_catalog import MAX_SOURCE_PASSES, row_group_touches
-
-    agencies = [f"A{i:02d}" for i in range(10)]
-    rows = [agency for agency in agencies for _ in range(4)]
-    sorted_file, shuffled_file = tmp_path / "sorted.parquet", tmp_path / "shuffled.parquet"
-    pq.write_table(pa.table({"agency_code": rows}), sorted_file, row_group_size=4)
-    # Every row group holds the whole alphabet: each agency's load reads all of them.
-    pq.write_table(pa.table({"agency_code": agencies * 4}), shuffled_file, row_group_size=10)
-    con = duckdb.connect()
-
-    groups, touches = row_group_touches(con, str(sorted_file), agencies)
-    assert (groups, touches) == (10, 10)
-    groups, touches = row_group_touches(con, str(shuffled_file), agencies)
-    assert (groups, touches) == (4, 40)
-    assert touches > MAX_SOURCE_PASSES * groups
-
-
-def test_unchanged_merge_does_not_issue_catalog_writes(tmp_path, local_catalog):
-    con = local_catalog
-    iceberg._ensure_table(con, DOCKET)
-    staging = tmp_path / "staging"
-    _write_staging(staging, "EPA", [_docket("EPA-1", "EPA", "Same", "2025-01-01")])
-    files = iceberg._staging_files(staging, DOCKET)
-    assert iceberg._merge(con, files, DOCKET) == 1
-    statements = []
-
-    class Observed:
-        def execute(self, sql, *args):
-            statements.append(sql)
-            return con.execute(sql, *args)
-
-    assert iceberg._merge(Observed(), files, DOCKET) == 0
-    assert not any(sql.startswith(("DELETE", "INSERT")) for sql in statements)
 
 
 def test_comment_merge_does_not_recount_or_build_index(tmp_path, local_catalog, monkeypatch):
@@ -957,117 +492,24 @@ def test_comment_merge_does_not_recount_or_build_index(tmp_path, local_catalog, 
     assert not (tmp_path / "comments_index.parquet").exists()
 
 
-class _FlakyLiveInsert:
-    """Fails the swap INSERT into the live table for ``agency`` with a catalog error ``times`` times.
-
-    ``commit_anyway`` runs the INSERT before raising: the commit landed but the
-    client saw an error, which the retry must not repeat.
-    """
-
-    def __init__(self, con, agency, *, times=1, commit_anyway=False, count_failures=0):
-        self.con, self.agency, self.times, self.commit_anyway = con, agency, times, commit_anyway
-        self.prefix = f"INSERT INTO {iceberg._qualified(COMMENT)}"
-        self.count_prefix = f"SELECT count(*) FROM {iceberg._qualified(COMMENT)} WHERE"
-        self.failed = 0
-        self.count_failures = count_failures  # the recount meets the same outage this many times
-
-    def execute(self, sql, parameters=None):
-        if (sql.lstrip().startswith(self.count_prefix) and f"agency_code = '{self.agency}'" in sql
-                and self.count_failures):
-            self.count_failures -= 1
-            raise duckdb.IOException("HTTP 502 from the catalog during the recount")
-        flaky = (sql.lstrip().startswith(self.prefix) and f"agency_code = '{self.agency}'" in sql
-                 and self.failed < self.times)
-        if flaky and not self.commit_anyway:
-            self.failed += 1
-            raise duckdb.IOException("HTTP 502 from the catalog")
-        result = self.con.execute(sql, parameters) if parameters is not None else self.con.execute(sql)
-        if flaky:
-            self.failed += 1
-            raise duckdb.IOException("HTTP 502 after commit")
-        return result
-
-
-def _seed_two_agencies(tmp_path, con):
-    iceberg._ensure_table(con, COMMENT)
-    base = tmp_path / "seed.parquet"
-    rows = [_comment("a", "EPA-1", "EPA", "2025-01-01"), _comment("b", "OMB-1", "OMB", "2025-01-01")]
-    pl.DataFrame(rows + rows, schema=COMMENT.schema).write_parquet(base)
-    iceberg.seed_comments_from_parquet(con, str(base), COMMENT)
-
-
-@pytest.mark.parametrize("count_failures", [0, 1])
-@pytest.mark.parametrize("commit_anyway", [False, True])
-def test_dedupe_swap_retries_a_transient_catalog_error(tmp_path, local_catalog, monkeypatch, commit_anyway,
-                                                      count_failures):
-    """Upstream #198's retry on the journaled swap: a transient catalog error on one agency's INSERT is
-    retried in the same run, an INSERT that committed despite the error is not repeated, and a recount
-    that meets the same outage is retried rather than guessed past."""
-    monkeypatch.setattr(iceberg.time, "sleep", lambda _seconds: None)
-    con = local_catalog
-    _seed_two_agencies(tmp_path, con)
-    flaky = _FlakyLiveInsert(con, "OMB", commit_anyway=commit_anyway, count_failures=count_failures)
-    assert iceberg.dedupe_table(flaky, COMMENT) == (4, 2)
-    assert flaky.failed == 1
-    live = iceberg._qualified(COMMENT)
-    assert con.execute(f"SELECT comment_id FROM {live} ORDER BY comment_id").fetchall() == [("a",), ("b",)]
-    assert not iceberg.dedupe_recovery_pending(con, COMMENT)
-
-
-def test_dedupe_swap_leaves_the_journal_to_resume_when_retries_run_out(tmp_path, local_catalog, monkeypatch):
-    monkeypatch.setattr(iceberg.time, "sleep", lambda _seconds: None)
-    monkeypatch.setenv("DEDUP_SWAP_RETRIES", "2")
-    con = local_catalog
-    _seed_two_agencies(tmp_path, con)
-    with pytest.raises(duckdb.IOException):
-        iceberg.dedupe_table(_FlakyLiveInsert(con, "OMB", times=2), COMMENT)
-    assert iceberg.dedupe_recovery_pending(con, COMMENT)
-    assert iceberg.dedupe_table(con, COMMENT) == (4, 2)
-    assert not iceberg.dedupe_recovery_pending(con, COMMENT)
-
-
-def test_export_migrated_comments_fills_old_snapshot_fields_with_null(tmp_path, local_catalog, monkeypatch):
-    con = local_catalog
-    iceberg._ensure_table(con, COMMENT)
-    staging = tmp_path / "staging"
-    _write_comment_staging(staging, "EPA", [_comment("c1", "EPA-1", "EPA", "2025-01-15T00:00:00Z")])
-    iceberg._merge(con, iceberg._staging_files(staging, COMMENT), COMMENT)
-    old_columns = [c for c in COMMENT.schema if c not in iceberg._COMMENT_ADDED_COLUMNS]
-    projection = ", ".join(f'"{c}"' for c in old_columns)
-    monkeypatch.setattr(iceberg, "_connect", lambda: con)
-    monkeypatch.setattr(iceberg, "_read_snapshot", lambda *_: iceberg.CatalogSnapshot("local", 1, 4))
-    monkeypatch.setattr(iceberg, "_snapshot_query", lambda rt, snap: f"SELECT {projection} FROM {iceberg._qualified(rt)}")
-    result = iceberg.export_public_comments(tmp_path / "out", COMMENT)
-    rows = pl.read_parquet(result["comments"])
-    assert rows.height == 1
-    # The contract order (spicy-docs COMMENT), not the snapshot's appended order.
-    assert rows.columns == list(COMMENT.schema)
-    partition = next((tmp_path / "out").rglob("agency_code=EPA/part-0.parquet"))
-    assert pl.read_parquet(partition).columns == [c for c in COMMENT.schema if c != "agency_code"]
-    for column in iceberg._COMMENT_ADDED_COLUMNS:
-        assert rows[column].to_list() == [None]
-
-
 @pytest.mark.parametrize('prior_exists', [False, True])
 def test_merge_refuses_intervening_insert_or_update(tmp_path, local_catalog, monkeypatch, prior_exists):
     con = local_catalog
     iceberg._ensure_table(con, DOCKET)
     table = iceberg._qualified(DOCKET)
     if prior_exists:
-        con.execute(f"INSERT INTO {table} (docket_id,title,modify_date) VALUES ('D','old','2025-01-01')")
+        _put(con, DOCKET, [_docket('D','EPA','old','2025-01-01')])
     staging = tmp_path / 'staging'
     _write_staging(staging, 'EPA', [_docket('D','EPA','prepared','2025-02-01')])
-    real_replace = iceberg.replace_rows
+    real_replace = native.replace_native
 
     def intervening_write(connection, record_type, source, **kwargs):
-        if prior_exists:
-            connection.execute(f"UPDATE {table} SET title='concurrent',modify_date='2026-01-01' WHERE docket_id='D'")
-        else:
-            connection.execute(f"INSERT INTO {table} (docket_id,title,modify_date) VALUES ('D','concurrent','2026-01-01')")
+        concurrent = _source(connection, record_type, [_docket('D','EPA','concurrent','2026-01-01')], 'concurrent')
+        real_replace(connection, record_type, concurrent)
         real_replace(connection, record_type, source, **kwargs)
 
-    monkeypatch.setattr(iceberg, 'replace_rows', intervening_write)
-    with pytest.raises(RuntimeError, match='prior changed'):
+    monkeypatch.setattr(native, 'replace_native', intervening_write)
+    with pytest.raises(RuntimeError, match='changed after preparation'):
         iceberg._merge(con, iceberg._staging_files(staging, DOCKET), DOCKET)
     assert con.execute(f'SELECT title,modify_date FROM {table}').fetchall() == [('concurrent','2026-01-01')]
     # Refusal leaves no open failed transaction.
@@ -1079,16 +521,17 @@ def test_text_fill_refuses_intervening_unrelated_cell_change(tmp_path, local_cat
     con = local_catalog
     iceberg._ensure_table(con, COMMENT)
     table = iceberg._qualified(COMMENT)
-    con.execute(f"INSERT INTO {table} (comment_id,agency_code,docket_id) VALUES ('c1','EPA','old')")
+    _put(con, COMMENT, [dict(comment_id='c1', agency_code='EPA', docket_id='old')])
     real_replace = iceberg.replace_rows
 
     def intervening_write(connection, record_type, source, **kwargs):
-        connection.execute(f"UPDATE {table} SET docket_id='newer-source' WHERE comment_id='c1'")
+        concurrent = _source(connection, COMMENT, [dict(comment_id='c1', agency_code='EPA', docket_id='newer-source')], 'concurrent')
+        real_replace(connection, record_type, concurrent)
         real_replace(connection, record_type, source, **kwargs)
 
     monkeypatch.setattr(iceberg, 'replace_rows', intervening_write)
     updates = pl.DataFrame({'comment_id':['c1'], '_new_text':['filled'], '_new_status':['ok']})
-    with pytest.raises(RuntimeError, match='prior changed'):
+    with pytest.raises(RuntimeError, match='changed after preparation'):
         iceberg.upsert_comment_text(con, COMMENT, 'EPA', updates)
     assert con.execute(f'SELECT docket_id,text_content FROM {table}').fetchall() == [('newer-source',None)]
 
@@ -1097,21 +540,21 @@ def test_replace_preserves_commit_error_when_transaction_already_aborted(local_c
     con = local_catalog
     iceberg._ensure_table(con, DOCKET)
     table = iceberg._qualified(DOCKET)
-    con.execute(f"INSERT INTO {table} (docket_id,title) VALUES ('D','prior')")
-    con.execute(f'CREATE TEMP TABLE replacement AS SELECT * FROM {table}')
+    _put(con, DOCKET, [dict(docket_id='D', title='prior')])
+    _fresh(con, DOCKET, name='replacement')
     con.execute("UPDATE replacement SET title='replacement'")
     conflict = duckdb.TransactionException('simulated concurrent catalog commit conflict')
 
     class AbortedCommit:
         rollback_attempts = 0
 
-        def execute(self, sql):
+        def execute(self, sql, *args):
             if sql == 'COMMIT':
                 con.execute('ROLLBACK')
                 raise conflict
             if sql == 'ROLLBACK':
                 self.rollback_attempts += 1
-            return con.execute(sql)
+            return con.execute(sql, *args)
 
     connection = AbortedCommit()
     with pytest.raises(duckdb.TransactionException, match='concurrent catalog commit conflict') as raised:
@@ -1121,32 +564,6 @@ def test_replace_preserves_commit_error_when_transaction_already_aborted(local_c
     assert con.execute(f'SELECT title FROM {table}').fetchall() == [('prior',)]
     con.execute('BEGIN')
     con.execute('ROLLBACK')
-
-
-def test_document_native_migration_preserves_legacy_processing_rows(local_catalog):
-    from spicy_regs.schemas import RECORD_TYPES
-    from spicy_regs.sources import regulatory_catalog as native
-    record = RECORD_TYPES['documents']
-    legacy = f'{iceberg._schema_ref()}."documents"'
-    local_catalog.execute(f'CREATE SCHEMA IF NOT EXISTS {iceberg._schema_ref()}')
-    local_catalog.execute(f'CREATE TABLE {legacy} (document_id VARCHAR, pdf_extraction_results_json VARCHAR)')
-    local_catalog.execute(f"INSERT INTO {legacy} VALUES ('held', 'prior diagnostics')")
-    native.ensure_native(local_catalog, record)
-    restored = native.processing_table(local_catalog, record)
-    assert local_catalog.execute(f'SELECT document_id,pdf_extraction_results_json,attachment_records_json FROM {restored}').fetchall() == [('held', 'prior diagnostics', None)]
-
-
-def test_document_native_migration_refuses_wrong_existing_type(local_catalog):
-    from spicy_regs.schemas import RECORD_TYPES
-    from spicy_regs.sources import regulatory_catalog as native
-    record = RECORD_TYPES['documents']
-    local_catalog.execute(f'CREATE SCHEMA IF NOT EXISTS {iceberg._schema_ref()}')
-    local_catalog.execute(f'CREATE TABLE {iceberg._schema_ref()}.documents (document_id VARCHAR, attachment_records_json INTEGER)')
-    with pytest.raises(ValueError, match='incompatible types'):
-        native.ensure_native(local_catalog, record)
-
-
-# --- interrupted writes (#202) ---------------------------------------------
 
 
 class _CatalogWriteInterrupted:
@@ -1184,35 +601,10 @@ def test_merge_interrupted_before_commit_keeps_existing_rows(tmp_path, local_cat
     con.execute("ROLLBACK")
 
 
-def test_seed_replace_agency_interrupted_leaves_agency_intact(tmp_path, local_catalog) -> None:
-    con = local_catalog
-    iceberg._ensure_table(con, COMMENT)
-    base = tmp_path / "seed.parquet"
-    rows = [
-        _comment("c1", "EPA-1", "EPA", "2025-01-01T00:00:00Z"),
-        _comment("c2", "EPA-1", "EPA", "2025-01-02T00:00:00Z"),
-    ]
-    pl.DataFrame(rows, schema=COMMENT.schema).write_parquet(base)
-    iceberg.seed_comments_from_parquet(con, str(base), COMMENT, agency="EPA", replace=True)
-
-    replacement = tmp_path / "replacement.parquet"
-    pl.DataFrame([_comment("c3", "EPA-1", "EPA", "2025-02-01T00:00:00Z")], schema=COMMENT.schema).write_parquet(replacement)
-    with pytest.raises(KeyboardInterrupt):
-        iceberg.seed_comments_from_parquet(
-            _CatalogWriteInterrupted(con), str(replacement), COMMENT, agency="EPA", replace=True,
-        )
-
-    assert con.execute(f"SELECT count(*) FROM {iceberg._qualified(COMMENT)}").fetchone()[0] == 2
-    con.execute("BEGIN")
-    con.execute("ROLLBACK")
-
-
 def test_upsert_comment_text_interrupted_keeps_rows(tmp_path, local_catalog) -> None:
     con = local_catalog
     iceberg._ensure_table(con, COMMENT)
-    base = tmp_path / "seed.parquet"
-    pl.DataFrame([_comment("c1", "EPA-1", "EPA", "2025-01-01T00:00:00Z")], schema=COMMENT.schema).write_parquet(base)
-    iceberg.seed_comments_from_parquet(con, str(base), COMMENT)
+    _put(con, COMMENT, [_comment("c1", "EPA-1", "EPA", "2025-01-01T00:00:00Z")])
 
     updates = pl.DataFrame(
         {"comment_id": ["c1"], "_new_text": ["filled"], "_new_status": ["ok"]},
@@ -1225,3 +617,46 @@ def test_upsert_comment_text_interrupted_keeps_rows(tmp_path, local_catalog) -> 
     assert con.execute(f"SELECT comment_id, text_content FROM {tbl}").fetchall() == [("c1", None)]
     con.execute("BEGIN")
     con.execute("ROLLBACK")
+
+
+def test_unchanged_merge_retains_rejected_attempt_without_changing_subject(tmp_path, local_catalog):
+    con = local_catalog
+    iceberg._ensure_table(con, DOCKET)
+    staging = tmp_path / 'staging'
+    _write_staging(staging, 'EPA', [_docket('D', 'EPA', 'Held', '2026-01-01')])
+    files = iceberg._staging_files(staging, DOCKET)
+    assert iceberg._merge(con, files, DOCKET) == 1
+    before = con.execute(f'SELECT * FROM {iceberg._qualified(DOCKET)}').fetchall()
+    assert iceberg._merge(con, files, DOCKET) == 0
+    assert con.execute(f'SELECT * FROM {iceberg._qualified(DOCKET)}').fetchall() == before
+    rejected = con.execute(f"SELECT processing_json FROM {native.receipts_table()} WHERE outcome='rejected'").fetchall()
+    assert len(rejected) == 1 and 'Held' in rejected[0][0]
+
+
+def test_duplicate_audit_reports_corruption_without_writing(local_catalog):
+    con = local_catalog
+    _put(con, COMMENT, [_comment('c1', 'EPA-1', 'EPA', '2026-01-01')])
+    table = iceberg._qualified(COMMENT)
+    con.execute(f'INSERT INTO {table} SELECT * FROM {table}')  # Deliberate corruption, not a seed path.
+    before = con.execute(f'SELECT * FROM {native.receipts_table()}').fetchall()
+    assert iceberg.audit_duplicates(con, COMMENT) == [('EPA', 2, 1)]
+    assert con.execute(f'SELECT * FROM {native.receipts_table()}').fetchall() == before
+
+
+@pytest.mark.parametrize('invalid', ['unknown_column', 'fractional_integer'])
+def test_merge_refuses_unclassified_or_lossy_source_before_casting(tmp_path, local_catalog, invalid):
+    con = local_catalog
+    iceberg._ensure_table(con, COMMENT)
+    row = _comment('c1', 'EPA-1', 'EPA', '2026-01-01')
+    schema = dict(COMMENT.schema)
+    if invalid == 'unknown_column':
+        row['unclassified_fact'] = 'must not disappear'
+        schema['unclassified_fact'] = pl.String
+    else:
+        row['duplicate_comments'] = '2.8'
+        schema['duplicate_comments'] = pl.String
+    file = tmp_path / 'bad.parquet'
+    pl.DataFrame([row], schema=schema).write_parquet(file)
+    with pytest.raises(ValueError):
+        iceberg._merge(con, [file], COMMENT)
+    assert con.execute(f'SELECT count(*) FROM {iceberg._qualified(COMMENT)}').fetchone() == (0,)

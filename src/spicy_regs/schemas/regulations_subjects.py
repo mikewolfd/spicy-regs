@@ -1,10 +1,10 @@
 """Reviewed domain columns for the regulations family.
 
-Legacy columns are explicit migration inputs, not a public-schema inference rule.
+Source columns declare processor inputs independently from public subject fields.
 Source spelling and conversion evidence are retained by regulations_shape.
 """
 
-LEGACY_COLUMNS = {
+SOURCE_COLUMNS = {
     "agency_lifecycle_stats": [
         ("agency_code", "VARCHAR"),
         ("stratum", "VARCHAR"),

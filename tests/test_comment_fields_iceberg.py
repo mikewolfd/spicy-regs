@@ -273,19 +273,13 @@ def test_a_commit_by_another_writer_during_the_batch_is_refused_at_commit(tmp_pa
 
 
 @pytest.mark.parametrize("interrupt", [False, True])
-def test_legacy_preview_then_native_migration_on_same_connection_keeps_source(rest_uri, monkeypatch, tmp_path, interrupt):
+def test_native_initialization_requires_receipt_before_reading(rest_uri, monkeypatch, tmp_path, interrupt):
     from spicy_regs.sources import regulatory_catalog as native
-    namespace = 'migration' + uuid4().hex[:8]
+    namespace = 'initialize' + uuid4().hex[:8]
     monkeypatch.setenv('R2_CATALOG_NAMESPACE', namespace)
     with duckdb.connect() as con:
         con.execute('LOAD iceberg')
         con.execute(f"ATTACH '' AS reg_catalog (TYPE iceberg, ENDPOINT '{rest_uri}', CLIENT_ID 'admin', CLIENT_SECRET 'password')")
-        con.execute(f'CREATE SCHEMA {iceberg._schema_ref()}')
-        con.execute(f'CREATE TABLE {iceberg._schema_ref()}.comments (comment_id VARCHAR, agency_code VARCHAR)')
-        con.execute(f"INSERT INTO {iceberg._schema_ref()}.comments VALUES ('held', 'EPA')")
-        legacy_snapshot = iceberg._read_snapshot(con, COMMENT)
-        preview = native.processing_table(con, COMMENT)
-        assert con.execute(f'SELECT comment_id FROM {preview}').fetchall() == [('held',)]
         if interrupt:
             class InterruptedPreparation:
                 def execute(self, sql, *args):
@@ -295,26 +289,34 @@ def test_legacy_preview_then_native_migration_on_same_connection_keeps_source(re
                     return result
             with pytest.raises(RuntimeError, match='crash after empty'):
                 native.ensure_native(InterruptedPreparation(), COMMENT)
-            assert con.execute(f'SELECT count(*) FROM {native.qualified(COMMENT)}').fetchone() == (0,)
             assert not native.initialized(con, 'comments')
-            assert iceberg._read_snapshot(con, COMMENT) == legacy_snapshot
-            retained = native.processing_table(con, COMMENT)
-            assert con.execute(f'SELECT comment_id FROM {retained}').fetchall() == [('held',)]
             with pytest.raises(ValueError, match='initialization receipt'):
-                native.export_pair(con, COMMENT, tmp_path / 'unselected', generation_id='invalid')
-        # A read-only field-fill prepare must use the same legacy UUID, snapshot
-        # and physical files, including after empty native storage was prepared.
-        part = tmp_path / 'legacy-reads.parquet'
-        incoming = {**dict.fromkeys(cf.PART_SCHEMA), 'key': 'raw/held', 'comment_id': 'held',
-                    'agency_code': 'EPA', 'subtype': 'Public Comment'}
-        pl.DataFrame([incoming], schema=cf.PART_SCHEMA).write_parquet(part)
-        prepared = cfw.prepare(tmp_path / 'field-fill', reads=part, con=con)
-        assert prepared['snapshot'] == legacy_snapshot.__dict__
-        assert prepared['table_rows'] == 1 and prepared['rows_to_fill'] == 1
-        assert not native.initialized(con, 'comments')
-        assert iceberg._read_snapshot(con, COMMENT) == legacy_snapshot
+                native.processing_table(con, COMMENT)
+            with pytest.raises(ValueError, match='initialization receipt'):
+                iceberg.audit_duplicates(con, COMMENT)
         native.ensure_native(con, COMMENT)
         assert native.initialized(con, 'comments')
-        assert iceberg._read_snapshot(con, COMMENT).table_uuid != legacy_snapshot.table_uuid
+        assert iceberg.audit_duplicates(con, COMMENT) == []
+        row = {**dict.fromkeys(COMMENT.schema), 'comment_id': 'held', 'agency_code': 'EPA'}
+        con.register('input', pl.DataFrame([row], schema=COMMENT.schema).to_arrow())
+        iceberg.replace_rows(con, COMMENT, 'input')
         assert con.execute(f'SELECT comment_id FROM {native.qualified(COMMENT)}').fetchall() == [('held',)]
-        assert con.execute(f'SELECT comment_id FROM {iceberg._schema_ref()}.comments').fetchall() == [('held',)]
+        selected = native.export_pair(con, COMMENT, tmp_path / 'selected', generation_id='actual-iceberg')
+        from spicy_regs.transforms.regulations_receipts import read_internal
+        assert list(read_internal(selected)) == [row]
+        incoming = {**dict.fromkeys(cf.PART_SCHEMA), 'key': 'raw/held', 'comment_id': 'held',
+                    'agency_code': 'EPA', 'subtype': 'Public Comment'}
+        part = tmp_path / 'reads.parquet'
+        pl.DataFrame([incoming], schema=cf.PART_SCHEMA).write_parquet(part)
+        prepared = cfw.prepare(tmp_path / 'field-fill', reads=part, con=con)
+        assert prepared['table_rows'] == 1 and prepared['rows_to_fill'] == 1
+
+
+def test_probe_exercises_native_pair_in_separate_namespace(lake):
+    from scripts.probe_catalog_replace import run_probe
+    before = rows(lake)
+    assert run_probe(lake, 'probe_catalog_replace_' + uuid4().hex) == [
+        'insert', 'scoped update with expected prior and replay', 'changed prior refused',
+        'post-MERGE failure rolled back',
+    ]
+    assert rows(lake) == before

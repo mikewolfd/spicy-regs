@@ -51,14 +51,17 @@ def test_retained_native_occurrences_and_generation(tmp_path):
     assert target["target_status"] == "not_checked"  # no selected target bytes
     with pytest.raises(ValueError, match="require ETL receipts"):
         build_generation(
-            tmp_path / "unmigrated", family="native-legal-references", files=files, expected_keys=OUTPUTS,
+            tmp_path / "unmigrated",
+            family="native-legal-references",
+            files=files,
+            expected_keys=OUTPUTS,
             schemas={contract.name: [(c, "VARCHAR") for c in contract.columns] for contract in CONTRACTS},
         )
-    from spicy_regs.legislative_receipts import FILE_POLICY, migrate_outputs, policy
+    from spicy_regs.legislative_receipts import FILE_POLICY, write_legislative_outputs, policy
     from spicy_regs.native_types import described_schema
 
     bundle = tmp_path / "receipt-bundle"
-    migrate_outputs(files, bundle, generation_id="native-test")
+    write_legislative_outputs(files, bundle, generation_id="native-test")
     subject_policy = policy("native_legal_references")
     artifact = build_generation(
         tmp_path / "candidate",

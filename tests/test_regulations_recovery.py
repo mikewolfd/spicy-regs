@@ -2,7 +2,6 @@
 
 import json
 
-import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 from botocore.exceptions import ClientError
@@ -30,7 +29,9 @@ from tests.regulatory_publication_fakes import install as install_publication
 
 @pytest.fixture(autouse=True)
 def native_publication(monkeypatch):
-    return install_publication(monkeypatch)
+    remote = install_publication(monkeypatch)
+    monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
+    return remote
 
 
 @pytest.mark.parametrize("chunked", [False, True])
@@ -203,17 +204,17 @@ def test_supplier_rejects_publisher_error_even_with_identity(record_name):
     assert secret not in outcome.reason
 
 
-def test_legacy_false_coverage_is_retried_before_new_work(tmp_path, monkeypatch):
+def test_selected_failed_coverage_is_retried_before_new_work(tmp_path, monkeypatch):
     old, new = _docket_key("EPA-2024-0001"), _docket_key("EPA-2025-0002")
     save_manifest(tmp_path, {old})
-    pq.write_table(
-        pa.Table.from_pylist([{"key": old, "kind": "parse", "run_at": "2026-09-19"}]), tmp_path / "failed_keys.parquet"
-    )
-    from spicy_regs.pipelines.regulatory_publication import migrate_checkpoints
+    from spicy_regs.pipelines.regulatory_publication import finish_checkpoints
 
-    pending = tmp_path / "pending_comment_text.parquet"
-    pq.write_table(pa.table({"comment_id": pa.array([], type=pa.string())}), pending)
-    migrate_checkpoints(tmp_path, {"failed_keys": tmp_path / "failed_keys.parquet", "pending_comment_text": pending})
+    finish_checkpoints(tmp_path, {
+        "failed_keys": [{"agency": "EPA", "record_type": "dockets", "key": old,
+                         "status": "unreadable", "reason": "parse failed",
+                         "attempted_at": "2026-09-19", "attempts": 1}],
+        "pending_comment_text": [],
+    }, publish=False)
     asked = []
 
     class Recording(_FakeS3Resource):
@@ -249,6 +250,7 @@ def test_scoped_run_preserves_other_agencies_outcomes(tmp_path):
 @pytest.mark.parametrize("chunked", [False, True])
 @pytest.mark.parametrize("recovers", [False, True])
 def test_unresolved_history_survives_fresh_hosted_runner(tmp_path, monkeypatch, chunked, recovers, native_publication):
+    monkeypatch.setenv("R2_PUBLIC_URL", "https://test.invalid")
     from spicy_regs import manifest as manifest_module
     from spicy_regs.pipelines import regulations
 
@@ -349,4 +351,4 @@ def test_unresolved_history_survives_fresh_hosted_runner(tmp_path, monkeypatch, 
     assert uploaded[-2:] == ["checkpoints", "manifest.parquet"]
     third = tmp_path / "restore-only"
     third.mkdir()
-    assert UnresolvedKeys(third).rows == outcomes, "cleared state must also survive a fresh runner"
+    assert UnresolvedKeys(third, index=publication.current_index("https://test.invalid")).rows == outcomes, "cleared state must also survive a fresh runner"

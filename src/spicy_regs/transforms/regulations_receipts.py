@@ -1,15 +1,16 @@
 """Regulations-family writers and qualified internal reads using shared receipts.
 
-The explicit local migration entry point seals native subject files and the one
+The local producer seals native subject files and the one
 shared receipt member together. It never updates a remote pointer or catalog.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping, Sequence
+from contextlib import ExitStack
 from dataclasses import dataclass
 from functools import cache
-from hashlib import file_digest
+from hashlib import file_digest, sha256
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -19,22 +20,23 @@ import pyarrow.parquet as pq
 from spicy_regs.etl_receipts import (
     DatasetPolicy,
     ReceiptContext,
+    ReceiptLineage,
     RECEIPT_SCHEMA,
     combine_receipts,
     failure_receipt,
     read_with_receipts,
     observation_receipt,
     read_attempts,
+    exact_json,
     select_receipts,
     write_dataset,
 )
 from spicy_regs.transforms.regulations_shape import (
     IDENTITIES,
-    LEGACY_COLUMNS,
+    SOURCE_COLUMNS,
     RECEIPT_COLUMNS,
     TYPES,
     shape_record,
-    restore_legacy_record,
     subject_schema,
 )
 
@@ -80,20 +82,40 @@ def _qualified_rows(selected: ReceiptInput) -> Iterable[dict]:
     """
     with TemporaryDirectory(prefix="regulations-receipt-read-") as temporary:
         scoped = select_receipts(selected.receipts, Path(temporary) / "receipts.parquet", dataset=selected.dataset)
+        # Complete input consistency validation precedes any processor yield.
+        # This stays bounded and catches a bad later row before an external fetch.
         for row in read_with_receipts(
             selected.subjects, [scoped], policy(selected.dataset), generation_id=selected.generation_id
         ):
-            yield row
+            _processor_input(selected.dataset, row)
+        yield from read_with_receipts(
+            selected.subjects, [scoped], policy(selected.dataset), generation_id=selected.generation_id
+        )
+
+
+def _processor_input(dataset, row):
+    value = row.get("raw_conversion_inputs")
+    if not isinstance(value, Mapping):
+        raise ValueError(f"{dataset}: exact retained processor input is required")
+    shaped = shape_record(dataset, value)
+    schema = subject_schema(dataset)
+    reproduced = pa.Table.from_pylist([shaped], schema=schema).to_pylist()[0]
+    selected = {name: row.get(name) for name in schema.names}
+    if exact_json(reproduced) != exact_json(selected):
+        raise ValueError(f"{dataset}: retained processor input differs from selected native subject")
+    if any(exact_json(shaped.get(name)) != exact_json(row.get(name)) for name in RECEIPT_COLUMNS[dataset]):
+        raise ValueError(f"{dataset}: retained processor input differs from selected processing evidence")
+    return dict(value)
 
 
 def read_internal(selected: ReceiptInput) -> Iterable[dict]:
-    """Restore internal fields only after validating the entire selected dataset."""
+    """Read exact retained processor inputs after validating the selected dataset."""
     for row in _qualified_rows(selected):
-        yield restore_legacy_record(selected.dataset, row)
+        yield _processor_input(selected.dataset, row)
 
 
 def materialize_internal(selected: ReceiptInput, destination: Path) -> Path:
-    """Bounded temporary input for existing algorithms, with qualified metadata.
+    """Bounded exact retained processor inputs, with qualified file metadata.
 
     File-level placement/aggregation metadata is restored only when every row's
     receipt agrees. This keeps CFR incremental placement from becoming a blind
@@ -123,17 +145,17 @@ def materialize_internal(selected: ReceiptInput, destination: Path) -> Path:
             if held and any(value != held[0] for value in held):
                 raise ValueError("Empty input metadata differs across selected receipts")
             metadata = held[0] if held else {}
-    schema = pa.schema([(name, TYPES[t]) for name, t in LEGACY_COLUMNS[selected.dataset]])
+    schema = pa.schema([(name, TYPES[t]) for name, t in SOURCE_COLUMNS[selected.dataset]])
     if metadata:
         schema = schema.with_metadata(metadata)
 
     def restored():
         if first is not None:
-            yield restore_legacy_record(selected.dataset, first)
+            yield _processor_input(selected.dataset, first)
         for row in rows:
             if row.get("input_metadata", {}) != metadata:
                 raise ValueError("Input metadata differs across selected receipts")
-            yield restore_legacy_record(selected.dataset, row)
+            yield _processor_input(selected.dataset, row)
 
     return write_rows(restored(), destination, schema)
 
@@ -146,6 +168,7 @@ def write_records(
     input_metadata: Mapping | None = None,
     project: Callable[[Mapping], Mapping] | None = None,
     observation_context: ReceiptContext | None = None,
+    prior_receipts: Sequence[Path] = (),
 ) -> tuple[Path, Path]:
     """Write one dataset and preserve malformed-input attempts without subjects.
 
@@ -154,7 +177,8 @@ def write_records(
     rows require a stable subject identity and exactly one matching receipt.
     """
     declared = policy(dataset)
-    with TemporaryDirectory(prefix="regulations-refusals-") as temp:
+    with TemporaryDirectory(prefix="regulations-refusals-") as temp, ExitStack() as stack:
+        lineages = [stack.enter_context(ReceiptLineage([path], dataset=dataset)) for path in prior_receipts]
         refusal_path = Path(temp) / "refused.parquet"
         writer = pq.ParquetWriter(refusal_path, RECEIPT_SCHEMA, compression="zstd")
         refused = []
@@ -200,6 +224,8 @@ def write_records(
                             flush()
                         continue
                     shaped["input_metadata"] = dict(input_metadata or {})
+                    for lineage in lineages:
+                        context = lineage.inherit(context, declared, shaped)
                     yield shaped, context
             finally:
                 flush()
@@ -230,14 +256,13 @@ def write_held_dataset(
     processor: str = "spicy-regs:regulations-native-v1",
     witnesses: Sequence[Mapping] = (),
     include_source_witness: bool = True,
+    prior_receipts: Sequence[Path] = (),
 ) -> tuple[Path, Path]:
-    """Replay every retained row with a pinned file witness and exact row locator.
+    """Convert retained rows with witnesses to their exact receipt-held input.
 
     Existing source metadata (placement rules, omitted dates, evaluation clock)
     goes into each receipt. Neither source bytes nor their metadata are deleted.
     """
-    with source.open("rb") as body:
-        digest = file_digest(body, "sha256").hexdigest()
     parquet = pq.ParquetFile(source)
     metadata = dict(parquet.schema_arrow.metadata or {})
     # The exact input metadata is receipt data, including byte-valued keys.
@@ -249,9 +274,9 @@ def write_held_dataset(
             for row in batch.to_pylist():
                 witness = {
                     "source_id": f"retained:{dataset}",
-                    "source_uri": str(source),
-                    "sha256": digest,
-                    "locator": f"row:{ordinal}",
+                    "source_uri": None,
+                    "sha256": sha256(exact_json(row).encode()).hexdigest(),
+                    "locator": "receipt.values.raw_conversion_inputs (canonical exact_json)",
                     "body_version": None,
                 }
                 context = ReceiptContext(
@@ -266,9 +291,9 @@ def write_held_dataset(
 
     input_witness = {
         "source_id": f"retained:{dataset}",
-        "source_uri": str(source),
-        "sha256": digest,
-        "locator": None,
+        "source_uri": None,
+        "sha256": sha256(exact_json(metadata).encode()).hexdigest(),
+        "locator": "receipt.values.input_metadata (canonical exact_json)",
         "body_version": None,
     }
     observed = ReceiptContext(
@@ -278,7 +303,8 @@ def write_held_dataset(
         ([input_witness] if include_source_witness else []) + list(witnesses),
         {"kind": "input_file_metadata", "rows": parquet.metadata.num_rows},
     )
-    return write_records(dataset, records(), destination, input_metadata=metadata, observation_context=observed)
+    return write_records(dataset, records(), destination, input_metadata=metadata, observation_context=observed,
+                         prior_receipts=prior_receipts)
 
 
 def build_local_generation(
@@ -290,16 +316,16 @@ def build_local_generation(
     publication_status: str = "local-partial",
     witnesses: Sequence[Mapping] = (),
     include_source_witness: bool = True,
+    prior_receipts: Mapping[str, Sequence[Path]] | None = None,
 ):
     """Replay explicitly selected held datasets and admit their complete row joins.
 
-    Local-partial is deliberate: a retained input does not prove source coverage
-    or authorization to switch an existing remote family. Full publication and
-    complete-family reconciliation remain the integration owner's work.
+    Local-partial is deliberate: retained input alone does not prove complete
+    source coverage. Publishers must explicitly declare and qualify a full family.
     """
     from spicy_regs.generations import build_generation
 
-    if not sources or not set(sources) <= set(LEGACY_COLUMNS):
+    if not sources or not set(sources) <= set(SOURCE_COLUMNS):
         raise ValueError("Explicit assigned regulations datasets are required")
     destination.parent.mkdir(parents=True, exist_ok=True)
     with TemporaryDirectory(prefix="regulations-native-", dir=destination.parent) as temp:
@@ -314,6 +340,7 @@ def build_local_generation(
                 generation_id=generation_id,
                 witnesses=witnesses,
                 include_source_witness=include_source_witness,
+                prior_receipts=(prior_receipts or {}).get(name, ()),
             )
             subjects.append(subject)
             receipts.append(receipt)
@@ -380,6 +407,7 @@ def build_from_receipts(
             family=family,
             witnesses=witnesses,
             include_source_witness=False,
+            prior_receipts={name: [i.receipts for i in inputs if i.dataset == name] for name in outputs},
         )
 
 
@@ -572,4 +600,5 @@ def merge_native_staging(
             family=dataset,
             witnesses=pins,
             include_source_witness=False,
+            prior_receipts={dataset: [i.receipts for i in [*staged, *([prior] if prior is not None else [])]]},
         )

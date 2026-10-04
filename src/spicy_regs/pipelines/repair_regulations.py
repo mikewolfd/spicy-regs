@@ -132,14 +132,7 @@ def repair_records(
 
             work = staging / "processing"
             work.mkdir()
-            selected = output_dir / f"{table}.parquet"
-            if selected.exists() and not (output_dir / ".native-state" / f"{table}.json").exists():
-                # Explicit held-input repair: leave its original bytes untouched until validation succeeds.
-                from shutil import copyfile
-
-                copyfile(selected, work / f"{table}.parquet")
-            else:
-                restore_dataset(output_dir, table, work / f"{table}.parquet")
+            restore_dataset(output_dir, table, work / f"{table}.parquet")
             merge_staging_files(
                 staging,
                 work,
@@ -189,7 +182,7 @@ def _repair_comments(
     columns, key = list(record_type.schema), record_type.dedup_key
     validate_staged_comments(staging)
     files = ", ".join(f"'{iceberg._sql_str(str(path))}'" for path in sorted((staging / "comments").glob("*.parquet")))
-    project = ", ".join(f'CAST("{column}" AS VARCHAR) AS "{column}"' for column in columns)
+    project = ", ".join(f'CAST("{column}" AS {record_type.sql_type(column)}) AS "{column}"' for column in columns)
     con = iceberg._connect()
     try:
         from spicy_regs.sources.regulatory_catalog import processing_table, ensure_native
@@ -206,12 +199,9 @@ def _repair_comments(
         if iceberg._read_snapshot(con, record_type) != snapshot:
             raise RuntimeError("the comments catalog moved since the repair read it; rerun the repair")
         prior_sql = f"SELECT * FROM {prior_table}"
-        missing_write_columns: set[str] = set()
-        missing_columns: set[str] = set()
-        prior_project = ", ".join(f'CAST("{column}" AS VARCHAR) AS "{column}"' for column in columns)
         con.execute(f"""
             CREATE TEMP TABLE _repair_prior AS
-            SELECT {prior_project} FROM ({prior_sql})
+            SELECT {project} FROM ({prior_sql})
             WHERE "{key}" IN (SELECT "{key}" FROM _repair_fresh)
         """)
         corrected = correction_query(
@@ -242,8 +232,6 @@ def _repair_comments(
             "mode": "apply" if apply else "dry-run",
             "source": dict(source_pins) if source_pins is not None else None,
             "catalog_snapshot": asdict(snapshot),
-            "schema_migration_required": sorted(missing_write_columns),
-            "snapshot_columns_null_filled": sorted(missing_columns),
             "identities": [row[0] for row in con.execute(f'SELECT "{key}" FROM _repair_fresh ORDER BY 1').fetchall()],
             "missing_identities": [
                 row[0]
@@ -269,12 +257,6 @@ def _repair_comments(
         path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
         if not apply:
             return receipt
-        if missing_write_columns:
-            raise ValueError(
-                "Migrate the comments schema through the catalog ingestion/export path, "
-                "then rerun the repair against its current write schema; missing: "
-                + ", ".join(sorted(missing_write_columns))
-            )
         if receipt["missing_identities"]:
             raise ValueError(
                 f"comment repair corrects existing rows; {len(receipt['missing_identities'])} staged "
@@ -326,9 +308,8 @@ def main(
 ) -> None:
     """Correct rows from one explicitly trusted source release.
 
-    Dockets and documents: existing local Parquet files are the prior
-    generation. No remote prior is downloaded: operators must retain the
-    intended files before this command. Comments: the catalog is the prior. A
+    Dockets and documents use the pinned local native selection and its receipts
+    as the prior generation. No remote prior is downloaded. Comments: the catalog is the prior. A
     dry run writes ``comments-repair.json``; ``--apply`` also writes the
     catalog, and ``--expected-snapshot`` pins it to a reviewed dry run.
     """

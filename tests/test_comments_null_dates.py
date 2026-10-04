@@ -1,4 +1,4 @@
-"""Unknown posted dates survive catalog seeds, the comments index, the agency mirror and consumers."""
+"""Unknown posted dates survive native catalog writes, the comments index, the agency mirror and consumers."""
 
 import duckdb
 import polars as pl
@@ -29,8 +29,8 @@ def comment(identity, date):
     }
 
 
-def test_unknown_dates_survive_catalog_seed_index_and_agency_mirror(tmp_path):
-    """An unknown date keeps its own NULL index group and survives the seed, the rollups and the mirror."""
+def test_unknown_dates_survive_native_catalog_index_and_agency_mirror(tmp_path):
+    """An unknown date keeps its NULL index group across native storage and consumers."""
     output = tmp_path / "output"
     output.mkdir()
     source = tmp_path / "source.parquet"
@@ -41,7 +41,8 @@ def test_unknown_dates_survive_catalog_seed_index_and_agency_mirror(tmp_path):
     with duckdb.connect() as con:
         con.execute(f"ATTACH ':memory:' AS {iceberg._CATALOG_ALIAS}")
         iceberg._ensure_table(con, COMMENT)
-        assert iceberg.seed_comments_from_parquet(con, str(source), COMMENT) == 2
+        con.execute("CREATE TEMP TABLE source AS SELECT * FROM read_parquet(?)", [str(source)])
+        iceberg.replace_rows(con, COMMENT, "source")
         got = con.execute(
             f"SELECT comment_id,posted_date FROM {iceberg._qualified(COMMENT)} ORDER BY comment_id"
         ).fetchall()

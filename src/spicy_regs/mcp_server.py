@@ -475,6 +475,8 @@ def _tables_named(cursor: duckdb.DuckDBPyConnection, sql: str) -> set[str]:
             continue
         if not isinstance(node, dict):
             continue
+        if node.get("type") == "TABLE_FUNCTION" and node.get("function", {}).get("function_name", "").lower() in {"query", "query_table"}:
+            raise ValueError("Dynamic query functions are not supported; name the source relations directly")
         if node.get("type") == "BASE_TABLE":
             name, schema = node["table_name"].lower(), node["schema_name"].lower()
             if node["catalog_name"].lower() in ("", "memory") and (schema == "main" or (not schema and name not in ctes)):
@@ -567,7 +569,7 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
     if rulemaking is not None:
         con.execute("CREATE TABLE _spicy_rulemaking (snapshot VARCHAR)")
         con.execute("INSERT INTO _spicy_rulemaking VALUES (?)", [json.dumps(rulemaking)])
-    if local is not None and local.is_download:
+    if local is not None and (local.is_download or local.native):
         con.execute("CREATE TABLE _spicy_local_selection (snapshot VARCHAR)")
         con.execute(
             "INSERT INTO _spicy_local_selection VALUES (?)",
@@ -578,6 +580,9 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
                         "signatures": signatures,
                         "selected_tables": list(local.files),
                         "receipt_members": {name: str(path) for name, path in local.receipts.items()},
+                        "native": {name: {"subjects": [str(p) for p in value.subjects],
+                                           "receipts": str(value.receipts), "generation_id": value.generation_id}
+                                   for name, value in local.native.items()},
                     }
                 )
             ],
@@ -586,7 +591,7 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
         key.removesuffix(".parquet") for e in publication_index["families"].values() for key in e["tables"]
     ]
     snapshot_names = [key.removesuffix(".parquet") for key in (rulemaking or {"tables": {}})["tables"]]
-    selected_names = list(local.files) if local is not None and local.is_download else []
+    selected_names = list(local.files) if local is not None else []
     for name in dict.fromkeys((*TABLES, *managed_names, *snapshot_names, *selected_names)):
         published = table_descriptor(publication_index, f"{name}.parquet")
         paths = [member.path for member in table_members(publication_index, f"{name}.parquet")]
@@ -600,7 +605,14 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
         else:
             urls = [f"{R2_BASE_URL}/{path}" for path in paths]
         try:
-            con.execute(f'CREATE VIEW "{name}" AS SELECT * FROM {parquet_scan(urls)}')
+            if not urls and local is not None and name in local.native:
+                import pyarrow as pa
+                from spicy_regs.etl_policy_registry import installed_policies
+                con.register("_empty_native", pa.Table.from_batches([], schema=installed_policies()[name].subject_schema))
+                con.execute(f'CREATE TABLE "{name}" AS SELECT * FROM _empty_native')
+                con.unregister("_empty_native")
+            else:
+                con.execute(f'CREATE VIEW "{name}" AS SELECT * FROM {parquet_scan(urls)}')
             if published is not None:
                 actual = con.execute(f'DESCRIBE "{name}"').fetchall()
                 if [[row[0], row[1]] for row in actual] != published["columns"]:
@@ -608,7 +620,7 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
                     raise RuntimeError(f"Published schema differs from admitted generation: {name}")
             allowed_paths.extend(urls)
         except duckdb.Error as exc:
-            required = published is not None or pinned is not None or (local is not None and local.is_download)
+            required = published is not None or pinned is not None or (local is not None and (local.is_download or local.native))
             # A remote legacy table is skipped only when it is absent; a throttled or failing read refuses the
             # build, so a refresh keeps the connection it would replace instead of serving one without the table.
             absent = local is not None or (isinstance(exc, duckdb.HTTPException) and exc.status_code == 404)
@@ -629,7 +641,16 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
                 receipt_members.append(f"{R2_BASE_URL}/{family['prefix'].rstrip('/')}/{item['key']}")
     if receipt_members:
         try:
-            con.execute(f'CREATE VIEW etl_receipts AS SELECT * FROM {parquet_scan(receipt_members)}')
+            if local is not None and local.native:
+                groups = {}
+                for name, value in local.native.items():
+                    groups.setdefault(str(value.receipts), []).append(name)
+                scans = [f"SELECT * FROM {parquet_scan([path])} WHERE dataset IN (" +
+                         ",".join("'" + name.replace("'", "''") + "'" for name in names) + ")"
+                         for path, names in groups.items()]
+                con.execute('CREATE VIEW etl_receipts AS ' + ' UNION ALL '.join(scans))
+            else:
+                con.execute(f'CREATE VIEW etl_receipts AS SELECT * FROM {parquet_scan(receipt_members)}')
             actual = [[r[0], r[1]] for r in con.execute('DESCRIBE etl_receipts').fetchall()]
             for family in publication_index["families"].values():
                 if "etlReceipts" in family and family["etlReceipts"]["columns"] != actual:
@@ -735,7 +756,6 @@ def _install_relationship_views(con: duckdb.DuckDBPyConnection) -> None:
     from spicy_regs.relationship_views import install_relationship_views
 
     status = _publication_status(con)
-    relationships = install_relationship_views(con, status["tables"], publication=status["publication"])
     from spicy_regs.fec_receipt_adapter import ReceiptAdapter, receipt_owner
     from spicy_regs.relationship_views.fec import FEC_VIEWS
     from spicy_regs.relationship_views.sql_views import install_sql_views
@@ -749,18 +769,25 @@ def _install_relationship_views(con: duckdb.DuckDBPyConnection) -> None:
                   in local_selection.get("receipt_members", {})
                   for name in family.get("etlReceipts", {}).get("datasets", ())
                   if declared.get(name, {}).get("receipt_only")}
+    native = local_selection.get("native", {}) if local_selection else {}
+    processing |= {name for name in native if declared.get(name, {}).get("receipt_only")}
     local_directory = local_selection["directory"] if local_selection else DATA_DIR
     adapter = ReceiptAdapter(con, index, R2_BASE_URL, local_directory=local_directory,
-                             local_receipts=local_selection.get("receipt_members") if local_selection else None)
-    for spec in FEC_VIEWS:
-        if (set(spec.required) <= set(status["tables"]) | processing
-                and any(receipt_owner(index, table) for table in spec.required)):
-            prepared = adapter.prepare(spec, spec.query(status["publication"]))
-            item = install_sql_views(con, prepared.required, [prepared], status["publication"])[spec.name]
-            item["dependencies"] = list(spec.required)
-            item["metadata"]["input_publications"] = {table: status["publication"].get(table) for table in spec.required}
-            item["metadata"]["availability_basis"] = "Pinned subject and receipt bytes and exact row-version joins validated before binding."
-            relationships[spec.name] = item
+                             local_receipts=local_selection.get("receipt_members") if local_selection else None, local_native=native)
+    # A mixed old/native dependency set is a refusal, never a pass-through.
+    adapted = [spec for spec in FEC_VIEWS
+               if set(spec.required) <= set(status["tables"]) | processing
+               and any(receipt_owner(index, table) or table in native for table in spec.required)]
+    for spec in adapted:
+        adapter.require_selected(spec.required)
+    relationships = install_relationship_views(con, status["tables"], publication=status["publication"])
+    for spec in adapted:
+        prepared = adapter.prepare(spec, spec.query(status["publication"]))
+        item = install_sql_views(con, prepared.required, [prepared], status["publication"])[spec.name]
+        item["dependencies"] = list(spec.required)
+        item["metadata"]["input_publications"] = {table: status["publication"].get(table) for table in spec.required}
+        item["metadata"]["availability_basis"] = "Pinned subject and receipt bytes and exact row-version joins validated before binding."
+        relationships[spec.name] = item
     selected = _fec_release_configuration(con, status["publication"])
     if selected is not None:
         from spicy_regs.fec_release import install_views
@@ -799,6 +826,10 @@ def _publication_status(cursor: duckdb.DuckDBPyConnection) -> dict:
         for family, entry in index["families"].items()
         for key in entry["tables"]
     }
+    if local is not None:
+        managed.update({name: {"status": "native_selected", "generation_id": value["generation_id"],
+                               "verification": "Selected bytes and exact receipt joins verified; file changes checked around statements."}
+                        for name, value in local.get("native", {}).items()})
     snapshot = {
         key.removesuffix(".parquet"): {
             "status": "rulemaking_snapshot",
@@ -1291,6 +1322,8 @@ def _register_tools(mcp: MCPServer) -> None:
         FROM-first shorthand are accepted as SELECT. Statements that write
         (COPY TO, ATTACH, CREATE, INSERT, DROP, EXPORT, SET, ...) are refused.
         EXPLAIN is refused because its ANALYZE form can execute writes.
+        Internal _spicy_ relations and dynamic query()/query_table() functions
+        are refused; name public tables or views directly.
         The connection reads either R2 or an explicitly configured local directory.
         Local mode never falls back to remote files. One view exists per
         table listed by list_sources. Always include a LIMIT in exploratory
@@ -1312,7 +1345,11 @@ def _register_tools(mcp: MCPServer) -> None:
 
         with _statement_timeout(cursor):
             relationships = _connection_relationships(cursor)
-            for name in _tables_named(cursor, sql):
+            named = _tables_named(cursor, sql)
+            internal = sorted(name for name in named if name.startswith("_spicy_"))
+            if internal:
+                raise ValueError("Internal relations are not queryable: " + ", ".join(internal))
+            for name in named:
                 release = relationships.get(name, {}).get("release_compatibility")
                 if release is not None and release["status"] != "compatible":
                     raise ValueError(f"Qualified FEC view {name} is disabled: {relationships[name]['reason']}")

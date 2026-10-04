@@ -125,7 +125,7 @@ def test_missing_receipts_refuse_before_processing_read(tmp_path, monkeypatch):
     first.build_receipts(directory, mixed_builder)
     index = select_bundle(monkeypatch, directory, first)
     del index["families"][first.name]["etlReceipts"]
-    with pytest.raises(ValueError, match="conversion refused"):
+    with pytest.raises(ValueError, match="native input requires"):
         SelectedPriors(tmp_path / "bad").get("members")
 
 
@@ -144,13 +144,15 @@ def test_bad_native_value_keeps_refusal_and_cannot_admit_complete_family(tmp_pat
 
     with pytest.raises(ValueError, match="conversion refused"):
         Members().build_receipts(tmp_path, bad)
-    assert "refused" in pq.read_table(tmp_path / "etl_receipts.parquet")["outcome"].to_pylist()
+    assert not (tmp_path / "etl_receipts.parquet").exists()
+    [receipt] = (tmp_path / ".builds").glob("*/candidate/etl_receipts.parquet")
+    assert "refused" in pq.read_table(receipt)["outcome"].to_pylist()
 
 
 def test_held_citations_carries_exact_sibling_receipts_and_zero_result_checkpoint(tmp_path, monkeypatch):
     import json
     import pyarrow as pa
-    from spicy_regs.legislative_receipts import migrate_outputs, restore_prior
+    from spicy_regs.legislative_receipts import write_legislative_outputs, restore_prior
     from spicy_regs.pipelines.rollups.held_citations import HeldCitationsRollup
     from spicy_regs.etl_receipts import validate_receipt_bundle
     from spicy_regs.transforms.held_citations import NAMESPACE
@@ -161,8 +163,7 @@ def test_held_citations_carries_exact_sibling_receipts_and_zero_result_checkpoin
         for name in ("house_activity_reports", "budget_volumes", "bill_committee_actions", "document_citations")
     ]
     bundle = tmp_path / "bundle"
-    migrate_outputs(raws, bundle, generation_id="before")
-    monkeypatch.setenv("LEGISLATIVE_PRIOR_BUNDLE", str(bundle))
+    write_legislative_outputs(raws, bundle, generation_id="before")
     monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
     manifest = tmp_path / "selection.json"
     manifest.write_text(
@@ -181,6 +182,20 @@ def test_held_citations_carries_exact_sibling_receipts_and_zero_result_checkpoin
     monkeypatch.setattr("spicy_regs.pipelines.rollups.held_citations.load_public_http", lambda *_: None)
     output = tmp_path / "output"
     output.mkdir()
+    from spicy_regs.selected_generations import remember_selection, SelectedDataset
+
+    remember_selection(
+        output,
+        [
+            SelectedDataset(
+                p.dataset,
+                () if p.receipt_only else (bundle / (p.dataset + ".parquet"),),
+                bundle / "etl_receipts.parquet",
+                "before",
+            )
+            for p in pipeline.receipt_policies
+        ],
+    )
     paths = pipeline.build(output)
     assert {p.name for p in paths} == set(pipeline.outputs)
     validate_receipt_bundle(
@@ -193,9 +208,9 @@ def test_held_citations_carries_exact_sibling_receipts_and_zero_result_checkpoin
     after = pq.read_table(output / "etl_receipts.parquet").to_pylist()
     for old in before:
         if old["dataset"] == "budget_volumes":
-            [new] = [r for r in after if r["dataset"] == old["dataset"] and r["attempt_id"] == old["attempt_id"]]
-            assert new["witnesses"] == old["witnesses"]
-    restored = restore_prior(output / ".held-native", tmp_path / "restored")
+            [new] = [r for r in after if r["dataset"] == old["dataset"] and r["record_id"] == old["record_id"]]
+            assert new["witnesses"][: len(old["witnesses"])] == old["witnesses"]
+    restored = restore_prior(next((output / ".builds").glob("*/legislative-bundle")), tmp_path / "restored")
     checkpoint = read_checkpoints(restored["document_citations"], NAMESPACE)
     assert len(checkpoint) == 1 and checkpoint[0]["findings"] == 0
 
@@ -258,11 +273,9 @@ def test_local_mixed_rollup_can_build_twice_in_one_output_directory(tmp_path, mo
     assert len(list((tmp_path / ".builds").iterdir())) == 2
 
 
-def test_selected_legacy_generation_is_migrated_before_resuming(tmp_path, monkeypatch):
+def test_selected_legacy_generation_refuses_without_conversion(tmp_path, monkeypatch):
     from types import SimpleNamespace
     import pyarrow as pa
-    from spicy_regs.etl_receipts import read_attempts, select_receipts
-    from spicy_regs.pipelines.rollups.subject_receipts import dataset_policy
 
     directory = tmp_path / "legacy"
     directory.mkdir()
@@ -270,66 +283,164 @@ def test_selected_legacy_generation_is_migrated_before_resuming(tmp_path, monkey
     pq.write_table(pa.table({"unused": []}), directory / "etl_receipts.parquet")
     pipeline = SimpleNamespace(
         name="legacy-mixed",
-        receipt_generation_id="old-unused",
+        receipt_generation_id="unused",
         outputs=tuple(path.name for path in outputs),
         receipt_policies=MixedRollup.receipt_policies,
     )
     index = select_bundle(monkeypatch, directory, pipeline)
     del index["families"][pipeline.name]["etlReceipts"]
-    reader = SelectedPriors(tmp_path / "migration")
+    reader = SelectedPriors(tmp_path / "selected")
     for dataset in ("members", "laws", "bill_family_archives"):
-        restored = reader.get(dataset)
-        assert pq.read_table(restored).to_pylist() == pq.read_table(directory / (dataset + ".parquet")).to_pylist()
-        subjects, receipt, generation = reader.selections[dataset]
-        scoped = select_receipts(receipt, tmp_path / (dataset + "-receipts.parquet"), dataset=dataset)
-        assert list(read_attempts([scoped], dataset_policy(dataset), generation_id=generation))
-    assert pq.read_schema(reader.get("bill_family_archives")).metadata[b"completed"] == b"yes"
+        with pytest.raises(ValueError, match="native input requires"):
+            reader.get(dataset)
+    assert not list(tmp_path.rglob("migrated"))
 
 
-def test_fec_committee_legacy_prior_migrates_and_preserves_exact_processing_values(tmp_path, monkeypatch):
-    from types import SimpleNamespace
-    import pyarrow as pa
-    from spicy_regs.transforms.build_fec_committees import COLUMNS, _SCHEMA
-    from spicy_regs.pipelines.rollups.subject_receipts import dataset_policy
+def test_remote_selection_wins_over_stale_local_family_and_local_snapshot_is_fixed(tmp_path, monkeypatch):
+    from spicy_regs.selected_generations import SelectedInputs
 
-    directory = tmp_path / "legacy-fec"
-    directory.mkdir()
-    row = dict.fromkeys(COLUMNS)
-    row.update(
-        committee_id="C00000001",
-        name="Source committee",
-        last_file_date="2026-09-30",
-        cycles_json="[ 2024, null, 2026, 2024 ]",
-        candidate_ids_json='["H0XX00001",null,"H0XX00001"]',
-    )
-    source = directory / "fec_committees.parquet"
-    pq.write_table(pa.Table.from_pylist([row], schema=_SCHEMA), source)
-    pq.write_table(pa.table({"unused": []}), directory / "etl_receipts.parquet")
-    pipeline = SimpleNamespace(
-        name="fec-committees",
-        receipt_generation_id="unused",
-        outputs=(source.name,),
-        receipt_policies=(dataset_policy("fec_committees"),),
-    )
-    index = select_bundle(monkeypatch, directory, pipeline)
-    owner = index["families"][pipeline.name]
-    del owner["etlReceipts"]
-    owner["artifactDigest"] = "sha256:" + "9" * 64
-    reader = SelectedPriors(tmp_path / "migration")
-    restored = reader.get("fec_committees")
-    assert pq.read_table(restored).to_pylist() == [row]
-    subjects, receipt, generation = reader.selections["fec_committees"]
-    assert pq.read_table(subjects[0])["cycles"].to_pylist() == [[2024, None, 2026, 2024]]
-    accepted = pq.read_table(receipt).to_pylist()[0]
-    assert accepted["generation_id"] == generation
-    assert accepted["witnesses"][0]["body_version"] == owner["artifactDigest"]
-    assert accepted["witnesses"][0]["sha256"] == "sha256:" + hashlib.sha256(source.read_bytes()).hexdigest()
-    # Removing receipts from an already-native selected file cannot masquerade as a source-shaped prior.
-    native = tmp_path / "native-without-receipts"
-    native.mkdir()
-    shutil.copyfile(subjects[0], native / source.name)
-    shutil.copyfile(receipt, native / "etl_receipts.parquet")
-    broken = select_bundle(monkeypatch, native, pipeline)
-    del broken["families"][pipeline.name]["etlReceipts"]
-    with pytest.raises(ValueError):
-        SelectedPriors(tmp_path / "missing-native-evidence").get("fec_committees")
+    monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
+    local = tmp_path / "local"
+    local.mkdir()
+    MixedRollup().build_receipts(local, mixed_builder)
+    captured = SelectedInputs(local, tmp_path / "captured", public_url="")
+    old = captured.select("members")
+
+    remote = tmp_path / "remote"
+    remote.mkdir()
+    pipeline = MixedRollup()
+
+    def newer(directory, *, download_prior):
+        paths = mixed_builder(directory, download_prior=download_prior)
+        shaped(directory / "members.parquet", [{"bioguide_id": "X", "name_first": "Remote update"}])
+        return paths
+
+    pipeline.build_receipts(remote, newer)
+    index = select_bundle(monkeypatch, remote, pipeline)
+    selected = SelectedPriors(tmp_path / "selected", root=local, index=index)
+    assert pq.read_table(selected.get("members"))["name_first"].to_pylist() == ["Remote update"]
+    # Explicit local mode sees the pinned local generation, despite configured remote access.
+    local_only = SelectedInputs(local, tmp_path / "local-selected", public_url="")
+    assert local_only.select("members") == old
+    # Advancing a pointer cannot retroactively change an already captured input.
+    from spicy_regs.selected_generations import remember_selection
+
+    remember_selection(local, [selected.selected.select("members")])
+    assert captured.select("members") == old
+
+
+def test_mutated_local_member_cannot_establish_a_prior(tmp_path, monkeypatch):
+    from spicy_regs.selected_generations import SelectedInputs
+
+    monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
+    MixedRollup().build_receipts(tmp_path, mixed_builder)
+    selection = SelectedInputs(tmp_path, tmp_path / "one", public_url="").select("members")
+    selection.subjects[0].write_bytes(b"changed")
+    with pytest.raises(ValueError, match="Selected local native member changed"):
+        SelectedPriors(tmp_path / "two", root=tmp_path).get("members")
+
+
+def test_run_uses_pinned_native_required_input_without_convenience_copy(tmp_path, monkeypatch):
+    import json
+    from spicy_regs.generations import verify_generation
+
+    class ReadsMembers(SubjectReceiptRollup):
+        name = "members-read-test"
+        inputs = ("members.parquet",)
+        output = "members.parquet"
+
+        def build(self, output_dir):
+            def producer(work):
+                path = work / "members.parquet"
+                assert pq.read_table(path)["bioguide_id"].to_pylist() == ["X"]
+                return path
+
+            return self.build_receipts(output_dir, producer)
+
+    monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
+    MixedRollup().build_receipts(tmp_path, mixed_builder)
+    pointer = json.loads((tmp_path / ".native-state/selection.json").read_text())["members"]
+    old_receipt_digest = pointer["receipts"]["sha256"]
+    (tmp_path / "members.parquet").unlink()
+    monkeypatch.setattr("spicy_regs.sources.r2.download", lambda *_: pytest.fail("convenience download"))
+    ReadsMembers(output_dir=tmp_path).run()
+    [directory] = (tmp_path / "generations").iterdir()
+    artifact = verify_generation(directory)
+    assert artifact.root["spec"]["parents"]["members/etl_receipts.parquet"]["sha256"] == old_receipt_digest
+
+
+def test_refused_refresh_preserves_visible_and_selected_native_rows(tmp_path, monkeypatch):
+    from spicy_regs.local_data import local_selection
+
+    class Members(SubjectReceiptRollup):
+        name = "members-refresh-test"
+        output = "members.parquet"
+
+        def build(self, output_dir):
+            raise NotImplementedError
+
+    def good(work):
+        return shaped(work / "members.parquet", [{"bioguide_id": "X", "fec_ids_json": '["A"]'}])
+
+    def bad(work):
+        return shaped(work / "members.parquet", [{"bioguide_id": "X", "fec_ids_json": "broken"}])
+
+    monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
+    Members().build_receipts(tmp_path, good)
+    visible = (tmp_path / "members.parquet").read_bytes()
+    receipt = (tmp_path / "etl_receipts.parquet").read_bytes()
+    pointer = (tmp_path / ".native-state/selection.json").read_bytes()
+    before = local_selection(tmp_path)
+    before_path = before.files["members"][0]
+    assert pq.read_table(before_path)["bioguide_id"].to_pylist() == ["X"]
+    with pytest.raises(ValueError, match="conversion refused"):
+        Members().build_receipts(tmp_path, bad)
+    assert (tmp_path / "members.parquet").read_bytes() == visible
+    assert (tmp_path / "etl_receipts.parquet").read_bytes() == receipt
+    assert (tmp_path / ".native-state/selection.json").read_bytes() == pointer
+    selected = local_selection(tmp_path)
+    assert pq.read_table(selected.files["members"][0])["bioguide_id"].to_pylist() == ["X"]
+    attempts = [
+        r for p in (tmp_path / ".builds").glob("*/candidate/etl_receipts.parquet") for r in pq.read_table(p).to_pylist()
+    ]
+    assert any(r["outcome"] == "refused" for r in attempts)
+
+
+@pytest.mark.parametrize("identities", [(), ("C00000001", "C00000002")])
+def test_fec_committee_multipart_prior_reads_all_members_without_mutating_selection(tmp_path, identities):
+    from spicy_regs.etl_receipts import combine_receipts
+    from spicy_regs.selected_generations import SelectedDataset, remember_selection
+    from spicy_regs.transforms.build_fec_committees import COLUMNS
+    from spicy_regs.transforms.fec_identity_receipts import IdentityReceiptWriter
+    from tests.test_fec_identity_receipts import WITNESS
+
+    dataset = "fec_committees"
+    originals = [
+        dict.fromkeys(COLUMNS) | {"committee_id": identity, "cycles_json": "[ 2024, 2024 ]"} for identity in identities
+    ]
+    parts = []
+    receipts = []
+    for ordinal, original in enumerate(originals or [None]):
+        directory = tmp_path / "selected" / str(ordinal)
+        with IdentityReceiptWriter(directory, generation_id="selected", tables=[dataset]) as writer:
+            if original is not None:
+                writer.emit(dataset, original, input_witness=WITNESS)
+        if original is not None:
+            parts.append(directory / (dataset + ".parquet"))
+        receipts.append(directory / "etl_receipts.parquet")
+    receipt_dir = tmp_path / "selected" / "receipts"
+    receipt_dir.mkdir()
+    combined = combine_receipts(receipts, receipt_dir / "etl_receipts.parquet")
+    root = tmp_path / "output"
+    remember_selection(root, [SelectedDataset(dataset, tuple(parts), combined, "selected")])
+    before = {
+        p.relative_to(tmp_path / "selected"): p.read_bytes() for p in (tmp_path / "selected").rglob("*") if p.is_file()
+    }
+
+    restored = SelectedPriors(tmp_path / "private", root=root, public_url="").get(dataset)
+
+    assert pq.read_table(restored).to_pylist() == originals
+    after = {
+        p.relative_to(tmp_path / "selected"): p.read_bytes() for p in (tmp_path / "selected").rglob("*") if p.is_file()
+    }
+    assert after == before

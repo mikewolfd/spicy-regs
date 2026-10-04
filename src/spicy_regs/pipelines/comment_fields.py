@@ -2,7 +2,7 @@
 
 The catalog replaces a row only when its ``modify_date`` moves, and the manifest skips keys already read, so rows
 ingested before a field was retained keep it NULL: the four comment-reference columns, ``subtype`` and
-``duplicate_comments`` (``iceberg._COMMENT_ADDED_COLUMNS``), and ``attachments_json`` wherever the row's first read
+``duplicate_comments`` (``comment_fields_write.FILL_COLUMNS``), and ``attachments_json`` wherever the row's first read
 lacked the attachments. One pass keeps, per object: its key and the GET's ETag and size; the whole thin-table row
 through ``COMMENT.extract`` (one spelling), with the body as its SHA-256 and length; and every other stated attribute
 as compact JSON (``attributes_json``: the keys the extract does not map, non-null only), which ``comment_attributes``

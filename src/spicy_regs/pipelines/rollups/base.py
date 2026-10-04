@@ -175,14 +175,19 @@ class RollupPipeline(Pipeline):
             parents = self._prime(build_dir, prior_index)
             remote = self._observe_remote_inputs(build_dir, public_url)
             logger.info("Building rollup {}...", self.output)
-            built = self.build(build_dir)
+            self._defer_native_selection = True
+            try:
+                built = self.build(build_dir)
+            finally:
+                self._defer_native_selection = False
             if self._observe_remote_inputs(build_dir, public_url) != remote:
                 raise publication.PublicationError("A remote input changed while the rollup built; rebuild")
             parents |= remote
             out_paths = built if isinstance(built, tuple) else (built,)
             family = self.name
-            expected_keys = tuple(key for key in (self.outputs or (self.output,))
-                                  if key not in self.receipt_only_tables)
+            expected_keys = tuple(
+                key for key in (self.outputs or (self.output,)) if key not in self.receipt_only_tables
+            )
             if len(out_paths) != len(expected_keys) or set(output_keys(out_paths, self.partitioned)) != set(
                 expected_keys
             ):
@@ -226,15 +231,27 @@ class RollupPipeline(Pipeline):
         with TemporaryDirectory(prefix=".generation-", dir=output_dir) as staging:
             directory = Path(staging) / "artifact"
             artifact = build_generation(
-                directory, family=family, files=out_paths,
-                expected_keys=expected_keys, schemas=self.generation_schemas(),
-                read_snapshot=prior_index, carried_forward=carried_forward,
+                directory,
+                family=family,
+                files=out_paths,
+                expected_keys=expected_keys,
+                schemas=self.generation_schemas(),
+                read_snapshot=prior_index,
+                carried_forward=carried_forward,
                 publication_status=publication_status,
                 inputs=self.source_evidence.inputs() if self.source_evidence else (),
-                parents=parents, partitioned=partitioned,
+                parents=parents,
+                partitioned=partitioned,
                 **self.generation_kwargs(out_paths),
-                **({"receipt_path": build_dir / "etl_receipts.parquet", "receipt_policies": self.receipt_policies,
-                    "receipt_generation_id": self.receipt_generation_id} if self.receipt_policies else {}),
+                **(
+                    {
+                        "receipt_path": build_dir / "etl_receipts.parquet",
+                        "receipt_policies": self.receipt_policies,
+                        "receipt_generation_id": self.receipt_generation_id,
+                    }
+                    if self.receipt_policies
+                    else {}
+                ),
             )
             destination = generations / artifact.pin.artifact_digest.removeprefix("sha256:")
             if destination.exists():
@@ -248,14 +265,20 @@ class RollupPipeline(Pipeline):
             if not public_url:
                 raise RuntimeError("Generation publication requires R2_PUBLIC_URL")
             publication.publish_generation(
-                destination, client=r2.get_r2_client(),
-                bucket=getenv("R2_BUCKET_NAME", "spicy-regs"), prior_index=prior_index,
+                destination,
+                client=r2.get_r2_client(),
+                bucket=getenv("R2_BUCKET_NAME", "spicy-regs"),
+                prior_index=prior_index,
                 evidence_directories=(self.source_evidence.artifact_dir,) if self.source_evidence else (),
-                added_tables=frozenset(self.added_tables), receipt_only_tables=frozenset(self.receipt_only_tables),
+                added_tables=frozenset(self.added_tables),
+                receipt_only_tables=frozenset(self.receipt_only_tables),
             )
             from spicy_regs.sources.cloudflare import purge_urls
 
             purge_urls([f"{public_url.rstrip('/')}/{key}" for key in (publication.INDEX_V2_KEY, publication.INDEX_KEY)])
+        from spicy_regs.selected_generations import remember_generation
+
+        remember_generation(output_dir, destination, artifact)
         logger.info("Done!")
 
     def _prime(self, output_dir: Path, snapshot: Mapping | None = None) -> dict[str, dict]:
@@ -289,8 +312,10 @@ class RollupPipeline(Pipeline):
                 parent = {"sha256": descriptor["sha256"], "byteSize": descriptor["byteSize"]}
             else:
                 with local.open("rb") as stream:
-                    parent = {"sha256": "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest(),
-                              "byteSize": local.stat().st_size}
+                    parent = {
+                        "sha256": "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest(),
+                        "byteSize": local.stat().st_size,
+                    }
             if owner:
                 parent |= {"family": owner[0], "artifactDigest": owner[1]["artifactDigest"]}
             parents[remote_key] = parent
@@ -303,8 +328,10 @@ class RollupPipeline(Pipeline):
             local = output_dir / remote_key
             if local.exists():
                 with local.open("rb") as stream:
-                    observed[remote_key] = {"sha256": "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest(),
-                                            "byteSize": local.stat().st_size}
+                    observed[remote_key] = {
+                        "sha256": "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest(),
+                        "byteSize": local.stat().st_size,
+                    }
                 continue
             if not public_url:
                 raise RuntimeError(f"Rollup {self.output!r}: {remote_key} needs R2_PUBLIC_URL or a local copy")

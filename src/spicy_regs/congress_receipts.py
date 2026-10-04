@@ -3,15 +3,16 @@
 The source builders retain their acquisition, safety, merge and interpretation
 rules. This entry point supplies explicit prior selections, reconstructs private
 working inputs from matching receipts, and splits every owned output before
-admission. Legacy imports require explicit selection; missing receipts never
-silently turn into a legacy read.
+admission. Every incremental input must contain selected native subjects and
+matching receipts. There is no legacy import path.
 """
+
 from __future__ import annotations
 
 import hashlib
 import json
 import shutil
-import sqlite3
+from contextlib import ExitStack
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -23,21 +24,42 @@ import pyarrow.parquet as pq
 
 from spicy_regs.congress_subjects import IDENTITIES, INPUT_COLUMNS, RECEIPT_ONLY, map_record, subject_schema
 from spicy_regs.etl_receipts import (
-    RECEIPT_SCHEMA, DatasetPolicy, ReceiptContext, combine_receipts, failure_receipt,
-    observation_receipt, read_attempts, read_with_receipts, select_receipts, split_record,
-    subject_identity, validate_receipt_bundle,
+    RECEIPT_SCHEMA,
+    DatasetPolicy,
+    ReceiptContext,
+    ReceiptLineage,
+    combine_receipts,
+    failure_receipt,
+    observation_receipt,
+    read_attempts,
+    read_with_receipts,
+    select_receipts,
+    split_record,
+    validate_receipt_bundle,
 )
 from spicy_regs.transforms.parquet_rows import write_rows
 
-PROCESSOR = 'congress-subjects/1'
-RECEIPT_FIELDS = ('source_fields', 'source_metadata', 'source_schema', 'entry_kind')
-ACQUISITION_POLICY = DatasetPolicy('congress_acquisition', pa.schema([]), (), ('capture_event', 'build_event'),
-                                   policy_version=PROCESSOR, receipt_only=True)
+PROCESSOR = "congress-subjects/1"
+RECEIPT_FIELDS = ("source_fields", "source_metadata", "source_schema", "entry_kind")
+ACQUISITION_POLICY = DatasetPolicy(
+    "congress_acquisition",
+    pa.schema([]),
+    (),
+    ("capture_event", "build_event"),
+    policy_version=PROCESSOR,
+    receipt_only=True,
+)
 
 
 def policy(dataset: str) -> DatasetPolicy:
-    return DatasetPolicy(dataset, subject_schema(dataset), IDENTITIES.get(dataset, ()), RECEIPT_FIELDS,
-                         policy_version='congress-subjects/1', receipt_only=dataset in RECEIPT_ONLY)
+    return DatasetPolicy(
+        dataset,
+        subject_schema(dataset),
+        IDENTITIES.get(dataset, ()),
+        RECEIPT_FIELDS,
+        policy_version="congress-subjects/1",
+        receipt_only=dataset in RECEIPT_ONLY,
+    )
 
 
 def _rows(path: Path):
@@ -47,8 +69,8 @@ def _rows(path: Path):
 
 
 def _digest(path: Path) -> str:
-    with path.open('rb') as source:
-        return 'sha256:' + hashlib.file_digest(source, 'sha256').hexdigest()
+    with path.open("rb") as source:
+        return "sha256:" + hashlib.file_digest(source, "sha256").hexdigest()
 
 
 def _build_events(directory: Path, generation_id: str, builder: str, evidence, error=None):
@@ -58,37 +80,57 @@ def _build_events(directory: Path, generation_id: str, builder: str, evidence, e
     captured inputs, parser versions and incomplete responses keep their exact
     journal objects. A top-level failure still raises after this local record.
     """
-    event = {'builder': builder, 'outcome': 'error' if error else 'built',
-             'error_type': type(error).__name__ if error else None}
-    invocation = directory / 'build-event.json'
-    invocation.write_text(json.dumps(event, sort_keys=True) + '\n')
-    journal = directory / 'source-journal.jsonl'
+    event = {
+        "builder": builder,
+        "outcome": "error" if error else "built",
+        "error_type": type(error).__name__ if error else None,
+    }
+    invocation = directory / "build-event.json"
+    invocation.write_text(json.dumps(event, sort_keys=True) + "\n")
+    journal = directory / "source-journal.jsonl"
     if evidence is not None:
-        shutil.copyfile(evidence.artifact_dir / 'journal.jsonl', journal)
+        shutil.copyfile(evidence.artifact_dir / "journal.jsonl", journal)
 
     def records():
-        files = [(invocation, 'build_event')]
+        files = [(invocation, "build_event")]
         if journal.exists():
-            files.append((journal, 'capture_event'))
+            files.append((journal, "capture_event"))
         for path, field_name in files:
             digest = _digest(path)
             with path.open() as stream:
                 for line, raw in enumerate(stream):
-                    context = ReceiptContext(generation_id, f'{field_name}:{line}', PROCESSOR, [{
-                        'source_id': field_name, 'source_uri': str(path.resolve()), 'sha256': digest,
-                        'locator': f'line:{line + 1}', 'body_version': None,
-                    }])
+                    context = ReceiptContext(
+                        generation_id,
+                        f"{field_name}:{line}",
+                        PROCESSOR,
+                        [
+                            {
+                                "source_id": field_name,
+                                "source_uri": str(path.resolve()),
+                                "sha256": digest,
+                                "locator": f"line:{line + 1}",
+                                "body_version": None,
+                            }
+                        ],
+                    )
                     fields = {field_name: json.loads(raw)}
-                    if field_name == 'build_event' and error is not None:
-                        yield failure_receipt(ACQUISITION_POLICY, context, outcome='error', raw_fields=fields)
+                    if field_name == "build_event" and error is not None:
+                        yield failure_receipt(ACQUISITION_POLICY, context, outcome="error", raw_fields=fields)
                     else:
                         yield observation_receipt(ACQUISITION_POLICY, context, processing_fields=fields)
-    return write_rows(records(), directory / 'acquisition-receipts.parquet', RECEIPT_SCHEMA)
+
+    return write_rows(records(), directory / "acquisition-receipts.parquet", RECEIPT_SCHEMA)
 
 
-def write_congress_dataset(source: Path, directory: Path, *, dataset: str, generation_id: str,
-                           witnesses: Sequence[Mapping[str, Any]] = (),
-                           prior: CongressInput | None = None) -> tuple[Path | None, Path]:
+def write_congress_dataset(
+    source: Path,
+    directory: Path,
+    *,
+    dataset: str,
+    generation_id: str,
+    witnesses: Sequence[Mapping[str, Any]] = (),
+    prior: CongressInput | None = None,
+) -> tuple[Path | None, Path]:
     """Retain one complete shaped output, including rejected rows and its exact footer.
 
     The source file remains in place. Its digest and row ordinal identify the
@@ -103,64 +145,78 @@ def write_congress_dataset(source: Path, directory: Path, *, dataset: str, gener
     selected = policy(dataset)
     digest = _digest(source)
     directory.parent.mkdir(parents=True, exist_ok=True)
-    with TemporaryDirectory(prefix='.congress-', dir=directory.parent) as temporary:
-        stage = Path(temporary) / 'bundle'
+    with TemporaryDirectory(prefix=".congress-", dir=directory.parent) as temporary, ExitStack() as stack:
+        stage = Path(temporary) / "bundle"
         stage.mkdir()
-        subjects = None if selected.receipt_only else stage / (dataset + '.parquet')
-        receipts = stage / 'etl_receipts.parquet'
-        base_witness = {'source_id': 'shaped-observation:' + dataset, 'source_uri': str(source.resolve()),
-                        'sha256': digest, 'body_version': None}
+        subjects = None if selected.receipt_only else stage / (dataset + ".parquet")
+        receipts = stage / "etl_receipts.parquet"
+        base_witness = {
+            "source_id": "shaped-observation:" + dataset,
+            "source_uri": str(source.resolve()),
+            "sha256": digest,
+            "body_version": None,
+        }
         footer = dict(pq.read_schema(source).metadata or {})
-        prior_db = sqlite3.connect(str(Path(temporary) / 'prior.db'))
-        prior_db.execute('CREATE TABLE witnesses (record_id TEXT PRIMARY KEY, value TEXT)')
-        if prior is not None and not prior.legacy_bootstrap:
-            if prior.receipts is None or prior.generation_id is None:
-                raise ValueError('Prior witnesses require selected generation receipts')
-            scoped = select_receipts(prior.receipts, Path(temporary) / 'prior.parquet', dataset=dataset)
-            validate_receipt_bundle({dataset: [] if prior.source is None else [prior.source]}, [scoped], [selected],
-                                    generation_id=prior.generation_id)
-            for receipt in _rows(scoped):
-                if receipt['outcome'] == 'accepted':
-                    prior_db.execute('INSERT INTO witnesses VALUES (?, ?)',
-                                     [receipt['record_id'], json.dumps(receipt['witnesses'])])
+        prior_paths = []
+        if prior is not None:
+            scoped = select_receipts(prior.receipts, Path(temporary) / "prior.parquet", dataset=dataset)
+            validate_receipt_bundle({dataset: prior.subjects}, [scoped], [selected], generation_id=prior.generation_id)
+            prior_paths.append(scoped)
+        lineage = stack.enter_context(ReceiptLineage(prior_paths, dataset=dataset))
 
-        def context(ordinal, diagnostics=None, subject=None):
-            inherited = []
+        def context(ordinal, diagnostics=None, subject=None, processing=None):
+            current = ReceiptContext(
+                generation_id,
+                f"{dataset}:{digest}:{ordinal}",
+                PROCESSOR,
+                [{**base_witness, "locator": str(ordinal)}, *witnesses],
+                diagnostics or {},
+            )
             if subject is not None:
-                record_id = subject_identity(selected, subject)[0]
-                found = prior_db.execute('SELECT value FROM witnesses WHERE record_id=?', [record_id]).fetchone()
-                if found is not None:
-                    inherited = json.loads(found[0])
-            return ReceiptContext(generation_id, f'{dataset}:{digest}:{ordinal}', PROCESSOR,
-                                  [*inherited, {**base_witness, 'locator': str(ordinal)}, *witnesses], diagnostics or {})
+                return lineage.inherit(current, selected, subject)
+            return lineage.inherit_processing(current, processing) if processing is not None else current
 
-        with pq.ParquetWriter(receipts, RECEIPT_SCHEMA, compression='zstd') as rw:
-            sw = None if subjects is None else pq.ParquetWriter(subjects, selected.subject_schema, compression='zstd')
+        with pq.ParquetWriter(receipts, RECEIPT_SCHEMA, compression="zstd") as rw:
+            sw = None if subjects is None else pq.ParquetWriter(subjects, selected.subject_schema, compression="zstd")
             try:
                 receipt_batch, subject_batch = [], []
-                metadata = {'source_metadata': list(footer.items()),
-                            'source_schema': pq.read_schema(source).serialize().to_pybytes(),
-                            'entry_kind': 'table_metadata'}
-                receipt = observation_receipt(selected, context('metadata'), processing_fields=metadata)
+                metadata = {
+                    "source_metadata": list(footer.items()),
+                    "source_schema": pq.read_schema(source).serialize().to_pybytes(),
+                    "entry_kind": "table_metadata",
+                }
+                receipt = observation_receipt(
+                    selected, context("metadata", processing=metadata), processing_fields=metadata
+                )
                 receipt_batch.append(receipt)
                 for ordinal, raw in enumerate(_rows(source)):
                     try:
                         mapped = map_record(dataset, raw)
-                        processing = {'source_fields': mapped.source_fields, 'entry_kind': 'row'}
+                        processing = {"source_fields": mapped.source_fields, "entry_kind": "row"}
                         if mapped.subject is None and not selected.receipt_only:
-                            receipt = failure_receipt(selected, context(ordinal, {'reason': 'no_domain_subject'}),
-                                                      outcome='rejected', raw_fields=processing)
+                            receipt = failure_receipt(
+                                selected,
+                                context(ordinal, {"reason": "no_domain_subject"}),
+                                outcome="rejected",
+                                raw_fields=processing,
+                            )
                         else:
-                            subject, receipt = split_record(selected, (mapped.subject or {}) | processing,
-                                                            context(ordinal, subject=mapped.subject))
+                            subject, receipt = split_record(
+                                selected,
+                                (mapped.subject or {}) | processing,
+                                context(ordinal, subject=mapped.subject, processing=processing),
+                            )
                             if subject is not None:
                                 subject_batch.append(subject)
                     except (ValueError, TypeError, pa.ArrowException) as error:
                         # Missing identity and bad native values both remain attempts.
                         # Arbitrary exception text can contain source content or credentials.
-                        receipt = failure_receipt(selected, context(ordinal, {'reason': 'conversion_refused',
-                                                  'error_type': type(error).__name__}), outcome='refused',
-                                                  raw_fields={'source_fields': raw, 'entry_kind': 'row'})
+                        receipt = failure_receipt(
+                            selected,
+                            context(ordinal, {"reason": "conversion_refused", "error_type": type(error).__name__}),
+                            outcome="refused",
+                            raw_fields={"source_fields": raw, "entry_kind": "row"},
+                        )
                     receipt_batch.append(receipt)
                     if len(receipt_batch) >= 2000:
                         if subject_batch:
@@ -177,16 +233,17 @@ def write_congress_dataset(source: Path, directory: Path, *, dataset: str, gener
             finally:
                 if sw is not None:
                     sw.close()
-                prior_db.close()
-        validate_receipt_bundle({dataset: [] if subjects is None else [subjects]}, [receipts], [selected],
-                                generation_id=generation_id)
+        validate_receipt_bundle(
+            {dataset: [] if subjects is None else [subjects]}, [receipts], [selected], generation_id=generation_id
+        )
         publish_directory_no_replace(stage, directory)
     return (None if subjects is None else directory / subjects.name, directory / receipts.name)
 
 
-def restore_processing_input(subject: Path | None, receipts: Path, destination: Path, *, dataset: str,
-                             generation_id: str) -> Path:
-    """Recreate private legacy-shaped inputs only after exact receipt admission.
+def restore_processing_input(
+    subject: Path | tuple[Path, ...] | None, receipts: Path, destination: Path, *, dataset: str, generation_id: str
+) -> Path:
+    """Restore retained original source fields and schema after exact receipt admission.
 
     Rejected conversion attempts remain available for retry. Technical tables
     and processing events remain receipt-only in the public generation. Footer
@@ -194,52 +251,53 @@ def restore_processing_input(subject: Path | None, receipts: Path, destination: 
     """
     selected = policy(dataset)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    with TemporaryDirectory(prefix='.congress-read-', dir=destination.parent) as temp:
-        scoped = select_receipts(receipts, Path(temp) / 'receipts.parquet', dataset=dataset)
-        paths = [] if subject is None else [subject]
+    with TemporaryDirectory(prefix=".congress-read-", dir=destination.parent) as temp:
+        scoped = select_receipts(receipts, Path(temp) / "receipts.parquet", dataset=dataset)
+        paths = () if subject is None else ((subject,) if isinstance(subject, Path) else tuple(subject))
         validate_receipt_bundle({dataset: paths}, [scoped], [selected], generation_id=generation_id)
         # Exercise the shared exact matching reader before reconstructing original source rows.
         for _ in read_with_receipts(paths, [scoped], selected, generation_id=generation_id):
             pass
         metadata_rows = []
         for receipt in read_attempts([scoped], selected, generation_id=generation_id):
-            data = receipt['processing_fields']
-            if data.get('entry_kind') == 'table_metadata':
+            data = receipt["processing_fields"]
+            if data.get("entry_kind") == "table_metadata":
                 metadata_rows.append(data)
-        if len(metadata_rows) != 1:
-            raise ValueError('Congress input requires exactly one retained source footer')
+        if not metadata_rows or any(row != metadata_rows[0] for row in metadata_rows[1:]):
+            raise ValueError("Congress input requires consistent retained source footers")
         retained = metadata_rows[0]
+
         # Source shapers use strings. Preserve discovered source columns and
         # absent columns by reading the exact retained input dictionaries.
         def original_rows():
             for receipt in read_attempts([scoped], selected, generation_id=generation_id):
-                data = receipt['processing_fields']
-                diagnostic = receipt['diagnostics']
-                if data.get('entry_kind') == 'row' and diagnostic.get('reason') != 'conversion_refused':
-                    yield data['source_fields']
-        schema = pa.ipc.read_schema(pa.BufferReader(retained['source_schema']))
+                data = receipt["processing_fields"]
+                diagnostic = receipt["diagnostics"]
+                if data.get("entry_kind") == "row" and diagnostic.get("reason") != "conversion_refused":
+                    yield data["source_fields"]
+
+        schema = pa.ipc.read_schema(pa.BufferReader(retained["source_schema"]))
         return write_rows(original_rows(), destination, schema)
 
 
 @dataclass(frozen=True)
 class CongressInput:
-    """An explicit local prior selection, either migrated or a legacy bootstrap."""
-    source: Path | None
-    receipts: Path | None = None
-    generation_id: str | None = None
-    legacy_bootstrap: bool = False
+    """One admitted native table, including every selected partition member."""
+
+    source: Path | tuple[Path, ...] | None
+    receipts: Path
+    generation_id: str
+
+    @property
+    def subjects(self) -> tuple[Path, ...]:
+        return () if self.source is None else ((self.source,) if isinstance(self.source, Path) else tuple(self.source))
 
     def materialize(self, dataset: str, destination: Path) -> Path:
-        if self.legacy_bootstrap:
-            if self.source is None or self.receipts is not None or self.generation_id is not None:
-                raise ValueError('Invalid explicit legacy selection')
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(self.source, destination)
-            return destination
-        if self.receipts is None or self.generation_id is None:
-            raise ValueError('Migrated Congress input is missing selected generation receipts')
-        return restore_processing_input(self.source, self.receipts, destination, dataset=dataset,
-                                        generation_id=self.generation_id)
+        if not self.receipts or not self.generation_id:
+            raise ValueError("Native Congress input requires selected generation receipts")
+        return restore_processing_input(
+            self.subjects, self.receipts, destination, dataset=dataset, generation_id=self.generation_id
+        )
 
 
 @dataclass
@@ -250,6 +308,7 @@ class CongressBuild:
     Cross-family inputs must be supplied by their owner in an explicitly admitted
     private working shape until the integration reader registry is available.
     """
+
     generation_id: str
     inputs: Mapping[str, CongressInput] = field(default_factory=dict)
     witnesses: Sequence[Mapping[str, Any]] = ()
@@ -263,17 +322,18 @@ class CongressBuild:
         import inspect
 
         self.completed = False
-        if (not self.generation_id or self.generation_id in {'.', '..'}
-                or Path(self.generation_id).name != self.generation_id):
-            raise ValueError('A local build needs a plain generation identity')
+        if (
+            not self.generation_id
+            or self.generation_id in {".", ".."}
+            or Path(self.generation_id).name != self.generation_id
+        ):
+            raise ValueError("A local build needs a plain generation identity")
         directory = output_dir / self.generation_id
         directory.mkdir(parents=True, exist_ok=False)
-        work = directory / 'processing'
+        work = directory / "processing"
         work.mkdir()
         for name, selected in self.inputs.items():
-            if selected.source is not None and selected.source.is_dir():
-                continue
-            selected.materialize(name, work / (name + '.parquet'))
+            selected.materialize(name, work / (name + ".parquet"))
 
         def download(key: str, destination: Path) -> bool:
             name = Path(key).stem
@@ -285,29 +345,31 @@ class CongressBuild:
 
         parameters = inspect.signature(builder).parameters
         options = dict(kwargs)
-        if 'download_prior' in parameters:
-            options['download_prior'] = download
-        if 'download_members' in parameters:
+        if "download_prior" in parameters:
+            options["download_prior"] = download
+        if "download_members" in parameters:
+
             def download_members(key, destination):
                 name = Path(key).stem
                 selected = self.inputs.get(name)
                 if selected is None:
                     return ()
-                if not selected.legacy_bootstrap or selected.source is None:
-                    raise ValueError('Partitioned sibling requires its owner\'s admitted processing input')
-                if selected.source.is_dir():
-                    copied = destination / name
-                    shutil.copytree(selected.source, copied)
-                    return sorted(copied.rglob('*.parquet'))
                 destination.mkdir(parents=True, exist_ok=True)
                 return (selected.materialize(name, destination / key),)
-            options['download_members'] = download_members
-        self.source_evidence = options.get('evidence')
+
+            options["download_members"] = download_members
+        self.source_evidence = options.get("evidence")
         try:
             built = builder(work, **options)
         except Exception as error:
-            events = _build_events(directory, self.generation_id, getattr(builder, "__name__", type(builder).__name__), self.source_evidence, error)
-            self.receipt_path = combine_receipts([events], directory / 'etl_receipts.parquet')
+            events = _build_events(
+                directory,
+                self.generation_id,
+                getattr(builder, "__name__", type(builder).__name__),
+                self.source_evidence,
+                error,
+            )
+            self.receipt_path = combine_receipts([events], directory / "etl_receipts.parquet")
             self.policies = (ACQUISITION_POLICY,)
             raise
         paths = built if isinstance(built, tuple) else (built,)
@@ -317,22 +379,38 @@ class CongressBuild:
             if dataset not in INPUT_COLUMNS:
                 untouched.append(source)
                 continue
-            subject, receipt = write_congress_dataset(source, directory / 'datasets' / dataset,
-                dataset=dataset, generation_id=self.generation_id, witnesses=self.witnesses,
-                prior=self.inputs.get(dataset))
+            subject, receipt = write_congress_dataset(
+                source,
+                directory / "datasets" / dataset,
+                dataset=dataset,
+                generation_id=self.generation_id,
+                witnesses=self.witnesses,
+                prior=self.inputs.get(dataset),
+            )
             if subject is not None:
                 subjects.append(subject)
             receipts.append(receipt)
             policies.append(policy(dataset))
         if not receipts:
-            raise ValueError('Builder emitted no owned Congress datasets')
-        receipts.append(_build_events(directory, self.generation_id, getattr(builder, "__name__", type(builder).__name__), self.source_evidence))
+            raise ValueError("Builder emitted no owned Congress datasets")
+        receipts.append(
+            _build_events(
+                directory,
+                self.generation_id,
+                getattr(builder, "__name__", type(builder).__name__),
+                self.source_evidence,
+            )
+        )
         policies.append(ACQUISITION_POLICY)
-        self.receipt_path = combine_receipts(receipts, directory / 'etl_receipts.parquet')
+        self.receipt_path = combine_receipts(receipts, directory / "etl_receipts.parquet")
         self.policies = tuple(policies)
         self.unclassified_outputs = tuple(untouched)
-        validate_receipt_bundle({p.dataset: [s for s in subjects if s.stem == p.dataset] for p in policies},
-                                [self.receipt_path], policies, generation_id=self.generation_id)
+        validate_receipt_bundle(
+            {p.dataset: [s for s in subjects if s.stem == p.dataset] for p in policies},
+            [self.receipt_path],
+            policies,
+            generation_id=self.generation_id,
+        )
         # Other family outputs remain exact; complete-family admission below
         # refuses them until their owner supplies policies and receipts.
         result = tuple(subjects) + tuple(untouched)
@@ -343,12 +421,18 @@ class CongressBuild:
         from spicy_regs.generations import build_generation
 
         if self.unclassified_outputs:
-            raise ValueError('Complete family awaits policies and receipts for sibling outputs')
+            raise ValueError("Complete family awaits policies and receipts for sibling outputs")
         if not self.completed or self.receipt_path is None:
-            raise ValueError('No completed Congress build to admit')
-        if any(r['outcome'] == 'refused' for r in _rows(self.receipt_path)):
-            raise ValueError('Conversion refusals require review before complete generation admission')
-        return build_generation(directory, family=family, files=subjects,
-            expected_keys=[path.name for path in subjects], receipt_path=self.receipt_path,
-            receipt_policies=self.policies, receipt_generation_id=self.generation_id,
-            inputs=self.source_evidence.inputs() if self.source_evidence is not None else ())
+            raise ValueError("No completed Congress build to admit")
+        if any(r["outcome"] == "refused" for r in _rows(self.receipt_path)):
+            raise ValueError("Conversion refusals require review before complete generation admission")
+        return build_generation(
+            directory,
+            family=family,
+            files=subjects,
+            expected_keys=[path.name for path in subjects],
+            receipt_path=self.receipt_path,
+            receipt_policies=self.policies,
+            receipt_generation_id=self.generation_id,
+            inputs=self.source_evidence.inputs() if self.source_evidence is not None else (),
+        )

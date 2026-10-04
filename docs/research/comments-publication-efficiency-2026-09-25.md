@@ -231,7 +231,7 @@ the monolith still contributes `O(S)` and global integrity checks can contribute
 4. **Preserve incremental state across execution batches.**
    [`Manifest.load`](https://github.com/mikewolfd/spicy-regs/blob/03541c7d917b3ea5ed2eb88071590c13b45e34f6/src/spicy_regs/manifest.py) hashes the complete
    manifest in Python in every fresh job. The
-   [runbook measurement](../etl-catalog-seed.md)
+   [runbook measurement](https://github.com/mikewolfd/spicy-regs/blob/7bd285a189f997501159abbf7bed8cd19be90402/docs/etl-catalog-seed.md)
    records 183 seconds for the earlier seed, or about 46 minutes across the
    scheduled batch matrix. The pipeline already accepts `run(manifest=...)`.
    `array('L')` uses 8-byte items here while the filter allocates and reports

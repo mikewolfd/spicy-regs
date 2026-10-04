@@ -10,7 +10,7 @@ The follow-up addresses W1–W5 and moves the historical remainder to a pinned
 local checkout. The hosted sweep was cancelled after its completed batch 0;
 batch 1 was still staging, so its uncommitted work is being repeated locally.
 ETL, mirror publication, dedupe and comments monitoring are paused during that
-local writer. The [catch-up runbook](../etl-catalog-seed.md) defines the return
+local writer. The [catch-up runbook](https://github.com/mikewolfd/spicy-regs/blob/7bd285a189f997501159abbf7bed8cd19be90402/docs/etl-catalog-seed.md) defines the return
 to scheduled incremental processing.
 
 | Finding | Implemented behavior | Verification |

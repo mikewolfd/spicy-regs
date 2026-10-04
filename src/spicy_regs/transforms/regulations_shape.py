@@ -14,7 +14,7 @@ from collections.abc import Mapping
 
 import pyarrow as pa
 
-from spicy_regs.schemas.regulations_subjects import LEGACY_COLUMNS, RECEIPT_COLUMNS
+from spicy_regs.schemas.regulations_subjects import SOURCE_COLUMNS, RECEIPT_COLUMNS
 
 S = pa.string()
 STRINGS = pa.list_(S)
@@ -140,7 +140,7 @@ IDENTITIES = {
     "rulemaking_lifecycles": ("proceeding_id",),
     "unified_agenda": ("rin", "agenda_edition"),
 }
-# Preserve witness-distinct legacy rows when their witness columns move to receipts.
+# Preserve witness-distinct source rows when their witness columns move to receipts.
 DERIVED_IDENTITIES = {
     "rule_targets": ("rule_target_id", ("docket_id", "cfr_ref", "rin", "source")),
     "lifecycle_events": (
@@ -287,7 +287,7 @@ def _native(dataset, field, value):
 @cache
 def subject_schema(dataset):
     fields = []
-    for name, type_name in LEGACY_COLUMNS[dataset]:
+    for name, type_name in SOURCE_COLUMNS[dataset]:
         if name in RECEIPT_COLUMNS[dataset]:
             continue
         target, dtype = NATIVE_FIELDS.get(dataset, {}).get(name, (name, TYPES[type_name]))
@@ -323,19 +323,18 @@ def _validate(value, dtype, path):
 def shape_record(dataset, row):
     """Return native fields plus explicitly declared receipt-only input fields.
 
-    An omitted legacy field stays omitted in raw_conversion_inputs; SQL NULL,
+    An omitted source field stays omitted in raw_conversion_inputs; SQL NULL,
     JSON null, empty lists, repeated list items and original key spelling are
     distinguishable there. Subjects never carry this processing evidence.
     """
-    known = {c for c, _ in LEGACY_COLUMNS[dataset]}
+    known = {c for c, _ in SOURCE_COLUMNS[dataset]}
     if unknown := set(row) - known:
         raise RegulationsShapeError(f"{dataset}: undeclared fields {sorted(unknown)}")
     shaped = {c: row[c] for c in RECEIPT_COLUMNS[dataset] if c in row}
-    # Only transformed values need conversion input retention; evidence fields
-    # above retain their exact values and ordinary domain fields stay unchanged.
-    conversions = set(NATIVE_FIELDS.get(dataset, {})) | set(TYPE_OVERRIDES.get(dataset, {}))
-    shaped["raw_conversion_inputs"] = {c: row[c] for c in sorted(conversions) if c in row}
-    for name, _ in LEGACY_COLUMNS[dataset]:
+    # Preserve the exact processor input independently of the resulting subject.
+    # Incremental processors consume this retained observation directly.
+    shaped["raw_conversion_inputs"] = dict(row)
+    for name, _ in SOURCE_COLUMNS[dataset]:
         if name in RECEIPT_COLUMNS[dataset]:
             continue
         value = row.get(name)
@@ -384,18 +383,3 @@ def shape_record(dataset, row):
     # Arrow checks range/date errors after structural validation prevents loss.
     pa.Table.from_pylist([{f.name: shaped.get(f.name) for f in schema}], schema=schema)
     return shaped
-
-
-def restore_legacy_record(dataset, row):
-    """Restore only an internal row already qualified by read_with_receipts."""
-    if "raw_conversion_inputs" not in row:
-        raise RegulationsShapeError(f"{dataset}: qualified conversion receipt required")
-    raw = row["raw_conversion_inputs"]
-    result = {}
-    for name, _ in LEGACY_COLUMNS[dataset]:
-        if name in NATIVE_FIELDS.get(dataset, {}) or name in TYPE_OVERRIDES.get(dataset, {}):
-            if name in raw:
-                result[name] = raw[name]
-        else:
-            result[name] = row.get(name)
-    return result

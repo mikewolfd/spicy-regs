@@ -5,7 +5,6 @@ import pytest
 
 from spicy_regs.court_receipts import write_court_rows
 from spicy_regs.generations import verify_generation
-from spicy_regs.pipelines.rollups.base import RollupPipeline
 
 CASES = [
     ('court_citations', 'CourtCitationsRollup', {
@@ -21,8 +20,6 @@ CASES = [
 
 @pytest.mark.parametrize('module_name,class_name,records', CASES)
 def test_runner_admits_receipts_and_typed_subjects(tmp_path, monkeypatch, module_name, class_name, records):
-    if not hasattr(RollupPipeline, 'generation_kwargs'):
-        pytest.skip('Shared runner hook patch is an explicit integration dependency')
     monkeypatch.delenv('R2_PUBLIC_URL', raising=False)
     module = importlib.import_module('spicy_regs.pipelines.rollups.' + module_name)
     cls = getattr(module, class_name)
@@ -40,3 +37,11 @@ def test_runner_admits_receipts_and_typed_subjects(tmp_path, monkeypatch, module
     assert artifact.root['spec']['etlReceipts']['generationId'] == 'local-runner-build'
     assert set(artifact.root['spec']['tables']) == {name + '.parquet' for name in records}
     assert (generation / 'etl_receipts.parquet').is_file()
+
+    from spicy_regs.local_data import local_selection
+    selected = local_selection(tmp_path)
+    assert set(selected.files) == set(records)
+    for name in records:
+        assert selected.paths(name) == (generation / (name + '.parquet'),)
+        assert selected.native[name].receipts == generation / 'etl_receipts.parquet'
+        assert selected.native[name].generation_id == 'local-runner-build'

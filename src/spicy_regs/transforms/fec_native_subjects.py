@@ -158,11 +158,10 @@ def _legal_facts(value):
         elif pa.types.is_list(dtype) and pa.types.is_struct(dtype.value_type):
             result[name] = _list(
                 item,
-                lambda v: (
-                    {f.name: _scalar(v.get(f.name), f.type) for f in dtype.value_type}
-                    if not set(v) - set(dtype.value_type.names)
-                    else _object(v, dtype.value_type.names, name)
-                ),
+                lambda v: {
+                    f.name: _scalar(_object(v, dtype.value_type.names, name).get(f.name), f.type)
+                    for f in dtype.value_type
+                },
             )
         elif name == "citations":
             if item is not None:

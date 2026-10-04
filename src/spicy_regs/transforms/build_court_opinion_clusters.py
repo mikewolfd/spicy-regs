@@ -49,7 +49,7 @@ from spicy_regs.transforms.court_scope import (
 from spicy_regs.transforms.table_merge import merge_local_prior
 from spicy_regs.court_subjects import SUBJECT_SCHEMAS
 from spicy_regs.court_receipts import (
-    finish_court_output, file_witness, read_court_rows, prior_receipt_selection, restore_processing_input,
+    finish_court_output, file_witness, read_court_rows, prior_receipt_selection, restore_processing_input, admit_court_updates,
 )
 
 OUTPUT = "court_opinion_clusters.parquet"
@@ -228,7 +228,7 @@ def _shape_search(result: dict, *, scope: CourtScope | None = None) -> dict:
 
 
 def held_export(table: Path, *, receipt_path: Path | None = None,
-                generation_id: str | None = None, allow_legacy: bool = False) -> tuple[int | None, str | None]:
+                generation_id: str | None = None) -> tuple[int | None, str | None]:
     """A clusters table's highest bulk ``cluster_id`` and the day of its newest bulk ``date_created``.
 
     Together they name the export the table holds without a stamp: the id is
@@ -236,26 +236,15 @@ def held_export(table: Path, *, receipt_path: Path | None = None,
     whose newest bulk row was created on or after a dump's date already holds it.
     One scan of two columns.
     """
-    import duckdb
-
-    if not allow_legacy or pq.read_schema(table).equals(SUBJECT_SCHEMAS['court_opinion_clusters']):
-        high, created = None, None
-        for row in read_court_rows(table, dataset='court_opinion_clusters', receipt_path=receipt_path,
-                                  generation_id=generation_id, allow_legacy=allow_legacy):
-            if row.get('ingest_source') == 'bulk':
-                identity = row.get('cluster_id')
-                if identity and identity.isdecimal():
-                    high = max(high or 0, int(identity))
-                if row.get('date_created'):
-                    created = max(created or '', row['date_created'])
-        return high, created[:10] if created else None
-    path = str(table).replace("'", "''")
-    with duckdb.connect() as con:
-        high, created = con.execute(
-            f"""SELECT max(TRY_CAST(cluster_id AS BIGINT)) FILTER (WHERE ingest_source = 'bulk'),
-                       max(date_created) FILTER (WHERE ingest_source = 'bulk')
-                FROM read_parquet('{path}')"""
-        ).fetchone() or (None, None)
+    high, created = None, None
+    for row in read_court_rows(table, dataset='court_opinion_clusters', receipt_path=receipt_path,
+                              generation_id=generation_id):
+        if row.get('ingest_source') == 'bulk':
+            identity = row.get('cluster_id')
+            if identity and identity.isdecimal():
+                high = max(high or 0, int(identity))
+            if row.get('date_created'):
+                created = max(created or '', row['date_created'])
     return high, created[:10] if created else None
 
 
@@ -270,7 +259,6 @@ def build_court_opinion_clusters(
     courts_local_file: Path | None = None,
     skip_court_scope: bool = False,
     include_prior: bool = True,
-    allow_legacy_prior: bool = False,
 ) -> Path:
     """Build ``court_opinion_clusters.parquet`` (bulk dump + search catch-up).
 
@@ -306,13 +294,15 @@ def build_court_opinion_clusters(
     # 1. Prior table (absence just means first build).
     have_prior = include_prior and (prior_file.exists() or r2.download(OUTPUT, prior_file))
     input_witnesses = [file_witness(prior_file)] if have_prior else []
-    if have_prior and (not allow_legacy_prior or not pq.read_schema(prior_file).equals(_SCHEMA)):
+    receipt_path = None
+    if have_prior:
         receipt_path, generation_id = prior_receipt_selection(prior_file, dataset='court_opinion_clusters')
         if receipt_path is not None:
             input_witnesses.append(file_witness(receipt_path))
+        prior_export = held_export(prior_file, receipt_path=receipt_path, generation_id=generation_id)
         prior_file = restore_processing_input(prior_file, output_dir / f'.clusters-prior-{uuid4().hex}.parquet',
             dataset='court_opinion_clusters', schema=_SCHEMA, receipt_path=receipt_path,
-            generation_id=generation_id, allow_legacy=allow_legacy_prior)
+            generation_id=generation_id)
     logger.info(
         "Opinion clusters: {}",
         f"merging against prior table {prior_file}" if have_prior else "no prior table — full build",
@@ -329,7 +319,7 @@ def build_court_opinion_clusters(
         published = find_dump(objects, DATASET, resolved)
         if published is None:
             raise RuntimeError(f"CourtListener bulk: no {DATASET} dump for {resolved}")
-        held_high, held_day = held_export(prior_file, allow_legacy=True) if have_prior and dump_date is None else (None, None)
+        held_high, held_day = prior_export if have_prior and dump_date is None else (None, None)
         catch_up_only = held_high is not None and held_day is not None and held_day >= resolved.isoformat()
         if catch_up_only:
             logger.info("Opinion clusters: prior holds the {} export (to id {:,}); catch-up only", resolved, held_high)
@@ -420,11 +410,16 @@ def build_court_opinion_clusters(
             witnesses.insert(0, file_witness(local_file))
         out_file = finish_court_output('court_opinion_clusters', new_file, output_dir, witnesses=witnesses,
             diagnostics={'dump_date': resolved.isoformat() if resolved else None, 'bulk_rows': bulk_rows,
-                         'search_rows': search_rows, 'legacy_prior_authorized': allow_legacy_prior})
+                         'search_rows': search_rows})
         total = pq.ParquetFile(out_file).metadata.num_rows
         logger.info("Court opinion clusters: {:,} rows (first build, dump order)", total)
         return out_file
 
+    build_generation_id = uuid4().hex
+    new_file, fresh_receipts = admit_court_updates(
+        'court_opinion_clusters', new_file, output_dir / '.court-updates' / build_generation_id,
+        schema=_SCHEMA, generation_id=build_generation_id,
+    )
     spill_dir = output_dir / ".duckdb_tmp"
     spill_dir.mkdir(exist_ok=True)
     con = duckdb.connect()
@@ -446,9 +441,10 @@ def build_court_opinion_clusters(
     con.close()
 
     out_file = finish_court_output('court_opinion_clusters', staged, output_dir,
+        generation_id=build_generation_id, refused_receipts=fresh_receipts, prior_receipts=receipt_path,
         witnesses=[file_witness(staged), *input_witnesses],
         diagnostics={'dump_date': resolved.isoformat() if resolved else None, 'bulk_rows': bulk_rows,
-                     'search_rows': search_rows, 'legacy_prior_authorized': allow_legacy_prior})
+                     'search_rows': search_rows})
 
     total = pq.ParquetFile(out_file).metadata.num_rows
     logger.info("Court opinion clusters: {:,} rows", total)

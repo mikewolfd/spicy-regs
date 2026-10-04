@@ -18,7 +18,7 @@ def family_policies():
     from spicy_regs.legislative_documents import field_registry
     from spicy_regs.scorecards.etl import POLICIES as scorecards
     from spicy_regs.transforms.government_receipts import POLICIES as government
-    from spicy_regs.transforms.regulations_receipts import policy as regulations_policy, LEGACY_COLUMNS
+    from spicy_regs.transforms.regulations_receipts import policy as regulations_policy, SOURCE_COLUMNS
     from spicy_regs.transforms.fec_identity_receipts import dataset_policy as identity_policy, REGISTRY
     from spicy_regs.transforms.fec_subject_receipts import dataset_policy as fec_policy
     from spicy_regs.transforms.fec_native_subjects import FIELD_RULES
@@ -35,7 +35,7 @@ def family_policies():
         add(congress_policy(name))
     for name in field_registry():
         add(legislative_policy(name))
-    for name in LEGACY_COLUMNS:
+    for name in SOURCE_COLUMNS:
         add(regulations_policy(name))
     for name in REGISTRY:
         add(identity_policy(name))

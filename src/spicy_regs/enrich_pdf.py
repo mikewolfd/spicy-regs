@@ -722,6 +722,7 @@ def enrich_receipted_dataset(
     from itertools import islice
 
     from spicy_regs.etl_receipts import ReceiptContext
+    from spicy_regs.schemas import RECORD_TYPES
     from spicy_regs.transforms.regulations_receipts import read_internal, write_records
 
     if selected.dataset not in ("documents", "comments"):
@@ -748,7 +749,7 @@ def enrich_receipted_dataset(
         rows = iter(read_internal(selected))
         ordinal = 0
         while batch := list(islice(rows, batch_size)):
-            frame = pl.from_dicts(batch, infer_schema_length=None)
+            frame = pl.DataFrame(batch, schema=RECORD_TYPES[selected.dataset].schema)
             remaining = None if limit is None else max(0, limit - stats["selected"])
             filled, counts = enrich(
                 frame, fetch=fetch, extract=extract, limit=remaining, max_workers=max_workers, overwrite=overwrite
@@ -768,7 +769,7 @@ def enrich_receipted_dataset(
                 )
                 ordinal += 1
 
-    paths = write_records(selected.dataset, records(), destination)
+    paths = write_records(selected.dataset, records(), destination, prior_receipts=[selected.receipts])
     return paths, stats
 
 

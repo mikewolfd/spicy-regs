@@ -58,23 +58,16 @@ def test_bad_receipt_refuses_processing_read(con):
         native.processing_table(con, COMMENT)
 
 
-def test_migration_retains_legacy_source(con):
-    expected = source(con)
-    con.execute('CREATE SCHEMA reg_catalog."default"')
-    con.execute('CREATE TABLE reg_catalog."default".comments AS SELECT * FROM source')
-    native.ensure_native(con, COMMENT)
-    assert con.execute('SELECT count(*) FROM reg_catalog."default".comments').fetchone() == (1,)
-    result = native.processing_table(con, COMMENT)
-    assert con.execute(f'SELECT * FROM {result}').to_arrow_table().to_pylist() == [expected]
-
-
-def test_legacy_preview_does_not_create_native_catalog(con):
+def test_only_initialized_native_storage_is_read_authority(con):
     source(con)
     con.execute('CREATE SCHEMA reg_catalog."default"')
     con.execute('CREATE TABLE reg_catalog."default".comments AS SELECT * FROM source')
-    result = native.processing_table(con, COMMENT)
-    assert con.execute(f'SELECT count(*) FROM {result}').fetchone() == (1,)
+    with pytest.raises(ValueError, match='initialization receipt'):
+        native.processing_table(con, COMMENT)
     assert not native._exists(con, native.qualified(COMMENT))
+    native.ensure_native(con, COMMENT)
+    assert con.execute(f'SELECT count(*) FROM {native.processing_table(con, COMMENT)}').fetchone() == (0,)
+    assert con.execute('SELECT count(*) FROM reg_catalog."default".comments').fetchone() == (1,)
 
 
 def test_receipt_insert_failure_rolls_back_subject_update(con):
@@ -104,44 +97,27 @@ def test_pair_export_preserves_generation_and_processing(con, tmp_path):
     assert 'export-1' in (tmp_path / 'generation.json').read_text()
 
 
-def test_seed_scope_replaces_subjects_and_receipts_together(con, tmp_path):
+def test_explicit_scope_replacement_retains_removed_evidence(con):
+    from spicy_regs.etl_receipts import resolve_receipt_witness
     source(con)
     iceberg.replace_rows(con, COMMENT, 'source')
-    replacement = source(con, identity='c2', text='seeded')
-    file = tmp_path / 'seed.parquet'
-    pl.DataFrame([replacement], schema=COMMENT.schema).write_parquet(file)
-    assert iceberg.seed_comments_from_parquet(con, str(file), COMMENT, 'EPA', replace=True) == 1
+    source(con, identity='c2', text='replacement')
+    native.replace_native(con, COMMENT, 'source', scope={'agency_code': 'EPA'}, delete_scope=True)
     assert con.execute(f'SELECT comment_id FROM {native.qualified(COMMENT)}').fetchall() == [('c2',)]
-    assert con.execute(f"SELECT count(*) FROM {native.receipts_table()} WHERE outcome='accepted'").fetchone() == (1,)
-    assert con.execute(f'SELECT comment_id FROM {native.processing_table(con, COMMENT)}').fetchall() == [('c2',)]
+    retired = con.execute(f"SELECT * FROM {native.receipts_table()} WHERE attempt_id LIKE '%:retired'").to_arrow_table().to_pylist()
+    assert len(retired) == 1 and retired[0]['outcome'] == 'observed'
+    references = [w for w in retired[0]['witnesses'] if (w['source_uri'] or '').startswith('receipt-processing:')]
+    assert references and all(resolve_receipt_witness(retired[0], w) for w in references)
+    native.processing_table(con, COMMENT)
 
 
-def test_backfill_keeps_newer_catalog_row_and_only_inserts_missing(con, tmp_path):
-    from spicy_regs.schemas import DOCKET
-    native.ensure_native(con, DOCKET)
-    rows = [{**dict.fromkeys(DOCKET.schema), 'docket_id': 'd1', 'title': 'newer'},
-            {**dict.fromkeys(DOCKET.schema), 'docket_id': 'd2', 'title': 'missing'}]
-    con.register('docket_source', pl.DataFrame(rows[:1], schema=DOCKET.schema).to_arrow())
-    iceberg.replace_rows(con, DOCKET, 'docket_source')
-    rows[0]['title'] = 'older'
-    path = tmp_path / 'dockets.parquet'
-    pl.DataFrame(rows, schema=DOCKET.schema).write_parquet(path)
-    assert iceberg.backfill_missing_from_parquet(con, str(path), DOCKET) == (1, 2)
-    assert con.execute(f'SELECT title FROM {native.qualified(DOCKET)} ORDER BY docket_id').fetchall() == [('newer',), ('missing',)]
-    native.processing_table(con, DOCKET)
-
-
-def test_dedup_migration_keeps_losing_source_as_rejected_receipt(con):
-    source(con)
-    con.execute('CREATE SCHEMA reg_catalog."default"')
-    con.execute('CREATE TABLE reg_catalog."default".comments AS SELECT * FROM source')
-    source(con, text='newest')
-    con.execute("UPDATE source SET modify_date='2026-10-04'")
-    con.execute('INSERT INTO reg_catalog."default".comments SELECT * FROM source')
-    assert iceberg.dedupe_table(con, COMMENT) == (2, 1)
-    assert con.execute('SELECT count(*) FROM reg_catalog."default".comments').fetchone() == (2,)
-    assert con.execute(f'SELECT outcome,count(*) FROM {native.receipts_table()} GROUP BY 1 ORDER BY 1').fetchall() == [('accepted', 1), ('observed', 1), ('rejected', 1)]
-    assert con.execute(f'SELECT text_content FROM {native.qualified(COMMENT)}').fetchone() == ('newest',)
+def test_prepared_storage_is_not_a_clean_selected_catalog(con):
+    con.execute(f'CREATE SCHEMA reg_catalog."{native.namespace()}"')
+    con.execute(f'CREATE TABLE {native.qualified(COMMENT)} ({native._ddl(native.policy("comments").subject_schema)})')
+    with pytest.raises(ValueError, match='initialization receipt'):
+        iceberg.audit_duplicates(con, COMMENT)
+    native.ensure_native(con, COMMENT)
+    assert iceberg.audit_duplicates(con, COMMENT) == []
 
 
 def test_failed_conversion_keeps_refusal_and_prior_subject(con):
@@ -192,4 +168,82 @@ def test_unpaired_subject_delete_refuses_whole_dataset_read(con):
     iceberg.replace_rows(con, COMMENT, 'source')
     con.execute(f'DELETE FROM {native.qualified(COMMENT)}')
     with pytest.raises(ValueError, match='Accepted receipt has no matching subject'):
+        native.processing_table(con, COMMENT)
+
+
+def test_replaced_and_exported_witnesses_resolve_exact_retained_payloads(con, tmp_path):
+    from hashlib import sha256
+    import pyarrow.parquet as pq
+    from spicy_regs.etl_receipts import resolve_receipt_witness
+    for text in ('first', 'second', 'third'):
+        source(con, text=text)
+        iceberg.replace_rows(con, COMMENT, 'source')
+    selected = native.export_pair(con, COMMENT, tmp_path, generation_id='exported')
+    receipt = next(r for r in pq.read_table(selected.receipts).to_pylist() if r['outcome'] == 'accepted')
+    assert len(receipt['witnesses']) >= 3
+    for witness in receipt['witnesses']:
+        payload = resolve_receipt_witness(receipt, witness)
+        assert sha256(payload).hexdigest() == witness['sha256'].removeprefix('sha256:')
+
+
+def test_refusal_persistence_failure_preserves_recoverable_spool(con):
+    source(con)
+    iceberg.replace_rows(con, COMMENT, 'source')
+    source(con, attachments='not-json')
+    class Unavailable:
+        def execute(self, sql, *args):
+            if sql.startswith(f'INSERT INTO {native.receipts_table()} SELECT * FROM read_parquet'):
+                raise RuntimeError('catalog unavailable while retaining refusal')
+            return con.execute(sql, *args)
+    with pytest.raises(native.CatalogConversionRefused) as refusal:
+        iceberg.replace_rows(Unavailable(), COMMENT, 'source')
+    path = refusal.value.receipt_path
+    try:
+        import pyarrow.parquet as pq
+        assert path.is_file()
+        assert any(r['outcome'] == 'refused' for r in pq.read_table(path).to_pylist())
+        assert str(path) in ' '.join(refusal.value.__notes__)
+        assert con.execute(f'SELECT text_content FROM {native.qualified(COMMENT)}').fetchone() == ('first',)
+        native.retain_refusal(con, refusal.value)
+        assert not path.exists()
+    finally:
+        path.unlink(missing_ok=True)
+
+
+def test_historical_refusal_and_stale_attempt_do_not_poison_later_export(con, tmp_path):
+    from spicy_regs.pipelines.regulatory_publication import finish_dataset
+    row = source(con, text='current')
+    iceberg.replace_rows(con, COMMENT, 'source')
+    source(con, attachments='not-json')
+    with pytest.raises(native.CatalogConversionRefused):
+        iceberg.replace_rows(con, COMMENT, 'source')
+    # A later valid write remains selectable while the failed attempt is retained.
+    row = source(con, text='recovered')
+    iceberg.replace_rows(con, COMMENT, 'source')
+    staged = tmp_path / 'stale.parquet'
+    pl.DataFrame([{**row, 'modify_date': '2020-01-01'}], schema=COMMENT.schema).write_parquet(staged)
+    assert iceberg._merge(con, [staged], COMMENT) == 0
+    source_path = iceberg._export_parquet(con, COMMENT, tmp_path / 'export')
+    result = finish_dataset(tmp_path, 'comments', source_path, publish=False)
+    assert pl.read_parquet(result)['text_content'].to_list() == ['recovered']
+
+
+def test_resealed_catalog_receipt_cannot_restore_inconsistent_source_input(con):
+    import json
+    from hashlib import sha256
+    import pyarrow as pa
+    from spicy_regs.etl_receipts import exact_json
+
+    source(con, text='selected')
+    iceberg.replace_rows(con, COMMENT, 'source')
+    [receipt] = con.execute(f"SELECT * FROM {native.receipts_table()} WHERE outcome='accepted'").to_arrow_table().to_pylist()
+    from spicy_regs.etl_receipts import _unpack
+    processing = _unpack(json.loads(receipt['processing_json']))
+    processing['raw_conversion_inputs'].pop('text_content')
+    receipt['processing_json'] = exact_json(processing)
+    receipt['receipt_id'] = 'sha256:' + sha256(exact_json({k: v for k, v in receipt.items() if k != 'receipt_id'}).encode()).hexdigest()
+    con.register('altered_receipt', pa.Table.from_pylist([receipt], schema=native.RECEIPT_SCHEMA))
+    con.execute(f"DELETE FROM {native.receipts_table()} WHERE outcome='accepted'")
+    con.execute(f'INSERT INTO {native.receipts_table()} SELECT * FROM altered_receipt')
+    with pytest.raises(ValueError, match='retained processor input differs'):
         native.processing_table(con, COMMENT)

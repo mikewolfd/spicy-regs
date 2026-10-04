@@ -4,6 +4,7 @@ Declarations are cheap and import no source readers. Restoration happens only
 for release-compatible views and preserves the public native subject relations.
 """
 from dataclasses import replace
+from collections.abc import Mapping
 from importlib.resources import files
 import base64
 import json
@@ -37,10 +38,11 @@ def receipt_owner(index, table):
 
 class ReceiptAdapter:
     """One connection's bounded restoration cache, scoped to captured members."""
-    def __init__(self, connection, index, base_url, *, local_directory=None, local_receipts=None):
+    def __init__(self, connection, index, base_url, *, local_directory=None, local_receipts=None, local_native=None):
         self.connection, self.index, self.base_url = connection, index, base_url
         self.local_directory = Path(local_directory) if local_directory else None
         self.local_receipts = local_receipts
+        self.local_native = local_native or {}
         self.restored = {}
 
     def _fetch(self, member, destination):
@@ -60,13 +62,18 @@ class ReceiptAdapter:
                 raise ValueError("Local selected receipt member differs from its generation pin")
             shutil.copyfile(source, destination)
 
+    def require_selected(self, tables):
+        missing = sorted(table for table in tables
+                         if table not in self.local_native and receipt_owner(self.index, table) is None)
+        if missing:
+            raise ValueError("FEC dependencies require selected native receipts: " + ", ".join(missing))
+
     def restore(self, table):
         if table in self.restored:
             return self.restored[table]
         owner = receipt_owner(self.index, table)
-        if owner is None:
-            # Historical unsplit generations retain their already pinned fields.
-            return table
+        native = self.local_native.get(table)
+        self.require_selected((table,))
         import pyarrow as pa
         from .etl_receipts import DatasetPolicy, read_with_receipts, read_attempts, select_receipts
         from .subject_catalog import descriptors
@@ -74,21 +81,29 @@ class ReceiptAdapter:
         policy = DatasetPolicy.from_descriptor(descriptors()[table])
         declaration = processing_declarations()[table]
         schema = pa.ipc.read_schema(pa.BufferReader(base64.b64decode(declaration["arrow_schema"])))
+        identity_scalars = ({} if policy.policy_version.startswith("fec-subject-receipts/") else
+                            json.loads(files("spicy_regs").joinpath("fec_identity_context_fields.json").read_text())
+                            [table]["native_scalars"])
         target = "_spicy_fec_processing_" + table
         temporary = target + "_batch"
         con = self.connection
         with TemporaryDirectory(prefix="fec-qualified-receipts-") as directory:
             directory = Path(directory)
-            shared = directory / "shared.parquet"
-            self._fetch(receipt_members(self.index, dataset=table)[0], shared)
+            if native is not None:
+                shared = Path(native["receipts"])
+                subjects = [Path(path) for path in native["subjects"]]
+                generation = native["generation_id"]
+            else:
+                shared = directory / "shared.parquet"
+                self._fetch(receipt_members(self.index, dataset=table)[0], shared)
+                subjects = []
+                if not policy.receipt_only:
+                    for ordinal, member in enumerate(table_members(self.index, table + ".parquet")):
+                        path = directory / f"subject-{ordinal}.parquet"
+                        self._fetch(member, path)
+                        subjects.append(path)
+                generation = owner[1]["etlReceipts"]["generationId"]
             receipt = select_receipts(shared, directory / "receipt.parquet", dataset=table)
-            subjects = []
-            if not policy.receipt_only:
-                for ordinal, member in enumerate(table_members(self.index, table + ".parquet")):
-                    path = directory / f"subject-{ordinal}.parquet"
-                    self._fetch(member, path)
-                    subjects.append(path)
-            generation = owner[1]["etlReceipts"]["generationId"]
             if policy.receipt_only:
                 rows = (row["processing_fields"] for row in read_attempts(
                     [receipt], policy, generation_id=generation, outcomes=frozenset({"observed"})))
@@ -97,16 +112,28 @@ class ReceiptAdapter:
             def originals():
                 for row in rows:
                     if policy.policy_version.startswith("fec-subject-receipts/"):
-                        conversion = row["fec_conversion_inputs"]
+                        conversion = row.get("fec_conversion_inputs")
+                        columns = row.get("fec_input_columns")
+                        if not isinstance(conversion, Mapping) or not isinstance(columns, list) or any(
+                            not isinstance(name, str) for name in columns
+                        ):
+                            raise ValueError(f"{table}: declared FEC conversion inputs are missing or malformed")
                         yield {name: conversion[name] if name in conversion else row[name]
-                               for name in row.get("fec_input_columns", conversion)}
+                               for name in columns}
                     else:
                         # Explicit identity mapper conversion inputs retain original
                         # scalar spellings; repeated raw fields are receipt fields.
-                        yield {name: row.get("conversion_inputs", {}).get(name, row.get(name))
-                               for name in schema.names}
+                        conversion = row.get("conversion_inputs")
+                        if not isinstance(conversion, Mapping):
+                            raise ValueError(f"{table}: declared conversion_inputs must be a mapping")
+                        for name in schema.names:
+                            if name not in conversion and (name not in policy.input_fields or
+                                    (name in identity_scalars and row.get(name) is not None)):
+                                raise ValueError(f"{table}: missing retained conversion input for {name}")
+                        yield {name: conversion[name] if name in conversion else row.get(name) for name in schema.names}
             con.register(temporary, pa.Table.from_batches([], schema=schema))
-            con.execute(f'CREATE TEMP TABLE "{target}" AS SELECT * FROM "{temporary}"')
+            # MCP worker cursors share regular in-memory relations, not temporary tables.
+            con.execute(f'CREATE TABLE "{target}" AS SELECT * FROM "{temporary}"')
             try:
                 batch = []
                 for row in originals():
@@ -127,6 +154,7 @@ class ReceiptAdapter:
         return target
 
     def prepare(self, spec, sql):
+        self.require_selected(spec.required)
         replacements = {table: self.restore(table) for table in spec.required}
         tree = json.loads(self.connection.execute("SELECT json_serialize_sql(?)", [sql]).fetchone()[0])
         def visit(node, ctes=frozenset()):

@@ -14,10 +14,10 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from spicy_regs.court_subjects import (
-    IDENTITIES, LEGACY_COLUMNS, RECEIPT_FIELDS, SUBJECT_SCHEMAS, normalize_court_row,
+    IDENTITIES, RECEIPT_FIELDS, SUBJECT_SCHEMAS, normalize_court_row,
 )
 from spicy_regs.etl_receipts import (
-    DatasetPolicy, RECEIPT_SCHEMA, ReceiptContext, combine_receipts, failure_receipt,
+    DatasetPolicy, RECEIPT_SCHEMA, ReceiptContext, ReceiptLineage, combine_receipts, failure_receipt,
     read_with_receipts, select_receipts, split_record, write_dataset,
 )
 
@@ -64,7 +64,8 @@ def _pdf_failure(row: Mapping) -> str | None:
 def write_court_rows(
     dataset: str, rows: Iterable[Mapping], output_dir: Path, *, witnesses: Sequence[Mapping],
     generation_id: str | None = None, processor: str = 'spicy_regs/courts/1',
-    diagnostics: Mapping | None = None,
+    diagnostics: Mapping | None = None, refused_receipts: Path | None = None,
+    attempt_prefix: str = "row", prior_receipts: Path | None = None,
 ) -> Path:
     """Expose a complete subject/receipt pair only after validating both.
 
@@ -77,14 +78,15 @@ def write_court_rows(
     output_dir.mkdir(parents=True, exist_ok=True)
     bundle = output_dir / '.court-etl' / uuid4().hex
     bundle.parent.mkdir(exist_ok=True)
-    with TemporaryDirectory(prefix='.court-failures-', dir=output_dir) as temporary:
+    with ReceiptLineage([] if prior_receipts is None else [prior_receipts], dataset=dataset) as lineage, \
+            TemporaryDirectory(prefix='.court-failures-', dir=output_dir) as temporary:
         failures_path = Path(temporary) / 'etl_receipts.parquet'
         with pq.ParquetWriter(failures_path, RECEIPT_SCHEMA, compression='zstd') as writer:
             failures = []
 
             def records():
                 for ordinal, raw in enumerate(rows):
-                    context = ReceiptContext(generation_id, f'{dataset}:{ordinal}', processor,
+                    context = ReceiptContext(generation_id, f'{dataset}:{attempt_prefix}:{ordinal}', processor,
                         [dict(w) for w in witnesses],
                         diagnostics or {})
                     try:
@@ -92,8 +94,9 @@ def write_court_rows(
                         reason = _pdf_failure(mapped) if dataset == 'court_opinion_pdf_extractions' else None
                         if reason:
                             raise ValueError(f'Opinion body unavailable: {reason}')
-                        # Validate before yielding so a conversion refusal is a receipt-only attempt.
+                        # Validate before inheriting evidence or replacing a subject.
                         split_record(policy, mapped, context)
+                        context = lineage.inherit(context, policy, mapped)
                     except (ValueError, TypeError, KeyError, pa.ArrowException) as error:
                         failed = replace(context, diagnostics={**context.diagnostics,
                             'error_type': type(error).__name__, 'error': str(error)})
@@ -107,6 +110,12 @@ def write_court_rows(
                 if failures:
                     writer.write_table(pa.Table.from_pylist(failures, schema=RECEIPT_SCHEMA))
                     failures.clear()
+                if refused_receipts is not None:
+                    for receipt in parquet_rows(refused_receipts):
+                        if receipt['dataset'] != dataset or receipt['generation_id'] != generation_id:
+                            raise ValueError('Rejected updates differ from the selected court build')
+                        if receipt['outcome'] == 'refused':
+                            writer.write_table(pa.Table.from_pylist([receipt], schema=RECEIPT_SCHEMA))
                 writer.close()
 
             try:
@@ -131,11 +140,23 @@ def write_court_rows(
 
 
 def finish_court_output(dataset: str, staged: Path, output_dir: Path, *, witnesses=None,
-                        generation_id: str | None = None, diagnostics: Mapping | None = None) -> Path:
+                        generation_id: str | None = None, diagnostics: Mapping | None = None,
+                        refused_receipts: Path | None = None, prior_receipts: Path | None = None) -> Path:
     """Split a completed private mapper output; keep its bytes as retained evidence."""
     return write_court_rows(dataset, parquet_rows(staged), output_dir,
                             witnesses=witnesses or [file_witness(staged)], generation_id=generation_id,
-                            diagnostics=diagnostics)
+                            diagnostics=diagnostics, refused_receipts=refused_receipts, prior_receipts=prior_receipts)
+
+
+def admit_court_updates(dataset: str, source: Path, directory: Path, *, schema: pa.Schema,
+                        generation_id: str) -> tuple[Path, Path]:
+    """Validate updates before merging identities; return accepted inputs and all refusal receipts."""
+    subject = write_court_rows(dataset, parquet_rows(source), directory,
+        witnesses=[file_witness(source)], generation_id=generation_id, attempt_prefix='incoming')
+    receipts, _ = local_receipt_selection(subject)
+    accepted = restore_processing_input(subject, directory / 'accepted-inputs.parquet',
+        dataset=dataset, schema=schema)
+    return accepted, receipts
 
 
 def local_receipt_selection(path: Path) -> tuple[Path, str]:
@@ -150,16 +171,10 @@ def local_receipt_selection(path: Path) -> tuple[Path, str]:
 
 
 def read_court_rows(path: Path, *, dataset: str, receipt_path: Path | None = None,
-                    generation_id: str | None = None, allow_legacy: bool = False) -> Iterable[dict]:
+                    generation_id: str | None = None) -> Iterable[dict]:
     """Internal processing read; a migrated row never falls back to missing evidence."""
     if not pq.read_schema(path).equals(SUBJECT_SCHEMAS[dataset]):
-        if not allow_legacy:
-            raise ValueError('Legacy court prior requires explicit migration authorization')
-        allowed = set(LEGACY_COLUMNS[dataset]) | set(RECEIPT_FIELDS[dataset]) | set(SUBJECT_SCHEMAS[dataset].names)
-        if set(pq.read_schema(path).names) - allowed:
-            raise ValueError('Legacy court input has unclassified columns')
-        yield from parquet_rows(path)
-        return
+        raise ValueError('Court prior must use the native subject schema and selected receipts')
     if receipt_path is None:
         receipt_path, generation_id = local_receipt_selection(path)
     if generation_id is None:
@@ -170,14 +185,13 @@ def read_court_rows(path: Path, *, dataset: str, receipt_path: Path | None = Non
 
 
 def restore_processing_input(path: Path, destination: Path, *, dataset: str, schema: pa.Schema,
-                             receipt_path: Path | None = None, generation_id: str | None = None,
-                             allow_legacy: bool = False) -> Path:
+                             receipt_path: Path | None = None, generation_id: str | None = None) -> Path:
     """Reconstruct the mapper's private merge columns, preserving exact raw literals."""
     from spicy_regs.transforms.parquet_rows import write_rows
 
     def restored():
         for row in read_court_rows(path, dataset=dataset, receipt_path=receipt_path,
-                                   generation_id=generation_id, allow_legacy=allow_legacy):
+                                   generation_id=generation_id):
             row = dict(row)
             row.update(row.get('conversion_inputs') or {})
             if dataset == 'court_dockets':

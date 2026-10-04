@@ -349,8 +349,12 @@ def test_every_member_is_republished_together_from_the_pinned_snapshot(published
 
 def test_export_refuses_a_catalog_moved_from_the_pinned_snapshot(tmp_path, monkeypatch):
     from spicy_regs.sources import regulatory_catalog
-    monkeypatch.setattr(regulatory_catalog, "ensure_native", lambda con, rt: None)
-    monkeypatch.setattr(iceberg, "_connect", duckdb.connect)
+    def connect():
+        con = duckdb.connect()
+        con.execute(f"ATTACH ':memory:' AS {iceberg._CATALOG_ALIAS}")
+        regulatory_catalog.ensure_native(con, COMMENT)
+        return con
+    monkeypatch.setattr(iceberg, "_connect", connect)
     monkeypatch.setattr(iceberg, "_read_snapshot", lambda con, rt: iceberg.CatalogSnapshot("table-uuid", 42, 0))
     monkeypatch.setattr(iceberg, "_snapshot_query", lambda *a: pytest.fail("scanned a snapshot other than the pinned one"))
     with pytest.raises(RuntimeError, match="changed before export"):

@@ -223,7 +223,7 @@ def test_invalid_current_does_not_fall_back_to_stale_root(tmp_path, monkeypatch,
 
 def test_mixed_batch_labels_legacy_and_readers_prefer_selected_files(tmp_path, monkeypatch, capsys):
     _remote(monkeypatch, legacy=True)
-    # Conflicting root files remain available as legacy only when unselected.
+    # A selected download excludes every unselected root file.
     pl.DataFrame({"id": ["stale-root"], "title": ["stale"]}).write_parquet(tmp_path / "a.parquet")
     pl.DataFrame({"id": ["standalone"], "title": ["legacy"]}).write_parquet(tmp_path / "other.parquet")
     batch = _download(tmp_path, "a", "b", "dockets")
@@ -236,7 +236,7 @@ def test_mixed_batch_labels_legacy_and_readers_prefer_selected_files(tmp_path, m
     output = capsys.readouterr().out
     assert "legacy-unversioned" in output and "managed" in output
     assert "old-a" in output and "old-b" in output and "stale-root" not in output
-    assert "OTHER" in output
+    assert "OTHER" not in output
 
 
 def test_reader_holds_one_local_batch_if_current_switches_during_operation(tmp_path, monkeypatch, capsys):

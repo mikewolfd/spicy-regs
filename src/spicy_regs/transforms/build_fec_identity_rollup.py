@@ -13,6 +13,7 @@ from tempfile import TemporaryDirectory
 import pyarrow.parquet as pq
 
 from .fec_identity_receipts import IdentityReceiptWriter, read_identity_rows
+from spicy_regs.etl_receipts import ReceiptLineage
 
 BUILDERS = {
     "fec_committees": ("build_fec_committees", "build_fec_committees"),
@@ -72,7 +73,7 @@ def build_fec_identity_rollup(
                 def reconstructed():
                     for row in read_identity_rows(prior_bundle, table, generation_id=prior_generation_id):
                         originals = row["conversion_inputs"]
-                        yield {name: originals.get(name, row.get(name)) for name in COLUMNS}
+                        yield {name: originals[name] for name in COLUMNS}
 
                 prior_rows = reconstructed()
             # An explicit empty full-walk prior also prevents an unqualified remote fallback.
@@ -86,9 +87,14 @@ def build_fec_identity_rollup(
         retained = evidence_dir / built.name
         shutil.copyfile(built, retained)
         witness = dict(source_id=table, source_uri=str(retained), sha256=digest, locator=None, body_version=None)
-        with IdentityReceiptWriter(output_dir, generation_id=generation_id, tables=[table]) as writer:
+        with (
+            ReceiptLineage(
+                () if prior_bundle is None else (Path(prior_bundle) / "etl_receipts.parquet",), dataset=table
+            ) as lineage,
+            IdentityReceiptWriter(output_dir, generation_id=generation_id, tables=[table]) as writer,
+        ):
             with pq.ParquetFile(built) as source:
                 for batch in source.iter_batches(batch_size=512, use_threads=False):
                     for row in batch.to_pylist():
-                        writer.emit(table, row, input_witness=witness)
+                        writer.emit(table, row, input_witness=witness, lineage=lineage)
     return output_dir

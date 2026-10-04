@@ -204,3 +204,18 @@ def test_clean_subject_dictionary_cannot_trigger_legacy_evidence_fallback(tmp_pa
             namespace_evidence={},
             package_root=root,
         )
+
+
+@pytest.mark.parametrize('child', [[], '', 7, ['wrong']])
+def test_malformed_legal_child_retains_refusal_and_valid_sibling(tmp_path, child):
+    rows = [dict(record_id='bad', native_facts_json=json.dumps({'ao_citations': [child]})),
+            dict(record_id='good', native_facts_json=json.dumps({'ao_citations': []}))]
+    schema = pa.Table.from_pylist(rows).schema
+    (subject, receipt), _ = write_fec_subjects(
+        rows, tmp_path / 'bundle', table='fec_legal_matters', input_schema=schema,
+        generation_id='generation-a', context_for=context)
+    assert [r['record_id'] for r in pq.read_table(subject).to_pylist()] == ['good']
+    receipts = pq.read_table(receipt).to_pylist()
+    assert sorted(r['outcome'] for r in receipts) == ['accepted', 'refused']
+    refused = next(r for r in receipts if r['outcome'] == 'refused')
+    assert 'ao_citations' in refused['processing_json']

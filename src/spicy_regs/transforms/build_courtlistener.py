@@ -6,8 +6,7 @@ An unknown list stays NULL; an explicitly empty publisher list stays empty.
 Source URLs, capture inputs and publisher record timestamps stay in receipts.
 
 Incremental builds reconstruct private processing inputs from the selected
-subject and receipt generation. Legacy priors require an explicit migration
-flag. The dated overlap, bounded fill of unnamed dockets and case-type rule
+subject and receipt generation. The dated overlap, bounded fill of unnamed dockets and case-type rule
 remain in force. A failed source walk leaves the previous output pair intact.
 """
 
@@ -30,7 +29,7 @@ from spicy_regs.sources import r2
 from spicy_regs.sources.courtlistener import CourtListenerDocketIdReader, CourtListenerReader, docket_id_queries
 from spicy_regs.transforms.table_merge import merge_local_prior
 from spicy_regs.court_subjects import SUBJECT_SCHEMAS
-from spicy_regs.court_receipts import file_witness, finish_court_output, prior_receipt_selection, restore_processing_input
+from spicy_regs.court_receipts import file_witness, finish_court_output, prior_receipt_selection, restore_processing_input, admit_court_updates
 
 OUTPUT = "court_dockets.parquet"
 
@@ -163,7 +162,6 @@ def build_courtlistener(
     evidence: CaptureEvidence | None = None,
     since: date | None = None,
     max_records: int | None = None,
-    allow_legacy_prior: bool = False,
 ) -> Path:
     """Build ``court_dockets.parquet`` (incremental merge with the prior table)."""
     import duckdb
@@ -174,13 +172,14 @@ def build_courtlistener(
     # 1. Pull the prior table (best effort — absence just means full backfill).
     have_prior = prior_file.exists() or r2.download(OUTPUT, prior_file)
     input_witnesses = [file_witness(prior_file)] if have_prior else []
-    if have_prior and (not allow_legacy_prior or not pq.read_schema(prior_file).equals(_SCHEMA)):
+    receipt_path = None
+    if have_prior:
         receipt_path, generation_id = prior_receipt_selection(prior_file, dataset='court_dockets')
         if receipt_path is not None:
             input_witnesses.append(file_witness(receipt_path))
         prior_file = restore_processing_input(prior_file, output_dir / f'.cl-prior-{uuid4().hex}.parquet',
             dataset='court_dockets', schema=_SCHEMA, receipt_path=receipt_path,
-            generation_id=generation_id, allow_legacy=allow_legacy_prior)
+            generation_id=generation_id)
     if have_prior:
         logger.info("CourtListener: merging against prior table {}", prior_file)
     else:
@@ -212,7 +211,15 @@ def build_courtlistener(
     table = pa.Table.from_pylist(rows, schema=_SCHEMA) if rows else _SCHEMA.empty_table()
     pq.write_table(table, new_file, compression="zstd")
 
-    # 4. Merge prior + new, dedup on cl_docket_id preferring the new row.
+    # Admit fresh rows before replacing prior identities. Refused updates retain
+    # their receipt while the last valid subject remains eligible for the merge.
+    build_generation_id = uuid4().hex
+    new_file, fresh_receipts = admit_court_updates(
+        'court_dockets', new_file, output_dir / '.court-updates' / build_generation_id,
+        schema=_SCHEMA, generation_id=build_generation_id,
+    )
+
+    # 4. Merge admitted updates over prior rows.
     spill_dir = output_dir / ".duckdb_tmp"
     spill_dir.mkdir(exist_ok=True)
     con = duckdb.connect()
@@ -236,7 +243,8 @@ def build_courtlistener(
 
     out_file = finish_court_output('court_dockets', staged, output_dir,
         witnesses=[file_witness(staged), *input_witnesses],
-        diagnostics={'source_selection_max_records': max_records, 'legacy_prior_authorized': allow_legacy_prior})
+        diagnostics={'source_selection_max_records': max_records},
+        generation_id=build_generation_id, refused_receipts=fresh_receipts, prior_receipts=receipt_path)
 
     total = pq.ParquetFile(out_file).metadata.num_rows
     logger.info("Court dockets: {:,} rows", total)

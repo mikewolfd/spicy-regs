@@ -26,19 +26,20 @@ from tests.regulatory_publication_fakes import install as install_publication
 
 
 def _seed_catalog(con, rows):
-    con.execute(f"CREATE SCHEMA IF NOT EXISTS {iceberg._schema_ref()}")
     con.register("seed", pa.Table.from_pylist(rows, schema=pa.schema([(c, pa.string()) for c in COMMENT.schema])))
-    con.execute(f'CREATE TABLE {iceberg._schema_ref()}."comments" AS SELECT * FROM seed')
-    iceberg._ensure_table(con, COMMENT)
+    iceberg.replace_rows(con, COMMENT, "seed")
 
 
 @pytest.fixture(autouse=True)
 def native_publication(monkeypatch):
-    return install_publication(monkeypatch)
+    remote = install_publication(monkeypatch)
+    monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
+    return remote
 
 
 @pytest.mark.parametrize("mode", ["catalog", "chunked"])
 def test_text_retry_after_manifest_on_fresh_host(tmp_path, monkeypatch, mode, native_publication):
+    monkeypatch.setenv("R2_PUBLIC_URL", "https://test.invalid")
     identity = f"{ACF[1]}-0004"
     raw_key = _comment_key(identity, ACF[1], agency=ACF[0])
     payload = _comment_payload(identity, ACF[1], "2025-01-01")

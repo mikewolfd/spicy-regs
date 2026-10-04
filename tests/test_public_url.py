@@ -100,8 +100,6 @@ def test_freshness_uses_publisher_url_and_explicit_argument(tmp_path, monkeypatc
     [
         ("check-comments-freshness.yml", "Check comments freshness"),
         ("check-rollup-freshness.yml", "Check published tables"),
-        ("seed-comments-catalog.yml", "Verify freshness (index vs rows)"),
-        ("seed-dockets-catalog.yml", "Verify published freshness"),
         ("deploy-docs.yml", "Verify every active published schema"),
         ("_comments-mirror.yml", "Publish comments mirror from the catalog"),
         ("_comments-mirror.yml", "Capture published base versions for dependent jobs"),

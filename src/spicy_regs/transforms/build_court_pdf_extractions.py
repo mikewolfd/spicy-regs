@@ -88,7 +88,6 @@ def prepare_captured_opinions(
     output: Path, items: Sequence[tuple[Mapping[str, Any], Any]], *,
     read_snapshot: dict, public_url: str, max_records: int = 10,
     max_capture_bytes: int = 16 * 1024 * 1024,
-    allow_legacy_prior: bool = False,
 ) -> dict:
     """Seal an explicit bounded cohort using existing generation/evidence APIs.
 
@@ -122,6 +121,7 @@ def prepare_captured_opinions(
     path = output / KEY
     table = pa.Table.from_pylist(rows, schema=RAW_SCHEMA)
     prior_member = None
+    receipt_path = None
     if FAMILY in read_snapshot['families']:
         from spicy_regs.sources import publication, r2
         prior_member = publication.single_member(read_snapshot, KEY)
@@ -144,7 +144,7 @@ def prepare_captured_opinions(
                 raise ValueError('Prior extraction receipts are missing')
             generation_id = owner['etlReceipts']['generationId']
         prior_rows = read_court_rows(prior_path, dataset='court_opinion_pdf_extractions',
-            receipt_path=receipt_path, generation_id=generation_id, allow_legacy=allow_legacy_prior)
+            receipt_path=receipt_path, generation_id=generation_id)
         prior_table = pa.Table.from_pylist(list(prior_rows), schema=RAW_SCHEMA)
         table = merge_extractions(prior_table, table)
         evidence.event('preserving-extraction-merge', prior_sha256=digest, prior_rows=len(prior_table),
@@ -158,7 +158,7 @@ def prepare_captured_opinions(
         witnesses.append({'source_id': KEY, 'source_uri': prior_member.path,
                           'sha256': prior_member.sha256, 'locator': None,
                           'body_version': read_snapshot['families'][FAMILY]['artifactDigest']})
-    path = write_court_rows('court_opinion_pdf_extractions', table.to_pylist(), output, witnesses=witnesses)
+    path = write_court_rows('court_opinion_pdf_extractions', table.to_pylist(), output, witnesses=witnesses, prior_receipts=receipt_path)
     artifact = build_court_generation(output / 'generation', family=FAMILY, files=[path],
                                 read_snapshot=read_snapshot, inputs=evidence.inputs(),
                                 parents={'court_opinions.parquet': {
