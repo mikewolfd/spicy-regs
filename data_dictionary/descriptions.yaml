@@ -1177,7 +1177,12 @@ tables:
       *direct* agency lobbying. Primary / dedup key is `filing_uuid`. All columns
       are stored as VARCHAR; nested/array fields are JSON strings.
     columns:
-      filing_uuid: "LDA filing UUID (e.g. `7866327b-c892-4430-b9f0-1f0f679c58c6`). Primary key / dedup key."
+      filing_uuid: >-
+        LDA filing UUID (e.g. `7866327b-c892-4430-b9f0-1f0f679c58c6`). Primary key / dedup key. The filing's
+        printable document page on lda.gov (the API's `filing_document_url`; lda.senate.gov redirects there) is
+        kept in the filing's receipt, not in this table:
+        `SELECT regexp_extract(processing_json, '\["url",\["str","([^"]*)"', 1) FROM etl_receipts
+        WHERE dataset = 'lobbying_filings' AND outcome = 'accepted' AND contains(identity_json, '"<filing_uuid>"')`.
       filing_type: "The LDA filing-type code as the API states it: `RR` registration; `Q1`–`Q4` quarterly reports and `MM` the pre-2008 mid-year report; `1A`–`4A` and `MA` amendments; `1T`–`4T` and `MT` terminations; `1@`–`4@` and `M@` termination amendments; a trailing `Y` marks a no-activity report (`Q1Y`, `1@Y`). The LDA constants endpoint (`/api/v1/constants/filing/filingtypes/`) is the authority. An amendment is a separate filing that restates its quarter's report. To total amounts, drop registrations (`RR`, `RA`), which carry a `filing_period` too, then keep the latest filing per registrant, `client_id` and period: with registrations kept, a later one displaced a quarterly report in 103 groups of 2025 (measured 2026-10-03). For issues or activities, choose filing types first: a termination chain (`1T`, then a no-activity `1@Y`) shares the period, and the latest filing can be the no-activity one."
       filing_year: "Calendar year the filing reports on."
       filing_period: "Reporting period within the year (e.g. `first_quarter`, `year_end`)."
@@ -4282,8 +4287,7 @@ tables:
         population; unresolved applicability prevents a qualified current total.
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
-      filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
-        share it; group proven filing identity before joining.
+      filing_key: &filing_key_association_pointer "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. It does not by itself say whether the row's filing is held: where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`). `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist."
       filing_link_status: &map_time_filing_link_status "Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist."
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
@@ -4648,8 +4652,7 @@ tables:
         population; unresolved applicability prevents a qualified current total.
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
-      filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
-        share it; group proven filing identity before joining.
+      filing_key: *filing_key_association_pointer
       filing_link_status: *map_time_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
@@ -4862,8 +4865,7 @@ tables:
         population; unresolved applicability prevents a qualified current total.
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
-      filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
-        share it; group proven filing identity before joining.
+      filing_key: *filing_key_association_pointer
       filing_link_status: *map_time_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
@@ -5212,8 +5214,7 @@ tables:
         population; unresolved applicability prevents a qualified current total.
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
-      filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
-        share it; group proven filing identity before joining.
+      filing_key: *filing_key_association_pointer
       filing_link_status: *map_time_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
@@ -5697,8 +5698,7 @@ tables:
         population; unresolved applicability prevents a qualified current total.
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
-      filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
-        share it; group proven filing identity before joining.
+      filing_key: *filing_key_association_pointer
       filing_link_status: *map_time_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
@@ -5800,8 +5800,7 @@ tables:
         population; unresolved applicability prevents a qualified current total.
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
-      filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
-        share it; group proven filing identity before joining.
+      filing_key: *filing_key_association_pointer
       filing_link_status: *map_time_filing_link_status
       aggregate_type: Source-defined aggregation class, such as geographic bucket, contribution-size band or inaugural
         contributor group.
@@ -5886,8 +5885,7 @@ tables:
         population; unresolved applicability prevents a qualified current total.
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
-      filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
-        share it; group proven filing identity before joining.
+      filing_key: *filing_key_association_pointer
       filing_link_status: *map_time_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
@@ -6070,8 +6068,7 @@ tables:
         population; unresolved applicability prevents a qualified current total.
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
-      filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
-        share it; group proven filing identity before joining.
+      filing_key: *filing_key_association_pointer
       filing_link_status: *map_time_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
@@ -6244,8 +6241,7 @@ tables:
         population; unresolved applicability prevents a qualified current total.
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
-      filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
-        share it; group proven filing identity before joining.
+      filing_key: *filing_key_association_pointer
       filing_link_status: *map_time_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
@@ -6426,8 +6422,7 @@ tables:
         population; unresolved applicability prevents a qualified current total.
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
-      filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
-        share it; group proven filing identity before joining.
+      filing_key: *filing_key_association_pointer
       filing_link_status: *map_time_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
@@ -6732,8 +6727,7 @@ tables:
         population; unresolved applicability prevents a qualified current total.
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
-      filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
-        share it; group proven filing identity before joining.
+      filing_key: *filing_key_association_pointer
       filing_link_status: *map_time_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
@@ -7172,8 +7166,7 @@ tables:
         population; unresolved applicability prevents a qualified current total.
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
-      filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
-        share it; group proven filing identity before joining.
+      filing_key: *filing_key_association_pointer
       filing_link_status: *map_time_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
@@ -7301,8 +7294,7 @@ tables:
         population; unresolved applicability prevents a qualified current total.
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
-      filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
-        share it; group proven filing identity before joining.
+      filing_key: *filing_key_association_pointer
       filing_link_status: *map_time_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
@@ -7478,8 +7470,7 @@ tables:
         population; unresolved applicability prevents a qualified current total.
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
-      filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
-        share it; group proven filing identity before joining.
+      filing_key: *filing_key_association_pointer
       filing_link_status: *map_time_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
@@ -7938,8 +7929,7 @@ tables:
         population; unresolved applicability prevents a qualified current total.
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
-      filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
-        share it; group proven filing identity before joining.
+      filing_key: *filing_key_association_pointer
       filing_link_status: *map_time_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
@@ -8041,8 +8031,7 @@ tables:
         population; unresolved applicability prevents a qualified current total.
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
-      filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
-        share it; group proven filing identity before joining.
+      filing_key: *filing_key_association_pointer
       filing_link_status: *map_time_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
@@ -8233,8 +8222,7 @@ tables:
         population; unresolved applicability prevents a qualified current total.
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
-      filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
-        share it; group proven filing identity before joining.
+      filing_key: *filing_key_association_pointer
       filing_link_status: *map_time_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
@@ -8795,8 +8783,7 @@ tables:
         population; unresolved applicability prevents a qualified current total.
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
-      filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
-        share it; group proven filing identity before joining.
+      filing_key: *filing_key_association_pointer
       filing_link_status: *map_time_filing_link_status
       currency: Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.
       amount_kind: Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It
@@ -9215,8 +9202,7 @@ tables:
         population; unresolved applicability prevents a qualified current total.
       current_record_status: Explicit current-selection limitation or decision. Capture order and a mapped value alone
         do not establish the current record.
-      filing_key: Nullable authority- and namespace-qualified filing-version key. Several retained observations can
-        share it; group proven filing identity before joining.
+      filing_key: *filing_key_association_pointer
       filing_link_status: *map_time_filing_link_status
       summary_type: Namespaced source summary layout or report type; measures from different layouts and periods are
         not interchangeable.

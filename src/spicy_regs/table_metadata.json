@@ -1944,7 +1944,7 @@
       {
         "column_name": "filing_uuid",
         "column_type": "VARCHAR",
-        "description": "LDA filing UUID (e.g. `7866327b-c892-4430-b9f0-1f0f679c58c6`). Primary key / dedup key."
+        "description": "LDA filing UUID (e.g. `7866327b-c892-4430-b9f0-1f0f679c58c6`). Primary key / dedup key. The filing's printable document page on lda.gov (the API's `filing_document_url`; lda.senate.gov redirects there) is kept in the filing's receipt, not in this table: `SELECT regexp_extract(processing_json, '\\[\"url\",\\[\"str\",\"([^\"]*)\"', 1) FROM etl_receipts WHERE dataset = 'lobbying_filings' AND outcome = 'accepted' AND contains(identity_json, '\"<filing_uuid>\"')`."
       },
       {
         "column_name": "filing_type",
@@ -2325,7 +2325,7 @@
       {
         "column_name": "filing_key",
         "column_type": "VARCHAR",
-        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining."
+        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. It does not by itself say whether the row's filing is held: where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`). `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist."
       },
       {
         "column_name": "currency",
@@ -2728,7 +2728,7 @@
       {
         "column_name": "filing_key",
         "column_type": "VARCHAR",
-        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining."
+        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. It does not by itself say whether the row's filing is held: where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`). `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist."
       },
       {
         "column_name": "currency",
@@ -3130,7 +3130,7 @@
       {
         "column_name": "filing_key",
         "column_type": "VARCHAR",
-        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining."
+        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. It does not by itself say whether the row's filing is held: where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`). `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist."
       },
       {
         "column_name": "currency",
@@ -3489,7 +3489,7 @@
       {
         "column_name": "filing_key",
         "column_type": "VARCHAR",
-        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining."
+        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. It does not by itself say whether the row's filing is held: where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`). `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist."
       },
       {
         "column_name": "currency",
@@ -4202,7 +4202,7 @@
       {
         "column_name": "filing_key",
         "column_type": "VARCHAR",
-        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining."
+        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. It does not by itself say whether the row's filing is held: where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`). `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist."
       },
       {
         "column_name": "currency",
@@ -4374,7 +4374,7 @@
       {
         "column_name": "filing_key",
         "column_type": "VARCHAR",
-        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining."
+        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. It does not by itself say whether the row's filing is held: where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`). `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist."
       },
       {
         "column_name": "aggregate_type",
@@ -4491,7 +4491,7 @@
       {
         "column_name": "filing_key",
         "column_type": "VARCHAR",
-        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining."
+        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. It does not by itself say whether the row's filing is held: where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`). `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist."
       },
       {
         "column_name": "currency",
@@ -4888,7 +4888,7 @@
       {
         "column_name": "filing_key",
         "column_type": "VARCHAR",
-        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining."
+        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. It does not by itself say whether the row's filing is held: where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`). `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist."
       },
       {
         "column_name": "currency",
@@ -5190,7 +5190,7 @@
       {
         "column_name": "filing_key",
         "column_type": "VARCHAR",
-        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining."
+        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. It does not by itself say whether the row's filing is held: where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`). `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist."
       },
       {
         "column_name": "currency",
@@ -5597,7 +5597,7 @@
       {
         "column_name": "filing_key",
         "column_type": "VARCHAR",
-        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining."
+        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. It does not by itself say whether the row's filing is held: where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`). `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist."
       },
       {
         "column_name": "currency",
@@ -5791,7 +5791,7 @@
       {
         "column_name": "filing_key",
         "column_type": "VARCHAR",
-        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining."
+        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. It does not by itself say whether the row's filing is held: where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`). `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist."
       },
       {
         "column_name": "currency",
@@ -6364,7 +6364,7 @@
       {
         "column_name": "filing_key",
         "column_type": "VARCHAR",
-        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining."
+        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. It does not by itself say whether the row's filing is held: where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`). `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist."
       },
       {
         "column_name": "currency",
@@ -6531,7 +6531,7 @@
       {
         "column_name": "filing_key",
         "column_type": "VARCHAR",
-        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining."
+        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. It does not by itself say whether the row's filing is held: where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`). `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist."
       },
       {
         "column_name": "currency",
@@ -6868,7 +6868,7 @@
       {
         "column_name": "filing_key",
         "column_type": "VARCHAR",
-        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining."
+        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. It does not by itself say whether the row's filing is held: where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`). `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist."
       },
       {
         "column_name": "currency",
@@ -7513,7 +7513,7 @@
       {
         "column_name": "filing_key",
         "column_type": "VARCHAR",
-        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining."
+        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. It does not by itself say whether the row's filing is held: where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`). `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist."
       },
       {
         "column_name": "currency",
@@ -7660,7 +7660,7 @@
       {
         "column_name": "filing_key",
         "column_type": "VARCHAR",
-        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining."
+        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. It does not by itself say whether the row's filing is held: where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`). `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist."
       },
       {
         "column_name": "currency",
@@ -7952,7 +7952,7 @@
       {
         "column_name": "filing_key",
         "column_type": "VARCHAR",
-        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining."
+        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. It does not by itself say whether the row's filing is held: where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`). `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist."
       },
       {
         "column_name": "currency",
@@ -8962,7 +8962,7 @@
       {
         "column_name": "filing_key",
         "column_type": "VARCHAR",
-        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining."
+        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. It does not by itself say whether the row's filing is held: where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`). `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist."
       },
       {
         "column_name": "source_cycle",
@@ -9618,7 +9618,7 @@
       {
         "column_name": "filing_key",
         "column_type": "VARCHAR",
-        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining."
+        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. It does not by itself say whether the row's filing is held: where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`). `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist."
       },
       {
         "column_name": "summary_type",
@@ -17447,7 +17447,7 @@
     ],
     "column_descriptions": {
       "record_id": "Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event.",
-      "filing_key": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining.",
+      "filing_key": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. It does not by itself say whether the row's filing is held: where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`). `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist.",
       "currency": "Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.",
       "source_ordinal": "Zero-based position within the named parent array. Repeated source elements remain separate rows.",
       "native_position": "Zero-based field position in the retained filing layout, distinct from this measure array ordinal.",
@@ -17466,7 +17466,7 @@
       {
         "column_name": "filing_key",
         "column_type": "VARCHAR",
-        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining."
+        "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. It does not by itself say whether the row's filing is held: where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`). `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist."
       },
       {
         "column_name": "currency",
