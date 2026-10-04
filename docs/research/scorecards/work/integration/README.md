@@ -6,6 +6,8 @@ The [merge follow-up](merge_20261004.md) records the provider package selected
 when integrating that work with the newer fork main.
 The [reader repin](repin_20261004.md) records adoption of the remaining reviewed
 readers and their shared PDF validator.
+The [verified publication follow-up](release_followup_20261004.md) identifies
+the subsequent source release, the next reader package and remaining work.
 
 The [generated work queue](integration_progress.md) accounts for every publisher
 in the [adapter matrix](adapter_support_matrix.md) and

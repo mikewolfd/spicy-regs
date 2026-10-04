@@ -1,0 +1,31 @@
+{
+  "format_version": "scorecard-integration-qualified-scope/1",
+  "qualified": true,
+  "publisher_id": "norml",
+  "scorecard_id": "norml:federal-incumbents",
+  "source_url": "https://vote.norml.org/",
+  "parser_version": "norml-current-federal-html/1",
+  "reader_sha256": "8f375d508150142dd544915ba87de2f6bbb055eb9daf6d8cb4585522e58ed7c4",
+  "capture_manifest_sha256": "ece0ae6bf2f9ccc45801e0a2dbf6aa2de1df5e6ef9370af45320662dbf80e1ec",
+  "native_reference_sha256": "08ec5f061fa94060b37a4a2f2aaeec2574912c11313688c8d20e1114f3497d6f",
+  "native_reference_kind": "source_table_family",
+  "source_qualification_sha256": "3a59470a1f919a4c81997b56551f354be78b8b3fdc3617d81da21840fb70d965",
+  "completeness_rule": "Every publisher-linked state guide reached document EOF; all source federal current-officeholder cards parsed with unique IDs; grade/identity/office corroborates in every original profile; disclosed votes, compound sponsorship/cosponsorship blocks and qualitative profile context preserved with no inferred grading participation or target positions; full guide/profile/methodology facts agree on stable reread",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 472,
+    "scorecard_metrics": 1,
+    "scorecard_items": 5278,
+    "scorecard_metric_items": 0,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 534,
+    "scorecard_member_ratings": 534,
+    "scorecard_member_item_results": 5278
+  },
+  "capture_count": 1174,
+  "evidence_policy": "hash_only",
+  "qualification_boundary": "Named source rendition; remaining editions and renditions stay in scope",
+  "published": false
+}

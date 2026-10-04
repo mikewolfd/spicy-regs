@@ -1,0 +1,24 @@
+{
+  "format_version": "scorecard-integration-published-observation/2",
+  "publisher_id": "afge",
+  "scorecard_id": "afge:2023",
+  "parser_version": "afge-noted-grouped-qualified-pdf/2",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 96,
+    "scorecard_metrics": 2,
+    "scorecard_items": 17,
+    "scorecard_metric_items": 24,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 544,
+    "scorecard_member_ratings": 544,
+    "scorecard_member_item_results": 7896
+  },
+  "source_qualification": "publications/c2479058bffe9f5520db2acd7e4c1956edeaba4a842b95985870c207092c72b1/1d46efdd9fa9eb34a8ea7fc1ceb16b2360376b317aa657e36a0e85f7a3a76fdf.json",
+  "source_qualification_sha256": "1d46efdd9fa9eb34a8ea7fc1ceb16b2360376b317aa657e36a0e85f7a3a76fdf",
+  "public_readback": "publications/c2479058bffe9f5520db2acd7e4c1956edeaba4a842b95985870c207092c72b1/readback.json",
+  "public_readback_sha256": "155cf6beca670679f542b021f3fe146530ef049ea6d841c2237ee8dc5064fe29",
+  "observed_source_generation": "sha256:c2479058bffe9f5520db2acd7e4c1956edeaba4a842b95985870c207092c72b1"
+}

@@ -1,0 +1,31 @@
+{
+  "format_version": "scorecard-integration-qualified-scope/1",
+  "qualified": true,
+  "publisher_id": "animal_welfare_institute",
+  "scorecard_id": "animal_welfare_institute:118-Senate-aggregate",
+  "source_url": "https://www.congressweb.com/AWI/legislators/membercompassionindex?congress_chamber=118-Senate&framed_parent_url=https%3A%2F%2Fawionline.org%2Ftake-action%2F&framed_parent_is_microsite=false&frame_is_responsive=true&frame_is_websticker=false&frame_hide_menu=false&frame_container_id=iframe&full_height_websticker=false",
+  "parser_version": "awi-original-compassion-aggregate/1",
+  "reader_sha256": "3e619fcbd51bf2f742ee231a2a6dbdd06ba3b4f88b86ce81a64282f3257e9cd2",
+  "capture_manifest_sha256": "9b6bffc5d31f1e9cab2059790c60dde148d58c59c0bb8bccbc9b3675c5136c69",
+  "native_reference_sha256": "089c12c64f8dc7b824faed17855e8cb6d46a22fc0c30eb1c3db16c9cb3da9228",
+  "native_reference_kind": "source_table_family",
+  "source_qualification_sha256": "9c58324d79f671f396d2c59eb834c5828a6b1e4dc49777410679ac88e198b088",
+  "completeness_rule": "Complete source-defined aggregate table reaches its original closing table/document and terminal footer; every native member/value agrees across rating/name orderings and reread; native edition catalog reread agrees",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 0,
+    "scorecard_metrics": 1,
+    "scorecard_items": 0,
+    "scorecard_metric_items": 0,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 83,
+    "scorecard_member_ratings": 83,
+    "scorecard_member_item_results": 0
+  },
+  "capture_count": 5,
+  "evidence_policy": "hash_only",
+  "qualification_boundary": "Named source rendition; remaining editions and renditions stay in scope",
+  "published": false
+}

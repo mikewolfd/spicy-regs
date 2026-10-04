@@ -1,0 +1,24 @@
+{
+  "format_version": "scorecard-integration-published-observation/2",
+  "publisher_id": "nrf",
+  "scorecard_id": "nrf:118",
+  "parser_version": "nrf-federal-native-html/1",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 10,
+    "scorecard_metrics": 0,
+    "scorecard_items": 8,
+    "scorecard_metric_items": 0,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 545,
+    "scorecard_member_ratings": 0,
+    "scorecard_member_item_results": 2180
+  },
+  "source_qualification": "publications/c2479058bffe9f5520db2acd7e4c1956edeaba4a842b95985870c207092c72b1/8d548bbf13c8afd295e80eeafa612a84a25b5d959e0e271d21fafd3a0f97e4ab.json",
+  "source_qualification_sha256": "8d548bbf13c8afd295e80eeafa612a84a25b5d959e0e271d21fafd3a0f97e4ab",
+  "public_readback": "publications/c2479058bffe9f5520db2acd7e4c1956edeaba4a842b95985870c207092c72b1/readback.json",
+  "public_readback_sha256": "155cf6beca670679f542b021f3fe146530ef049ea6d841c2237ee8dc5064fe29",
+  "observed_source_generation": "sha256:c2479058bffe9f5520db2acd7e4c1956edeaba4a842b95985870c207092c72b1"
+}

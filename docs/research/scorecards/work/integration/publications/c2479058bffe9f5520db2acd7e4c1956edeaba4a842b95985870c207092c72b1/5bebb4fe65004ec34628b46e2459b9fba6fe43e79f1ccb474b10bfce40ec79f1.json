@@ -1,0 +1,32 @@
+{
+  "format_version": "scorecard-integration-qualified-scope/1",
+  "qualified": true,
+  "publisher_id": "reproductive_freedom",
+  "scorecard_id": "reproductive_freedom:2024",
+  "source_url": "https://reproductivefreedomforall.org/wp-content/uploads/2025/05/2024-Congressional-Record-on-Reproductive-Freedom.pdf",
+  "parser_version": "reproductive-freedom-named-original-annual-pdf/2",
+  "reader_sha256": "082a32c230b5f0cf22a33212b5476782ad7c881ecb8e7d4e26fd061b3934a96e",
+  "capture_manifest_sha256": "fb9b0567db544a1f23a44ecac0971f125b57b0cc82d8a75a2d93fed15d7b5d02",
+  "native_reference_sha256": "834d1eace40418cb1751a252908dec2cd0a8a8f7d8883a60582eb85fe3022451",
+  "native_reference_kind": "source_table_family",
+  "source_qualification_sha256": "a1a7bc8bc58bffe48b07d0dc882128e70f9d12c53c1e5cb3c98ad09ffb8f6280",
+  "completeness_rule": "Complete original annual printed edition, all source member/rating/action cells including blank vacancy rows; every source item and short preferred position; original PDF reread identically",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 12,
+    "scorecard_metrics": 2,
+    "scorecard_items": 10,
+    "scorecard_metric_items": 10,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 539,
+    "scorecard_member_ratings": 539,
+    "scorecard_member_item_results": 2695
+  },
+  "capture_count": 2,
+  "evidence_policy": "hash_only",
+  "qualification_boundary": "Named source rendition; remaining editions and renditions stay in scope",
+  "published": false,
+  "qualified_reader_input_sha256": "71b5c35b4e1d8d888f230fae1a5a7fb001c63b330498b58d979848334fc4526a"
+}

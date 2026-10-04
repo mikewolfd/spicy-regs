@@ -6,10 +6,10 @@
   "source_url": "https://scorecard.afscme.org/",
   "parser_version": "afscme-app-literals/1",
   "reader_sha256": "13b731725e34a81d6f93acebf92555db4932d40b20a4433508d6046f8a8e39ea",
-  "capture_manifest_sha256": "0d998746e12c1a674e47afc54e9e0dc4d24e1c15836bcef88df4a72735173b39",
-  "native_reference_sha256": "1072bcb219dc35344443f4ea4f4d18d556f7069bbf469895f9d3ef5b5d668090",
+  "capture_manifest_sha256": "3dc6fe671076248295c1b20616b6514b51fc23451c624daa1470e719a72170ee",
+  "native_reference_sha256": "76662962d35fbf3a63ca1c401991a8abd794a5712342e64e87a67559dc05ea3c",
   "native_reference_kind": "source_table_family",
-  "source_qualification_sha256": "5aaa380ab69e85be247160e05d0efedd7a6722cfa057bd3fb0e236e69a690d43",
+  "source_qualification_sha256": "646045dda01e7fd27c080341fbe07add094f25e51b758e245931ca54d090fb43",
   "completeness_rule": "Original HTML and linked app reach EOF; both complete JSON member exports and every item literal parsed; Bioguide identities unique; every member has every chamber item result; state identifiers checked, including the publisher roster's Puerto Rico row outside its state selector; full index and app facts agree on stable reread",
   "counts": {
     "scorecard_publishers": 1,
