@@ -1,0 +1,90 @@
+{
+  "format_version": "scorecard-stopping-point/1",
+  "status": "stopped_at_user_request",
+  "observed_at": "2026-10-04T14:28:52.267434+00:00",
+  "campaign_root": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004",
+  "producer_pushed_commit": "a477f80ee4482f2ab2267ecc4dd9cfe8cbe9a14c",
+  "consumer_runtime_commit": "57693645a0354f4a0cebfdf04a8d33601676aca4",
+  "consumer_provider_version": "0.53.0+scorecards.ff2797d34976",
+  "public_scorecards_generation": "sha256:4508fa881535786411d6cf3d3e769e7a432a1bb1ea88cc149fc5d48a51a0a81a",
+  "public_table_counts": {
+    "scorecard_items.parquet": 13139,
+    "scorecard_member_item_results.parquet": 1242073,
+    "scorecard_member_ratings.parquet": 709922,
+    "scorecard_members.parquet": 140453,
+    "scorecard_methodologies.parquet": 3680,
+    "scorecard_metric_components.parquet": 121,
+    "scorecard_metric_items.parquet": 7519,
+    "scorecard_metrics.parquet": 1564,
+    "scorecard_publishers.parquet": 39,
+    "scorecards.parquet": 175
+  },
+  "unpublished_batch": {
+    "status": "interrupted_before_preparation_qualification",
+    "source_scopes_accepted": 35,
+    "candidate_directory": "integration-batch-8-native-profiles/candidate-v3-rating-precision",
+    "plan_file": "package/frozen-ila-details-expansion-20261004/plan-v2-reference-bound.json",
+    "plan_sha256": "2dc261657b5f5c06bb54709bed8c6c2b243aa58ad4e4cd338506036a7b8fface",
+    "index_file": "integration-batch-8-native-profiles/public-index-v3-rating-precision.json",
+    "index_sha256": "fa8cc3fdea868bfb3e4b6dd057088656739a190e6b54109d82b6937d02e57753",
+    "candidate_editions_physical_rows": 210,
+    "candidate_publishers_physical_rows": 44,
+    "preparation_exists": false,
+    "session_exit_code": 130,
+    "publisher_network_requests": 0,
+    "publisher_or_model_bodies_in_public_evidence": 0
+  },
+  "proofs": {
+    "checkpoint": {
+      "file": "stopping-point-20261004/checkpoint.json",
+      "sha256": "2346fecee2ee72dc1b7ca41034f1cd6b1ae9fbf0a0fff7ec5830eb1b09222741"
+    },
+    "nfu_independent_review": {
+      "file": "national_farmers_union/independent-review/review-certificate.json",
+      "sha256": "16e209d58d904821c7191b90494d179d20dfdb536e537d0a8636d366e0811c6d"
+    },
+    "shared_pdf_independent_review": {
+      "file": "consolidation-pdf-independent-review-v1/review-receipt.json",
+      "sha256": "7f1878e690f9a1ec95ba42e4cd9ce3c21362d9248758dd7620bbb5160a08539b"
+    },
+    "afge_independent_review": {
+      "file": "afge/independent-semantic-review-cpac-v1/review-receipt.json",
+      "sha256": "ef8705757348294eb33a7f74a896518e76c95231ad09e9fc7a2921033b263709"
+    },
+    "rffa_independent_review": {
+      "file": "reproductive_freedom/independent-review-v2/review-receipt.json",
+      "sha256": "80224babafa0ef94b112c7b662ed7bb7d65f1bbd30720ba81cba6c7e602ce3d6"
+    },
+    "freedomworks_print_candidate": {
+      "file": "freedomworks/frozen-print-v3-handoff.json",
+      "sha256": "db510fe9f35faf41c398aea3081b1fb9c7289276a870d2b2e50f1828e87adaf1"
+    },
+    "freedomworks_print_partial_review": {
+      "file": "freedomworks/print-v3-partial-review-stop/partial-handoff.json",
+      "sha256": "bac8c99b7915418dfa9fcfc5de97364887dcb7f31ddfcac8239fcf437dc1c943"
+    },
+    "freedomworks_wordpress_failed_review": {
+      "file": "freedomworks/independent-wordpress-review-cpac-v1/frozen-handoff.json",
+      "sha256": "507fa4bdfa0424cf4752c8084f1569991a3e0b14680a35112e043602ef8636ef"
+    },
+    "freedomworks_wordpress_tooltip_candidate": {
+      "file": "freedomworks/wordpress-v3-tooltip-candidate/frozen-handoff-v2.json",
+      "sha256": "99f186101c761b23a5a25d7080619731b958bdb344316937f7f0520092bec9d9"
+    },
+    "preparation_reuse_audit": {
+      "file": "preparation-reuse-audit-stopping-point/audit.json",
+      "sha256": "1cf678673159375e7128bc7d33e8e197d649092ca341649c1febd5a566422bda"
+    }
+  },
+  "source_gate_log": "afge/root-producer-gate-v4-indexed-guides.log",
+  "consumer_gate_log": "etl-conversion-review/root-full-tests-v3-indexed-reader.log",
+  "pending": [
+    "Measure and implement bounded preparation reuse without weakening verification.",
+    "Rerun the pinned retained batch in fresh directories; publish only after successful qualification and public readback.",
+    "Build a reviewed provider overlay including the required shared PDF primitive; qualify and register the ready readers downstream.",
+    "Finish independent print /3 source reconciliation and Ruff formatting before FreedomWorks adoption.",
+    "Fix unstated WordPress metric primary designation to null and independently verify tooltip correction and full source replays.",
+    "Rebuild downstream identity and item analysis against the accepted source generation; retain unresolved rows.",
+    "Continue remaining publisher and archive work using the generated census queue; enable live refresh only for qualified configured inputs."
+  ]
+}

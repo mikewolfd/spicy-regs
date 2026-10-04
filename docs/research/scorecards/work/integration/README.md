@@ -1,5 +1,8 @@
 # Reproduce scorecard integration
 
+The [October 4 stopping point](stopping_point_20261004.md) records pushed code,
+published data, the preserved interrupted batch and the next required checks.
+
 The [generated work queue](integration_progress.md) accounts for every publisher
 in the [adapter matrix](adapter_support_matrix.md) and
 [API inventory](publisher_api_inventory.md). Its pinned

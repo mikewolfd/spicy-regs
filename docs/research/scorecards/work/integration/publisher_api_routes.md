@@ -40,6 +40,15 @@ qualification continues separately from this API discovery.
 
 ## Archived publisher JSON
 
+**FreedomWorks:** the retained original WordPress client requests
+`/wp-json/wp/v2/posts/get_single_chamber_graph_data` with a year and chamber.
+Archived 2022 House and Senate JSON responses contain chamber leadership cards
+and party chart series, rather than complete member rosters. The client also
+names member, comparison and vote routes; those names alone do not establish
+working endpoints. Current availability remains unqualified. See the
+[dated route observations](publisher_api_route_additions.json); complete archived
+HTML scorecards require separate qualification.
+
 **U.S. Chamber:** the original application selected House, Senate and bill JSON
 files under `/sites/all/modules/custom/htv_vue/json/{year}/`. Archived copies of
 the original 2018 index, JavaScript and all selected files now establish a
