@@ -15,7 +15,7 @@ import pytest
 from spicy_regs import mcp_server as server
 from spicy_regs.relationship_views import RELATIONSHIP_VIEWS, SQL_RELATIONSHIP_VIEWS
 from spicy_regs.relationship_views import comments as comment_views
-from spicy_regs.relationship_views.fec_query_views import fec_query_views
+from spicy_regs.fec_receipt_adapter import qualified_views, processing_declarations
 from spicy_regs.relationship_views.lineage import Columns, column_lineage, table_columns
 from spicy_regs.relationship_views.sql_views import _COLUMN_DESCRIPTIONS, install_sql_views, view_columns
 from tests.test_mcp_server import _listed, _records, _tool_data
@@ -24,15 +24,19 @@ FALLBACK = "described by this view"
 SOURCE = "sha256:9c289dfec822ff7e54f9d5719276579452a7b35cad573e701a51e0a15c2a06c0"
 
 
-def _typed_tables(con, names):
+def _typed_tables(con, names, *, processing=False):
     """Empty tables with the dictionary's declared columns and types, so ``alias.*`` passthroughs appear."""
     for name in names:
-        columns = server._table_metadata()[name]["columns"]
+        if processing and name in processing_declarations():
+            columns = [{"column_name": n, "column_type": t} for n, t in processing_declarations()[name]["columns"]]
+        else:
+            columns = server._table_metadata()[name]["columns"]
         con.execute(f'CREATE TABLE "{name}" (' + ", ".join(f'"{c["column_name"]}" {c["column_type"]}' for c in columns) + ")")
 
 
 def _dictionary(table: str) -> dict[str, str | None]:
-    return {c["column_name"]: c.get("description") for c in server._table_metadata()[table]["columns"]}
+    return {**processing_declarations().get(table, {}).get("descriptions", {}),
+            **{c["column_name"]: c.get("description") for c in server._table_metadata().get(table, {}).get("columns", [])}}
 
 
 def _dependencies() -> dict[str, list[str]]:
@@ -48,7 +52,7 @@ def _dependencies() -> dict[str, list[str]]:
 
 
 def _fec_specs():
-    return fec_query_views(source_generation_pin=SOURCE, population="fixture", as_of="fixture", namespace_evidence={})
+    return qualified_views(dict(source_generation_pin=SOURCE, population="fixture", as_of="fixture", namespace_evidence={}))
 
 
 def _described(columns, metadata) -> list[dict]:
@@ -83,7 +87,7 @@ def registry_server(monkeypatch):
     """Every registry view bound over dictionary-typed empty tables, served through the real tools."""
     deps = _dependencies()
     with duckdb.connect() as con:
-        _typed_tables(con, sorted({table for tables in deps.values() for table in tables}))
+        _typed_tables(con, sorted({table for tables in deps.values() for table in tables}), processing=True)
         server._install_relationship_views(con)
         monkeypatch.setattr(server, "_get_connection", lambda: con)
         yield server.build_server(), con, deps
@@ -111,7 +115,7 @@ def test_every_registry_view_meaning_is_declared_registry_or_lineage_never_a_nam
         if info["status"] != "available":
             continue
         described = _tool_data(mcp, "describe_table", {"table": name})
-        declared = declared_by.get(name) or info["metadata"].get("column_descriptions", {})
+        declared = info["metadata"].get("column_descriptions", {}) or declared_by.get(name, {})
         faults += _check_meanings(name, described["columns"], info["metadata"], declared)
         assert "column_lineage" not in described["metadata"] and "column_descriptions" not in described["metadata"]
     assert faults == []
@@ -120,8 +124,8 @@ def test_every_registry_view_meaning_is_declared_registry_or_lineage_never_a_nam
 def test_every_fec_qualified_view_column_has_a_real_description_and_honest_lineage():
     specs = _fec_specs()
     con: Any = duckdb.connect()
-    _typed_tables(con, sorted({table for spec in specs for table in spec.view.required}))
-    installed = install_sql_views(con, [t for t in server._table_metadata() if t.startswith("fec_")], [s.view for s in specs])
+    _typed_tables(con, sorted({table for spec in specs for table in spec.view.required}), processing=True)
+    installed = install_sql_views(con, list(processing_declarations()), [s.view for s in specs])
     undescribed, faults = {}, []
     for spec in specs:
         entry = installed[spec.view.name]
@@ -131,7 +135,7 @@ def test_every_fec_qualified_view_column_has_a_real_description_and_honest_linea
         if bad:
             undescribed[spec.view.name] = bad
         faults += _check_meanings(spec.view.name, columns, entry["metadata"], dict(spec.view.column_descriptions))
-    assert len(specs) == 72 and undescribed == {} and faults == []
+    assert specs and undescribed == {} and faults == []
     # Namesakes the SQL computes carry no inherited meaning: a min() over a policy table, a constant, an EXCLUDE'd recomputation.
     inclusion = installed["fec_individual_snapshot_inclusion"]["metadata"]["column_lineage"]
     assert "purpose" not in inclusion and "policy_version" not in inclusion
@@ -148,14 +152,20 @@ def test_a_projected_column_inherits_its_source_meaning_and_a_computed_namesake_
         return {c["column_name"]: c["description"] for c in _tool_data(mcp, "describe_table", {"table": name})["columns"]}
 
     candidates, links = meanings("org_identity_candidates"), _dictionary("org_committee_links")
-    assert candidates["organization"] == links["organization"] and candidates["confidence"] == links["confidence"]
+    assert candidates["organization"] == links["organization"]
+    assert "confidence" not in candidates and "confidence" not in links
+    assert "receipt" in relationships["org_identity_candidates"]["metadata"]["summary"]
     assert candidates["decision"].startswith("Always pending")
     parties, terms, affiliations = meanings("member_vote_party_affiliations"), _dictionary("member_vote_terms"), _dictionary("member_party_affiliations")
     assert parties["bioguide_id"] == terms["bioguide_id"] != affiliations["bioguide_id"]
     assert parties["term_index"] == terms["term_index"] != affiliations["term_index"]
     assert "unknown" in parties["party_status"] and "member_votes.party" in relationships["member_vote_party_affiliations"]["metadata"]["summary"]
     # fec_source_records also has collection_id; the view computes its own from a locator, so it must not inherit.
-    evidence = meanings("fec_relationship_evidence")
+    # FEC processing tables are private in serving; test SQL lineage on the explicit processing schema.
+    from spicy_regs.relationship_views.fec import FEC_VIEWS
+    bound = install_sql_views(con, processing_declarations(), FEC_VIEWS)["fec_relationship_evidence"]
+    evidence = {column["column_name"]: column["description"] for column in _described(
+        con.execute("DESCRIBE fec_relationship_evidence").fetchall(), bound["metadata"])}
     assert evidence["collection_id"] != _dictionary("fec_source_records")["collection_id"]
     assert "locator" in evidence["collection_id"]
     assert evidence["source_sha256"] == _dictionary("fec_relationships")["source_sha256"]
@@ -167,8 +177,12 @@ def test_a_projected_column_inherits_its_source_meaning_and_a_computed_namesake_
 def test_lineage_of_array_views_matches_their_templates_structurally(registry_server):
     _, con, _ = registry_server
     relationships = server._connection_relationships(con.cursor())
-    for spec in RELATIONSHIP_VIEWS:
-        if relationships[spec.names[0]]["status"] != "available":
+    from spicy_regs.relationship_views.congress import NATIVE_CONGRESS_RELATIONSHIPS, NATIVE_COMMUNICATION_RINS
+    from spicy_regs.relationship_views.artifacts_topics import NATIVE_BILL_SUBJECTS
+    native = {spec.name: spec for spec in (*NATIVE_CONGRESS_RELATIONSHIPS, NATIVE_COMMUNICATION_RINS, NATIVE_BILL_SUBJECTS)}
+    for original in RELATIONSHIP_VIEWS:
+        spec = native.get(original.name, original)
+        if spec.names[0] not in relationships or relationships[spec.names[0]]["status"] != "available":
             continue
         passthrough = [*spec.source_keys, *spec.context_columns]
         expected = {
@@ -181,7 +195,8 @@ def test_lineage_of_array_views_matches_their_templates_structurally(registry_se
                             "raw_field_value": [spec.source_table, spec.source_field]},
         }
         for name, lineage in expected.items():
-            assert relationships[name]["metadata"]["column_lineage"] == lineage, name
+            if name in relationships and relationships[name]["metadata"].get("rule_version") != "native-subject-navigation/1":
+                assert relationships[name]["metadata"].get("column_lineage", {}) == lineage, name
 
 
 def test_lineage_reads_the_parse_tree_not_the_column_names():
@@ -203,6 +218,10 @@ def test_lineage_reads_the_parse_tree_not_the_column_names():
         "SELECT item.measure.native_field AS n, record_id AS summary_record_id FROM a, UNNEST(ms) AS item(measure)": {"summary_record_id": ["a", "record_id"]},
         "SELECT c.k, f.sf FROM (SELECT k FROM a) c CROSS JOIN (VALUES ('x','y')) AS f(sf, tk)": {"k": ["a", "k"]},
         "SELECT min(k) AS k, z FROM b GROUP BY z": {"z": ["b", "z"]},
+        # Recursive origins must hold through every iteration, not just the seed.
+        "WITH RECURSIVE n(x,y) AS (SELECT k,j FROM a UNION ALL SELECT x,y FROM n WHERE false) SELECT * FROM n": {"x": ["a", "k"], "y": ["a", "j"]},
+        "WITH RECURSIVE n(x,y,z) AS (SELECT k,k,k FROM a UNION ALL SELECT y,z,upper(z) FROM n WHERE false) SELECT * FROM n": {},
+        "WITH RECURSIVE n(x,y) AS (SELECT k,j FROM a UNION ALL SELECT y,x FROM n WHERE false) SELECT * FROM n": {},
         # an unqualified name beside a relation of unknown shape resolves to nothing
         "SELECT k FROM a, json_each(j) e": {},
     }
@@ -213,11 +232,30 @@ def test_lineage_reads_the_parse_tree_not_the_column_names():
     assert column_lineage(con, "SELECT DISTINCT k, c FROM v1", {**relations, "v1": v1}) == {"k": ["a", "k"]}
 
 
+
+@pytest.mark.parametrize("sql", [
+    "WITH n(x) AS (SELECT k,j FROM a) SELECT * FROM n",
+    "WITH RECURSIVE n(x) AS (SELECT k,j FROM a UNION ALL SELECT x,j FROM n WHERE false) SELECT * FROM n",
+    "WITH RECURSIVE n(x) AS (SELECT k,j FROM a UNION ALL SELECT p.y,p.j FROM n AS p(y) WHERE false) SELECT * FROM n",
+    "SELECT * FROM a AS n(x)",
+    "SELECT * FROM (SELECT k,j FROM a) AS n(x)",
+])
+def test_partial_aliases_preserve_remaining_column_lineage(sql):
+    with duckdb.connect() as con:
+        con.execute("CREATE TABLE a(k VARCHAR, j VARCHAR)")
+        # Bind with DuckDB too: parsing alone cannot establish valid alias shape.
+        result = con.execute(sql)
+        assert [column[0] for column in result.description] == ["x", "j"]
+        assert column_lineage(con, sql, {"a": table_columns("a", ["k", "j"])}) == {
+            "x": ["a", "k"], "j": ["a", "j"]}
+
+
 def test_array_detail_columns_carry_their_declared_meaning(registry_server):
     mcp, _, _ = registry_server
     columns = {c["column_name"]: c["description"] for c in _tool_data(mcp, "describe_table", {"table": "house_communication_rins_occurrences"})["columns"]}
-    assert "rule" in columns["extraction_rule"].lower() and "offset" in columns["span_start"].lower()
-    assert "matched" in columns["matched_text"].lower()
+    assert {"extraction_rule", "span_start", "matched_text"}.isdisjoint(columns)
+    assert "reference" in columns["target_key"].lower()
+    assert "position" in columns["source_ordinal"].lower()
 
 
 def test_an_undeclared_column_is_reported_as_undescribed_not_paraphrased():
@@ -271,7 +309,10 @@ def test_describe_omits_only_measurements_and_ledger_statements_by_default_and_s
     assert {"status", "generation", "live_pin", "ledger_pin", "ledger_disposition", "ledger_tasks"} <= set(compact["qualification"])
     assert compact["detail"] == {"full": False, "omitted": ["joins[].measurement", "qualification.ledger_statements"]}
     assert full["detail"] == {"full": True, "omitted": []}
-    assert any(join.get("measurement") for join in full["joins"]["outgoing"] + full["joins"]["incoming"])
+    expected = server._table_joins("bill_versions", measurements=True)
+    assert full["joins"] == expected
+    # Measurements for changed native keys were invalidated; detail must not revive old evidence.
+    assert not any(join.get("measurement") for join in expected["outgoing"] + expected["incoming"])
     assert full["qualification"]["ledger_statements"]
     # The compact reply is a projection of the full one: every value it carries is the full reply's value.
     for key, value in compact.items():

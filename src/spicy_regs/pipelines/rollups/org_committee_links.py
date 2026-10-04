@@ -18,8 +18,8 @@ it is read straight from the public bucket with Parquet projection pushdown
 from pathlib import Path
 from typing import ClassVar
 
-from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
-from spicy_regs.transforms import build_org_committee_links
+from spicy_regs.pipelines.rollups.base import make_rollup_app
+from spicy_regs.pipelines.rollups.fec_receipts import FecReceiptRollup as RollupPipeline
 
 
 class OrgCommitteeLinksRollup(RollupPipeline):
@@ -31,7 +31,7 @@ class OrgCommitteeLinksRollup(RollupPipeline):
     output: ClassVar[str] = "org_committee_links.parquet"
 
     def build(self, output_dir: Path) -> Path:
-        return build_org_committee_links(output_dir)
+        return self.build_receipts(output_dir)
 
 
 app = make_rollup_app(OrgCommitteeLinksRollup)

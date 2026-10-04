@@ -12,7 +12,6 @@ import json
 import importlib
 
 import httpx
-import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
@@ -41,7 +40,7 @@ _RAW_DOCKET = {
     "party": [
         "HENNEPIN COUNTY, MINNESOTA",
         "U.S. DEPARTMENT OF HEALTH AND HUMAN SERVICES",
-        None,  # blanks are dropped
+        None,  # Source list positions remain intact.
     ],
     "attorney": ["Skye Perryman", "Allison Marcy Zieve"],
     "firm": ["Democracy Forward", "Public Citizen Litigation Group"],
@@ -63,8 +62,8 @@ def test_shape_maps_and_serializes_fields():
     # Integer id stringifies (schema is all-VARCHAR).
     assert row["cl_docket_id"] == "73613631"
     assert row["case_name"].startswith("HENNEPIN COUNTY")
-    # Empty full caption normalizes to NULL, not "".
-    assert row["case_name_full"] is None
+    # Source empty captions remain distinct from missing captions.
+    assert row["case_name_full"] == ""
     assert row["court_id"] == "dcd"
     assert row["court_citation_string"] == "D.D.C."
     assert row["docket_number"] == "1:26-cv-02460"
@@ -80,11 +79,12 @@ def test_shape_maps_and_serializes_fields():
     assert row["absolute_url"] == (
         "https://www.courtlistener.com/docket/73613631/hennepin-county-minnesota-v-us-dept-of-hhs/"
     )
-    # Array fields serialize to JSON, dropping blank/None entries.
+    # Private mapper inputs keep all list elements for the native subject writer.
     parties = json.loads(row["parties_json"])
     assert parties == [
         "HENNEPIN COUNTY, MINNESOTA",
         "U.S. DEPARTMENT OF HEALTH AND HUMAN SERVICES",
+        None,
     ]
     assert json.loads(row["attorneys_json"]) == ["Skye Perryman", "Allison Marcy Zieve"]
     assert json.loads(row["firms_json"]) == ["Democracy Forward", "Public Citizen Litigation Group"]
@@ -94,11 +94,33 @@ def test_shape_handles_missing_fields():
     row = _shape({"docket_id": 42})
     assert row["cl_docket_id"] == "42"
     assert row["case_name"] is None
-    assert row["parties_json"] == "[]"
-    assert row["attorneys_json"] == "[]"
-    assert row["firms_json"] == "[]"
+    assert row["parties_json"] is None
+    assert row["attorneys_json"] is None
+    assert row["firms_json"] is None
     assert row["absolute_url"] is None
     assert row["date_created"] is None
+
+
+def test_incremental_rerun_uses_latest_complete_local_pair(tmp_path, monkeypatch):
+    from spicy_regs.court_receipts import read_court_rows
+    from spicy_regs.transforms.build_courtlistener import build_courtlistener
+
+    monkeypatch.setattr("spicy_regs.sources.r2.download", lambda *args, **kwargs: False)
+    rows = [{"docket_id": 1, "party": ["Agency", None, "", "Agency"],
+             "meta": {"date_created": "2026-06-30T08:00:00Z"}}]
+    monkeypatch.setattr(CourtListenerReader, "iter_records", lambda self: iter(rows))
+    first = build_courtlistener(tmp_path, max_records=10)
+    first_bytes = first.read_bytes()
+    (tmp_path / "_cl_prior.parquet").write_bytes(b"stale retained scratch")
+    rows[:] = [{"docket_id": 2, "party": [], "meta": {"date_created": "2026-07-01T08:00:00Z"}}]
+    second = build_courtlistener(tmp_path, max_records=10)
+    restored = {r["cl_docket_id"]: r for r in read_court_rows(second, dataset="court_dockets")}
+    assert set(restored) == {"1", "2"}
+    assert restored["1"]["parties"] == ["Agency", None, "", "Agency"]
+    assert restored["2"]["parties"] == []
+    assert restored["1"]["date_created"] == "2026-06-30T08:00:00Z"
+    assert first.read_bytes() == first_bytes
+    assert (tmp_path / "court_dockets.parquet").resolve() == second
 
 
 def _page(ids, next_url=None, *, total=None, kind="r"):
@@ -230,15 +252,18 @@ def test_malformed_response_refuses(payload):
 )
 def test_later_page_failure_preserves_prior_and_existing_output(monkeypatch, tmp_path, second):
     module = importlib.import_module("spicy_regs.transforms.build_courtlistener")
-    table = pa.Table.from_pylist([module._shape(_RAW_DOCKET)], schema=module._SCHEMA)
-    prior, output = tmp_path / "_cl_prior.parquet", tmp_path / "court_dockets.parquet"
-    pq.write_table(table, prior)
-    pq.write_table(table, output)
+    from spicy_regs.court_receipts import write_court_rows
+    witness = dict(source_id='fixture', source_uri=None, sha256='sha256:' + 'a' * 64,
+                   locator=None, body_version=None)
+    prior = write_court_rows('court_dockets', [module._shape(_RAW_DOCKET)], tmp_path, witnesses=[witness])
+    output = tmp_path / 'court_dockets.parquet'
     before = prior.read_bytes(), output.read_bytes()
-    reader = CourtListenerReader(transport=Transport(_page([1], NEXT, total=2), second))
+    transport = Transport(_page([1], NEXT, total=2), second)
+    reader = CourtListenerReader(transport=transport)
     monkeypatch.setattr(module, "CourtListenerReader", lambda **kwargs: reader)
     with pytest.raises((ValueError, ConnectionError, httpx.HTTPError, CredentialRefusedError)):
         module.build_courtlistener(tmp_path)
+    assert len(transport.calls) == 2
     assert (prior.read_bytes(), output.read_bytes()) == before
     assert not (tmp_path / "_cl_new.parquet").exists()
 
@@ -310,7 +335,10 @@ def test_a_run_fills_a_bounded_slice_of_unnamed_dockets_and_flags_case_type(monk
     named = {**module._shape(_RAW_DOCKET), "cl_docket_id": "1"}
     unnamed = [{**named, "cl_docket_id": str(100_000_000 + n), "parties_json": None,
                 "docket_number": "22-16094" if n == 0 else f"2:19-cr-{n:05d}"} for n in range(50)]
-    pq.write_table(pa.Table.from_pylist([named, *unnamed], schema=module._SCHEMA), tmp_path / "_cl_prior.parquet")
+    from spicy_regs.court_receipts import write_court_rows
+    witness = dict(source_id='fixture', source_uri=None, sha256='sha256:' + 'a' * 64,
+                   locator=None, body_version=None)
+    write_court_rows('court_dockets', [named, *unnamed], tmp_path, witnesses=[witness])
     asked = []
 
     class Named:
@@ -328,8 +356,42 @@ def test_a_run_fills_a_bounded_slice_of_unnamed_dockets_and_flags_case_type(monk
     rows = {r["cl_docket_id"]: r for r in pq.read_table(module.build_courtlistener(tmp_path)).to_pylist()}
     filled = asked[0].removeprefix("docket_id:(").removesuffix(")").split(" OR ")
     assert len(asked) == 1 and filled == [row["cl_docket_id"] for row in unnamed[:len(filled)]]
-    assert all(json.loads(rows[i]["parties_json"]) == [f"party of {i}"] for i in filled)
-    assert all(rows[row["cl_docket_id"]]["parties_json"] is None for row in unnamed[len(filled):])
+    assert all(rows[i]["parties"] == [f"party of {i}"] for i in filled)
+    assert all(rows[row["cl_docket_id"]]["parties"] is None for row in unnamed[len(filled):])
     assert rows["1"]["case_type"] == "cv" and rows[filled[0]]["case_type"] is None
     assert rows[unnamed[-1]["cl_docket_id"]]["case_type"] == "cr"
     assert list(rows["1"]) == list(module.PUBLISHED_COLUMNS)
+
+
+@pytest.mark.parametrize("bad_party", [[12], {"name": "bad"}])
+def test_refused_refresh_keeps_prior_and_records_rejected_update(tmp_path, monkeypatch, bad_party):
+    from spicy_regs.court_receipts import local_receipt_selection
+    from spicy_regs.transforms.build_courtlistener import build_courtlistener
+    monkeypatch.setattr("spicy_regs.sources.r2.download", lambda *a, **k: False)
+    rows = [{"docket_id": 1, "caseName": "Held", "party": ["Agency"]}]
+    monkeypatch.setattr(CourtListenerReader, "iter_records", lambda self: iter(rows))
+    first = build_courtlistener(tmp_path, max_records=10)
+    original_path = first.resolve()
+    original = pq.read_table(original_path).to_pylist()[0]
+    old_receipt = pq.read_table(local_receipt_selection(first)[0]).to_pylist()[0]
+    rows[:] = [{"docket_id": 1, "caseName": "Rejected", "party": bad_party},
+               {"docket_id": 2, "caseName": "New", "party": []}]
+    second = build_courtlistener(tmp_path, max_records=10)
+    subjects = {r['cl_docket_id']: r for r in pq.read_table(second).to_pylist()}
+    assert subjects['1'] == original
+    assert subjects['2']['case_name'] == 'New'
+    receipt_path, _ = local_receipt_selection(second)
+    receipts = pq.read_table(receipt_path).to_pylist()
+    refused = [r for r in receipts if r['outcome'] == 'refused']
+    assert len(refused) == 1 and 'Rejected' in refused[0]['processing_json']
+    retained = next(r for r in receipts if r['record_id'] == old_receipt['record_id'] and r['outcome'] == 'accepted')
+    assert pq.read_table(original_path).to_pylist() == [original]
+    assert second.resolve() != original_path
+    assert retained['subject_version'] == old_receipt['subject_version']
+    assert retained['witnesses'][:len(old_receipt['witnesses'])] == old_receipt['witnesses']
+    from spicy_regs.etl_receipts import resolve_receipt_witness
+    from hashlib import sha256
+    prior_witness = next(w for w in retained['witnesses'] if w['body_version'] == old_receipt['receipt_id'])
+    original_processing = old_receipt['processing_json'].encode()
+    assert prior_witness['sha256'] == 'sha256:' + sha256(original_processing).hexdigest()
+    assert resolve_receipt_witness(retained, prior_witness) == original_processing

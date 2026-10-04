@@ -511,7 +511,7 @@ def quality_notice_effect(row, notice):
     """A source-listed committee notice annotates; it does not identify or exclude donors."""
     committee = row.get("reporting_committee_id")
     supported = (
-        _source_identity(notice, "fec-identity-observations/1", "fec-bulk-false-fictitious-notice")
+        _source_identity(notice, "fec-identity-observations/2", "fec-bulk-false-fictitious-notice")
         and notice.get("notice_kind") == "publisher_false_fictitious_filings_list"
         and notice.get("notice_scope") == "source_listed_committee"
         and notice.get("exclusion_status") == "no_automatic_exclusion"

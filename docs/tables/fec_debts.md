@@ -6,6 +6,8 @@
 
 One obligation state as reported in a filing and period. Separates opening and closing balances from newly incurred amounts and payments. Repeated period-end balances are not repeated spending; source direction identifies whether debt is owed by or to the filer. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. For original-filing rows, definition_set_id joins fec_filing_definitions.record_id and its fec_filing_definition_evidence context witnesses; filing_header_record_id and filing_header_locator_json identify the separate actual header witness. Other source layouts retain their own dictionary evidence.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_debts'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled. Supported observations from retained Schedule D debt layouts. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
 
 **Data quality.** Exact decimals preserve signs. Memo, subtotal and attribution flags require source-specific interpretation; successful mapping does not qualify current, gross or net totals. Keep reported balances, allocation totals/components, overlapping summaries and two-sided transfers at their declared grains. Quality notices do not automatically exclude records.
@@ -18,26 +20,10 @@ One obligation state as reported in a filing and period. Separates opening and c
 | Column | Type | Description |
 | --- | --- | --- |
 | `record_id` | `VARCHAR` | Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event. |
-| `identity_version` | `VARCHAR` | Version of the source-observation identity rule; it does not select a current or canonical record. |
-| `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
-| `value_mapping_version` | `VARCHAR` | Version of the exact monetary and date conversion rules used for supported values. |
-| `mapping_status` | `VARCHAR` | Whether this source observation mapped fully, partially, or received an explicit nondata/refusal disposition; inspect the reason alongside NULL values. |
-| `mapping_reason_json` | `VARCHAR` | JSON object naming unsupported, missing or otherwise limited field interpretations; native values remain reachable through evidence. |
-| `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
-| `source_record_id` | `VARCHAR` | Native source-observation key within collection_id. Resolve with the source generation, exact locator and source digest, not this value alone. |
-| `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
-| `source_locator_json` | `VARCHAR` | Exact source row or subrecord coordinates, including available member, ordinal, byte span and field-definition references. Resolve in the pinned source generation. |
-| `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
-| `selection_evidence_sha256` | `VARCHAR` | Digest of the retained selection evidence used to authorize this mapper's source scope; not a financial inclusion decision. |
-| `source_representation_role` | `VARCHAR` | Selected source role such as snapshot, insertion or deletion. Amount signs and ordinary amendment flags do not establish correction applicability. |
 | `correction_operation` | `VARCHAR` | Source-supported correction operation, when applicable; a positive amount in a deletion stream is not a new receipt or an inferred refund. |
-| `correction_applicability_status` | `VARCHAR` | Whether the captured correction can be applied to an evidenced base and target population; unresolved applicability prevents a qualified current total. |
-| `current_record_status` | `VARCHAR` | Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record. |
 | `filing_key` | `VARCHAR` | Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. |
-| `filing_link_status` | `VARCHAR` | Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist. |
 | `currency` | `VARCHAR` | Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately. |
 | `amount_kind` | `VARCHAR` | Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It is not an aggregation permission. |
-| `source_namespace` | `VARCHAR` | Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent. |
 | `reporting_committee_id` | `VARCHAR` | Literal FEC ID of the reporting committee where that source field identifies a committee. It does not by itself identify the sender or recipient of money. |
 | `report_number` | `VARCHAR` | Literal source file/report number, retained separately from source row, image and transaction identifiers. A filing join requires a qualified number namespace. |
 | `image_number` | `VARCHAR` | Literal FEC image reference; it is not a transaction ID or filing number. |
@@ -57,20 +43,7 @@ One obligation state as reported in a filing and period. Separates opening and c
 | `original_source_record_id` | `VARCHAR` | Source-stated original record reference, preserved independently of this observation's source_record_id. |
 | `reported_cycle` | `VARCHAR` | Cycle exactly as reported in a native field; kept separate from the selection's source_cycle. |
 | `line_number` | `VARCHAR` | Literal report line reference from the source; not the physical row ordinal or a globally unique item key. |
-| `query_completeness` | `VARCHAR` | Whether complete traversal of the stated source query was established. A retained page or rejected response is not a completed query. |
 | `observation_grain` | `VARCHAR` | Source-defined meaning of this retained row, including aggregate rather than individual-transaction grains. |
-| `opening_balance_raw` | `VARCHAR` | Literal source value before conversion for opening_balance. Preserves spelling, signs and empty values; the typed value and its status are separate. |
-| `opening_balance_status` | `VARCHAR` | Source-presence or conversion state for opening_balance, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
-| `closing_balance_raw` | `VARCHAR` | Literal source value before conversion for closing_balance. Preserves spelling, signs and empty values; the typed value and its status are separate. |
-| `closing_balance_status` | `VARCHAR` | Source-presence or conversion state for closing_balance, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
-| `incurred_in_period_raw` | `VARCHAR` | Literal source value before conversion for incurred_in_period. Preserves spelling, signs and empty values; the typed value and its status are separate. |
-| `incurred_in_period_status` | `VARCHAR` | Source-presence or conversion state for incurred_in_period, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
-| `paid_in_period_raw` | `VARCHAR` | Literal source value before conversion for paid_in_period. Preserves spelling, signs and empty values; the typed value and its status are separate. |
-| `paid_in_period_status` | `VARCHAR` | Source-presence or conversion state for paid_in_period, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
-| `period_start_raw` | `VARCHAR` | Literal source value before conversion for period_start. Preserves spelling, signs and empty values; the typed value and its status are separate. |
-| `period_start_status` | `VARCHAR` | Source-presence or conversion state for period_start, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
-| `period_end_raw` | `VARCHAR` | Literal source value before conversion for period_end. Preserves spelling, signs and empty values; the typed value and its status are separate. |
-| `period_end_status` | `VARCHAR` | Source-presence or conversion state for period_end, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
 | `source_cycle` | `INTEGER` | Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year. |
 | `opening_balance` | `DECIMAL(38,9)` | Exact decimal for the reported balance at the start of this period. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations. |
 | `closing_balance` | `DECIMAL(38,9)` | Exact decimal for the reported balance at the end of this period. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations. |
@@ -88,11 +61,6 @@ One obligation state as reported in a filing and period. Separates opening and c
 | `creditor_debtor_street2` | `VARCHAR` | The creditor/debtor in the source-stated obligation direction's second reported street-address line. |
 | `creditor_debtor_zip` | `VARCHAR` | The creditor/debtor in the source-stated obligation direction's reported postal code, preserving leading zeroes. |
 | `obligation_direction` | `VARCHAR` | Source-supported direction of the debt obligation; do not infer creditor/debtor roles from names alone. |
-| `definition_set_id` | `VARCHAR` | Key of the pinned source layout in fec_filing_definitions. Join its definition evidence for exact workbook cells; the layout does not validate the submission. |
-| `declared_format_version` | `VARCHAR` | Format version declared by the filing header, retained separately from the reviewed source layout version. |
-| `filing_header_record_id` | `VARCHAR` | Source-record key of the actual file header. Resolve with collection_id and filing_header_locator_json in the source generation. |
-| `filing_header_locator_json` | `VARCHAR` | Exact native coordinates of the file-header witness, separate from the financial row's own locator. |
-| `submission_conformance_status` | `VARCHAR` | Explicit statement of whether submission conformance was established; successful field mapping alone does not establish it. |
 | `source_committee_id` | `VARCHAR` | Literal committee reference; it is not substituted for the reporting party from the retained filing layout. |
 | `source_candidate_id` | `VARCHAR` | Literal candidate reference; it is not an inferred candidate association from the retained filing layout. |
 | `source_candidate_name` | `VARCHAR` | Literal candidate name from the retained filing layout. |

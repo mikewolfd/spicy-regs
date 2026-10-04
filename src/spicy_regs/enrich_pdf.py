@@ -171,6 +171,8 @@ def pdf_urls_for_document(attachments_json: str | None, file_url: str | None) ->
     if attachments_json:
         try:
             for att in json.loads(attachments_json):
+                if att is None:
+                    continue
                 if _is_pdf(att.get("url"), att.get("format")):
                     urls.append(att["url"])
         except (json.JSONDecodeError, AttributeError, TypeError):
@@ -190,7 +192,11 @@ def pdf_urls_for_comment(attachments_json: str | None) -> list[str]:
     if attachments_json:
         try:
             for att in json.loads(attachments_json):
+                if att is None:
+                    continue
                 for fmt in att.get("formats") or []:
+                    if fmt is None:
+                        continue
                     if _is_pdf(fmt.get("url"), fmt.get("format")):
                         urls.append(fmt["url"])
         except (json.JSONDecodeError, AttributeError, TypeError):
@@ -507,8 +513,10 @@ def _enrich_comment_agency_in_catalog(
     """
     from spicy_regs.sources import iceberg
 
-    tbl = iceberg._qualified(record_type)
+    from spicy_regs.sources.regulatory_catalog import processing_table
+
     ag = iceberg._sql_str(agency)
+    tbl = processing_table(con, record_type, where=f"agency_code = '{ag}'")
     status_filter = "" if overwrite else "AND (text_extraction_status IS NULL OR text_extraction_status = '')"
     limit_sql = f" LIMIT {int(limit)}" if limit is not None else ""
     candidates = con.execute(
@@ -689,6 +697,80 @@ def main() -> None:
             max_workers=args.max_workers,
             overwrite=args.overwrite,
         )
+
+
+def enrich_receipted_dataset(
+    selected,
+    destination: Path,
+    *,
+    generation_id: str,
+    fetch: FetchFn = fetch_pdf_bytes,
+    extract: ExtractFn = extract_pdf_text,
+    limit: int | None = None,
+    max_workers: int = 8,
+    overwrite: bool = False,
+    batch_size: int = 2000,
+):
+    """Locally enrich a selected native generation, qualifying retry state first.
+
+    The shared receipt join must succeed before fetching any PDF. Each bounded
+    batch uses the existing text/status/results update rules, then the subject
+    and new receipts are written together. Every input row is carried forward;
+    ``limit`` bounds extraction work across batches, not the output population.
+    """
+    from hashlib import file_digest
+    from itertools import islice
+
+    from spicy_regs.etl_receipts import ReceiptContext
+    from spicy_regs.schemas import RECORD_TYPES
+    from spicy_regs.transforms.regulations_receipts import read_internal, write_records
+
+    if selected.dataset not in ("documents", "comments"):
+        raise ValueError("PDF enrichment requires documents or comments")
+    if batch_size <= 0 or limit is not None and limit < 0:
+        raise ValueError("Invalid PDF batch size or limit")
+    witnesses = []
+    for path in (*selected.subjects, selected.receipts):
+        with path.open("rb") as body:
+            digest = file_digest(body, "sha256").hexdigest()
+        witnesses.append(
+            {
+                "source_id": f"{selected.dataset}:{path.name}",
+                "source_uri": str(path),
+                "sha256": digest,
+                "locator": None,
+                "body_version": selected.generation_id,
+            }
+        )
+    enrich = enrich_documents_with_pdf_text if selected.dataset == "documents" else enrich_comments_with_pdf_text
+    stats = {"selected": 0, "ok": 0, "empty": 0, "encrypted": 0, "error": 0}
+
+    def records():
+        rows = iter(read_internal(selected))
+        ordinal = 0
+        while batch := list(islice(rows, batch_size)):
+            frame = pl.DataFrame(batch, schema=RECORD_TYPES[selected.dataset].schema)
+            remaining = None if limit is None else max(0, limit - stats["selected"])
+            filled, counts = enrich(
+                frame, fetch=fetch, extract=extract, limit=remaining, max_workers=max_workers, overwrite=overwrite
+            )
+            for key, value in counts.items():
+                stats[key] += value
+            for row in filled.iter_rows(named=True):
+                yield (
+                    row,
+                    ReceiptContext(
+                        generation_id,
+                        f"pdf:{ordinal}",
+                        "spicy-regs:pdf-receipt-v1",
+                        witnesses,
+                        {"prior_generation_id": selected.generation_id},
+                    ),
+                )
+                ordinal += 1
+
+    paths = write_records(selected.dataset, records(), destination, prior_receipts=[selected.receipts])
+    return paths, stats
 
 
 if __name__ == "__main__":

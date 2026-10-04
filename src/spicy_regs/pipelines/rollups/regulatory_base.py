@@ -1,15 +1,11 @@
-"""Rollup pipelines: the ETL's dockets, documents and the three attribute tables as managed families.
+"""Republish selected native regulatory subjects with their exact shared receipts.
 
-The ETL rewrites the bare ``dockets.parquet`` and ``documents.parquet`` after
-every sweep batch and keeps reading them as its working copies; the same read
-merges ``docket_attributes.parquet`` and ``document_attributes.parquet``
-(decisions 65-67). Once a sweep completes, these publish each as its own
-generation family, so index-aware readers and DocSpec's by-reference admission
-see one verified snapshot per sweep. Bare-URL readers keep reading the working
-copies. The documents family alone adds two columns, from the reconcile step's
-bare outcomes, which the working copy never carries.
+Scheduled refresh jobs preserve the selected generation's source evidence while
+rebinding receipts to the newly sealed generation. No bare processing copy is a
+publication input.
 """
 
+import hashlib
 from pathlib import Path
 from typing import ClassVar
 
@@ -19,6 +15,12 @@ import pyarrow.parquet as pq
 from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
 from spicy_regs.schemas.regulations import RECORD_TYPES
 from spicy_regs.sources import r2
+from spicy_regs.etl_receipts import select_receipts, rebind_receipt, RECEIPT_SCHEMA
+from spicy_regs.transforms.parquet_rows import write_rows
+from spicy_regs.transforms.regulations_receipts import policy, write_held_dataset
+from spicy_regs.native_types import described_schema
+from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
+import shutil
 
 
 #: DocSpec admits a member by reference only when every row group is at most
@@ -35,10 +37,43 @@ class _BaseTableFamily(RollupPipeline):
         """The column every row must carry once."""
         return RECORD_TYPES[self.name].dedup_key
 
+    def generation_schemas(self):
+        dataset = self.output.removesuffix(".parquet")
+        return {dataset: described_schema(policy(dataset).subject_schema)}
+
     def build(self, output_dir: Path) -> Path:
         path = output_dir / self.output
-        if not r2.download_working_copy(self.output, path):
-            raise RuntimeError(f"{self.output}: no working copy on R2 to publish")
+        dataset = self.output.removesuffix(".parquet")
+        selected = SelectedPriors(output_dir / ".selected")
+        processing = selected.get(dataset)
+        if processing is None:
+            raise RuntimeError(f"{self.output}: no selected native generation to publish")
+        subjects, receipts, _ = selected.selections[dataset]
+        if len(subjects) != 1:
+            raise ValueError("Base regulatory family requires one subject member")
+        scoped = select_receipts(receipts, output_dir / ".selected-receipts.parquet", dataset=dataset)
+        if type(self).annotate is not _BaseTableFamily.annotate:
+            source = output_dir / ".annotated-input.parquet"
+            shutil.copyfile(processing, source)
+            witnesses = self.annotate(source)
+            subject, rewritten_receipts = write_held_dataset(
+                dataset, source, output_dir / ".annotated-native", generation_id=self.receipt_generation_id,
+                witnesses=witnesses, prior_receipts=[scoped],
+            )
+            shutil.copyfile(subject, path)
+            shutil.copyfile(rewritten_receipts, output_dir / "etl_receipts.parquet")
+        else:
+            shutil.copyfile(subjects[0], path)
+            write_rows(
+                (
+                    rebind_receipt(row, generation_id=self.receipt_generation_id)
+                    for batch in pq.ParquetFile(scoped).iter_batches()
+                    for row in batch.to_pylist()
+                ),
+                output_dir / "etl_receipts.parquet",
+                RECEIPT_SCHEMA,
+            )
+        type(self).receipt_policies = (policy(dataset),)
         key = self.key()
         rows, distinct, missing = (
             duckdb.connect()
@@ -48,15 +83,15 @@ class _BaseTableFamily(RollupPipeline):
         )
         if missing or distinct != rows:
             raise RuntimeError(f"{self.output}: {missing} rows lack {key} and {rows - missing - distinct} repeat one")
-        self.annotate(path)
         metadata = pq.ParquetFile(path).metadata
         largest = max((metadata.row_group(i).total_byte_size for i in range(metadata.num_row_groups)), default=0)
         if largest > MAX_ROW_GROUP_BYTES:
             raise RuntimeError(f"{self.output}: a {largest / 2**20:.1f} MiB row group exceeds the admission bound")
         return path
 
-    def annotate(self, path: Path) -> None:
-        """Add what the family publishes beyond the working copy; the base tables add nothing."""
+    def annotate(self, path: Path) -> tuple[dict, ...]:
+        """Read extra source observations before native subjects and receipts are sealed."""
+        return ()
 
 
 class DocketsFamily(_BaseTableFamily):
@@ -70,11 +105,19 @@ class DocumentsFamily(_BaseTableFamily):
     name: ClassVar[str] = "documents"
     output: ClassVar[str] = "documents.parquet"
 
-    def annotate(self, path: Path) -> None:
+    def annotate(self, path: Path) -> tuple[dict, ...]:
         from spicy_regs.pipelines.docket_reconcile import OUTCOMES, with_publisher_status
 
         outcomes = path.with_name(OUTCOMES)
-        with_publisher_status(path, outcomes if r2.download_working_copy(OUTCOMES, outcomes) else None)
+        available = r2.download_working_copy(OUTCOMES, outcomes)
+        with_publisher_status(path, outcomes if available else None)
+        if not available:
+            return ()
+        with outcomes.open("rb") as source:
+            digest = "sha256:" + hashlib.file_digest(source, "sha256").hexdigest()
+        r2.note_read(OUTCOMES, sha256=digest, byte_size=outcomes.stat().st_size)
+        return ({"source_id": "regulations-gov-reconciliation", "source_uri": outcomes.resolve().as_uri(),
+                 "sha256": digest, "locator": None, "body_version": None},)
 
 
 class _AttributesFamily(_BaseTableFamily):

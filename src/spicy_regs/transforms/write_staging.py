@@ -25,6 +25,7 @@ def write_staging(
 
     temporary = staging_file.with_suffix(".parquet.tmp")  # excluded from every staging *.parquet scan
     rows: list[dict] = []
+    native_schema = pl.DataFrame(schema=schema).to_arrow().schema
     characters = total = 0
     try:
         with ExitStack() as resources:
@@ -42,6 +43,8 @@ def write_staging(
                 rows.clear()
 
             for record in records:
+                from spicy_regs.native_types import reject_extra_fields
+                reject_extra_fields(record, native_schema)
                 rows.append(record)
                 characters += sum(len(value) for value in record.values() if isinstance(value, str))
                 if len(rows) >= MAX_BATCH_ROWS or characters >= MAX_BATCH_CHARACTERS:

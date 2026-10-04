@@ -33,7 +33,8 @@ import pyarrow.parquet as pq
 from loguru import logger
 
 from spicy_regs.sources import r2
-from spicy_regs.transforms.table_merge import merge_contract_table, published_table
+from spicy_regs.transforms.government_receipts import internal_prior, receipt_builder
+from spicy_regs.transforms.table_merge import published_table
 
 if TYPE_CHECKING:
     import httpx
@@ -161,6 +162,7 @@ def fold(
     return rows + [{**row, "listed_open": "false"} for row in held.values()], retirement
 
 
+@receipt_builder
 def build_gao_recommendations(
     output_dir: Path,
     *,
@@ -197,6 +199,7 @@ def build_gao_recommendations(
         for item in export.recommendations
     ]
     prior_file = published_table(output_dir, TABLE, download_prior)
+    prior_file = internal_prior(TABLE, prior_file) if prior_file is not None else None
     prior = pq.read_table(prior_file).to_pylist() if prior_file is not None else []
     rows, retirement = fold(prior, fresh, allow_mass_close_reason=allow_mass_close_reason)
     listed = sum(row["listed_open"] == "true" for row in rows)
@@ -211,6 +214,10 @@ def build_gao_recommendations(
                        retired=retirement["retired"])
         if reason is not None:
             evidence.event("mass-close-allowed", stage=STAGE, reason=reason, **retirement)
-    return merge_contract_table(
-        output_dir, TABLE, rows, download_prior=download_prior, prior_present=prior_file is not None
-    )
+    from spicy_docs.schemas.gao_recommendation_tables import GAO_RECOMMENDATIONS
+    import pyarrow as pa
+
+    out = output_dir / OUTPUT
+    schema = pa.schema([(column, pa.string()) for column in GAO_RECOMMENDATIONS.columns])
+    pq.write_table(pa.Table.from_pylist(rows, schema=schema), out, compression="zstd")
+    return out

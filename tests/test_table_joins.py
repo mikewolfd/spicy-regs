@@ -85,7 +85,13 @@ def test_the_spicy_docs_contracts_reference_the_identity_joins_declared_here():
     declared = {(j.child, j.child_columns, j.parent, j.parent_columns): j for j in table_joins.JOINS}
     referenced = {(contract.name, tuple(ref.child_columns), ref.parent_table, tuple(ref.parent_columns))
                   for contract in TABLE_CONTRACTS.values() for ref in contract.references}
-    assert referenced <= declared.keys()
+    retired = {(j.child, j.child_columns, j.parent, j.parent_columns) for j in table_joins.RETIRED_PROCESSING_JOINS}
+    translated = set()
+    for child, child_columns, parent, parent_columns in referenced - retired:
+        rename = table_joins._NATIVE_JOIN_FIELDS
+        translated.add((child, tuple(rename.get((child, c), c) for c in child_columns),
+                        parent, tuple(rename.get((parent, c), c) for c in parent_columns)))
+    assert translated <= declared.keys()
 
 def test_describe_table_lists_the_joins_a_table_makes_and_receives(monkeypatch):
     described = _tool_data(_serve(monkeypatch, _index(), bundled=True), "describe_table", {"table": "dockets"})
@@ -247,7 +253,7 @@ def test_mcp_legal_join_discovery_uses_the_generated_registry(monkeypatch):
 # Round 6 (implementer B): the joins the column prose promised, each measured through check_table_joins.
 # --------------------------------------------------------------------------- #
 def _only_join(child: str, parent: str) -> table_joins.Join:
-    (join,) = [join for join in table_joins.JOINS if join.child == child and join.parent == parent]
+    (join,) = [join for join in table_joins.SOURCE_JOINS if join.child == child and join.parent == parent]
     return join
 
 
@@ -258,9 +264,10 @@ def test_lobbyists_join_their_filing_directly_with_a_full_measurement():
 
 
 def test_every_fec_typed_table_with_a_collection_names_a_held_collection():
-    schemas = dd.expected_schemas()
+    from spicy_regs.fec_receipt_adapter import processing_declarations
+    schemas = {name: item["columns"] for name, item in processing_declarations().items()}
     with_collection = {table for table in dd.FEC_TYPED_TABLES if "collection_id" in dict(schemas[table])}
-    declared = {join.child for join in table_joins.JOINS
+    declared = {join.child for join in table_joins.SOURCE_JOINS
                 if join.parent == "fec_collections" and join.child_columns == ("collection_id",)}
     assert with_collection <= declared
     assert all(_only_join(table, "fec_collections").kind == "complete" for table in with_collection)
@@ -273,7 +280,7 @@ def test_every_fec_typed_table_with_a_collection_names_a_held_collection():
     ("fec_contribution_aggregates", "candidate_native_id", "fec_candidate_history"),
 ])
 def test_the_partial_fec_routes_are_declared_as_scope_joins_with_their_reason(child, column, parent):
-    (join,) = [join for join in table_joins.JOINS
+    (join,) = [join for join in table_joins.SOURCE_JOINS
                if join.child == child and join.parent == parent and join.child_columns == (column,)]
     assert join.kind == "scope" and join.baseline_missing > 0 and join.reason
 
@@ -285,7 +292,7 @@ def test_a_guarantor_reaches_its_loan_by_its_back_reference():
 
 
 def test_no_join_reason_names_a_path_on_a_maintainers_machine():
-    assert [join.name for join in table_joins.JOINS if table_joins.maintainer_path(join.reason)] == []
+    assert [join.name for join in table_joins.SOURCE_JOINS if table_joins.maintainer_path(join.reason)] == []
 
 
 def test_incoming_measurement_evidence_is_retrievable_from_the_child(monkeypatch):

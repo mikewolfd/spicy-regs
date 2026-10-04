@@ -1,0 +1,634 @@
+import json
+from datetime import date
+from pathlib import Path
+
+import pyarrow as pa
+import pyarrow.parquet as pq
+import pytest
+
+from spicy_regs.etl_receipts import ReceiptContext, validate_receipt_bundle
+from spicy_regs.transforms.regulations_receipts import (
+    ReceiptInput,
+    build_local_generation,
+    policy,
+    read_internal,
+    write_records,
+)
+from spicy_regs.transforms.regulations_shape import IDENTITIES, SOURCE_COLUMNS, subject_schema
+
+
+def context(generation="g1", attempt="row1"):
+    return ReceiptContext(
+        generation,
+        attempt,
+        "test-processor",
+        [
+            {
+                "source_id": "captured-source",
+                "source_uri": "https://example.gov/source",
+                "sha256": "a" * 64,
+                "locator": "/records/0",
+                "body_version": None,
+            }
+        ],
+    )
+
+
+def write(tmp_path, dataset, rows, generation="g1", label="input"):
+    subjects, receipts = write_records(
+        dataset, ((r, context(generation, str(i))) for i, r in enumerate(rows)), tmp_path / label
+    )
+    return ReceiptInput(dataset, (subjects,), receipts, generation)
+
+
+@pytest.mark.parametrize("dataset", list(SOURCE_COLUMNS))
+def test_every_assigned_policy_can_round_trip_a_qualified_row(tmp_path, dataset):
+    row: dict = {k: "1" for k in IDENTITIES[dataset] if k not in ("rule_target_id", "lifecycle_event_id")}
+    row.update({k: 1 for k in row if k in ("year", "month", "docket_source_ordinal")})
+    if dataset == "lifecycle_events":
+        row.update(proceeding_id="P", document_id="D", stage="proposed", event_date=date(2026, 1, 1))
+    if dataset == "rule_targets":
+        row.update(docket_id="D", source="docket_rin", rin="1000-AA00")
+    selected = write(tmp_path, dataset, [row])
+    actual = list(read_internal(selected))
+    assert len(actual) == 1
+    assert all(actual[0][k] == v for k, v in row.items())
+    validate_receipt_bundle(
+        {dataset: list(selected.subjects)}, [selected.receipts], [policy(dataset)], generation_id="g1"
+    )
+    assert pq.read_schema(selected.subjects[0]).equals(subject_schema(dataset))
+
+
+def test_malformed_input_has_diagnosable_receipt_without_fabricated_subject(tmp_path):
+    selected = write(
+        tmp_path,
+        "documents",
+        [
+            {"document_id": "good", "attachments_json": "[]"},
+            {"document_id": "bad", "attachments_json": "{bad"},
+            {"document_id": "extra", "undeclared": 7},
+            {"document_id": None, "title": "unidentified source observation"},
+        ],
+    )
+    assert [r["document_id"] for r in pq.read_table(selected.subjects[0]).to_pylist()] == ["good"]
+    receipts = pq.read_table(selected.receipts).to_pylist()
+    assert [r["outcome"] for r in receipts] == ["accepted", "refused", "refused", "refused"]
+    assert "{bad" in receipts[1]["processing_json"]
+    assert "undeclared" in receipts[2]["processing_json"]
+    assert "unidentified source observation" in receipts[3]["processing_json"]
+    assert len(list(read_internal(selected))) == 1
+
+
+def test_wrong_generation_missing_and_wrong_subject_receipts_refuse(tmp_path):
+    selected = write(tmp_path, "documents", [{"document_id": "D", "text_extraction_status": "ok"}])
+    with pytest.raises(ValueError):
+        list(read_internal(ReceiptInput("documents", selected.subjects, selected.receipts, "wrong")))
+    pq.write_table(
+        pa.Table.from_pylist([{"document_id": "changed"}], schema=subject_schema("documents")), selected.subjects[0]
+    )
+    with pytest.raises(ValueError):
+        list(read_internal(selected))
+
+
+def test_aggregate_null_coordinates_do_not_merge_with_literal_strings(tmp_path):
+    selected = write(
+        tmp_path,
+        "comments_index",
+        [
+            {"agency_code": "A", "docket_id": None, "year": None, "month": None, "row_count": 5},
+            {"agency_code": "A", "docket_id": "null", "year": None, "month": None, "row_count": 7},
+        ],
+    )
+    assert len(list(read_internal(selected))) == 2
+    assert len({r["record_id"] for r in pq.read_table(selected.receipts).to_pylist()}) == 2
+
+
+def test_local_generation_admits_receipts_separately_from_domain_tables(tmp_path):
+    source = tmp_path / "held.parquet"
+    pq.write_table(pa.table({"docket_id": ["D"], "modify_date": ["2026-01-01"]}), source)
+    artifact = build_local_generation({"dockets": source}, tmp_path / "generation", generation_id="g")
+    assert "etl_receipts.parquet" not in artifact.root["spec"]["tables"]
+    assert (tmp_path / "generation/etl_receipts.parquet").is_file()
+    assert source.is_file()
+
+
+def test_receipt_pdf_retries_skip_prior_status_and_keep_global_limit(tmp_path):
+    from spicy_regs.enrich_pdf import enrich_receipted_dataset
+    from tests.pdf_fixtures import make_pdf
+
+    selected = write(
+        tmp_path,
+        "documents",
+        [
+            {
+                "document_id": str(i),
+                "attachments_json": json.dumps([{"url": f"https://example.gov/{i}.pdf", "format": "pdf", "size": 1}]),
+                "text_extraction_status": "error" if i == 0 else None,
+                "text_content": "retained" if i == 0 else None,
+            }
+            for i in range(4)
+        ],
+    )
+    calls = []
+
+    def fetch(url):
+        calls.append(url)
+        return make_pdf(["new content"])
+
+    (subject, receipts), stats = enrich_receipted_dataset(
+        selected, tmp_path / "filled", generation_id="g2", fetch=fetch, limit=1, batch_size=2, max_workers=1
+    )
+    assert stats["selected"] == 1
+    assert calls == ["https://example.gov/1.pdf"]
+    restored = list(read_internal(ReceiptInput("documents", (subject,), receipts, "g2")))
+    byid = {r["document_id"]: r for r in restored}
+    assert byid["0"]["text_content"] == "retained" and byid["0"]["text_extraction_status"] == "error"
+    assert byid["1"]["text_extraction_status"] == "ok"
+    assert byid["2"]["text_extraction_status"] is None
+    assert len(restored) == 4
+    from spicy_regs.etl_receipts import resolve_receipt_witness
+    for receipt in pq.read_table(receipts).to_pylist():
+        if receipt['outcome'] == 'accepted':
+            inherited = [w for w in receipt['witnesses'] if (w['source_uri'] or '').startswith('receipt-processing:')]
+            assert inherited and all(resolve_receipt_witness(receipt, w) for w in inherited)
+    assert "text_extraction_status" not in pq.read_schema(subject).names
+
+
+def test_pdf_requires_receipt_validation_before_fetch(tmp_path):
+    from spicy_regs.enrich_pdf import enrich_receipted_dataset
+
+    selected = write(tmp_path, "documents", [{"document_id": "D", "attachments_json": "[]"}])
+    wrong = ReceiptInput("documents", selected.subjects, selected.receipts, "wrong")
+    with pytest.raises(ValueError):
+        enrich_receipted_dataset(
+            wrong, tmp_path / "out", generation_id="next", fetch=lambda _: pytest.fail("fetch before validation")
+        )
+    assert not (tmp_path / "out").exists()
+
+
+def test_correction_keeps_text_status_and_diagnostics_together(tmp_path):
+    from spicy_regs.transforms.regulations_correction import correct_receipted_dataset
+
+    prior = write(
+        tmp_path,
+        "documents",
+        [
+            {
+                "document_id": "D",
+                "modify_date": "2026-01-01",
+                "title": "old",
+                "text_content": "retained",
+                "text_extraction_status": "ok",
+                "pdf_extraction_results_json": '[{"status":"ok"}]',
+            }
+        ],
+        label="prior",
+    )
+    fresh = write(
+        tmp_path,
+        "documents",
+        [
+            {
+                "document_id": "D",
+                "modify_date": "2026-01-01",
+                "title": "corrected",
+                "text_content": None,
+                "text_extraction_status": None,
+            }
+        ],
+        generation="g2",
+        label="fresh",
+    )
+    subject, receipts = correct_receipted_dataset(prior, fresh, tmp_path / "corrected", generation_id="g3")
+    [row] = read_internal(ReceiptInput("documents", (subject,), receipts, "g3"))
+    assert row["title"] == "corrected"
+    assert (row["text_content"], row["text_extraction_status"], row["pdf_extraction_results_json"]) == (
+        "retained",
+        "ok",
+        '[{"status":"ok"}]',
+    )
+    assert "pdf_extraction_results_json" not in pq.read_schema(subject).names
+    from spicy_regs.etl_receipts import resolve_receipt_witness
+    [receipt] = [r for r in pq.read_table(receipts).to_pylist() if r['outcome'] == 'accepted']
+    inherited = [w for w in receipt['witnesses'] if (w['source_uri'] or '').startswith('receipt-processing:')]
+    assert len(inherited) == 2
+    assert all(resolve_receipt_witness(receipt, w) for w in inherited)
+
+
+def test_real_rulemaking_producers_build_native_outputs_from_qualified_inputs(tmp_path):
+    from spicy_regs.pipelines.rulemaking_dataset import RulemakingDatasetPipeline
+
+    source_rows = {
+        "dockets": [
+            {
+                "docket_id": "EPA-2026-0001",
+                "agency_code": "EPA",
+                "docket_type": "Rulemaking",
+                "title": "A rule",
+                "rin": "1000-AA00",
+            }
+        ],
+        "documents": [
+            {
+                "document_id": "EPA-2026-0001-0001",
+                "docket_id": "EPA-2026-0001",
+                "agency_code": "EPA",
+                "document_type": "Proposed Rule",
+                "posted_date": "2026-01-01",
+                "modify_date": "2026-01-01",
+                "comment_end_date": "2026-03-01",
+                "title": "Proposal",
+            }
+        ],
+        "federal_register": [],
+        "unified_agenda": [],
+        "fr_docket_links": [],
+    }
+    inputs = [write(tmp_path, name, rows, label=name) for name, rows in source_rows.items()]
+    target = tmp_path / "native-rulemaking"
+    artifact = RulemakingDatasetPipeline().build_native(inputs, target, generation_id="rulemaking-g2")
+    assert len(artifact.root["spec"]["tables"]) == 8
+    [proceeding] = pq.read_table(target / "proceedings.parquet").to_pylist()
+    assert proceeding["docket_ids"] == ["EPA-2026-0001"]
+    assert proceeding["stage_events"][0]["stage"] == "proposed"
+    assert "actor_id" not in proceeding and "stage_events_json" not in proceeding
+    [lifecycle] = pq.read_table(target / "rulemaking_lifecycles.parquet").to_pylist()
+    assert lifecycle["proposal_date"] == date(2026, 1, 1)
+    assert lifecycle["outcome"] == "censored"
+    assert pq.read_table(target / "etl_receipts.parquet").num_rows >= 8
+
+
+def test_raw_source_staging_keeps_empty_lists_restrictions_and_failed_count(tmp_path):
+    from spicy_regs.transforms.regulations_receipts import write_source_records
+
+    payload = {
+        "data": {"id": "C", "attributes": {"modifyDate": "2026-01-01", "duplicateComments": 0}},
+        "included": [
+            {
+                "id": "a",
+                "type": "attachments",
+                "attributes": {"title": "restricted", "fileFormats": None, "restrictReasonType": "Confidential"},
+            },
+            {"id": "b", "type": "attachments", "attributes": {"title": "empty", "fileFormats": []}},
+        ],
+    }
+    subject, receipts = write_source_records("comments", [(payload, context())], tmp_path / "source")
+    [row] = pq.read_table(subject).to_pylist()
+    assert [v["formats"] for v in row["attachments"]] == [None, []]
+    assert row["attachments"][0]["restrict_reason_type"] == "Confidential"
+    assert row["duplicate_comments"] == 0
+    assert "raw_source_record" in pq.read_table(receipts).to_pylist()[0]["processing_json"]
+    invalid = {"data": {"id": "bad", "attributes": {"duplicateComments": True}}}
+    subject, receipts = write_source_records("comments", [(invalid, context())], tmp_path / "bad")
+    assert pq.read_table(subject).num_rows == 0
+    assert pq.read_table(receipts)["outcome"].to_pylist() == ["refused"]
+
+
+def test_native_volume_rollup_keeps_counts_and_omission_metadata_in_receipts(tmp_path):
+    from spicy_regs.transforms.regulations_receipts import build_native_rollup
+
+    selected = write(
+        tmp_path,
+        "documents",
+        [
+            {"document_id": "D1", "agency_code": "EPA", "document_type": "Rule", "posted_date": "2026-01-01"},
+            {"document_id": "D2", "agency_code": "EPA", "document_type": "Rule", "posted_date": "0000-01-01"},
+            {"document_id": "D3", "agency_code": "EPA", "document_type": "Rule", "posted_date": None},
+        ],
+    )
+    target = tmp_path / "volume"
+    build_native_rollup("agency_monthly_volume", [selected], target, generation_id="volume2")
+    assert pq.read_table(target / "agency_monthly_volume.parquet")["document_count"].to_pylist() == [1]
+    [receipt] = [r for r in pq.read_table(target / "etl_receipts.parquet").to_pylist() if r["outcome"] == "accepted"]
+    assert "omitted_rows" in receipt["processing_json"]
+    assert all(Path(w["source_uri"]).exists() for w in receipt["witnesses"])
+
+
+def test_native_navigation_preserves_occurrences_without_cartesian_products(tmp_path):
+    import duckdb
+    from spicy_regs.relationship_views.regulations_native import install_native_regulations_views
+
+    selected = write(
+        tmp_path,
+        "federal_register",
+        [
+            {
+                "document_number": "1",
+                "publication_date": "2026-01-01",
+                "regulation_id_numbers_json": '["1000-AA00",null,"1000-AA00","malformed-rin"]',
+                "docket_ids_json": '["D1","D2"]',
+            }
+        ],
+    )
+    with duckdb.connect() as con:
+        con.from_parquet(str(selected.subjects[0])).create_view("federal_register")
+        installed = install_native_regulations_views(con, ["federal_register"])
+        assert con.execute(
+            "SELECT source_ordinal,target_key FROM federal_register_rins_occurrences ORDER BY source_ordinal"
+        ).fetchall() == [(0, "1000-AA00"), (1, None), (2, "1000-AA00"), (3, None)]
+        assert con.execute("SELECT count(*) FROM federal_register_dockets_occurrences").fetchone() == (2,)
+        assert con.execute("SELECT count(*) FROM federal_register_rins_pairs").fetchone() == (1,)
+        assert "federal_register_rins_field_states" not in installed
+        assert "raw_value_json" not in {
+            r[0] for r in con.execute("DESCRIBE federal_register_rins_occurrences").fetchall()
+        }
+
+
+def test_pdf_selection_keeps_later_renditions_after_null_members():
+    from spicy_regs.enrich_pdf import pdf_urls_for_document, pdf_urls_for_comment
+
+    assert pdf_urls_for_document('[null,{"url":"https://example.gov/a.pdf","format":"pdf"}]', None) == [
+        "https://example.gov/a.pdf"
+    ]
+    assert pdf_urls_for_comment('[null,{"formats":[null,{"url":"https://example.gov/b.pdf","format":"pdf"}]}]') == [
+        "https://example.gov/b.pdf"
+    ]
+
+
+def test_cfr_internal_prior_restores_qualified_placement_metadata(tmp_path):
+    from spicy_regs.transforms.regulations_receipts import write_held_dataset, materialize_internal
+    from spicy_regs.transforms.build_cfr_sections import PLACEMENT_MARKER
+
+    source = tmp_path / "cfr-old.parquet"
+    table = pa.table(
+        {"granule_id": ["CFR-2025-title1-vol1-sec1-1"], "last_modified": ["2025-01-01"]}
+    ).replace_schema_metadata(PLACEMENT_MARKER)
+    pq.write_table(table, source)
+    subject, receipt = write_held_dataset("cfr_sections", source, tmp_path / "cfr", generation_id="cfr1")
+    selected = ReceiptInput("cfr_sections", (subject,), receipt, "cfr1")
+    internal = materialize_internal(selected, tmp_path / "prior.parquet")
+    assert pq.read_schema(internal).metadata == table.schema.metadata
+
+
+def test_native_source_ingest_uses_qualified_fr_prior_and_preserves_dated_records(tmp_path):
+    from spicy_regs.transforms.regulations_ingest import federal_register_generation
+
+    prior = write(
+        tmp_path,
+        "federal_register",
+        [
+            {
+                "document_number": "1",
+                "publication_date": "2026-01-01",
+                "title": "old",
+                "regulation_id_numbers_json": "[]",
+                "docket_ids_json": "[]",
+                "agencies_json": "[]",
+            }
+        ],
+    )
+    target = tmp_path / "fr-new"
+    federal_register_generation(
+        [{"document_number": "1", "publication_date": "2026-02-01", "title": "new"}],
+        target,
+        generation_id="fr2",
+        witnesses=context().witnesses,
+        prior=prior,
+    )
+    assert pq.read_table(target / "federal_register.parquet")["publication_date"].to_pylist() == [
+        "2026-02-01",
+        "2026-01-01",
+    ]
+    assert "pdf_url" not in pq.read_schema(target / "federal_register.parquet").names
+
+
+def test_native_unified_agenda_source_ingest_keeps_partial_dates_and_prior_editions(tmp_path):
+    from spicy_regs.transforms.regulations_ingest import unified_agenda_generation
+
+    prior = write(
+        tmp_path, "unified_agenda", [{"rin": "1000-AA00", "agenda_edition": "202510", "timetable_json": "[]"}]
+    )
+    target = tmp_path / "agenda-new"
+    unified_agenda_generation(
+        {
+            "202604": [
+                {
+                    "rin": "1000-AA00",
+                    "agenda_edition": "202604",
+                    "rin_status": "Completed",
+                    "timetable": [{"action": "Final Rule", "date": "04/00/2026", "fr_citation": None}],
+                }
+            ]
+        },
+        target,
+        generation_id="agenda2",
+        witnesses=context().witnesses,
+        prior=prior,
+    )
+    rows = pq.read_table(target / "unified_agenda.parquet").to_pylist()
+    assert len(rows) == 2
+    latest = next(r for r in rows if r["agenda_edition"] == "202604")
+    assert latest["timetable"][0]["date"] == "04/00/2026"
+    assert latest["rin_status"] == "Completed"
+
+
+def test_native_cfr_source_ingest_keeps_source_modified_date(tmp_path):
+    from contextlib import nullcontext
+    from spicy_regs.transforms.regulations_ingest import cfr_sections_generation
+
+    target = tmp_path / "cfr-new"
+    cfr_sections_generation(
+        [
+            {
+                "granuleId": "CFR-2025-title1-vol1-part1",
+                "packageId": "CFR-2025-title1-vol1",
+                "lastModified": "2026-01-03",
+                "title": "General Provisions",
+                "granuleClass": "PART",
+            }
+        ],
+        target,
+        acquirer=nullcontext(object()),
+        generation_id="cfr2",
+        witnesses=context().witnesses,
+    )
+    [row] = pq.read_table(target / "cfr_sections.parquet").to_pylist()
+    assert row["last_modified"] == "2026-01-03"
+    assert row["part"] == "1"
+    assert "url" not in row
+
+
+def test_native_staging_merge_keeps_integer_counts_and_source_recency(tmp_path):
+    from spicy_regs.transforms.regulations_receipts import merge_native_staging, build_native_rollup
+
+    prior = write(
+        tmp_path,
+        "comments",
+        [
+            {
+                "comment_id": "C",
+                "agency_code": "EPA",
+                "modify_date": "2026-01-01",
+                "docket_id": None,
+                "posted_date": None,
+                "duplicate_comments": 2,
+            }
+        ],
+        label="prior",
+    )
+    fresh = write(
+        tmp_path,
+        "comments",
+        [
+            {
+                "comment_id": "C",
+                "agency_code": "EPA",
+                "modify_date": "2026-02-01",
+                "docket_id": None,
+                "posted_date": None,
+                "duplicate_comments": 3,
+            }
+        ],
+        generation="g2",
+        label="fresh",
+    )
+    target = tmp_path / "merged"
+    merge_native_staging([fresh], target, generation_id="g3", prior=prior)
+    [row] = pq.read_table(target / "comments.parquet").to_pylist()
+    assert row["duplicate_comments"] == 3
+    assert row["modify_date"] == "2026-02-01"
+    selected = ReceiptInput("comments", (target / "comments.parquet",), target / "etl_receipts.parquet", "g3")
+    build_native_rollup("comments_index", [selected], tmp_path / "index", generation_id="g4")
+    [index] = pq.read_table(tmp_path / "index/comments_index.parquet").to_pylist()
+    assert index == {"agency_code": "EPA", "docket_id": None, "year": None, "month": None, "row_count": 1}
+
+
+def test_successful_empty_output_keeps_metadata_as_observed_receipt(tmp_path):
+    from spicy_regs.transforms.regulations_receipts import write_held_dataset, materialize_internal
+
+    source = tmp_path / "empty.parquet"
+    metadata = {"spicy_regs.omitted_rows": "9", "spicy_regs.as_of": "2026-01-01"}
+    pq.write_table(
+        pa.schema(
+            [
+                ("agency_code", pa.string()),
+                ("recent_30d", pa.int64()),
+                ("baseline", pa.float64()),
+                ("ratio", pa.float64()),
+            ]
+        )
+        .with_metadata(metadata)
+        .empty_table(),
+        source,
+    )
+    subject, receipt = write_held_dataset(
+        "discovery_signals", source, tmp_path / "empty-native", generation_id="empty1"
+    )
+    assert pq.read_table(subject).num_rows == 0
+    [attempt] = pq.read_table(receipt).to_pylist()
+    assert attempt["outcome"] == "observed" and attempt["subject_version"] is None
+    selected = ReceiptInput("discovery_signals", (subject,), receipt, "empty1")
+    internal = materialize_internal(selected, tmp_path / "empty-internal.parquet")
+    assert pq.read_schema(internal).metadata == pq.read_schema(source).metadata
+
+
+def test_retry_checkpoint_receipts_preserve_empty_retirement_and_wrong_generation(tmp_path):
+    from spicy_regs.transforms.regulations_checkpoints import write_checkpoint, read_checkpoint
+    from spicy_regs.pipelines.regulations_state import UnresolvedKeys
+
+    row = {
+        "agency": "EPA",
+        "record_type": "comments",
+        "key": "source-key",
+        "status": "requested-empty",
+        "reason": "zero bytes",
+        "attempted_at": "2026-01-01",
+        "attempts": 2,
+    }
+    receipt = write_checkpoint("failed_keys", [row], tmp_path / "checkpoint", context())
+    assert not (tmp_path / "checkpoint/failed_keys.parquet").exists()
+    restored = UnresolvedKeys.from_receipts(receipt, generation_id="g1", output_dir=tmp_path)
+    assert restored.rows == {"source-key": row}
+    with pytest.raises(ValueError):
+        read_checkpoint("failed_keys", receipt, generation_id="wrong")
+    restored.rows.clear()
+    cleared = restored.save_receipts(tmp_path / "cleared", context("g2"))
+    assert read_checkpoint("failed_keys", cleared, generation_id="g2") == []
+    assert pq.read_table(cleared)["outcome"].to_pylist() == ["observed"]
+
+
+def test_attribute_selection_keeps_every_copy_and_same_volatile_tie_choice(tmp_path):
+    from datetime import UTC, datetime
+    from spicy_docs.sources.mirrulations import KeyedPayload
+    from spicy_regs.etl_receipts import read_attempts
+    from spicy_regs.transforms.regulations_attributes import TeeAttributes, merge_attribute_parts
+    from spicy_regs.transforms.regulations_attribute_receipts import build_attribute_generation
+
+    copies = [
+        {
+            "data": {
+                "id": "D",
+                "type": "documents",
+                "attributes": {
+                    "modifyDate": "2026-01-01",
+                    "openForComment": flag,
+                    "pageCount": 4,
+                    "topics": ["Air", "Air"],
+                    "displayProperties": [{"name": "x", "label": "Display"}],
+                },
+            }
+        }
+        for flag in [True, False, False]
+    ]
+    times = [1_000_000, 1_000_030, 1_004_000]
+    keyed = [
+        KeyedPayload(str(i), datetime.fromtimestamp(t, UTC), p)
+        for i, (p, t) in enumerate(zip(copies, times, strict=True))
+    ]
+    list(TeeAttributes("document_attributes", tmp_path / "legacy").apply(keyed))
+    legacy = tmp_path / "selected.parquet"
+    merge_attribute_parts("document_attributes", tmp_path / "legacy/document_attributes", None, legacy)
+    prior = write(tmp_path, "document_attributes", [{"document_id": "carried", "page_count": 7}], label="prior")
+    invalid = {"data": {"id": "invalid", "attributes": {"pageCount": "wrong"}}}
+    inputs: list[tuple[dict, ReceiptContext, int | None]] = [(p, context("g2", str(i)), t) for i, (p, t) in enumerate(zip(copies, times, strict=True))]
+    inputs.append((invalid, context("g2", "invalid"), None))
+    target = tmp_path / "generation"
+    build_attribute_generation("document_attributes", inputs, target, scan_context=context("g2", "scan"), prior=prior)
+    selected = ReceiptInput(
+        "document_attributes", (target / "document_attributes.parquet",), target / "etl_receipts.parquet", "g2"
+    )
+    restored = {r["document_id"]: r for r in read_internal(selected)}
+    assert restored["D"] == pq.read_table(legacy).to_pylist()[0]
+    assert restored["carried"]["page_count"] == 7
+    assert restored["D"]["topics"] == ["Air", "Air"]
+    attempts = list(read_attempts([selected.receipts], policy("document_attributes"), generation_id="g2"))
+    copies_held = [a for a in attempts if a["outcome"] == "observed" and "raw_source_record" in a["processing_fields"]]
+    assert [a["processing_fields"]["raw_source_record"] for a in copies_held] == copies
+    assert [a["processing_fields"]["raw_conversion_inputs"]["_written_at"] for a in copies_held] == times
+    assert sum(a["outcome"] == "refused" for a in attempts) == 1
+    assert not any(c.startswith("_") for c in pq.read_schema(selected.subjects[0]).names)
+
+
+def test_attribute_successful_empty_scan_has_receipt_without_a_subject(tmp_path):
+    from spicy_regs.transforms.regulations_attribute_receipts import build_attribute_generation
+
+    target = tmp_path / "generation"
+    build_attribute_generation("docket_attributes", [], target, scan_context=context("g2", "empty"))
+    assert pq.read_table(target / "docket_attributes.parquet").num_rows == 0
+    [attempt] = pq.read_table(target / "etl_receipts.parquet").to_pylist()
+    assert attempt["outcome"] == "observed"
+
+
+@pytest.mark.parametrize('dataset,original,altered', [
+    ('documents', {'document_id': 'D', 'title': 'selected'}, {'document_id': 'D'}),
+    ('documents', {'document_id': 'D', 'title': 'selected'}, {'document_id': 'D', 'title': 'different'}),
+    ('rule_targets', {'docket_id': 'D', 'source': 'docket_rin', 'rin': '1000-AA00'}, {}),
+])
+def test_resealed_inconsistent_processor_input_refuses_before_processing(tmp_path, dataset, original, altered):
+    from hashlib import sha256
+    from spicy_regs.etl_receipts import exact_json, RECEIPT_SCHEMA
+
+    originals = ([{"document_id": "early", "title": "safe"}] if dataset == "documents" else []) + [original]
+    selected = write(tmp_path, dataset, originals)
+    receipts = pq.read_table(selected.receipts).to_pylist()
+    receipt = receipts[-1]
+    from spicy_regs.etl_receipts import _unpack
+    processing = _unpack(json.loads(receipt['processing_json']))
+    processing['raw_conversion_inputs'] = altered
+    receipt['processing_json'] = exact_json(processing)
+    receipt['receipt_id'] = 'sha256:' + sha256(exact_json({k: v for k, v in receipt.items() if k != 'receipt_id'}).encode()).hexdigest()
+    pq.write_table(pa.Table.from_pylist(receipts, schema=RECEIPT_SCHEMA), selected.receipts)
+    # The subject hash, receipt digest and row join are all valid; source replay is not.
+    validate_receipt_bundle({dataset: list(selected.subjects)}, [selected.receipts], [policy(dataset)], generation_id='g1')
+    with pytest.raises(ValueError, match='retained processor input differs'):
+        next(iter(read_internal(selected)))

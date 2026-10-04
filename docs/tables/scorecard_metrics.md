@@ -6,6 +6,8 @@
 
 One publisher measurement for an explicit chamber, cohort and period in an edition. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='scorecard_metrics'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled publisher editions selected by the scorecard source registry. Complete edition reads replace that edition; failed or incomplete reads preserve prior observations. Coverage varies by publisher and historical source format. *(measured 2026-10-03)*
 
 - **Parquet file:** `scorecard_metrics.parquet`
@@ -23,11 +25,7 @@ One publisher measurement for an explicit chamber, cohort and period in an editi
 | `chamber_text` | `VARCHAR` | Source-stated chamber, preserved as text; NULL when unstated. |
 | `cohort_text` | `VARCHAR` | Source-stated cohort, preserved as text; NULL when unstated. |
 | `period_text` | `VARCHAR` | Source-stated period, preserved as text; NULL when unstated. |
-| `periods_json` | `VARCHAR` | Ordered explicit or relative source periods with occurrence_id, period_text, kind and source_path. |
-| `is_primary` | `VARCHAR` | Publisher primary-measure designation as true or false, or NULL when unstated. |
+| `periods` | `STRUCT(occurrence_id VARCHAR, period_text VARCHAR, kind VARCHAR, congress_text VARCHAR, chamber_text VARCHAR, session_text VARCHAR, year_text VARCHAR)[]` | Ordered explicit or relative source periods with occurrence_id, period_text, kind and source_path. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `is_primary` | `BOOLEAN` | Publisher primary-measure designation as true or false, or NULL when unstated. |
 | `scale_text` | `VARCHAR` | Source-stated scale, preserved as text; NULL when unstated. |
 | `rank_population_text` | `VARCHAR` | Source-stated rank population, preserved as text; NULL when unstated. |
-| `snapshot_id` | `VARCHAR` | Opaque identity of the complete accepted edition capture and parse. |
-| `capture_id` | `VARCHAR` | Opaque caller-issued identity of the source observation supporting this row. |
-| `source_url` | `VARCHAR` | Original publisher URL supporting this observation. |
-| `source_path` | `VARCHAR` | Source locator within the captured response, such as cell, JSON path or PDF page. |

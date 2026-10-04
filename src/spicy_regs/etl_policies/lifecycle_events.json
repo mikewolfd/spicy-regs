@@ -1,0 +1,24 @@
+{
+  "dataset": "lifecycle_events",
+  "policy_version": "regulations-native-v1",
+  "subject_schema": "/////7ABAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAcAAABEAQAAAAEAANAAAACkAAAAaAAAADQAAAAEAAAA6P7//wAAAQUQAAAAHAAAAAQAAAAAAAAACwAAAGFuY2hvcl9yb2xlAND+//8U////AAABBRAAAAAgAAAABAAAAAAAAAANAAAAZG9jdW1lbnRfZm9ybQAAAAD///9E////AAABCBAAAAAkAAAABAAAAAAAAAAKAAAAZXZlbnRfZGF0ZQAAAAAGAAgABgAGAAAAAAAAAHz///8AAAEFEAAAABgAAAAEAAAAAAAAAAUAAABzdGFnZQAAAGD///+k////AAABBRAAAAAcAAAABAAAAAAAAAALAAAAZG9jdW1lbnRfaWQAjP///9D///8AAAEFEAAAACAAAAAEAAAAAAAAAA0AAABwcm9jZWVkaW5nX2lkAAAAvP///xAAFAAIAAYABwAMAAAAEAAQAAAAAAABBRAAAAAoAAAABAAAAAAAAAASAAAAbGlmZWN5Y2xlX2V2ZW50X2lkAAAEAAQABAAAAAAAAAA=",
+  "identity_fields": [
+    "lifecycle_event_id"
+  ],
+  "receipt_fields": [
+    "source",
+    "dated_by",
+    "evidence_id",
+    "joined_by",
+    "method",
+    "actor_id",
+    "run_id",
+    "asserted_at",
+    "supersedes_id",
+    "raw_conversion_inputs",
+    "input_metadata",
+    "raw_source_record"
+  ],
+  "receipt_only": false,
+  "nullable_identity_fields": []
+}

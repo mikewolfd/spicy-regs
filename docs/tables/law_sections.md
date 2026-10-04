@@ -4,9 +4,11 @@
 
 **Published law sections**
 
-One row per native section occurrence in a published law's main body. These are the law's own words, including amendment instructions, not a consolidated statement of current law. Section numbers and publisher IDs can repeat or be absent; (law_id, seq) identifies each occurrence and native_path locates it in the source XML. is_quoted marks sections inside quotedContent; parent_seq alone does not imply a quotation. Body excludes its own number and heading, print furniture, and nested sections' text; query the child rows as well. laws.law_body_remainder retains text outside all numbered sections, including appropriation blocks. Hierarchy and issues_json retain context and source irregularities. All columns are VARCHAR, including boolean and numeric observations.
+One row per native section occurrence in a published law's main body. These are the law's own words, including amendment instructions, not a consolidated statement of current law. Section numbers and publisher IDs can repeat or be absent; (law_id, seq) identifies each occurrence and native_path locates it in the source XML. is_quoted marks sections inside quotedContent; parent_seq alone does not imply a quotation. Body excludes its own number and heading, print furniture, and nested sections' text; query the child rows as well. laws.law_body_remainder retains text outside all numbered sections, including appropriation blocks. Hierarchy retains the source context; source irregularities and extraction outcomes remain in the law_sections ETL receipts. Boolean and numeric observations use native types.
 
-**Coverage.** Derived: source-native sections from identity-validated GovInfo public and private law XML acquired by the laws rollup. Join law_id to laws.law_id, then laws.bill_id to congress_bills.bill_id. A missing section row does not establish that the law has no text: check laws.law_text_outcome and law_section_count. Coverage follows successfully read XML, not all enacted laws. PDF-only sources are outside this reader. *(measured 2026-10-02)*
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='law_sections'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
+**Coverage.** Derived: source-native sections from identity-validated GovInfo public and private law XML acquired by the laws rollup. Join law_id to laws.law_id, then laws.bill_id to congress_bills.bill_id. A missing section row does not establish that the law has no text: check law_text_outcome and law_section_count in the laws ETL receipts. Coverage follows successfully read XML, not all enacted laws. PDF-only sources are outside this reader. *(measured 2026-10-02)*
 
 - **Parquet file:** `law_sections.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -16,18 +18,13 @@ One row per native section occurrence in a published law's main body. These are 
 | Column | Type | Description |
 | --- | --- | --- |
 | `law_id` | `VARCHAR` | Validated congress-kind-number law key; joins laws.law_id and through laws.bill_id to the enacted measure. |
-| `seq` | `VARCHAR` | Zero-based native section occurrence in document order; missing or repeated labels never merge rows. |
+| `seq` | `BIGINT` | Zero-based native section occurrence in document order; missing or repeated labels never merge rows. |
 | `publisher_id` | `VARCHAR` | The section element's literal id attribute, including repeats; NULL if missing. |
 | `publisher_identifier` | `VARCHAR` | The section element's literal identifier attribute, not inferred from its number. |
 | `section_number` | `VARCHAR` | Text of the section's direct num element; repeated direct num elements are newline-joined and flagged. |
 | `section_number_value` | `VARCHAR` | The single direct num element's value attribute, where stated; NULL for missing or repeated num elements. |
 | `heading` | `VARCHAR` | Mixed inline text of the direct heading; repeated direct headings are newline-joined and flagged. |
-| `parent_seq` | `VARCHAR` | Occurrence of the nearest containing native section; NULL for sections without a section ancestor. |
-| `hierarchy_json` | `VARCHAR` | Source-order structural ancestors with element, namespace-qualified path, native IDs, number and heading. |
-| `native_path` | `VARCHAR` | Absolute XPath 1.0 using local-name and namespace-uri predicates into the exact source XML. |
+| `parent_seq` | `BIGINT` | Occurrence of the nearest containing native section; NULL for sections without a section ancestor. |
+| `hierarchy` | `STRUCT(element VARCHAR, publisher_id VARCHAR, publisher_identifier VARCHAR, number VARCHAR, heading VARCHAR)[]` | Source-order structural ancestors with element, namespace-qualified path, native IDs, number and heading. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `body` | `VARCHAR` | Section-owned source text: block boundaries become newlines; inline adjacency survives, amending actions included. Excludes own number/heading, print furniture and nested sections, which have separate rows. Print furniture is the page's apparatus beside the enacted words: page numbers, running heads and, from law_text_reader_version law-sections-uslm-v2, the USLM sidenote margin notes (`42 USC 405 note.`, a topical catchword such as `Contracts.`), each flagged in issues_json as print_furniture_excluded:<element>; under law-sections-uslm-v1 the margin notes were kept as body lines. This is not consolidated or applied law text. |
-| `is_quoted` | `VARCHAR` | true when a native quotedContent ancestor encloses this section; a quoted section is not a separate enacted section. |
-| `issues_json` | `VARCHAR` | Observed missing/repeated labels or IDs, unknown elements, excluded nested text and print furniture; these observations do not interpret legal effect. |
-| `source_sha256` | `VARCHAR` | SHA-256 of the exact identity-validated law XML shared with the parent law metadata capture. |
-| `reader_version` | `VARCHAR` | Source-owned USLM section-reading rule; no enrolled BILLS parser or diff equivalence is used. |
-| `observed_at` | `VARCHAR` | When the caller captured the law XML, not when this section reader ran. |
+| `is_quoted` | `BOOLEAN` | true when a native quotedContent ancestor encloses this section; a quoted section is not a separate enacted section. |

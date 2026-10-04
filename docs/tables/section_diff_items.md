@@ -6,6 +6,8 @@
 
 One row per settled correspondence in one version-pair comparison. `text_diff_json` is byte-capped, and `text_diff_truncated` says when the cap was reached. All columns are stored as VARCHAR.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='section_diff_items'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled: the settled correspondences within each comparison in section_diffs, so it covers exactly what that table covers. *(measured 2026-09-28)*
 
 - **Parquet file:** `section_diff_items.parquet`
@@ -17,30 +19,25 @@ One row per settled correspondence in one version-pair comparison. `text_diff_js
 | --- | --- | --- |
 | `bill_id` | `VARCHAR` | The bill both printings belong to. |
 | `from_version_code` | `VARCHAR` | The earlier printing's version code. |
-| `from_source` | `VARCHAR` | Which acquisition path supplied the earlier printing. |
+| `from_printing_id` | `VARCHAR` | Which acquisition path supplied the earlier printing. |
 | `to_version_code` | `VARCHAR` | The later printing's version code. |
-| `to_source` | `VARCHAR` | Which acquisition path supplied the later printing. |
-| `seq` | `VARCHAR` | Position in the engine's own stable ordering of settled correspondences. |
+| `to_printing_id` | `VARCHAR` | Which acquisition path supplied the later printing. |
+| `seq` | `BIGINT` | Position in the engine's own stable ordering of settled correspondences. |
 | `op` | `VARCHAR` | What changed: added, removed, modified, unchanged or moved. |
-| `similarity` | `VARCHAR` | The word-overlap signal the assignment round recorded, rounded to four places. |
-| `moved` | `VARCHAR` | True when the engine classified this correspondence as a move. |
-| `pairing_rule` | `VARCHAR` | Which assignment round selected this correspondence: path-round, move-round or unpaired. |
-| `evidence_json` | `VARCHAR` | Every named signal the round recorded, as the engine spelled them. |
-| `match_path` | `VARCHAR` | The normalized cross-version key, unit-separator joined. |
-| `match_path_json` | `VARCHAR` | The same path as a JSON array. |
-| `display_path_old_json` | `VARCHAR` | The earlier printing's display path, as a JSON array. |
-| `display_path_new_json` | `VARCHAR` | The later printing's display path, as a JSON array. |
+| `moved` | `BOOLEAN` | True when the engine classified this correspondence as a move. |
+| `match_path` | `VARCHAR[]` | The normalized cross-version key, unit-separator joined. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `display_path_old` | `VARCHAR[]` | The earlier printing's display path, as a Native list. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `display_path_new` | `VARCHAR[]` | The later printing's display path, as a Native list. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `section_number` | `VARCHAR` | The section's displayed number. |
 | `heading` | `VARCHAR` | The section heading, preferring the later printing's. |
 | `from_element_id` | `VARCHAR` | The earlier printing's own element id, which resolves this side to a bill_sections row. |
 | `to_element_id` | `VARCHAR` | The later printing's own element id. |
-| `from_text_sha256` | `VARCHAR` | Digest of the earlier body text, so an unchanged side is recognisable without it. |
-| `to_text_sha256` | `VARCHAR` | Digest of the later body text. |
-| `from_text_chars` | `VARCHAR` | Character length of the earlier body text. |
-| `to_text_chars` | `VARCHAR` | Character length of the later body text. |
-| `text_diff_json` | `VARCHAR` | The engine's word-level diff as a JSON array, capped at the published byte limit. |
-| `text_diff_truncated` | `VARCHAR` | True when the word diff did not fit the cap and entries were dropped from the end. |
-| `financial_from_amounts_json` | `VARCHAR` | Every dollar figure the earlier body states, as a JSON array. |
-| `financial_to_amounts_json` | `VARCHAR` | Every dollar figure the later body states, as a JSON array. |
-| `financial_amounts_changed` | `VARCHAR` | True when the two multisets of figures differ; needs no account model to be true. |
-| `financial_has_amendment_annotations` | `VARCHAR` | True when the section carries amendment annotations around its figures. |
+| `from_text_chars` | `BIGINT` | Character length of the earlier body text. |
+| `to_text_chars` | `BIGINT` | Character length of the later body text. |
+| `text_diff` | `VARCHAR[]` | The engine's word-level diff as a Native list, capped at the published byte limit. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `financial_from_amounts` | `DECIMAL(38,2)[]` | Every dollar figure the earlier body states, as a Native list. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `financial_to_amounts` | `DECIMAL(38,2)[]` | Every dollar figure the later body states, as a Native list. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `financial_amounts_changed` | `BOOLEAN` | True when the two multisets of figures differ; needs no account model to be true. |
+| `financial_has_amendment_annotations` | `BOOLEAN` | True when the section carries amendment annotations around its figures. |
+| `from_body_version_id` | `VARCHAR` | Stable identity of the earlier document body in this comparison. |
+| `to_body_version_id` | `VARCHAR` | Stable identity of the later document body in this comparison. |

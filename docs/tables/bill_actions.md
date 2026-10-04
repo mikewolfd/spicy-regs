@@ -6,6 +6,8 @@
 
 One row per entry of the bill's own action list (`actions` in its BILLSTATUS document), in publisher order; actions recorded under the bill's amendments (`amendments/amendment/actions`) are not rows, so a roll call on an amendment can have no action here. Each row also carries the stage the action text implies, with the rule and matcher that fired, which makes `congress_bills.stage` auditable action by action. All columns are stored as VARCHAR.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='bill_actions'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled: bills the bill family has read from GovInfo BILLSTATUS, Congress by Congress from the 108th on; group by the Congress in bill_id to see which Congresses are filled. *(measured 2026-09-28)*
 
 **Data quality.** One event is often entered by more than one system (`source_system_name`). Library of Congress and House floor rows carry an `action_code`; Senate and House committee rows carry none. The same event can appear once per system in different words, and some events appear in one system only (S. 545's committee report has a Senate row and no Library of Congress row; 119th Congress, checked 2026-10-03). Counting rows counts entries, not events; filtering to one system, or to rows with an `action_code`, drops the events the other systems alone record.
@@ -18,16 +20,12 @@ One row per entry of the bill's own action list (`actions` in its BILLSTATUS doc
 | Column | Type | Description |
 | --- | --- | --- |
 | `bill_id` | `VARCHAR` | The bill this action belongs to. |
-| `action_index` | `VARCHAR` | Zero-based position in the publisher's own action list, which runs newest first: 0 is the bill's latest action. Part of the identity. |
+| `action_index` | `BIGINT` | Zero-based position in the publisher's own action list, which runs newest first: 0 is the bill's latest action. Part of the identity. |
 | `action_date` | `VARCHAR` | The publisher's actionDate for this action. |
 | `action_time` | `VARCHAR` | The publisher's actionTime, where the source system states one. |
 | `action_text` | `VARCHAR` | The action text exactly as written, whitespace included; NULL when the publisher stated none. |
 | `action_code` | `VARCHAR` | The publisher's action code, which is what the became-law rule keys on. |
 | `action_type` | `VARCHAR` | The publisher's action type (IntroReferral, Floor, BecameLaw...). |
-| `source_system_code` | `VARCHAR` | Code of the system that reported the action. |
-| `source_system_name` | `VARCHAR` | Name of the system that reported the action. |
-| `recorded_vote_count` | `VARCHAR` | How many recordedVote entries this action carries. |
-| `is_latest_action` | `VARCHAR` | True on the one actions[] entry the publisher's separate latestAction element names. |
+| `recorded_vote_count` | `BIGINT` | How many recordedVote entries this action carries. |
+| `is_latest_action` | `BOOLEAN` | True on the one actions[] entry the publisher's separate latestAction element names. |
 | `stage` | `VARCHAR` | The stage this one action's qualified code and text classify as, in the same vocabulary as congress_bills.stage (`introduced`, `committee`, `calendared`, `passed_chamber`, `other_chamber`, `conference`, `cleared`, `presented`, `law`, or the outcomes `failed` and `vetoed`; never `passed_both`, which is a bill's state, not one action's); `introduced` with stage_rule NULL when no rule classifies the action, as for the desk or a floor step in the bill's own chamber. An action reads `cleared` where its own words complete agreement on one text; a chamber's agreement to a conference report reads `conference` here, and the bill reads `cleared` from the second. One action's classification, not the bill's state. |
-| `stage_rule` | `VARCHAR` | Which stage rule fired on this action (the names congress_bills.stage_rule lists, but never passed_both), or NULL when none did. |
-| `stage_matcher` | `VARCHAR` | The matched text pattern, publisher code or vote-result reading used by the named rule. |

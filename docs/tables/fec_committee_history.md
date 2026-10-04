@@ -6,6 +6,8 @@
 
 One row per FEC committee per two-year cycle, as that cycle's bulk committee master states it: name, treasurer, address, designation, type, party, filing frequency, interest-group category, connected organization and linked candidate. Read by the `fec-committee-history` rollup through SpicyDocs' committee-master reader, which verifies each file by digest and checks the publisher's header. Codes stay literal. `fec_committees` is the current registry from the API; this is the history, keyed on (`committee_id`, `cycle`). All columns are stored as VARCHAR.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_committee_history'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** True range. Every cycle from 1980 through the current one: each run reads every cycle's bulk committee master whole and publishes every row. The current cycle's file is republished daily, so its rows change. *(measured 2026-09-27)*
 
 - **Parquet file:** `fec_committee_history.parquet`
@@ -16,7 +18,7 @@ One row per FEC committee per two-year cycle, as that cycle's bulk committee mas
 | Column | Type | Description |
 | --- | --- | --- |
 | `committee_id` | `VARCHAR` | The FEC committee id (`CMTE_ID`). |
-| `cycle` | `VARCHAR` | The two-year cycle the file covers, as its closing even year. |
+| `cycle` | `INTEGER` | The two-year cycle the file covers, as its closing even year. |
 | `name` | `VARCHAR` | The committee's name as that cycle's file states it (`CMTE_NM`); NULL when blank. |
 | `treasurer_name` | `VARCHAR` | The treasurer's name as filed (`TRES_NM`); NULL when blank. |
 | `street_1` | `VARCHAR` | The first street line of the committee's address (`CMTE_ST1`); NULL when blank. |

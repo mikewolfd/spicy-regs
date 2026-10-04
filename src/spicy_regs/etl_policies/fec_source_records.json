@@ -1,0 +1,30 @@
+{
+  "dataset": "fec_source_records",
+  "policy_version": "fec-identity-context-receipts/1",
+  "subject_schema": "/////zAAAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAAAAAA=",
+  "identity_fields": [],
+  "receipt_fields": [
+    "collection_id",
+    "source_family",
+    "profile",
+    "source_record_id",
+    "committee_id",
+    "candidate_id",
+    "filing_id",
+    "legal_doc_id",
+    "audit_case_id",
+    "source_sha256",
+    "source_url",
+    "observed_at",
+    "source_locator_json",
+    "metadata_json",
+    "assets_json",
+    "embedded_bodies_json",
+    "source_record_json",
+    "conversion_inputs",
+    "conversion_diagnostics",
+    "source_input"
+  ],
+  "receipt_only": true,
+  "nullable_identity_fields": []
+}

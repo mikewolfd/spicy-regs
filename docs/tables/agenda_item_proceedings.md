@@ -6,6 +6,8 @@
 
 One row per piece of evidence that an agenda item tracks a proceeding: a docket, Regulations.gov document or Register document that directly reports the RIN for that proceeding. Unified Agenda equality alone never links an action. Keyed `relationship_id`; joins `regulatory_agenda_items` on `agenda_item_id`, `proceedings` on `proceeding_id` and `unified_agenda` on `rin`. Built by `build_regulatory_agenda`; all columns are VARCHAR.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='agenda_item_proceedings'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Derived, and bounded by its inputs: `dockets`, `documents` and `federal_register` records that state a RIN the proceeding holds. *(measured 2026-09-28)*
 
 - **Parquet file:** `agenda_item_proceedings.parquet`, in the snapshot that `materialized/rulemaking/latest.json` names
@@ -20,12 +22,3 @@ One row per piece of evidence that an agenda item tracks a proceeding: a docket,
 | `rin` | `VARCHAR` | The item's Regulation Identifier Number. |
 | `proceeding_id` | `VARCHAR` | The proceeding the item tracks; joins `proceedings.proceeding_id`. |
 | `relationship_role` | `VARCHAR` | The link's role; `agenda_tracks_proceeding` throughout. |
-| `source` | `VARCHAR` | What reported the RIN: `docket_rin` (the docket), `document_rin` (a document's `additional_rins`) or `federal_register_rin` (a Register document). |
-| `evidence_id` | `VARCHAR` | The reporting record, by `source`: a docket id, a Regulations.gov document id, or a dated Register record id (`number@YYYY-MM-DD`). |
-| `evidence_uri` | `VARCHAR` | Public URL of that record on regulations.gov or federalregister.gov. |
-| `evidence_date` | `VARCHAR` | Eastern day of the evidence: the docket's or document's latest date, or the Register publication date. |
-| `method` | `VARCHAR` | How the row was asserted; `deterministic` (computed by rule) throughout. |
-| `actor_id` | `VARCHAR` | The builder that asserted the row, with its version (`spicy-regs:agenda-item-proceedings:v<n>`), bumped when its published rows change. |
-| `run_id` | `VARCHAR` | The materialization run that built the snapshot (e.g. `rulemaking-20260927T062656Z`). |
-| `asserted_at` | `VARCHAR` | When that run asserted the row, as a UTC ISO 8601 instant. |
-| `supersedes_id` | `VARCHAR` | Id of a prior row this one continues; always NULL here. |

@@ -6,6 +6,8 @@
 
 One row per change detected between two runs of the bill family. Two instants per row: `occurred_at` is the publisher's, `detected_at` is the run's. All columns are stored as VARCHAR.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='public_activity_events'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled: bills the bill family has read from GovInfo BILLSTATUS, Congress by Congress from the 108th on; group by the Congress in bill_id to see which Congresses are filled. Each event compares a bill between two runs of the bill family, not the historical sequence of its actions. *(measured 2026-09-29)*
 
 **Data quality.** A `stage_changed` event compares a bill's actions, not its published stage: the prior stage is re-derived from the bill's published actions under the running stage rule, so a rule change is not an event. spicy-docs 0.51.0 moves 154,374 of the 172,991 stages with actions (its replay, reproduced on the live generation of 2026-09-29), none of which emits one. An event's `from` is therefore the stage the running rule reads from the prior actions, which can differ from the stage the prior row published.
@@ -21,5 +23,10 @@ One row per change detected between two runs of the bill family. Two instants pe
 | `event_type` | `VARCHAR` | One of the four sealed event types. |
 | `subject_id` | `VARCHAR` | The version or summary key the event is about, unit-separator joined; empty for a bill event. |
 | `occurred_at` | `VARCHAR` | The publisher's own instant for the change, falling back to the run instant. |
-| `detected_at` | `VARCHAR` | When the run that found this change ran; the merge prefers the larger value. |
-| `event_data_json` | `VARCHAR` | The few fields a reader needs to render the event without joining another table. |
+| `title` | `VARCHAR` | The few fields a reader needs to render the event without joining another table. This column retains the source property title. |
+| `stage` | `VARCHAR` | The few fields a reader needs to render the event without joining another table. This column retains the source property stage. |
+| `sponsor_bioguide_id` | `VARCHAR` | The few fields a reader needs to render the event without joining another table. This column retains the source property sponsor_bioguide_id. |
+| `from_stage` | `VARCHAR` | The few fields a reader needs to render the event without joining another table. This column retains the source property from. |
+| `to_stage` | `VARCHAR` | The few fields a reader needs to render the event without joining another table. This column retains the source property to. |
+| `version_code` | `VARCHAR` | The few fields a reader needs to render the event without joining another table. This column retains the source property version_code. |
+| `kind` | `VARCHAR` | The few fields a reader needs to render the event without joining another table. This column retains the source property kind. |

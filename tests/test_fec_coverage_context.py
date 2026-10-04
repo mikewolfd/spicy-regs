@@ -47,7 +47,7 @@ def test_context_preserves_prior_rows_and_separates_refusal_from_empty_result(tm
     records, collections, relationships = _rows(paths)
     assert records == baseline[0] and collections[:2] == baseline[1] and relationships == baseline[2]
     row = collections[2]
-    assert row["record_count"] == row["relationship_count"] == "0"
+    assert row["record_count"] == row["relationship_count"] == 0
     assert row["record_outcome"] == "refused"
     for key in (
         "profile",
@@ -64,7 +64,7 @@ def test_context_preserves_prior_rows_and_separates_refusal_from_empty_result(tm
     assert outcome["receiverDisposition"]["callerContext"]["pin"] == disposition["disposition"]["context"]
     with duckdb.connect() as connection:
         assert connection.execute(
-            "SELECT collection_id, record_outcome, profile FROM read_parquet(?) WHERE record_count='0' ORDER BY collection_id",
+            "SELECT collection_id, record_outcome, profile FROM read_parquet(?) WHERE record_count=0 ORDER BY collection_id",
             [str(paths[1])],
         ).fetchall() == [("coverage:refused-original", "refused", None), ("empty", "empty", "candidate")]
 

@@ -43,7 +43,7 @@ def test_reused_component_does_not_amplify_full_key(tmp_path, columns, child_key
 
 def test_full_selected_receipts_cover_new_keys_and_populated_attributes():
     measured=[j for j in JOINS if j.measurement]
-    assert {j.child for j in measured} >= {"bill_sections","section_diffs","report_sections","hearing_transcripts",
+    assert {j.child for j in measured} >= {"report_sections","hearing_transcripts",
                                          "document_attributes","docket_attributes"}
     for join in measured:
         assert join.measurement is not None
@@ -56,3 +56,9 @@ def test_full_selected_receipts_cover_new_keys_and_populated_attributes():
         assert 0 <= join.measurement["max_parent_multiplicity"] <= 1
         assert join.measurement["parent_duplicate_keys"] == 0
         assert all('/generations/' in url for key in ['child_urls','parent_urls'] for url in join.measurement[key])
+
+
+def test_changed_printing_keys_do_not_inherit_old_measurements():
+    native = [j for j in JOINS if j.child in {"bill_sections", "section_diffs"} and "printing_id" in " ".join((*j.child_columns, *j.parent_columns))]
+    assert native
+    assert all(j.measurement is None and j.baseline_keys == 0 for j in native)

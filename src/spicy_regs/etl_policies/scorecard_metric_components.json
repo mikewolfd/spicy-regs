@@ -1,0 +1,20 @@
+{
+  "dataset": "scorecard_metric_components",
+  "policy_version": "scorecards-etl-v1",
+  "subject_schema": "/////6gBAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAYAAABEAQAA/AAAAMQAAACUAAAAQAAAAAQAAACI////AAABBRAAAAAoAAAABAAAAAAAAAAVAAAAY29tYmluYXRpb25fcnVsZV90ZXh0AAAA3P7//8D///8AAAEHEAAAACgAAAAEAAAAAAAAAA0AAAB3ZWlnaHRfbnVtYmVyAAAACAAMAAQACAAIAAAAJgAAABIAAAAQABQACAAGAAcADAAAABAAEAAAAAAAAQUQAAAAHAAAAAQAAAAAAAAACwAAAHdlaWdodF90ZXh0AFj///+Y////AAAABRAAAAAkAAAABAAAAAAAAAATAAAAY29tcG9uZW50X21ldHJpY19pZACM////zP///wAAAAUQAAAAJAAAAAQAAAAAAAAAEAAAAHBhcmVudF9tZXRyaWNfaWQAAAAAwP///xAAFAAIAAAABwAMAAAAEAAQAAAAAAAABRAAAAAkAAAABAAAAAAAAAAMAAAAc2NvcmVjYXJkX2lkAAAAAAQABAAEAAAA",
+  "identity_fields": [
+    "scorecard_id",
+    "parent_metric_id",
+    "component_metric_id"
+  ],
+  "receipt_fields": [
+    "snapshot_id",
+    "capture_id",
+    "source_url",
+    "source_path",
+    "conversion_inputs",
+    "raw_source"
+  ],
+  "receipt_only": false,
+  "nullable_identity_fields": []
+}

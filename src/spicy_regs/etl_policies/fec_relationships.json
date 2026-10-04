@@ -1,0 +1,24 @@
+{
+  "dataset": "fec_relationships",
+  "policy_version": "fec-identity-context-receipts/1",
+  "subject_schema": "/////yACAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAkAAADAAQAAgAEAAEwBAAAUAQAA5AAAALQAAACEAAAASAAAAAQAAAB0/v//AAABAhAAAAAoAAAABAAAAAAAAAAXAAAAY2FuZGlkYXRlX2VsZWN0aW9uX3llYXIA0P///wAAAAEgAAAAtP7//wAAAQIQAAAAIAAAAAQAAAAAAAAABQAAAGN5Y2xlAAAACAAMAAgABwAIAAAAAAAAASAAAADs/v//AAABBRAAAAAcAAAABAAAAAAAAAALAAAAb2JqZWN0X25hbWUA3P7//xj///8AAAEFEAAAABwAAAAEAAAAAAAAAAsAAABvYmplY3RfdHlwZQAI////RP///wAAAQUQAAAAHAAAAAQAAAAAAAAACQAAAG9iamVjdF9pZAAAADT///9w////AAABBRAAAAAkAAAABAAAAAAAAAARAAAAcmVsYXRpb25zaGlwX3R5cGUAAABo////pP///wAAAQUQAAAAIAAAAAQAAAAAAAAADAAAAHN1YmplY3RfdHlwZQAAAACY////1P///wAAAQUQAAAAHAAAAAQAAAAAAAAACgAAAHN1YmplY3RfaWQAAMT///8QABQACAAGAAcADAAAABAAEAAAAAAAAQUQAAAAIAAAAAQAAAAAAAAACQAAAHJlY29yZF9pZAAAAAQABAAEAAAA",
+  "identity_fields": [
+    "record_id"
+  ],
+  "receipt_fields": [
+    "subject_id_status",
+    "object_id_status",
+    "value_status",
+    "source_family",
+    "source_sha256",
+    "source_url",
+    "observed_at",
+    "source_locator_json",
+    "source_fields_json",
+    "conversion_inputs",
+    "conversion_diagnostics",
+    "source_input"
+  ],
+  "receipt_only": false,
+  "nullable_identity_fields": []
+}

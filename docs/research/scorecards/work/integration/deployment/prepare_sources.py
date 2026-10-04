@@ -15,11 +15,10 @@ from importlib.metadata import version
 import json
 from pathlib import Path
 
-import pyarrow.parquet as pq
 import yaml
 
 from spicy_docs.transport.captured import CapturedBodyResponse
-from spicy_regs.data_dictionary import expected_schemas
+from spicy_regs.scorecards.etl import SOURCE_NAMES, generation_options, read_family, read_source_generation
 from spicy_regs.generations import build_generation, implementation_id, verify_generation
 from spicy_regs.scorecards.registry import REGISTRY
 from spicy_regs.source_evidence import CaptureEvidence, verify_evidence
@@ -160,7 +159,7 @@ def prepare(args):
             fetch_factory=factory,
             download_prior=lambda key, path: False,
         )
-        rows = {path.stem: pq.ParquetFile(path).read().to_pylist() for path in files}
+        rows = read_family(args.output, SOURCE_NAMES)
         if {row["publisher_id"] for row in rows["scorecards"]} != set(replays):
             raise ValueError("A selected publisher did not produce an accepted complete edition")
         afp_replay.complete()
@@ -168,10 +167,7 @@ def prepare(args):
         references = {
             "afp": json.loads((args.afp_captures / "qualified.tables.json").read_bytes()),
             "ijm": json.loads((args.ijm_captures / "qualified.tables.json").read_bytes()),
-            "lcv": {
-                path.stem: pq.ParquetFile(path).read().to_pylist()
-                for path in args.lcv_qualified_generation.glob("*.parquet")
-            },
+            "lcv": read_source_generation(args.lcv_qualified_generation),
         }
         for publisher, tables in references.items():
             ids = {row["scorecard_id"] for row in tables["scorecards"]}
@@ -194,7 +190,7 @@ def prepare(args):
             family="scorecards",
             files=files,
             expected_keys=OUTPUTS,
-            schemas=expected_schemas(),
+            **generation_options(args.output, SOURCE_NAMES),
             read_snapshot=index,
             inputs=evidence.inputs(),
         )

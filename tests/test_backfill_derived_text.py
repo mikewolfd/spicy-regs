@@ -26,6 +26,7 @@ from spicy_regs.backfill_derived_text import (
 )
 from spicy_regs.schemas import COMMENT
 from spicy_regs.sources import iceberg
+from spicy_regs.sources.regulatory_catalog import processing_table
 from tests.conftest import COMMENT_SCHEMA
 
 # Reuse the fake S3 surface from the derived-text unit tests.
@@ -240,9 +241,8 @@ def _seed_catalog(con, rows: list[dict]) -> None:
     """Insert comment rows into the local catalog table (all COMMENT columns)."""
     iceberg._ensure_table(con, COMMENT)
     frame = pl.DataFrame([{**{c: None for c in COMMENT.schema}, **r} for r in rows], schema=COMMENT.schema)
-    col_list = ", ".join(f'"{c}"' for c in COMMENT.schema)
     con.register("_seed_src", frame.to_arrow())
-    con.execute(f"INSERT INTO {iceberg._qualified(COMMENT)} ({col_list}) SELECT {col_list} FROM _seed_src;")
+    iceberg.replace_rows(con, COMMENT, "_seed_src")
     con.unregister("_seed_src")
 
 
@@ -288,7 +288,7 @@ def test_catalog_backfill_upserts_filled_rows_in_place() -> None:
 
         out = dict(
             con.execute(
-                f"SELECT comment_id, text_content FROM {iceberg._qualified(COMMENT)} ORDER BY comment_id"
+                f"SELECT comment_id, text_content FROM {processing_table(con, COMMENT)} ORDER BY comment_id"
             ).fetchall()
         )
         assert out["ACF-2025-0038-0004"] == "Wisconsin DCF comment body"
@@ -297,13 +297,13 @@ def test_catalog_backfill_upserts_filled_rows_in_place() -> None:
 
         # Upsert preserves other columns and doesn't duplicate the row.
         row = con.execute(
-            f"SELECT comment, text_extraction_status, pdf_extraction_results_json FROM {iceberg._qualified(COMMENT)} "
+            f"SELECT comment, text_extraction_status, pdf_extraction_results_json FROM {processing_table(con, COMMENT)} "
             f"WHERE comment_id = 'ACF-2025-0038-0004'"
         ).fetchall()
         assert len(row) == 1
         assert row[0][:2] == ("orig body", "derived")
         assert json.loads(row[0][2])["comment_id"] == "ACF-2025-0038-0004"
-        count = con.execute(f"SELECT count(*) FROM {iceberg._qualified(COMMENT)}").fetchone()
+        count = con.execute(f"SELECT count(*) FROM {processing_table(con, COMMENT)}").fetchone()
         assert count is not None and count[0] == 3
 
         # Idempotent: a second run finds nothing new (the filled row now has a status).
@@ -353,7 +353,7 @@ def test_catalog_backfill_discover_from_derived_finds_legacy_rows_without_attach
 
         out = dict(
             con.execute(
-                f"SELECT comment_id, text_content FROM {iceberg._qualified(COMMENT)} ORDER BY comment_id"
+                f"SELECT comment_id, text_content FROM {processing_table(con, COMMENT)} ORDER BY comment_id"
             ).fetchall()
         )
         assert out["ACF-2025-0038-0004"] == "Wisconsin DCF comment body"
@@ -461,7 +461,7 @@ def test_catalog_overwrite_refills_derived_rows_and_never_pdf_fills() -> None:
         )
         stats = _backfill_agency_in_catalog(con, COMMENT, "ACF", resource_factory=_factory(), overwrite=True)
         assert stats == _counts(1, derived=1)
-        rows = dict(con.execute(f"SELECT comment_id, text_content FROM {iceberg._qualified(COMMENT)}").fetchall())
+        rows = dict(con.execute(f"SELECT comment_id, text_content FROM {processing_table(con, COMMENT)}").fetchall())
         assert rows == {"ACF-2025-0038-0004": "Wisconsin DCF comment body", "ACF-2025-0038-0015": "extracted by us"}
     finally:
         con.close()
@@ -583,15 +583,31 @@ def test_catalog_backfill_rederives_only_the_named_comments() -> None:
     con = duckdb.connect()
     con.execute(f"ATTACH ':memory:' AS {iceberg._CATALOG_ALIAS};")
     try:
-        _seed_catalog(con, [
-            {"comment_id": cid, "docket_id": "ACF-2025-0038", "agency_code": "ACF", "attachments_json": _attach(),
-             "modify_date": "2025-01-01", "text_content": "stale", "text_extraction_status": "derived"}
-            for cid in ("ACF-2025-0038-0004", "ACF-2025-0038-0040")
-        ])
-        stats = _backfill_agency_in_catalog(con, COMMENT, "ACF", resource_factory=_factory(), overwrite=True,
-                                            comment_ids=frozenset({"ACF-2025-0038-0004"}))
+        _seed_catalog(
+            con,
+            [
+                {
+                    "comment_id": cid,
+                    "docket_id": "ACF-2025-0038",
+                    "agency_code": "ACF",
+                    "attachments_json": _attach(),
+                    "modify_date": "2025-01-01",
+                    "text_content": "stale",
+                    "text_extraction_status": "derived",
+                }
+                for cid in ("ACF-2025-0038-0004", "ACF-2025-0038-0040")
+            ],
+        )
+        stats = _backfill_agency_in_catalog(
+            con,
+            COMMENT,
+            "ACF",
+            resource_factory=_factory(),
+            overwrite=True,
+            comment_ids=frozenset({"ACF-2025-0038-0004"}),
+        )
         assert stats["selected"] == 1
-        out = dict(con.execute(f"SELECT comment_id, text_content FROM {iceberg._qualified(COMMENT)}").fetchall())
+        out = dict(con.execute(f"SELECT comment_id, text_content FROM {processing_table(con, COMMENT)}").fetchall())
         assert out == {"ACF-2025-0038-0004": "Wisconsin DCF comment body", "ACF-2025-0038-0040": "stale"}
     finally:
         con.close()

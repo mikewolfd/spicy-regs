@@ -12,7 +12,8 @@ class is four lines and its console entry names it by attribute.
 from pathlib import Path
 from typing import ClassVar
 
-from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
+from spicy_regs.pipelines.rollups.base import make_rollup_app
+from spicy_regs.pipelines.rollups.subject_receipts import SubjectReceiptRollup as RollupPipeline
 from spicy_regs.transforms.build_congress_index import (
     build_committee_meetings,
     build_house_communications,
@@ -31,7 +32,7 @@ class HouseCommunicationsRollup(RollupPipeline):
     retain_source_evidence: ClassVar[bool] = True
 
     def build(self, output_dir: Path) -> Path:
-        return build_house_communications(output_dir, evidence=self.source_evidence)
+        return self.build_receipts(output_dir, build_house_communications, evidence=self.source_evidence)
 
 
 class CommitteeMeetingsRollup(RollupPipeline):
@@ -43,7 +44,7 @@ class CommitteeMeetingsRollup(RollupPipeline):
     retain_source_evidence: ClassVar[bool] = True
 
     def build(self, output_dir: Path) -> Path:
-        return build_committee_meetings(output_dir, evidence=self.source_evidence)
+        return self.build_receipts(output_dir, build_committee_meetings, evidence=self.source_evidence)
 
 
 class RecordIssuesRollup(RollupPipeline):
@@ -55,7 +56,7 @@ class RecordIssuesRollup(RollupPipeline):
     retain_source_evidence: ClassVar[bool] = True
 
     def build(self, output_dir: Path) -> Path:
-        return build_record_issues(output_dir, evidence=self.source_evidence)
+        return self.build_receipts(output_dir, build_record_issues, evidence=self.source_evidence)
 
 
 class TreatiesRollup(RollupPipeline):
@@ -67,7 +68,7 @@ class TreatiesRollup(RollupPipeline):
     retain_source_evidence: ClassVar[bool] = True
 
     def build(self, output_dir: Path) -> Path:
-        return build_treaties(output_dir, evidence=self.source_evidence)
+        return self.build_receipts(output_dir, build_treaties, evidence=self.source_evidence)
 
 
 class NominationsRollup(RollupPipeline):
@@ -79,7 +80,7 @@ class NominationsRollup(RollupPipeline):
     retain_source_evidence: ClassVar[bool] = True
 
     def build(self, output_dir: Path) -> Path:
-        return build_nominations(output_dir, evidence=self.source_evidence)
+        return self.build_receipts(output_dir, build_nominations, evidence=self.source_evidence)
 
 
 house_communications_app = make_rollup_app(HouseCommunicationsRollup)

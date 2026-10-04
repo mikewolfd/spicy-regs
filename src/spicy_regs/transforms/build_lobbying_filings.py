@@ -1,7 +1,7 @@
 """Transform: build ``lobbying_filings.parquet`` from the Senate LDA REST API.
 
-Produces three all-VARCHAR tables. ``lobbying_filings`` is keyed by
-``filing_uuid``, with the activities and entities it has always carried as JSON.
+Produces native domain tables and separate ETL receipts. ``lobbying_filings`` is keyed by
+``filing_uuid``, with ordered native activity and entity arrays.
 ``lobbying_activities`` holds one row per activity a filing reports, keyed
 ``(filing_uuid, activity_index)``. ``lobbying_activity_lobbyists`` holds one row
 per lobbyist an activity names, keyed ``(filing_uuid, activity_index,
@@ -38,6 +38,7 @@ from loguru import logger
 
 from spicy_regs.transforms.parquet_rows import str_or_none
 from spicy_regs.sources import r2
+from spicy_regs.transforms.government_receipts import internal_prior, receipt_builder
 from spicy_regs.transforms.table_merge import merge_local_prior
 
 if TYPE_CHECKING:
@@ -127,8 +128,8 @@ def _iter_filings(reader: LdaFilingsReader, url: str, *, max_records: int | None
                 return
 
 
-# The published schema: all VARCHAR, keyed by filing_uuid. Array/nested fields
-# are JSON strings.
+# Literal processing columns used by the source mapper and incremental merge.
+# The receipt writer converts the final output to the native subject schema.
 COLUMNS = (
     "filing_uuid",
     "filing_type",
@@ -175,43 +176,36 @@ LOBBYIST_COLUMNS = (
 
 
 
-def _activities(filing: dict) -> list[dict]:
-    """Project lobbying_activities to their issue codes + descriptions."""
-    out: list[dict] = []
-    for act in filing.get("lobbying_activities") or []:
-        if not isinstance(act, dict):
-            continue
-        out.append(
-            {
-                "general_issue_code": act.get("general_issue_code"),
-                "general_issue_code_display": act.get("general_issue_code_display"),
-                "description": act.get("description"),
-            }
-        )
-    return out
+def _source_list(value: object, field: str) -> list | None:
+    """Keep null, empty and positional entries; refuse unsupported source shapes."""
+    if value is None:
+        return None
+    if not isinstance(value, list) or any(item is not None and not isinstance(item, dict) for item in value):
+        raise LobbyingFilingsError(f"{field} must be an array of objects or nulls")
+    return value
 
 
-def _government_entities(filing: dict) -> list[dict]:
-    """Collect the distinct government entities (agencies/chambers) lobbied.
+def _entities(activity: dict) -> list | None:
+    values = _source_list(activity.get("government_entities"), "government_entities")
+    return None if values is None else [None if value is None else {"id": value.get("id"), "name": value.get("name")} for value in values]
 
-    They are nested under each lobbying activity; flatten + dedup on entity id
-    (falling back to name) so a filing that lobbied the same chamber across
-    several issues lists it once.
-    """
-    seen: set[object] = set()
-    out: list[dict] = []
-    for act in filing.get("lobbying_activities") or []:
-        if not isinstance(act, dict):
-            continue
-        for ent in act.get("government_entities") or []:
-            if not isinstance(ent, dict):
-                continue
-            key = ent.get("id") if ent.get("id") is not None else ent.get("name")
-            if key in seen:
-                continue
-            seen.add(key)
-            out.append({"id": ent.get("id"), "name": ent.get("name")})
-    return out
+
+def _activities(filing: dict) -> list | None:
+    """Keep activity descriptions at their source positions, including nulls."""
+    values = _source_list(filing.get("lobbying_activities"), "lobbying_activities")
+    return None if values is None else [None if act is None else {
+        "general_issue_code": act.get("general_issue_code"),
+        "general_issue_code_display": act.get("general_issue_code_display"),
+        "description": act.get("description"),
+    } for act in values]
+
+
+def _government_entities(filing: dict) -> list | None:
+    """Known entity occurrences in activity order; child rows retain per-activity null lists."""
+    activities = _source_list(filing.get("lobbying_activities"), "lobbying_activities")
+    if activities is None:
+        return None
+    return [entity for act in activities if act is not None for entity in (_entities(act) or [])]
 
 
 def _shape(filing: dict) -> dict:
@@ -239,11 +233,9 @@ def _shape(filing: dict) -> dict:
 def _activity_rows(filing: dict) -> list[dict]:
     """One row per activity the filing reports, at its position in the filing's own list."""
     rows = []
-    for index, act in enumerate(filing.get("lobbying_activities") or []):
-        if not isinstance(act, dict):
-            continue
-        entities = [{"id": e.get("id"), "name": e.get("name")} for e in act.get("government_entities") or []
-                    if isinstance(e, dict)]
+    for index, act in enumerate(_source_list(filing.get("lobbying_activities"), "lobbying_activities") or []):
+        act = act or {}
+        entities = _entities(act)
         rows.append({
             "filing_uuid": filing.get("filing_uuid"),
             "activity_index": str(index),
@@ -259,13 +251,13 @@ def _activity_rows(filing: dict) -> list[dict]:
 def _lobbyist_rows(filing: dict) -> list[dict]:
     """One row per lobbyist an activity names, at its positions in the filing's lists."""
     rows = []
-    for index, act in enumerate(filing.get("lobbying_activities") or []):
-        if not isinstance(act, dict):
-            continue
-        for position, entry in enumerate(act.get("lobbyists") or []):
-            if not isinstance(entry, dict):
-                continue
-            person = entry.get("lobbyist") if isinstance(entry.get("lobbyist"), dict) else {}
+    for index, act in enumerate(_source_list(filing.get("lobbying_activities"), "lobbying_activities") or []):
+        act = act or {}
+        for position, entry in enumerate(_source_list(act.get("lobbyists"), "lobbyists") or []):
+            entry = entry or {}
+            person = entry.get("lobbyist")
+            if not isinstance(person, dict):
+                person = {}
             rows.append({
                 "filing_uuid": filing.get("filing_uuid"),
                 "activity_index": str(index),
@@ -298,6 +290,7 @@ def _prior_max_dt_posted(prior_file: Path) -> date | None:
         return None
 
 
+@receipt_builder
 def build_lobbying_filings(
     output_dir: Path,
     *,
@@ -314,6 +307,8 @@ def build_lobbying_filings(
 
     # 1. Pull the prior table (best effort — absence just means full backfill).
     have_prior = prior_file.exists() or r2.download(OUTPUT, prior_file)
+    if have_prior:
+        prior_file = internal_prior("lobbying_filings", prior_file)
     if have_prior:
         logger.info("LDA: merging against prior table {}", prior_file)
     else:
@@ -386,6 +381,8 @@ def build_lobbying_filings(
             else:
                 table_prior = output_dir / f"_{key.removesuffix('.parquet')}_prior.parquet"
                 table_has_prior = table_prior.exists() or r2.download(key, table_prior)
+                if table_has_prior:
+                    table_prior = internal_prior(key.removesuffix(".parquet"), table_prior)
             schema = pa.schema([(c, pa.string()) for c in columns])
             new_file = output_dir / f"_{key.removesuffix('.parquet')}_new.parquet"
             pq.write_table(pa.Table.from_pylist(rows, schema=schema) if rows else schema.empty_table(), new_file,

@@ -1,0 +1,33 @@
+{
+  "dataset": "fec_committee_master_observations",
+  "policy_version": "fec-identity-context-receipts/1",
+  "subject_schema": "/////5gDAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAABEAAAA4AwAA9AIAALgCAACMAgAAWAIAACgCAAD4AQAAzAEAAKABAAB4AQAASAEAABQBAADoAAAAsAAAAHgAAAA4AAAABAAAABz9//8AAAEFEAAAACAAAAAEAAAAAAAAAAwAAABjYW5kaWRhdGVfaWQAAAAAEP3//0z9//8AAAEFEAAAACwAAAAEAAAAAAAAABsAAABjb25uZWN0ZWRfb3JnYW5pemF0aW9uX25hbWUATP3//4j9//8AAAEFEAAAACQAAAAEAAAAAAAAABEAAABvcmdhbml6YXRpb25fdHlwZQAAAID9//+8/f//AAABBRAAAAAkAAAABAAAAAAAAAAQAAAAZmlsaW5nX2ZyZXF1ZW5jeQAAAAC0/f//8P3//wAAAQUQAAAAGAAAAAQAAAAAAAAABQAAAHBhcnR5AAAA3P3//xj+//8AAAEFEAAAACAAAAAEAAAAAAAAAA4AAABjb21taXR0ZWVfdHlwZQAADP7//0j+//8AAAEFEAAAABwAAAAEAAAAAAAAAAsAAABkZXNpZ25hdGlvbgA4/v//dP7//wAAAQUQAAAAFAAAAAQAAAAAAAAAAwAAAHppcABc/v//mP7//wAAAQUQAAAAGAAAAAQAAAAAAAAABQAAAHN0YXRlAAAAhP7//8D+//8AAAEFEAAAABgAAAAEAAAAAAAAAAQAAABjaXR5AAAAAKz+///o/v//AAABBRAAAAAcAAAABAAAAAAAAAAIAAAAc3RyZWV0XzIAAAAA2P7//xT///8AAAEFEAAAABwAAAAEAAAAAAAAAAgAAABzdHJlZXRfMQAAAAAE////QP///wAAAQUQAAAAIAAAAAQAAAAAAAAADgAAAHRyZWFzdXJlcl9uYW1lAAA0////cP///wAAAQUQAAAAGAAAAAQAAAAAAAAABAAAAG5hbWUAAAAAXP///5j///8AAAECEAAAACAAAAAEAAAAAAAAAAUAAABjeWNsZQAAAAgADAAIAAcACAAAAAAAAAEgAAAA0P///wAAAQUQAAAAIAAAAAQAAAAAAAAADAAAAGNvbW1pdHRlZV9pZAAAAADE////EAAUAAgABgAHAAwAAAAQABAAAAAAAAEFEAAAACAAAAAEAAAAAAAAAAkAAAByZWNvcmRfaWQAAAAEAAQABAAAAA==",
+  "identity_fields": [
+    "record_id"
+  ],
+  "receipt_fields": [
+    "identity_version",
+    "mapping_version",
+    "mapping_status",
+    "mapping_reason_json",
+    "collection_id",
+    "source_record_id",
+    "source_sha256",
+    "source_locator_json",
+    "source_authority",
+    "selection_evidence_sha256",
+    "source_representation_role",
+    "current_record_status",
+    "source_namespace",
+    "source_url",
+    "history_scope_status",
+    "source_cycle",
+    "cycle_raw",
+    "cycle_status",
+    "conversion_inputs",
+    "conversion_diagnostics",
+    "source_input"
+  ],
+  "receipt_only": false,
+  "nullable_identity_fields": []
+}

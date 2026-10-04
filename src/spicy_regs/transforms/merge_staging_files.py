@@ -107,7 +107,24 @@ def merge_staging_files(
 
         # Escape single quotes in paths for inline SQL.
         files_sql = ", ".join(f"'{str(p).replace(chr(39), chr(39) * 2)}'" for p in valid_files)
-        col_select = ", ".join(f'CAST("{c}" AS VARCHAR) AS "{c}"' for c in target_columns)
+        import polars as pl
+        from spicy_regs.native_types import described_schema
+
+        sql_types = dict(described_schema(pl.DataFrame(schema=schemas[data_type]).to_arrow().schema))
+        if data_type in {"dockets", "documents", "comments"}:
+            from spicy_regs.transforms.regulations_shape import SOURCE_COLUMNS
+
+            sql_types = dict(SOURCE_COLUMNS[data_type])
+            target_columns = list(sql_types)
+
+        def select_columns(paths):
+            present = {name for path in paths for name in pq.ParquetFile(path).schema_arrow.names}
+            return ", ".join(
+                f'CAST("{c}" AS {sql_types[c]}) AS "{c}"' if c in present
+                else f'CAST(NULL AS {sql_types[c]}) AS "{c}"' for c in target_columns
+            )
+
+        col_select = select_columns(valid_files)
 
         # Cluster the output by docket_id so consumers filtering on it (the UI
         # docket page reads documents/dockets with `WHERE docket_id = ?` over
@@ -116,17 +133,13 @@ def merge_staging_files(
         # every row group spans the full docket_id range and nothing prunes.
         sort_clause = 'ORDER BY "docket_id"' if "docket_id" in target_columns else ""
 
-        query = f"""
-        COPY (
+        merged_sql = f"""
             SELECT {col_select}
             FROM read_parquet([{files_sql}], union_by_name=true)
             QUALIFY ROW_NUMBER() OVER (
                 PARTITION BY "{key_col}"
                 ORDER BY modify_date DESC NULLS LAST
             ) = 1
-            {sort_clause}
-        ) TO '{str(temp_output).replace(chr(39), chr(39) * 2)}'
-        (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 100000);
         """
 
         spill_dir = output_dir / ".duckdb_tmp"
@@ -142,26 +155,40 @@ def merge_staging_files(
                 from spicy_regs.transforms.regulations_correction import correction_query
 
                 fresh_paths = ", ".join(f"'{str(p).replace(chr(39), chr(39) * 2)}'" for p in staging_files)
-                fresh_sql = f"SELECT {col_select} FROM read_parquet([{fresh_paths}], union_by_name=true)"
+                fresh_sql = f"SELECT {select_columns(staging_files)} FROM read_parquet([{fresh_paths}], union_by_name=true)"
                 if output_file.exists():
                     present = set(pq.ParquetFile(output_file).schema_arrow.names)
                     prior_columns = ", ".join(
-                        f'CAST("{c}" AS VARCHAR) AS "{c}"' if c in present else f'NULL::VARCHAR AS "{c}"'
+                        f'CAST("{c}" AS {sql_types[c]}) AS "{c}"' if c in present else f'NULL::{sql_types[c]} AS "{c}"'
                         for c in target_columns
                     )
                     escaped = str(output_file).replace("'", "''")
                     prior_sql = f"SELECT {prior_columns} FROM read_parquet('{escaped}')"
                 else:
-                    prior_sql = f"SELECT {', '.join(f'NULL::VARCHAR AS "{c}"' for c in target_columns)} WHERE false"
-                corrected = correction_query(
+                    prior_sql = f"SELECT {', '.join(f'NULL::{sql_types[c]} AS "{c}"' for c in target_columns)} WHERE false"
+                merged_sql = correction_query(
                     con,
                     fresh_sql=fresh_sql,
                     prior_sql=prior_sql,
                     columns=target_columns,
                     key=key_col,
                 )
-                escaped_temp = str(temp_output).replace("'", "''")
-                query = f"COPY ({corrected} {sort_clause}) TO '{escaped_temp}' (FORMAT PARQUET, COMPRESSION ZSTD)"
+            if data_type == "documents" and output_file.exists():
+                # Listing reconciliation is an independent source observation;
+                # a document body reread cannot erase its status and observation time.
+                status_columns = ("publisher_status", "removed_observed_at")
+                held = set(pq.ParquetFile(output_file).schema_arrow.names)
+                if set(status_columns) <= held:
+                    absent = " AND ".join(f'm."{c}" IS NULL' for c in status_columns)
+                    retained = ", ".join(
+                        f'CASE WHEN {absent} THEN p."{c}" ELSE m."{c}" END AS "{c}"'
+                        for c in status_columns
+                    )
+                    escaped_prior = str(output_file).replace("'", "''")
+                    merged_sql = f'''SELECT m.* REPLACE ({retained}) FROM ({merged_sql}) m
+                        LEFT JOIN read_parquet('{escaped_prior}') p USING ("{key_col}")'''
+            escaped_temp = str(temp_output).replace("'", "''")
+            query = f"COPY ({merged_sql} {sort_clause}) TO '{escaped_temp}' (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 100000)"
             con.execute(query)
         finally:
             con.close()

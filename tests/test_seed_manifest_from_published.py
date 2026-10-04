@@ -14,6 +14,8 @@ from spicy_regs.schemas import COMMENT, DOCKET, DOCUMENT
 from spicy_regs.sources import iceberg
 
 
+
+
 def _write(path: Path, record_type, rows: list[dict]) -> Path:
     full = [{col: None for col in record_type.schema} | row for row in rows]
     pl.DataFrame(full, schema=record_type.schema).write_parquet(path)

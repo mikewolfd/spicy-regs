@@ -10,13 +10,21 @@ Only the necessary public fields are transcribed below, not a generated policy o
 from copy import deepcopy
 from decimal import Decimal
 import json
+import base64
+import shutil
+
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 import duckdb
 import pytest
 from starlette.testclient import TestClient
 
 from spicy_regs import fec_release, mcp_server as server
-from spicy_regs.relationship_views.fec_query_views import fec_query_views
+from spicy_regs.fec_receipt_adapter import processing_declarations, qualified_views
+from spicy_regs.etl_receipts import ReceiptContext
+from spicy_regs.sources import publication
+from spicy_regs.transforms.fec_subject_receipts import write_fec_subjects
 from spicy_regs.relationship_views.sql_views import SQLView, install_sql_views, view_columns
 from tests.test_fec_release import digest
 from tests.test_mcp_query_results import call
@@ -46,23 +54,54 @@ OBSERVATION = {
 
 
 @pytest.fixture
-def financial_server(tmp_path, monkeypatch):
-    specs = tuple(s for s in fec_query_views(
+def financial_server(tmp_path, monkeypatch, request):
+    specs = tuple(s for s in qualified_views(dict(
         source_generation_pin=SOURCE, population=POPULATION, as_of=AS_OF, namespace_evidence={},
-    ) if s.view.name in {"fec_receipts_" + purpose + "_decision" for purpose in (
+    )) if s.view.name in {"fec_receipts_" + purpose + "_decision" for purpose in (
         "source_analysis", "detailed_summary_component", "gross_receipts", "net_receipts",
     )})
+    generation = "financial-native-fixture"
+    declaration = processing_declarations()["fec_receipts"]
+    schema = pa.ipc.read_schema(pa.BufferReader(base64.b64decode(declaration["arrow_schema"])))
+    observation = {**OBSERVATION, "memo_indicator": getattr(request, "param", "")}
+    (subject, etl), _ = write_fec_subjects(
+        [observation], tmp_path / "native", table="fec_receipts", input_schema=schema,
+        generation_id=generation,
+        context_for=lambda row, ordinal: ReceiptContext(generation, str(ordinal), "financial-fixture",
+            [{"source_id": "retained-fec-row", "sha256": SOURCE, "locator": RECORD}]),
+    )
+    assert subject is not None
+    native = pq.ParquetFile(subject).read()
     columns = [[c["column_name"], c["column_type"]] for c in server._table_metadata()["fec_receipts"]["columns"]]
-    descriptor = {"columns": columns, "rows": 26, "byteSize": 2600, "partitionColumns": ["source_namespace"],
-                  "members": [{"key": f"fec_receipts/source_namespace=fixture/part-{i:06}.parquet",
-                               "rows": 1, "byteSize": 100, "sha256": digest(f"fixture-{i}"),
-                               "partition": {"source_namespace": "fixture"}} for i in range(26)]}
+    prefix = "generations/fec-query/" + digest("local-financial-fixture")[7:]
+    locations, members = {}, []
+    def identity(path):
+        info = publication.file_identity(path)
+        return {"sha256": info["sha256"], "byteSize": info["bytes"], "rows": pq.read_metadata(path).num_rows}
+    # Many captured members exercise the compact response budget with real bytes.
+    for i in range(26):
+        key = f"fec_receipts/currency=USD/part-{i:06}.parquet"
+        path = tmp_path / f"part-{i}.parquet"
+        pq.write_table(native if i == 0 else native.slice(0, 0), path)
+        locations[prefix + "/" + key] = path
+        members.append({"key": key, **identity(path), "partition": {"currency": "USD"}})
+    descriptor = {"columns": columns, "rows": 1, "byteSize": sum(p["byteSize"] for p in members),
+                  "partitionColumns": ["currency"], "members": members}
+    locations[prefix + "/etl_receipts.parquet"] = etl
     index = {"families": {
-        "fec-query": {"artifactDigest": digest("local-financial-fixture"),
-                      "tables": {"fec_receipts.parquet": descriptor}},
+        "fec-query": {"artifactDigest": digest("local-financial-fixture"), "prefix": prefix,
+                      "tables": {"fec_receipts.parquet": descriptor},
+                      "etlReceipts": {"key": "etl_receipts.parquet", **identity(etl),
+                                      "datasets": ["fec_receipts"], "generationId": generation}},
         "fec-observations": {"artifactDigest": SOURCE, "prefix": f"generations/fec-observations/{SOURCE[7:]}",
                              "tables": {}},
     }}
+    def fetch(base, member, destination, *args, **kwargs):
+        source = locations[member.path]
+        assert (member.sha256, member.byte_size) == (identity(source)["sha256"], identity(source)["byteSize"])
+        shutil.copyfile(source, destination)
+        return True
+    monkeypatch.setattr(publication, "fetch_member", fetch)
     consumer = {"image_digest": digest("test-image"), "code_sha256": digest("test-code"),
                 "package_versions": {"test": "1"}}
     config = fec_release.capture_configuration(specs, receipt_digest=None, image_digest=None,
@@ -89,9 +128,9 @@ def financial_server(tmp_path, monkeypatch):
     monkeypatch.setattr(server, "TABLES", ("fec_receipts",))
     monkeypatch.setattr(server, "DATA_DIR", None)
     with duckdb.connect(config={"threads": 1, "memory_limit": "128MB"}) as con:
-        con.execute("CREATE TABLE fec_receipts (" + ",".join(f'"{n}" {t}' for n, t in columns) + ")")
-        con.execute("INSERT INTO fec_receipts (" + ",".join(OBSERVATION) + ") VALUES (" +
-                    ",".join("?" for _ in OBSERVATION) + ")", list(OBSERVATION.values()))
+        con.register("native_input", native)
+        con.execute("CREATE TABLE fec_receipts AS SELECT * FROM native_input")
+        con.unregister("native_input")
         con.execute("CREATE TABLE _spicy_publication(snapshot VARCHAR)")
         con.execute("INSERT INTO _spicy_publication VALUES (?)", [json.dumps(index)])
         server._install_relationship_views(con)
@@ -167,17 +206,16 @@ def test_financial_columns_explain_actual_decision_and_do_not_override_other_sta
     assert other[0]["description"] is None  # undeclared, so undescribed: no financial text leaks into another view
 
 
-@pytest.mark.parametrize(("purpose", "memo", "status", "value"), [
+@pytest.mark.parametrize(("purpose", "financial_server", "status", "value"), [
     ("source_analysis", "X", "eligible", "50.000000000"),
     ("detailed_summary_component", "X", "excluded", None),
     ("gross_receipts", "", "refused", None),
     ("net_receipts", "", "refused", None),
-])
-def test_purpose_distinctions_follow_publisher_memo_rule(financial_server, purpose, memo, status, value):
+], indirect=["financial_server"])
+def test_purpose_distinctions_follow_publisher_memo_rule(financial_server, purpose, status, value):
     # Retained FEC individual-file description: X is not in the detailed summary,
     # but memo items should be included in source analysis. No net total follows.
-    mcp, con, _, _ = financial_server
-    con.execute("UPDATE fec_receipts SET memo_indicator = ?", [memo])
+    mcp, _, _, _ = financial_server
     reply = _tool_data(mcp, "query_sql", {"sql": f"SELECT status, value, current_financial_total_qualified "
                                        f"FROM fec_receipts_{purpose}_decision"})
     assert _records(reply) == [{"status": status, "value": value, "current_financial_total_qualified": False}]

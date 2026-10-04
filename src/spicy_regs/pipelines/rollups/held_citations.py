@@ -11,20 +11,28 @@ from dotenv import load_dotenv
 
 from spicy_regs.citation_sources import TEXT_SOURCES
 from spicy_regs.duckdb_settings import load_public_http
-from spicy_regs.pipelines.rollups.base import RollupPipeline
-from spicy_regs.sources import publication, r2
+from spicy_regs.pipelines.rollups.subject_receipts import SubjectReceiptRollup
+from spicy_regs.legislative_rollups import family_policies
+from spicy_regs.native_types import described_schema
+from spicy_regs.sources import publication
 from spicy_regs.transforms.held_citations import build_held_citations, parse_selections, write_citation_reads
 
 
-class HeldCitationsRollup(RollupPipeline):
+class HeldCitationsRollup(SubjectReceiptRollup):
     """Explicit bounded field selection; reuse print-citations publication and source evidence."""
 
     name = "held-citations"
     publication_family = "print-citations"
     inputs = ("document_citations.parquet",)
-    #: The citation table and the reads its checkpoints record. A partial writer: the print-citations rollup must
-    #: have published ``document_citation_reads`` in the family first (its next scheduled run adds it).
-    outputs = ("document_citations.parquet", "document_citation_reads.parquet")
+    output = "document_citations.parquet"
+    outputs = (
+        "house_activity_reports.parquet",
+        "budget_volumes.parquet",
+        "bill_committee_actions.parquet",
+        "document_citations.parquet",
+        "document_citation_reads.parquet",
+    )
+    receipt_policies = family_policies(*(key.removesuffix(".parquet") for key in outputs))
     retain_source_evidence = True
 
     def __init__(self, *, selection: Path, **kwargs):
@@ -56,30 +64,58 @@ class HeldCitationsRollup(RollupPipeline):
             if owner is None or owner[1]["artifactDigest"] != expected:
                 raise ValueError(f"{table}: requested input generation is not selected; rebuild the selection")
             member = publication.single_member(index, key)
-            pin = {"family": owner[0], "artifactDigest": expected,
-                   "sha256": member.sha256, "byteSize": member.byte_size}
+            pin = {
+                "family": owner[0],
+                "artifactDigest": expected,
+                "sha256": member.sha256,
+                "byteSize": member.byte_size,
+            }
             parents[key] = pin
             self.input_pins[table] = pin
             self.source_members[table] = public_url.rstrip("/") + "/" + member.path
         return parents
 
+    def generation_schemas(self):
+        return {p.dataset: described_schema(p.subject_schema) for p in self.receipt_policies if not p.receipt_only}
+
     def build(self, output_dir):
         if not self.source_members:
             self._observe_remote_inputs(output_dir, os.environ.get("R2_PUBLIC_URL"))
         if self.source_evidence:
-            self.source_evidence.retain_bytes(self.selection_body, stage="held-citation-selection",
-                                               sources=self.input_pins, selected_fields=len(self.selections))
-            self.source_evidence.event("held-citation-selection", sha256=self.selection_sha256,
-                                       sources=self.input_pins, selected_fields=len(self.selections))
-        with duckdb.connect(config={"memory_limit": "1GB", "threads": 2}) as con:
-            load_public_http(con)
-            for table, url in self.source_members.items():
-                escaped = url.replace("'", "''")
-                con.execute(f'CREATE VIEW "{table}" AS SELECT * FROM read_parquet(\'{escaped}\')')
-            citations = build_held_citations(output_dir, cursor=con, selections=self.selections,
-                                             input_pins=self.input_pins, download_prior=r2.download,
-                                             evidence=self.source_evidence)
-        return citations, write_citation_reads(output_dir, citations)
+            self.source_evidence.retain_bytes(
+                self.selection_body,
+                stage="held-citation-selection",
+                sources=self.input_pins,
+                selected_fields=len(self.selections),
+            )
+            self.source_evidence.event(
+                "held-citation-selection",
+                sha256=self.selection_sha256,
+                sources=self.input_pins,
+                selected_fields=len(self.selections),
+            )
+
+        def builder(work, *, download_prior):
+            for key in self.outputs:
+                if not download_prior(key, work / key):
+                    raise ValueError("Held citations require a complete selected print-citations receipt generation")
+            with duckdb.connect(config={"memory_limit": "1GB", "threads": 2}) as con:
+                load_public_http(con)
+                for table, url in self.source_members.items():
+                    escaped = url.replace("'", "''")
+                    con.execute(f"CREATE VIEW \"{table}\" AS SELECT * FROM read_parquet('{escaped}')")
+                citations = build_held_citations(
+                    work,
+                    cursor=con,
+                    selections=self.selections,
+                    input_pins=self.input_pins,
+                    download_prior=download_prior,
+                    evidence=self.source_evidence,
+                )
+            write_citation_reads(work, citations)
+            return tuple(work / key for key in self.source_outputs)
+
+        return self.build_receipts(output_dir, builder)
 
 
 app = App(help=__doc__)

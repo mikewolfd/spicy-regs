@@ -1,0 +1,14 @@
+{
+  "dataset": "fec_agency_report_documents",
+  "policy_version": "fec-subject-receipts/1",
+  "subject_schema": "/////zABAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAUAAADMAAAAjAAAAGQAAAA4AAAABAAAAFj///8AAAEFEAAAACAAAAAEAAAAAAAAAA0AAAByZWxhdGlvbl90eXBlAAAATP///4j///8AAAEFEAAAABgAAAAEAAAAAAAAAAUAAABsYWJlbAAAAHT///+w////AAABBRAAAAAUAAAABAAAAAAAAAADAAAAdXJsAJj////U////AAABBRAAAAAcAAAABAAAAAAAAAAJAAAAcmVwb3J0X2lkAAAAxP///xAAFAAIAAYABwAMAAAAEAAQAAAAAAABBRAAAAAgAAAABAAAAAAAAAAJAAAAcmVjb3JkX2lkAAAABAAEAAQAAAAAAAAA",
+  "identity_fields": [
+    "record_id"
+  ],
+  "receipt_fields": [
+    "fec_conversion_inputs",
+    "fec_input_columns"
+  ],
+  "receipt_only": false,
+  "nullable_identity_fields": []
+}

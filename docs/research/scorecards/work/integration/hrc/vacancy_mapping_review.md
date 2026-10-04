@@ -6,7 +6,7 @@ The independent [special-row readback](house_special_rows_independent_readback.j
 
 ## Current model boundary
 
-The frozen source tables (`../../../../../../../spicy-docs/src/spicy_docs/schemas/scorecard_tables.py`) have a member occurrence table, member ratings, and member item results. Both dependent tables require a `scorecard_members` key. There is no non-member source-row table or entity-kind discriminator. A synthetic vacancy member would enter downstream member resolution and member counts despite not describing a person.
+The frozen source tables in `spicy-docs/src/spicy_docs/schemas/scorecard_tables.py` have a member occurrence table, member ratings, and member item results. Both dependent tables require a `scorecard_members` key. There is no non-member source-row table or entity-kind discriminator. A synthetic vacancy member would enter downstream member resolution and member counts despite not describing a person.
 
 `scorecard_methodologies` describes source rule sets. Footnote 11 explains why the seat is vacant; it does not itself state a scoring rule. Keep it linked in the retained notes collection instead of inventing methodology semantics. Neither `methodology_text` nor snapshot count fields and completeness prose should substitute for a typed vacancy record.
 

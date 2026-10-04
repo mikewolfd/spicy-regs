@@ -1,0 +1,18 @@
+{
+  "dataset": "court_docket_groups",
+  "policy_version": "courts/1",
+  "subject_schema": "/////ygBAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAQAAADAAAAAeAAAAEQAAAAEAAAAYP///wAAAQIQAAAAJAAAAAQAAAAAAAAACgAAAGdyb3VwX3NpemUAAAgADAAIAAcACAAAAAAAAAFAAAAAnP///wAAAQUQAAAAIAAAAAQAAAAAAAAADwAAAGNvbmZpZGVuY2VfdGllcgCM////zP///wAAAQUQAAAAJAAAAAQAAAAAAAAAEwAAAHBhcmVudF9jbF9kb2NrZXRfaWQAwP///xAAFAAIAAYABwAMAAAAEAAQAAAAAAABBRAAAAAkAAAABAAAAAAAAAAMAAAAY2xfZG9ja2V0X2lkAAAAAAQABAAEAAAAAAAAAA==",
+  "identity_fields": [
+    "cl_docket_id"
+  ],
+  "receipt_fields": [
+    "edition",
+    "rule_version",
+    "match_basis",
+    "conversion_inputs",
+    "raw_source_record",
+    "source_observation"
+  ],
+  "receipt_only": false,
+  "nullable_identity_fields": []
+}

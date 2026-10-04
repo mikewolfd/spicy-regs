@@ -218,11 +218,10 @@ def with_publisher_status(documents: Path, outcomes: Path | None) -> None:
     answers = pq.read_table(outcomes, columns=columns) if read else pa.table({c: pa.array([], pa.string()) for c in columns})
     answers = {column: answers[column].cast(pa.string()).combine_chunks() for column in columns}
     source = pq.ParquetFile(documents)
-    if clash := set(DOCUMENT_FAMILY_COLUMNS) & set(source.schema_arrow.names):
-        raise RuntimeError(f"documents working copy already carries {sorted(clash)}")
     schema = source.schema_arrow
     for column in DOCUMENT_FAMILY_COLUMNS:
-        schema = schema.append(pa.field(column, pa.string()))
+        if column not in schema.names:
+            schema = schema.append(pa.field(column, pa.string()))
     groups = source.metadata.num_row_groups
     codec = source.metadata.row_group(0).column(0).compression if groups else "ZSTD"
     lookup = pc.SetLookupOptions(value_set=answers["document_id"])
@@ -232,7 +231,13 @@ def with_publisher_status(documents: Path, outcomes: Path | None) -> None:
             group = source.read_row_group(index)
             found = pc.call_function("index_in", [group["document_id"].cast(pa.string())], lookup)
             for column in DOCUMENT_FAMILY_COLUMNS:
-                group = group.append_column(column, pc.take(answers[column], found))
+                values = pc.take(answers[column], found)
+                if column in group.column_names:
+                    # No new observation leaves the prior publisher statement intact.
+                    values = pc.call_function("if_else", [found.is_null(), group[column].cast(pa.string()), values])
+                    group = group.set_column(group.schema.get_field_index(column), column, values)
+                else:
+                    group = group.append_column(column, values)
             writer.write_table(group, row_group_size=max(group.num_rows, 1))
     staged.replace(documents)
 

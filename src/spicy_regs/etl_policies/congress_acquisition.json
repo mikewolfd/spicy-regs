@@ -1,0 +1,12 @@
+{
+  "dataset": "congress_acquisition",
+  "policy_version": "congress-subjects/1",
+  "subject_schema": "/////zAAAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAAAAAA=",
+  "identity_fields": [],
+  "receipt_fields": [
+    "capture_event",
+    "build_event"
+  ],
+  "receipt_only": true,
+  "nullable_identity_fields": []
+}

@@ -20,6 +20,7 @@ from spicy_regs.enrich_pdf import (
 from spicy_regs.schemas import COMMENT
 from spicy_regs.transforms.pdf_text import extract_pdf_text
 from spicy_regs.sources import iceberg
+from spicy_regs.sources.regulatory_catalog import processing_table
 
 
 def test_pdf_urls_prefers_pdf_renditions() -> None:
@@ -209,9 +210,8 @@ def _seed_catalog(con, rows: list[dict]) -> None:
     """Insert comment rows into the local catalog table (all COMMENT columns)."""
     iceberg._ensure_table(con, COMMENT)
     frame = pl.DataFrame([{**{c: None for c in COMMENT.schema}, **r} for r in rows], schema=COMMENT.schema)
-    col_list = ", ".join(f'"{c}"' for c in COMMENT.schema)
     con.register("_seed_src", frame.to_arrow())
-    con.execute(f"INSERT INTO {iceberg._qualified(COMMENT)} ({col_list}) SELECT {col_list} FROM _seed_src;")
+    iceberg.replace_rows(con, COMMENT, "_seed_src")
     con.unregister("_seed_src")
 
 
@@ -253,7 +253,7 @@ def test_catalog_pdf_enrich_upserts_extracted_text_in_place() -> None:
 
         out = dict(
             con.execute(
-                f"SELECT comment_id, text_content FROM {iceberg._qualified(COMMENT)} ORDER BY comment_id"
+                f"SELECT comment_id, text_content FROM {processing_table(con, COMMENT)} ORDER BY comment_id"
             ).fetchall()
         )
         assert out["ACF-1"] is not None and "Comment attachment body" in out["ACF-1"]
@@ -262,11 +262,11 @@ def test_catalog_pdf_enrich_upserts_extracted_text_in_place() -> None:
 
         # Other columns preserved, no duplication.
         row = con.execute(
-            f"SELECT comment, text_extraction_status FROM {iceberg._qualified(COMMENT)} WHERE comment_id = 'ACF-1'"
+            f"SELECT comment, text_extraction_status FROM {processing_table(con, COMMENT)} WHERE comment_id = 'ACF-1'"
         ).fetchall()
         assert len(row) == 1
         assert row[0] == ("See attached file(s)", "ok")
-        count = con.execute(f"SELECT count(*) FROM {iceberg._qualified(COMMENT)}").fetchone()
+        count = con.execute(f"SELECT count(*) FROM {processing_table(con, COMMENT)}").fetchone()
         assert count is not None and count[0] == 3
 
         # Idempotent: every attachment row now carries a status, so nothing is re-selected.

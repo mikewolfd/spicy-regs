@@ -8,7 +8,8 @@ whole in the same run that reads the route.
 from pathlib import Path
 from typing import ClassVar
 
-from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
+from spicy_regs.pipelines.rollups.base import make_rollup_app
+from spicy_regs.pipelines.rollups.subject_receipts import SubjectReceiptRollup as RollupPipeline
 from spicy_regs.transforms.build_committee_rosters import build_committee_rosters
 
 
@@ -20,7 +21,7 @@ class CommitteeRostersRollup(RollupPipeline):
     outputs: ClassVar[tuple[str, ...]] = ("committees.parquet", "committee_assignments.parquet")
 
     def build(self, output_dir: Path) -> tuple[Path, ...]:
-        return build_committee_rosters(output_dir)
+        return self.build_receipts(output_dir, build_committee_rosters)
 
 
 app = make_rollup_app(CommitteeRostersRollup)

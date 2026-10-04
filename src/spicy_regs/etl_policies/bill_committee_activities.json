@@ -1,0 +1,20 @@
+{
+  "dataset": "bill_committee_activities",
+  "policy_version": "congress-subjects/1",
+  "subject_schema": "/////4ABAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAYAAAAkAQAA5AAAALAAAAB8AAAAPAAAAAQAAAAE////AAABBRAAAAAkAAAABAAAAAAAAAASAAAAcGFyZW50X3N5c3RlbV9jb2RlAAAA////OP///wAAAQIQAAAAJAAAAAQAAAAAAAAACgAAAG9jY3VycmVuY2UAAAgADAAIAAcACAAAAAAAAAFAAAAAdP///wAAAQUQAAAAIAAAAAQAAAAAAAAADQAAAGFjdGl2aXR5X2RhdGUAAABs////pP///wAAAQUQAAAAIAAAAAQAAAAAAAAADQAAAGFjdGl2aXR5X25hbWUAAACc////1P///wAAAQUQAAAAHAAAAAQAAAAAAAAACwAAAHN5c3RlbV9jb2RlAMj///8QABQACAAGAAcADAAAABAAEAAAAAAAAQUQAAAAHAAAAAQAAAAAAAAABwAAAGJpbGxfaWQABAAEAAQAAAA=",
+  "identity_fields": [
+    "bill_id",
+    "system_code",
+    "activity_name",
+    "activity_date",
+    "occurrence"
+  ],
+  "receipt_fields": [
+    "source_fields",
+    "source_metadata",
+    "source_schema",
+    "entry_kind"
+  ],
+  "receipt_only": false,
+  "nullable_identity_fields": []
+}

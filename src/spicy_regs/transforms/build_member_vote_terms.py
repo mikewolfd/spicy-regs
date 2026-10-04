@@ -121,12 +121,16 @@ def _rows(path: Path, columns: list[str]) -> list[dict]:
     return pq.read_table(path, columns=columns).to_pylist()
 
 
-def build_member_vote_terms(output_dir: Path) -> Path:
+def build_member_vote_terms(output_dir: Path, *, receipt_build=None) -> Path:
     """Build ``member_vote_terms.parquet`` from the two published inputs in ``output_dir``.
 
     Raises FileNotFoundError for a missing input, ValueError for a duplicated member
     vote, an unknown chamber, or a vote date outside its chamber's spelling.
     """
+    if receipt_build is not None:
+        return receipt_build.run(build_member_vote_terms, output_dir, **{
+            key: value for key, value in locals().items() if key not in {"output_dir", "receipt_build"}
+        })
     # Local, like every spicy-docs use reachable from the transforms facade: a base
     # install imports this module without the source-readers group.
     import duckdb

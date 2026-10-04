@@ -71,7 +71,9 @@ def _build(tmp_path, published, neighbours=()):
     out = build_court_docket_groups(tmp_path / "out", dockets_file=dockets, native_file=native, edition="2026-06-30")
     table = pq.read_table(out)
     assert table.schema == SCHEMA
-    return {row["cl_docket_id"]: row for row in table.to_pylist()}
+    from spicy_regs.court_receipts import read_court_rows
+
+    return {row["cl_docket_id"]: row for row in read_court_rows(out, dataset="court_docket_groups")}
 
 
 def _groups(rows):

@@ -6,6 +6,8 @@
 
 One row per lobbyist an LDA filing names on one of its activities, with the lobbyist's LDA id and name parts, any covered official position they held, and whether the filing lists them as new. Keyed `(filing_uuid, activity_index, lobbyist_index)`, positions in the filing's own lists. Joins to `lobbying_activities` on `(filing_uuid, activity_index)` and to `lobbying_filings` on `filing_uuid`. All columns are stored as VARCHAR.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='lobbying_activity_lobbyists'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** True range, the same filings as `lobbying_filings`: one row per lobbyist named on each activity. An activity that names no lobbyist has no rows here. *(measured 2026-09-28)*
 
 - **Parquet file:** `lobbying_activity_lobbyists.parquet`
@@ -16,8 +18,8 @@ One row per lobbyist an LDA filing names on one of its activities, with the lobb
 | Column | Type | Description |
 | --- | --- | --- |
 | `filing_uuid` | `VARCHAR` | The filing; joins to `lobbying_filings.filing_uuid`. |
-| `activity_index` | `VARCHAR` | The activity's position in the filing; with `filing_uuid`, joins to `lobbying_activities`. |
-| `lobbyist_index` | `VARCHAR` | The lobbyist's position in the activity's list, from `0`. Completes the key. |
+| `activity_index` | `BIGINT` | The activity's position in the filing; with `filing_uuid`, joins to `lobbying_activities`. |
+| `lobbyist_index` | `BIGINT` | The lobbyist's position in the activity's list, from `0`. Completes the key. |
 | `lobbyist_id` | `VARCHAR` | LDA's lobbyist record id: one registrant's record of a lobbyist, stable across that registrant's filings, not an identity for the person. LDA's own record for an id (`lda.gov/api/v1/lobbyists/<id>/`) names exactly one registrant, so a lobbyist who moves to another firm is filed under a new id: Stephen Holland is 146616 under registrant 11377 and 151303 under registrant 7257. A count of distinct ids counts registrant-lobbyist records, not people; matching a person across firms is a name match. A few ids also appear on another registrant's filing, all on filings of 2020-2022 (measured 2026-10-03). |
 | `prefix` | `VARCHAR` | Name prefix as filed; often null. |
 | `first_name` | `VARCHAR` | First name as filed (LDA prints names upper-case). |
@@ -26,4 +28,4 @@ One row per lobbyist an LDA filing names on one of its activities, with the lobb
 | `last_name` | `VARCHAR` | Last name as filed. |
 | `suffix` | `VARCHAR` | Name suffix as filed; often null. |
 | `covered_position` | `VARCHAR` | The covered executive- or legislative-branch position the lobbyist held, as the registrant typed it for this activity: free text, not parsed, with no link to `committees` or any agency table. It is stated per activity, so one lobbyist's rows can carry it on some activities and not others; NULL means this entry states none, not that the lobbyist held none. Many values are placeholders rather than positions (`N/A`, `None`, `Not applicable`) or point elsewhere (`See prior filing`), and LDA's own filings sometimes put a colleague's text against the wrong name. |
-| `new` | `VARCHAR` | `True` when the filing lists the lobbyist as new for this activity, `False` otherwise. |
+| `new` | `BOOLEAN` | `True` when the filing lists the lobbyist as new for this activity, `False` otherwise. |

@@ -1,0 +1,22 @@
+{
+  "dataset": "court_opinions",
+  "policy_version": "courts/1",
+  "subject_schema": "/////+ABAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAgAAAB8AQAAPAEAAAgBAADYAAAAqAAAAHgAAABEAAAABAAAALT+//8AAAECEAAAACQAAAAEAAAAAAAAAAoAAABwYWdlX2NvdW50AAAIAAwACAAHAAgAAAAAAAABQAAAAPD+//8AAAEFEAAAACAAAAAEAAAAAAAAAA0AAABqb2luZWRfYnlfc3RyAAAA5P7//yD///8AAAEGEAAAABwAAAAEAAAAAAAAAAoAAABwZXJfY3VyaWFtAAAQ////TP///wAAAQUQAAAAHAAAAAQAAAAAAAAACgAAAGF1dGhvcl9zdHIAADz///94////AAABBRAAAAAcAAAABAAAAAAAAAAJAAAAYXV0aG9yX2lkAAAAaP///6T///8AAAEFEAAAACAAAAAEAAAAAAAAAAwAAABvcGluaW9uX3R5cGUAAAAAmP///9T///8AAAEFEAAAABwAAAAEAAAAAAAAAAoAAABjbHVzdGVyX2lkAADE////EAAUAAgABgAHAAwAAAAQABAAAAAAAAEFEAAAACAAAAAEAAAAAAAAAAoAAABvcGluaW9uX2lkAAAEAAQABAAAAAAAAAA=",
+  "identity_fields": [
+    "opinion_id"
+  ],
+  "receipt_fields": [
+    "sha1",
+    "download_url",
+    "local_path",
+    "extracted_by_ocr",
+    "date_created",
+    "date_modified",
+    "dump_date",
+    "conversion_inputs",
+    "raw_source_record",
+    "source_observation"
+  ],
+  "receipt_only": false,
+  "nullable_identity_fields": []
+}

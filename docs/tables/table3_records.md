@@ -6,6 +6,8 @@
 
 One row per classification record of one public law in OLRC's Table III: which U.S. Code place each section of the law went to, as Table III's bulk file states it. All columns are stored as VARCHAR.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='table3_records'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Window, complete for the Congresses read: every public law Table III holds for each Congress the laws table holds, plus the scoped ones, derived from OLRC's Table III bulk file on each run, so a Congress keeps its rows current after it leaves the laws scope while Table III catches up. The file holds the whole table back to 1789; other Congresses, private laws and pre-1957 session-law chapters are not derived. *(measured 2026-09-26)*
 
 **Data quality.** Table III holds an act only once OLRC has classified it, and lags enactment: on 2026-09-26 it was current through 119-73, a law of 2026-01-23, while the law route reached 119-111. `release_point` says how current the file was. Its file at release point 119-73 also has no record of 119-70, a second-session law `law_code_sections` classifies (OLRC's gap, not a reading error).
@@ -22,7 +24,7 @@ Table III only grows: across the eight consecutive releases from 116-150 (2020-0
 | --- | --- | --- |
 | `act_key` | `VARCHAR` | The act key: a public law number, or a pre-1957 session-law chapter. |
 | `stated_key` | `VARCHAR` | The act number as Table III states it: `119-4` in the bulk file, `119–4` (en dash) on a page. |
-| `seq` | `VARCHAR` | Zero-based position of this record in its act, in the source's own order. |
+| `seq` | `BIGINT` | Zero-based position of this record in its act, in the source's own order. |
 | `congress` | `VARCHAR` | The Congress Table III states for the act: `119` in the bulk file, `119th Cong.` on a page. |
 | `act_date` | `VARCHAR` | The act's date as Table III states it: `2025-03-15` in the bulk file, `Mar. 15, 2025` on a page. |
 | `statutes_at_large_volume` | `VARCHAR` | The volume Table III states for the act, or in the bulk file for the fragment holding this record: `139` there, `139 Stat.` on a page. |
@@ -33,6 +35,5 @@ Table III only grows: across the eight consecutive releases from 116-150 (2020-0
 | `usc_title` | `VARCHAR` | The Code title the section went to; NULL where it went nowhere. |
 | `usc_section` | `VARCHAR` | The Code section the section went to, as Table III prints it: a note or preceding place is part of the value (`1101 nt`, `prec. 1071`, `nt. prec. 791`), where law_code_sections prints the bare section and puts `nt` or `prec` in action; usc_section_key and usc_place split it. NULL where it went nowhere. |
 | `status` | `VARCHAR` | Table III's status for the record, as printed and not expanded: `Rep.` (repealed) or `Elim.` (eliminated) on the 119th Congress's records; older acts also print `Rev. T.` (revised title) or a Revised Statutes or Internal Revenue Code reference (`R.S. Sec 572`). NULL where it prints none. The per-Congress tables spell a repeal `repealed` in law_code_sections.action. |
-| `observed_at` | `VARCHAR` | When the page or bulk file was captured; the merge prefers the larger value. |
 | `usc_section_key` | `VARCHAR` | The one U.S. Code section the row names, as a join key: the section number without Table III's printed note words (`nt`, `nts`, `prec.`; usc_place states them), lower-cased, with every dash spelling an ASCII hyphen, as RefSpec's section oracle keys it. Both OLRC tables key it the same way, so they meet on usc_title, usc_section_key and usc_place; without usc_place a note line meets the section's own line. Fold another source the same way (schemas.tables.usc_section_key): document_citations' usc_section rule 001 keeps the printed case and dashes. NULL where usc_section is NULL or names no single section (a list, a range or a chapter, which Table III prints for some older acts), and on rows published before the column existed. |
 | `usc_place` | `VARCHAR` | Where on that section the row lands: `section` (the section itself), `note` (a note under it; OLRC's `nt` or `nts`), `preceding` (the place just before it, such as a chapter or subchapter heading a law adds there; `prec`) or `note_preceding` (a note at that place). Read from the section as Table III prints it (`1101 nt`, `prec. 1071`, `nt. prec. 791`) and from the head of law_code_sections.action (`nt new`, `prec`, `nt prec new`), by schemas.law_tables.usc_section_place. NULL where usc_section_key is NULL, and on rows published before the column existed. |

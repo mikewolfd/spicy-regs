@@ -14,18 +14,36 @@ from datetime import date
 import pytest
 
 from spicy_regs import data_dictionary as dd
-from spicy_regs.schemas.regulations import COMMENT_MIRROR_COLUMNS, DOCUMENT_FAMILY_COLUMNS, RECORD_TYPES
+from spicy_regs.schemas.regulations import RECORD_TYPES
 
 
 def test_record_types_covered_by_expected_schemas():
-    """Every core RecordType column flows into the expected schema; the comments mirror's derived columns follow, and
-    so do the reconcile step's columns on the documents family."""
+    """Every core table exposes only its declared native subject fields."""
     expected = dd.expected_schemas()
-    derived_by_table = {"comments": COMMENT_MIRROR_COLUMNS, "documents": DOCUMENT_FAMILY_COLUMNS}
-    for name, rt in RECORD_TYPES.items():
+    for name in RECORD_TYPES:
         assert name in expected
-        derived = derived_by_table.get(name, ())
-        assert [c for c, _ in expected[name]] == [*rt.schema, *derived]
+        assert [c for c, _ in expected[name]] == dd.subject_policies()[name].subject_schema.names
+
+
+
+def test_native_field_prose_preserves_current_table_meaning(tmp_path):
+    """Generated native columns cannot replace newer curated table descriptions."""
+    import yaml
+
+    document = yaml.safe_load(dd.DEFAULT_DESCRIPTIONS.read_text())
+    entry = document["tables"]["law_sections"]
+    entry["summary"] = "The current law section meaning."
+    entry["coverage"] = "Derived: successfully read law sections only."
+    path = tmp_path / "descriptions.yaml"
+    path.write_text(yaml.safe_dump(document))
+
+    described = dd.load_descriptions(path)["law_sections"]
+    assert described["summary"].startswith(entry["summary"] + "\n\n")
+    assert described["coverage"] == entry["coverage"]
+    assert described["subject"] == "congress"
+    assert "etl_receipts" in described["summary"]
+    assert described["identity_columns"] == ["law_id", "seq"]
+    assert set(described["columns"]) == set(dd.subject_policies()["law_sections"].subject_schema.names)
 
 
 def test_all_tables_have_a_schema():
@@ -271,7 +289,7 @@ def test_bundled_mcp_metadata_matches_dictionary_and_provider():
     committed = json.loads(dd.DEFAULT_MCP_METADATA_PATH.read_text(encoding="utf-8"))
     assert committed == fresh, "table_metadata.json is stale; run 'uv run spicy-regs-dict generate'"
     assert committed["dockets"]["identity_columns"] == ["docket_id"]
-    assert committed["member_votes"]["identity_columns"] == list(dd._contracts()["member_votes"].identity)
+    assert committed["member_votes"]["identity_columns"] == list(dd.subject_policies()["member_votes"].identity_fields)
     assert committed["member_votes"]["grain"] == dd.contract_grain("member_votes")
 
 
@@ -371,7 +389,7 @@ def test_every_hosted_column_has_prose():
     """All four hundred-odd columns carry a sentence, read from the contract."""
     descriptions = dd.load_descriptions()
     schemas = dd.expected_schemas()
-    for table in dd.CONTRACT_TABLES:
+    for table in set(dd.CONTRACT_TABLES) & set(dd.TABLES):
         columns = descriptions[table]["columns"]
         assert set(columns) == {c for c, _ in schemas[table]}, table
         blank = [name for name, text in columns.items() if not (text or "").strip()]
@@ -383,8 +401,12 @@ def test_hosted_prose_is_the_contract_prose_not_a_copy():
     from spicy_docs.schemas import TABLE_CONTRACTS
 
     descriptions = dd.load_descriptions()
-    for table in dd.CONTRACT_TABLES:
-        assert descriptions[table]["columns"] == dict(TABLE_CONTRACTS[table].descriptions), table
+    for table in set(dd.CONTRACT_TABLES) & set(dd.TABLES):
+        source = dict(TABLE_CONTRACTS[table].descriptions)
+        policy = dd.subject_policies().get(table)
+        for field, prose in descriptions[table]["columns"].items():
+            if field in source and (policy is None or str(policy.subject_schema.field(field).type) in {"string", "bool", "int64", "int32"}):
+                assert prose == source[field], (table, field)
 
 
 def test_hosted_entries_do_not_list_columns_inline():
@@ -431,13 +453,13 @@ def test_hosted_schemas_follow_the_contract_types_in_contract_order():
 # The materialized rulemaking dataset: builders' own schemas, served from the snapshot pointer.
 # --------------------------------------------------------------------------- #
 RULEMAKING_IDENTITY = {
-    "rule_targets": ["docket_id", "cfr_ref", "rin", "source"],
+    "rule_targets": ["rule_target_id"],
     "proceedings": ["proceeding_id"],
     "regulatory_agenda_items": ["agenda_item_id"],
     "agenda_item_proceedings": ["relationship_id"],
     "comment_periods": ["comment_period_id"],
     "rulemaking_lifecycles": ["proceeding_id"],
-    "lifecycle_events": ["proceeding_id", "document_id"],
+    "lifecycle_events": ["lifecycle_event_id"],
     "agency_lifecycle_stats": ["agency_code", "stratum"],
 }
 

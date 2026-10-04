@@ -1,29 +1,13 @@
-"""Transform: build ``court_dockets.parquet`` from the CourtListener v4 API.
+"""Build court docket subjects and receipts from CourtListener search results.
 
-Pinned all-VARCHAR schema keyed by ``cl_docket_id``; array-valued fields
-(parties, attorneys, law firms) are JSON strings and the document-level
-``recap_documents`` blob is intentionally dropped. Scope is APA / agency-review
-litigation: RECAP dockets with nature-of-suit 899, the litigation counterpart
-to the rulemakings in ``dockets``/``documents``. There is no machine RIN/FR key
-on a docket, so links are name- and topic-based (agency in ``case_name`` /
-``parties_json``, statute in ``cause``).
+The subject retains docket facts and native lists of parties, attorneys and
+firms. Lists preserve order, repetitions, null elements and empty strings.
+An unknown list stays NULL; an explicitly empty publisher list stays empty.
+Source URLs, capture inputs and publisher record timestamps stay in receipts.
 
-Incremental by design: best-effort prior from R2, fetch only dockets filed
-since its max ``date_filed`` minus a short overlap, then dedup on
-``cl_docket_id`` preferring the fresh row. With no prior table it is a full
-backfill. The scheduled run sets ``COURTLISTENER_API_TOKEN`` because keyless
-runs time out on 429s; a free token's 125-requests-a-day cap still covers the
-daily delta, but not a full backfill of several hundred pages in one day.
-
-Each run also re-reads up to ``FILL_QUERIES_PER_RUN`` packed id queries of the
-prior dockets with NULL party names (rows the bulk edition supplied, which
-carries no parties), so the names fill a bounded slice a day (owner decision
-50). An empty list means the publisher names no party; NULL means never read.
-
-``case_type`` is the case-type code in a district-court docket number
-(``1:23-cv-01234`` is ``cv``), recomputed from ``docket_number`` every run;
-NULL when the number carries none, as appellate numbers do. Non-civil rows are
-kept and flagged, not dropped (owner decision 49).
+Incremental builds reconstruct private processing inputs from the selected
+subject and receipt generation. The dated overlap, bounded fill of unnamed dockets and case-type rule
+remain in force. A failed source walk leaves the previous output pair intact.
 """
 
 from __future__ import annotations
@@ -32,6 +16,7 @@ import json
 from datetime import date, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
+from uuid import uuid4
 
 if TYPE_CHECKING:
     from spicy_regs.source_evidence import CaptureEvidence
@@ -44,6 +29,8 @@ from spicy_regs.transforms.parquet_rows import str_or_none
 from spicy_regs.sources import r2
 from spicy_regs.sources.courtlistener import CourtListenerDocketIdReader, CourtListenerReader, docket_id_queries
 from spicy_regs.transforms.table_merge import merge_local_prior
+from spicy_regs.court_subjects import SUBJECT_SCHEMAS
+from spicy_regs.court_receipts import file_witness, finish_court_output, prior_receipt_selection, restore_processing_input, admit_court_updates
 
 OUTPUT = "court_dockets.parquet"
 
@@ -78,22 +65,23 @@ COLUMNS = (
     "pacer_case_id",
     "date_created",
     "absolute_url",
+    "blocked",
+    "date_blocked",
+    "raw_source_record",
 )
 _SCHEMA = pa.schema([(c, pa.string()) for c in COLUMNS])
 #: Recomputed from ``docket_number`` over every merged row.
 DERIVED = {"case_type": r"lower(nullif(regexp_extract(docket_number, '^\s*(?:\d+:)?\d{2}-([A-Za-z]{1,4})-\d', 1), ''))"}
-PUBLISHED_COLUMNS = (*COLUMNS, *DERIVED)
+PUBLISHED_COLUMNS = tuple(SUBJECT_SCHEMAS['court_dockets'].names)
 #: About 38 ids a query and two 20-row pages each: 30 requests, with the daily
 #: delta well inside the 50-an-hour and 125-a-day limits.
 FILL_QUERIES_PER_RUN = 15
 
 
 
-def _strings(value: object) -> list[str]:
-    """Normalize a search-result array field to a list of strings, dropping blanks."""
-    if not isinstance(value, list):
-        return []
-    return [str(v) for v in value if v is not None and str(v).strip()]
+def _array_input(value: object) -> str | None:
+    """Retain raw arrays, including malformed variants for receipt-only refusal."""
+    return None if value is None else json.dumps(value, ensure_ascii=False)
 
 
 def _abs_url(docket: dict) -> str | None:
@@ -110,7 +98,7 @@ def _shape(docket: dict) -> dict:
     return {
         "cl_docket_id": str_or_none(docket.get("docket_id")),
         "case_name": docket.get("caseName"),
-        "case_name_full": docket.get("case_name_full") or None,
+        "case_name_full": docket.get("case_name_full"),
         "court_id": docket.get("court_id"),
         "court": docket.get("court"),
         "court_citation_string": docket.get("court_citation_string"),
@@ -124,12 +112,15 @@ def _shape(docket: dict) -> dict:
         "jury_demand": docket.get("juryDemand"),
         "assigned_to": docket.get("assignedTo"),
         "referred_to": docket.get("referredTo"),
-        "parties_json": json.dumps(_strings(docket.get("party"))),
-        "attorneys_json": json.dumps(_strings(docket.get("attorney"))),
-        "firms_json": json.dumps(_strings(docket.get("firm"))),
+        "parties_json": _array_input(docket.get("party")),
+        "attorneys_json": _array_input(docket.get("attorney")),
+        "firms_json": _array_input(docket.get("firm")),
         "pacer_case_id": str_or_none(docket.get("pacer_case_id")),
         "date_created": meta.get("date_created") if isinstance(meta, dict) else None,
         "absolute_url": _abs_url(docket),
+        "blocked": str_or_none(docket.get("blocked")),
+        "date_blocked": docket.get("date_blocked"),
+        "raw_source_record": json.dumps(docket, ensure_ascii=False),
     }
 
 
@@ -171,10 +162,19 @@ def build_courtlistener(
     import duckdb
 
     out_file = output_dir / OUTPUT
-    prior_file = output_dir / "_cl_prior.parquet"
+    prior_file = out_file if out_file.is_symlink() else output_dir / "_cl_prior.parquet"
 
     # 1. Pull the prior table (best effort — absence just means full backfill).
     have_prior = prior_file.exists() or r2.download(OUTPUT, prior_file)
+    input_witnesses = [file_witness(prior_file)] if have_prior else []
+    receipt_path = None
+    if have_prior:
+        receipt_path, generation_id = prior_receipt_selection(prior_file, dataset='court_dockets')
+        if receipt_path is not None:
+            input_witnesses.append(file_witness(receipt_path))
+        prior_file = restore_processing_input(prior_file, output_dir / f'.cl-prior-{uuid4().hex}.parquet',
+            dataset='court_dockets', schema=_SCHEMA, receipt_path=receipt_path,
+            generation_id=generation_id)
     if have_prior:
         logger.info("CourtListener: merging against prior table {}", prior_file)
     else:
@@ -201,12 +201,20 @@ def build_courtlistener(
         filled = sum(1 for docket_id in unnamed if docket_id in fresh)
         logger.info("CourtListener: re-read {:,} of {:,} dockets without party names ({} of {} queries)",
                     filled, len(unnamed), min(len(queries), FILL_QUERIES_PER_RUN), len(queries))
-    new_file = output_dir / "_cl_new.parquet"
+    new_file = output_dir / f".cl-new-{uuid4().hex}.parquet"
     rows = list(fresh.values())
     table = pa.Table.from_pylist(rows, schema=_SCHEMA) if rows else _SCHEMA.empty_table()
     pq.write_table(table, new_file, compression="zstd")
 
-    # 4. Merge prior + new, dedup on cl_docket_id preferring the new row.
+    # Admit fresh rows before replacing prior identities. Refused updates retain
+    # their receipt while the last valid subject remains eligible for the merge.
+    build_generation_id = uuid4().hex
+    new_file, fresh_receipts = admit_court_updates(
+        'court_dockets', new_file, output_dir / '.court-updates' / build_generation_id,
+        schema=_SCHEMA, generation_id=build_generation_id,
+    )
+
+    # 4. Merge admitted updates over prior rows.
     spill_dir = output_dir / ".duckdb_tmp"
     spill_dir.mkdir(exist_ok=True)
     con = duckdb.connect()
@@ -215,6 +223,7 @@ def build_courtlistener(
     con.execute("SET threads=2")
     con.execute(f"SET temp_directory='{spill_dir}'")
 
+    staged = output_dir / f'.cl-merged-{uuid4().hex}.parquet'
     merge_local_prior(
         con,
         columns=COLUMNS,
@@ -222,14 +231,15 @@ def build_courtlistener(
         order_by="date_filed DESC, cl_docket_id",
         prior_file=prior_file if have_prior else None,
         new_file=new_file,
-        out_file=out_file,
+        out_file=staged,
         derived=DERIVED,
     )
     con.close()
 
-    # Housekeeping: drop scratch files so they aren't mistaken for outputs.
-    for scratch in (prior_file, new_file):
-        scratch.unlink(missing_ok=True)
+    out_file = finish_court_output('court_dockets', staged, output_dir,
+        witnesses=[file_witness(staged), *input_witnesses],
+        diagnostics={'source_selection_max_records': max_records},
+        generation_id=build_generation_id, refused_receipts=fresh_receipts, prior_receipts=receipt_path)
 
     total = pq.ParquetFile(out_file).metadata.num_rows
     logger.info("Court dockets: {:,} rows", total)

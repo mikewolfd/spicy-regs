@@ -62,3 +62,69 @@ def correction_query(
         projection.append(f'CASE WHEN {wins} THEN {fresh} ELSE p."{column}" END AS "{column}"')
     return f'''SELECT {", ".join(projection)} FROM _correction_fresh f
                FULL OUTER JOIN _correction_prior p ON f."{key}" = p."{key}"'''
+
+
+def correct_receipted_dataset(prior, fresh, destination, *, generation_id: str):
+    """Local correction using receipt-qualified status and exact source recency.
+
+    Both inputs must be complete selected subject/receipt pairs. The existing
+    correction rule keeps text, status and per-URL results together; its duplicate
+    and unorderable-date refusals still occur before the new output is exposed.
+    """
+    from hashlib import file_digest
+    from pathlib import Path
+    from tempfile import TemporaryDirectory
+
+    from spicy_regs.etl_receipts import ReceiptContext
+    from spicy_regs.transforms.regulations_receipts import materialize_internal, write_records
+    from spicy_regs.transforms.regulations_shape import SOURCE_COLUMNS
+
+    if prior.dataset != fresh.dataset or prior.dataset not in ("documents", "comments"):
+        raise ValueError("Correction inputs must name the same documents/comments dataset")
+    dataset = prior.dataset
+    witnesses = []
+    for selected in (prior, fresh):
+        for path in (*selected.subjects, selected.receipts):
+            with path.open("rb") as body:
+                digest = file_digest(body, "sha256").hexdigest()
+            witnesses.append(
+                {
+                    "source_id": f"{dataset}:{path.name}",
+                    "source_uri": str(path),
+                    "sha256": digest,
+                    "locator": None,
+                    "body_version": selected.generation_id,
+                }
+            )
+    with TemporaryDirectory(prefix="regulations-correction-") as temp, duckdb.connect() as con:
+        paths = [
+            materialize_internal(selected, Path(temp) / f"{role}.parquet")
+            for role, selected in [("prior", prior), ("fresh", fresh)]
+        ]
+        for role, path in zip(("prior_input", "fresh_input"), paths, strict=True):
+            con.from_parquet(str(path)).create_view(role)
+        query = correction_query(
+            con,
+            fresh_sql="SELECT * FROM fresh_input",
+            prior_sql="SELECT * FROM prior_input",
+            columns=[c for c, _ in SOURCE_COLUMNS[dataset]],
+            key="document_id" if dataset == "documents" else "comment_id",
+        )
+
+        def records():
+            ordinal = 0
+            for batch in con.execute(query).to_arrow_reader(2000):
+                for row in batch.to_pylist():
+                    yield (
+                        row,
+                        ReceiptContext(
+                            generation_id,
+                            f"correction:{ordinal}",
+                            "spicy-regs:regulations-correction-v1",
+                            witnesses,
+                            {"prior_generation_id": prior.generation_id, "fresh_generation_id": fresh.generation_id},
+                        ),
+                    )
+                    ordinal += 1
+
+        return write_records(dataset, records(), destination, prior_receipts=[prior.receipts, fresh.receipts])

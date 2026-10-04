@@ -19,6 +19,7 @@ from spicy_regs.duckdb_settings import load_public_http
 from spicy_regs.public_url import resolve_r2_base_url
 from spicy_regs.schemas.regulations import RECORD_TYPES
 from spicy_regs.sources import iceberg
+from spicy_regs.sources.regulatory_catalog import require_initialized
 
 
 @contextmanager
@@ -53,8 +54,7 @@ def main() -> int:
             load_public_http(con)
             con.execute("SET memory_limit='4GB'; SET threads=2; SET preserve_insertion_order=false")
             if surface == "catalog":
-                if iceberg.dedupe_recovery_pending(con, RECORD_TYPES["comments"]):
-                    raise RuntimeError("Unfinished comments dedupe; catalog is not ready")
+                require_initialized(con, RECORD_TYPES["comments"])
                 source = iceberg._qualified(RECORD_TYPES["comments"])
             else:
                 source = f"read_parquet('{base}/comments.parquet')"

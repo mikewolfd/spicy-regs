@@ -6,6 +6,8 @@
 
 One row per recorded vote on one bill action: which roll call the bill's own actions say settled it. Read by the `roll-call-votes` rollup to fill `roll_call_votes.bill_id` and its match columns. All columns are stored as VARCHAR.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='bill_vote_references'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled: the roll calls named in the actions of the bills the bill family has read, from the 108th Congress on. *(measured 2026-09-28)*
 
 **Data quality.** Every row is a publisher statement copied without interpretation: the six fields a `recordedVotes` entry carries, plus the position of the action it sat on. An entry missing any of the six is refused and counted in the run log rather than published with a hole in it. `full_action_name` is a seventh field the BILLSTATUS user guide documents that the publisher was not sending on any of the 58 entries measured; it is carried because the publisher may resume sending it. Both chambers appear here — 6 of the 34 measured roll calls were Senate. `roll_call_votes` acquired House rows only when this was measured; it hosts Senate roll calls too since the LIS menu route landed (2026-09-21), so a Senate row here links a vote this pipeline hosts. `action_index` is the action's position in the publisher's newest-first list at the capture, and it rises as actions are added, so one roll call can appear here under more than one index, one per capture that saw it at a new position (`count(*)` per bill, chamber, Congress, session and roll number is the measure); `roll_call_votes.match_action_index` takes the lowest. All columns are stored as VARCHAR.
@@ -22,8 +24,6 @@ One row per recorded vote on one bill action: which roll call the bill's own act
 | `congress` | `VARCHAR` | The numbered Congress the roll call belongs to. |
 | `session` | `VARCHAR` | The session number within that Congress, from the entry's sessionNumber. |
 | `roll_number` | `VARCHAR` | The roll-call number within that session, from the entry's rollNumber. |
-| `action_index` | `VARCHAR` | Position of the action this entry sat on, in the publisher's own newest-first action order at the capture; it rises as actions are added, so it is not a stable key across captures. |
-| `url` | `VARCHAR` | The publisher's URL for the roll call: a House Clerk EVS file or a Senate LIS vote page. |
+| `action_index` | `BIGINT` | Position of the action this entry sat on, in the publisher's own newest-first action order at the capture; it rises as actions are added, so it is not a stable key across captures. |
 | `date` | `VARCHAR` | The instant the entry states for the vote. |
 | `full_action_name` | `VARCHAR` | The guide's seventh field, absent on every entry measured; NULL where the publisher sends none. |
-| `observed_at` | `VARCHAR` | When the bill-family run that read this entry captured the BILLSTATUS document. |

@@ -6,6 +6,8 @@
 
 One committee or subcommittee activity a bill's BILLSTATUS document lists: the committee, the activity's name and timestamp as written, and an occurrence number for exact repeats. Not a complete record of what committees did: a report can appear in `bill_actions` only (119-s-545 lists Markup By and no Reported By). A re-read merges on the key and keeps the newer document's row, so an activity the publisher later drops is not removed.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='bill_committee_activities'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled, and filling: what each committee and subcommittee a BILLSTATUS document lists did and when, for the bills the bill family has read under spicy-docs 0.54.0. A bill read before that has no rows here until its Congress is read again, so an absent bill is unread, not inactive. The scheduled run reads the sitting Congress; earlier Congresses fill only by a bill-family dispatch scoped to them. *(measured 2026-10-03)*
 
 **Data quality.** Measured with the spicy-docs reader over the 119th's 19,531 BILLSTATUS documents (round 4, 2026-10-03): 32,102 rows on 18,998 bills, no reader refusal; 1,468 Reported By rows, 820 exact repeats (occurrence 2 and above) and 49 undated items, whose `activity_date` is empty.
@@ -21,6 +23,5 @@ One committee or subcommittee activity a bill's BILLSTATUS document lists: the c
 | `system_code` | `VARCHAR` | The publisher's identifier of the committee or subcommittee that did it (ssju00). |
 | `activity_name` | `VARCHAR` | The publisher's activity name exactly as written, in either capitalisation it uses (Reported By and Reported by, Referred To and Referred to): Referred To, Markup By, Reported By, Discharged From, Hearings By (full committee), Hearings By (subcommittee), Reported Original Measure, Bills of Interest - Exchange of Letters, Unknown. |
 | `activity_date` | `VARCHAR` | The publisher's timestamp for it, as written (2026-05-11T20:30:49Z), in UTC: an evening step can fall on the next day here while bill_actions.action_date keeps the day the publisher states for the action (119-hr-1703's discharge: 2026-10-01T03:17:50Z here, 2026-09-30 there). Empty where the item states none, as every Bills of Interest - Exchange of Letters item does. |
-| `occurrence` | `VARCHAR` | 1 for an activity's first listing under this committee, 2 for an exact repeat (same name and timestamp), and so on: the publisher lists some referrals twice (119-s-545). |
+| `occurrence` | `BIGINT` | 1 for an activity's first listing under this committee, 2 for an exact repeat (same name and timestamp), and so on: the publisher lists some referrals twice (119-s-545). |
 | `parent_system_code` | `VARCHAR` | The parent committee's system code when the activity is a subcommittee's. |
-| `snapshot_update_date` | `VARCHAR` | The parent document's updateDate, so a committee's activities are versioned with its bill. |

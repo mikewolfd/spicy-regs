@@ -18,7 +18,6 @@ import shutil
 from urllib.parse import parse_qsl, urlsplit
 
 from bs4 import BeautifulSoup
-import pyarrow.parquet as pq
 import yaml
 
 from spicy_docs.sources.scorecards import lcv
@@ -27,6 +26,7 @@ from spicy_regs.generations import build_generation, verify_generation
 from spicy_regs.source_evidence import PRIOR_ROLE, CaptureEvidence, verify_evidence
 from spicy_regs.scorecards.registry import REGISTRY
 from spicy_regs.sources import publication
+from spicy_regs.scorecards.etl import SOURCE_NAMES, generation_options, read_source_generation
 from spicy_regs.transforms.build_scorecards import OUTPUTS, ScorecardRefreshError, build_scorecards, installed_provider
 
 
@@ -117,12 +117,28 @@ def entry(artifact, directory: Path):
     from rulespec_artifacts import LocalMemberSource, iter_member_descriptors
 
     members = list(iter_member_descriptors(artifact, LocalMemberSource(directory)))
-    return {
-        "prefix": "generations/scorecards/" + artifact.pin.artifact_digest.removeprefix("sha256:"),
+    result = {
+        "prefix": f"generations/{artifact.root['spec']['family']}/" + artifact.pin.artifact_digest.removeprefix("sha256:"),
         "logicalId": artifact.pin.logical_id,
         "artifactDigest": artifact.pin.artifact_digest,
-        "tables": publication.table_entries(artifact.root["spec"]["tables"], members),
+        "tables": publication.table_entries(
+            artifact.root["spec"]["tables"], [m for m in members if m.object_key != "etl_receipts.parquet"]
+        ),
     }
+
+    if "etlReceipts" in artifact.root["spec"]:
+        spec = artifact.root["spec"]["etlReceipts"]
+        member = next(m for m in members if m.object_key == "etl_receipts.parquet")
+        result["etlReceipts"] = {
+            "key": member.object_key,
+            "sha256": member.sha256,
+            "byteSize": member.byte_size,
+            "rows": member.record_count,
+            "columns": spec["columns"],
+            "generationId": spec["generationId"],
+            "datasets": [policy["dataset"] for policy in spec["policies"]],
+        }
+    return result
 
 
 def build_source(retained: Retained, output: Path, registry: Path, *, mutation=None, prior=None):
@@ -154,6 +170,7 @@ def build_source(retained: Retained, output: Path, registry: Path, *, mutation=N
             force=True,
             fetch_factory=retained.factory(mutation),
             download_prior=download,
+            download_prior_receipts=lambda target: download("etl_receipts.parquet", target),
         )
     except Exception as error:
         evidence.finish(error)
@@ -164,10 +181,7 @@ def build_source(retained: Retained, output: Path, registry: Path, *, mutation=N
         family="scorecards",
         files=files,
         expected_keys=OUTPUTS,
-        schemas={
-            name: [(c, "VARCHAR") for c in contract.columns]
-            for name, contract in installed_provider().contracts.items()
-        },
+        **generation_options(output, SOURCE_NAMES),
         read_snapshot=snapshot,
         inputs=evidence.inputs(),
     )
@@ -241,12 +255,13 @@ def qualify(retained: Retained, output: Path):
     output.mkdir(parents=True)
     registry = local_registry(output)
     first = build_source(retained, output / "initial", registry)
-    tables = {Path(path).stem: pq.ParquetFile(path).read().to_pylist() for path in first["files"]}
+    tables = read_source_generation(first["directory"])
     readback = direct_readback(retained, tables)
     second = build_source(retained, output / "replacement", registry, prior=first)
+    replacement_tables = read_source_generation(second["directory"])
     for name, rows in tables.items():
         contract = installed_provider().contracts[name]
-        replacement = pq.ParquetFile(second["directory"] / (name + ".parquet")).read().to_pylist()
+        replacement = replacement_tables[name]
         if name == "scorecard_snapshots":
             assert len(rows) == len(replacement) == 1
             assert rows[0]["snapshot_id"] != replacement[0]["snapshot_id"]

@@ -6,6 +6,8 @@
 
 One cosponsor occurrence in one retained BILLSTATUS observation, keyed by the bill, the input digest and the list ordinal. A member listed twice keeps two rows; a successfully read absent or empty list replaces the bill's prior rows.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='bill_cosponsors'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled: cosponsors from the BILLSTATUS archives replayed for the held bill edition; some Congresses are not yet replayed, and a bill outside a replay has no rows here. Every native field reconciles, including positive withdrawal dates. *(measured 2026-09-28)*
 
 - **Parquet file:** `bill_cosponsors.parquet`
@@ -16,17 +18,12 @@ One cosponsor occurrence in one retained BILLSTATUS observation, keyed by the bi
 | Column | Type | Description |
 | --- | --- | --- |
 | `bill_id` | `VARCHAR` | The bill whose source lists the cosponsor. |
-| `input_sha256` | `VARCHAR` | Digest of the complete input XML bytes, not the reserialized item. |
-| `cosponsor_index` | `VARCHAR` | Zero-based position in the source cosponsors list, including repeated members. |
+| `cosponsor_index` | `BIGINT` | Zero-based position in the source cosponsors list, including repeated members. |
 | `bioguide_id` | `VARCHAR` | Source member identifier; its presence does not prove target resolution. |
 | `full_name` | `VARCHAR` | The source's fullName literal. |
 | `sponsorship_date` | `VARCHAR` | Literal sponsorshipDate; absent is NULL and present empty is an empty string. |
-| `sponsorship_date_status` | `VARCHAR` | Calendar spelling status: absent, empty, valid or invalid. |
-| `is_original_raw` | `VARCHAR` | Literal isOriginalCosponsor text, without Boolean coercion. |
+| `is_original` | `BOOLEAN` | Literal isOriginalCosponsor text, without Boolean coercion. |
 | `sponsorship_withdrawn_date` | `VARCHAR` | Literal sponsorshipWithdrawnDate; retained BILLSTATUS source observations include positive dates. |
-| `sponsorship_withdrawn_date_status` | `VARCHAR` | Calendar spelling status, not confirmation of a withdrawal event. |
 | `party` | `VARCHAR` | Party as the cosponsor entry states it. |
 | `state` | `VARCHAR` | State as the cosponsor entry states it. |
 | `district` | `VARCHAR` | District as the cosponsor entry states it. |
-| `source_path` | `VARCHAR` | XPath to the occurrence in the retained XML. |
-| `source_xml` | `VARCHAR` | The cosponsor item's markup exactly as the publisher wrote it, from <item> through </item>, cut from the input bytes input_sha256 pins; it keeps every field, including those no column reads. |

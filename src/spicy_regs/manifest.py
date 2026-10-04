@@ -155,7 +155,7 @@ class Manifest:
             if not allow_fresh_start:
                 raise MissingManifestError(
                     f"No {MANIFEST_FILE} in {output_dir} or on R2: every source key would count as new. "
-                    "Seed it from the published ids (docs/etl-catalog-seed.md), or allow a fresh start "
+                    "Restore its retained acquisition state, or allow a fresh start "
                     "(--allow-fresh-start) for a deliberate bootstrap."
                 )
             logger.warning("No manifest found — fresh start allowed: every source key is new")

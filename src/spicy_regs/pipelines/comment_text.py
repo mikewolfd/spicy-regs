@@ -7,12 +7,11 @@ from threading import Lock
 
 import polars as pl
 import pyarrow as pa
-import pyarrow.parquet as pq
 from loguru import logger
 from spicy_docs.transport.credentials import scrub_credential
 
 from spicy_regs.schemas import RECORD_TYPES
-from spicy_regs.sources import iceberg, r2
+from spicy_regs.sources import iceberg
 from spicy_regs.transforms.comment_text_updates import write_text_updates
 from spicy_regs.transforms.derived_text_pool import DerivedTextPool, TextResult
 
@@ -20,12 +19,23 @@ PENDING_TEXT_FILE = "pending_comment_text.parquet"
 TEXT_RULE_VERSION = "mirrulations-derived-v1"
 _COORDINATES = ["agency_code", "docket_id", "comment_id"]
 _COLUMNS = [*_COORDINATES, "posted_date", "text_content", "text_extraction_status"]
-_SCHEMA = pa.schema([
-    *((name, pa.string()) for name in [
-        *_COORDINATES, "posted_date", "phase", "reason", "source_json", "rule_version", "attempted_at",
-    ]),
-    ("attempts", pa.int64()),
-])
+_SCHEMA = pa.schema(
+    [
+        *(
+            (name, pa.string())
+            for name in [
+                *_COORDINATES,
+                "posted_date",
+                "phase",
+                "reason",
+                "source_json",
+                "rule_version",
+                "attempted_at",
+            ]
+        ),
+        ("attempts", pa.int64()),
+    ]
+)
 
 
 class PendingCommentText:
@@ -37,13 +47,37 @@ class PendingCommentText:
     A fresh run lists again so a changed extraction can recover from a 412.
     """
 
-    def __init__(self, output_dir: Path) -> None:
-        self.path = output_dir / PENDING_TEXT_FILE
-        if not self.path.exists():
-            r2.download(self.path.name, self.path)
-        self.rows = {row["comment_id"]: row for row in pq.read_table(self.path).to_pylist()} if self.path.exists() else {}
+    def __init__(self, output_dir: Path, *, index=None) -> None:
+        from spicy_regs.pipelines.regulatory_publication import restore_checkpoint
+
+        self.path = output_dir / ".processing" / PENDING_TEXT_FILE
+        self.rows = {
+            row["comment_id"]: row for row in restore_checkpoint(output_dir, "pending_comment_text", index=index)
+        }
         self._retry = dict(self.rows)
         self._lock = Lock()
+
+    @classmethod
+    def from_receipts(cls, receipt: Path, *, generation_id: str, output_dir: Path):
+        """Restore a selected checkpoint without a remote or legacy fallback."""
+        from spicy_regs.transforms.regulations_checkpoints import read_checkpoint
+
+        instance = cls.__new__(cls)
+        instance.path = output_dir / ".processing" / PENDING_TEXT_FILE
+        instance.rows = {
+            row["comment_id"]: row
+            for row in read_checkpoint("pending_comment_text", receipt, generation_id=generation_id)
+        }
+        instance._retry = dict(instance.rows)
+        instance._lock = Lock()
+        return instance
+
+    def save_receipts(self, destination: Path, context) -> Path:
+        """Save the active retry set, including successful empty retirement."""
+        from spicy_regs.transforms.regulations_checkpoints import write_checkpoint
+
+        with self._lock:
+            return write_checkpoint("pending_comment_text", self.rows.values(), destination, context)
 
     def observe(self, result: TextResult, *, retry: bool = False) -> None:
         row = result.record
@@ -75,13 +109,18 @@ class PendingCommentText:
             }
 
     def save(self) -> None:
-        # Empty state must replace the remote failures too, otherwise a fresh
-        # runner resurrects already completed retries.
+        from spicy_regs.pipelines.regulatory_publication import finish_checkpoints, restore_checkpoint
+
+        root = self.path.parent.parent
         with self._lock:
-            temporary = self.path.with_suffix(".tmp.parquet")
-            pq.write_table(pa.Table.from_pylist(list(self.rows.values()), schema=_SCHEMA), temporary, compression="zstd")
-            temporary.replace(self.path)
-            logger.info("Retained {} failed comment-text reads for retry", len(self.rows))
+            finish_checkpoints(
+                root,
+                {
+                    "pending_comment_text": list(self.rows.values()),
+                    "failed_keys": restore_checkpoint(root, "failed_keys"),
+                },
+                publish=False,
+            )
 
     def retry(self, pool: DerivedTextPool, output_dir: Path, agencies: list[str]) -> None:
         """Retry prior failures still untouched by ingestion in the catalog; preserve current metadata.
@@ -102,9 +141,12 @@ class PendingCommentText:
         # No attachment gate: the retained failure proves the original row was
         # eligible. The current persisted text/status protects completed work.
         return write_text_updates(
-            pool.map(candidates.unique(subset="comment_id").iter_rows(named=True), select=lambda row: (
-                row["text_content"] is None and not row["text_extraction_status"]
-            )), updates, observe=lambda result: self.observe(result, retry=True),
+            pool.map(
+                candidates.unique(subset="comment_id").iter_rows(named=True),
+                select=lambda row: row["text_content"] is None and not row["text_extraction_status"],
+            ),
+            updates,
+            observe=lambda result: self.observe(result, retry=True),
         )
 
     def _retry_catalog(self, pool: DerivedTextPool, pending: pl.DataFrame, updates: Path) -> None:
@@ -112,18 +154,23 @@ class PendingCommentText:
         con = iceberg._connect_for_table(record_type)
         try:
             con.register("_text_pending", pending.to_arrow())
+            from spicy_regs.sources.regulatory_catalog import processing_table
+
+            prior = processing_table(con, record_type, where="comment_id IN (SELECT comment_id FROM _text_pending)")
             for agency in pending["agency_code"].unique().sort():
-                candidates = con.execute(f"""
-                    SELECT {', '.join('r.' + column for column in _COLUMNS)}
-                    FROM {iceberg._qualified(record_type)} r JOIN _text_pending p
+                candidates = con.execute(
+                    f"""
+                    SELECT {", ".join("r." + column for column in _COLUMNS)}
+                    FROM {prior} r JOIN _text_pending p
                       ON r.agency_code = p.agency_code AND r.comment_id = p.comment_id
                      AND r.docket_id IS NOT DISTINCT FROM p.docket_id
                     WHERE r.agency_code = ?
                     QUALIFY ROW_NUMBER() OVER (PARTITION BY r.comment_id ORDER BY r.modify_date DESC NULLS LAST) = 1
-                """, [agency]).pl()
+                """,
+                    [agency],
+                ).pl()
                 stats = self._updates(pool, candidates, updates)
                 if stats["derived"]:
                     iceberg.upsert_comment_text(con, record_type, agency, updates)
         finally:
             con.close()
-

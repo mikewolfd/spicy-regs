@@ -16,7 +16,7 @@ import pyarrow as pa
 from .fec_bulk_financial import COMMON_TEXT
 from .fec_filing_financial import EXTRA_TEXT, _json, _mapping, map_filing_financial, validate_filing_header
 from .fec_filing_schedules import retained_filing_mappings
-from .fec_query import AMOUNT_TYPE, observation_fields, record_evidence
+from .fec_query import AMOUNT_TYPE, SOURCE_TEXT, subject_observation_fields, record_evidence
 
 _COLUMNS = {
     "independent": "form_type reporting_committee_id transaction_id entity_type payee_organization payee_last_name payee_first_name payee_middle_name payee_prefix payee_suffix payee_street1 payee_street2 payee_city payee_state payee_zip election_code election_other_description dissemination_date amount reported_aggregate_amount purpose category_code payee_committee_id support_oppose_code candidate_id candidate_last_name candidate_first_name candidate_middle_name candidate_prefix candidate_suffix candidate_office candidate_state candidate_district",
@@ -2442,16 +2442,6 @@ _COVER_TEXT = (
     "candidate_last_name candidate_first_name report_code election_code account_name account_native_id transaction_id"
 ).split()
 _COVER_DATES = "period_start period_end signed_date election_date source_amendment_date effective_date".split()
-_NATIVE_FIELD = pa.struct(
-    [
-        ("position", pa.int32()),
-        ("definition_label", pa.string()),
-        ("definition_cell", pa.string()),
-        ("presence", pa.string()),
-        ("raw_value", pa.string()),
-        ("body_reference_json", pa.string()),
-    ]
-)
 _REPORTED_MEASURE = pa.struct(
     [
         ("native_position", pa.int32()),
@@ -2476,7 +2466,7 @@ FILING_REPORT_SCHEMA = pa.schema(
     ]
     + [("source_cycle", pa.int32())]
     + [(n, pa.date32()) for n in _COVER_DATES]
-    + [("native_fields", pa.list_(_NATIVE_FIELD)), ("reported_measures", pa.list_(_REPORTED_MEASURE))]
+    + [("reported_measures", pa.list_(_REPORTED_MEASURE))]
 )
 
 
@@ -2561,8 +2551,6 @@ def map_filing_cover(row, selection, mapping, *, layout, header_row):
         reasons = json.loads(result["mapping_reason_json"])
         reasons["definition_ambiguity"] = "v2-F3-unexplained-address-column-insertion"
         result.update(mapping_status="partial", mapping_reason_json=_json(reasons))
-    native = json.loads(row["metadata_json"])
-    result["native_fields"] = _native_fields(native, layout)
     spec = next(s for s in _COVERS if s[0] in mapping.declared_versions and s[5] == mapping.layout_pin)
     result["reported_measures"] = [
         dict(
@@ -2579,26 +2567,6 @@ def map_filing_cover(row, selection, mapping, *, layout, header_row):
         for i, quantity, role in _COVER_MEASURE_SETS[spec[9]]
     ]
     return result, evidence
-
-
-def _native_fields(native, layout):
-    """Keep every source position, including separated bodies and undefined cells."""
-    values = native["fields"]
-    bodies = {b["field_index"]: b for b in native.get("embedded_bodies", [])}
-    fields = []
-    for i in range(max(native["field_count"], len(layout["fields"]))):
-        definition = layout["fields"][i] if i < len(layout["fields"]) else {}
-        fields.append(
-            dict(
-                position=i,
-                definition_label=definition.get("label"),
-                definition_cell=definition.get("cell"),
-                presence="absent" if i >= native["field_count"] else "body" if i in bodies else "value",
-                raw_value=values.get(str(i)),
-                body_reference_json=_json(bodies[i]) if i in bodies else None,
-            )
-        )
-    return fields
 
 
 _TEXT_LAYOUTS = (
@@ -2681,11 +2649,11 @@ _TEXT_FRAGMENT = pa.struct(
         ("body_reference_json", pa.string()),
     ]
 )
+_TEXT_COMMON = SOURCE_TEXT + "filing_key filing_link_status".split()
 FILING_TEXT_SCHEMA = pa.schema(
-    [(n, pa.string()) for n in COMMON_TEXT + EXTRA_TEXT + _TEXT_IDENTIFIERS + ["text_record_kind"]]
+    [(n, pa.string()) for n in _TEXT_COMMON + EXTRA_TEXT + _TEXT_IDENTIFIERS + ["text_record_kind"]]
     + [
         ("source_cycle", pa.int32()),
-        ("native_fields", pa.list_(_NATIVE_FIELD)),
         ("text_fragments", pa.list_(_TEXT_FRAGMENT)),
     ]
 )
@@ -2741,8 +2709,7 @@ def map_filing_text(row, selection, *, header_row, read_body, mapping=None, layo
         if mapping not in filing_text_mappings() or layout is None:
             raise ValueError("TEXT requires its explicitly reviewed narrative mapping and layout")
         typed, evidence = map_filing_financial(row, selection, mapping, layout=layout, header_row=header_row)
-        result = {n: typed.get(n) for n in COMMON_TEXT + EXTRA_TEXT + _TEXT_IDENTIFIERS + ["source_cycle"]}
-        result["native_fields"] = _native_fields(native, layout)
+        result = {n: typed.get(n) for n in _TEXT_COMMON + EXTRA_TEXT + _TEXT_IDENTIFIERS + ["source_cycle"]}
         position = int(next(p for n, p in mapping.fields.text if n == "native_text"))
         if len(bodies) > 1 or any(b.get("field_index") != position for b in bodies):
             raise ValueError("Narrative body differs from the defined TEXT position")
@@ -2757,8 +2724,8 @@ def map_filing_text(row, selection, *, header_row, read_body, mapping=None, layo
         if len(bodies) != 1 or "field_index" in bodies[0]:
             raise ValueError("Standalone narrative requires its exact source body reference")
         header = validate_filing_header(row, header_row, selection)
-        result = dict.fromkeys(COMMON_TEXT + EXTRA_TEXT + _TEXT_IDENTIFIERS)
-        result.update(observation_fields(table, row, selection, "fec-filing-narrative/1"))
+        result = dict.fromkeys(_TEXT_COMMON + EXTRA_TEXT + _TEXT_IDENTIFIERS)
+        result.update(subject_observation_fields(table, row, selection, "fec-filing-narrative/2"))
         result.update(
             declared_format_version=header["format_version"],
             filing_header_record_id=header_row["source_record_id"],
@@ -2766,7 +2733,6 @@ def map_filing_text(row, selection, *, header_row, read_body, mapping=None, layo
             submission_conformance_status="not-qualified",
             mapping_status="mapped",
             mapping_reason_json=_json({"dictionary": "not-applicable-to-standalone-text"}),
-            native_fields=[],
         )
         evidence = record_evidence(table, result["record_id"], row, selection.source_generation_pin)
         evidence += [
@@ -2789,8 +2755,9 @@ def map_filing_text(row, selection, *, header_row, read_body, mapping=None, layo
     if text == "":
         status = "source_empty"
     result.update(
-        currency=None,
-        amount_kind=None,
+        filing_key=None,
+        filing_link_status="unresolved",
+        current_record_status="unqualified",
         source_namespace="fec-filing-narrative",
         text_record_kind=kind,
         text_fragments=[
@@ -2832,25 +2799,17 @@ def map_filing_physical_text(row, selection):
     ):
         raise ValueError("Expected a pinned source-owned original physical filing line")
     table = "fec_filing_text_observations"
-    result: dict = dict.fromkeys(COMMON_TEXT + EXTRA_TEXT + _TEXT_IDENTIFIERS)
-    result.update(observation_fields(table, row, selection, "fec-filing-physical-text/1"))
+    result: dict = dict.fromkeys(_TEXT_COMMON + EXTRA_TEXT + _TEXT_IDENTIFIERS)
+    result.update(subject_observation_fields(table, row, selection, "fec-filing-physical-text/2"))
     result.update(
         mapping_status="partial",
         mapping_reason_json=_json({"filing_syntax": "syntax-uninterpreted", "header_identity": "unresolved"}),
         submission_conformance_status="not-qualified",
         source_namespace="fec-filing-physical-text",
         text_record_kind="physical-line",
-        native_fields=[
-            dict(
-                position=i,
-                definition_label=None,
-                definition_cell=None,
-                presence="value",
-                raw_value=value,
-                body_reference_json=None,
-            )
-            for i, value in enumerate(fields)
-        ],
+        filing_key=None,
+        filing_link_status="unresolved",
+        current_record_status="unqualified",
         text_fragments=[
             dict(
                 field_position=0 if fields else None,

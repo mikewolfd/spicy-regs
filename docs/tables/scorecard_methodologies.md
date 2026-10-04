@@ -6,6 +6,8 @@
 
 One source-stated rule set in an edition, scoped to chamber and cohort as stated. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='scorecard_methodologies'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled publisher editions selected by the scorecard source registry. Complete edition reads replace that edition; failed or incomplete reads preserve prior observations. Coverage varies by publisher and historical source format. *(measured 2026-10-03)*
 
 - **Parquet file:** `scorecard_methodologies.parquet`
@@ -23,7 +25,3 @@ One source-stated rule set in an edition, scoped to chamber and cohort as stated
 | `methodology_text` | `VARCHAR` | Source-stated methodology, preserved as text; NULL when unstated. |
 | `methodology_url` | `VARCHAR` | Source-stated methodology url, preserved as text; NULL when unstated. |
 | `disclosure_status` | `VARCHAR` | Source-stated disclosure status, preserved as text; NULL when unstated. |
-| `capture_id` | `VARCHAR` | Opaque caller-issued identity of the source observation supporting this row. |
-| `source_path` | `VARCHAR` | Source locator within the captured response, such as cell, JSON path or PDF page. |
-| `snapshot_id` | `VARCHAR` | Opaque identity of the complete accepted edition capture and parse. |
-| `source_url` | `VARCHAR` | Original publisher URL supporting this observation. |

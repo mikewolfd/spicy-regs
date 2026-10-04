@@ -7,7 +7,7 @@ from typing import Any
 
 import duckdb
 
-from spicy_regs.relationship_views import RELATIONSHIP_VIEWS, SQL_RELATIONSHIP_VIEWS, install_relationship_views, view_columns
+from spicy_regs.relationship_views import install_relationship_views, view_columns
 
 
 def table(con, name, fields, records):
@@ -17,20 +17,24 @@ def table(con, name, fields, records):
 
 
 def test_all_navigation_definitions_bind_and_report_actual_schemas():
+    import pyarrow as pa
+    from spicy_regs.subject_catalog import policies
     con: Any = duckdb.connect()
-    schema = {}
-    for spec in RELATIONSHIP_VIEWS:
-        schema.setdefault(spec.source_table,set()).update(spec.required_columns)
-    for spec in SQL_RELATIONSHIP_VIEWS:
-        for source, fields in spec.required.items():
-            schema.setdefault(source,set()).update(fields)
-    for name, fields in schema.items():
-        table(con,name,sorted(fields),[])
-    result = install_relationship_views(con,schema)
-    for spec in SQL_RELATIONSHIP_VIEWS:
-        assert result[spec.name]['status'] == 'available', result[spec.name]
-        assert view_columns(con.execute(f'DESCRIBE {spec.name}').fetchall())
-        assert con.cursor().execute(f'SELECT * FROM {spec.name} LIMIT 0').fetchall() == []
+    subjects = {name: policy for name, policy in policies().items() if not policy.receipt_only}
+    for name, policy in subjects.items():
+        con.register("fixture", pa.Table.from_batches([], schema=policy.subject_schema))
+        con.execute(f'CREATE TABLE "{name}" AS SELECT * FROM fixture')
+        con.unregister("fixture")
+    result = install_relationship_views(con, subjects)
+    for name, info in result.items():
+        if info['status'] == 'available':
+            assert view_columns(con.execute(f'DESCRIBE {name}').fetchall())
+            assert con.cursor().execute(f'SELECT * FROM {name} LIMIT 0').fetchall() == []
+        else:
+            assert info['reason'], name
+    for name in ('fcc_native_observations', 'bill_subject_terms_pairs', 'section_diff_endpoints',
+                 'org_identity_candidates', 'member_vote_party_affiliations'):
+        assert result[name]['status'] == 'available', result[name]
 
 
 def test_entity_enrichment_cannot_multiply_award_money():

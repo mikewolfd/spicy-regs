@@ -1388,6 +1388,7 @@ def test_a_dispatch_names_its_chambers_and_cap_and_refuses_anything_else(monkeyp
     # The rollup hands the dispatch's cap to the transform.
     monkeypatch.setenv("ROLL_CALL_MAX_VOTES", "7")
     seen = {}
+    monkeypatch.setattr(rollup.RollCallVotesRollup, "build_receipts", lambda self, directory, builder, **kwargs: builder(directory, **kwargs))
     monkeypatch.setattr(rollup, "build_roll_call_votes", lambda output_dir, **kwargs: seen.update(kwargs) or ())
     rollup.RollCallVotesRollup().build(Path("unused"))
     assert seen["max_votes"] == 7
@@ -1521,7 +1522,7 @@ def test_the_rollup_retains_the_other_chambers_generation_then_fails_the_run(tmp
     real = rollup.build_roll_call_votes
     acquirer = RefusingListing({"house": REFUSALS["house"]}, senate_rolls=(1, 2))
     monkeypatch.setattr(rollup, "build_roll_call_votes", lambda output_dir, **kwargs: real(
-        output_dir, acquirer=acquirer, download_prior=_no_prior, open_congresses=(119,), **kwargs))
+        output_dir, acquirer=acquirer, open_congresses=(119,), **kwargs))
     pipeline = rollup.RollCallVotesRollup(output_dir=tmp_path, skip_upload=True)
     with pytest.raises(ChamberListingRefused):
         pipeline.run()

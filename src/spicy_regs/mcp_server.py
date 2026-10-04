@@ -8,6 +8,8 @@ reading either the public R2 bucket or an explicitly configured local directory
 
 from __future__ import annotations
 
+from spicy_regs.subject_catalog import subject_tables
+
 import base64
 import difflib
 import functools
@@ -49,7 +51,7 @@ from spicy_regs.citation_resolution import SOURCE_TABLES
 from spicy_regs.duckdb_settings import INTERACTIVE_HTTP_RETRIES, load_public_http, memory_limit
 from spicy_regs.fec_release import QUERY_RELEASE_FIELDS, RELEASE_INVENTORIES, release_summary
 from spicy_regs.public_url import resolve_r2_base_url, service_url
-from spicy_regs.relationship_views.fec_query_views import fec_query_views
+from spicy_regs.fec_receipt_adapter import qualified_views
 from spicy_regs.vocabulary_mapping import Namespace
 
 TABLES = (
@@ -244,6 +246,8 @@ TABLES = (
     "native_legal_reference_reads",
     "court_opinion_pdf_extractions",
 )
+TABLES = subject_tables(TABLES)
+
 STATEMENT_TIMEOUT = os.environ.get("SPICY_REGS_STATEMENT_TIMEOUT", "790s")
 #: The kinds resolve_document_citations accepts, and its schema lists with their tables: the kinds a writer emits.
 DOCUMENT_KINDS = tuple(sorted(SOURCE_TABLES))
@@ -283,11 +287,8 @@ DOCUMENT_KIND_TABLES = "Each kind's table: " + "; ".join(
 logger = logging.getLogger(__name__)
 
 DEFAULT_CATALOG_NAMESPACE = "default"
-# Trusted installed scope and SQL declare the candidate views. Release checks
-# keep them disabled until exact data, interpretation and consumer pins match.
-# A receipt cannot populate this registry, change scope or supply executable SQL.
-FEC_QUALIFIED_VIEWS: tuple = fec_query_views(
-    **json.loads(files("spicy_regs").joinpath("fec_query_scope.json").read_text(encoding="utf-8"))
+FEC_QUALIFIED_VIEWS: tuple = qualified_views(
+    json.loads(files("spicy_regs").joinpath("fec_query_scope.json").read_text(encoding="utf-8"))
 )
 
 
@@ -526,9 +527,18 @@ def _tables_named(cursor: duckdb.DuckDBPyConnection, sql: str) -> set[str]:
     before it and, when recursive, itself. Other schemas are not tables of this
     database; callers intersect the result with the published tables.
     """
-    [(serialized,)] = cursor.execute("SELECT json_serialize_sql(?)", [sql]).fetchall()
+    # extract_statements normalizes read-only PRAGMA forms to SELECT. Serializing
+    # the original text instead returns an error object, hiding all its reads.
+    stack: list[tuple[Any, frozenset[str]]] = []
+    for statement in cursor.extract_statements(sql):
+        [(serialized,)] = cursor.execute("SELECT json_serialize_sql(?)", [statement.query]).fetchall()
+        tree = json.loads(serialized)
+        if tree.get("error"):
+            raise ValueError("Cannot inspect SQL relations: " + tree.get("error_message", "unsupported SQL"))
+        stack.append((tree, frozenset()))
     names: set[str] = set()
-    stack: list[tuple[Any, frozenset[str]]] = [(json.loads(serialized), frozenset())]
+    [(catalog,)] = cursor.execute("SELECT current_database()").fetchall()
+    catalog = catalog.lower()
     while stack:
         node, ctes = stack.pop()
         if isinstance(node, list):
@@ -536,9 +546,17 @@ def _tables_named(cursor: duckdb.DuckDBPyConnection, sql: str) -> set[str]:
             continue
         if not isinstance(node, dict):
             continue
+        if node.get("type") == "TABLE_FUNCTION" and node.get("function", {}).get("function_name", "").lower() in {"query", "query_table", "json_execute_serialized_sql", "pragma_storage_info"}:
+            # Storage statistics include source values and resolve their table
+            # argument dynamically, outside the named-relation access checks.
+            raise ValueError("Dynamic query functions are not supported; name the source relations directly")
         if node.get("type") == "BASE_TABLE":
             name, schema = node["table_name"].lower(), node["schema_name"].lower()
-            if node["catalog_name"].lower() in ("", "memory") and (schema == "main" or (not schema and name not in ctes)):
+            source_catalog = node["catalog_name"].lower()
+            # DuckDB also accepts catalog.table: its unbound tree places that
+            # catalog in schema_name, before binding decides which it names.
+            if source_catalog in ("", catalog) and (schema == "main" or
+                    (not source_catalog and schema == catalog) or (not schema and name not in ctes)):
                 names.add(name)
             continue
         if node.get("type") == "RECURSIVE_CTE_NODE":
@@ -659,7 +677,7 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
     if rulemaking is not None:
         con.execute("CREATE TABLE _spicy_rulemaking (snapshot VARCHAR)")
         con.execute("INSERT INTO _spicy_rulemaking VALUES (?)", [json.dumps(rulemaking)])
-    if local is not None and local.is_download:
+    if local is not None and (local.is_download or local.native):
         con.execute("CREATE TABLE _spicy_local_selection (snapshot VARCHAR)")
         con.execute(
             "INSERT INTO _spicy_local_selection VALUES (?)",
@@ -669,6 +687,10 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
                         "directory": str(local.directory),
                         "signatures": signatures,
                         "selected_tables": list(local.files),
+                        "receipt_members": {name: str(path) for name, path in local.receipts.items()},
+                        "native": {name: {"subjects": [str(p) for p in value.subjects],
+                                           "receipts": str(value.receipts), "generation_id": value.generation_id}
+                                   for name, value in local.native.items()},
                     }
                 )
             ],
@@ -677,7 +699,7 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
         key.removesuffix(".parquet") for e in publication_index["families"].values() for key in e["tables"]
     ]
     snapshot_names = [key.removesuffix(".parquet") for key in (rulemaking or {"tables": {}})["tables"]]
-    selected_names = list(local.files) if local is not None and local.is_download else []
+    selected_names = list(local.files) if local is not None else []
     exports: list[str] = []
     for name in dict.fromkeys((*TABLES, *managed_names, *snapshot_names, *selected_names)):
         published = table_descriptor(publication_index, f"{name}.parquet")
@@ -692,7 +714,14 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
         else:
             urls = [f"{R2_BASE_URL}/{path}" for path in paths]
         try:
-            con.execute(f'CREATE VIEW "{name}" AS SELECT * FROM {parquet_scan(urls)}')
+            if not urls and local is not None and name in local.native:
+                import pyarrow as pa
+                from spicy_regs.etl_policy_registry import installed_policies
+                con.register("_empty_native", pa.Table.from_batches([], schema=installed_policies()[name].subject_schema))
+                con.execute(f'CREATE TABLE "{name}" AS SELECT * FROM _empty_native')
+                con.unregister("_empty_native")
+            else:
+                con.execute(f'CREATE VIEW "{name}" AS SELECT * FROM {parquet_scan(urls)}')
             if published is not None:
                 actual = con.execute(f'DESCRIBE "{name}"').fetchall()
                 if [[row[0], row[1]] for row in actual] != published["columns"]:
@@ -702,7 +731,7 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
             if local is None and published is None and pinned is None and name in COMMENTS_EXPORT_TABLES:
                 exports.append(name)
         except duckdb.Error as exc:
-            required = published is not None or pinned is not None or (local is not None and local.is_download)
+            required = published is not None or pinned is not None or (local is not None and (local.is_download or local.native))
             # A remote legacy table is skipped only when it is absent; a throttled or failing read refuses the
             # build, so a refresh keeps the connection it would replace instead of serving one without the table.
             absent = local is not None or (isinstance(exc, duckdb.HTTPException) and exc.status_code == 404)
@@ -719,6 +748,36 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
             raise
         con.execute("CREATE TABLE _spicy_comments_export (snapshot VARCHAR)")
         con.execute("INSERT INTO _spicy_comments_export VALUES (?)", [json.dumps({"receipt": comments, "tables": matched})])
+    # Receipt members are selected independently per captured family, alongside
+    # the subjects above. They are not fabricated ordinary subject tables.
+    receipt_members = []
+    if local is not None:
+        receipt_members.extend(str(path) for path in local.receipts.values())
+    else:
+        for family in publication_index["families"].values():
+            if "etlReceipts" in family:
+                item = family["etlReceipts"]
+                receipt_members.append(f"{R2_BASE_URL}/{family['prefix'].rstrip('/')}/{item['key']}")
+    if receipt_members:
+        try:
+            if local is not None and local.native:
+                groups = {}
+                for name, value in local.native.items():
+                    groups.setdefault(str(value.receipts), []).append(name)
+                scans = [f"SELECT * FROM {parquet_scan([path])} WHERE dataset IN (" +
+                         ",".join("'" + name.replace("'", "''") + "'" for name in names) + ")"
+                         for path, names in groups.items()]
+                con.execute('CREATE VIEW etl_receipts AS ' + ' UNION ALL '.join(scans))
+            else:
+                con.execute(f'CREATE VIEW etl_receipts AS SELECT * FROM {parquet_scan(receipt_members)}')
+            actual = [[r[0], r[1]] for r in con.execute('DESCRIBE etl_receipts').fetchall()]
+            for family in publication_index["families"].values():
+                if "etlReceipts" in family and family["etlReceipts"]["columns"] != actual:
+                    raise RuntimeError("Published ETL receipt schema differs from admitted generation")
+            allowed_paths.extend(receipt_members)
+        except (duckdb.Error, RuntimeError) as exc:
+            con.close()
+            raise RuntimeError("Published ETL receipt member unavailable") from exc
     _install_relationship_views(con)
     _apply_security_settings(con, allowed_paths)
     return con
@@ -802,11 +861,42 @@ def _fec_release_reply(cursor):
 
 
 def _install_relationship_views(con: duckdb.DuckDBPyConnection) -> None:
-    """Bind trusted SQL definitions before locking the connection; no source row scan."""
+    """Bind trusted definitions and verify selected FEC receipt inputs before locking."""
     from spicy_regs.relationship_views import install_relationship_views
 
     status = _publication_status(con)
+    from spicy_regs.fec_receipt_adapter import ReceiptAdapter, receipt_owner
+    from spicy_regs.relationship_views.fec import FEC_VIEWS
+    from spicy_regs.relationship_views.sql_views import install_sql_views
+    index = _connection_index(con)
+    from spicy_regs.subject_catalog import descriptors
+    declared = descriptors()
+    local_selection = _connection_local_selection(con)
+    processing = {name for family in index["families"].values()
+                  if local_selection is None or
+                  f"{family['prefix'].rstrip('/')}/{family.get('etlReceipts', {}).get('key')}"
+                  in local_selection.get("receipt_members", {})
+                  for name in family.get("etlReceipts", {}).get("datasets", ())
+                  if declared.get(name, {}).get("receipt_only")}
+    native = local_selection.get("native", {}) if local_selection else {}
+    processing |= {name for name in native if declared.get(name, {}).get("receipt_only")}
+    local_directory = local_selection["directory"] if local_selection else DATA_DIR
+    adapter = ReceiptAdapter(con, index, R2_BASE_URL, local_directory=local_directory,
+                             local_receipts=local_selection.get("receipt_members") if local_selection else None, local_native=native)
+    # A mixed old/native dependency set is a refusal, never a pass-through.
+    adapted = [spec for spec in FEC_VIEWS
+               if set(spec.required) <= set(status["tables"]) | processing
+               and any(receipt_owner(index, table) or table in native for table in spec.required)]
+    for spec in adapted:
+        adapter.require_selected(spec.required)
     relationships = install_relationship_views(con, status["tables"], publication=status["publication"])
+    for spec in adapted:
+        prepared = adapter.prepare(spec, spec.query(status["publication"]))
+        item = install_sql_views(con, prepared.required, [prepared], status["publication"])[spec.name]
+        item["dependencies"] = list(spec.required)
+        item["metadata"]["input_publications"] = {table: status["publication"].get(table) for table in spec.required}
+        item["metadata"]["availability_basis"] = "Pinned subject and receipt bytes and exact row-version joins validated before binding."
+        relationships[spec.name] = item
     selected = _fec_release_configuration(con, status["publication"])
     if selected is not None:
         from spicy_regs.fec_release import install_views
@@ -814,11 +904,13 @@ def _install_relationship_views(con: duckdb.DuckDBPyConnection) -> None:
         if any(spec.view.name in {*status["tables"], *relationships} for spec in FEC_QUALIFIED_VIEWS):
             raise ValueError("Qualified FEC view collides with an existing table or relationship view")
         relationships.update(install_views(
-            con, FEC_QUALIFIED_VIEWS, selected, _connection_index(con), status["tables"], status["publication"],
-            read_tables=_tables_named,
+            con, FEC_QUALIFIED_VIEWS, selected, index, set(status["tables"]) | processing, status["publication"],
+            read_tables=_tables_named, prepare=adapter.prepare,
         ))
         con.execute("CREATE TABLE _spicy_fec_release (snapshot VARCHAR)")
         con.execute("INSERT INTO _spicy_fec_release VALUES (?)", [json.dumps(selected)])
+    from spicy_regs.citation_receipts import install_citation_inputs
+    install_citation_inputs(con, adapter, status["tables"])
     con.execute("CREATE TABLE _spicy_relationships (snapshot VARCHAR)")
     con.execute("INSERT INTO _spicy_relationships VALUES (?)", [json.dumps(relationships)])
 
@@ -845,6 +937,10 @@ def _publication_status(cursor: duckdb.DuckDBPyConnection) -> dict:
         for family, entry in index["families"].items()
         for key in entry["tables"]
     }
+    if local is not None:
+        managed.update({name: {"status": "native_selected", "generation_id": value["generation_id"],
+                               "verification": "Selected bytes and exact receipt joins verified; file changes checked around statements."}
+                        for name, value in local.get("native", {}).items()})
     snapshot = {
         key.removesuffix(".parquet"): {
             "status": "rulemaking_snapshot",
@@ -1229,12 +1325,19 @@ def _lineage_meanings(lineage: Mapping[str, Sequence[str]]) -> dict[str, str]:
     read from its parse tree when it was bound: a computed column has no entry and
     so inherits nothing, whatever its name.
     """
+    from spicy_regs.fec_receipt_adapter import processing_declarations
+
     dictionary = _table_metadata()
+    processing = processing_declarations()
     meanings: dict[str, str] = {}
     for column, (table, source) in lineage.items():
-        declared = {c["column_name"]: c.get("description") for c in dictionary.get(table, {}).get("columns", [])}
-        if declared.get(source):
-            meanings[column] = declared[source]
+        original = table.removeprefix("_spicy_fec_processing_")
+        if table != original and original not in processing:
+            continue
+        declared = {c["column_name"]: c.get("description") for c in dictionary.get(original, {}).get("columns", [])}
+        meaning = declared.get(source) or processing.get(original, {}).get("descriptions", {}).get(source)
+        if meaning:
+            meanings[column] = meaning
     return meanings
 
 
@@ -1441,7 +1544,7 @@ def _available_tables(cursor: duckdb.DuckDBPyConnection) -> list[str]:
     selected = local["selected_tables"] if local is not None else []
     relationships = _connection_relationships(cursor)
     return [
-        name for name in dict.fromkeys((*TABLES, *managed, *snapshot, *selected, *relationships)) if name in registered
+        name for name in dict.fromkeys((*TABLES, *managed, *snapshot, *selected, *relationships, "etl_receipts")) if name in registered
     ]
 
 
@@ -1489,24 +1592,32 @@ def _source_read(
     """
     from spicy_regs.citation_sources import TEXT_SOURCES, source_digests
 
+    from spicy_regs.citation_receipts import selected_citation_inputs
+
+    selected = selected_citation_inputs(cursor)
+    inputs = selected["tables"]
     parent = SOURCE_TABLES[kind]
     if parent not in tables:
         return {"table": parent, "status": "unavailable"}, None
+    if parent not in selected["selected_sources"]:
+        raise ValueError(f"Citation source {parent} requires selected native ETL receipts")
     try:
         if kind not in TEXT_SOURCES:
             values = cursor.execute(
                 "SELECT DISTINCT text_sha256, pages_read IS NOT NULL AND rule_set_version IS NOT NULL, "
-                f'CAST(citation_rows AS BIGINT) FROM "{parent}" WHERE package_id = ? LIMIT 2',
+                f'CAST(citation_rows AS BIGINT) FROM "{inputs[parent]}" WHERE package_id = ? LIMIT 2',
                 [key],
             ).fetchall()
         else:
-            values = [(digest, False, None) for (digest,) in source_digests(cursor, kind, key)]
-            if len(values) == 1 and values[0][0] and not cited and HELD_FIELD_READS in tables:
+            values = [(digest, False, None) for (digest,) in source_digests(
+                cursor, kind, key, table=selected["sources"][parent],
+                digest_field="sha256_" + TEXT_SOURCES[kind].field)]
+            if len(values) == 1 and values[0][0] and not cited and HELD_FIELD_READS in inputs:
                 # Every read published so far states no rule set and no time (round 6, 13 of 13): the dictionary
                 # calls that a read recorded before the table existed. An undated read stating rows outranks one
                 # stating none, so a disagreement refuses rather than reading as "none found".
                 read = cursor.execute(
-                    f'SELECT CAST(citation_rows AS BIGINT) FROM "{HELD_FIELD_READS}" WHERE document_kind = ? '
+                    f'SELECT CAST(citation_rows AS BIGINT) FROM "{inputs[HELD_FIELD_READS]}" WHERE document_kind = ? '
                     "AND document_key = ? AND text_sha256 = ? "
                     "ORDER BY read_at DESC NULLS LAST, CAST(citation_rows AS BIGINT) DESC LIMIT 1",
                     [kind, key, values[0][0]],
@@ -1767,6 +1878,9 @@ def _tools() -> list[Tool]:
     def list_sources() -> dict[str, Any]:
         """List the queryable tables by subject (null: not yet assigned): label, coverage kind and pinned rows; views grouped.
 
+        FEC subject tables contain the build-shaped facts. Entries marked child_query
+        expose a distinct response or array-element grain and name their source_tables.
+        Categories distinguish query data, diagnostics, evidence, leads and samples.
         coverage is the dictionary's kind: true_range, window, sampled,
         derived, not_a_range or empty; a window or a sample does not hold the
         source's full history. rows is the pinned generation's row count for a
@@ -1796,7 +1910,7 @@ def _tools() -> list[Tool]:
         # A relationship family's occurrence, pair and field-state views share one summary; list it once.
         views: dict[str, list[str]] = {}
         for name, entry in relationships.items():
-            if name in available:
+            if name in available and entry["metadata"].get("view_role") != "child_query":
                 views.setdefault(entry["metadata"]["summary"], []).append(name)
 
         def rows(name: str) -> dict[str, Any]:
@@ -1810,10 +1924,16 @@ def _tools() -> list[Tool]:
         # among 158 listed in one run (round 6, L10).
         subjects: dict[str | None, list[dict[str, Any]]] = {}
         for name in available:
-            if name not in relationships:
-                subjects.setdefault(metadata.get(name, {}).get("subject"), []).append(
-                    {"table": name, "label": metadata.get(name, {}).get("label"),
-                     "coverage": metadata.get(name, {}).get("kind"), **rows(name)})
+            relationship = relationships.get(name, {})
+            view = relationship.get("metadata", {})
+            if not relationship or view.get("view_role") == "child_query":
+                entry = metadata.get(name, {})
+                subjects.setdefault(entry.get("subject", "campaign_finance" if view.get("view_role") == "child_query" else None), []).append(
+                    {"table": name, "label": entry.get("label", view.get("label")),
+                     "coverage": entry.get("kind", "derived"), **rows(name),
+                     **({"category": entry["category"]} if entry.get("category") else {}),
+                     **({"role": "child_query", "source_tables": relationship["dependencies"]}
+                        if relationship else {})})
         if None in subjects:
             subjects[None] = subjects.pop(None)
         return {
@@ -1821,6 +1941,15 @@ def _tools() -> list[Tool]:
             "subjects": [{"subject": subject, "tables": tables} for subject, tables in subjects.items()],
             "relationship_views": [{"views": names, "summary": summary} for summary, names in views.items()],
             "unavailable_tables": [name for name in (*TABLES, *relationships) if name not in available],
+            "etl_receipts": {
+                "available": "etl_receipts" in available,
+                "query_table": "etl_receipts" if "etl_receipts" in available else None,
+                "dataset_count": len(metadata.get("etl_receipts", {}).get("datasets", [])),
+                "details": "describe_table('etl_receipts') lists datasets and receipt columns.",
+                "members": [{"family": name, "prefix": family["prefix"], **family["etlReceipts"]}
+                            for name, family in _connection_index(cursor)["families"].items() if "etlReceipts" in family],
+                "selection": "Receipt and subject versions must belong to the same selected generation; absence does not mean no processing history.",
+            },
             "fec_release": _fec_release_reply(cursor),
         }
 
@@ -1859,7 +1988,7 @@ def _tools() -> list[Tool]:
         with _statement_timeout(cursor):
             status = _publication_status(cursor)
         relationships = _connection_relationships(cursor)
-        if table not in TABLES and table not in status["tables"] and table not in relationships:
+        if table not in TABLES and table != "etl_receipts" and table not in status["tables"] and table not in relationships:
             known = list(dict.fromkeys((*TABLES, *status["tables"], *relationships)))
             close = difflib.get_close_matches(table, known, n=5, cutoff=0.6)
             hint = f" Close names: {', '.join(close)}." if close else ""
@@ -1875,7 +2004,8 @@ def _tools() -> list[Tool]:
             metadata = relationships[table]["metadata"]
             inherited = _lineage_meanings(metadata.get("column_lineage", {}))
             entry = {"table": table, **metadata,
-                     "columns": view_columns(rows, metadata.get("column_descriptions"), inherited)}
+                     "columns": view_columns(rows, {**_table_metadata().get(table, {}).get("column_descriptions", {}),
+                                                   **metadata.get("column_descriptions", {})}, inherited)}
         else:
             entry = _table_metadata().get(table, {"table": table, "columns": []})
         declared = {column["column_name"]: column for column in entry["columns"]}
@@ -1918,7 +2048,8 @@ def _tools() -> list[Tool]:
             "publication": publication,
             "qualification": scope if qualified is None else {**scope, **qualified[table]},
             "joins": _table_joins(table, measurements=detail),
-            "metadata": {key: value for key, value in entry.items()
+            "metadata": {key: [item["dataset"] for item in value] if table == "etl_receipts" and key == "datasets" else value
+                         for key, value in entry.items()
                          if key not in {"table", "columns", "column_descriptions", "column_lineage"}},
             "metadata_basis": "Dictionary declarations and dated coverage notes; not live population measurements.",
             "schema_matches_declared": not any(differences.values()) if differences is not None else None,
@@ -1935,12 +2066,13 @@ def _tools() -> list[Tool]:
         max_rows: Annotated[int, Field(ge=1, le=500)] = 25,
         max_cell_chars: Annotated[int | None, Field(ge=1)] = None,
     ) -> dict[str, Any]:
-        """Run read-only SQL against configured Spicy Regs tables, returning up to max_rows rows.
+        """Run read-only SQL on Spicy Regs tables, returning up to max_rows rows.
 
         Only SELECT runs; DESCRIBE, SHOW, SUMMARIZE, VALUES, PRAGMA's table
         forms and FROM-first shorthand count as SELECT. Writes (COPY TO, ATTACH,
         CREATE, INSERT, DROP, EXPORT, SET, ...) and EXPLAIN (its ANALYZE form can
-        write) are refused. One view exists per table list_sources lists. Always
+        write) are refused. Query tables listed by list_sources.
+        Internal _spicy_ relations, dynamic SQL and storage statistics are refused.
         LIMIT exploratory queries. rows are arrays in the order of columns.
         truncated says whether rows beyond max_rows were cut from what the
         statement returned, not rows your LIMIT excluded: to learn whether more
@@ -1968,7 +2100,11 @@ def _tools() -> list[Tool]:
 
         with _statement_timeout(cursor):
             relationships = _connection_relationships(cursor)
-            for name in _tables_named(cursor, sql):
+            named = _tables_named(cursor, sql)
+            internal = sorted(name for name in named if name.startswith("_spicy_"))
+            if internal:
+                raise ValueError("Internal relations are not queryable: " + ", ".join(internal))
+            for name in named:
                 release = relationships.get(name, {}).get("release_compatibility")
                 if release is not None and release["status"] != "compatible":
                     raise ValueError(f"Qualified FEC view {name} is disabled: {relationships[name]['reason']}")
@@ -2045,9 +2181,12 @@ def _tools() -> list[Tool]:
             status = _publication_status(cursor)
             if "document_citations" not in status["tables"]:
                 raise ValueError("document_citations is not available in this connection")
+            from spicy_regs.citation_receipts import selected_citation_inputs
+            processing = selected_citation_inputs(cursor)
+            citations = processing["tables"]["document_citations"]
             document = [document_kind, document_key]
             kind_counts = dict(cursor.execute(
-                "SELECT cite_kind, count(*) FROM document_citations WHERE document_kind = ? AND document_key = ? "
+                f'SELECT cite_kind, count(*) FROM "{citations}" WHERE document_kind = ? AND document_key = ? '
                 "GROUP BY cite_kind ORDER BY cite_kind", document,
             ).fetchall())
             parent, held_field = SOURCE_TABLES[document_kind], document_kind in TEXT_SOURCES
@@ -2063,9 +2202,9 @@ def _tools() -> list[Tool]:
             # span_start is stored as text: CAST orders it as the offset it is and refuses one that is not.
             # target_key separates the rows one range citation writes at one span, and text_sha256 (identity,
             # absent from a legacy file) a re-read text's rows, so the order is total and a page boundary stable.
-            columns = [column[0] for column in cursor.execute("SELECT * FROM document_citations LIMIT 0").description]
+            columns = [column[0] for column in cursor.execute(f'SELECT * FROM "{citations}" LIMIT 0').description]
             cursor.execute(
-                "SELECT * FROM document_citations WHERE document_kind = ? AND document_key = ?"
+                f'SELECT * FROM "{citations}" WHERE document_kind = ? AND document_key = ?'
                 + (" AND cite_kind = ?" if cite_kind is not None else "")
                 + " ORDER BY cite_kind, CAST(span_start AS BIGINT), target_key, rule_version"
                 + (", text_sha256" if "text_sha256" in columns else "") + " LIMIT ? OFFSET ?",
@@ -2097,6 +2236,9 @@ def _tools() -> list[Tool]:
             name for name in ("document_citations", parent, *([HELD_FIELD_READS] if held_field else ()))
             if name in status["publication"]
         ])
+        for name in ("document_citations", parent, *([HELD_FIELD_READS] if held_field else ())):
+            if name in processing["publication"]:
+                pins.setdefault(name, processing["publication"][name])
         source_pin = status["publication"].get(parent, {})
 
         def page(resolved: list[dict[str, Any]]) -> dict[str, Any]:

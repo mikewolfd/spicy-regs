@@ -8,6 +8,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 
 from spicy_regs import mcp_server
 from tests.test_mcp_server import _listed, _records, _tool_data
+from tests.citation_fixtures import prepare_citation_inputs
 
 
 def test_discovery_exposes_derived_dependencies_and_unsupported_old_schema(monkeypatch):
@@ -62,12 +63,12 @@ def citation_connection():
     con.execute("CREATE TABLE document_citations (document_kind VARCHAR, document_key VARCHAR, text_sha256 VARCHAR, "
                 "cite_kind VARCHAR, target_key VARCHAR, target_resolved VARCHAR, span_start VARCHAR, rule_version VARCHAR)")
     con.execute("INSERT INTO document_citations VALUES "
-                "('govinfo_package','CRPT-example','digest','public_law','114-public-254','true','1','003'), "
-                "('govinfo_package','CRPT-example','digest','public_law','114-public-254','true','2','003')")
+                "('govinfo_package','CRPT-example','sha256:1111111111111111111111111111111111111111111111111111111111111111','public_law','114-public-254','true','1','003'), "
+                "('govinfo_package','CRPT-example','sha256:1111111111111111111111111111111111111111111111111111111111111111','public_law','114-public-254','true','2','003')")
     # The read record the print-citations rollup writes beside each report it read (pages, rules, rows produced).
     con.execute("CREATE TABLE house_activity_reports (package_id VARCHAR, text_sha256 VARCHAR, pages_read VARCHAR, "
                 "rule_set_version VARCHAR, citation_rows VARCHAR)")
-    con.execute("INSERT INTO house_activity_reports VALUES ('CRPT-example','digest','9','rules','2')")
+    con.execute("INSERT INTO house_activity_reports VALUES ('CRPT-example','sha256:1111111111111111111111111111111111111111111111111111111111111111','9','rules','2')")
     con.execute("CREATE TABLE laws(law_id VARCHAR, congress VARCHAR, law_type VARCHAR, number VARCHAR)")
     con.execute("INSERT INTO laws VALUES ('114-public-254','114','public','254')")
     con.execute("CREATE TABLE _spicy_publication(snapshot VARCHAR)")
@@ -80,8 +81,11 @@ def citation_connection():
 @pytest.mark.parametrize("name", ["fcc_native_observations", "fcc_native_proceeding_links"])
 def test_fcc_description_explains_complete_publisher_key(monkeypatch, name):
     with duckdb.connect() as con:
-        con.execute("CREATE TABLE fcc_filings (id_submission VARCHAR, native_fields_json VARCHAR, "
-                    "native_fields_sha256 VARCHAR)")
+        import pyarrow as pa
+        from spicy_regs.transforms.government_source_shapes import SUBJECT_SCHEMAS
+        con.register("_fcc_fixture", pa.Table.from_batches([], schema=SUBJECT_SCHEMAS["fcc_filings"]))
+        con.execute("CREATE TABLE fcc_filings AS SELECT * FROM _fcc_fixture")
+        con.unregister("_fcc_fixture")
         con.execute("CREATE TABLE fcc_proceedings (name VARCHAR, id_proceeding VARCHAR)")
         mcp_server._install_relationship_views(con)
         monkeypatch.setattr(mcp_server, "_get_connection", lambda: con)
@@ -96,7 +100,7 @@ def test_fcc_description_explains_complete_publisher_key(monkeypatch, name):
 
 def test_citation_tool_is_bounded_and_keeps_extraction_separate(monkeypatch):
     with citation_connection() as con:
-        monkeypatch.setattr(mcp_server, "_get_connection", lambda: con)
+        monkeypatch.setattr(mcp_server, "_get_connection", lambda: prepare_citation_inputs(con))
         server = mcp_server.build_server()
         result = _tool_data(server, "resolve_document_citations", {
             "document_kind": "govinfo_package", "document_key": "CRPT-example", "max_occurrences": 1,
@@ -120,18 +124,22 @@ def test_citation_tool_is_bounded_and_keeps_extraction_separate(monkeypatch):
 def test_source_problems_never_become_successful_target_checks(monkeypatch, damage):
     with citation_connection() as con:
         if damage == "ambiguous":
-            con.execute("INSERT INTO house_activity_reports VALUES ('CRPT-example','other','9','rules','2')")
+            con.execute("INSERT INTO house_activity_reports VALUES ('CRPT-example','sha256:2222222222222222222222222222222222222222222222222222222222222222','9','rules','2')")
         elif damage == "stale":
-            con.execute("UPDATE house_activity_reports SET text_sha256='other'")
+            con.execute("UPDATE house_activity_reports SET text_sha256='sha256:2222222222222222222222222222222222222222222222222222222222222222'")
         elif damage == "missing_finding_digest":
             con.execute("ALTER TABLE document_citations DROP COLUMN text_sha256")
         else:
             con.execute("ALTER TABLE house_activity_reports DROP COLUMN text_sha256")
-        monkeypatch.setattr(mcp_server, "_get_connection", lambda: con)
-        result = _tool_data(mcp_server.build_server(), "resolve_document_citations", {
-            "document_kind": "govinfo_package", "document_key": "CRPT-example",
-        })
+        monkeypatch.setattr(mcp_server, "_get_connection", lambda: prepare_citation_inputs(con))
+        arguments = {"document_kind": "govinfo_package", "document_key": "CRPT-example"}
+        server = mcp_server.build_server()
+        if damage in {"ambiguous", "missing_finding_digest"}:
+            with pytest.raises(ToolError, match="Duplicate|missing subject identity"):
+                _tool_data(server, "resolve_document_citations", arguments)
+            return
+        result = _tool_data(server, "resolve_document_citations", arguments)
         assert all(row["target_status"] == "not_checked" for row in merged_occurrences(result))
         assert result["source_read"]["status"] == {
-            "ambiguous": "ambiguous", "stale": "read", "missing_column": "read_failure", "missing_finding_digest": "read",
+            "stale": "read", "missing_column": "missing_digest",
         }[damage]

@@ -1,0 +1,25 @@
+{
+  "dataset": "fec_collections",
+  "policy_version": "fec-identity-context-receipts/1",
+  "subject_schema": "/////zAAAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAAAAAA=",
+  "identity_fields": [],
+  "receipt_fields": [
+    "collection_id",
+    "source_family",
+    "profile",
+    "source_system_id",
+    "source_state_scope",
+    "record_count",
+    "relationship_count",
+    "record_outcome",
+    "requested_scope_json",
+    "coverage_limits_json",
+    "collection_outcome_json",
+    "artifact_sha256",
+    "conversion_inputs",
+    "conversion_diagnostics",
+    "source_input"
+  ],
+  "receipt_only": true,
+  "nullable_identity_fields": []
+}

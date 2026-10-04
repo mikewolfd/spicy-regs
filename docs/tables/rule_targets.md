@@ -6,6 +6,8 @@
 
 The rule-identity spine: one row per observed edge between a Regulations.gov docket, a CFR part and a RIN, with the `source` class of evidence that states it (docs/ontology.md, "The rule_targets carrier"). A missing or ambiguous reference leaves its target NULL rather than inventing one, and a `docket_document_cites_action_notice` row is a citation, with both targets NULL. Keyed (`docket_id`, `cfr_ref`, `rin`, `source`), NULLs included; joins `dockets` on `docket_id` and `unified_agenda` on `rin`. Built by `build_rule_targets`; all columns are VARCHAR.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='rule_targets'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Derived, and bounded by its inputs: `dockets`, `documents`, `federal_register` and `fr_docket_links` as the live snapshot's manifest pins them. *(measured 2026-09-28)*
 
 - **Parquet file:** `rule_targets.parquet`, in the snapshot that `materialized/rulemaking/latest.json` names
@@ -15,19 +17,13 @@ The rule-identity spine: one row per observed edge between a Regulations.gov doc
 
 | Column | Type | Description |
 | --- | --- | --- |
+| `rule_target_id` | `VARCHAR` | Stable identity of this rule-target assertion, preserving repeated observations independently. |
 | `docket_id` | `VARCHAR` | Regulations.gov docket the edge belongs to, normalized; joins `dockets.docket_id`. |
 | `cfr_ref` | `VARCHAR` | CFR reference the rule targets, `title-part` or `title-part.section` (e.g. `40-60`); NULL on a RIN-only or citation edge. |
 | `cfr_title` | `VARCHAR` | The CFR title of `cfr_ref` (e.g. `40`). |
 | `cfr_part` | `VARCHAR` | The CFR part of `cfr_ref` (e.g. `60`). |
 | `cfr_section` | `VARCHAR` | The CFR section of `cfr_ref` when it names one; NULL for a part-level reference. |
 | `rin` | `VARCHAR` | Regulation Identifier Number the edge carries (e.g. `2060-AV16`); NULL on a CFR-only or citation edge. |
-| `source` | `VARCHAR` | The evidence class: `fr_cfr_ref`, `docket_rin`, `document_rin`, `document_fr_doc` or `docket_document_cites_action_notice`. |
-| `evidence_id` | `VARCHAR` | The least id of the records stating the edge: the docket for `docket_rin`, a dated Register record id (`number@YYYY-MM-DD`) for `fr_cfr_ref`, else a Regulations.gov document id. |
 | `first_seen` | `VARCHAR` | Earliest Eastern day any evidence for the edge is dated, `YYYY-MM-DD`. |
 | `last_seen` | `VARCHAR` | Latest Eastern day any evidence for the edge is dated, `YYYY-MM-DD`. |
-| `method` | `VARCHAR` | How the row was asserted; `deterministic` (computed by rule) throughout. |
-| `actor_id` | `VARCHAR` | The builder that asserted the row, with its version (`spicy-regs:rule-targets:v<n>`), bumped when its published rows change. |
-| `run_id` | `VARCHAR` | The materialization run that built the snapshot (e.g. `rulemaking-20260927T062656Z`). |
-| `asserted_at` | `VARCHAR` | When that run asserted the row, as a UTC ISO 8601 instant. |
-| `supersedes_id` | `VARCHAR` | Id of a prior row this one continues; always NULL here, since an edge has no id of its own. |
-| `fr_references_json` | `VARCHAR` | JSON array of the literal Federal Register number references behind the edge, each with the `status` saying how it resolved (`dated`, `single_candidate_in_input`, `ambiguous`, `missing`, or a folded or unpadded match). |
+| `fr_document_ids` | `VARCHAR[]` | Dated Federal Register document identities associated with this subject; no applicability inference is implied. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |

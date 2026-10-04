@@ -10,16 +10,18 @@ other grouping, and why ``senate_expenditures`` is a rollup of its own.
 from pathlib import Path
 from typing import ClassVar
 
-from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
+from spicy_regs.pipelines.rollups.base import make_rollup_app
+from spicy_regs.legislative_rollups import LegislativeReceiptRollup, family_policies
 from spicy_regs.transforms.build_print_citations import build_print_citations
 from spicy_regs.transforms.held_citations import write_citation_reads
 
 
-class PrintCitationsRollup(RollupPipeline):
+class PrintCitationsRollup(LegislativeReceiptRollup):
     """GovInfo activity reports and budget volumes, what their prints cite, and the actions they state (api.data.gov key)."""
 
     name: ClassVar[str] = "print-citations"
     inputs: ClassVar[tuple[str, ...]] = ()
+    receipt_policies = family_policies('house_activity_reports', 'budget_volumes', 'bill_committee_actions', 'document_citations', 'document_citation_reads')
     outputs: ClassVar[tuple[str, ...]] = (
         "house_activity_reports.parquet",
         "budget_volumes.parquet",
@@ -29,14 +31,15 @@ class PrintCitationsRollup(RollupPipeline):
         # so a run of this family never drops what the held-citations rollup read.
         "document_citation_reads.parquet",
     )
-    #: The family grows by the reads table on its first run from this code; inert once it is published.
-    added_tables: ClassVar[tuple[str, ...]] = ("document_citation_reads.parquet",)
 
     retain_source_evidence: ClassVar[bool] = True
 
     def build(self, output_dir: Path) -> tuple[Path, ...]:
-        paths = build_print_citations(output_dir, evidence=self.source_evidence)
-        return (*paths, write_citation_reads(output_dir, paths[3]))
+        def builder(work, **kwargs):
+            paths = build_print_citations(work, **kwargs)
+            return (*paths, write_citation_reads(work, paths[3]))
+
+        return self.build_receipts(output_dir, builder, evidence=self.source_evidence)
 
 
 app = make_rollup_app(PrintCitationsRollup)

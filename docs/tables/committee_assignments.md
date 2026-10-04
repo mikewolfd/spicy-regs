@@ -6,6 +6,8 @@
 
 One row per member per committee or subcommittee seat a chamber roster file lists today, from the House Clerk's MemberData.xml and the Senate's cvc_member_data.xml. All columns are stored as VARCHAR.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='committee_assignments'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled. Today's seats: the House Clerk's and the Senate's committee files are captured whole each run, for the current Congress only, and each capture replaces its chamber's rows for that Congress; an earlier Congress keeps its last capture. Vacant and placeholder seats appear as the Clerk's file states them. *(measured 2026-09-19)*
 
 **Data quality.** A row is a seat the file listed on its `file_date`: a seat the file no longer lists is gone on the next capture. The House file states its Congress and the reader proves it; the Senate file states none, so its rows carry the caller's Congress with `congress_basis` = `caller`. A House vacancy has no member and no row, and a seated member whose only assignment is the file's `<committee rank=""/>` placeholder has none either (nine placeholders on 2026-09-19). Only a file captured this run replaces its chamber's rows; a chamber whose file was not established keeps its prior rows. House `system_code` derives its prefix from the native committee type and parent context; `committee_code` preserves the literal source identifier. Join matching `system_code` values to `committees` and `bioguide_id` to `members`. Rows whose `system_code` matches no committee stay listed and are never matched by name (the Joint Economic Committee has three Congress.gov codes). On 2026-09-23 that is 28 rows: 25 House seats on the Clerk's four joint committees (`EC00`, `IT00`, `JL00`, `JP00`, typed `joint` in the Clerk file with no Congress.gov code), and three Senate seats on `JSIK00`, the 2024 inaugural committee, which Congress.gov does not list in any Congress. All columns are stored as VARCHAR.
@@ -18,12 +20,11 @@ One row per member per committee or subcommittee seat a chamber roster file list
 | Column | Type | Description |
 | --- | --- | --- |
 | `congress` | `VARCHAR` | The Congress the assignment belongs to. |
-| `congress_basis` | `VARCHAR` | `file` when the file states that Congress itself (the House file does), `caller` when it states none and the caller supplied it (the Senate file states only its update date). |
 | `session` | `VARCHAR` | The session the House file states; the Senate file states none. |
 | `chamber` | `VARCHAR` | Which file the seat came from: house or senate. |
 | `system_code` | `VARCHAR` | Derived join code: House native standing/select type selects hs/hl; the Senate code is lowercased. House joint codes keep their unresolved legacy spelling and do not establish a Congress.gov join. |
 | `committee_code` | `VARCHAR` | The file's own committee code, verbatim. |
-| `is_subcommittee` | `VARCHAR` | true for a House subcommittee seat; the Senate file lists full committees only. |
+| `is_subcommittee` | `BOOLEAN` | true for a House subcommittee seat; the Senate file lists full committees only. |
 | `parent_system_code` | `VARCHAR` | The parent committee's systemCode for a subcommittee seat. |
 | `committee_name` | `VARCHAR` | The committee's name as the file itself states it. |
 | `bioguide_id` | `VARCHAR` | The member's bioguide id, which both files state; the key's target is members.bioguide_id. |
@@ -35,5 +36,3 @@ One row per member per committee or subcommittee seat a chamber roster file list
 | `district` | `VARCHAR` | The House member's district as the file states it. |
 | `rank` | `VARCHAR` | The House file's rank on the committee; the Senate file states none. |
 | `position` | `VARCHAR` | The seat's stated role, verbatim: the House leadership attribute or the Senate position attribute. |
-| `file_date` | `VARCHAR` | The date the file states for itself: the House publish-date or the Senate lastUpdate date. |
-| `observed_at` | `VARCHAR` | When the file was captured; the merge prefers the larger value. |

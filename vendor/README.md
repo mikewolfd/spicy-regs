@@ -5,6 +5,11 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
+- `spicy_docs-0.54.0+etl.cf9f88e8c4b7`: merged native ETL, source-reader, and scorecard work from
+  SpicyDocs commit `cf9f88e8c4b7967b73edc190d326650306af9308`. Two archive
+  builds produced identical wheels and every packaged source file matches the commit.
+  The receipt in `spicy_docs-etl.json` records its digest. The complete source gate passed.
+
 - `spicy_docs-0.54.0+scorecards.9ea43ea7845d`: additive scorecard adoption over the
   current main reader `0.54.0+chaos.a1b91ce28a2a`, preserving its newer source readers
   and body-text derivation exports. SHA-256

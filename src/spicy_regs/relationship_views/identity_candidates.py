@@ -53,3 +53,38 @@ IDENTITY_VIEWS = (
             'acceptance, rejection or revocation workflow is implemented by this view.', ('candidate_id',),
             column_descriptions=COLUMNS),
 )
+
+
+def native_candidates(publication):
+    selected = publication.get(SOURCE)
+    pinned = isinstance(selected, dict) and bool(selected.get('artifact_digest') or selected.get('sha256'))
+    identity = f"""'org_candidate_' || sha256(to_json(struct_pack(
+        source_publication:=CAST({pin(publication, SOURCE)} AS JSON), organization:=organization,
+        committee_id:=committee_id)))""" if pinned else 'NULL::VARCHAR'
+    return f"""SELECT *, {identity} AS candidate_id,
+        {literal('publication_scoped' if pinned else 'unversioned_source')} AS candidate_id_status,
+        organization AS observed_name, 'fec_committee' AS target_namespace,
+        committee_id AS candidate_target_id, 'pending' AS decision, 'unknown' AS acting_role,
+        struct_pack(committee_match_count:=committee_match_count,
+            multiple_name_matches:=committee_match_count>1) AS competing_candidates,
+        NULL::VARCHAR AS accepted_identity_evidence, NULL::VARCHAR AS decision_at,
+        {pin(publication, SOURCE)} AS source_publication_json,
+        'native-name-candidates/2' AS rule_version
+        FROM org_committee_links"""
+
+
+NATIVE_IDENTITY_VIEWS = (
+    SQLView('org_identity_candidates', {
+        SOURCE: ('organization', 'committee_id', 'committee_name', 'committee_match_count',
+                 'first_comment_date', 'last_comment_date', 'association_kind'),
+    }, native_candidates,
+       'Organization name associations remain pending candidates, not accepted identity. '
+       'Candidate IDs bind the selected domain row and publication. Matching algorithms, '
+       'normalizations and confidence are available in its separate ETL receipt; date bounds '
+       'describe comments and do not establish validity. Competing counts are native structs.',
+       ('candidate_id',), rule_version='native-name-candidates/2', column_descriptions={
+           **{name: text for name, text in COLUMNS.items() if name not in {'matcher_evidence_json', 'competing_candidates_json'}},
+           'candidate_id': "Stable candidate key from the pinned publication, organization and committee_id; NULL when unpinned.",
+           'competing_candidates': "Native struct of the recorded match count and whether several committee names matched.",
+       }),
+)

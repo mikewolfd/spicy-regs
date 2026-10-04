@@ -6,6 +6,8 @@
 
 One retained agency report edition observation with its source context. Discover report editions, fiscal periods and source-defined report numbers. Join child metrics, recommendations, text and document references using report_id without merging editions by title. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_agency_reports'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled. Supported observations from retained FOIA XML reports, oversight HTML and non-PDF agency documents. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
 
 - **Parquet file:** `fec_agency_reports.parquet`
@@ -16,31 +18,37 @@ One retained agency report edition observation with its source context. Discover
 | Column | Type | Description |
 | --- | --- | --- |
 | `record_id` | `VARCHAR` | Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event. |
-| `identity_version` | `VARCHAR` | Version of the source-observation identity rule; it does not select a current or canonical record. |
-| `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
-| `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
-| `source_record_id` | `VARCHAR` | Native source-observation key within collection_id. Resolve with the source generation, exact locator and source digest, not this value alone. |
-| `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
-| `source_locator_json` | `VARCHAR` | Exact source row or subrecord coordinates, including available member, ordinal, byte span and field-definition references. Resolve in the pinned source generation. |
-| `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
-| `selection_evidence_sha256` | `VARCHAR` | Digest of the retained selection evidence used to authorize this mapper's source scope; not a financial inclusion decision. |
-| `source_url` | `VARCHAR` | Captured source URL for this observation; it does not assert current availability or body retrieval. |
-| `observed_at` | `VARCHAR` | Recorded capture time when supplied, distinct from the source's event, report and publication dates. |
-| `subrecord_pointer` | `VARCHAR` | Exact child pointer within the source-owned native record, retaining repeated occurrences. |
 | `report_id` | `VARCHAR` | Key of the associated agency report edition. It does not merge different captures or schema editions by title. |
 | `report_type` | `VARCHAR` | Source-reported report classification, interpreted within its namespace rather than as a universal period code. |
 | `title` | `VARCHAR` | Source title or explicitly labeled mapper title; consult title_basis or title_status when present. |
-| `title_basis` | `VARCHAR` | Evidence basis for the title, distinguishing source text from a structural report label. |
 | `native_report_number` | `VARCHAR` | Literal agency report number when supplied; not an FEC financial file number. |
-| `schema_version` | `VARCHAR` | Source report schema version, retained to keep definitions from different XML editions distinct. |
-| `fiscal_year_raw` | `VARCHAR` | Fiscal year exactly as stated in the agency report before integer interpretation. |
 | `period_basis` | `VARCHAR` | Evidence and source definition establishing the covered period; unknown or overlapping periods remain explicit. |
-| `publication_date_raw` | `VARCHAR` | Literal source value before conversion for publication_date. Preserves spelling, signs and empty values; the typed value and its status are separate. |
-| `publication_date_status` | `VARCHAR` | Source-presence or conversion state for publication_date, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
-| `organizations_json` | `VARCHAR` | JSON representation of organizations stated by the agency report, preserving source naming and context. |
-| `metadata_json` | `VARCHAR` | Complete retained native metadata supporting the mapped fields; interpret it within the selected source layout. |
-| `body_status` | `VARCHAR` | Explicit body availability or processing status. A PDF link remains deferred; metadata does not imply extracted content. |
 | `fiscal_year` | `INTEGER` | Agency report fiscal year parsed from its stated source value; not an election cycle. |
 | `period_start` | `DATE` | Date parsed from the start of the source-defined reporting period. NULL requires the source value and conversion status; capture time is not substituted. |
 | `period_end` | `DATE` | Date parsed from the end of the source-defined reporting period. NULL requires the source value and conversion status; capture time is not substituted. |
 | `publication_date` | `DATE` | Date parsed from the source publication date of the agency report. NULL requires the source value and conversion status; capture time is not substituted. |
+| `organizations` | `STRUCT(id VARCHAR, "names" VARCHAR[], abbreviations VARCHAR[], "role" VARCHAR, "label" VARCHAR, "value" VARCHAR, items VARCHAR[])[]` | JSON representation of organizations stated by the agency report, preserving source naming and context. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `published_report_body` | `VARCHAR` | Publisher report field body, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
+| `published_report_field_net_funds_for_better_use` | `VARCHAR` | Publisher report field field-net-funds-for-better-use, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
+| `published_report_field_net_questioned_costs` | `VARCHAR` | Publisher report field field-net-questioned-costs, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
+| `published_report_additional_details` | `VARCHAR` | Publisher report field field-report-additional-details, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
+| `published_report_agency_reviewed` | `VARCHAR` | Publisher report field field-report-agency-reviewed, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
+| `published_report_agency_wide` | `VARCHAR` | Publisher report field field-report-agency-wide, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
+| `published_report_components` | `VARCHAR` | Publisher report field field-report-components, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
+| `published_report_date_issued` | `VARCHAR` | Publisher report field field-report-date-issued, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
+| `published_report_external_entity` | `VARCHAR` | Publisher report field field-report-external-entity, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
+| `published_report_file` | `VARCHAR` | Publisher report field field-report-file, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
+| `published_report_hidden` | `VARCHAR` | Publisher report field field-report-hidden, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
+| `published_report_link` | `VARCHAR` | Publisher report field field-report-link, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
+| `published_report_location` | `VARCHAR` | Publisher report field field-report-location, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
+| `published_report_ndaa_5274` | `VARCHAR` | Publisher report field field-report-ndaa-5274, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
+| `published_report_number` | `VARCHAR` | Publisher report field field-report-number, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
+| `published_report_number_of_recs` | `VARCHAR` | Publisher report field field-report-number-of-recs, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
+| `published_report_other_oigs` | `VARCHAR` | Publisher report field field-report-other-oigs, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
+| `published_report_peer_review_by_oig` | `VARCHAR` | Publisher report field field-report-peer-review-by-oig, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
+| `published_report_special_projects` | `VARCHAR` | Publisher report field field-report-special-projects, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
+| `published_report_submitting_oig` | `VARCHAR` | Publisher report field field-report-submitting-oig, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
+| `published_report_type` | `VARCHAR` | Publisher report field field-report-type, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
+| `published_report_field_sarc_end_date` | `VARCHAR` | Publisher report field field-sarc-end-date, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
+| `published_report_field_sarc_start_date` | `VARCHAR` | Publisher report field field-sarc-start-date, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
+| `published_report_field_title_full` | `VARCHAR` | Publisher report field field-title-full, retained as substantive report data; original values and field evidence remain in the ETL receipt. |

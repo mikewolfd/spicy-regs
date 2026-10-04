@@ -222,3 +222,73 @@ def assemble_table(
     return dict(rows=sum(item.rows for item in inputs), members=results,
                 partition_columns=["source_namespace"] if partitioned else [],
                 every_stored_cell_compared=True, source_files_rehashed_after_readback=True)
+
+
+def assemble_subject_table(
+    inputs: Sequence[TypedInput], *, table: str, schema: pa.Schema, output: Path,
+    generation_id: str, context_for, check_resources: Callable[[], None],
+    source_partitioned: bool = False, read_batch_rows: int = 8192,
+) -> dict:
+    """Assemble this FEC family's subjects and receipts from qualified mapper files.
+
+    Namespace partitions are checked on the input processing rows. Subject output
+    uses ordinary Parquet members because source_namespace now lives in receipts;
+    removing that field never bypasses input partition validation. The original
+    assembly entry point remains available for legacy, unmigrated datasets.
+    """
+    from .fec_subject_receipts import write_fec_subjects, read_fec_with_receipts
+    from .fec_native_subjects import FIELD_RULES
+
+    if table not in FIELD_RULES or not inputs or read_batch_rows <= 0:
+        raise ValueError("Subject assembly requires an owned dataset and selected inputs")
+    paths = [item.path.resolve() for item in inputs]
+    if len(paths) != len(set(paths)):
+        raise ValueError("The same FEC input file was selected twice")
+    for item in inputs:
+        check_resources()
+        _digest(item.sha256)
+        if type(item.rows) is not int or item.rows < 0 or not item.path.is_file() or item.path.is_symlink():
+            raise ValueError("FEC input must be a regular file with explicit row membership")
+        if _sha(item.path) != item.sha256:
+            raise ValueError("FEC input bytes differ from the qualified digest")
+        with pq.ParquetFile(item.path) as source:
+            if source.metadata.num_rows != item.rows:
+                raise ValueError("FEC input footer differs from declared row membership")
+            if not pa.unify_schemas([schema, source.schema_arrow]).equals(schema, check_metadata=False):
+                raise ValueError("FEC assembly target would discard source fields")
+        if source_partitioned and not isinstance(item.source_namespace, str):
+            raise ValueError("FEC namespace partition requires its exact supported source value")
+    if source_partitioned and "source_namespace" not in schema.names:
+        raise ValueError("Namespace validation requires processing rows reconstructed from receipts")
+
+    def records():
+        for batch in _batches(inputs, schema, read_batch_rows, check_resources, source_partitioned):
+            yield from batch.to_pylist()
+
+    paths, policy = write_fec_subjects(records(), output, table=table, input_schema=schema,
+                                      generation_id=generation_id, context_for=context_for,
+                                      batch_size=read_batch_rows)
+    subject, receipts = paths
+    refused = 0
+    for batch in pq.ParquetFile(receipts).iter_batches(columns=["outcome"]):
+        refused += sum(v in {"refused", "error", "rejected"} for v in batch.column(0).to_pylist())
+    # Compare exact prior mapper rows when the source is fully admitted. A refused
+    # input remains in the receipt and explicitly prevents a qualified full rebuild.
+    checked = None
+    if subject is not None and not refused:
+        def restored():
+            values = []
+            for row in read_fec_with_receipts([subject], [receipts], policy, generation_id=generation_id):
+                values.append(row)
+                if len(values) == read_batch_rows:
+                    yield pa.RecordBatch.from_pylist(values, schema=schema)
+                    values.clear()
+            if values:
+                yield pa.RecordBatch.from_pylist(values, schema=schema)
+        checked = _equal_streams(_batches(inputs, schema, read_batch_rows, check_resources, source_partitioned), restored())
+    return dict(dataset=table, subject_path=None if subject is None else str(subject), receipt_path=str(receipts),
+                policy=policy.descriptor(), input_rows=sum(i.rows for i in inputs),
+                subject_rows=0 if subject is None else pq.ParquetFile(subject).metadata.num_rows,
+                refused_rows=refused, exact_mapper_rows_compared=checked,
+                source_partition_columns=["source_namespace"] if source_partitioned else [],
+                subject_partition_columns=[], full_rebuild_qualified=not refused)

@@ -10,7 +10,8 @@ which is built separately from a retained copy of the 54.6 GB ``opinions`` expor
 from pathlib import Path
 from typing import ClassVar
 
-from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
+from spicy_regs.pipelines.rollups.base import make_rollup_app
+from spicy_regs.pipelines.rollups.court_receipts import CourtReceiptRollup as RollupPipeline
 from spicy_regs.transforms.build_court_bulk_tables import (
     CITATION_MAP,
     CITATIONS,

@@ -40,6 +40,7 @@ from loguru import logger
 
 from spicy_regs.env_values import first_env
 from spicy_regs.sources import r2
+from spicy_regs.transforms.government_receipts import internal_prior, receipt_builder
 from spicy_regs.transforms.parquet_rows import str_or_none, write_rows
 from spicy_regs.transforms.table_merge import merge_local_prior
 
@@ -520,7 +521,8 @@ def _docket_documents_in_preference(documents: list[dict]) -> list[dict]:
     return ordered
 
 
-def build_fcc_proceedings(output_dir: Path) -> Path:
+@receipt_builder
+def build_fcc_proceedings(output_dir: Path, *, evidence: CaptureEvidence | None = None) -> Path:
     """Build ``fcc_proceedings.parquet`` from a whole walk of ECFS proceedings, one row per docket name.
 
     A whole walk (21,691 documents in three windows, measured 2026-09-23) rather than an
@@ -531,7 +533,12 @@ def build_fcc_proceedings(output_dir: Path) -> Path:
     """
     out_file = output_dir / PROCEEDINGS_OUTPUT
     logger.info("FCC proceedings: walking every proceeding created since {}", ECFS_EPOCH)
-    documents = list(_fetch_fcc("proceedings"))
+    transport = None
+    if evidence is not None:
+        evidence.credential = _resolve_api_key() or ""
+        evidence.event("selection", stage="fcc-proceedings", since=ECFS_EPOCH.isoformat())
+        transport = evidence.transport(stage="fcc-proceedings-response", max_bytes=MAX_PAGE_BYTES)
+    documents = list(_fetch_fcc("proceedings", **({"transport": transport} if transport is not None else {})))
     if not documents:
         raise FccEcfsError("ECFS answered no proceedings at all; an empty whole walk is not an empty table")
     by_name: dict[str, list[dict]] = {}
@@ -547,6 +554,9 @@ def build_fcc_proceedings(output_dir: Path) -> Path:
     repeated = sorted(name for name, docs in by_name.items() if len(docs) > 1)
     if repeated:
         logger.info("FCC proceedings: {} docket names hold more than one document: {}", len(repeated), repeated)
+    if evidence is not None:
+        evidence.event("proceeding-selection", nameless_ids=nameless, repeated_names=repeated,
+                       selection_rule="earliest-created/latest-modified/most-populated/lowest-id")
     rows = [_shape_proceeding(_docket_documents_in_preference(docs)[0]) for docs in by_name.values()]
     rows.sort(key=lambda row: row["name"])
     rows.sort(key=lambda row: row["date_created"] or "", reverse=True)
@@ -560,6 +570,7 @@ def build_fcc_proceedings(output_dir: Path) -> Path:
     return out_file
 
 
+@receipt_builder
 def build_fcc_filings(
     output_dir: Path,
     *,
@@ -577,6 +588,8 @@ def build_fcc_filings(
     prior_file = output_dir / "_fcc_filings_prior.parquet"
 
     have_prior = prior_file.exists() or r2.download(FILINGS_OUTPUT, prior_file)
+    if have_prior:
+        prior_file = internal_prior("fcc_filings", prior_file)
     if since is None:
         prior_max = _prior_max_date(prior_file, "date_received") if have_prior else None
         if prior_max:

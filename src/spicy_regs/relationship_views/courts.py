@@ -36,16 +36,16 @@ def spec(name, source, source_keys, roles, extras=()):
 
 COURT_VIEWS = (
     spec('court_opinion_citation_endpoints', 'court_citation_map',
-         ('citing_opinion_id','cited_opinion_id','dump_date'), (
+         ('citing_opinion_id','cited_opinion_id'), (
              ('citing','citing_opinion_id','court_opinions','opinion_id','court_opinion'),
              ('cited','cited_opinion_id','court_opinions','opinion_id','court_opinion'),)),
     spec('court_opinion_cluster_endpoints', 'court_opinions', ('opinion_id',), (
         ('decision','cluster_id','court_opinion_clusters','cluster_id','court_cluster'),)),
     spec('court_cluster_docket_endpoints', 'court_opinion_clusters', ('cluster_id',), (
         ('case','cl_docket_id','court_dockets','cl_docket_id','court_docket'),)),
-    spec('court_reporter_citation_endpoints', 'court_citations', ('citation_id','dump_date'), (
+    spec('court_reporter_citation_endpoints', 'court_citations', ('citation_id',), (
         ('decision','cluster_id','court_opinion_clusters','cluster_id','court_cluster'),)),
-    spec('court_parenthetical_endpoints', 'court_parentheticals', ('parenthetical_id','dump_date'), (
+    spec('court_parenthetical_endpoints', 'court_parentheticals', ('parenthetical_id',), (
         ('described','described_opinion_id','court_opinions','opinion_id','court_opinion'),
         ('describing','describing_opinion_id','court_opinions','opinion_id','court_opinion'),)),
 )

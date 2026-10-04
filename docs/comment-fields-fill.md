@@ -361,8 +361,7 @@ concurrency group, so it excludes the other writers by hand:
    schedule or can be dispatched (`etl-new-pipeline.yml` with
    `_regulations-refresh.yml` and `_comments-mirror.yml`,
    `publish-comments-mirror.yml`, `dedupe-comments-catalog.yml`,
-   `backfill-comment-attachment-text.yml`, `seed-comments-catalog.yml`,
-   `seed-dockets-catalog.yml`, `check-comments-freshness.yml`,
+   `backfill-comment-attachment-text.yml`, `check-comments-freshness.yml`,
    `fill-comment-fields.yml`). Confirm none has a run queued or in progress
    (`gh run list --workflow <file> --status in_progress`, then `--status
    queued`).

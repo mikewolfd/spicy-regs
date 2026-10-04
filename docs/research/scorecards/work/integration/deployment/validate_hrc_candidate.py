@@ -8,9 +8,9 @@ from hashlib import sha256
 import json
 from pathlib import Path
 
-import pyarrow.parquet as pq
 
 from prepare_hrc import canonical, check_public_evidence
+from spicy_regs.scorecards.etl import read_source_generation
 from spicy_regs.generations import verify_generation
 
 CARD = "hrc:118-final"
@@ -78,16 +78,17 @@ def main():
         raise ValueError("Readback asset differs from prepared input")
     tables = {}
     preserved = {}
-    for path in Path(prepared["generation_directory"]).glob("*.parquet"):
-        rows = pq.ParquetFile(path).read().to_pylist()
-        field, scope = ("publisher_id", "hrc") if path.stem == "scorecard_publishers" else ("scorecard_id", CARD)
+    current_rows = read_source_generation(Path(prepared["generation_directory"]))
+    prior_rows = read_source_generation(args.prior_generation)
+    for name, rows in current_rows.items():
+        field, scope = ("publisher_id", "hrc") if name == "scorecard_publishers" else ("scorecard_id", CARD)
         kept = [row for row in rows if row[field] != scope]
-        old = pq.ParquetFile(args.prior_generation / path.name).read().to_pylist()
+        old = prior_rows[name]
         old = [row for row in old if row[field] != scope]
         if canonical(old) != canonical(kept):
             raise ValueError("A prior source value or observation identifier changed")
-        tables[path.stem] = [row for row in rows if row[field] == scope]
-        preserved[path.stem] = len(kept)
+        tables[name] = [row for row in rows if row[field] == scope]
+        preserved[name] = len(kept)
     result = value_readback(json.loads(asset_bytes), tables)
     check_public_evidence(Path(prepared["evidence_directory"]))
     report = {

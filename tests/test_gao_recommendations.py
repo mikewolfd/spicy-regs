@@ -14,6 +14,8 @@ from pathlib import Path
 
 import httpx
 import pyarrow.parquet as pq
+from tests.government_fakes import literal_table, copy_build_selection
+from spicy_regs.transforms.government_source_shapes import SUBJECT_SCHEMAS
 import pytest
 from spicy_docs.schemas.gao_recommendation_tables import GAO_RECOMMENDATIONS
 from spicy_docs.sources.gao.recommendations import (
@@ -75,6 +77,7 @@ def _prior(path: Path | None):
         if path is None:
             return False
         shutil.copyfile(path, local)
+        copy_build_selection(path, local.parent)
         return True
 
     return download
@@ -88,14 +91,16 @@ def _run(directory: Path, body: bytes = EXCERPT, prior: Path | None = None, evid
 
 
 def _rows(path: Path) -> dict[str, dict]:
-    return {row["recommendation_id"]: row for row in pq.read_table(path).to_pylist()}
+    return {row["recommendation_id"]: row for row in literal_table(path).to_pylist()}
 
 
 def test_a_first_run_publishes_every_listed_recommendation_open(tmp_path):
     out = _run(tmp_path / "first")
     table = pq.read_table(out)
-    assert tuple(table.column_names) == GAO_RECOMMENDATIONS.columns
-    rows = table.to_pylist()
+    assert table.schema.equals(SUBJECT_SCHEMAS['gao_recommendations'])
+    assert 'first_seen' not in table.column_names and 'last_seen' not in table.column_names
+    assert all(row['listed_open'] is True for row in table.to_pylist())
+    rows = literal_table(out).to_pylist()
     assert len(rows) == 35 and len({row["recommendation_id"] for row in rows}) == 35
     numbered = [row for row in rows if row["recommendation_number"] is not None]
     assert len(numbered) == 33 and {row["recommendation_kind"] for row in numbered} == {"recommendation", "matter"}
@@ -243,7 +248,7 @@ def _published_text(root: Path) -> list[tuple[Path, str]]:
     seen = []
     for path in sorted(p for p in root.rglob("*") if p.is_file()):
         if path.suffix == ".parquet":
-            seen.append((path, json.dumps(pq.read_table(path).to_pylist(), ensure_ascii=False)))
+            seen.append((path, json.dumps(pq.read_table(path).to_pylist(), ensure_ascii=False, default=str)))
         else:
             seen.append((path, path.read_bytes().decode("utf-8", "replace")))
     return seen

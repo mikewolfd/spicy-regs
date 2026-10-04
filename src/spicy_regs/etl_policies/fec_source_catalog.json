@@ -1,0 +1,24 @@
+{
+  "dataset": "fec_source_catalog",
+  "policy_version": "fec-identity-context-receipts/1",
+  "subject_schema": "/////zAAAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAAAAAA=",
+  "identity_fields": [],
+  "receipt_fields": [
+    "source_family",
+    "title",
+    "api_routes_json",
+    "indexes_json",
+    "bulk_families_json",
+    "references_json",
+    "source_metadata_json",
+    "catalog_sha256",
+    "provider_version",
+    "catalogued_at",
+    "coverage_note",
+    "conversion_inputs",
+    "conversion_diagnostics",
+    "source_input"
+  ],
+  "receipt_only": true,
+  "nullable_identity_fields": []
+}

@@ -1,0 +1,11 @@
+{
+  "dataset": "document_citation_reads",
+  "policy_version": "legislative-documents/1",
+  "subject_schema": "/////zAAAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAAAAAA=",
+  "identity_fields": [],
+  "receipt_fields": [
+    "raw_source_row"
+  ],
+  "receipt_only": true,
+  "nullable_identity_fields": []
+}

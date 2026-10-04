@@ -8,6 +8,7 @@ import duckdb
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
+from mcp.server.mcpserver.exceptions import ToolError
 
 from spicy_regs import mcp_server
 from spicy_regs.citation_sources import document_key, key_values, source_digests
@@ -96,7 +97,7 @@ def test_composite_full_identity_and_actual_field_digest():
     key = document_key("bill_section", keys)
     assert key_values("bill_section", key) == keys
     with duckdb.connect() as con:
-        con.execute("CREATE TABLE bill_sections(bill_id VARCHAR,version_code VARCHAR,source VARCHAR,seq INTEGER,body VARCHAR)")
+        con.execute("CREATE TABLE bill_sections(bill_id VARCHAR,version_code VARCHAR,printing_id VARCHAR,seq INTEGER,body VARCHAR)")
         con.execute("INSERT INTO bill_sections VALUES (?,?,?,?,?), (?,?,?,?,?)", [*keys, "right", *keys[:3], "3", "wrong"])
         assert source_digests(con, "bill_section", key) == [("sha256:" + hashlib.sha256(b"right").hexdigest(),)]
         con.execute("INSERT INTO bill_sections SELECT * FROM bill_sections WHERE seq=2")
@@ -106,6 +107,8 @@ def test_composite_full_identity_and_actual_field_digest():
 
 
 def test_mcp_checks_literal_field_and_refuses_stale_or_duplicate_parent(tmp_path, monkeypatch):
+    from tests.citation_fixtures import prepare_citation_inputs
+
     with connection() as con:
         con.execute("INSERT INTO comments VALUES ('a', 'Public Law 114-254')")
         path = run(con, tmp_path, ["a"])
@@ -116,7 +119,7 @@ def test_mcp_checks_literal_field_and_refuses_stale_or_duplicate_parent(tmp_path
         con.execute("INSERT INTO _spicy_publication VALUES (?)", [json.dumps({"families": {
             "laws": {"artifactDigest": "sha256:" + "a" * 64, "tables": {"laws.parquet": {}}},
         }})])
-        monkeypatch.setattr(mcp_server, "_get_connection", lambda: con)
+        monkeypatch.setattr(mcp_server, "_get_connection", lambda: prepare_citation_inputs(con))
         server = mcp_server.build_server()
         args = {"document_kind": "comment_inline", "document_key": "a"}
         found = _tool_data(server, "resolve_document_citations", args)
@@ -125,7 +128,8 @@ def test_mcp_checks_literal_field_and_refuses_stale_or_duplicate_parent(tmp_path
         con.execute("UPDATE comments SET comment='changed'")
         assert _tool_data(server, "resolve_document_citations", args)["occurrences"][0]["target_status"] == "not_checked"
         con.execute("INSERT INTO comments SELECT * FROM comments")
-        assert _tool_data(server, "resolve_document_citations", args)["source_read"]["status"] == "ambiguous"
+        with pytest.raises(ToolError, match="Duplicate"):
+            _tool_data(server, "resolve_document_citations", args)
 
 
 def test_selection_requires_full_keys_and_immutable_input(tmp_path):
@@ -164,7 +168,7 @@ class _Recording:
 
 def test_selected_fields_read_with_two_scans_per_kind_on_native_key_types():
     with duckdb.connect() as con:
-        con.execute("CREATE TABLE bill_sections(bill_id VARCHAR,version_code VARCHAR,source VARCHAR,seq INTEGER,body VARCHAR)")
+        con.execute("CREATE TABLE bill_sections(bill_id VARCHAR,version_code VARCHAR,printing_id VARCHAR,seq INTEGER,body VARCHAR)")
         con.executemany("INSERT INTO bill_sections VALUES ('B','ih','congress.gov',?,?)",
                         [(n, f"section {n}") for n in range(1, 6)])
         selections = [held.Selection("bill_section", ("B", "ih", "congress.gov", key)) for key in ("2", "02", "5", "9")]
@@ -239,34 +243,52 @@ def test_a_read_from_before_the_reads_table_states_no_time_or_rule_set(tmp_path)
         "empty", "0", None, None)
 
 
-def test_the_print_citations_family_rebuilds_the_reads_from_its_merged_citation_table(tmp_path, monkeypatch):
-    """Both writers of the family publish the table, so a print-citations run never drops a held read."""
+def _native_print_family(tmp_path, monkeypatch):
+    from spicy_docs.schemas import TABLE_CONTRACTS
+    from spicy_regs.contract_types import arrow_schema
     from spicy_regs.pipelines.rollups import print_citations as rollup
+    import shutil
 
     with connection() as con:
         con.execute("INSERT INTO comments VALUES ('empty', 'No references here.')")
         citations = run(con, tmp_path, ["empty"])
-    monkeypatch.setattr(rollup, "build_print_citations", lambda output_dir, **_: (citations,) * 4)
-    *_, reads = rollup.PrintCitationsRollup(output_dir=tmp_path).build(tmp_path)
+
+    def build(output_dir, **_):
+        paths = []
+        for name in ("house_activity_reports", "budget_volumes", "bill_committee_actions"):
+            path = output_dir / (name + ".parquet")
+            pq.write_table(arrow_schema(TABLE_CONTRACTS[name]).empty_table(), path)
+            paths.append(path)
+        target = output_dir / "document_citations.parquet"
+        shutil.copyfile(citations, target)
+        return (*paths, target)
+
+    monkeypatch.setattr(rollup, "build_print_citations", build)
+    return rollup.PrintCitationsRollup(output_dir=tmp_path).build(tmp_path)
+
+
+def test_the_print_citations_family_rebuilds_the_reads_from_its_merged_citation_table(tmp_path, monkeypatch):
+    """Successful empty reads survive as shared receipts beside the complete native subject family."""
+    from spicy_regs.pipelines.rollups.print_citations import PrintCitationsRollup
+    from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
+
+    _native_print_family(tmp_path, monkeypatch)
+    reads = SelectedPriors(tmp_path / "verify", root=tmp_path).get("document_citation_reads")
     assert [row["document_key"] for row in pq.read_table(reads).to_pylist()] == ["empty"]
-    assert rollup.PrintCitationsRollup.outputs[-1] == "document_citation_reads.parquet"
-    assert rollup.PrintCitationsRollup.added_tables == ("document_citation_reads.parquet",)
+    assert "document_citation_reads.parquet" not in PrintCitationsRollup.outputs
+    assert "document_citation_reads.parquet" in PrintCitationsRollup.source_outputs
+    assert next(p for p in PrintCitationsRollup.receipt_policies if p.dataset == "document_citation_reads").receipt_only
 
 
-def test_the_held_citations_rollup_records_its_familys_citation_table_as_no_parent(tmp_path):
-    """document_citations belongs to print-citations, the family this partial writer updates: its prior is the
-    generation's prior-generation input (c8e49dbb recorded it as a parent before this rule)."""
-    import json
-
+def test_the_held_citations_rollup_records_its_familys_citation_table_as_no_parent(tmp_path, monkeypatch):
+    """Its own verified input belongs to prior-generation evidence, never the dependency parents."""
     from spicy_regs.pipelines.rollups.held_citations import HeldCitationsRollup
 
+    _native_print_family(tmp_path, monkeypatch)
     selection = tmp_path / "selection.json"
     selection.write_text(json.dumps({"selections": [{"kind": "comment_inline", "keys": ["a"]}],
                                      "input_generations": {"comments": "sha256:" + "c" * 64}}))
-    (tmp_path / "document_citations.parquet").write_bytes(b"held")
-    snapshot = {"families": {"print-citations": {"artifactDigest": "sha256:" + "d" * 64, "tables": {
-        "document_citations.parquet": {"sha256": "sha256:" + "e" * 64, "byteSize": 4}}}}}
-    assert HeldCitationsRollup(selection=selection)._prime(tmp_path, snapshot) == {}
+    assert HeldCitationsRollup(selection=selection, output_dir=tmp_path)._prime(tmp_path) == {}
 
 
 def test_retained_held_field_bytes_have_claimed_evidence_members(tmp_path):

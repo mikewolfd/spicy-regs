@@ -14,7 +14,8 @@ from pathlib import Path
 from typing import ClassVar
 
 from spicy_regs.env_values import date_env
-from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
+from spicy_regs.pipelines.rollups.base import make_rollup_app
+from spicy_regs.pipelines.rollups.subject_receipts import SubjectReceiptRollup as RollupPipeline
 from spicy_regs.transforms import build_federal_register
 
 
@@ -26,7 +27,7 @@ class FederalRegisterRollup(RollupPipeline):
     output: ClassVar[str] = "federal_register.parquet"
 
     def build(self, output_dir: Path) -> Path:
-        return build_federal_register(output_dir, since=date_env("FR_SINCE"))
+        return self.build_receipts(output_dir, build_federal_register, since=date_env("FR_SINCE"))
 
 
 app = make_rollup_app(FederalRegisterRollup)

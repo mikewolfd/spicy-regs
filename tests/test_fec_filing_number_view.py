@@ -49,7 +49,7 @@ def metadata():
     return dict(
         record_id=pin("metadata"),
         identity_version="fec-typed-observation/1",
-        mapping_version="fec-identity-observations/1",
+        mapping_version="fec-identity-observations/2",
         filing_key=KEY,
         report_number="123",
         source_authority="official-fec",
@@ -204,3 +204,10 @@ def test_pins_required_columns_and_quoted_table_names():
         financial_number_association_sql("x", GEN, {NS: "bad"}, columns=source())
     with pytest.raises(ValueError):
         financial_number_association_sql("x", GEN, {}, columns=[])
+
+
+@pytest.mark.parametrize("version", ["fec-identity-observations/1", "fec-identity-observations/3", "unknown"])
+def test_sql_and_python_refuse_non_v2_target_metadata(version):
+    result = check(filings=[{**metadata(), "mapping_version": version}])
+    assert result[0]["association_status"] == "unresolved_target_identity_conflict"
+    assert result[0]["filing_key"] is None

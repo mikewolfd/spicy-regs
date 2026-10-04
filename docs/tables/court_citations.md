@@ -6,6 +6,8 @@
 
 Every reporter citation CourtListener records for a decision, such as "410 U.S. 113", "93 S. Ct. 705" or a WestLaw or neutral cite. Join cluster_id to court_opinion_clusters.cluster_id to reach the decision; a U.S. Reports citation found in a document (SpicyDocs' us_reports_cite rule) resolves through the rows with reporter 'U.S.', to every cluster carrying it (often two for a recent Supreme Court decision). Rebuilt whole from each quarterly export. All columns are VARCHAR, copied as the publisher wrote them.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='court_citations'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Not a range. The complete 2026-06-30 CourtListener citations export, copied field for field: every (cluster_id, volume, reporter, page) unique as the publisher's schema requires. The publisher cut this export hours after the cluster export, so a few citations name a cluster court_opinion_clusters lacks (63 on 2026-09-26, 43 of them added by the clusters' catch-up; receipt join-gaps-2026-09-26/i/). *(measured 2026-09-22)*
 
 **Data quality.** Citations are the publisher's, not re-derived from opinion text; a decision missing a citation here may still carry one in print. Reporter strings are the publisher's abbreviations and are not normalized. page is text because some reporters page with letters or asterisks. A new export is refused until the published court_opinion_clusters reaches every cluster id it names; a cluster the publisher merged away after the export still dangles. The 2026-06-30 export holds no S. Ct. citation in volumes 143 and 144 (measured 2026-10-03).
@@ -23,6 +25,3 @@ Every reporter citation CourtListener records for a decision, such as "410 U.S. 
 | `reporter` | `VARCHAR` | Reporter abbreviation, such as `U.S.`, `F.3d` or `WL`, as the publisher records it. |
 | `page` | `VARCHAR` | Starting page or equivalent locator in the reporter, as text. |
 | `citation_type` | `VARCHAR` | Publisher citation type code: 1 federal reporter, 2 state, 3 state regional, 4 specialty, 5 early U.S. Supreme Court, 6 Lexis, 7 WestLaw, 8 vendor-neutral, 9 law journal. |
-| `date_created` | `VARCHAR` | Timestamp the publisher created the citation record. |
-| `date_modified` | `VARCHAR` | Timestamp the publisher last modified the citation record. |
-| `dump_date` | `VARCHAR` | The CourtListener bulk export the row was copied from (ISO date). |

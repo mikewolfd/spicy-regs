@@ -17,7 +17,7 @@ from tests.test_mcp_server import _listed, _records, _tool_data
 
 def test_discovery_summarizes_mixed_release_states_and_names_each_view(tmp_path, monkeypatch):
     specs, index, _, consumer, _ = configure(tmp_path, monkeypatch)
-    index["families"]["members"]["artifactDigest"] = digest("advanced-parent")
+    index["families"]["filings"]["artifactDigest"] = digest("advanced-parent")
     with connection(index) as con:
         monkeypatch.setattr(server, "_get_connection", lambda: con)
         mcp = server.build_server()
@@ -42,7 +42,7 @@ def test_discovery_summarizes_mixed_release_states_and_names_each_view(tmp_path,
 def test_selected_description_carries_evidence_once_without_changing_pinned_state(tmp_path, monkeypatch, available):
     specs, index, _, _, _ = configure(tmp_path, monkeypatch)
     if not available:
-        index["families"]["members"]["artifactDigest"] = digest("advanced-parent")
+        index["families"]["filings"]["artifactDigest"] = digest("advanced-parent")
     with connection(index) as con:
         monkeypatch.setattr(server, "_get_connection", lambda: con)
         mcp = server.build_server()
@@ -112,7 +112,7 @@ def test_reflected_descriptions_explain_summary_and_selected_evidence():
 
 def test_release_summary_size_does_not_expand_with_dependency_evidence(tmp_path, monkeypatch):
     specs, index, _, _, _ = configure(tmp_path, monkeypatch)
-    index["families"]["members"]["artifactDigest"] = digest("advanced-parent")
+    index["families"]["filings"]["artifactDigest"] = digest("advanced-parent")
     with connection(index) as con:
         before = server._fec_release_reply(con)
         captured = deepcopy(server._pinned_record(con, "_spicy_fec_release"))
@@ -154,7 +154,7 @@ def test_query_size_is_independent_of_inventory_and_does_not_mutate_pins(tmp_pat
         pins = server._reply_pins(con, server._publication_status(con)["publication"], [name])
         saved = deepcopy(pins)
         projected = server._query_reply_pins(pins, relationships)
-        projected[name]["input_publications"]["members"]["artifact_digest"] = "edited"
+        projected[name]["input_publications"]["fec_filings"]["artifact_digest"] = "edited"
         assert pins == saved
         assert server._connection_relationships(con) == relationships
 

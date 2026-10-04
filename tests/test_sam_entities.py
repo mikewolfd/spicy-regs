@@ -139,7 +139,7 @@ def test_a_completed_extract_year_retires_what_it_no_longer_holds(tmp_path, monk
             yield _registration("A", "2002-03-04")
 
     monkeypatch.setattr(sam_extract, "SamBulkExtract", Extract)
-    monkeypatch.setenv("SAM_API_KEY", "k")
+    monkeypatch.setenv("SAM_API_KEY", "sam-test-credential-which-is-not-source-data")
     _published(tmp_path, _registration("A", "2002-03-04"), _registration("B", "2002-05-06"),
                _registration("C", "2010-01-02"), _registration("D", None))
     evidence = CaptureEvidence(tmp_path / "audit", "sam-entities")
@@ -455,5 +455,7 @@ def test_rollup_build_honours_explicit_range(monkeypatch, tmp_path):
         return output_dir / "sam_entities.parquet"
 
     monkeypatch.setattr(rollup, "build_sam_entities", fake_build)
-    rollup.SamEntitiesRollup().build(tmp_path)
+    pipeline = rollup.SamEntitiesRollup()
+    pipeline.build(tmp_path)
+    assert captured.pop("receipt_generation_id") == pipeline.receipt_generation_id
     assert captured == {"mode": "partition", "since_year": 2000, "until_year": 2026, "max_records": None, "evidence": None}

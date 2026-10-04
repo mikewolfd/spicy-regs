@@ -6,6 +6,8 @@
 
 One row per term a legislator served, in the crosswalk's own order. All columns are stored as VARCHAR.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='member_terms'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled. The fork selection retains every term from the same complete September 22, 2026 UTC captures as `members`. All mapped values, parent joins and per-member term counts agree with the originals; earlier retained term identities survive. Source order defines term_index. The single party value per term does not reproduce the finer party_affiliations histories, which the crosswalk records only for terms with a mid-term party change; a member with no affiliation interval never switched. Receipts: fork-execution-2026-09-21/members-qualification/. *(measured 2026-09-22)*
 
 - **Parquet file:** `member_terms.parquet`
@@ -16,12 +18,10 @@ One row per term a legislator served, in the crosswalk's own order. All columns 
 | Column | Type | Description |
 | --- | --- | --- |
 | `bioguide_id` | `VARCHAR` | The legislator who served this term. |
-| `term_index` | `VARCHAR` | Zero-based position in the crosswalk's own terms list; part of the identity. |
+| `term_index` | `BIGINT` | Zero-based position in the crosswalk's own terms list; part of the identity. |
 | `term_type` | `VARCHAR` | Chamber of this term: rep or sen. |
 | `term_start` | `VARCHAR` | Start date of this term. |
 | `term_end` | `VARCHAR` | End date of this term, where the crosswalk states one. |
 | `term_state` | `VARCHAR` | State this term was served for. |
 | `term_party` | `VARCHAR` | The separate source term-level party assertion, not a dated history. |
 | `term_district` | `VARCHAR` | District for this term, spelled as the publisher does; absent for a Senate term. |
-| `observed_at` | `VARCHAR` | The parent capture's instant, carried so a term list versions with the member row it came from. |
-| `party_affiliations_state` | `VARCHAR` | Nested list state: unread, absent, null, empty or populated. |

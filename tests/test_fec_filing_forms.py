@@ -223,14 +223,15 @@ def test_report_measures_keep_repeated_labels_and_time_columns_distinct():
 def test_report_year_is_not_money_and_repeated_totals_are_not_merged():
     row, _ = cover("8.5", "F3XN", {"23": "120", "74": "2024", "75": "300"})
     measures = {m["native_position"]: m for m in row["reported_measures"]}
-    assert 74 not in measures and row["native_fields"][74]["raw_value"] == "2024"
+    assert 74 not in measures
+    assert "native_fields" not in row
     assert measures[23]["value"] == 120 and measures[75]["value"] == 300
 
 
 def test_candidate_statement_retains_candidate_filer_and_literal_other_identifiers():
     row, _ = cover("8.5", "F2A", {"1": "H0AA00001", "2": "Native Name", "23": "C00123456"})
     assert row["reporting_candidate_id"] == "H0AA00001" and row["reporting_committee_id"] is None
-    assert row["native_fields"][23]["raw_value"] == "C00123456"
+    assert "native_fields" not in row
     assert row["reported_measures"] == [] and row["filing_link_status"] == "unresolved"
 
 
@@ -238,7 +239,7 @@ def test_retained_lowercase_supplement_is_explicit_and_never_normalized():
     row, _ = cover("8.1", "f2s", {"1": "H0AA00001", "2": "C00123456"})
     assert row["form_type"] == "f2s" and row["report_record_role"] == "supplement"
     assert row["reporting_candidate_id"] == "H0AA00001"
-    assert row["native_fields"][2]["raw_value"] == "C00123456"
+    assert "native_fields" not in row
     assert filing_cover_mapping_for("8.5", "f2s") is None
 
 
@@ -270,15 +271,16 @@ def test_v2_report_dictionary_ambiguity_refuses_shifted_date_and_money_interpret
     assert row["reporting_committee_id"] == "C00123456"
     assert row["reported_measures"] == [] and row["period_start"] is None and row["period_end"] is None
     assert row["definition_applicability_status"] == "source-layout-ambiguous"
-    assert row["mapping_status"] == "partial" and row["native_fields"][21]["raw_value"] == "159925.73"
+    assert row["mapping_status"] == "partial"
+    assert "native_fields" not in row
 
 
 def test_report_absent_blank_body_and_extra_fields_survive_without_body_processing():
     row, _ = cover("8.5", "F3N", {"93": "extra"}, width=94, bodies=[dict(field_index=23, body_id="literal-body")])
-    assert row["native_fields"][23]["presence"] == "body"
-    assert json.loads(row["native_fields"][23]["body_reference_json"])["body_id"] == "literal-body"
-    assert row["native_fields"][24]["raw_value"] == "" and row["native_fields"][24]["presence"] == "value"
-    assert row["native_fields"][93]["definition_label"] is None and row["native_fields"][93]["raw_value"] == "extra"
+    assert "native_fields" not in row
+    reasons = json.loads(row["mapping_reason_json"])
+    assert reasons["body_positions"] == [23]
+    assert reasons["extra_positions"] == {"93": "extra"}
     assert row["reported_measures"][0]["value_status"] == "source_body_reference"
     row, _ = cover("8.5", "F3N", width=23)
     assert row["reported_measures"][0]["value_status"] == "source_missing"
@@ -340,16 +342,17 @@ def test_narrative_body_and_field_pointers_preserve_text_and_unresolved_identity
     assert fragment["text"] == "  exact\ntext  "
     assert fragment["field_position"] == position
     assert fragment["source_pointer"] == "/embedded_bodies/0"
-    assert result["native_fields"][position]["presence"] == "body"
+    assert json.loads(fragment["body_reference_json"])["field_index"] == position
+    assert "native_fields" not in result
     assert result["filing_key"] is None and result["current_record_status"] == "unqualified"
-    assert result["currency"] is None and result["amount_kind"] is None
+    assert not {"currency", "amount_kind", "value_mapping_version", "correction_operation"} & result.keys()
     assert [e["role"] for e in evidence] == ["primary", "filing_header"]
 
 
 def test_standalone_narrative_has_no_invented_dictionary_or_financial_interpretation():
     body = dict(sha256=PIN, byte_offset=0, byte_length=20, encoding="utf-8")
     result, _ = narrative(dict(kind="text", embedded_bodies=[body]))
-    assert result["definition_set_id"] is None and result["native_fields"] == []
+    assert result["definition_set_id"] is None and "native_fields" not in result
     assert result["text_fragments"][0]["field_position"] is None
     assert result["filing_header_record_id"] == "0"
 
@@ -439,7 +442,8 @@ def test_physical_filing_text_remains_searchable_without_repair_or_financial_int
     result, evidence = map_filing_physical_text(row, SELECTION)
     assert result["text_fragments"][0]["text"] == text
     assert result["declared_format_version"] is None and result["filing_header_record_id"] is None
-    assert result["reporting_committee_id"] is None and result["currency"] is None and result["amount_kind"] is None
+    assert result["reporting_committee_id"] is None
+    assert not {"currency", "amount_kind", "value_mapping_version", "native_fields"} & result.keys()
     assert json.loads(result["mapping_reason_json"])["filing_syntax"] == "syntax-uninterpreted"
     assert result["filing_key"] is None and result["definition_set_id"] is None
     assert [e["role"] for e in evidence] == ["primary"]
@@ -459,3 +463,23 @@ def test_physical_filing_text_refuses_unpinned_or_delimited_fields():
     row["metadata_json"] = json.dumps(native)
     with pytest.raises(ValueError, match="physical filing line"):
         map_filing_physical_text(row, SELECTION)
+
+
+def test_report_native_values_resolve_through_evidence_without_duplicate_array():
+    mapping = filing_cover_mapping_for("8.5", "F3N")
+    layout = load_layout(mapping)
+    values = dict.fromkeys(map(str, range(len(layout["fields"]))), "")
+    values.update({"0": "F3N", "1": "C00123456", "23": "100.00", "93": "undefined-extra"})
+    native = dict(kind="record", record_type="F3N", field_count=94, fields=values, embedded_bodies=[])
+    original = source(native, 1)
+    before = original["metadata_json"]
+    result, evidence = map_filing_cover(
+        original, SELECTION, mapping, layout=layout, header_row=source(dict(kind="header", format_version="8.5"), 0)
+    )
+    assert "native_fields" not in result and "native_fields" not in FILING_REPORT_SCHEMA.names
+    assert original["metadata_json"] == before
+    witness = next(e for e in evidence if e["role"] == "primary")
+    assert witness["source_record_id"] == original["source_record_id"]
+    assert witness["collection_id"] == original["collection_id"]
+    assert json.loads(original["metadata_json"])["fields"]["93"] == "undefined-extra"
+    assert result["reported_measures"][0]["raw_value"] == "100.00"

@@ -1,5 +1,7 @@
 """Publisher-listed congressional relationships, without inferred list pairing."""
 
+from dataclasses import replace
+
 from .core import ArrayRelationship
 
 
@@ -114,4 +116,30 @@ CONGRESS_RELATIONSHIPS = (
         target_kind_expression=f"CASE WHEN {AMENDMENT_VALID} THEN 'amendment' ELSE 'amendment_observation' END",
         rule_version="vote-native-routing/2",
     ),
+)
+
+
+# Explicit migration selection for the integration registry. The shared view
+# implementation converts a native list to JSON only while expanding it; the
+# stored source remains a declared Arrow list/struct. Processing context is read
+# from receipts by qualified internal callers, never invented on these views.
+NATIVE_CONGRESS_RELATIONSHIPS = tuple(
+    replace(
+        spec,
+        source_field=spec.source_field.removesuffix("_json"),
+        detail_read_column=None,
+        context_columns=tuple(c for c in spec.context_columns if c not in {"observed_at", "roster", "source_url"}),
+        details=(("relationship_details", "s.related_bills[CAST(e.key AS BIGINT)+1].relationship_details",
+                  "Publisher relationship details in native list order; types and identifying source remain as stated."),)
+                if spec.name == "bill_related_bills" else spec.details,
+    )
+    for spec in CONGRESS_RELATIONSHIPS
+)
+
+NATIVE_COMMUNICATION_RINS = ArrayRelationship(
+    'house_communication_rins', 'house_communications', ('congress', 'communication_type', 'number'),
+    'rins', 'rin', SCALAR, scalar_valid('[0-9]{4}-[A-Z0-9]{4}'),
+    'Ordered RIN findings on the communication. Repeats remain distinct; original field spans, '
+    'digests and extraction rules are retained in the matching ETL receipt.',
+    context_columns=('update_date',),
 )

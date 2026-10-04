@@ -48,10 +48,12 @@ def _table_name(value: str) -> str:
 
 
 def _local_selection(output_dir: Path):
-    """Capture current once, then resolve selected files before legacy files."""
-    from spicy_regs.local_data import local_selection
+    """Capture and verify the selected local files before reading."""
+    from spicy_regs.local_data import local_selection, verify_local_members
 
-    return local_selection(output_dir, include_legacy=True)
+    selection = local_selection(output_dir)
+    verify_local_members(selection)
+    return selection
 
 
 def _polars():
@@ -64,8 +66,15 @@ def _polars():
     return polars
 
 
-def _read(paths, **options):
+def _read(paths, *, dataset=None, **options):
     """One table from its local files: a split table's members as one frame, their ``col=value`` paths not columns."""
+    if not paths:
+        if dataset is None:
+            raise ValueError("An empty selected table needs its dataset policy")
+        import pyarrow as pa
+        from spicy_regs.etl_policy_registry import installed_policies
+        frame = _polars().from_arrow(pa.Table.from_batches([], schema=installed_policies()[dataset].subject_schema))
+        return frame.select(options["columns"]) if "columns" in options else frame
     return _polars().read_parquet(list(paths), hive_partitioning=False, **options)
 
 
@@ -123,8 +132,8 @@ def cmd_download(args):
     for name in types_to_download:
         _table_name(name)
 
-    from spicy_regs.local_data import selection_record
-    from spicy_regs.sources.publication import snapshot
+    from spicy_regs.local_data import selection_record, selected_receipt_members, receipt_local_key
+    from spicy_regs.sources.publication import snapshot, fetch_member
 
     base_url = resolve_r2_base_url()
     with snapshot(base_url) as index:
@@ -153,6 +162,10 @@ def cmd_download(args):
             print(f"  {data_type}: {selected[data_type]['status']}")
             if download_file(data_type, destination, force=args.force, base_url=base_url) is None:
                 raise RuntimeError(f"Download incomplete: {data_type}")
+        for member in selected_receipt_members(index, selected):
+            receipt_path = destination / receipt_local_key(member)
+            receipt_path.parent.mkdir(parents=True, exist_ok=True)
+            fetch_member(base_url, member, receipt_path, member.path, headers=DEFAULT_HEADERS, timeout=60.0)
         if staged:
             metadata["status"] = "complete"
             (destination / "download.json").write_text(json.dumps(metadata, indent=2) + "\n")
@@ -184,7 +197,7 @@ def cmd_stats(args):
     selection = _local_selection(output_dir)
     for data_type, (_, status) in selection.files.items():
         paths = selection.paths(data_type)
-        df, size_mb = _read(paths), _megabytes(paths)
+        df, size_mb = _read(paths, dataset=data_type), _megabytes(paths)
 
         print(f"\n{data_type.upper()} ({size_mb:.1f} MB; {status})")
         print("-" * 40)
@@ -210,14 +223,15 @@ def cmd_sample(args):
     if args.data_type in selection.files:
         paths, status = selection.paths(args.data_type), selection.files[args.data_type][1]
     else:
-        paths, status = (output_dir / f"{args.data_type}.parquet",), "legacy-unversioned"
+        print(f"Dataset not selected: {args.data_type}")
+        sys.exit(1)
 
     if not all(path.exists() for path in paths):
         print(f"File not found: {paths[0]}")
         print("Run: spicy-regs download")
         sys.exit(1)
 
-    df = _read(paths)
+    df = _read(paths, dataset=args.data_type)
 
     if args.agency:
         df = df.filter(pl.col("agency_code") == args.agency)
@@ -247,7 +261,7 @@ def cmd_search(args):
 
     selection = _local_selection(output_dir)
     for data_type, (_, status) in selection.files.items():
-        df = _read(selection.paths(data_type))
+        df = _read(selection.paths(data_type), dataset=data_type)
         columns = search_configs.get(data_type, [name for name, dtype in df.schema.items() if dtype == pl.String])
 
         # Build filter for any column containing the query
@@ -280,7 +294,7 @@ def cmd_agencies(args):
     for data_type in ["dockets", "documents", "comments"]:
         if data_type in selection.files:
             status = selection.files[data_type][1]
-            df = _read(selection.paths(data_type), columns=["agency_code"])
+            df = _read(selection.paths(data_type), dataset=data_type, columns=["agency_code"])
             agencies = df["agency_code"].unique().sort().to_list()
 
             print(f"Agencies ({len(agencies)} total; {status}):")

@@ -6,6 +6,8 @@
 
 One row per rulemaking proceeding: the dockets that are one action, the Register documents that joined it, their stage events, RINs and CFR targets. A RIN names a Unified Agenda item, never a proceeding: it is carried as evidence and never groups dockets. A posting Regulations.gov flags withdrawn (`documents.withdrawn = 'true'`) is no evidence: agencies withdraw a posting filed to the wrong docket, duplicated, moved or replaced, so it gives no stage event, title, agency or RIN, and makes no docket a rulemaking. A docket-less proceeding is one Register document. Keyed `proceeding_id`, which continues across generations when its dockets or Register documents overlap a prior one. Joined by `agenda_item_proceedings`, `comment_periods` and `rulemaking_lifecycles` on `proceeding_id`. Built by `build_proceedings`; all columns are VARCHAR, lists as JSON strings.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='proceedings'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Derived, and bounded by its inputs (`dockets`, `documents`, `federal_register`, `fr_docket_links` and `rule_targets`) and the prior snapshot it continues ids from. A proceeding is docketed, or docket-less when it is a single Register document. *(measured 2026-09-28)*
 
 - **Parquet file:** `proceedings.parquet`, in the snapshot that `materialized/rulemaking/latest.json` names
@@ -17,21 +19,14 @@ One row per rulemaking proceeding: the dockets that are one action, the Register
 | --- | --- | --- |
 | `proceeding_id` | `VARCHAR` | Stable opaque id of the proceeding (`proceeding_<24 hex>`), continued from the prior generation where it overlaps one. |
 | `rin` | `VARCHAR` | The proceeding's RIN when it holds exactly one, else NULL; a query aid, never its identity (`rins_json` lists every RIN). |
-| `docket_ids_json` | `VARCHAR` | JSON array of the Regulations.gov dockets the proceeding comprises; `[]` for a docket-less proceeding. |
+| `docket_ids` | `VARCHAR[]` | Native list of the Regulations.gov dockets the proceeding comprises; `[]` for a docket-less proceeding. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `title` | `VARCHAR` | Title of its most recently dated titled document. |
 | `agency_code` | `VARCHAR` | The agency code most of its documents carry. A docket-less proceeding takes its Register document's agency code. Each Register agency maps to one Regulations.gov code through RefSpec's agency projection and agency registry, whose identity bridges and successions give a defunct agency its current successor's code whatever the document's date: a 1998 Health Care Finance Administration notice is CMS. A split agency maps only when every successor gives the same one code. A department named with one of its own agencies yields to it (Transportation Department with FAA is FAA), and a department signing with one of its own unmapped bureaus keeps the department's code. NULL when no agency maps or the agencies are unrelated. |
 | `current_stage` | `VARCHAR` | The one stage (`proposed`, `supplemental`, `final` or `withdrawn`) of its latest dated events; NULL when none, or when that day's events disagree. |
-| `stage_events_json` | `VARCHAR` | JSON array of its stage events, one per staged document: `{effective_date, event_kind, evidence_id, joined_by, source, stage}`. |
-| `fr_document_numbers_json` | `VARCHAR` | JSON array of the Federal Register document numbers it holds. |
-| `cfr_refs_json` | `VARCHAR` | JSON array of the CFR references (`title-part`) that the `rule_targets` edges of its dockets name. |
-| `cfr_target_iris_json` | `VARCHAR` | The same CFR references as Rulespec identifiers (e.g. `urn:rkaf:us:cfr:40:60`). |
-| `authority_refs_json` | `VARCHAR` | Always `[]`: legal authority belongs to the editioned Unified Agenda entry, never to an action. |
-| `method` | `VARCHAR` | How the row was asserted; `deterministic` (computed by rule) throughout. |
-| `actor_id` | `VARCHAR` | The builder that asserted the row, with its version (`spicy-regs:proceedings:v<n>`), bumped when its published rows change. |
-| `run_id` | `VARCHAR` | The materialization run that built the snapshot (e.g. `rulemaking-20260927T062656Z`). |
-| `asserted_at` | `VARCHAR` | When that run asserted the row, as a UTC ISO 8601 instant. |
-| `supersedes_id` | `VARCHAR` | The prior generation's `proceeding_id` this proceeding continues, so equal to `proceeding_id` on a continuing row (the id carries over); NULL for a proceeding new in this generation. |
-| `fr_document_ids_json` | `VARCHAR` | JSON array of the dated Federal Register record ids (`number@YYYY-MM-DD`) it holds. |
-| `fr_document_joins_json` | `VARCHAR` | How each `fr_document_ids_json` document joined, in the same order: `{fr_document_id, joined_by}`, `joined_by` being `fr_docket_link`, `fr_copy`, `specific_rin` or `fr_document`. |
-| `unresolved_fr_references_json` | `VARCHAR` | JSON array of Register number references it holds that resolve to no single record, each with its candidates and status. |
-| `rins_json` | `VARCHAR` | JSON array of every RIN it holds, from its dockets, documents and Register documents. |
+| `stage_events` | `STRUCT(stage VARCHAR, event_kind VARCHAR, effective_date VARCHAR, document_id VARCHAR)[]` | Native list of its stage events, one per staged document: `{effective_date, event_kind, evidence_id, joined_by, source, stage}`. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `fr_document_numbers` | `VARCHAR[]` | Native list of the Federal Register document numbers it holds. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `cfr_refs` | `VARCHAR[]` | Native list of the CFR references (`title-part`) that the `rule_targets` edges of its dockets name. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `cfr_target_iris` | `VARCHAR[]` | The same CFR references as Rulespec identifiers (e.g. `urn:rkaf:us:cfr:40:60`). Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `authority_refs` | `VARCHAR[]` | Always `[]`: legal authority belongs to the editioned Unified Agenda entry, never to an action. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `fr_document_ids` | `VARCHAR[]` | Native list of the dated Federal Register record ids (`number@YYYY-MM-DD`) it holds. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `rins` | `VARCHAR[]` | Native list of every RIN it holds, from its dockets, documents and Register documents. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |

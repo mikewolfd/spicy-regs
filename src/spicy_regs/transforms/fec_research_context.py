@@ -17,8 +17,16 @@ from urllib.parse import urljoin, urlsplit
 import pyarrow as pa
 
 from .fec_query import AMOUNT_TYPE, _digest, exact_amount
+from .fec_context_shape import (
+    CSV_FIELDS,
+    filing_announcement,
+    iso_timestamp,
+    nonnegative_integer,
+    source_page_body,
+)
 
-VERSION = "fec-research-context/1"
+IDENTITY_VERSION = "fec-research-context/1"
+VERSION = "fec-research-context/2"
 ROOT = "/receiverDisposition/callerContext/facts"
 COMMON = "record_id mapping_version collection_id source_authority source_url source_sha256 context_sha256 source_context_pointer observed_at_json".split()
 HISTORICAL_SCHEMA = pa.schema(
@@ -40,35 +48,38 @@ CSV_SCHEMA = pa.schema(
     [
         (n, pa.string())
         for n in COMMON
-        + "observation_type reporting_committee_id reporting_committee_name counterparty_name transaction_id native_sub_id amount_raw amount_status date_raw date_status native_fields_json native_row_locator_json coverage_status current_total_status".split()
+        + "observation_type reporting_committee_id reporting_committee_name counterparty_name transaction_id native_sub_id amount_raw amount_status date_raw date_status native_row_locator_json coverage_status current_total_status".split()
     ]
+    + [(n, pa.string()) for n in CSV_FIELDS]
+    + [("report_year", pa.int32()), ("report_year_status", pa.string())]
     + [("amount", AMOUNT_TYPE), ("reported_date", pa.date32()), ("source_row_ordinal", pa.int32())]
 )
 RESEARCH_DOCUMENT_SCHEMA = pa.schema(
     [
         (n, pa.string())
         for n in COMMON
-        + "document_native_id title description canonical_url source_publisher source_created_at source_updated_at original_extension body_status fec_relationship_status native_metadata_json".split()
+        + "document_native_id title description canonical_url source_publisher source_created_at source_updated_at original_extension body_status fec_relationship_status language evidence_use page_count_status".split()
+    ]
+    + [
+        ("page_count", pa.int64()),
+        ("created_at", pa.timestamp("us", tz="UTC")),
+        ("updated_at", pa.timestamp("us", tz="UTC")),
     ]
 )
 MEETING_SCHEMA = pa.schema(
     [
         (n, pa.string())
-        for n in COMMON
-        + "meeting_type title_raw reported_status dates_json date_status links_json native_cells_json".split()
+        for n in COMMON + "meeting_type title_raw reported_status dates_json date_status links_json".split()
     ]
     + [("table_ordinal", pa.int32()), ("table_row", pa.int32())]
 )
 SOURCE_PAGE_SCHEMA = pa.schema(
-    [
-        (n, pa.string())
-        for n in COMMON + "page_type title text content_scope links_json times_json headings_json".split()
-    ]
+    [(n, pa.string()) for n in COMMON + "page_type title text content_scope content_status links_json".split()]
 )
 RESPONSE_SCHEMA = pa.schema(
     [
         (n, pa.string())
-        for n in COMMON + "profile_refusal query_completeness payload_shape outcome_status native_payload_json".split()
+        for n in COMMON + "profile_refusal query_completeness payload_shape outcome_status capture_disposition".split()
     ]
     + [("observed_payload_records", pa.int32())]
 )
@@ -76,14 +87,20 @@ RSS_SCHEMA = pa.schema(
     [
         (n, pa.string())
         for n in COMMON
-        + "title link guid published_at_raw description native_fields_json source_parts_json current_record_status".split()
+        + "title link guid published_at_raw current_record_status reported_filer_id committee_id candidate_id source_label_status filing_id form_type report_type coverage_start_raw coverage_end_raw parsing_status filing_link_status".split()
+    ]
+    + [
+        ("coverage_start_date", pa.date32()),
+        ("coverage_end_date", pa.date32()),
+        ("published_at", pa.timestamp("us", tz="UTC")),
     ]
 )
 DISPOSITION_SCHEMA = pa.schema(
     [
         (n, pa.string())
-        for n in "collection_id mapping_status mapping_reason source_url context_sha256 source_fact_count outputs_json".split()
+        for n in "collection_id mapping_status mapping_reason source_url context_sha256 outputs_json".split()
     ]
+    + [("source_fact_count", pa.int64())]
 )
 SCHEMAS = {
     "fec_research_source_pages": SOURCE_PAGE_SCHEMA,
@@ -134,7 +151,7 @@ class _Context:
 
     def emit(self, table, pointer, values, *, context=()):
         pointer = ROOT + pointer
-        identity = [VERSION, table, self.collection_id, self.source_sha, self.pin, pointer]
+        identity = [IDENTITY_VERSION, table, self.collection_id, self.source_sha, self.pin, pointer]
         rid = "sha256:" + hashlib.sha256(_json(identity).encode()).hexdigest()
         row = dict(
             record_id=rid,
@@ -178,7 +195,7 @@ class _Context:
                 mapping_reason=reason,
                 source_url=self.url,
                 context_sha256=self.pin,
-                source_fact_count=str(count),
+                source_fact_count=count,
                 outputs_json=_json({k: len(v) for k, v in self.result.tables.items() if v}),
             )
         )
@@ -396,7 +413,15 @@ def _csv(ctx):
                 date_raw=raw_date,
                 reported_date=dt,
                 date_status=ds,
-                native_fields_json=_json(values),
+                **{name: values.get(name) or None for name in CSV_FIELDS},
+                report_year=int(values["report_year"])
+                if re.fullmatch(r"[1-9][0-9]{3}", values.get("report_year") or "")
+                else None,
+                report_year_status="parsed"
+                if re.fullmatch(r"[1-9][0-9]{3}", values.get("report_year") or "")
+                else "missing"
+                if not values.get("report_year")
+                else "unsupported_year",
                 native_row_locator_json=_json(native["source"]),
                 source_row_ordinal=i,
                 coverage_status="complete_records_of_truncated_capture",
@@ -438,7 +463,16 @@ def _documents(ctx):
                     original_extension=extension,
                     body_status="deferred_pdf" if extension and extension.lower() == "pdf" else "body_not_qualified",
                     fec_relationship_status="search_result_only_no_verified_matter_join",
-                    native_metadata_json=_json(native),
+                    language=native.get("language"),
+                    page_count=nonnegative_integer(native.get("page_count")),
+                    page_count_status="parsed"
+                    if nonnegative_integer(native.get("page_count")) is not None
+                    else "missing"
+                    if native.get("page_count") is None
+                    else "invalid_count",
+                    created_at=iso_timestamp(native.get("created_at")),
+                    updated_at=iso_timestamp(native.get("updated_at")),
+                    evidence_use="discovery_only",
                 ),
             )
     return ctx.disposition(
@@ -565,7 +599,6 @@ def _meetings(ctx):
                     dates_json=dates,
                     date_status=date_status,
                     links_json=_json([link for c in cells for link in c["links"]]),
-                    native_cells_json=_json(cells),
                     table_ordinal=table,
                     table_row=row_number,
                 ),
@@ -644,6 +677,18 @@ def _source_page(ctx, page_type):
             active_link = None
     title = next((h["text"].strip() for h in headings if h["tag"] == "h1"), None)
     title = title or next((h["text"].strip() for h in headings if h["tag"] == "title"), None)
+    body, content_status = source_page_body(title, "\n".join(texts), ctx.url)
+    # Exact events stay in the collection witness. Only links visibly contained
+    # in the extracted body enter ordinary subject output.
+    body_links = [
+        link
+        for link in links
+        if body
+        and link["label"].strip()
+        and link["label"].strip() in body
+        and link["href"]
+        and not link["href"].startswith("#")
+    ]
     key = "facts" if "facts" in ctx.parsing else "native_events"
     ctx.emit(
         "fec_research_source_pages",
@@ -651,11 +696,10 @@ def _source_page(ctx, page_type):
         dict(
             page_type=page_type,
             title=title,
-            text="\n".join(texts),
+            text=body,
+            content_status=content_status,
             content_scope="retained_native_context_part",
-            links_json=_json(links),
-            times_json=_json(times),
-            headings_json=_json(headings),
+            links_json=_json(body_links),
         ),
     )
     return ctx.disposition(
@@ -689,7 +733,11 @@ def _response_outcome(ctx):
                 payload_shape=shape,
                 outcome_status="refused_native_observation_not_qualified_empty_success",
                 observed_payload_records=count,
-                native_payload_json=_json(value),
+                capture_disposition="refused"
+                if fact["profile_refusal"]
+                else "empty_payload_not_verified_success"
+                if shape == "results_empty"
+                else "captured_payload_not_verified_success",
             ),
         )
     return ctx.disposition(
@@ -751,9 +799,7 @@ def map_filing_feed_contexts(collections, source_generation_pin):
                     link=single("link"),
                     guid=single("guid"),
                     published_at_raw=single("pubDate"),
-                    description=single("description"),
-                    native_fields_json=_json(fields),
-                    source_parts_json=_json(item["parts"]),
+                    **filing_announcement(single("description"), single("pubDate")),
                     current_record_status="source_feed_observation_only",
                 ),
             )

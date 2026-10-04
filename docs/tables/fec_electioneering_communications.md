@@ -6,6 +6,8 @@
 
 One source candidate-associated disbursement observation. Keeps each candidate association, the full disbursement amount and the publisher-calculated candidate share. Similar dates/payees/images do not prove a shared event key; unresolved event equivalence prevents summing full amounts once per candidate. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_electioneering_communications'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled. Supported observations from retained electioneering CSV records and their source definitions. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
 
 **Data quality.** Exact decimals preserve signs. Memo, subtotal and attribution flags require source-specific interpretation; successful mapping does not qualify current, gross or net totals. Keep reported balances, allocation totals/components, overlapping summaries and two-sided transfers at their declared grains. Quality notices do not automatically exclude records.
@@ -18,26 +20,10 @@ One source candidate-associated disbursement observation. Keeps each candidate a
 | Column | Type | Description |
 | --- | --- | --- |
 | `record_id` | `VARCHAR` | Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event. |
-| `identity_version` | `VARCHAR` | Version of the source-observation identity rule; it does not select a current or canonical record. |
-| `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
-| `value_mapping_version` | `VARCHAR` | Version of the exact monetary and date conversion rules used for supported values. |
-| `mapping_status` | `VARCHAR` | Whether this source observation mapped fully, partially, or received an explicit nondata/refusal disposition; inspect the reason alongside NULL values. |
-| `mapping_reason_json` | `VARCHAR` | JSON object naming unsupported, missing or otherwise limited field interpretations; native values remain reachable through evidence. |
-| `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
-| `source_record_id` | `VARCHAR` | Native source-observation key within collection_id. Resolve with the source generation, exact locator and source digest, not this value alone. |
-| `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
-| `source_locator_json` | `VARCHAR` | Exact source row or subrecord coordinates, including available member, ordinal, byte span and field-definition references. Resolve in the pinned source generation. |
-| `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
-| `selection_evidence_sha256` | `VARCHAR` | Digest of the retained selection evidence used to authorize this mapper's source scope; not a financial inclusion decision. |
-| `source_representation_role` | `VARCHAR` | Selected source role such as snapshot, insertion or deletion. Amount signs and ordinary amendment flags do not establish correction applicability. |
 | `correction_operation` | `VARCHAR` | Source-supported correction operation, when applicable; a positive amount in a deletion stream is not a new receipt or an inferred refund. |
-| `correction_applicability_status` | `VARCHAR` | Whether the captured correction can be applied to an evidenced base and target population; unresolved applicability prevents a qualified current total. |
-| `current_record_status` | `VARCHAR` | Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record. |
 | `filing_key` | `VARCHAR` | Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. |
-| `filing_link_status` | `VARCHAR` | Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist. |
 | `currency` | `VARCHAR` | Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately. |
 | `amount_kind` | `VARCHAR` | Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It is not an aggregation permission. |
-| `source_namespace` | `VARCHAR` | Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent. |
 | `reporting_entity_id` | `VARCHAR` | The reporting entity's literal identifier in the source namespace; not inferred from the name. |
 | `reporting_entity_name` | `VARCHAR` | The reporting entity's name as reported, without a name-based identity merge. |
 | `candidate_id` | `VARCHAR` | Literal FEC candidate identifier when the source reports one. Syntax checks do not prove identity resolution or a target match. |
@@ -53,18 +39,6 @@ One source candidate-associated disbursement observation. Keeps each candidate a
 | `purpose` | `VARCHAR` | Source-reported purpose of the payment, event, debt or other financial record. |
 | `reported_candidate_count` | `VARCHAR` | Candidate count stated by the source for this communication; not inferred from a join. |
 | `observation_grain` | `VARCHAR` | Source-defined meaning of this retained row, including aggregate rather than individual-transaction grains. |
-| `event_equivalence_status` | `VARCHAR` | Whether candidate-associated rows have been proved to represent one spending event. Unresolved event identity prevents adding repeated full amounts. |
-| `amount_aggregation_status` | `VARCHAR` | Source-grain restriction on summing full disbursement amounts across candidate-associated rows. |
-| `amount_raw` | `VARCHAR` | Literal source value before conversion for amount. Preserves spelling, signs and empty values; the typed value and its status are separate. |
-| `amount_status` | `VARCHAR` | Source-presence or conversion state for amount, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
-| `allocated_candidate_amount_raw` | `VARCHAR` | Literal source value before conversion for allocated_candidate_amount. Preserves spelling, signs and empty values; the typed value and its status are separate. |
-| `allocated_candidate_amount_status` | `VARCHAR` | Source-presence or conversion state for allocated_candidate_amount, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
-| `disbursement_date_raw` | `VARCHAR` | Literal source value before conversion for disbursement_date. Preserves spelling, signs and empty values; the typed value and its status are separate. |
-| `disbursement_date_status` | `VARCHAR` | How `disbursement_date` was read. `exact_with_year_bounds`: a two-digit year read in the range described on `disbursement_date`. `outside_selected_year_bounds`: no year in that range ends in those digits (a typed `34` in a file captured in 2026), so `disbursement_date` is NULL. `source_empty`: the source left it blank. `unresolved_century`: every two-digit year in the fec-query generation `81453ac6…` (published 2026-10-02) and earlier, mapped before that range was applied. Not a financial eligibility test. |
-| `communication_date_raw` | `VARCHAR` | Literal source value before conversion for communication_date. Preserves spelling, signs and empty values; the typed value and its status are separate. |
-| `communication_date_status` | `VARCHAR` | How `communication_date` was read. `exact_with_year_bounds`: a two-digit year read in the range described on `communication_date`. `outside_selected_year_bounds`: no year in that range ends in those digits (a typed `34` in a file captured in 2026), so `communication_date` is NULL. `source_empty`: the source left it blank. `unresolved_century`: every two-digit year in the fec-query generation `81453ac6…` (published 2026-10-02) and earlier, mapped before that range was applied. Not a financial eligibility test. |
-| `public_disbursement_date_raw` | `VARCHAR` | Literal source value before conversion for public_disbursement_date. Preserves spelling, signs and empty values; the typed value and its status are separate. |
-| `public_disbursement_date_status` | `VARCHAR` | How `public_disbursement_date` was read. `exact_with_year_bounds`: a two-digit year read in the range described on `public_disbursement_date`. `outside_selected_year_bounds`: no year in that range ends in those digits (a typed `34` in a file captured in 2026), so `public_disbursement_date` is NULL. `source_empty`: the source left it blank. `unresolved_century`: every two-digit year in the fec-query generation `81453ac6…` (published 2026-10-02) and earlier, mapped before that range was applied. Not a financial eligibility test. |
 | `source_cycle` | `INTEGER` | Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year. |
 | `amount` | `DECIMAL(38,9)` | Exact decimal for the source-reported amount for this record and its amount_kind. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations. |
 | `allocated_candidate_amount` | `DECIMAL(38,9)` | Exact decimal for the publisher's calculated candidate share of the disbursement; this is not a filer-reported allocation. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations. |

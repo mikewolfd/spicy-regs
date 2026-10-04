@@ -1368,7 +1368,8 @@ def test_the_documents_based_rollup_is_gone_with_no_dangling_reference():
     assert "rulemaking_lifecycles" in mcp_server.TABLES and "rulemaking_lifecycles" in dd.MCP_QUERYABLE
     assert "rulemaking_lifecycles" not in dd.DERIVED_SCHEMAS
     declared = dd.expected_schemas()["rulemaking_lifecycles"]
-    assert [column for column, _ in declared] == LIFECYCLE_SCHEMA.names
+    from spicy_regs.native_types import described_schema
+    assert dd.expected_schemas()["rulemaking_lifecycles"] == described_schema(dd.subject_policies()["rulemaking_lifecycles"].subject_schema)
     assert not {"docket_id", "title", "proposed_date", "days"} & {column for column, _ in declared}
     rollup_prose = ("build_rulemaking_lifecycles", "Proposed→final rulemaking arcs", "`stuck`", "`pair`")
     for path in (

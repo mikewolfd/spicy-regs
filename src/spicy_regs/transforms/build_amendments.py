@@ -142,8 +142,13 @@ def build_amendments(
     until: date | None = None,
     download_prior: Callable[[str, Path], bool] = r2.download,
     evidence: CaptureEvidence | None = None,
+    receipt_build=None,
 ) -> Path:
     """Build ``amendments.parquet`` for the scoped Congresses, incrementally."""
+    if receipt_build is not None:
+        return receipt_build.run(build_amendments, output_dir, **{
+            key: value for key, value in locals().items() if key not in {"output_dir", "receipt_build"}
+        })
     if reader is None:
         api_key = _resolve_api_key()
         if not api_key:

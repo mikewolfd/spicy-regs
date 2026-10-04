@@ -292,8 +292,13 @@ def build_committee_rosters(
     rosters: RosterSource | None = None,
     max_details: int = MAX_DETAILS_PER_RUN,
     download_prior: Callable[[str, Path], bool] = r2.download,
+    receipt_build=None,
 ) -> tuple[Path, Path]:
     """Build ``committees.parquet`` and ``committee_assignments.parquet``."""
+    if receipt_build is not None:
+        return receipt_build.run(build_committee_rosters, output_dir, **{
+            key: value for key, value in locals().items() if key not in {"output_dir", "receipt_build"}
+        })
     if reader is None:
         api_key = _resolve_api_key()
         if not api_key:

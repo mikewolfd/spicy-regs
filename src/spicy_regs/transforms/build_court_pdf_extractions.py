@@ -12,17 +12,23 @@ from typing import Any
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from spicy_regs.generations import build_generation, verify_generation
+from spicy_regs.generations import verify_generation
+from spicy_regs.court_subjects import SUBJECT_SCHEMAS
+from spicy_regs.court_receipts import (
+    _pdf_failure, build_court_generation, read_court_rows, write_court_rows,
+)
 from spicy_regs.source_evidence import CaptureEvidence
 from spicy_regs.transforms.pdf_text import PdfTextResult, extract_pdf_text
 
-COLUMNS = (
+INPUT_COLUMNS = (
     'opinion_id', 'cluster_id', 'source_url', 'resolved_url', 'source_sha256',
     'native_sha1', 'actual_sha1', 'sha1_matches', 'text_content',
     'pdf_extraction_results_json', 'observed_at', 'extractor', 'extractor_version',
     'parent_opinion_publication_json',
 )
-SCHEMA = pa.schema([(column, pa.string()) for column in COLUMNS])
+RAW_SCHEMA = pa.schema([(column, pa.string()) for column in INPUT_COLUMNS])
+SCHEMA = SUBJECT_SCHEMAS['court_opinion_pdf_extractions']
+COLUMNS = tuple(SCHEMA.names)
 FAMILY = 'court-opinion-pdf-extractions'
 KEY = 'court_opinion_pdf_extractions.parquet'
 
@@ -51,7 +57,7 @@ def shape_captured_opinion(
         'page_count': result.page_count if result else None,
         'error': result.error if result else 'Captured bytes differ from held native SHA-1',
     }
-    return dict(zip(COLUMNS, (
+    return dict(zip(INPUT_COLUMNS, (
         identity, cluster, capture.url, capture.resolved_url, digest, native, actual,
         str(matches).lower(), result.text if result and result.ok else None,
         json.dumps([diagnostic]), capture.observed_at, 'spicy_regs.transforms.pdf_text/pypdf',
@@ -63,6 +69,7 @@ def shape_captured_opinion(
 def merge_extractions(prior: pa.Table, fresh: pa.Table) -> pa.Table:
     """Keep distinct captured bodies; replace only the same opinion/body extraction."""
     rows = {}
+    failures = []
     for table in (prior, fresh):
         seen = set()
         for row in table.to_pylist():
@@ -70,8 +77,11 @@ def merge_extractions(prior: pa.Table, fresh: pa.Table) -> pa.Table:
             if any(value is None for value in key) or key in seen:
                 raise ValueError('Missing or duplicate opinion/body identity in one input')
             seen.add(key)
-            rows[key] = row
-    return pa.Table.from_pylist([rows[key] for key in sorted(rows)], schema=SCHEMA)
+            if _pdf_failure(row):
+                failures.append(row)
+            else:
+                rows[key] = row
+    return pa.Table.from_pylist([rows[key] for key in sorted(rows)] + failures, schema=RAW_SCHEMA)
 
 
 def prepare_captured_opinions(
@@ -109,8 +119,9 @@ def prepare_captured_opinions(
                        parent_opinion_generation=parent, extraction=row)
         rows.append(row)
     path = output / KEY
-    table = pa.Table.from_pylist(rows, schema=SCHEMA)
+    table = pa.Table.from_pylist(rows, schema=RAW_SCHEMA)
     prior_member = None
+    receipt_path = None
     if FAMILY in read_snapshot['families']:
         from spicy_regs.sources import publication, r2
         prior_member = publication.single_member(read_snapshot, KEY)
@@ -122,17 +133,34 @@ def prepare_captured_opinions(
             digest = 'sha256:' + hashlib.file_digest(stream, 'sha256').hexdigest()
         if prior_path.stat().st_size != prior_member.byte_size or digest != prior_member.sha256:
             raise ValueError('Prior extraction bytes differ from selected publication')
-        prior_table = pq.read_table(prior_path)
-        if len(prior_table) > 10000 or prior_table.schema.names != list(COLUMNS):
-            raise ValueError('Prior extraction table exceeds row bound or has unsupported schema')
+        if pq.ParquetFile(prior_path).metadata.num_rows > 10000:
+            raise ValueError('Prior extraction table exceeds row bound')
+        receipt_path = generation_id = None
+        owner = read_snapshot['families'][FAMILY]
+        if 'etlReceipts' in owner:
+            member, = publication.receipt_members(read_snapshot, dataset='court_opinion_pdf_extractions')
+            receipt_path = output / 'prior-etl-receipts.parquet'
+            if not publication.fetch_member(public_url, member, receipt_path):
+                raise ValueError('Prior extraction receipts are missing')
+            generation_id = owner['etlReceipts']['generationId']
+        prior_rows = read_court_rows(prior_path, dataset='court_opinion_pdf_extractions',
+            receipt_path=receipt_path, generation_id=generation_id)
+        prior_table = pa.Table.from_pylist(list(prior_rows), schema=RAW_SCHEMA)
         table = merge_extractions(prior_table, table)
         evidence.event('preserving-extraction-merge', prior_sha256=digest, prior_rows=len(prior_table),
                        fresh_rows=len(rows), output_rows=len(table),
                        identity=['opinion_id', 'source_sha256'],
                        meaning='Different bodies retain separate versions; same opinion/body replaces extraction only.')
-    pq.write_table(table, path)
-    artifact = build_generation(output / 'generation', family=FAMILY, files=[path],
-                                expected_keys=[KEY], read_snapshot=read_snapshot, inputs=evidence.inputs(),
+    witnesses = [{'source_id': str(opinion['opinion_id']), 'source_uri': capture.url,
+                  'sha256': 'sha256:' + hashlib.sha256(capture.body).hexdigest(), 'locator': None,
+                  'body_version': None} for opinion, capture in items]
+    if prior_member is not None:
+        witnesses.append({'source_id': KEY, 'source_uri': prior_member.path,
+                          'sha256': prior_member.sha256, 'locator': None,
+                          'body_version': read_snapshot['families'][FAMILY]['artifactDigest']})
+    path = write_court_rows('court_opinion_pdf_extractions', table.to_pylist(), output, witnesses=witnesses, prior_receipts=receipt_path)
+    artifact = build_court_generation(output / 'generation', family=FAMILY, files=[path],
+                                read_snapshot=read_snapshot, inputs=evidence.inputs(),
                                 parents={'court_opinions.parquet': {
                                     'sha256': parent['tables']['court_opinions.parquet']['sha256'],
                                     'byteSize': parent['tables']['court_opinions.parquet']['byteSize'],
@@ -141,5 +169,5 @@ def prepare_captured_opinions(
     verify_generation(output / 'generation', expected_pin=artifact.pin)
     evidence.finish()
     return {'candidate_pin': artifact.pin.as_dict(), 'generation_directory': str(output / 'generation'),
-            'evidence_directory': str(evidence.artifact_dir), 'rows': len(table),
+            'evidence_directory': str(evidence.artifact_dir), 'rows': pq.ParquetFile(path).metadata.num_rows,
             'parent_opinion_generation': parent, 'status': 'verified_local_candidate_not_published'}

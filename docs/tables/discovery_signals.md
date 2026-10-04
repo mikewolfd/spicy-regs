@@ -6,6 +6,8 @@
 
 Per-agency document-output spike signal that powers the feed's discovery panel — agencies whose document count in the trailing 30 days is at least 2× their prior-year monthly mean, requiring ≥24 documents in the prior year to suppress tiny-denominator noise. Recomputed relative to the run date, so rows turn over on every rebuild; it is a current-state signal, not a time series. Built by `build_discovery_signals` from `documents`, less postings Regulations.gov removed (`documents.publisher_status`).
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='discovery_signals'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Not a range. A dated snapshot recomputed from `documents` at each build. Its date is the calculation instant the file's metadata records (`spicy_regs.discovery_signals.as_of`, beside the date policy and the `documents` digest it read; `parquet_kv_metadata` on the generation's file returns them), not `measured_on`, which dates the audit of this note. Future dates are excluded from recent activity. This is not a historical series or a complete measure of agency activity. Receipt: fork-execution-2026-09-21/discovery-utc/MANUAL-AUDIT.md. *(measured 2026-09-21)*
 
 **Data quality.** Activity windows use UTC instants and preserve explicit source offsets. Dates and timestamps without offsets use UTC; source values remain unchanged. Corpus backfills and source date anomalies can affect these document-count signals.

@@ -3,8 +3,8 @@
 from pathlib import Path
 from typing import ClassVar
 
-from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
-from spicy_regs.transforms.build_fec_source_catalog import build_fec_source_catalog
+from spicy_regs.pipelines.rollups.base import make_rollup_app
+from spicy_regs.pipelines.rollups.fec_receipts import FecReceiptRollup as RollupPipeline
 
 
 class FecSourceCatalogRollup(RollupPipeline):
@@ -15,7 +15,7 @@ class FecSourceCatalogRollup(RollupPipeline):
     output: ClassVar[str] = "fec_source_catalog.parquet"
 
     def build(self, output_dir: Path) -> Path:
-        return build_fec_source_catalog(output_dir)
+        return self.build_receipts(output_dir)
 
 
 app = make_rollup_app(FecSourceCatalogRollup)

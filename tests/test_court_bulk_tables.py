@@ -14,6 +14,7 @@ import yaml
 from spicy_docs.sources.courtlistener.listing import BulkObject
 
 from spicy_regs import data_dictionary as dd
+from spicy_regs.court_receipts import read_court_rows
 from spicy_regs import mcp_server
 from spicy_regs.pipelines.rollups.court_citations import CourtCitationsRollup
 from spicy_regs.pipelines.rollups.court_opinions import CourtOpinionsRollup
@@ -54,7 +55,8 @@ def test_a_table_renames_selected_fields_stamps_the_edition_and_keeps_values_exa
     table = pq.read_table(out)
     assert table.schema == CITATIONS.schema
     assert table.column_names == list(CITATIONS.columns) == [c for c, _ in dd.expected_schemas()["court_citations"]]
-    assert table.to_pylist() == [
+    restored = list(read_court_rows(out, dataset="court_citations"))
+    assert [{k: row[k] for k in CITATIONS.input_columns} for row in restored] == [
         {
             "citation_id": "7",
             "cluster_id": "108713",
@@ -85,7 +87,7 @@ def test_the_citation_map_drops_only_its_surrogate_id(tmp_path):
     source = _export(tmp_path / "map.csv.bz2", b'id,depth,cited_opinion_id,citing_opinion_id\n"1","3","20","10"\n')
     out = build_court_bulk_table(CITATION_MAP, tmp_path, local_file=source, dump_date=EDITION)
     assert pq.read_table(out).to_pylist() == [
-        {"citing_opinion_id": "10", "cited_opinion_id": "20", "depth": "3", "dump_date": "2026-06-30"}
+        {"citing_opinion_id": "10", "cited_opinion_id": "20", "depth": 3}
     ]
 
 
@@ -164,7 +166,7 @@ def test_a_missing_export_is_downloaded_bound_to_its_listing(tmp_path, monkeypat
     assert kwargs["max_bytes"] == kwargs["expected_size"] == 123 and kwargs["etag"] == '"abc"'
 
 
-def test_downloaded_exports_are_deleted_and_retained_ones_kept(tmp_path, monkeypatch):
+def test_downloaded_and_preexisting_exports_remain_retained(tmp_path, monkeypatch):
     bodies = {
         "citations": b'id,volume,reporter,page,type,cluster_id,date_created,date_modified\n"1","1","U.S.","1","1","2",,\n',
         "citation-map": b'id,depth,cited_opinion_id,citing_opinion_id\n"1","1","2","3"\n',
@@ -177,7 +179,7 @@ def test_downloaded_exports_are_deleted_and_retained_ones_kept(tmp_path, monkeyp
     monkeypatch.setattr(module, "published_cluster_ceiling", lambda: 2)
     built = build_court_bulk_tables((CITATIONS, CITATION_MAP), tmp_path / "out")
     assert [path.name for path in built] == [CITATIONS.output, CITATION_MAP.output]
-    assert not files["citations"].exists(), "a downloaded export is removed once decoded"
+    assert files["citations"].exists(), "receipt witnesses retain downloaded source bytes"
     assert files["citation-map"].exists(), "a retained export is never removed"
 
 
@@ -217,7 +219,9 @@ def test_tables_naming_clusters_are_refused_before_any_download_when_none_are_pu
 def test_every_table_is_registered_everywhere_the_dictionary_needs_it(table):
     name = table.output.removesuffix(".parquet")
     assert name in dd.TABLES and name in dd.MCP_QUERYABLE and name in mcp_server.TABLES
-    assert dd.expected_schemas()[name] == [(column, "VARCHAR") for column in table.columns]
+    from spicy_regs.native_types import described_schema
+    from spicy_regs.court_receipts import POLICIES
+    assert dd.expected_schemas()[name] == described_schema(POLICIES[name].subject_schema)
     assert (REPO_ROOT / "docs" / "tables" / f"{name}.md").exists()
 
 

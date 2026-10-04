@@ -6,6 +6,8 @@
 
 One row per staged document of a docketed proceeding: the events each `rulemaking_lifecycles` row is paired from. A Regulations.gov document whose own `fr_doc_num` resolves to one Register document is that document, dated by the Register (decision 60); a document that states no number keeps Regulations.gov's type and its upload day. A stage comes only from a document's own Rule or Proposed Rule type (decision 58), so a Register document typed Notice is never an event: a petition withdrawal or receipt the Register types Notice (EPA's withdrawals 2010-8292, 2010-13540, 2011-8549 and 2011-16199; the receipts 2021-08335 and 2023-14192) neither closes nor opens a lifecycle. A posting Regulations.gov flags withdrawn is never an event (see `proceedings`). An Agenda entry completed as withdrawn adds its dated withdrawal. Keyed (`proceeding_id`, `document_id`); `dated_by` says which kind of id `document_id` is. Joins `rulemaking_lifecycles` on `proceeding_id`. Built by `build_lifecycles`; `event_date` is DATE.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='lifecycle_events'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Derived, and bounded by its inputs: the stage events of every docketed proceeding, one per document, less those undated or dated after the run's day. *(measured 2026-09-28)*
 
 - **Parquet file:** `lifecycle_events.parquet`, in the snapshot that `materialized/rulemaking/latest.json` names
@@ -15,18 +17,10 @@ One row per staged document of a docketed proceeding: the events each `rulemakin
 
 | Column | Type | Description |
 | --- | --- | --- |
+| `lifecycle_event_id` | `VARCHAR` | Stable identity of this lifecycle event within its lifecycle. |
 | `proceeding_id` | `VARCHAR` | The proceeding; joins `rulemaking_lifecycles.proceeding_id`. |
 | `document_id` | `VARCHAR` | The document, by `dated_by`: a dated Register record id (`number@YYYY-MM-DD`), a Regulations.gov document id, or an agenda item id (`urn:rkaf:us:rin:<rin>`). |
 | `stage` | `VARCHAR` | The stage the event records: `proposed`, `supplemental`, `final` or `withdrawn`. |
 | `event_date` | `DATE` | The event's day, from the source `dated_by` names. |
-| `source` | `VARCHAR` | Who typed the stage: `federal_register` (for its copies too, wherever it states a type), `regulations_gov` or `unified_agenda`. |
-| `dated_by` | `VARCHAR` | Whose day `event_date` is, and so which kind of id `document_id` is: `federal_register`, `regulations_gov` (its upload) or `unified_agenda`. |
-| `evidence_id` | `VARCHAR` | The proceedings stage event it came from: that record's own id, or `<agenda item id>@<edition>` for an Agenda withdrawal. |
-| `joined_by` | `VARCHAR` | How the document joined the proceeding: `docket`, `fr_docket_link`, `fr_copy`, `specific_rin` or `agenda_rin`. |
 | `document_form` | `VARCHAR` | Its stage refined by its title: `proposed`, `advance_proposed`, `comment_period`, `final`, `interim_final`, `direct_final`, `correction`, `supplemental` or `withdrawn`. |
 | `anchor_role` | `VARCHAR` | `proposal`, `final` or `withdrawal` when the lifecycle anchors on this document; NULL otherwise. |
-| `method` | `VARCHAR` | How the row was asserted; `deterministic` (computed by rule) throughout. |
-| `actor_id` | `VARCHAR` | The builder that asserted the row, with its version (`spicy-regs:lifecycle-events:v<n>`), bumped when its published rows change. |
-| `run_id` | `VARCHAR` | The materialization run that built the snapshot (e.g. `rulemaking-20260927T062656Z`). |
-| `asserted_at` | `VARCHAR` | When that run asserted the row, as a UTC ISO 8601 instant. |
-| `supersedes_id` | `VARCHAR` | Id of a prior row this one continues; always NULL here: events are recomputed each snapshot and continue no prior row. `proceedings.supersedes_id` differs: there a continuing proceeding names its own id. |

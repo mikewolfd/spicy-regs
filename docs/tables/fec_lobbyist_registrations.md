@@ -2,9 +2,11 @@
 
 # `fec_lobbyist_registrations`
 
-**Retained lobbyist registration observations**
+**FEC lobbyist registration observations**
 
 One native committee registration/lobbyist observation. Preserves literal lobbyist flags and their boolean interpretation status. Image links keep body-processing status; the observation does not infer an unreported affiliation. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates.
+
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_lobbyist_registrations'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
 
 **Coverage.** Sampled. Supported observations from retained lobbyist registration source records and image references. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
 
@@ -16,31 +18,9 @@ One native committee registration/lobbyist observation. Preserves literal lobbyi
 | Column | Type | Description |
 | --- | --- | --- |
 | `record_id` | `VARCHAR` | Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event. |
-| `identity_version` | `VARCHAR` | Version of the source-observation identity rule; it does not select a current or canonical record. |
-| `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
-| `mapping_status` | `VARCHAR` | Whether this source observation mapped fully, partially, or received an explicit nondata/refusal disposition; inspect the reason alongside NULL values. |
-| `mapping_reason_json` | `VARCHAR` | JSON object naming unsupported, missing or otherwise limited field interpretations; native values remain reachable through evidence. |
-| `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
-| `source_record_id` | `VARCHAR` | Native source-observation key within collection_id. Resolve with the source generation, exact locator and source digest, not this value alone. |
-| `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
-| `source_locator_json` | `VARCHAR` | Exact source row or subrecord coordinates, including available member, ordinal, byte span and field-definition references. Resolve in the pinned source generation. |
-| `source_pointer` | `VARCHAR` | Exact pointer within the provider-owned native record to the mapped value or metadata object. |
-| `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
-| `selection_evidence_sha256` | `VARCHAR` | Digest of the retained selection evidence used to authorize this mapper's source scope; not a financial inclusion decision. |
-| `source_namespace` | `VARCHAR` | Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent. |
-| `filing_key` | `VARCHAR` | Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. |
-| `filing_link_status` | `VARCHAR` | Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist. |
-| `native_field_states_json` | `VARCHAR` | JSON map of field presence states such as source_missing, source_null, source_empty or reported. |
-| `current_record_status` | `VARCHAR` | Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record. |
 | `committee_id` | `VARCHAR` | Literal FEC committee identifier as reported in this observation. Use cycle and source scope for historical joins. |
 | `committee_name` | `VARCHAR` | The committee's name as reported, without a name-based identity merge. |
 | `image_url` | `VARCHAR` | Source image reference for the registration; its body is deferred where it is a PDF/image link. |
 | `lobbyist_indicator` | `VARCHAR` | Literal source lobbyist flag before boolean interpretation; inspect lobbyist_status. |
-| `committee_id_status` | `VARCHAR` | State or syntax check of the reported committee ID; a valid shape is not a resolved identity. |
-| `lobbyist_status` | `VARCHAR` | Mapping state of the source lobbyist flag, including unsupported or absent values. |
-| `image_body_status` | `VARCHAR` | Explicit processing/availability state of the linked registration image body. |
-| `filed_date_raw` | `VARCHAR` | Literal source value before conversion for filed_date. Preserves spelling, signs and empty values; the typed value and its status are separate. |
-| `filed_date_status` | `VARCHAR` | How `filed_date` was read. `exact_with_year_bounds`: a two-digit year read in the range described on `filed_date`. `outside_selected_year_bounds`: no year in that range ends in those digits (a typed `34` in a file captured in 2026), so `filed_date` is NULL. `source_empty`: the source left it blank. `unresolved_century`: every two-digit year in the fec-query generation `81453ac6…` (published 2026-10-02) and earlier, mapped before that range was applied. Not a financial eligibility test. |
-| `source_cycle` | `INTEGER` | Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year. |
 | `filed_date` | `DATE` | The filing date the source states. A two-digit year (FEC's lobbyist file writes `11-SEP-26`) is read as the one year ending in those digits between 1975, when FEC began, and the year the file was captured (`26` is 2026; the capture instant is in `fec_collections`, by `collection_id`). A typo that stays in the range (`26` for `24`) is typed as written and cannot be detected; `filed_date_raw` keeps the date as filed. NULL has its reason in `filed_date_status`; capture time is never substituted. |
 | `is_lobbyist` | `BOOLEAN` | Boolean mapped only from a supported source lobbyist flag; NULL retains the adjacent status. |

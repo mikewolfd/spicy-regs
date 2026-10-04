@@ -11,7 +11,6 @@ import pytest
 
 from spicy_regs import data_dictionary as dd
 from spicy_regs import mcp_server
-from spicy_regs.ontology.common import write_parquet_rows
 from spicy_regs.pipelines.rulemaking_dataset import RulemakingDatasetPipeline
 from spicy_regs.sources import publication as pub
 from spicy_regs.transforms.build_agency_lifecycle_stats import SCHEMA as AGENCY_LIFECYCLE_STATS_SCHEMA
@@ -239,12 +238,11 @@ def write_rulemaking(tmp_path, snapshot_id: str, marker: str) -> dict:
     """
     directory = tmp_path / snapshot_id
     directory.mkdir()
-    for table, shape in WRITERS.items():
-        path = directory / f"{table}.parquet"
-        if isinstance(shape, pa.Schema):
-            pq.write_table(pa.Table.from_pylist([], schema=shape), path)
-        else:
-            write_parquet_rows(path, columns=shape, rows=[{"docket_id": marker}] if table == "rule_targets" else [])
+    from spicy_regs.subject_catalog import policies
+    for table in WRITERS:
+        shape = policies()[table].subject_schema
+        rows = [{"docket_id": marker, "rule_target_id": marker}] if table == "rule_targets" else []
+        pq.write_table(pa.Table.from_pylist(rows, schema=shape), directory / f"{table}.parquet")
     prefix = f"materialized/rulemaking/snapshots/{snapshot_id}"
     return {f"{prefix}/{table}.parquet": directory / f"{table}.parquet" for table in WRITERS}
 
@@ -335,7 +333,7 @@ def test_each_rulemaking_view_describes_as_the_dictionary_declares(tmp_path, mon
         "BOOLEAN",
     )
     assert {kind for _, kind in declared["agency_lifecycle_stats"]} == {"VARCHAR", "INTEGER", "BOOLEAN", "DATE"}
-    assert {kind for table in dd.RULEMAKING_TABLES[:5] for _, kind in declared[table]} == {"VARCHAR"}
+    assert dict(declared["proceedings"])["docket_ids"] == "VARCHAR[]"
 
 
 def test_an_unreadable_snapshot_member_refuses_the_connection(tmp_path, monkeypatch):

@@ -14,6 +14,7 @@ from pathlib import Path
 import httpx
 import pyarrow as pa
 import pyarrow.parquet as pq
+from tests.government_fakes import literal_table
 import pytest
 
 from spicy_regs.sources.gao_govinfo import GaoGovInfoError
@@ -124,7 +125,7 @@ def _build(tmp_path, monkeypatch, prior_rows, mods):
 
     monkeypatch.setattr(module, "GaoReportsReader", NoFeed)
     out, _ = module.build_gao_reports(tmp_path, govinfo_mods=True, mods=mods)
-    rows = {row["report_id"]: row for row in pq.read_table(out).to_pylist()}
+    rows = {row["report_id"]: row for row in literal_table(out).to_pylist()}
     out.rename(tmp_path / "_gao_prior.parquet")
     return rows
 
@@ -175,6 +176,6 @@ def test_the_published_nine_column_prior_gains_the_mods_columns(tmp_path, monkey
 
     monkeypatch.setattr(module, "GaoReportsReader", NoFeed)
     out, _ = module.build_gao_reports(tmp_path, govinfo_mods=True, mods=FixtureMods())
-    (read,) = pq.read_table(out).to_pylist()
-    assert pq.read_schema(out).names == list(module.COLUMNS)
+    (read,) = literal_table(out).to_pylist()
+    assert literal_table(out).column_names == list(module.COLUMNS)
     assert (read["report_number"], read["product_type"]) == ("GAO-08-919R", "Correspondence")

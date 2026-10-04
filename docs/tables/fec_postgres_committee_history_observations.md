@@ -2,9 +2,11 @@
 
 # `fec_postgres_committee_history_observations`
 
-**Retained PostgreSQL committee history observations**
+**FEC PostgreSQL committee history observations**
 
 One native COPY row from a selected retained history derivation. Preserves original COPY strings alongside named fields, including SQL NULL and array/date/boolean text. Overlapping derivations are not silently deduplicated or used to replace the current registry. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates.
+
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_postgres_committee_history_observations'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
 
 **Coverage.** Sampled. Supported observations from retained PostgreSQL committee-history dump derivations and exact source column definitions. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
 
@@ -16,32 +18,74 @@ One native COPY row from a selected retained history derivation. Preserves origi
 | Column | Type | Description |
 | --- | --- | --- |
 | `record_id` | `VARCHAR` | Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event. |
-| `identity_version` | `VARCHAR` | Version of the source-observation identity rule; it does not select a current or canonical record. |
-| `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
-| `value_mapping_version` | `VARCHAR` | Version of the exact monetary and date conversion rules used for supported values. |
-| `mapping_status` | `VARCHAR` | Whether this source observation mapped fully, partially, or received an explicit nondata/refusal disposition; inspect the reason alongside NULL values. |
-| `mapping_reason_json` | `VARCHAR` | JSON object naming unsupported, missing or otherwise limited field interpretations; native values remain reachable through evidence. |
-| `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
-| `source_record_id` | `VARCHAR` | Native source-observation key within collection_id. Resolve with the source generation, exact locator and source digest, not this value alone. |
-| `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
-| `source_locator_json` | `VARCHAR` | Exact source row or subrecord coordinates, including available member, ordinal, byte span and field-definition references. Resolve in the pinned source generation. |
-| `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
-| `selection_evidence_sha256` | `VARCHAR` | Digest of the retained selection evidence used to authorize this mapper's source scope; not a financial inclusion decision. |
-| `source_representation_role` | `VARCHAR` | Selected source role such as snapshot, insertion or deletion. Amount signs and ordinary amendment flags do not establish correction applicability. |
-| `correction_operation` | `VARCHAR` | Source-supported correction operation, when applicable; a positive amount in a deletion stream is not a new receipt or an inferred refund. |
-| `correction_applicability_status` | `VARCHAR` | Whether the captured correction can be applied to an evidenced base and target population; unresolved applicability prevents a qualified current total. |
-| `current_record_status` | `VARCHAR` | Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record. |
-| `filing_key` | `VARCHAR` | Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. |
-| `filing_link_status` | `VARCHAR` | Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist. |
-| `currency` | `VARCHAR` | Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately. |
-| `amount_kind` | `VARCHAR` | Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It is not an aggregation permission. |
-| `source_namespace` | `VARCHAR` | Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent. |
-| `source_url` | `VARCHAR` | Captured source URL for this observation; it does not assert current availability or body retrieval. |
-| `capture_json` | `VARCHAR` | Retained capture request, source digest and scope metadata used to validate this history observation. |
-| `history_scope_status` | `VARCHAR` | Explicit historical scope limitation; repeated snapshots remain source observations instead of replacing committee/cycle identity rows. |
-| `source_cycle` | `INTEGER` | Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year. |
 | `committee_id` | `VARCHAR` | Literal FEC committee identifier as reported in this observation. Use cycle and source scope for historical joins. |
-| `cycle` | `VARCHAR` | Cycle exactly as supplied by the history source; raw PostgreSQL text is retained without inferring a new integer value. |
-| `derivation_json` | `VARCHAR` | Retained evidence for the SQL/PostgreSQL derivation, including source column definitions; distinct from original dump bytes. |
-| `raw_copy_fields` | `VARCHAR[]` | Ordered literal PostgreSQL COPY field strings, preserving original NULL markers and escaping beside named decoded fields. |
-| `native_fields` | `STRUCT(idx VARCHAR, "cycle" VARCHAR, committee_id VARCHAR, "name" VARCHAR, treasurer_name VARCHAR, treasurer_text VARCHAR, organization_type VARCHAR, organization_type_full VARCHAR, street_1 VARCHAR, street_2 VARCHAR, city VARCHAR, state VARCHAR, state_full VARCHAR, zip VARCHAR, treasurer_city VARCHAR, treasurer_name_1 VARCHAR, treasurer_name_2 VARCHAR, treasurer_name_middle VARCHAR, treasurer_phone VARCHAR, treasurer_name_prefix VARCHAR, treasurer_state VARCHAR, treasurer_street_1 VARCHAR, treasurer_street_2 VARCHAR, treasurer_name_suffix VARCHAR, treasurer_name_title VARCHAR, treasurer_zip VARCHAR, custodian_city VARCHAR, custodian_name_1 VARCHAR, custodian_name_2 VARCHAR, custodian_name_middle VARCHAR, custodian_name_full VARCHAR, custodian_phone VARCHAR, custodian_name_prefix VARCHAR, custodian_state VARCHAR, custodian_street_1 VARCHAR, custodian_street_2 VARCHAR, custodian_name_suffix VARCHAR, custodian_name_title VARCHAR, custodian_zip VARCHAR, email VARCHAR, fax VARCHAR, website VARCHAR, form_type VARCHAR, leadership_pac VARCHAR, lobbyist_registrant_pac VARCHAR, party_type VARCHAR, party_type_full VARCHAR, qualifying_date VARCHAR, first_file_date VARCHAR, last_file_date VARCHAR, last_f1_date VARCHAR, designation VARCHAR, designation_full VARCHAR, committee_type VARCHAR, committee_type_full VARCHAR, filing_frequency VARCHAR, party VARCHAR, party_full VARCHAR, cycles VARCHAR, candidate_ids VARCHAR, affiliated_committee_name VARCHAR, last_cycle_has_financial VARCHAR, cycles_has_financial VARCHAR, last_cycle_has_activity VARCHAR, cycles_has_activity VARCHAR, is_active VARCHAR, sponsor_candidate_ids VARCHAR, convert_to_pac_flag VARCHAR, former_committee_name VARCHAR, former_candidate_id VARCHAR, former_candidate_name VARCHAR, former_candidate_election_year VARCHAR, first_f1_date VARCHAR)` | Named source fields retained as a struct. PostgreSQL NULL, array text, date text and boolean text remain literal; no current-profile inference. |
+| `name` | `VARCHAR` | Committee name as registered with the FEC. |
+| `treasurer_name` | `VARCHAR` | Name of the committee's treasurer. |
+| `organization_type` | `VARCHAR` | Literal source organization-type code; interpretation follows the source namespace. |
+| `organization_type_full` | `VARCHAR` | Source-provided expansion of its organization-type code. |
+| `street_1` | `VARCHAR` | The first street line of the committee's address (`CMTE_ST1`); NULL when blank. |
+| `street_2` | `VARCHAR` | The second street line (`CMTE_ST2`); NULL when blank. |
+| `city` | `VARCHAR` | The address city (`CMTE_CITY`); NULL when blank. |
+| `state` | `VARCHAR` | Two-letter state associated with the committee. Often null. |
+| `state_full` | `VARCHAR` | Source-provided state name corresponding to the source state code. |
+| `zip` | `VARCHAR` | The address ZIP code as filed (`CMTE_ZIP`); NULL when blank. |
+| `treasurer_city` | `VARCHAR` | Source-reported city for the committee treasurer in this observation; preserve source spelling and do not infer person identity. |
+| `treasurer_name_1` | `VARCHAR` | Source-reported first name component for the committee treasurer in this observation; preserve source spelling and do not infer person identity. |
+| `treasurer_name_2` | `VARCHAR` | Source-reported second name component for the committee treasurer in this observation; preserve source spelling and do not infer person identity. |
+| `treasurer_name_middle` | `VARCHAR` | Source-reported middle name component for the committee treasurer in this observation; preserve source spelling and do not infer person identity. |
+| `treasurer_phone` | `VARCHAR` | Source-reported phone number for the committee treasurer in this observation; preserve source spelling and do not infer person identity. |
+| `treasurer_name_prefix` | `VARCHAR` | Source-reported name prefix for the committee treasurer in this observation; preserve source spelling and do not infer person identity. |
+| `treasurer_state` | `VARCHAR` | Source-reported state for the committee treasurer in this observation; preserve source spelling and do not infer person identity. |
+| `treasurer_street_1` | `VARCHAR` | Source-reported first street-address line for the committee treasurer in this observation; preserve source spelling and do not infer person identity. |
+| `treasurer_street_2` | `VARCHAR` | Source-reported second street-address line for the committee treasurer in this observation; preserve source spelling and do not infer person identity. |
+| `treasurer_name_suffix` | `VARCHAR` | Source-reported name suffix for the committee treasurer in this observation; preserve source spelling and do not infer person identity. |
+| `treasurer_name_title` | `VARCHAR` | Source-reported title for the committee treasurer in this observation; preserve source spelling and do not infer person identity. |
+| `treasurer_zip` | `VARCHAR` | Source-reported postal code for the committee treasurer in this observation; preserve source spelling and do not infer person identity. |
+| `custodian_city` | `VARCHAR` | Source-reported city for the committee custodian in this observation; preserve source spelling and do not infer person identity. |
+| `custodian_name_1` | `VARCHAR` | Source-reported first name component for the committee custodian in this observation; preserve source spelling and do not infer person identity. |
+| `custodian_name_2` | `VARCHAR` | Source-reported second name component for the committee custodian in this observation; preserve source spelling and do not infer person identity. |
+| `custodian_name_middle` | `VARCHAR` | Source-reported middle name component for the committee custodian in this observation; preserve source spelling and do not infer person identity. |
+| `custodian_name_full` | `VARCHAR` | Source-reported full name for the committee custodian in this observation; preserve source spelling and do not infer person identity. |
+| `custodian_phone` | `VARCHAR` | Source-reported phone number for the committee custodian in this observation; preserve source spelling and do not infer person identity. |
+| `custodian_name_prefix` | `VARCHAR` | Source-reported name prefix for the committee custodian in this observation; preserve source spelling and do not infer person identity. |
+| `custodian_state` | `VARCHAR` | Source-reported state for the committee custodian in this observation; preserve source spelling and do not infer person identity. |
+| `custodian_street_1` | `VARCHAR` | Source-reported first street-address line for the committee custodian in this observation; preserve source spelling and do not infer person identity. |
+| `custodian_street_2` | `VARCHAR` | Source-reported second street-address line for the committee custodian in this observation; preserve source spelling and do not infer person identity. |
+| `custodian_name_suffix` | `VARCHAR` | Source-reported name suffix for the committee custodian in this observation; preserve source spelling and do not infer person identity. |
+| `custodian_name_title` | `VARCHAR` | Source-reported title for the committee custodian in this observation; preserve source spelling and do not infer person identity. |
+| `custodian_zip` | `VARCHAR` | Source-reported postal code for the committee custodian in this observation; preserve source spelling and do not infer person identity. |
+| `email` | `VARCHAR` | Public contact email stated in this source observation; not verified current contact information. |
+| `fax` | `VARCHAR` | Public fax number stated in this source observation, preserved as text. |
+| `website` | `VARCHAR` | Source-reported website URL; no successful retrieval or present-day affiliation is asserted. |
+| `form_type` | `VARCHAR` | Literal filing form or record-type code from the source layout; does not prove submission conformance. |
+| `leadership_pac` | `VARCHAR` | Literal source leadership-PAC code. It is not a boolean; native codes remain distinct. |
+| `lobbyist_registrant_pac` | `VARCHAR` | Literal source lobbyist/registrant-PAC code. It is not a boolean; native codes remain distinct. |
+| `party_type` | `VARCHAR` | Literal party-type code supplied in the source history row. |
+| `party_type_full` | `VARCHAR` | Source-provided description of its party-type code. |
+| `designation` | `VARCHAR` | Single-letter committee designation code (e.g. `P` principal campaign committee, `A` authorized, `U` unauthorized, `J` joint fundraiser). |
+| `designation_full` | `VARCHAR` | Source-provided description of the committee designation. |
+| `committee_type` | `VARCHAR` | Single-letter committee type code (e.g. `P` presidential, `H` House, `S` Senate, `N`/`Q`/`O` PAC variants). |
+| `committee_type_full` | `VARCHAR` | Human-readable committee type (e.g. `Presidential`, `PAC - Qualified`). |
+| `filing_frequency` | `VARCHAR` | Single-letter filing frequency code (e.g. `A` administratively terminated, `M` monthly, `Q` quarterly, `T` terminated). |
+| `party` | `VARCHAR` | Political party code, when set (e.g. `DEM`, `REP`, `W`). Often null for non-party committees. |
+| `party_full` | `VARCHAR` | Human-readable political party (e.g. `DEMOCRATIC PARTY`, `WRITE-IN`). Often null. |
+| `affiliated_committee_name` | `VARCHAR` | Literal affiliated committee name stated by the source; a name is not a verified committee link. |
+| `former_committee_name` | `VARCHAR` | Former committee name stated by the source, without an inferred effective period. |
+| `former_candidate_id` | `VARCHAR` | Literal former candidate identifier; no target existence or unique-person claim. |
+| `former_candidate_name` | `VARCHAR` | Former candidate name stated by the source; not a resolved identity. |
+| `cycle` | `INTEGER` | Cycle exactly as supplied by the history source; raw PostgreSQL text is retained without inferring a new integer value. |
+| `qualifying_date` | `DATE` | Qualification calendar date as stated by the source; no independent legal determination. |
+| `first_file_date` | `DATE` | First filing date as reported in this source observation, not independently reconstructed history. |
+| `last_file_date` | `DATE` | Last filing date as reported in this source observation; later filings may exist. |
+| `last_f1_date` | `DATE` | Last Form 1 date reported by the source, without a completeness assertion. |
+| `last_cycle_has_financial` | `INTEGER` | Last source-reported cycle with financial activity; not derived from transaction rows. |
+| `last_cycle_has_activity` | `INTEGER` | Last source-reported cycle with activity; not a completeness assertion. |
+| `is_active` | `BOOLEAN` | Source-reported active flag in this dated observation; not a present-day registry decision. |
+| `convert_to_pac_flag` | `BOOLEAN` | Source-reported conversion-to-PAC flag, preserving null or unsupported values. |
+| `former_candidate_election_year` | `INTEGER` | Election year reported for the former candidate association. |
+| `first_f1_date` | `DATE` | First Form 1 date reported by the source, without a completeness assertion. |
+| `cycles` | `INTEGER[]` | Native list of election-cycle years the committee was active in (e.g. `[2018, 2020, 2022]`). Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `candidate_ids` | `VARCHAR[]` | Native list of OpenFEC candidate IDs associated with the committee (e.g. `["P00008052"]`). Often `[]`. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `sponsor_candidate_ids` | `VARCHAR[]` | Independent ordered array of source sponsor-candidate references; never pair positions with cycles or candidate_ids. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `cycles_has_financial` | `INTEGER[]` | Ordered source array of cycles marked as having financial activity; not independently verified completeness. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `cycles_has_activity` | `INTEGER[]` | Ordered source array of cycles marked as having activity; not independently verified completeness. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |

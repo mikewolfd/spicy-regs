@@ -19,11 +19,13 @@ Keyless: both files are static JSON on unitedstates.github.io.
 from __future__ import annotations
 
 from pathlib import Path
+from collections.abc import Callable
 
 from loguru import logger
 from spicy_docs.schemas.legislator_tables import shape_member, shape_member_term, shape_member_party_affiliation
 from spicy_docs.sources.legislators import LegislatorsAcquirer, LegislatorsBudget
 
+from spicy_regs.sources import r2
 from spicy_regs.transforms.table_merge import merge_contract_table
 from spicy_regs.source_evidence import CaptureEvidence
 from spicy_regs.sources.retained import RetainedLegislatorsAcquirer
@@ -38,9 +40,19 @@ BUDGET = LegislatorsBudget(
 )
 
 
-def build_members(output_dir: Path, *, acquirer: LegislatorsAcquirer | None = None,
-                  evidence: CaptureEvidence | None = None) -> tuple[Path, ...]:
+def build_members(
+    output_dir: Path,
+    *,
+    acquirer: LegislatorsAcquirer | None = None,
+    evidence: CaptureEvidence | None = None,
+    download_prior: Callable[[str, Path], bool] = r2.download,
+    receipt_build=None,
+) -> tuple[Path, ...]:
     """Build members, terms and affiliations from both complete rosters."""
+    if receipt_build is not None:
+        return receipt_build.run(build_members, output_dir, **{
+            key: value for key, value in locals().items() if key not in {"output_dir", "receipt_build"}
+        })
     acquirer = acquirer or (RetainedLegislatorsAcquirer(budget=BUDGET, evidence=evidence)
                            if evidence else LegislatorsAcquirer(budget=BUDGET))
 
@@ -82,8 +94,8 @@ def build_members(output_dir: Path, *, acquirer: LegislatorsAcquirer | None = No
 
     logger.info("Members: {:,} member rows, {:,} term rows", len(member_rows), len(term_rows))
     return (
-        merge_contract_table(output_dir, "members", member_rows),
-        merge_contract_table(output_dir, "member_terms", term_rows),
+        merge_contract_table(output_dir, "members", member_rows, download_prior=download_prior),
+        merge_contract_table(output_dir, "member_terms", term_rows, download_prior=download_prior),
         # Both complete rosters were read before any output is written. This is
         # the current source history, not a union of earlier captured histories.
         merge_contract_table(output_dir, "member_party_affiliations", affiliation_rows, prior_present=False),

@@ -30,6 +30,8 @@ from spicy_regs.transforms.regulations_attributes import (
     newest_copy_sql,
 )
 
+
+
 #: A bulk-era write instant (2025-04-14) and one modifyDate the tied copies share.
 WRITTEN = datetime(2025, 4, 14, 5, 29, 57, tzinfo=UTC)
 MODIFIED = "2023-05-10T01:00:44Z"

@@ -2,9 +2,11 @@
 
 # `fec_research_document_observations`
 
-**Retained research document and case references**
+**FEC research document and case references**
 
 One source document/case-reference metadata occurrence in retained context. Preserves publisher, authority, native document reference, dates and URL without inferring an FEC matter join. Bodies remain explicitly deferred or reference-only as supported by the retained evidence. Resolve collection_id to fec_collections in the captured source generation and source_context_pointer into its retained context. Context witnesses use their own digest and native coordinates; they do not require a fictional source_record_id.
+
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_research_document_observations'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
 
 **Coverage.** Sampled. Supported observations from retained court-case/report references and third-party DocumentCloud metadata. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
 
@@ -16,22 +18,13 @@ One source document/case-reference metadata occurrence in retained context. Pres
 | Column | Type | Description |
 | --- | --- | --- |
 | `record_id` | `VARCHAR` | Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event. |
-| `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
-| `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
-| `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
-| `source_url` | `VARCHAR` | Captured source URL for this observation; it does not assert current availability or body retrieval. |
-| `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
-| `context_sha256` | `VARCHAR` | Digest of the sealed retained context object used by this mapping; separate from original-source bytes and typed output. |
-| `source_context_pointer` | `VARCHAR` | Exact JSON pointer into the retained collection context to the native fact represented by this observation. |
-| `observed_at_json` | `VARCHAR` | Retained capture time value(s) as JSON without collapsing separately observed captures. |
 | `document_native_id` | `VARCHAR` | Literal identifier in the research publisher's document system; it is not automatically an FEC matter/document key. |
 | `title` | `VARCHAR` | Source title or explicitly labeled mapper title; consult title_basis or title_status when present. |
 | `description` | `VARCHAR` | Literal source description or narrative associated with this observation. |
 | `canonical_url` | `VARCHAR` | Source-supplied canonical research document URL; no inferred FEC case association. |
 | `source_publisher` | `VARCHAR` | Publisher named by the retained research metadata, kept distinct from source_authority. |
-| `source_created_at` | `VARCHAR` | Creation time stated by the research publisher; not a date of the underlying FEC event. |
-| `source_updated_at` | `VARCHAR` | Update time stated by the research publisher; not a current-version selection rule. |
 | `original_extension` | `VARCHAR` | Original file extension reported in research metadata, without body parsing or format validation. |
-| `body_status` | `VARCHAR` | Explicit body availability or processing status. A PDF link remains deferred; metadata does not imply extracted content. |
-| `fec_relationship_status` | `VARCHAR` | Explicit resolution state of any FEC relationship; third-party metadata does not establish an FEC matter join. |
-| `native_metadata_json` | `VARCHAR` | Complete native metadata object retained for this observation, including fields outside the typed mapping. |
+| `language` | `VARCHAR` | Language code reported by the discovery provider; not independently detected from a document body. |
+| `page_count` | `BIGINT` | Nonnegative exact page count reported by the discovery provider; no document-body acquisition is implied. |
+| `created_at` | `TIMESTAMP WITH TIME ZONE` | Provider-reported creation timestamp; distinct from source capture time. |
+| `updated_at` | `TIMESTAMP WITH TIME ZONE` | Provider-reported update timestamp; distinct from source capture time. |

@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from loguru import logger
 
 from spicy_regs.pipelines.rollups.base import RollupPipeline
+from spicy_regs.scorecards.etl import POLICIES, SOURCE_NAMES
 from spicy_regs.scorecards.registry import REGISTRY
 from spicy_regs.scorecards.acquisition import fetch_for_publishers
 from spicy_regs.transforms.build_scorecards import OUTPUTS, NoScorecardsDue, build_scorecards
@@ -20,6 +21,8 @@ class ScorecardsRollup(RollupPipeline):
     inputs: ClassVar[tuple[str, ...]] = ()
     outputs: ClassVar[tuple[str, ...]] = OUTPUTS
     retain_source_evidence: ClassVar[bool] = True
+    receipt_policies: ClassVar[tuple] = tuple(POLICIES[name] for name in SOURCE_NAMES)
+    receipt_only_tables: ClassVar[tuple[str, ...]] = ("scorecard_snapshots.parquet",)
 
     def __init__(
         self,
@@ -67,6 +70,7 @@ class ScorecardsRollup(RollupPipeline):
             provider=self.provider,
             pdf_extractor=self.pdf_extractor,
             retain_extraction=self.retain_extraction,
+            receipt_generation_id=self.receipt_generation_id,
             **options,
         )
 

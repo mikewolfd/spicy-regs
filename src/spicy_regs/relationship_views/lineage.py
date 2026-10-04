@@ -59,9 +59,21 @@ def _node_columns(node: dict, scope: dict[str, Columns | None]) -> Columns:
         columns = _node_columns(entry["value"]["query"]["node"], scope)
         aliases = entry["value"].get("aliases") or []
         if aliases:
-            origins = [origin for _, origin in columns] + [None] * len(aliases)
-            columns = list(zip(aliases, origins, strict=False))
+            columns = _rename_columns(columns, aliases)
         scope = {**scope, entry["key"].lower(): columns}
+    if node["type"] == "RECURSIVE_CTE_NODE":
+        seed = _node_columns(node["left"], scope)
+        columns = _rename_columns(seed, node.get("aliases") or [])
+        # An unchanged seed column remains inherited only if every recursive
+        # step also returns it unchanged. Origins can only disappear, so this
+        # reaches a fixed point even when recursive columns refer to each other.
+        while True:
+            step = _node_columns(node["right"], {**scope, node["cte_name"].lower(): columns})
+            checked = [(name, origin if origin == other else None)
+                       for (name, origin), (_, other) in zip(columns, step, strict=True)]
+            if checked == columns:
+                return checked
+            columns = checked
     if node["type"] == "SET_OPERATION_NODE":
         left, right = _node_columns(node["left"], scope), _node_columns(node["right"], scope)
         return [(name, origin if origin == other else None) for (name, origin), (_, other) in zip(left, right, strict=False)]
@@ -91,6 +103,14 @@ def _node_columns(node: dict, scope: dict[str, Columns | None]) -> Columns:
     return output
 
 
+def _rename_columns(columns: Columns, aliases: Sequence[str]) -> Columns:
+    """Rename the stated prefix, preserving trailing columns and their origins."""
+    renamed = [(aliases[index] if index < len(aliases) else name, origin)
+               for index, (name, origin) in enumerate(columns)]
+    # Unknown relation shapes can still state names, but establish no origins.
+    return renamed + [(name, None) for name in aliases[len(columns):]]
+
+
 def _find(columns: Columns | None, name: str, *, present: bool = False) -> Any:
     for column, origin in columns or []:
         if column.lower() == name.lower():
@@ -114,6 +134,5 @@ def _from_relations(ref: dict | None, scope: dict[str, Columns | None]) -> list[
     else:  # TABLE_FUNCTION, EXPRESSION_LIST (VALUES) and anything else DuckDB can read from
         name, columns = alias, None
     if renames:
-        origins = [origin for _, origin in columns or []] + [None] * len(renames)
-        columns = list(zip(renames, origins, strict=False))
+        columns = _rename_columns(columns or [], renames)
     return [(alias or name, columns)]

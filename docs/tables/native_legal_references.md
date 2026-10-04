@@ -6,6 +6,8 @@
 
 Selected eCFR AUTH/SOURCE notes and U.S. Code href/source-credit observations, retaining source XML paths and digests. spicy-docs shapes each row and reads the targets it names; this repository pins the inputs and looks each typed target up in the target tables its manifest selects. Complete reads replace the selected source/edition scope, including successful empty corrections. Candidate target matches concern held classification rows, not independently acquired legal text. Unparsed prose and unsupported forms remain visible; no universal extraction or historical completeness is implied.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='native_legal_references'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled. Observations from the complete retained eCFR Title 1, requested as of 2026-08-10, and USC Title 1 release 119-103. Selected public target tables resolve some occurrences; missing, unsupported and unqueried targets remain explicit. Rows read before spicy-docs 0.52.0 name native-legal-reference/002, the reading this repository ran; the next build names /003, which re-spells target_candidates_json that held a non-ASCII character and re-versions the text candidates citation rules 004 read, and moves no other value. Receipt: native-legal-full-2026-09-27/resolved-verification.json. *(measured 2026-09-27)*
 
 - **Parquet file:** `native_legal_references.parquet`
@@ -19,19 +21,15 @@ Selected eCFR AUTH/SOURCE notes and U.S. Code href/source-credit observations, r
 | `source_family` | `VARCHAR` | The scanner family that read the input: `uscode` or `ecfr`, fixed by the shaper. |
 | `source_record_key` | `VARCHAR` | The caller's record identity for the input, retained literally. |
 | `edition` | `VARCHAR` | The edition or request date the caller's checked capture metadata states, literally; NULL when it states none, never read from a filename. |
-| `input_sha256` | `VARCHAR` | `sha256:` digest of the exact retained XML bytes the scanner read. |
-| `source_locator` | `VARCHAR` | Where the caller retained the input from, literally; not proof of acquisition time or edition. |
-| `occurrence_index` | `VARCHAR` | The observation's zero-based position among the input's observations, both kinds counted together in the order the scanner reported them, as decimal text. |
-| `source_path` | `VARCHAR` | The observed element's positional XPath in the input (`/*[1]/*[2]`), never a byte offset. |
-| `element_tag` | `VARCHAR` | The observed element's tag, its namespace expanded (`{http://xml.house.gov/schemas/uslm/1.0}ref`) where the input declares one. |
-| `attributes_json` | `VARCHAR` | Every attribute of the observed element, as a JSON object keyed by expanded name. |
-| `ancestors_json` | `VARCHAR` | The observed element's ancestors from the root to its parent, each a JSON object of its attributes, positional XPath and tag. |
+| `body_version_id` | `VARCHAR` | `sha256:` digest of the exact retained XML bytes the scanner read. |
+| `occurrence_index` | `BIGINT` | The observation's zero-based position among the input's observations, both kinds counted together in the order the scanner reported them, as decimal text. |
 | `observation_kind` | `VARCHAR` | `native_reference` or `source_credit` for a U.S. Code observation, `authority` (AUTH) or `source_note` (SOURCE) for an eCFR note. |
 | `href` | `VARCHAR` | The element's href exactly as stated, an empty string when stated empty; NULL when absent, and on every source credit and note. |
 | `text` | `VARCHAR` | The complete decoded text of a source credit or note, whitespace kept; NULL on a native reference. |
-| `text_runs_json` | `VARCHAR` | An eCFR note's text split at element boundaries, as a JSON array whose strings join to text; NULL on U.S. Code rows. |
+| `text_runs` | `VARCHAR[]` | An eCFR note's text split at element boundaries, as a Native list whose strings join to text; NULL on U.S. Code rows. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `cfr_title` | `VARCHAR` | The CFR title the caller's checked capture metadata states, on an eCFR note; NULL when it states none, never inferred from a fragment. |
 | `cfr_part` | `VARCHAR` | The `N` of the nearest enclosing DIV5 part on an eCFR note; NULL when no part encloses it, and on U.S. Code rows. |
-| `interpretation_status` | `VARCHAR` | How the reading under rule_version read this observation: `native_section_href`, `native_statute_href`, `native_public_law_href` or `unsupported_href` for an href, `partial_text_findings` or `no_qualified_text_findings` for text; it does not claim exhaustive extraction. |
-| `target_candidates_json` | `VARCHAR` | The typed targets the reading found, as a JSON array in reading order, each with the outcome of the host's lookup in the target tables it selected; several targets in one note stay one row, and an unsupported href has none. |
-| `rule_version` | `VARCHAR` | `native-legal-reference/003` (`NATIVE_LEGAL_REFERENCE_RULE`): the scanners' selected shapes and the reading this row was produced under, comparable for equality only. |
+| `target_candidates` | `STRUCT(cite_kind VARCHAR, normalized_key VARCHAR, matched_text VARCHAR, span_start BIGINT, span_end BIGINT, target_kind VARCHAR, target_key VARCHAR, target_grain VARCHAR)[]` | The typed targets the reading found, as a Native list in reading order, each with the outcome of the host's lookup in the target tables it selected; several targets in one note stay one row, and an unsupported href has none. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `native_element_id` | `VARCHAR` | Publisher element identifier attached to this legal reference. |
+| `native_idref` | `VARCHAR` | Publisher identifier reference attached to this legal reference. |
+| `native_class` | `VARCHAR` | Publisher classification attached to this legal reference. |

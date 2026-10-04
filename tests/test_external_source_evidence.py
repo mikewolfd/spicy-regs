@@ -241,7 +241,8 @@ def test_usaspending_observation_and_old_schema_merge(tmp_path, monkeypatch):
     monkeypatch.setattr(usa, '_iter_recipient_rows', lambda **kw: real(
         **kw, transport=httpx.MockTransport(lambda r: httpx.Response(200, content=raw, headers={'content-type': 'application/json'}))))
     output = usa.build_usaspending_recipients(tmp_path, evidence=evidence)
-    rows = {r['recipient_id']: r for r in pq.read_table(output).to_pylist()}
+    from tests.government_fakes import literal_table
+    rows = {r['recipient_id']: r for r in literal_table(output).to_pylist()}
     assert rows['old-R']['observed_at'] is None
     assert rows['old-R']['source_capture_sha256'] is None
     observed = rows['fresh-R']
@@ -258,10 +259,11 @@ def test_usaspending_observation_and_old_schema_merge(tmp_path, monkeypatch):
     [read] = [e for e in events if e['event'] == 'page-read']
     assert (read['sha256'], read['observed_at']) == (observed['source_capture_sha256'], observed['observed_at'])
     # A subsequent successful empty selection must preserve the existing row times.
-    pq.write_table(pq.read_table(output), prior)
+    import shutil
+    shutil.copyfile(output, prior)
     monkeypatch.setattr(usa, '_iter_recipient_rows', lambda **kw: iter(()))
     second = usa.build_usaspending_recipients(tmp_path)
-    assert {r['recipient_id']: r for r in pq.read_table(second).to_pylist()} == rows
+    assert {r['recipient_id']: r for r in literal_table(second).to_pylist()} == rows
 
 
 def test_usaspending_output_is_its_declared_schema_and_admits_a_generation(tmp_path, monkeypatch):
@@ -269,7 +271,9 @@ def test_usaspending_output_is_its_declared_schema_and_admits_a_generation(tmp_p
     from spicy_regs.generations import verify_generation
     from spicy_regs.pipelines.rollups.usaspending_recipients import UsaSpendingRecipientsRollup
 
-    assert list(usa.COLUMNS) == [column for column, _ in expected_schemas()['usaspending_recipients']]
+    from spicy_regs.transforms.government_source_shapes import SUBJECT_SCHEMAS
+    assert SUBJECT_SCHEMAS['usaspending_recipients'].names == [column for column, _ in expected_schemas()['usaspending_recipients']]
+    assert {'observed_at', 'source_capture_sha256'} <= set(usa.COLUMNS) - set(SUBJECT_SCHEMAS['usaspending_recipients'].names)
     monkeypatch.delenv('R2_PUBLIC_URL', raising=False)
     monkeypatch.setattr(usa.r2, 'download', lambda *a: False)
     raw = json.dumps({'results': [{'id': 'fresh-R', 'uei': 'FRESH', 'name': 'After', 'recipient_level': 'R',
@@ -509,7 +513,6 @@ EVIDENCE_EXEMPT = {
     "CourtCitationsRollup": _UNWIRED,
     "CourtOpinionClustersRollup": _UNWIRED,
     "CourtOpinionsRollup": _UNWIRED,
-    "FccProceedingsRollup": _UNWIRED + "; measure one whole proceedings walk before retaining it daily",
     "FecCommitteesRollup": _UNWIRED + "; its captures live only as an expiring workflow artifact",
     "FecSourceCatalogRollup": _UNWIRED,
     "FederalRegisterRollup": _UNWIRED,

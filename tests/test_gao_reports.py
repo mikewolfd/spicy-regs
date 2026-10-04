@@ -7,10 +7,12 @@ from importlib import import_module
 from pathlib import Path
 
 from spicy_docs.interpretation.gao_decisions import GAO_OUTCOME_RULE
-from spicy_docs.schemas import TABLE_CONTRACTS
+from spicy_docs.schemas.gao_decision_tables import GAO_DECISIONS
 
 import pyarrow as pa
 import pyarrow.parquet as pq
+from tests.government_fakes import literal_table
+from spicy_regs.transforms.government_source_shapes import SUBJECT_SCHEMAS
 
 from spicy_regs.transforms.build_gao_reports import (
     COLUMNS,
@@ -102,12 +104,12 @@ def _run(tmp_path, monkeypatch, *, prior=None, feed=(), history=None, listed=Non
                             listing_run=tmp_path / "walk" if listed is not None else None, evidence=evidence,
                             decision_pages=pages)
     out, decisions = out
-    table = pq.read_table(out)
-    assert table.column_names == list(COLUMNS)
-    assert pq.read_table(decisions).column_names == list(TABLE_CONTRACTS["gao_decisions"].columns)
+    assert pq.read_schema(out).equals(SUBJECT_SCHEMAS['gao_reports'])
+    assert pq.read_schema(decisions).equals(SUBJECT_SCHEMAS['gao_decisions'])
+    table = literal_table(out).select(COLUMNS)
     rows = {row["report_id"]: row for row in table.to_pylist()}
     if with_decisions:
-        return rows, pq.read_table(decisions).to_pylist()
+        return rows, literal_table(decisions).select(GAO_DECISIONS.columns).to_pylist()
     return rows
 
 
@@ -202,7 +204,7 @@ def test_a_prior_published_as_decision_date_carries_its_dates_into_released_date
     _, first = _run(tmp_path, monkeypatch, listed=[_product("gao-26-1")], decided=decided, with_decisions=True)
     assert {row["released_date"] for row in first} == {"2026-08-18"}
     (tmp_path / "gao_reports.parquet").rename(tmp_path / "_gao_prior.parquet")
-    published = pq.read_table(tmp_path / "gao_decisions.parquet")
+    published = literal_table(tmp_path / "gao_decisions.parquet").select(GAO_DECISIONS.columns)
     published = published.rename_columns(["decision_date" if c == "released_date" else c for c in published.column_names])
     pq.write_table(published, tmp_path / "_gao_decisions_prior.parquet")
     (tmp_path / "gao_decisions.parquet").unlink()
@@ -245,7 +247,7 @@ def test_every_held_decision_has_its_outcome_read_again_each_run(tmp_path, monke
                _decision("/products/b-424130.1", "B-424130.1")]
     _, first = _run(tmp_path, monkeypatch, listed=[], decided=decided, with_decisions=True)
     (tmp_path / "gao_reports.parquet").rename(tmp_path / "_gao_prior.parquet")
-    stale = pq.read_table(tmp_path / "gao_decisions.parquet").to_pylist()
+    stale = literal_table(tmp_path / "gao_decisions.parquet").select(GAO_DECISIONS.columns).to_pylist()
     for row in stale:
         row.update(outcome="denied", outcome_rule="gao-decision-outcome/000")
     pq.write_table(pa.Table.from_pylist(stale), tmp_path / "_gao_decisions_prior.parquet")
@@ -263,6 +265,9 @@ def test_a_sentence_the_table_does_not_read_is_no_outcome_and_is_journaled(tmp_p
 
         def event(self, name, **fields):
             self.events.append((name, fields))
+
+        def retain_file(self, path, **fields):
+            pass
 
     from tests.test_gao_listing import _decision
 
@@ -295,10 +300,13 @@ def test_a_listing_read_is_journaled_with_its_scopes_and_counts(tmp_path, monkey
         def event(self, name, **fields):
             self.events.append((name, fields))
 
+        def retain_file(self, path, **fields):
+            assert path.is_file()
+
     evidence = Evidence()
     _run(tmp_path, monkeypatch, feed=["gao-26-1"], listed=[_product("gao-26-1"), _product("gao-12-100")],
          evidence=evidence)
-    (name, fields), _outcomes = evidence.events
+    (name, fields), = [event for event in evidence.events if event[0] == "gao-listing"]
     assert name == "gao-listing" and fields["scopes_read"] == ["2026-08"] and fields["scopes_unfinished"] == []
     assert fields["rows"] == 2 and fields["already_held"] == 1 and fields["complete_scopes"] == 1
 

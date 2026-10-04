@@ -14,20 +14,26 @@ from urllib.parse import quote, urlsplit
 import pyarrow as pa
 
 from .fec_bulk_financial import capture_year_bounds, financial_date, pairs
-from .fec_query import CollectionSelection, IDENTITY_VERSION, observation_id, record_evidence
+from .fec_query import CollectionSelection, SOURCE_TEXT, subject_observation_fields, observation_id, record_evidence
 from .fec_relationships import _id_status
+from .fec_identity_shape import typed_columns, typed_values
 
-MAPPING_VERSION = "fec-identity-observations/1"
+MAPPING_VERSION = "fec-identity-observations/2"
 STATEMENTS = "fec_registration_statements"
 LOBBYISTS = "fec_lobbyist_registrations"
 NOTICES = "fec_quality_notices"
 FILINGS = "fec_filings"
 LINKS = "fec_filing_links"
-COMMON = (
-    "record_id identity_version mapping_version mapping_status mapping_reason_json collection_id source_record_id "
-    "source_sha256 source_locator_json source_pointer source_authority selection_evidence_sha256 source_namespace "
-    "filing_key filing_link_status native_field_states_json current_record_status"
-).split()
+COMMON = SOURCE_TEXT + ["source_pointer"]
+FILING_TYPED = {
+    "pages": "integer",
+    "report_year": "year",
+    "reported_cycle": "year",
+    "election_year": "year",
+    "is_amended": "boolean",
+    "most_recent": "boolean",
+}
+STATEMENT_TYPED = {"election_year": "year", "report_year": "year"}
 STATEMENT_FIELDS = pairs(
     "committee_id:COMMITTEE_ID committee_name:COMMITTEE_NAME committee_street_1:COMMITTEE_STREET_1 "
     "committee_street_2:COMMITTEE_STREET_2 committee_city:COMMITTEE_CITY committee_state:COMMITTEE_STATE "
@@ -70,14 +76,16 @@ FILING_DATES = (
 )
 
 
-def _schema(fields, dates=(), booleans=()):
-    names = list(dict.fromkeys(COMMON + list(fields)))
+def _schema(fields, dates=(), booleans=(), *, typed=None):
+    typed = typed or {}
+    names = [n for n in dict.fromkeys(COMMON + list(fields)) if n not in typed]
     names += [f + suffix for f in dates for suffix in ("_raw", "_status")]
     return pa.schema(
         [(n, pa.string()) for n in names]
         + [("source_cycle", pa.int32())]
         + [(n, pa.date32()) for n in dates]
         + [(n, pa.bool_()) for n in booleans]
+        + typed_columns(typed)
     )
 
 
@@ -86,6 +94,7 @@ SCHEMAS = {
         [k for k, _ in STATEMENT_FIELDS + CANDIDATE_FIELDS]
         + ["form_type", "committee_id_status", "candidate_id_status", "affiliation_status"],
         ("receipt_date",),
+        typed=STATEMENT_TYPED,
     ),
     LOBBYISTS: _schema(
         [k for k, _ in LOBBYIST_FIELDS] + ["committee_id_status", "lobbyist_status", "image_body_status"],
@@ -99,6 +108,8 @@ SCHEMAS = {
     FILINGS: _schema(
         [k for k, _ in FILING_FIELDS]
         + [
+            "filing_key",
+            "filing_link_status",
             "filer_entity_type",
             "filer_id_status",
             "reporting_committee_id",
@@ -111,9 +122,12 @@ SCHEMAS = {
             "financial_fields_status",
         ],
         FILING_DATES,
+        typed=FILING_TYPED,
     ),
     LINKS: _schema(
         [
+            "filing_key",
+            "filing_link_status",
             "source_filing_record_id",
             "target_filing_key",
             "native_target_file_number",
@@ -202,25 +216,15 @@ def _base(table, row, selection, namespace, pointer=""):
         locator["typed_subrecord_pointer"] = pointer
     addressed = {**row, "source_locator_json": _json(locator)}
     result = dict.fromkeys(SCHEMAS[table].names)
+    result.update(subject_observation_fields(table, row, selection, MAPPING_VERSION))
     result.update(
         record_id=observation_id(table, addressed, selection.source_authority),
-        identity_version=IDENTITY_VERSION,
-        mapping_version=MAPPING_VERSION,
-        mapping_status="mapped",
-        mapping_reason_json="{}",
-        collection_id=row["collection_id"],
-        source_record_id=row["source_record_id"],
-        source_sha256=row["source_sha256"],
         source_locator_json=row["source_locator_json"],
         source_pointer=pointer,
-        source_authority=selection.source_authority,
-        selection_evidence_sha256=selection.selection_evidence_sha256,
         source_namespace=namespace,
-        source_cycle=selection.source_cycle,
-        filing_key=None,
-        filing_link_status="unresolved",
-        current_record_status="unqualified",
     )
+    if table in {FILINGS, LINKS}:
+        result.update(filing_key=None, filing_link_status="unresolved")
     return result
 
 
@@ -263,7 +267,6 @@ def map_registry(row, selection: CollectionSelection, mapping: RegistryMapping):
     if any(v is not None and not isinstance(v, str) for k, v in native.items() if k in required):
         raise ValueError("Native registry values must remain source text or null")
     result.update({k: native[v] for k, v in mapping.text_fields})
-    result["native_field_states_json"] = _json({k: _state(native, k) for k in sorted(required)})
     bounds = capture_year_bounds(row.get("observed_at"))
     if mapping == FORM2:
         raw_year = native["REPORT_YEAR"]
@@ -293,7 +296,6 @@ def map_registry(row, selection: CollectionSelection, mapping: RegistryMapping):
                 if affiliation
                 else _state(native, "AFFILIATED_COMMITTEE_NAME")
             )
-        result["filing_link_status"] = "unresolved_no_report_number"
     else:
         result["committee_id_status"] = _id_status(result["committee_id"], "committee")
     if mapping == LOBBYIST:
@@ -312,6 +314,12 @@ def map_registry(row, selection: CollectionSelection, mapping: RegistryMapping):
             notice_scope="source_listed_committee",
             exclusion_status="no_automatic_exclusion",
         )
+    if mapping.table == STATEMENTS:
+        values, invalid = typed_values(
+            {k: native[v] for k, v in mapping.text_fields if k in STATEMENT_TYPED}, STATEMENT_TYPED
+        )
+        result.update(values)
+        problems.update(invalid)
     return _finish(result, row, selection, mapping.table, problems)
 
 
@@ -381,20 +389,11 @@ def map_filing_metadata(row, selection: CollectionSelection):
     else:
         raise ValueError("Expected a source-owned filing result or response control")
     result["source_pointer"] = prefix
-    fields = (
-        {v for _, v in FILING_FIELDS}
-        | set(FILING_DATES)
-        | {
-            "amendment_chain",
-            "amends_file",
-            "amended_by",
-            "previous_file_number",
-            "most_recent_file_number",
-            "most_recent_filing",
-        }
+    result.update({k: _scalar(native.get(v)) for k, v in FILING_FIELDS if k not in FILING_TYPED})
+    values, problems = typed_values(
+        {k: native[v] for k, v in FILING_FIELDS if k in FILING_TYPED and v in native}, FILING_TYPED
     )
-    result.update({k: _scalar(native.get(v)) for k, v in FILING_FIELDS})
-    result["native_field_states_json"] = _json({k: _state(native, k) for k in sorted(fields)})
+    result.update(values)
     result["filing_key"] = filing_key(native.get("file_number"), selection.source_authority)
     result["filing_link_status"] = "native_file_number" if result["filing_key"] else "unresolved_no_file_number"
     result.update(
@@ -415,7 +414,6 @@ def map_filing_metadata(row, selection: CollectionSelection):
             filer_entity_type="unresolved", filer_id_status="not_reported" if not filer else "invalid_source_id_shape"
         )
     result["candidate_id_status"] = _id_status(result.get("candidate_id"), "candidate")
-    problems = {}
     for field in FILING_DATES:
         result[field], result[field + "_status"] = _api_date(native, field)
         result[field + "_raw"] = _scalar(native.get(field))
@@ -457,7 +455,6 @@ def map_filing_metadata(row, selection: CollectionSelection):
             reference_status="self_reference"
             if target is not None and target == result["filing_key"]
             else "reported_reference",
-            native_field_states_json=_json({"referenced_file_number": "source_null" if value is None else "reported"}),
         )
         link, links = _finish(link, row, selection, LINKS, {})
         tables[LINKS].append(link)

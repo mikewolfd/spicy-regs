@@ -6,6 +6,8 @@
 
 One source loan-terms or credit-line record version. Preserves rate/due-date wording, collateral, security, signers and stated amounts. Loan principal, credit draw and balances are distinct concepts; this table does not infer a new disbursement for each repeated terms record. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. For original-filing rows, definition_set_id joins fec_filing_definitions.record_id and its fec_filing_definition_evidence context witnesses; filing_header_record_id and filing_header_locator_json identify the separate actual header witness. Other source layouts retain their own dictionary evidence.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_loan_terms'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled. Supported observations from retained Schedule C1 loan agreement and credit-line layouts. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
 
 **Data quality.** Exact decimals preserve signs. Memo, subtotal and attribution flags require source-specific interpretation; successful mapping does not qualify current, gross or net totals. Keep reported balances, allocation totals/components, overlapping summaries and two-sided transfers at their declared grains. Quality notices do not automatically exclude records.
@@ -18,26 +20,10 @@ One source loan-terms or credit-line record version. Preserves rate/due-date wor
 | Column | Type | Description |
 | --- | --- | --- |
 | `record_id` | `VARCHAR` | Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event. |
-| `identity_version` | `VARCHAR` | Version of the source-observation identity rule; it does not select a current or canonical record. |
-| `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
-| `value_mapping_version` | `VARCHAR` | Version of the exact monetary and date conversion rules used for supported values. |
-| `mapping_status` | `VARCHAR` | Whether this source observation mapped fully, partially, or received an explicit nondata/refusal disposition; inspect the reason alongside NULL values. |
-| `mapping_reason_json` | `VARCHAR` | JSON object naming unsupported, missing or otherwise limited field interpretations; native values remain reachable through evidence. |
-| `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
-| `source_record_id` | `VARCHAR` | Native source-observation key within collection_id. Resolve with the source generation, exact locator and source digest, not this value alone. |
-| `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
-| `source_locator_json` | `VARCHAR` | Exact source row or subrecord coordinates, including available member, ordinal, byte span and field-definition references. Resolve in the pinned source generation. |
-| `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
-| `selection_evidence_sha256` | `VARCHAR` | Digest of the retained selection evidence used to authorize this mapper's source scope; not a financial inclusion decision. |
-| `source_representation_role` | `VARCHAR` | Selected source role such as snapshot, insertion or deletion. Amount signs and ordinary amendment flags do not establish correction applicability. |
 | `correction_operation` | `VARCHAR` | Source-supported correction operation, when applicable; a positive amount in a deletion stream is not a new receipt or an inferred refund. |
-| `correction_applicability_status` | `VARCHAR` | Whether the captured correction can be applied to an evidenced base and target population; unresolved applicability prevents a qualified current total. |
-| `current_record_status` | `VARCHAR` | Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record. |
 | `filing_key` | `VARCHAR` | Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. |
-| `filing_link_status` | `VARCHAR` | Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist. |
 | `currency` | `VARCHAR` | Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately. |
 | `amount_kind` | `VARCHAR` | Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It is not an aggregation permission. |
-| `source_namespace` | `VARCHAR` | Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent. |
 | `form_type` | `VARCHAR` | Literal filing form or record-type code from the source layout; does not prove submission conformance. |
 | `reporting_committee_id` | `VARCHAR` | Literal FEC ID of the reporting committee where that source field identifies a committee. It does not by itself identify the sender or recipient of money. |
 | `transaction_id` | `VARCHAR` | Literal transaction identifier within its source filing/layout scope; not a globally unique transaction or economic-event key. |
@@ -76,29 +62,6 @@ One source loan-terms or credit-line record version. Preserves rate/due-date wor
 | `authorized_suffix` | `VARCHAR` | The authorized signer's reported name suffix. |
 | `authorized_title` | `VARCHAR` | Reported title of the person authorized to sign the loan documentation. |
 | `financial_grain` | `VARCHAR` | Explicit financial row meaning selected for this layout, separating reported activity, balances, allocations and other observations. |
-| `aggregation_status` | `VARCHAR` | Declared limitation on adding this observation to other records; requires the relevant named financial policy before totals. |
-| `loan_amount_raw` | `VARCHAR` | Literal source value before conversion for loan_amount. Preserves spelling, signs and empty values; the typed value and its status are separate. |
-| `loan_amount_status` | `VARCHAR` | Source-presence or conversion state for loan_amount, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
-| `credit_draw_amount_raw` | `VARCHAR` | Literal source value before conversion for credit_draw_amount. Preserves spelling, signs and empty values; the typed value and its status are separate. |
-| `credit_draw_amount_status` | `VARCHAR` | Source-presence or conversion state for credit_draw_amount, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
-| `total_balance_raw` | `VARCHAR` | Literal source value before conversion for total_balance. Preserves spelling, signs and empty values; the typed value and its status are separate. |
-| `total_balance_status` | `VARCHAR` | Source-presence or conversion state for total_balance, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
-| `collateral_value_raw` | `VARCHAR` | Literal source value before conversion for collateral_value. Preserves spelling, signs and empty values; the typed value and its status are separate. |
-| `collateral_value_status` | `VARCHAR` | Source-presence or conversion state for collateral_value, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
-| `future_income_estimated_value_raw` | `VARCHAR` | Literal source value before conversion for future_income_estimated_value. Preserves spelling, signs and empty values; the typed value and its status are separate. |
-| `future_income_estimated_value_status` | `VARCHAR` | Source-presence or conversion state for future_income_estimated_value, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
-| `incurred_date_raw` | `VARCHAR` | Literal source value before conversion for incurred_date. Preserves spelling, signs and empty values; the typed value and its status are separate. |
-| `incurred_date_status` | `VARCHAR` | Source-presence or conversion state for incurred_date, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
-| `original_loan_date_raw` | `VARCHAR` | Literal source value before conversion for original_loan_date. Preserves spelling, signs and empty values; the typed value and its status are separate. |
-| `original_loan_date_status` | `VARCHAR` | Source-presence or conversion state for original_loan_date, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
-| `depository_established_date_raw` | `VARCHAR` | Literal source value before conversion for depository_established_date. Preserves spelling, signs and empty values; the typed value and its status are separate. |
-| `depository_established_date_status` | `VARCHAR` | Source-presence or conversion state for depository_established_date, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
-| `depository_authorization_date_raw` | `VARCHAR` | Literal source value before conversion for depository_authorization_date. Preserves spelling, signs and empty values; the typed value and its status are separate. |
-| `depository_authorization_date_status` | `VARCHAR` | Source-presence or conversion state for depository_authorization_date, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
-| `treasurer_signed_date_raw` | `VARCHAR` | Literal source value before conversion for treasurer_signed_date. Preserves spelling, signs and empty values; the typed value and its status are separate. |
-| `treasurer_signed_date_status` | `VARCHAR` | Source-presence or conversion state for treasurer_signed_date, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
-| `authorized_signed_date_raw` | `VARCHAR` | Literal source value before conversion for authorized_signed_date. Preserves spelling, signs and empty values; the typed value and its status are separate. |
-| `authorized_signed_date_status` | `VARCHAR` | Source-presence or conversion state for authorized_signed_date, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
 | `source_cycle` | `INTEGER` | Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year. |
 | `loan_amount` | `DECIMAL(38,9)` | Exact decimal for the loan amount stated in the terms record. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations. |
 | `credit_draw_amount` | `DECIMAL(38,9)` | Exact decimal for the reported draw on a credit line. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations. |
@@ -111,8 +74,3 @@ One source loan-terms or credit-line record version. Preserves rate/due-date wor
 | `depository_authorization_date` | `DATE` | Date parsed from the stated depository authorization date. NULL requires the source value and conversion status; capture time is not substituted. |
 | `treasurer_signed_date` | `DATE` | Date parsed from the date of the treasurer signature. NULL requires the source value and conversion status; capture time is not substituted. |
 | `authorized_signed_date` | `DATE` | Date parsed from the date of the authorized signature. NULL requires the source value and conversion status; capture time is not substituted. |
-| `definition_set_id` | `VARCHAR` | Key of the pinned source layout in fec_filing_definitions. Join its definition evidence for exact workbook cells; the layout does not validate the submission. |
-| `declared_format_version` | `VARCHAR` | Format version declared by the filing header, retained separately from the reviewed source layout version. |
-| `filing_header_record_id` | `VARCHAR` | Source-record key of the actual file header. Resolve with collection_id and filing_header_locator_json in the source generation. |
-| `filing_header_locator_json` | `VARCHAR` | Exact native coordinates of the file-header witness, separate from the financial row's own locator. |
-| `submission_conformance_status` | `VARCHAR` | Explicit statement of whether submission conformance was established; successful field mapping alone does not establish it. |

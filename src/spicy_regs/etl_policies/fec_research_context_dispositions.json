@@ -1,0 +1,20 @@
+{
+  "dataset": "fec_research_context_dispositions",
+  "policy_version": "fec-identity-context-receipts/1",
+  "subject_schema": "/////zAAAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAAAAAA=",
+  "identity_fields": [],
+  "receipt_fields": [
+    "collection_id",
+    "mapping_status",
+    "mapping_reason",
+    "source_url",
+    "context_sha256",
+    "outputs_json",
+    "source_fact_count",
+    "conversion_inputs",
+    "conversion_diagnostics",
+    "source_input"
+  ],
+  "receipt_only": true,
+  "nullable_identity_fields": []
+}

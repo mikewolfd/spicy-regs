@@ -1,0 +1,34 @@
+{
+  "dataset": "fec_quality_notices",
+  "policy_version": "fec-identity-context-receipts/1",
+  "subject_schema": "//////ABAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAgAAACQAQAATAEAABgBAADcAAAArAAAAHwAAABIAAAABAAAAKD+//8AAAEIEAAAACwAAAAEAAAAAAAAABIAAABmaXJzdF9yZWNlaXB0X2RhdGUAAAAABgAIAAYABgAAAAAAAADg/v//AAABBRAAAAAgAAAABAAAAAAAAAAMAAAAbm90aWNlX3Njb3BlAAAAANT+//8Q////AAABBRAAAAAcAAAABAAAAAAAAAALAAAAbm90aWNlX2tpbmQAAP///zz///8AAAEFEAAAABwAAAAEAAAAAAAAAAsAAABmaWxpbmdzX3VybAAs////aP///wAAAQUQAAAAKAAAAAQAAAAAAAAAFAAAAGZpbGVkX2NvbW1pdHRlZV90eXBlAAAAAGT///+g////AAABBRAAAAAgAAAABAAAAAAAAAAOAAAAY29tbWl0dGVlX25hbWUAAJT////Q////AAABBRAAAAAgAAAABAAAAAAAAAAMAAAAY29tbWl0dGVlX2lkAAAAAMT///8QABQACAAGAAcADAAAABAAEAAAAAAAAQUQAAAAIAAAAAQAAAAAAAAACQAAAHJlY29yZF9pZAAAAAQABAAEAAAA",
+  "identity_fields": [
+    "record_id"
+  ],
+  "receipt_fields": [
+    "identity_version",
+    "mapping_version",
+    "mapping_status",
+    "mapping_reason_json",
+    "collection_id",
+    "source_record_id",
+    "source_sha256",
+    "source_locator_json",
+    "source_authority",
+    "selection_evidence_sha256",
+    "source_representation_role",
+    "current_record_status",
+    "source_namespace",
+    "source_pointer",
+    "committee_id_status",
+    "exclusion_status",
+    "first_receipt_date_raw",
+    "first_receipt_date_status",
+    "source_cycle",
+    "conversion_inputs",
+    "conversion_diagnostics",
+    "source_input"
+  ],
+  "receipt_only": false,
+  "nullable_identity_fields": []
+}

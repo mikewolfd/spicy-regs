@@ -89,8 +89,8 @@ def _resolve_api_key() -> str | None:
 
 
 def _json_array(value: object) -> str:
-    """Serialize a list-ish field to a JSON string, defaulting to ``[]``."""
-    return json.dumps(value if isinstance(value, list) else [])
+    """Retain null, empty and malformed source values for receipt conversion."""
+    return json.dumps(value, ensure_ascii=False, allow_nan=False)
 
 
 def _shape(doc: dict) -> dict:
@@ -110,8 +110,8 @@ def _shape(doc: dict) -> dict:
         "filing_frequency": doc.get("filing_frequency"),
         "first_file_date": doc.get("first_file_date"),
         "last_file_date": doc.get("last_file_date"),
-        "cycles_json": _json_array(doc.get("cycles")),
-        "candidate_ids_json": _json_array(doc.get("candidate_ids")),
+        "cycles_json": _json_array(doc["cycles"]) if "cycles" in doc else None,
+        "candidate_ids_json": _json_array(doc["candidate_ids"]) if "candidate_ids" in doc else None,
     }
 
 

@@ -60,6 +60,37 @@ class RulemakingDatasetPipeline(MaterializedDatasetPipeline):
         "agency_lifecycle_stats.parquet",
     )
 
+    def build_native(self, inputs, destination: Path, *, generation_id: str, prior=None):
+        """Build the whole local rulemaking generation from qualified native inputs.
+
+        This explicit migration entry point preserves all existing stage rules.
+        Prior identity and evidence fields are reconstructed only after receipt
+        validation. The returned artifact binds native subjects and receipts;
+        no materialized or public pointer changes here.
+        """
+        from spicy_regs.transforms.regulations_receipts import build_from_receipts
+
+        required = {Path(name).stem for name in self.source_inputs}
+        if {selected.dataset for selected in inputs} != required or len(inputs) != len(required):
+            raise ValueError("Native rulemaking requires exactly its declared source datasets")
+        selected = list(inputs)
+        if prior is not None:
+            if prior.dataset != "proceedings":
+                raise ValueError("Prior rulemaking identity must come from proceedings")
+            selected.append(prior)
+        context = RunContext.resolve(run_id=generation_id, prefix="rulemaking")
+
+        def build(work):
+            if prior is not None:
+                (work / "proceedings.parquet").rename(work / "_proceedings_prior.parquet")
+            for stage in self.stages():
+                stage.build(work, context)
+
+        return build_from_receipts(
+            selected, destination, generation_id=generation_id,
+            outputs=[Path(name).stem for name in self.published_outputs], builder=build, family="rulemaking",
+        )
+
     def source_column_requirements(self) -> dict[str, tuple[str, ...]]:
         return {
             "dockets.parquet": (

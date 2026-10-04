@@ -13,11 +13,11 @@ from typing import ClassVar
 from cyclopts import App
 from dotenv import load_dotenv
 
-from spicy_regs.pipelines.rollups.base import RollupPipeline
+from spicy_regs.pipelines.rollups.court_receipts import CourtReceiptRollup
 from spicy_regs.transforms.build_court_docket_groups import build_court_docket_groups
 
 
-class CourtDocketGroupsRollup(RollupPipeline):
+class CourtDocketGroupsRollup(CourtReceiptRollup):
     """Same-case groups over the published court_dockets, from a local native bulk edition."""
 
     name: ClassVar[str] = "court-docket-groups"

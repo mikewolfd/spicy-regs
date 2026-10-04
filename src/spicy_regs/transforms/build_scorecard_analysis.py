@@ -6,10 +6,11 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 import json
 from pathlib import Path
-from uuid import uuid4
+from tempfile import TemporaryDirectory
 
-import pyarrow as pa
 import pyarrow.parquet as pq
+
+from spicy_regs.scorecards.etl import read_family, read_source_inputs, write_family
 
 SOURCE_TABLES = ("scorecards", "scorecard_members", "scorecard_items")
 OFFICIAL_TABLES = ("members", "member_terms", "congress_bills", "amendments", "roll_call_votes")
@@ -49,6 +50,10 @@ def build_scorecard_analysis(
     input_pins: Mapping[str, dict],
     input_paths: Mapping[str, Sequence[Path]],
     member_overrides: Sequence[dict] = (),
+    source_receipt_path: Path | None = None,
+    source_generation_id: str | None = None,
+    official_receipts: Mapping[str, tuple[Path, str]] | None = None,
+    receipt_generation_id: str | None = None,
 ) -> tuple[Path, Path]:
     """Resolve already verified inputs; the rollup owns download and generation pins.
 
@@ -67,10 +72,24 @@ def build_scorecard_analysis(
     expected = set((*SOURCE_TABLES, *OFFICIAL_TABLES))
     if set(input_pins) != expected or set(input_paths) != expected:
         raise ValueError("Scorecard analysis requires every source and official input pin")
-    source = {name: _read(input_paths[name]) for name in SOURCE_TABLES}
+    if source_receipt_path is None or not source_generation_id:
+        raise ValueError("Scorecard inputs require their selected native receipts and generation")
+    source = read_source_inputs(
+        {name: input_paths[name] for name in SOURCE_TABLES}, source_receipt_path, generation_id=source_generation_id
+    )
     if not source["scorecards"]:
         raise ValueError("An empty scorecard corpus cannot qualify an analysis generation")
-    official = {name: _read(input_paths[name], OFFICIAL_COLUMNS[name]) for name in OFFICIAL_TABLES}
+    if official_receipts is None or set(official_receipts) != set(OFFICIAL_TABLES):
+        raise ValueError("Every official analysis input requires its selected native receipts")
+    from spicy_regs.congress_receipts import CongressInput
+
+    official = {}
+    with TemporaryDirectory(prefix="scorecard-official-inputs-") as temporary:
+        for name in OFFICIAL_TABLES:
+            receipts, generation_id = official_receipts[name]
+            selected = CongressInput(tuple(input_paths[name]), receipts, generation_id)
+            path = selected.materialize(name, Path(temporary) / (name + ".parquet"))
+            official[name] = _read([path], OFFICIAL_COLUMNS[name])
     results = resolve_scorecard_links(source, official, input_pins, member_overrides=member_overrides)
     definitions = (
         ("scorecard_member_links", MEMBER_LINK_COLUMNS, ("scorecard_id", "publisher_member_key")),
@@ -81,24 +100,8 @@ def build_scorecard_analysis(
     for name, columns, key in definitions:
         _checked_rows(results[name], columns, key)
     output_dir.mkdir(parents=True, exist_ok=True)
-    # Publish only after both outputs validate. The outer generation layer
-    # seals these files and advances one family pointer after verification.
-    staging = output_dir / f".scorecard-analysis-{uuid4().hex}"
-    staging.mkdir()
-    paths = []
-    try:
-        for name, columns, _ in definitions:
-            schema = pa.schema([(column, pa.string()) for column in columns])
-            target = staging / f"{name}.parquet"
-            pq.write_table(pa.Table.from_pylist(results[name], schema=schema), target, compression="zstd")
-        for name, _, _ in definitions:
-            target = output_dir / f"{name}.parquet"
-            (staging / target.name).replace(target)
-            paths.append(target)
-    finally:
-        for remaining in staging.iterdir():
-            remaining.unlink()
-        staging.rmdir()
+    paths = write_family(output_dir, results, generation_id=receipt_generation_id)
+    read_family(output_dir, tuple(results))  # Persisted one-to-one linkage and refusal readback.
     receipt = {
         "rule_version": RULE_VERSION,
         "input_pins": dict(input_pins),

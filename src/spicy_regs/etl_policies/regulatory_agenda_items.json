@@ -1,0 +1,22 @@
+{
+  "dataset": "regulatory_agenda_items",
+  "policy_version": "regulations-native-v1",
+  "subject_schema": "/////wACAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAgAAACYAQAAYAEAACwBAADgAAAAoAAAAGQAAAA0AAAABAAAAJj+//8AAAEFEAAAABwAAAAEAAAAAAAAAAkAAABsYXN0X3NlZW4AAACE/v//xP7//wAAAQUQAAAAHAAAAAQAAAAAAAAACgAAAGZpcnN0X3NlZW4AALD+///w/v//AAABBRAAAAAoAAAABAAAAAAAAAAVAAAAbGF0ZXN0X2FnZW5kYV9lZGl0aW9uAAAA6P7//yj///8AAAECEAAAACQAAAAEAAAAAAAAABEAAABvYnNlcnZhdGlvbl9jb3VudAAAAMD///8AAAABQAAAAGT///8AAAECEAAAADAAAAAEAAAAAAAAABcAAABsaW5rZWRfcHJvY2VlZGluZ19jb3VudAAIAAwACAAHAAgAAAAAAAABQAAAAKz///8AAAEFEAAAACAAAAAEAAAAAAAAAAwAAABzY29wZV9zdGF0dXMAAAAAnP///9z///8AAAEFEAAAABQAAAAEAAAAAAAAAAMAAAByaW4AwP///xAAFAAIAAYABwAMAAAAEAAQAAAAAAABBRAAAAAkAAAABAAAAAAAAAAOAAAAYWdlbmRhX2l0ZW1faWQAAAQABAAEAAAAAAAAAA==",
+  "identity_fields": [
+    "agenda_item_id"
+  ],
+  "receipt_fields": [
+    "scope_basis",
+    "method",
+    "actor_id",
+    "run_id",
+    "asserted_at",
+    "supersedes_id",
+    "unresolved_fr_references_json",
+    "raw_conversion_inputs",
+    "input_metadata",
+    "raw_source_record"
+  ],
+  "receipt_only": false,
+  "nullable_identity_fields": []
+}

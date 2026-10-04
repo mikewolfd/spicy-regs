@@ -6,6 +6,8 @@
 
 One row per lobbying activity an LDA filing reports: the issue area, the registrant's description of what was lobbied, foreign-entity interests, and the government entities contacted for that activity. Keyed `(filing_uuid, activity_index)`, the position in the filing's own list, which is stable because LDA never edits a filing (an amendment is a new filing). Joins to `lobbying_filings` on `filing_uuid`. All columns are stored as VARCHAR.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='lobbying_activities'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** True range, the same filings as `lobbying_filings`: one row per lobbying activity a filing reports. A filing that lists no activity has no rows here. *(measured 2026-09-28)*
 
 - **Parquet file:** `lobbying_activities.parquet`
@@ -16,9 +18,9 @@ One row per lobbying activity an LDA filing reports: the issue area, the registr
 | Column | Type | Description |
 | --- | --- | --- |
 | `filing_uuid` | `VARCHAR` | The filing this activity belongs to; joins to `lobbying_filings.filing_uuid`. |
-| `activity_index` | `VARCHAR` | The activity's position in the filing's list, from `0`. With `filing_uuid`, the key. |
+| `activity_index` | `BIGINT` | The activity's position in the filing's list, from `0`. With `filing_uuid`, the key. |
 | `general_issue_code` | `VARCHAR` | LDA general issue area code (e.g. `SCI`, `HCR`). |
 | `general_issue_code_display` | `VARCHAR` | The issue area's name (e.g. `Science/Technology`). |
 | `description` | `VARCHAR` | The registrant's description of the specific lobbying, often naming bills (e.g. `S. 3597`). |
 | `foreign_entity_issues` | `VARCHAR` | The registrant's statement of any foreign entity's interest in the issue; often null. |
-| `government_entities_json` | `VARCHAR` | JSON array of the government entities contacted for this activity, `{id, name}` objects (e.g. `SENATE`). |
+| `government_entities` | `STRUCT(id VARCHAR, "name" VARCHAR)[]` | Native list of the government entities contacted for this activity, `{id, name}` objects (e.g. `SENATE`). Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |

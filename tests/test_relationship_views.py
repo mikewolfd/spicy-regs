@@ -226,7 +226,7 @@ def test_all_registry_views_bind_without_reading_rows():
         tables.setdefault(spec.source_table, set()).update(spec.required_columns)
     for table, columns in tables.items():
         con.execute(f'CREATE TABLE "{table}" (' + ','.join(f'"{c}" VARCHAR' for c in sorted(columns)) + ')')
-    results = install_relationship_views(con, tables)
+    results = install_arrays(con, tables, RELATIONSHIP_VIEWS)
     for spec in RELATIONSHIP_VIEWS:
         for name in spec.names:
             assert results[name]['status'] == 'available'

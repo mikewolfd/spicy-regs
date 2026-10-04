@@ -127,6 +127,7 @@ class MaterializedDatasetPipeline(Pipeline):
     optional_prior_outputs: ClassVar[tuple[tuple[str, str], ...]] = ()
     published_outputs: ClassVar[tuple[str, ...]] = ()
     internal_outputs: ClassVar[tuple[str, ...]] = ()
+    receipt_policies: ClassVar[tuple] = ()
 
     @classmethod
     def generation_outputs(cls) -> tuple[str, ...]:
@@ -134,7 +135,10 @@ class MaterializedDatasetPipeline(Pipeline):
         overlap = set(cls.published_outputs) & set(cls.internal_outputs)
         if overlap:
             raise RuntimeError(f"Materialized dataset outputs cannot be both public and internal: {sorted(overlap)}")
-        return (*cls.published_outputs, *cls.internal_outputs)
+        outputs = (*cls.published_outputs, *cls.internal_outputs)
+        if cls.receipt_policies and "etl_receipts.parquet" not in outputs:
+            outputs += ("etl_receipts.parquet",)
+        return outputs
 
     def __init__(
         self,
@@ -416,6 +420,19 @@ class MaterializedDatasetPipeline(Pipeline):
                 pending.remove(stage)
         return tuple(ordered)
 
+    def _validate_receipt_outputs(self, output_dir: Path, generation_id: str) -> None:
+        from spicy_regs.etl_policy_registry import require_registered_receipts
+        from spicy_regs.etl_receipts import validate_receipt_bundle
+        spec = ({"policies": [p.descriptor() for p in self.receipt_policies]} if self.receipt_policies else None)
+        require_registered_receipts(self.published_outputs, spec)
+        if self.receipt_policies:
+            if {p.dataset + ".parquet" for p in self.receipt_policies if not p.receipt_only} != set(self.published_outputs):
+                raise ValueError("Materialized policies must classify every subject output")
+            validate_receipt_bundle(
+                {p.dataset: [] if p.receipt_only else [output_dir / (p.dataset + ".parquet")]
+                 for p in self.receipt_policies}, [output_dir / "etl_receipts.parquet"], self.receipt_policies,
+                generation_id=generation_id)
+
     def _write_publication_files(
         self,
         output_dir: Path,
@@ -424,6 +441,7 @@ class MaterializedDatasetPipeline(Pipeline):
         stages: tuple[DatasetStage, ...],
         input_snapshot: dict,
     ) -> tuple[Path, Path, dict[str, Path]]:
+        self._validate_receipt_outputs(output_dir, context.run_id)
         artifact_paths = {name: output_dir / name for name in self.generation_outputs()}
         artifact_records = {
             name: {
@@ -468,6 +486,9 @@ class MaterializedDatasetPipeline(Pipeline):
             "inputs": input_snapshot,
             "stages": stage_records,
             "artifacts": artifacts,
+            **({"etlReceipts": {"key": "etl_receipts.parquet", "generationId": context.run_id,
+                                 "policies": [p.descriptor() for p in self.receipt_policies]}}
+               if self.receipt_policies else {}),
         }
         manifest_path = output_dir / f"{self.dataset_name}-dataset-manifest.json"
         manifest_path.write_text(
@@ -496,6 +517,19 @@ class MaterializedDatasetPipeline(Pipeline):
     ) -> None:
         manifest = _read_json(manifest_path)
         artifacts = manifest["artifacts"]
+        expected_receipts = ({"key": "etl_receipts.parquet", "generationId": manifest["run_id"],
+                              "policies": [p.descriptor() for p in self.receipt_policies]}
+                             if self.receipt_policies else None)
+        if manifest.get("etlReceipts") != expected_receipts:
+            raise ValueError("Materialized manifest receipt policy differs from producer admission")
+        if set(artifact_paths) != set(self.generation_outputs()) or set(artifacts) != set(artifact_paths):
+            raise ValueError("Materialized artifact membership differs from producer outputs")
+        self._validate_receipt_outputs(manifest_path.parent, manifest["run_id"])
+        if self.receipt_policies:
+            for name, path in artifact_paths.items():
+                observed = _file_record(path)
+                if any(artifacts[name].get(k) != v for k, v in observed.items()):
+                    raise ValueError("Subject or receipt changed after materialized admission")
         for name, path in artifact_paths.items():
             logger.info("Uploading immutable {} dataset artifact {}...", self.dataset_name, name)
             r2.upload_file(path, remote_key=artifacts[name]["remote_key"])

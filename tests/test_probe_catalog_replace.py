@@ -46,3 +46,21 @@ def test_probe_requires_credentials_only_when_asked(monkeypatch):
     monkeypatch.setattr("dotenv.load_dotenv", lambda *args, **kwargs: False)
     assert probe.main([]) == 0
     assert probe.main(["--require"]) == 1
+
+
+def test_probe_refuses_existing_native_storage_without_deleting_it(connect, monkeypatch):
+    from spicy_regs.schemas import COMMENT
+    from spicy_regs.sources import regulatory_catalog
+    monkeypatch.setenv('R2_CATALOG_NAMESPACE', 'probe_catalog_replace_held')
+    with connect() as con:
+        regulatory_catalog.ensure_native(con, COMMENT)
+        before = con.execute(f'SELECT * FROM {regulatory_catalog.receipts_table()}').fetchall()
+    with pytest.raises(ValueError, match='already contains data'):
+        probe.run_probe(connect, 'probe_catalog_replace_held')
+    with connect() as con:
+        assert con.execute(f'SELECT * FROM {regulatory_catalog.receipts_table()}').fetchall() == before
+
+
+def test_probe_refuses_production_namespace_before_connecting():
+    with pytest.raises(ValueError, match='disposable'):
+        probe.run_probe(lambda: pytest.fail('production namespace was opened'), 'default')

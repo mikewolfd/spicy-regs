@@ -6,6 +6,8 @@
 
 One row per aligned pair of dollar figures in a section whose amounts changed. `pairing_claim` names how the two figures were aligned; it is word alignment, not a semantic match. All columns are stored as VARCHAR.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='financial_changes'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Empty by owner decision 34: the amount pairing that would fill it is not run (spicy-docs `pair_amounts=False`), so no row is produced; `section_diff_items.financial_from_amounts_json` and `financial_to_amounts_json` carry the figures. *(measured 2026-10-03)*
 
 - **Parquet file:** `financial_changes.parquet`
@@ -17,13 +19,13 @@ One row per aligned pair of dollar figures in a section whose amounts changed. `
 | --- | --- | --- |
 | `bill_id` | `VARCHAR` | The bill both printings belong to. |
 | `from_version_code` | `VARCHAR` | The earlier printing's version code. |
-| `from_source` | `VARCHAR` | Which acquisition path supplied the earlier printing. |
+| `from_printing_id` | `VARCHAR` | Which acquisition path supplied the earlier printing. |
 | `to_version_code` | `VARCHAR` | The later printing's version code. |
-| `to_source` | `VARCHAR` | Which acquisition path supplied the later printing. |
-| `seq` | `VARCHAR` | The section_diff_items row this pairing came from. |
-| `amount_index` | `VARCHAR` | Position of this pairing within that section's word alignment. |
+| `to_printing_id` | `VARCHAR` | Which acquisition path supplied the later printing. |
+| `seq` | `BIGINT` | The section_diff_items row this pairing came from. |
+| `amount_index` | `BIGINT` | Position of this pairing within that section's word alignment. |
 | `label` | `VARCHAR` | The section heading, which BillTrax left empty in every row it wrote. |
-| `from_amount` | `VARCHAR` | The figure on the earlier side, or NULL where the alignment found none. |
-| `to_amount` | `VARCHAR` | The figure on the later side, or NULL where the alignment found none. |
-| `delta` | `VARCHAR` | to_amount minus from_amount, or NULL when either side is absent. |
+| `from_amount` | `DECIMAL(38,2)` | The figure on the earlier side, or NULL where the alignment found none. |
+| `to_amount` | `DECIMAL(38,2)` | The figure on the later side, or NULL where the alignment found none. |
+| `delta` | `DECIMAL(38,2)` | to_amount minus from_amount, or NULL when either side is absent. |
 | `pairing_claim` | `VARCHAR` | What this row claims: that the two figures sit at the same place in a word-level alignment. It does not claim they are the same account. |

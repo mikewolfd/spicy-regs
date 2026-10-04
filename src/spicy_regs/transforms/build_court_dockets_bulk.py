@@ -1,36 +1,12 @@
-"""Build ``court_dockets.parquet`` from the verified CourtListener bulk dockets dump.
+"""Build a complete-population court docket candidate from retained bulk bytes.
 
-The search-based :mod:`build_courtlistener` keeps the APA/agency-review (899)
-selection. This module is the complete-population sibling: it streams the
-verified ``dockets`` bulk dump through the source-owned
-``CourtListenerBulkReader`` (source CSV decoding stays with SpicyDocs) and maps
-every native row onto the same 22-column all-VARCHAR host schema.
+The source-owned reader decodes the CSV. The mapper retains docket facts and
+publisher blocked/date_blocked status; unavailable party, attorney and firm
+lists remain NULL. Source references and raw date conversion inputs become
+receipts. Original dates and timestamps remain diagnosable alongside normalized
+filing dates. The source must reach its end before selecting the output pair.
 
-Mapping decisions, each deliberate:
-
-* ``cl_docket_id`` is the native ``id``; every other string field keeps its
-  native value, including native empty strings (they are the source value,
-  not absence). Empty strings become NULL only for the columns the host
-  schema spells absence as NULL (``case_name_full``, dates, suit/cause/
-  jurisdiction/jury/judges); the reader's NULL/empty distinction is
-  preserved for everything else.
-* ``date_filed``/``date_terminated``/``date_argued`` are truncated to their
-  ISO date prefix (the host column is a date, and search rows store dates).
-  ``date_created`` keeps its full native timestamp with the space normalized
-  to ``T``.
-* ``court`` and ``court_citation_string`` come from the ``courts`` dump
-  (``full_name`` and ``citation_string``), joined on ``court_id``.
-* ``parties_json``/``attorneys_json``/``firms_json`` are NULL for every bulk
-  row: the standard bulk exports omit the party/attorney relationship tables,
-  and synthesizing empty arrays from absent fields would fabricate data.
-  The relationship tables need their own source qualification.
-* ``absolute_url`` is reconstructed from native ``id`` and ``slug`` using the
-  publisher's deterministic ``/docket/{id}/{slug}/`` URL shape.
-* Blocked dockets are included: the dump's complete population is the point.
-
-This stage produces a *candidate*: no prior table, no search merge, no
-publication. Reconciliation with the retained APA search observations and any
-population decision are separate, reviewed steps.
+This creates a local candidate without a prior search merge or publication.
 """
 
 from __future__ import annotations
@@ -39,12 +15,14 @@ import hashlib
 import json
 from datetime import date
 from pathlib import Path
+from uuid import uuid4
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 from loguru import logger
 
 from spicy_regs.transforms.build_courtlistener import CL_BASE_URL, COLUMNS
+from spicy_regs.court_receipts import file_witness, finish_court_output
 
 BATCH_ROWS = 50_000
 
@@ -110,6 +88,8 @@ _DIRECT = (
     ("referred_to_str", "referred_to"),
     ("pacer_case_id", "pacer_case_id"),
     ("date_created", "date_created"),
+    ("blocked", "blocked"),
+    ("date_blocked", "date_blocked"),
 )
 
 
@@ -123,8 +103,8 @@ def _empty_to_null(value: object, *, normalize: bool) -> str | None:
 
 
 def _date_prefix(value: object) -> str | None:
-    text = _empty_to_null(value, normalize=True)
-    return text[:10] if text else None
+    text = _empty_to_null(value, normalize=False)
+    return text[:10] if text is not None else None
 
 
 def _created_at(value: object) -> str | None:
@@ -144,7 +124,7 @@ def shape_bulk_docket(row: dict, courts: dict[str, dict]) -> dict:
     """Map one native bulk docket row onto the host columns."""
     out: dict[str, str | None] = {}
     for native, host in _DIRECT:
-        out[host] = _empty_to_null(row.get(native), normalize=native in _EMPTY_IS_NULL)
+        out[host] = _empty_to_null(row.get(native), normalize=False)
     out["date_filed"] = _date_prefix(row.get("date_filed"))
     out["date_terminated"] = _date_prefix(row.get("date_terminated"))
     out["date_argued"] = _date_prefix(row.get("date_argued"))
@@ -156,6 +136,8 @@ def shape_bulk_docket(row: dict, courts: dict[str, dict]) -> dict:
     out["attorneys_json"] = None
     out["firms_json"] = None
     out["absolute_url"] = _absolute_url(row)
+    out['raw_source_record'] = json.dumps({name: row.get(name) for name in
+        ('id', 'date_filed', 'date_terminated', 'date_argued', 'date_created', 'slug')}, ensure_ascii=False)
     return out
 
 
@@ -186,7 +168,7 @@ def build_court_dockets_bulk(
     from spicy_docs.sources.courtlistener.bulk import CourtListenerBulkReader
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    out_file = output_dir / "court_dockets.parquet"
+    out_file = output_dir / f".court-dockets-{uuid4().hex}.source.parquet"
     courts = load_courts(local_file=courts_file, dump_date=dump_date)
     logger.info("Court dockets bulk: {:,} courts loaded", len(courts))
 
@@ -231,6 +213,8 @@ def build_court_dockets_bulk(
 
     if reader.stopped_early:
         raise RuntimeError("dockets dump was not consumed to EOF")
+    if writer is None:
+        pq.write_table(_SCHEMA.empty_table(), out_file)
     digest = hashlib.sha256()
     with out_file.open("rb") as stream:
         for chunk in iter(lambda: stream.read(1 << 20), b""):
@@ -255,4 +239,5 @@ def build_court_dockets_bulk(
         json.dumps(identity, indent=2, sort_keys=True) + "\n")
     logger.info("Court dockets bulk: {:,} rows, {:,} blocked, {:,} missing courts, sha={}",
                 rows_mapped, blocked, missing_courts, sha256[:24])
-    return out_file
+    return finish_court_output('court_dockets', out_file, output_dir,
+                               witnesses=[file_witness(dockets_file), file_witness(courts_file), file_witness(out_file)])

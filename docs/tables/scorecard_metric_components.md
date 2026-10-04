@@ -6,6 +6,8 @@
 
 One source-stated relationship between a component metric and its parent metric. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='scorecard_metric_components'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Empty in the currently published scorecard editions: no component-to-parent metric relationships are present. This does not establish that other publisher editions lack such relationships. *(measured 2026-10-03)*
 
 - **Parquet file:** `scorecard_metric_components.parquet`
@@ -19,9 +21,5 @@ One source-stated relationship between a component metric and its parent metric.
 | `parent_metric_id` | `VARCHAR` | Stable source-layer parent metric id; no downstream identity resolution. |
 | `component_metric_id` | `VARCHAR` | Stable source-layer component metric id; no downstream identity resolution. |
 | `weight_text` | `VARCHAR` | Source-stated weight, preserved as text; NULL when unstated. |
-| `weight_number` | `VARCHAR` | Optional exact decimal text for a source-stated weight; no inferred normalization. |
+| `weight_number` | `DECIMAL(38,18)` | Optional exact decimal text for a source-stated weight; no inferred normalization. |
 | `combination_rule_text` | `VARCHAR` | Source-stated combination rule, preserved as text; NULL when unstated. |
-| `snapshot_id` | `VARCHAR` | Opaque identity of the complete accepted edition capture and parse. |
-| `capture_id` | `VARCHAR` | Opaque caller-issued identity of the source observation supporting this row. |
-| `source_url` | `VARCHAR` | Original publisher URL supporting this observation. |
-| `source_path` | `VARCHAR` | Source locator within the captured response, such as cell, JSON path or PDF page. |

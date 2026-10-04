@@ -200,8 +200,9 @@ def parse_index(raw: bytes) -> dict:
         ):
             raise ValueError("invalid publication index")
         seen = set()
+        dataset_owners = set()
         for family, entry in value["families"].items():
-            if not _NAME.fullmatch(family) or not _FAMILY_KEYS <= set(entry) <= _FAMILY_KEYS | {"publishedAt"}:
+            if not _NAME.fullmatch(family) or not _FAMILY_KEYS <= set(entry) <= _FAMILY_KEYS | {"publishedAt", "etlReceipts"}:
                 raise ValueError("invalid family")
             if "publishedAt" in entry:
                 instant = entry["publishedAt"]
@@ -215,8 +216,24 @@ def parse_index(raw: bytes) -> dict:
                 raise ValueError("prefix differs from artifact identity")
             if not isinstance(entry["logicalId"], str) or not entry["logicalId"].startswith("urn:"):
                 raise ValueError("invalid logical identity")
-            if not isinstance(entry["tables"], dict) or not entry["tables"]:
+            if not isinstance(entry["tables"], dict) or (not entry["tables"] and "etlReceipts" not in entry):
                 raise ValueError("empty family")
+            if "etlReceipts" in entry:
+                receipt = entry["etlReceipts"]
+                if (set(receipt) != {"key", "sha256", "byteSize", "rows", "columns", "generationId", "datasets"}
+                        or receipt["key"] != "etl_receipts.parquet"
+                        or not _DIGEST.fullmatch(receipt["sha256"]) or not _counts(receipt)
+                        or not isinstance(receipt["generationId"], str) or not receipt["generationId"]
+                        or not isinstance(receipt["columns"], list) or not receipt["columns"]
+                        or not isinstance(receipt["datasets"], list) or not receipt["datasets"]
+                        or len(set(receipt["datasets"])) != len(receipt["datasets"])
+                        or any(not isinstance(name, str) or not _NAME.fullmatch(name) for name in receipt["datasets"])):
+                    raise ValueError("invalid ETL receipt member")
+            datasets = {key.removesuffix(".parquet") for key in entry["tables"]}
+            datasets.update(entry.get("etlReceipts", {}).get("datasets", []))
+            if datasets & dataset_owners:
+                raise ValueError("multiply owned dataset")
+            dataset_owners.update(datasets)
             for key, table in entry["tables"].items():
                 if not key.endswith(".parquet") or not _NAME.fullmatch(key[:-8]) or key in seen:
                     raise ValueError("invalid or multiply owned table")
@@ -965,14 +982,17 @@ def _publish_evidence(client, bucket: str, path: Path, artifact) -> None:
 
 
 def publish_generation(directory: Path, *, client, bucket: str, prior_index: Mapping,
-                       evidence_directories: tuple[Path, ...] = (), added_tables: frozenset[str] = frozenset()) -> dict:
+                       evidence_directories: tuple[Path, ...] = (), added_tables: frozenset[str] = frozenset(),
+                       receipt_only_tables: frozenset[str] = frozenset()) -> dict:
     """Verify/upload/verify, then compare-and-swap the publication pointer.
 
     Validation and conditional-write refusals preserve the current pointer.
     A transport failure after the pointer request can have an uncertain result;
     reread the index to establish whether the complete generation is current.
     ``added_tables`` is an explicit migration: the family's table set may grow by
-    exactly those tables, and never shrink. Unreferenced immutable uploads may
+    exactly those tables. ``receipt_only_tables`` explicitly moves processing
+    tables into the shared receipt member; each must have a receipt-only policy.
+    Prior immutable bytes remain retained. Unreferenced immutable uploads may
     remain and are safe to reuse. A pointer
     moved by another family's writer is reread and this family's entry merged
     onto it, which equals a first attempt made a moment later; a change to this
@@ -985,7 +1005,7 @@ def publish_generation(directory: Path, *, client, bucket: str, prior_index: Map
     artifact = verify_generation(directory)
     return _publish_verified_generation(
         artifact, LocalMemberSource(directory), client=client, bucket=bucket, prior_index=prior_index,
-        evidence_directories=evidence_directories, added_tables=added_tables,
+        evidence_directories=evidence_directories, added_tables=added_tables, receipt_only_tables=receipt_only_tables,
         upload_member=lambda prefix, key: _put_immutable(client, bucket, prefix + "/" + key, directory / key),
     )
 
@@ -993,6 +1013,7 @@ def publish_generation(directory: Path, *, client, bucket: str, prior_index: Map
 def _publish_verified_generation(
     artifact, source, *, upload_member, client, bucket: str, prior_index: Mapping,
     evidence_directories: tuple[Path, ...] = (), added_tables: frozenset[str] = frozenset(),
+    receipt_only_tables: frozenset[str] = frozenset(),
 ) -> dict:
     """Shared publication gates; both callers fully verify their source first."""
     from botocore.exceptions import BotoCoreError, ClientError
@@ -1002,6 +1023,8 @@ def _publish_verified_generation(
 
     if artifact.root["spec"]["publicationStatus"] != "complete-family":
         raise PublicationError("A local partial candidate cannot be published")
+    from spicy_regs.etl_policy_registry import require_registered_receipts
+    require_registered_receipts(artifact.root["spec"]["tables"], artifact.root["spec"].get("etlReceipts"))
     family = artifact.root["spec"]["family"]
     if not _NAME.fullmatch(family):
         raise PublicationError("Invalid family name")
@@ -1010,7 +1033,9 @@ def _publish_verified_generation(
     prefix = f"generations/{family}/{artifact.pin.artifact_digest.removeprefix('sha256:')}"
     members = list(iter_member_descriptors(artifact, source))
     try:
-        tables = table_entries(artifact.root["spec"]["tables"], members)
+        tables = (table_entries(artifact.root["spec"]["tables"],
+                                [m for m in members if m.object_key != "etl_receipts.parquet"])
+                  if artifact.root["spec"]["tables"] else {})
     except ValueError as exc:
         raise PublicationError(str(exc)) from exc
     # The guards run per table: a partition of a split table may legitimately shrink, but none may vanish,
@@ -1025,14 +1050,32 @@ def _publish_verified_generation(
     old_family = index["families"].get(family)
     # The table set may change only by an explicit migration: exactly the declared added tables join, none leave.
     # A union, so the declaration is inert once those tables are published.
-    if old_family is not None and set(tables) != set(old_family["tables"]) | set(added_tables):
+    allowed_receipt_only = {p["dataset"] + ".parquet" for p in
+                            artifact.root["spec"].get("etlReceipts", {}).get("policies", []) if p["receipt_only"]}
+    if not set(receipt_only_tables) <= allowed_receipt_only or set(receipt_only_tables) & set(tables):
+        raise PublicationError("Only explicitly classified processing tables may move into receipts")
+    expected_tables = (set((old_family or {}).get("tables", {})) | set(added_tables)) - set(receipt_only_tables)
+    if old_family is not None and set(tables) != expected_tables:
         raise PublicationError("Family membership changed; explicit migration is required")
-    entry = {
+    entry: dict = {
         "prefix": prefix,
         "logicalId": artifact.pin.logical_id,
         "artifactDigest": artifact.pin.artifact_digest,
         "tables": tables,
     }
+    if "etlReceipts" in artifact.root["spec"]:
+        declared_receipt = artifact.root["spec"]["etlReceipts"]
+        receipt = next(m for m in members if m.object_key == "etl_receipts.parquet")
+        entry["etlReceipts"] = {"key": receipt.object_key, "sha256": receipt.sha256,
+                                "byteSize": receipt.byte_size, "rows": receipt.record_count,
+                                "columns": declared_receipt["columns"],
+                                "generationId": declared_receipt["generationId"],
+                                "datasets": [p["dataset"] for p in declared_receipt["policies"]]}
+    if old_family and "etlReceipts" in old_family and "etlReceipts" not in entry:
+        raise PublicationError("Cannot publish a generation that drops required ETL receipts")
+    if old_family and (set(old_family.get("etlReceipts", {}).get("datasets", []))
+                       - set(entry.get("etlReceipts", {}).get("datasets", []))):
+        raise PublicationError("Cannot publish a generation that drops receipt dataset ownership")
     _merge_family(index, family, entry)
     evidence = [verify_evidence(path) for path in evidence_directories]
     declared = [item for item in artifact.root["inputs"] if item["role"] == INPUT_ROLE]
@@ -1116,13 +1159,16 @@ def _assert_family_unchanged(index: Mapping, prior_index: Mapping, family: str) 
 
 
 def _merge_family(index: dict, family: str, entry: dict) -> tuple[dict, bytes]:
-    """Return ``index`` with ``family`` set to ``entry``, refusing a table another family owns."""
+    """Update one family, preserving unique subject and receipt-only dataset ownership."""
     from rulespec_artifacts import canonical_json_bytes
 
+    datasets = {key.removesuffix(".parquet") for key in entry["tables"]}
+    datasets.update(entry.get("etlReceipts", {}).get("datasets", []))
     for owner, other in index["families"].items():
-        for key in entry["tables"]:
-            if owner != family and key in other["tables"]:
-                raise PublicationError(f"{key} already belongs to family {owner}")
+        owned = {key.removesuffix(".parquet") for key in other["tables"]}
+        owned.update(other.get("etlReceipts", {}).get("datasets", []))
+        if owner != family and (overlap := datasets & owned):
+            raise PublicationError(f"{sorted(overlap)} already belongs to family {owner}")
     updated = deepcopy(index)
     updated["families"][family] = entry
     raw = canonical_json_bytes(updated)
@@ -1179,3 +1225,26 @@ def backfill_published_at(client, bucket: str, *, apply: bool = False) -> dict:
     if not _put_pointer(client, bucket, INDEX_V2_KEY, raw, etag):
         raise PublicationError(f"{INDEX_V2_KEY} moved since the backfill read it; nothing was written, run it again")
     return {"index": INDEX_V2_KEY, "etag": etag, "stamps": stamps, "applied": True}
+
+
+def receipt_members(index: Mapping, *, dataset: str | None = None) -> tuple[Member, ...]:
+    """Resolve the shared receipt table from the same captured index as subjects.
+
+    Dataset-scoped reads require receipts in that subject's selected family;
+    no bare-key or previous-generation fallback is permitted. Unscoped reads
+    combine the receipt member of every selected migrated family.
+    """
+    entries = list(index["families"].values())
+    if dataset is not None:
+        owner = table_owner(index, dataset + ".parquet")
+        if owner is not None:
+            if dataset not in owner[1].get("etlReceipts", {}).get("datasets", []):
+                raise PublicationError(f"Dataset has no generation-bound receipts: {dataset}")
+            entries = [owner[1]]
+        else:
+            entries = [entry for entry in entries if dataset in entry.get("etlReceipts", {}).get("datasets", [])]
+            if len(entries) != 1:
+                raise PublicationError(f"Dataset has no unambiguous generation-bound receipts: {dataset}")
+    return tuple(Member(f"{entry['prefix']}/{receipt['key']}", receipt["sha256"],
+                        receipt["byteSize"], receipt["rows"])
+                 for entry in entries if (receipt := entry.get("etlReceipts")))

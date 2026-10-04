@@ -44,13 +44,13 @@ nav:
   - Overview: index.md
   - Publication status: publication-status.md
   - Fork generation: fork-generation.md
-  - ETL catalog and manifest seed: etl-catalog-seed.md
   - Comment field fill: comment-fields-fill.md
   - Local data reuse: research/local-data-reuse-2026-09-21.md
   - Correction handling: correction-lifecycle.md
   - Changelog: changelog.md
   - Querying with Python: querying-python.md
   - FEC:
+      - FEC tables and child rows: fec-query-views.md
       - Integration: fec-integration.md
       - Delivery plan and tasks: fec-delivery-plan.md
       - Table ontology and relationships: fec-data-model.md
@@ -59,6 +59,8 @@ nav:
       - Remaining work: fec-gaps.md
       - Coverage census: research/fec-coverage-2026-09-21.md
   - Tables:
+      - ETL receipts: tables/etl_receipts.md
+      - law_sections: tables/law_sections.md
       - dockets: tables/dockets.md
       - documents: tables/documents.md
       - comments: tables/comments.md

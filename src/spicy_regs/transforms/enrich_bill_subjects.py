@@ -137,7 +137,7 @@ class SubjectsFetcher(Protocol):
     def close(self) -> None: ...
 
 
-def _shape(bill_id: str, policy_area: str | None, subjects: tuple[str, ...], carrier: str, now: str) -> dict:
+def _shape(bill_id: str, policy_area: str | None, subjects: tuple[str | None, ...], carrier: str, now: str) -> dict:
     """Map one fetched assignment onto the published column shape."""
     return {
         "bill_id": bill_id,
@@ -348,6 +348,8 @@ def enrich_bill_subjects(
     read_folder: FolderReader | None = None,
     clock: Callable[[], float] = time.monotonic,
     evidence: CaptureEvidence | None = None,
+    download_prior=r2.download,
+    receipt_build=None,
 ) -> Path:
     """Build ``bill_subjects.parquet`` (bounded, resumable enrichment pass).
 
@@ -357,6 +359,10 @@ def enrich_bill_subjects(
     ``deadline_seconds`` have passed on ``clock`` since the run began. Copying
     the bill family's own rows costs no request and is not capped.
     """
+    if receipt_build is not None:
+        return receipt_build.run(enrich_bill_subjects, output_dir, **{
+            key: value for key, value in locals().items() if key not in {"output_dir", "receipt_build"}
+        })
     import duckdb
 
     started = clock()
@@ -378,7 +384,7 @@ def enrich_bill_subjects(
     #    artifact from a previous run counts as a prior in its own right: without
     #    this, an R2-less re-run would silently overwrite everything enriched so
     #    far and start again from the top of the archive.
-    have_prior = prior_file.exists() or r2.download(OUTPUT, prior_file) or _adopt_local_output(out_file, prior_file)
+    have_prior = prior_file.exists() or download_prior(OUTPUT, prior_file) or _adopt_local_output(out_file, prior_file)
     if have_prior:
         logger.info("Bill subjects: merging against prior table {}", prior_file)
     else:

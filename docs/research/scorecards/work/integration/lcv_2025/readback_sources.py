@@ -11,7 +11,7 @@ from pathlib import Path
 from urllib.parse import urlencode
 
 from bs4 import BeautifulSoup
-import pyarrow.parquet as pq
+from spicy_regs.scorecards.etl import read_source_generation
 
 from qualify_lcv import Retained, digest, write
 from spicy_docs.sources.scorecards import lcv
@@ -36,7 +36,7 @@ def cards(response):
 def readback(retained, source_report, output):
     report = json.loads(source_report.read_bytes())
     directory = Path(report["source_generation_directory"])
-    tables = {path.stem: pq.ParquetFile(path).read().to_pylist() for path in directory.glob("*.parquet")}
+    tables = read_source_generation(directory)
     member_response = retained.fetch(lcv.MEMBERS + "?" + urlencode(lcv.MEMBER_QUERY))
     members = {
         row[-1]: row for row in csv_rows(member_response) if len(row) == 7 and row[-1].startswith(lcv.BASE + "/moc/")

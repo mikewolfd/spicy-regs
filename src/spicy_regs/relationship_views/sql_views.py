@@ -27,6 +27,8 @@ class SQLView:
     meaning: str
     identity_columns: tuple[str, ...]
     rule_version: str = "held-navigation-v1"
+    role: str = "navigation"
+    category: str = "derived"
     column_descriptions: Mapping[str, str] = field(default_factory=dict)
 
 
@@ -63,8 +65,9 @@ def install_sql_views(connection: Any, available_tables: Iterable[str], specs: I
             'metadata': {
                 'label': spec.name.replace('_', ' '), 'summary': spec.meaning, 'kind': 'derived',
                 'rule_version': spec.rule_version, 'identity_columns': list(spec.identity_columns),
+                'view_role': spec.role, 'category': spec.category,
+                'column_descriptions': dict(spec.column_descriptions),
                 'input_publications': {table: publication.get(table) for table in spec.required},
-                **({'column_descriptions': dict(spec.column_descriptions)} if spec.column_descriptions else {}),
                 **({'column_lineage': lineage} if lineage else {}),
                 'coverage': 'Bounded by each selected input independently. A found target establishes a lookup, '
                             'not population completeness, legal applicability, or common-person identity.',
@@ -77,6 +80,7 @@ _COLUMN_DESCRIPTIONS = {
     'source_ordinal': 'Zero-based position in the held source array; repeated elements remain distinct.',
     'source_pointer': 'Location in the retained source field; see source_field and the source key.',
     'raw_value_json': 'The complete held element, including unsupported objects and nulls.',
+    'subject_attributes_json': 'Held subject attributes excluding children, which appear as separate rows; source_pointer locates the complete original element.',
     'raw_field_value': 'Literal held field value; retained so malformed input remains inspectable.',
     'target_key': 'Typed target reference; a key alone does not prove the target exists.',
     'target_status': 'Lookup disposition: found, missing, ambiguous, unsupported or not_checked.',
@@ -116,7 +120,7 @@ def view_columns(described: Iterable[tuple], descriptions: Mapping[str, str] | N
 
 def annotate_views(views: dict[str, dict[str, Any]]) -> None:
     """Attach the shared availability and coverage semantics without evaluating or rebinding views."""
-    for info in views.values():
+    for name, info in views.items():
         metadata = info['metadata']
         metadata['availability_basis'] = (
             'SQL bound against loaded schemas only; installation does not scan rows or verify source authority.'
@@ -133,3 +137,18 @@ def annotate_views(views: dict[str, dict[str, Any]]) -> None:
                            'Original absent/null states are known only where native field-state evidence was retained.',
             'publication_limit': 'A bound view is not a separately published or source-qualified artifact.',
         }
+
+        if metadata.get('view_role') == 'child_query':
+            metadata['coverage'] = (
+                'Inherited from the selected source tables. A cleaner shape does not expand source coverage '
+                'or establish current records, complete populations, verified identities or financial totals.'
+            )
+            metadata['coverage_semantics'].pop('unique_pairs')
+            metadata['coverage_semantics']['occurrence_rows'] = (
+                'See the view summary for row grain, array ordering, filters and interpretation status. '
+                'Source tables preserve original values and field-presence evidence.'
+            )
+            metadata['coverage_semantics']['missingness'] = (
+                'Typed NULL does not establish source absence. Consult status columns and the original source row '
+                'to distinguish unsupported values, source nulls and missing fields.'
+            )

@@ -7,7 +7,8 @@ captures, and a legislator's terms are only in hand while the roster is.
 from pathlib import Path
 from typing import ClassVar
 
-from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
+from spicy_regs.pipelines.rollups.base import make_rollup_app
+from spicy_regs.pipelines.rollups.subject_receipts import SubjectReceiptRollup as RollupPipeline
 from spicy_regs.transforms.build_members import build_members
 
 
@@ -21,7 +22,7 @@ class MembersRollup(RollupPipeline):
     outputs: ClassVar[tuple[str, ...]] = ("members.parquet", "member_terms.parquet", "member_party_affiliations.parquet")
 
     def build(self, output_dir: Path) -> tuple[Path, ...]:
-        return build_members(output_dir, evidence=self.source_evidence)
+        return self.build_receipts(output_dir, build_members, evidence=self.source_evidence)
 
 
 app = make_rollup_app(MembersRollup)

@@ -6,6 +6,8 @@
 
 One row per committee or subcommittee a bill reached, as its BILLSTATUS document names it. `referral_signal` is set only for the six appropriations committees the money-bill classifier keys on; it is NULL elsewhere rather than absent. It names committees, not what they did: the committee activities BILLSTATUS lists under each committee (Referred To, Markup By, Reported By, with their dates) are not published, so find a committee's report in `bill_actions`. `bill_committee_actions` is a different source, the House committees' activity-report prints, filed at the end of each Congress, so it holds no rows for the sitting Congress. All columns are stored as VARCHAR.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='bill_committees'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled: bills the bill family has read from GovInfo BILLSTATUS, Congress by Congress from the 108th on; group by the Congress in bill_id to see which Congresses are filled. *(measured 2026-09-28)*
 
 - **Parquet file:** `bill_committees.parquet`
@@ -21,7 +23,5 @@ One row per committee or subcommittee a bill reached, as its BILLSTATUS document
 | `chamber` | `VARCHAR` | The chamber, which the publisher states for a committee and omits for a subcommittee. |
 | `committee_type` | `VARCHAR` | The publisher's committee type (Standing, Select...); absent on a subcommittee. |
 | `parent_system_code` | `VARCHAR` | The parent committee's system code when this row is a subcommittee. |
-| `is_subcommittee` | `VARCHAR` | True when this row came from another committee's subcommittees list. |
+| `is_subcommittee` | `BOOLEAN` | True when this row came from another committee's subcommittees list. |
 | `snapshot_update_date` | `VARCHAR` | The parent document's updateDate, so a committee list is versioned with its bill. |
-| `referral_signal` | `VARCHAR` | The money-bill referral signal this system code raises, from the six full-committee codes; NULL outside them, supplied by the caller that owns the vocabulary. |
-| `referral_rule` | `VARCHAR` | The rule applied to produce referral_signal; a system-code lookup, never a name match. |

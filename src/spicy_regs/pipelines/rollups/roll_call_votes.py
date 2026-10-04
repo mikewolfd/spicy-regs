@@ -29,12 +29,9 @@ cap, each run resuming on what the last published.
 from pathlib import Path
 from typing import ClassVar
 
-from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
-from spicy_regs.transforms.build_roll_call_votes import (
-    ChamberListingRefused,
-    build_roll_call_votes,
-    max_votes_from_env,
-)
+from spicy_regs.pipelines.rollups.base import make_rollup_app
+from spicy_regs.pipelines.rollups.subject_receipts import SubjectReceiptRollup as RollupPipeline
+from spicy_regs.transforms.build_roll_call_votes import ChamberListingRefused, build_roll_call_votes, max_votes_from_env
 
 
 class RollCallVotesRollup(RollupPipeline):
@@ -47,12 +44,16 @@ class RollCallVotesRollup(RollupPipeline):
     retain_source_evidence: ClassVar[bool] = True
 
     def build(self, output_dir: Path) -> tuple[Path, ...]:
-        try:
-            return build_roll_call_votes(output_dir, max_votes=max_votes_from_env(), evidence=self.source_evidence)
-        except ChamberListingRefused as refused:
-            # Publish the chamber that was read; ``run`` raises the refusal once the generation is published.
-            self.deferred_failure = refused
-            return refused.outputs
+        def builder(work, **kwargs):
+            try:
+                return build_roll_call_votes(work, **kwargs)
+            except ChamberListingRefused as refused:
+                # Seal the successful chamber and its receipts before the run reports the refusal.
+                self.deferred_failure = refused
+                return refused.outputs
+
+        return self.build_receipts(output_dir, builder, max_votes=max_votes_from_env(), evidence=self.source_evidence)
+
 
 
 app = make_rollup_app(RollCallVotesRollup)

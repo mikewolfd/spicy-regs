@@ -148,6 +148,8 @@ def test_query_sql_reply_names_the_statement_it_answers(client):
     pytest.param("SELECT * FROM FCC_Filings", {"fcc_filings"}, id="any case"),
     pytest.param("SELECT * FROM main.fcc_filings", {"fcc_filings"}, id="schema qualified"),
     pytest.param("SELECT * FROM memory.main.fcc_filings", {"fcc_filings"}, id="catalog qualified"),
+    pytest.param("SELECT * FROM memory.fcc_filings", {"fcc_filings"}, id="catalog shorthand"),
+    pytest.param("PRAGMA version; SELECT * FROM memory.fcc_filings", {"fcc_filings"}, id="pragma then catalog shorthand"),
     pytest.param("WITH fcc_filings AS (SELECT 9 AS x) SELECT * FROM main.fcc_filings", {"fcc_filings"},
                  id="a qualified name is never a CTE"),
     pytest.param("SELECT * FROM information_schema.tables", set(), id="another schema"),
@@ -155,12 +157,19 @@ def test_query_sql_reply_names_the_statement_it_answers(client):
                  {"fcc_filings", "fcc_proceedings"}, id="union"),
     pytest.param("SELECT * FROM read_parquet('https://example.test/fcc_filings.parquet')", set(),
                  id="a direct file read names no published table"),
-    pytest.param("SELEC nonsense FROM fcc_filings", set(), id="unparseable"),
 ])
 def test_tables_named_follows_sql_scope(sql, named):
     """The pins a reply carries come from these names: a false one claims a read that never happened."""
     with duckdb.connect() as con:
         assert mcp_server._tables_named(con, sql) == named
+
+
+def test_table_names_refuse_uninspectable_sql():
+    with duckdb.connect() as con:
+        with pytest.raises(duckdb.ParserException):
+            mcp_server._tables_named(con, "SELEC nonsense FROM fcc_filings")
+        with pytest.raises(ValueError, match="Cannot inspect SQL relations"):
+            mcp_server._tables_named(con, "EXPLAIN SELECT * FROM fcc_filings")
 
 
 def test_a_timestamp_with_time_zone_is_returned(client):

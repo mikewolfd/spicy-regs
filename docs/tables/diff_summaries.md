@@ -6,6 +6,8 @@
 
 One row per model-written summary of the change between two printings of a bill. All columns are stored as VARCHAR.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='diff_summaries'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Empty by owner decision 34: written only by a language model during bill-family runs, which no scheduled run enables, so no row is produced. *(measured 2026-10-03)*
 
 - **Parquet file:** `diff_summaries.parquet`
@@ -17,18 +19,11 @@ One row per model-written summary of the change between two printings of a bill.
 | --- | --- | --- |
 | `bill_id` | `VARCHAR` | The bill both printings belong to. |
 | `from_version_code` | `VARCHAR` | The earlier printing's version code. |
-| `from_source` | `VARCHAR` | Which acquisition path supplied the earlier printing. |
+| `from_printing_id` | `VARCHAR` | Which acquisition path supplied the earlier printing. |
 | `to_version_code` | `VARCHAR` | The later printing's version code. |
-| `to_source` | `VARCHAR` | Which acquisition path supplied the later printing. |
+| `to_printing_id` | `VARCHAR` | Which acquisition path supplied the later printing. |
 | `headline` | `VARCHAR` | One sentence naming the most important change. |
-| `key_changes_json` | `VARCHAR` | The bullet points describing the most significant changes, as a JSON array in the model's order. The prompt asks for at most five and nothing enforces it -- unlike bill_summaries.top_provisions_json, whose cap is checked before the row is stored -- because the ported answer schema states no maximum either, so a longer list is the model's answer and not a defect to hide. |
-| `sections_added_json` | `VARCHAR` | Section headings that were added, as a JSON array. |
-| `sections_removed_json` | `VARCHAR` | Section headings that were removed, as a JSON array. |
-| `dollar_changes_json` | `VARCHAR` | Notable dollar-amount changes in prose, as a JSON array. |
-| `model` | `VARCHAR` | The model id the call was made against. |
-| `prompt_version` | `VARCHAR` | The prompt version this summary was produced under. |
-| `content_hash` | `VARCHAR` | Digest of the diff text the summary was written from, spelled sha256: plus the hex digest. |
-| `input_tokens` | `VARCHAR` | Input tokens the provider reported. |
-| `output_tokens` | `VARCHAR` | Output tokens the provider reported. |
-| `requested_at` | `VARCHAR` | When the call was made. |
-| `completed_at` | `VARCHAR` | When the answer came back; the merge prefers the larger value. |
+| `key_changes` | `VARCHAR[]` | The bullet points describing the most significant changes, as a Native list in the model's order. The prompt asks for at most five and nothing enforces it -- unlike bill_summaries.top_provisions_json, whose cap is checked before the row is stored -- because the ported answer schema states no maximum either, so a longer list is the model's answer and not a defect to hide. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `sections_added` | `VARCHAR[]` | Section headings that were added, as a Native list. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `sections_removed` | `VARCHAR[]` | Section headings that were removed, as a Native list. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `dollar_changes` | `VARCHAR[]` | Notable dollar-amount changes in prose, as a Native list. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |

@@ -8,8 +8,9 @@ source evidence.
 from pathlib import Path
 from typing import ClassVar
 
-from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
-from spicy_regs.transforms.build_fec_candidate_history import OUTPUT, build_fec_candidate_history
+from spicy_regs.pipelines.rollups.base import make_rollup_app
+from spicy_regs.pipelines.rollups.fec_receipts import FecReceiptRollup as RollupPipeline
+from spicy_regs.transforms.build_fec_candidate_history import OUTPUT
 
 
 class FecCandidateHistoryRollup(RollupPipeline):
@@ -21,7 +22,7 @@ class FecCandidateHistoryRollup(RollupPipeline):
     output: ClassVar[str] = OUTPUT
 
     def build(self, output_dir: Path) -> Path:
-        return build_fec_candidate_history(output_dir, evidence=self.source_evidence)
+        return self.build_receipts(output_dir, evidence=self.source_evidence)
 
 
 app = make_rollup_app(FecCandidateHistoryRollup)

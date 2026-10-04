@@ -18,10 +18,13 @@ from spicy_regs.enrich_pdf import (
 )
 from spicy_regs.schemas import COMMENT, DOCUMENT
 from spicy_regs.sources import iceberg
+from spicy_regs.sources.regulatory_catalog import processing_table
+from spicy_regs.transforms.regulations_receipts import policy
 from spicy_regs.transforms.pdf_text import PdfTextResult, PdfTextStatus, extract_pdf_text
 from tests.pdf_enrichment_oracle import _combine as old_combine
 from tests.pdf_fixtures import make_pdf, make_textless_pdf
 from tests.test_pdf_text_shared import _rewrite
+
 
 FIELD = "pdf_extraction_results_json"
 GOOD = Path(__file__).parents[1] / "sample-data/mirrulations/comment-ACF-2025-0038-0004_attachment_1.pdf"
@@ -56,7 +59,13 @@ def test_retained_good_pdf_and_failed_attachment_keep_aggregate_and_each_result(
     assert (row["text_content"], row["text_extraction_status"]) == expected
     assert stats == {"selected": 1, "ok": 1, "empty": 0, "encrypted": 0, "error": 0}
     assert json.loads(row[FIELD]) == [
-        {"url": good_url, "source_sha256": "sha256:" + sha256(raw).hexdigest(), "status": "ok", "page_count": 2, "error": None},
+        {
+            "url": good_url,
+            "source_sha256": "sha256:" + sha256(raw).hexdigest(),
+            "status": "ok",
+            "page_count": 2,
+            "error": None,
+        },
         {
             "url": bad_url,
             "source_sha256": "sha256:" + sha256(failed).hexdigest() if failed is not None else None,
@@ -166,30 +175,27 @@ def catalog():
 
 
 @pytest.mark.parametrize("record_type", [DOCUMENT, COMMENT])
-def test_existing_table_adds_only_nullable_pdf_column_and_preserves_rows(catalog, record_type):
-    con = catalog
-    con.execute(f"CREATE SCHEMA IF NOT EXISTS {iceberg._schema_ref()}")
-    columns = [column for column in record_type.schema if column != FIELD]
-    definitions = ", ".join(f'"{column}" VARCHAR' for column in columns)
-    table = iceberg._qualified(record_type)
-    con.execute(f"CREATE TABLE {table} ({definitions})")
-    con.execute(f'INSERT INTO {table} ("{record_type.dedup_key}") VALUES (?)', ["retained"])
-    iceberg._ensure_table(con, record_type)
-    iceberg._ensure_table(con, record_type)
-    observed = con.execute(f"DESCRIBE {table}").fetchall()
-    assert [column[0] for column in observed] == [*columns, FIELD]
-    assert observed[-1][1:3] == ("VARCHAR", "YES")
-    assert con.execute(f'SELECT "{record_type.dedup_key}", {FIELD} FROM {table}').fetchall() == [("retained", None)]
+def test_native_subjects_keep_pdf_diagnostics_in_receipts(catalog, record_type):
+    row = {**dict.fromkeys(record_type.schema), record_type.dedup_key: 'retained'}
+    catalog.register('source', pl.DataFrame([row], schema=record_type.schema).to_arrow())
+    iceberg.replace_rows(catalog, record_type, 'source')
+    iceberg._ensure_table(catalog, record_type)
+    observed = catalog.execute(f"DESCRIBE {iceberg._qualified(record_type)}").fetchall()
+    assert [column[0] for column in observed] == policy(record_type.name).subject_schema.names
+    assert FIELD not in [column[0] for column in observed]
+    assert catalog.execute(
+        f'SELECT "{record_type.dedup_key}", {FIELD} FROM {processing_table(catalog, record_type)}'
+    ).fetchall() == [('retained', None)]
 
 
-def test_existing_incompatible_column_refuses_without_replacing_its_data(catalog):
+def test_incompatible_native_schema_refuses_without_replacing_data(catalog):
+    iceberg._ensure_table(catalog, COMMENT)
     table = iceberg._qualified(COMMENT)
-    catalog.execute(f"CREATE SCHEMA {iceberg._schema_ref()}")
-    catalog.execute(f"CREATE TABLE {table} (comment_id VARCHAR, {FIELD} INTEGER)")
-    catalog.execute(f"INSERT INTO {table} VALUES ('retained', 7)")
-    with pytest.raises(ValueError, match="must be VARCHAR"):
+    catalog.execute(f'ALTER TABLE {table} ADD COLUMN {FIELD} INTEGER')
+    catalog.execute(f"INSERT INTO {table} (comment_id, {FIELD}) VALUES ('retained', 7)")
+    with pytest.raises(ValueError, match='schema differs'):
         iceberg._ensure_table(catalog, COMMENT)
-    assert catalog.execute(f"SELECT * FROM {table}").fetchall() == [("retained", 7)]
+    assert catalog.execute(f'SELECT comment_id, {FIELD} FROM {table}').fetchall() == [('retained', 7)]
 
 
 def test_required_avro_install_failure_propagates_before_credentials_or_attach(monkeypatch):
@@ -224,22 +230,33 @@ def test_catalog_mixed_pdf_results_survive_export_and_derived_text_update(catalo
         values = frame("comments", urls, comment_id=identifier, agency_code=agency).row(0, named=True)
         rows.append({**{column: None for column in COMMENT.schema}, **values})
     catalog.register("_test_seed", pl.DataFrame(rows, schema=COMMENT.schema).to_arrow())
-    table = iceberg._qualified(COMMENT)
-    catalog.execute(f"INSERT INTO {table} SELECT * FROM _test_seed")
+    iceberg.replace_rows(catalog, COMMENT, "_test_seed")
     catalog.unregister("_test_seed")
     stats = _enrich_comment_agency_in_catalog(catalog, COMMENT, "ACF", fetch={urls[0]: raw, urls[1]: raw[:256]}.get)
     assert stats["ok"] == 1
-    attempted = catalog.execute(f"SELECT {FIELD} FROM {table} WHERE comment_id='C1'").fetchone()[0]
+    attempted = catalog.execute(
+        f"SELECT {FIELD} FROM {processing_table(catalog, COMMENT)} WHERE comment_id='C1'"
+    ).fetchone()[0]
     assert [entry["status"] for entry in json.loads(attempted)] == ["ok", "error"]
-    assert catalog.execute(f"SELECT {FIELD} FROM {table} WHERE comment_id='C2'").fetchone() == (None,)
+    assert catalog.execute(
+        f"SELECT {FIELD} FROM {processing_table(catalog, COMMENT)} WHERE comment_id='C2'"
+    ).fetchone() == (None,)
     derived = pl.DataFrame({"comment_id": ["C1"], "_new_text": ["independent derived text"], "_new_status": ["ok"]})
     iceberg.upsert_comment_text(catalog, COMMENT, "ACF", derived)
-    assert catalog.execute(f"SELECT text_content, {FIELD} FROM {table} WHERE comment_id='C1'").fetchone() == (
+    assert catalog.execute(
+        f"SELECT text_content, {FIELD} FROM {processing_table(catalog, COMMENT)} WHERE comment_id='C1'"
+    ).fetchone() == (
         "independent derived text",
         attempted,
     )
     exported = pl.read_parquet(iceberg._export_parquet(catalog, COMMENT, tmp_path))
-    assert exported.filter(pl.col("comment_id") == "C1")[FIELD][0] == attempted
+    assert FIELD not in exported.columns
+    from spicy_regs.transforms.regulations_receipts import ReceiptInput, read_internal
+    pair = tmp_path / '.catalog-pairs' / 'comments'
+    generation = json.loads((pair / 'generation.json').read_text())['generation_id']
+    restored = list(read_internal(ReceiptInput('comments', (pair / 'comments.parquet',),
+                                               pair / 'etl_receipts.parquet', generation)))
+    assert next(row for row in restored if row['comment_id'] == 'C1')[FIELD] == attempted
 
 
 @pytest.mark.parametrize("status", ["ok", "empty", "encrypted", "error"])

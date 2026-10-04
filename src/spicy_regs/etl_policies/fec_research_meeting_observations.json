@@ -1,0 +1,28 @@
+{
+  "dataset": "fec_research_meeting_observations",
+  "policy_version": "fec-identity-context-receipts/1",
+  "subject_schema": "/////0ACAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAcAAADgAQAAnAEAAGwBAAA4AQAA3AAAADQAAAAEAAAATP7//wAAAQUQAAAAHAAAAAQAAAAAAAAACQAAAGRhdGVfa2luZAAAADz+//94/v//AAABDBQAAAAcAAAABAAAAAEAAAAUAAAABQAAAGxpbmtzAAAAaP7//6T+//8AAAENGAAAABwAAAAEAAAAAgAAADwAAAAQAAAAAQAAAGwAAACU/v//0P7//wAAAQUQAAAAGAAAAAQAAAAAAAAABAAAAGhyZWYAAAAAvP7///j+//8AAAEFEAAAABQAAAAEAAAAAAAAAAMAAAB1cmwA4P7//xz///8AAAEMFAAAABwAAAAEAAAAAQAAABQAAAAFAAAAZGF0ZXMAAAAM////SP///wAAAQgQAAAAGAAAAAQAAAAAAAAAAQAAAGwABgAIAAYABgAAAAAAAAB0////AAABBRAAAAAgAAAABAAAAAAAAAAPAAAAcmVwb3J0ZWRfc3RhdHVzAGj///+k////AAABBRAAAAAcAAAABAAAAAAAAAAJAAAAdGl0bGVfcmF3AAAAlP///9D///8AAAEFEAAAACAAAAAEAAAAAAAAAAwAAABtZWV0aW5nX3R5cGUAAAAAxP///xAAFAAIAAYABwAMAAAAEAAQAAAAAAABBRAAAAAgAAAABAAAAAAAAAAJAAAAcmVjb3JkX2lkAAAABAAEAAQAAAA=",
+  "identity_fields": [
+    "record_id"
+  ],
+  "receipt_fields": [
+    "mapping_version",
+    "collection_id",
+    "source_authority",
+    "source_url",
+    "source_sha256",
+    "context_sha256",
+    "source_context_pointer",
+    "observed_at_json",
+    "dates_json",
+    "date_status",
+    "links_json",
+    "table_ordinal",
+    "table_row",
+    "conversion_inputs",
+    "conversion_diagnostics",
+    "source_input"
+  ],
+  "receipt_only": false,
+  "nullable_identity_fields": []
+}

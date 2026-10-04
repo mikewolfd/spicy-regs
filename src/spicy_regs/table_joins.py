@@ -22,6 +22,8 @@ import re
 from dataclasses import dataclass, replace
 from pathlib import Path
 
+from spicy_regs.subject_catalog import descriptors as _policy_descriptors
+
 RECORD = Path(__file__).with_name("table_joins.json")
 RECORD_FORMAT = "spicy-regs-table-joins"
 #: A path on a maintainer's machine (``~/…`` or an absolute ``/dir/…``), which means nothing to a reader of a
@@ -60,10 +62,10 @@ BASIS = (
 )
 
 #: Expected resolution. ``complete``: every key should resolve and an orphan is
-#: a defect. ``scope``: the parent holds a narrower selection than the child
+#: a defect. ``unmeasured``: native keys are declared but have no measured baseline. ``scope``: the parent holds a narrower selection than the child
 #: references. ``design``: the columns deliberately hold values the parent does
 #: not key. ``empty``: the child publishes no key yet.
-KINDS = ("complete", "scope", "design", "empty")
+KINDS = ("complete", "scope", "design", "empty", "unmeasured")
 
 #: A join reports up to this many orphans beyond those its floor admits, or
 #: this share of its keys if larger, as LAG instead of failing (see
@@ -945,6 +947,60 @@ JOINS = tuple(
 )
 
 
+# Source joins retain their measured keys, including processing observations.
+# Public joins use only native subject keys; changed keys require a new baseline.
+SOURCE_JOINS = JOINS
+_PROCESSING_TABLES = {name for name, spec in _policy_descriptors().items() if spec["receipt_only"]}
+_NATIVE_JOIN_FIELDS = {
+    ("bill_sections", "source"): "printing_id", ("bill_versions", "source"): "printing_id",
+    ("section_diffs", "from_source"): "from_printing_id", ("section_diffs", "to_source"): "to_printing_id",
+    **{(name, "text_sha256"): "body_version_id" for name in
+       ("document_citations", "budget_volumes", "house_activity_reports")},
+}
+# These tables now have one native row per logical subject. The captured source
+# snapshot still qualifies the original relationship in the corresponding receipt.
+_NATIVE_SCOPE_FIELDS = {
+    ("scorecard_member_links", "source_snapshot_id"), ("scorecard_members", "snapshot_id"),
+    ("scorecard_item_links", "source_snapshot_id"), ("scorecard_items", "snapshot_id"),
+    ("court_citation_map", "dump_date"), ("court_parentheticals", "dump_date"), ("court_opinions", "dump_date"),
+}
+_PROCESSING_JOIN_FIELDS = {
+    ("court_opinion_pdf_extractions", "native_sha1"), ("court_opinions", "sha1"),
+    ("house_communications", "record_package_id"),
+}
+
+
+def _processing_join(join):
+    if join.child in _PROCESSING_TABLES or join.parent in _PROCESSING_TABLES:
+        return True
+    if join.child == "hearing_transcripts" and join.child_columns == ("bill_id",):
+        return True
+    return any((table, column) in _PROCESSING_JOIN_FIELDS or
+               (table.startswith("fec_") and column in {"collection_id", "definition_set_id"})
+               for table, columns in ((join.child, join.child_columns), (join.parent, join.parent_columns))
+               for column in columns)
+
+
+def _native_join(join):
+    def columns(table, names):
+        return tuple(_NATIVE_JOIN_FIELDS.get((table, name), name) for name in names
+                     if (table, name) not in _NATIVE_SCOPE_FIELDS)
+    child, parent = columns(join.child, join.child_columns), columns(join.parent, join.parent_columns)
+    if (child, parent) == (join.child_columns, join.parent_columns):
+        return join
+    if not child or len(child) != len(parent):
+        raise ValueError(f"Native join loses its declared key: {join.name}")
+    return replace(join, child_columns=child, parent_columns=parent,
+                   baseline_keys=0, baseline_missing=0, kind="unmeasured", measurement=None,
+                   reason="Native subject keys replace source capture keys. The original measured relationship "
+                          "remains in processing_joins; this subject-key relationship has no measured baseline yet.")
+
+
+JOINS = tuple(_native_join(join) for join in SOURCE_JOINS if not _processing_join(join))
+RETIRED_PROCESSING_JOINS = tuple(join for join in SOURCE_JOINS
+                               if _processing_join(join) or _native_join(join) != join)
+
+
 def joins_for(table: str) -> dict[str, list[dict]]:
     """The declared joins where ``table`` is the child (``outgoing``) or the parent (``incoming``)."""
     return {
@@ -1003,6 +1059,7 @@ def joins_record() -> dict:
         },
         "kinds": list(KINDS),
         "joins": [record(join) for join in JOINS],
+        "processing_joins": [record(join) for join in RETIRED_PROCESSING_JOINS],
         "references": references(),
     }
 
@@ -1023,8 +1080,8 @@ def declaration_errors(schemas: dict[str, list[tuple[str, str]]]) -> list[str]:
             errors.append(f"{join.name}: a {join.kind} join must state its reason")
         if not 0 <= join.baseline_missing <= join.baseline_keys:
             errors.append(f"{join.name}: baseline missing count outside 0..keys")
-        if (join.kind == "empty") != (join.baseline_keys == 0) and join.kind != "design":
-            errors.append(f"{join.name}: an empty join has no baseline keys, and only an empty join may")
+        if (join.kind in {"empty", "unmeasured"}) != (join.baseline_keys == 0) and join.kind != "design":
+            errors.append(f"{join.name}: an empty or unmeasured join must have no baseline keys")
         for table, columns in ((join.child, join.child_columns), (join.parent, join.parent_columns)):
             known = {name for name, _ in schemas.get(table, [])}
             if not known:

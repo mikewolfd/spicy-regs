@@ -1,0 +1,35 @@
+{
+  "dataset": "fec_filing_links",
+  "policy_version": "fec-identity-context-receipts/1",
+  "subject_schema": "/////5ABAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAYAAAAsAQAA7AAAALAAAAB4AAAAOAAAAAQAAAD8/v//AAABBRAAAAAgAAAABAAAAAAAAAANAAAAcmVsYXRpb25fdHlwZQAAAPD+//8s////AAABBRAAAAAsAAAABAAAAAAAAAAZAAAAbmF0aXZlX3RhcmdldF9maWxlX251bWJlcgAAACz///9o////AAABBRAAAAAkAAAABAAAAAAAAAARAAAAdGFyZ2V0X2ZpbGluZ19rZXkAAABg////nP///wAAAQUQAAAAKAAAAAQAAAAAAAAAFwAAAHNvdXJjZV9maWxpbmdfcmVjb3JkX2lkAJj////U////AAABBRAAAAAcAAAABAAAAAAAAAAKAAAAZmlsaW5nX2tleQAAxP///xAAFAAIAAYABwAMAAAAEAAQAAAAAAABBRAAAAAgAAAABAAAAAAAAAAJAAAAcmVjb3JkX2lkAAAABAAEAAQAAAAAAAAA",
+  "identity_fields": [
+    "record_id"
+  ],
+  "receipt_fields": [
+    "identity_version",
+    "mapping_version",
+    "mapping_status",
+    "mapping_reason_json",
+    "collection_id",
+    "source_record_id",
+    "source_sha256",
+    "source_locator_json",
+    "source_authority",
+    "selection_evidence_sha256",
+    "source_representation_role",
+    "current_record_status",
+    "source_namespace",
+    "source_pointer",
+    "filing_link_status",
+    "target_resolution_status",
+    "replacement_mode",
+    "membership_completeness",
+    "reference_status",
+    "source_cycle",
+    "conversion_inputs",
+    "conversion_diagnostics",
+    "source_input"
+  ],
+  "receipt_only": false,
+  "nullable_identity_fields": []
+}

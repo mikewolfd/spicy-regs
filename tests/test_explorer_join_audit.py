@@ -17,7 +17,7 @@ AUDIT = json.loads((DATA / "join_audit.json").read_text())
 RECEIPT = json.loads((ROOT / "docs/evidence/explorer-joins-2026-10-03.json").read_text())
 SCORECARD_RECEIPT = json.loads((ROOT / "docs/evidence/scorecard-navigation-2026-10-03.json").read_text())
 REVIEWED_NAMES = {item["measurement"]["join"] for item in [*RECEIPT["results"], *SCORECARD_RECEIPT["joins"]]}
-REVIEWED = [join for join in table_joins.JOINS if join.name in REVIEWED_NAMES]
+REVIEWED = [join for join in table_joins.SOURCE_JOINS if join.name in REVIEWED_NAMES]
 
 
 def key(join):
@@ -45,8 +45,8 @@ def test_every_audited_connection_is_in_the_single_canonical_registry():
     for declaration in REVIEWED:
         join = table_joins.record(declaration)
         assert len(join["child_columns"]) == len(join["parent_columns"]) > 0
-        for side in ("child", "parent"):
-            assert set(join[f"{side}_columns"]) <= dict(schemas[join[side]]).keys()
+        assert declaration in table_joins.JOINS or declaration in table_joins.RETIRED_PROCESSING_JOINS
+    assert table_joins.declaration_errors(schemas) == []
 
 
 def test_audited_measurements_supply_enforced_baselines_and_cardinality():

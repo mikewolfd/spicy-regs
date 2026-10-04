@@ -12,10 +12,12 @@ import pytest
 from spicy_regs.duckdb_settings import ExportResources
 from spicy_regs.pipelines import comments_mirror as mirror
 from spicy_regs.schemas import COMMENT
-from spicy_regs.schemas.regulations import COMMENT_MIRROR_COLUMNS
 from spicy_regs.sources import iceberg
 from spicy_regs.transforms.partition_comments import assemble_comments, sort_comment_agencies, stage_comment_agencies
 from spicy_regs.transforms.write_staging import write_staging
+
+
+
 
 
 def build(con, root, resources):
@@ -70,11 +72,15 @@ def test_invalid_partition_preserves_previous_files(tmp_path, agency):
 
 @pytest.fixture
 def publication(tmp_path, monkeypatch):
-    snapshot = iceberg.CatalogSnapshot("table-uuid", 41, 0)
-    state: dict = {"snapshot": snapshot, "objects": {}, "receipt": None, "builds": 0, "uploads": [], "fail": None, "agency": "EPA", "text": "first"}
+    snapshot = iceberg.CatalogPairSnapshot("table-uuid", 41, 0, iceberg.CatalogSnapshot("receipts-uuid", 51, 0))
+    state: dict = {"snapshot": snapshot, "objects": {}, "index": {"format": "spicy-regs-publication", "version": 2, "families": {}}, "receipt": None, "builds": 0, "uploads": [], "fail": None, "agency": "EPA", "text": "first"}
     monkeypatch.setenv("R2_ACCESS_KEY_ID", "test")
     monkeypatch.setattr(mirror, "resolve_r2_base_url", lambda: "https://public.example")
     monkeypatch.setattr(mirror, "MIN_EXPECTED_ROWS", 1)
+    state['catalog_prepared'] = 0
+    def prepare_catalog(_):
+        state['catalog_prepared'] += 1
+    monkeypatch.setattr(mirror, '_prepare_catalog', prepare_catalog)
     monkeypatch.setattr(iceberg, "catalog_snapshot", lambda _: state["snapshot"])
     monkeypatch.setattr(iceberg, "rows_unchanged_since", lambda rt, pinned: iceberg.catalog_snapshot(rt) == pinned)
     monkeypatch.setattr(mirror.r2, "read_json_object", lambda _: state["receipt"])
@@ -83,15 +89,37 @@ def publication(tmp_path, monkeypatch):
     state["objects"]["comments.parquet"] = {"etag": "prior", "bytes": 99}
     monkeypatch.setattr(mirror, "validate_export", lambda *a, **kw: mirror.PublicPredecessor(state["objects"]["comments.parquet"]["etag"], frozenset({"EPA"})))
     monkeypatch.setattr(mirror.r2, "preflight_uploads", lambda *a: None)
+    monkeypatch.setattr(mirror.publication, "current_index", lambda _: state["index"])
+    monkeypatch.setattr(mirror.r2, "get_r2_client", lambda: object())
+    def publish(directory, **kwargs):
+        from spicy_regs.generations import verify_generation
+        artifact = verify_generation(directory)
+        entry = {"artifactDigest": artifact.root["artifactDigest"], "tables": artifact.root["spec"]["tables"],
+                 "etlReceipts": artifact.root["spec"]["etlReceipts"]}
+        state["index"] = {**state["index"], "families": {"comments": entry}}
+        return state["index"]
+    monkeypatch.setattr(mirror.publication, "publish_generation", publish)
 
     def export(root, rt, **kw):
         state["builds"] += 1
         root.mkdir(parents=True, exist_ok=True)
+        from spicy_regs.etl_receipts import ReceiptContext
+        from spicy_regs.transforms.regulations_receipts import write_records
+        from uuid import uuid4
+        pair = root / ".catalog-pairs" / uuid4().hex
+        generation = "snapshot-" + str(state["snapshot"].snapshot_id)
+        row = dict.fromkeys(COMMENT.schema)
+        row.update(comment_id="a", agency_code=state["agency"], text_content=state["text"])
+        witness = dict(source_id="fixture", source_uri=None, sha256="sha256:" + "a" * 64,
+                       locator=None, body_version=None)
+        subject, receipts = write_records("comments", [(row, ReceiptContext(generation, "row-a", "fixture", [witness]))], pair)
+        marker = pair / "generation.json"
+        marker.write_text(json.dumps(dict(generation_id=generation, dataset="comments", snapshot=asdict(state["snapshot"]))))
         with duckdb.connect() as con:
-            con.register("source", pa.table({"comment_id": ["a"], "agency_code": [state["agency"]], "text_content": [state["text"]],
-                                             "docket_id": pa.array([None], type=pa.string()),
-                                             "posted_date": pa.array([None], type=pa.string())}))
-            return build(con, root, ExportResources("64MB", 1))
+            con.register("source", pq.read_table(subject))
+            result = build(con, root, ExportResources("64MB", 1))
+        return {**result, "receipts": receipts, "generation": marker}
+
 
     def upload(path, remote_key=None, **kw):
         key = remote_key or path.name
@@ -235,20 +263,22 @@ def _comment(comment_id, agency, subtype, count, comment=None):
 def _footer(path) -> dict[str, tuple[str, str, str]]:
     """Each column's Arrow type, Parquet physical type and DuckDB type (DocSpec's lens), in footer order."""
     parquet = pq.ParquetFile(path)
-    leaves = [parquet.metadata.schema.column(i) for i in range(parquet.metadata.num_columns)]
+    leaves = {parquet.metadata.schema.column(i).name: parquet.metadata.schema.column(i).physical_type
+              for i in range(parquet.metadata.num_columns)}
     with duckdb.connect() as con:
-        bound = con.execute("SELECT name, duckdb_type FROM parquet_schema(?) ORDER BY column_id", [str(path)]).fetchall()[1:]
-    arrow = parquet.schema_arrow
-    assert arrow.names == [leaf.name for leaf in leaves] == [name for name, _ in bound]
-    return {field.name: (str(field.type), leaf.physical_type, kind)
-            for field, leaf, (_, kind) in zip(arrow, leaves, bound, strict=True)}
+        described = con.execute("DESCRIBE SELECT * FROM read_parquet(?)", [str(path)]).fetchall()
+    return {field.name: (str(field.type), leaves.get(field.name, "GROUP"), described[i][1])
+            for i, field in enumerate(parquet.schema_arrow)}
 
 
-@pytest.fixture(params=["current", "legacy"])
+
+@pytest.fixture(params=["populated", "null"])
 def published(request, publication, monkeypatch):
-    """Publish a pinned snapshot through the real export: EPA states both fields (a 0 among them), CMS neither,
-    DOT's last rows are gone so its fixed URL is cleared, and a write lands after the pin. A legacy snapshot
-    predates both fields."""
+    """Publish a native catalog pair through the real export.
+
+    EPA covers reported and all-null submitter values; CMS is all-null, and
+    DOT's empty compatibility partition clears its previous fixed URL.
+    """
     state, root = publication
     catalog = root / "catalog"
 
@@ -261,25 +291,21 @@ def published(request, publication, monkeypatch):
     rows = {"EPA": [_comment("EPA-1", "EPA", "Mass Mail Campaign", 15851, "I&#39;m writing<br/>&amp; asking."),
                     _comment("EPA-2", "EPA", "Public Comment", 0)],
             "CMS": [_comment("CMS-1", "CMS", None, None), _comment("CMS-2", "CMS", None, None)]}
+    if request.param == "null":
+        for agency_rows in rows.values():
+            for row in agency_rows:
+                row.update(subtype=None, duplicate_comments=None)
     for agency, agency_rows in rows.items():
         write_staging(agency, COMMENT.name, agency_rows, catalog / "staging", COMMENT.schema)
     iceberg.merge_comments(catalog / "staging", COMMENT)
-    live = iceberg._qualified(COMMENT)
-    projection = ", ".join(f'"{c}"' for c in COMMENT.schema if request.param == "current" or c not in _SUBMITTER)
-    with connect() as con:
-        # The pinned version's stand-in; the live table then moves past it.
-        con.execute(f"CREATE TABLE {iceberg._CATALOG_ALIAS}.pinned_{state['snapshot'].snapshot_id} AS "
-                    f"SELECT {projection} FROM {live}")
-        con.execute(f"INSERT INTO {live} (comment_id, agency_code, docket_id, posted_date) "
-                    "VALUES ('late', 'EPA', 'EPA-2025-1', '2025-01-16T00:00:00Z')")
     scans = []
-
-    def snapshot_query(rt, snapshot):
-        scans.append(snapshot)
-        return f"SELECT * FROM {iceberg._CATALOG_ALIAS}.pinned_{snapshot.snapshot_id}"
-
-    monkeypatch.setattr(iceberg, "_read_snapshot", lambda con, rt: state["snapshot"])
-    monkeypatch.setattr(iceberg, "_snapshot_query", snapshot_query)
+    from spicy_regs.sources import regulatory_catalog
+    original_export_pair = regulatory_catalog.export_pair
+    def capture_export(con, rt, directory, **kwargs):
+        scans.append(kwargs["snapshot"])
+        return original_export_pair(con, rt, directory, **kwargs)
+    monkeypatch.setattr(regulatory_catalog, "export_pair", capture_export)
+    monkeypatch.setattr(iceberg, "_read_pair_snapshot", lambda con, rt: state["snapshot"])
     monkeypatch.setattr(iceberg, "export_public_comments", _EXPORT)
     monkeypatch.setattr(mirror, "validate_export", lambda *a, **kw: mirror.PublicPredecessor("prior", frozenset({"EPA", "DOT"})))
     assert mirror.publish_comments_mirror(root, resources=ExportResources("64MB", 1))
@@ -298,7 +324,7 @@ def test_duplicate_comments_is_int32_in_every_published_member(published):
 def test_submitter_fields_are_typed_where_every_value_is_null(published):
     """An untyped NULL column is refused: an agency (or a snapshot) that states neither field still writes them typed."""
     shape, state, root, _ = published
-    stated = shape == "current"
+    stated = shape == "populated"
     flat = {row["comment_id"]: (row["subtype"], row["duplicate_comments"]) for row in pq.read_table(root / "comments.parquet").to_pylist()}
     assert flat == {"EPA-1": ("Mass Mail Campaign", 15851) if stated else (None, None),
                     "EPA-2": ("Public Comment", 0) if stated else (None, None),
@@ -319,7 +345,8 @@ def test_every_member_is_republished_together_from_the_pinned_snapshot(published
     agencies = {code: f"comments/agency/agency_code={code}/part-0.parquet" for code in ("CMS", "DOT", "EPA")}
     assert receipt["files"].keys() == {"comments.parquet", "comments_index.parquet", *agencies.values()}
     flat = _footer(root / "comments.parquet")
-    assert list(flat) == [*COMMENT.schema, *COMMENT_MIRROR_COLUMNS]
+    from spicy_regs.transforms.regulations_receipts import policy
+    assert list(flat) == policy("comments").subject_schema.names
     del flat["agency_code"]  # the partition key, carried by each agency file's path
     for key in agencies.values():
         assert list(_footer(root / key).items()) == list(flat.items()), key
@@ -377,10 +404,107 @@ def test_a_refused_receipt_uploads_nothing(publication, monkeypatch):
     assert state["uploads"] == [] and state["receipt"] is None
 
 
-def test_export_refuses_a_catalog_moved_from_the_pinned_snapshot(tmp_path, monkeypatch):
-    monkeypatch.setattr(iceberg, "_connect", duckdb.connect)
-    monkeypatch.setattr(iceberg, "_read_snapshot", lambda con, rt: iceberg.CatalogSnapshot("table-uuid", 42, 0))
+@pytest.mark.parametrize('changed_table', ['subjects', 'receipts'])
+@pytest.mark.parametrize('when', ['before-export', 'paired-export'])
+def test_export_refuses_a_catalog_moved_from_the_pinned_snapshot(tmp_path, monkeypatch, changed_table, when):
+    from spicy_regs.sources import regulatory_catalog
+    def connect():
+        con = duckdb.connect()
+        con.execute(f"ATTACH ':memory:' AS {iceberg._CATALOG_ALIAS}")
+        regulatory_catalog.ensure_native(con, COMMENT)
+        return con
+    monkeypatch.setattr(iceberg, "_connect", connect)
+    pinned = iceberg.CatalogPairSnapshot("table-uuid", 41, 0, iceberg.CatalogSnapshot("receipts-uuid", 51, 0))
+    moved = (replace(pinned, snapshot_id=42) if changed_table == 'subjects'
+             else replace(pinned, receipts=replace(pinned.receipts, snapshot_id=52)))
+    snapshots = iter([moved] if when == 'before-export' else [pinned, moved])
+    monkeypatch.setattr(iceberg, "_read_pair_snapshot", lambda con, rt: next(snapshots))
     monkeypatch.setattr(iceberg, "_snapshot_query", lambda *a: pytest.fail("scanned a snapshot other than the pinned one"))
-    with pytest.raises(RuntimeError, match="changed before export"):
-        iceberg.export_public_comments(tmp_path, COMMENT, snapshot=iceberg.CatalogSnapshot("table-uuid", 41, 0))
+    with pytest.raises(RuntimeError, match="changed before.*export"):
+        iceberg.export_public_comments(tmp_path, COMMENT, snapshot=pinned)
     assert not list(tmp_path.rglob("*.parquet"))
+
+
+@pytest.mark.parametrize("fault", ["missing", "tampered", "generation", "snapshot"])
+def test_receipt_fault_refuses_before_any_publication(publication, monkeypatch, fault):
+    state, root = publication
+    export = iceberg.export_public_comments
+    def broken(*args, **kwargs):
+        result = export(*args, **kwargs)
+        if fault == "missing":
+            result["receipts"].unlink()
+        elif fault == "tampered":
+            result["receipts"].write_bytes(b"invalid receipt bytes")
+        else:
+            metadata = json.loads(result["generation"].read_text())
+            if fault == "generation":
+                metadata["generation_id"] = "wrong-generation"
+            else:
+                metadata["snapshot"]["snapshot_id"] += 1
+            result["generation"].write_text(json.dumps(metadata))
+        return result
+    monkeypatch.setattr(iceberg, "export_public_comments", broken)
+    with pytest.raises((ValueError, OSError)):
+        mirror.publish_comments_mirror(root)
+    assert state["uploads"] == []
+    assert state["index"]["families"] == {}
+
+
+def test_mirror_selects_native_catalog_before_pinning_snapshot(publication, tmp_path, monkeypatch):
+    state, _ = publication
+    def snapshot(_):
+        assert state['catalog_prepared'] == 1
+        return state['snapshot']
+    monkeypatch.setattr(iceberg, 'catalog_snapshot', snapshot)
+    mirror.publish_comments_mirror(tmp_path, skip_upload=True)
+    assert state['catalog_prepared'] == 1
+
+
+def test_rejected_only_receipt_append_republishes_unchanged_subjects(publication, monkeypatch):
+    """A source attempt is retained even when it produces no changed subject row."""
+    from spicy_regs.etl_receipts import RECEIPT_SCHEMA, ReceiptContext, failure_receipt
+    from spicy_regs.transforms.regulations_receipts import policy
+
+    state, root = publication
+    assert mirror.publish_comments_mirror(root)
+    before_subject = (root / 'comments.parquet').read_bytes()
+    before_rows = state['receipt']['generation']['etlReceipts']['rows']
+    original_export = iceberg.export_public_comments
+
+    def export_with_rejection(*args, **kwargs):
+        result = original_export(*args, **kwargs)
+        generation = json.loads(result['generation'].read_text())['generation_id']
+        context = ReceiptContext(generation, 'rejected-attempt', 'fixture',
+            [{'source_id': 'comments', 'source_uri': None, 'sha256': 'sha256:' + 'b' * 64,
+              'locator': 'older source revision', 'body_version': None}])
+        failed = failure_receipt(policy('comments'), context, outcome='rejected',
+                                 raw_fields={'raw_source_record': {'comment_id': 'a', 'comment': 'older'}})
+        rows = pq.read_table(result['receipts']).to_pylist()
+        pq.write_table(pa.Table.from_pylist([*rows, failed], schema=RECEIPT_SCHEMA), result['receipts'])
+        return result
+
+    monkeypatch.setattr(iceberg, 'export_public_comments', export_with_rejection)
+    state['snapshot'] = replace(state['snapshot'], receipts=replace(state['snapshot'].receipts, snapshot_id=52))
+    assert mirror.publish_comments_mirror(root)
+    assert state['builds'] == 2
+    assert (root / 'comments.parquet').read_bytes() == before_subject
+    assert state['receipt']['source']['snapshot_id'] == 41
+    assert state['receipt']['source']['receipts']['snapshot_id'] == 52
+    assert state['receipt']['generation']['etlReceipts']['rows'] == before_rows + 1
+    assert not mirror.publish_comments_mirror(root)
+
+
+def test_receipt_only_write_during_export_refuses_before_upload(publication, monkeypatch):
+    state, root = publication
+    original_export = iceberg.export_public_comments
+
+    def changed(*args, **kwargs):
+        result = original_export(*args, **kwargs)
+        state['snapshot'] = replace(state['snapshot'], receipts=replace(state['snapshot'].receipts, snapshot_id=52))
+        return result
+
+    monkeypatch.setattr(iceberg, 'export_public_comments', changed)
+    with pytest.raises(RuntimeError, match='Catalog changed during export'):
+        mirror.publish_comments_mirror(root)
+    assert state['uploads'] == []
+    assert state['index']['families'] == {}

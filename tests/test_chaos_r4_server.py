@@ -25,6 +25,7 @@ from tests.test_chaos_r3_server import _fec_specs
 from tests.test_generation_mcp import connection_fixture, serve_documents
 from tests.test_mcp_fec_release import configure, connection
 from tests.test_mcp_query_results import call
+from tests.citation_fixtures import prepare_citation_inputs
 from tests.test_mcp_relationships import citation_connection
 from tests.test_mcp_server import _listed, _tool_data
 
@@ -91,7 +92,7 @@ def test_an_unsupported_kind_is_refused_naming_the_supported_kinds(monkeypatch, 
 
 def test_kinds_compare_case_insensitively(monkeypatch):
     with citation_connection() as con:
-        monkeypatch.setattr(server, "_get_connection", lambda: con)
+        monkeypatch.setattr(server, "_get_connection", lambda: prepare_citation_inputs(con))
         result = _tool_data(server.build_server(), "resolve_document_citations",
                             {"document_kind": "Govinfo_Package", "document_key": "CRPT-example"})
     assert result["document_kind"] == "govinfo_package"

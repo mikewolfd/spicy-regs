@@ -21,7 +21,7 @@ derivation is fail-safe: a key the mirror does not list never matches, and its
 object is read again. The mirror's re-fetch copies (``{id}(1).json`` …) are not
 derivable from ids; the first sweep reads them and keeps only strictly newer rows.
 
-Three modes, one per step of ``docs/etl-catalog-seed.md``:
+Three explicit modes:
 
 * build (default) — local Parquet in, ``manifest.parquet`` + ``manifest-seed.json``
   out. Writes nothing remote.

@@ -87,7 +87,7 @@ failed dispositions; the execution log records the dated work and receipts.
   before September 10 (8,251 new records, 26,311,037 comment rows, dependents
   and verify passing, 2 h 33 min end to end). ETL was re-enabled at 19:04 UTC on
   September 25. Document bodies and the retained text-read exceptions remain open. Follow the
-  [catch-up runbook](etl-catalog-seed.md). The local
+  [catch-up runbook](https://github.com/mikewolfd/spicy-regs/blob/7bd285a189f997501159abbf7bed8cd19be90402/docs/etl-catalog-seed.md). The local
   [publication efficiency refactor](research/comments-publication-efficiency-2026-09-25.md)
   reuses sweep membership, builds the mirror agency-first and skips verified
   unchanged snapshots. Listing now dominates a sweep; SpicyDocs 0.33.1's

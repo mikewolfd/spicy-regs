@@ -1,10 +1,4 @@
-"""The ETL's dockets and documents publish as managed families from its working copies.
-
-The ETL keeps reading and rewriting the bare objects after every sweep batch;
-the families are published once a sweep completes. These pin the two halves of
-that split: the publisher and the ETL both read the bare working copy, never
-the family, and the refresh publishes the families before any dependent reads.
-"""
+"""Scheduled base refreshes preserve selected native data and receipt evidence."""
 
 import io
 from contextlib import contextmanager
@@ -28,21 +22,17 @@ def _dockets(ids: list[str]) -> pl.DataFrame:
     return pl.DataFrame(rows, schema=DOCKETS.schema)
 
 
+def _publish_source(tmp_path, ids):
+    from spicy_regs.pipelines.regulatory_publication import finish_dataset
 
-def _working_copy(monkeypatch, frame: pl.DataFrame) -> list[str]:
-    read = []
+    root = tmp_path / "source"
+    root.mkdir(exist_ok=True)
+    path = root / "input.parquet"
+    _dockets(ids).write_parquet(path)
+    from spicy_regs.selected_generations import SelectedInputs, unique_build_directory
 
-    def working(remote_key, local_path):
-        read.append(remote_key)
-        frame.write_parquet(local_path)
-        return True
-
-    def managed(remote_key, local_path):
-        raise AssertionError(f"the family publisher must not read a managed family: {remote_key}")
-
-    monkeypatch.setattr(r2, "download_working_copy", working)
-    monkeypatch.setattr(r2, "download", managed)
-    return read
+    inputs = SelectedInputs(root, unique_build_directory(root))
+    return finish_dataset(root, "dockets", path, publish=True, inputs=inputs)
 
 
 def _published_ids(store: Store) -> list[str]:
@@ -50,45 +40,53 @@ def _published_ids(store: Store) -> list[str]:
     return pl.read_parquet(io.BytesIO(store.objects[location]))["docket_id"].to_list()
 
 
-def test_each_sweep_republishes_the_working_copy_as_the_family(tmp_path, monkeypatch, remote):
-    read = _working_copy(monkeypatch, _dockets(["EPA-1", "EPA-2"]))
-    DocketsFamily(output_dir=tmp_path / "first", skip_upload=False).run()
-    first = pub.parse_index(remote.objects[pub.INDEX_KEY])["families"]["dockets"]
-    assert list(first["tables"]) == ["dockets.parquet"]
-    assert _published_ids(remote) == ["EPA-1", "EPA-2"]
+def test_each_sweep_republishes_selected_native_rows_and_receipts(tmp_path, monkeypatch):
+    from tests.regulatory_publication_fakes import install
 
-    # The next sweep's working copy replaces the family; the publisher still reads the bare copy.
-    _working_copy(monkeypatch, _dockets(["EPA-1", "EPA-2", "EPA-3"]))
+    remote = install(monkeypatch)
+    _publish_source(tmp_path, ["EPA-1", "EPA-2"])
+    DocketsFamily(output_dir=tmp_path / "first", skip_upload=False).run()
+    first = pub.parse_index(remote.objects[pub.INDEX_V2_KEY])["families"]["dockets"]
+    assert first["etlReceipts"]["datasets"] == ["dockets"]
+    assert _published_ids(remote) == ["EPA-1", "EPA-2"]
+    _publish_source(tmp_path, ["EPA-1", "EPA-2", "EPA-3"])
     DocketsFamily(output_dir=tmp_path / "second", skip_upload=False).run()
-    second = pub.parse_index(remote.objects[pub.INDEX_KEY])["families"]["dockets"]
-    assert second["artifactDigest"] != first["artifactDigest"]
     assert _published_ids(remote) == ["EPA-1", "EPA-2", "EPA-3"]
-    assert read == ["dockets.parquet"]
 
 
 @pytest.mark.parametrize("ids", [["EPA-1", "EPA-1"], ["EPA-1", None]])
-def test_a_working_copy_with_a_repeated_or_missing_id_is_not_published(tmp_path, monkeypatch, remote, ids):
-    _working_copy(monkeypatch, _dockets(ids))
-    with pytest.raises(RuntimeError, match="lack docket_id"):
-        DocketsFamily(output_dir=tmp_path, skip_upload=False).run()
-    assert pub.INDEX_KEY not in remote.objects
+def test_a_repeated_or_missing_native_id_is_not_published(tmp_path, monkeypatch, ids):
+    from tests.regulatory_publication_fakes import install
+
+    remote = install(monkeypatch)
+    with pytest.raises((RuntimeError, ValueError)):
+        _publish_source(tmp_path, ids)
+    assert pub.INDEX_V2_KEY not in remote.objects
 
 
-def test_a_row_group_over_the_admission_bound_is_not_published(tmp_path, monkeypatch, remote):
+def test_a_row_group_over_the_admission_bound_is_not_republished(tmp_path, monkeypatch):
+    from tests.regulatory_publication_fakes import install
     from spicy_regs.pipelines.rollups import regulatory_base
 
-    _working_copy(monkeypatch, _dockets(["EPA-1", "EPA-2"]))
+    remote = install(monkeypatch)
+    _publish_source(tmp_path, ["EPA-1", "EPA-2"])
+    before = remote.objects[pub.INDEX_V2_KEY]
     monkeypatch.setattr(regulatory_base, "MAX_ROW_GROUP_BYTES", 1)
     with pytest.raises(RuntimeError, match="exceeds the admission bound"):
-        DocketsFamily(output_dir=tmp_path, skip_upload=False).run()
-    assert pub.INDEX_KEY not in remote.objects
+        DocketsFamily(output_dir=tmp_path / "republication", skip_upload=False).run()
+    assert remote.objects[pub.INDEX_V2_KEY] == before
 
 
 @pytest.mark.parametrize("reconciled", [True, False])
 def test_the_documents_family_carries_what_regulations_gov_last_said_of_each_document(
-    tmp_path, monkeypatch, remote, reconciled
+    tmp_path, monkeypatch, reconciled
 ):
-    """The reconcile step's bare outcomes join the working copy; never reconciled, the two columns read NULL."""
+    """Reconcile observations join selected native inputs before subjects and receipts are sealed."""
+    from tests.regulatory_publication_fakes import install
+    from spicy_regs.pipelines.regulatory_publication import finish_dataset
+    from spicy_regs.selected_generations import SelectedInputs, unique_build_directory
+
+    remote = install(monkeypatch)
     from spicy_regs.pipelines.docket_reconcile import OUTCOME_SCHEMA, OUTCOMES
     from spicy_regs.pipelines.rollups.regulatory_base import DocumentsFamily
 
@@ -114,6 +112,13 @@ def test_the_documents_family_carries_what_regulations_gov_last_said_of_each_doc
             return False
         frame.write_parquet(local_path)
         return True
+
+    source = tmp_path / "documents-source"
+    source.mkdir()
+    input_file = source / "input.parquet"
+    working_copy.write_parquet(input_file)
+    inputs = SelectedInputs(source, unique_build_directory(source))
+    finish_dataset(source, "documents", input_file, publish=True, inputs=inputs)
 
     monkeypatch.setattr(r2, "download_working_copy", working)
     monkeypatch.setattr(r2, "download", lambda key, path: pytest.fail(f"read a managed family: {key}"))
@@ -157,8 +162,12 @@ def test_refresh_publishes_the_families_before_the_mirror_captures_base_versions
     workflow = yaml.safe_load((REPO_ROOT / ".github/workflows/_regulations-refresh.yml").read_text())
     jobs = workflow["jobs"]
     assert jobs["base-families"]["strategy"]["matrix"]["command"] == [
-        "run-rollup-dockets", "run-rollup-documents", "run-rollup-docket-attributes", "run-rollup-document-attributes",
-        "run-rollup-comment-attributes"]
+        "run-rollup-dockets",
+        "run-rollup-documents",
+        "run-rollup-docket-attributes",
+        "run-rollup-document-attributes",
+        "run-rollup-comment-attributes",
+    ]
     assert jobs["base-families"]["with"]["skip_upload"] == "${{ inputs.skip_upload }}"
     assert jobs["mirror"]["needs"] == "base-families"
     assert jobs["derived"]["needs"] == "mirror" and jobs["org-links"]["needs"] == "mirror"

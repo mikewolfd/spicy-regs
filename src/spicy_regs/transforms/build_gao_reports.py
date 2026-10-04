@@ -1,6 +1,6 @@
 """Transform: build ``gao_reports.parquet`` from the GAO reports RSS feed, plus GovInfo's and GAO's own listings on request.
 
-Produces an 11-column all-VARCHAR schema keyed on ``report_id`` (e.g.
+Produces a native subject table and shared receipts keyed on ``report_id`` (e.g.
 ``gao-26-107974``) — the Government Accountability Office oversight layer over
 the rulemakings this dataset tracks. ``source`` names the route that supplied
 each row: ``gao_rss`` (this feed), ``gao_repair`` (an explicit repair,
@@ -75,6 +75,7 @@ import pyarrow.parquet as pq
 from loguru import logger
 
 from spicy_regs.sources import gao_govinfo, gao_listing, gao_r_package, r2
+from spicy_regs.transforms.government_receipts import internal_prior, receipt_builder
 from spicy_regs.sources.gao_decision_pages import DecisionPageCapture
 from spicy_regs.sources.gao_reports import GaoReportsReader
 from spicy_regs.transforms.table_merge import merge_local_prior
@@ -313,6 +314,7 @@ def _mods_reads(prior_file: Path, acquirer: Any, evidence: CaptureEvidence | Non
     return read
 
 
+@receipt_builder
 def build_gao_reports(
     output_dir: Path,
     *,
@@ -342,6 +344,8 @@ def build_gao_reports(
     # 1. Pull the prior table (best effort — absence just means a fresh start).
     have_prior = prior_file.exists() or r2.download(OUTPUT, prior_file)
     if have_prior:
+        prior_file = internal_prior("gao_reports", prior_file)
+    if have_prior:
         logger.info("GAO reports: accumulating onto prior table {}", prior_file)
     else:
         logger.info("GAO reports: no prior table found — starting fresh")
@@ -363,8 +367,7 @@ def build_gao_reports(
             rows += _mods_reads(prior_file, acquirer, evidence)
     decisions: list[dict] = []
     if listing_run is not None:
-        listed, decisions = _listing_rows(prior_file if have_prior else None, rows, listing_run, evidence,
-                                          decision_pages)
+        listed, decisions = _listing_rows(prior_file if have_prior else None, rows, listing_run, evidence, decision_pages)
         rows += listed
     rows, taken_over = _over_lowest(prior_file if have_prior else None, rows)
     if taken_over:
@@ -454,6 +457,7 @@ def _page_readings(prior_file: Path) -> dict[tuple[str, str], tuple[str, str, st
     return {(number, url): tuple(values) for number, url, *values in rows}
 
 
+@receipt_builder
 def _build_decisions(output_dir: Path, decisions: list[dict], evidence: CaptureEvidence | None = None) -> Path:
     """``gao_decisions.parquet``: the prior table with this run's listed decisions over it, every outcome read again.
 
@@ -475,6 +479,8 @@ def _build_decisions(output_dir: Path, decisions: list[dict], evidence: CaptureE
     new_file = output_dir / "_gao_decisions_new.parquet"
     merged_file = output_dir / "_gao_decisions_merged.parquet"
     have_prior = prior_file.exists() or r2.download(DECISIONS_OUTPUT, prior_file)
+    if have_prior:
+        prior_file = internal_prior("gao_decisions", prior_file)
     read = _page_readings(prior_file) if have_prior else {}
     rows = [{column: row[column] for column in stated} for row in decisions]
     for row in rows:

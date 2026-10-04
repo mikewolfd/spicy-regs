@@ -38,6 +38,7 @@ from __future__ import annotations
 import json
 import re
 from datetime import date
+from collections.abc import Callable, Iterable
 from pathlib import Path
 
 import pyarrow as pa
@@ -183,7 +184,9 @@ def editions_to_fetch(held: set[str], latest: str = DEFAULT_EDITION) -> tuple[st
     return (latest, *missing[:BACKFILL_EDITIONS_PER_RUN])
 
 
-def build_unified_agenda(output_dir: Path, *, editions: tuple[str, ...] | None = None) -> Path:
+def build_unified_agenda(output_dir: Path, *, editions: tuple[str, ...] | None = None,
+                        records: Callable[[str], Iterable[dict]] | None = None,
+                        download_prior: Callable[[str, Path], bool] | None = None) -> Path:
     """Build ``unified_agenda.parquet`` (incremental merge with the prior table and edition backfill)."""
     import duckdb
 
@@ -191,7 +194,7 @@ def build_unified_agenda(output_dir: Path, *, editions: tuple[str, ...] | None =
     prior_file = output_dir / "_ua_prior.parquet"
 
     # 1. Pull the prior table (best effort — absence just means no merge base).
-    have_prior = prior_file.exists() or r2.download(OUTPUT, prior_file)
+    have_prior = prior_file.exists() or (download_prior or r2.download)(OUTPUT, prior_file)
     if have_prior:
         logger.info("Unified Agenda: merging against prior table {}", prior_file)
     else:
@@ -207,7 +210,8 @@ def build_unified_agenda(output_dir: Path, *, editions: tuple[str, ...] | None =
         editions = editions_to_fetch(held, newest_edition())
     logger.info("Unified Agenda: fetching editions {}", ", ".join(editions))
     # One reader per edition: each acquisition carries its own request budget.
-    rows = [_shape(doc) for edition in editions for doc in UnifiedAgendaReader(editions=(edition,)).iter_records()]
+    read = records or (lambda edition: UnifiedAgendaReader(editions=(edition,)).iter_records())
+    rows = [_shape(doc) for edition in editions for doc in read(edition)]
     new_file = output_dir / "_ua_new.parquet"
     table = pa.Table.from_pylist(rows, schema=_SCHEMA) if rows else _SCHEMA.empty_table()
     pq.write_table(table, new_file, compression="zstd")

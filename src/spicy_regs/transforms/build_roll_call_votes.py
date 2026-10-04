@@ -627,6 +627,7 @@ def build_roll_call_votes(
     evidence: CaptureEvidence | None = None,
     open_congresses: Collection[int] | None = None,
     chambers: Sequence[str] | None = None,
+    receipt_build=None,
 ) -> tuple[Path, Path]:
     """Build the chambers in scope; optional bill links never restrict native selection.
 
@@ -641,6 +642,10 @@ def build_roll_call_votes(
     whose House sessions all precede the Clerk's archive refuses while the
     House is in scope.
     """
+    if receipt_build is not None:
+        return receipt_build.run(build_roll_call_votes, output_dir, **{
+            key: value for key, value in locals().items() if key not in {"output_dir", "receipt_build"}
+        })
     acquirer = acquirer or VoteAcquirer(
         budget=VOTE_BUDGET,
         transport=None if evidence is None else evidence.transport(stage="vote-source", max_bytes=VOTE_BUDGET.max_bytes),

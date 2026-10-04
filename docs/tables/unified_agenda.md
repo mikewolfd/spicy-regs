@@ -6,6 +6,8 @@
 
 One row per Regulation Identifier Number (RIN) per agenda edition, ingested from the OIRA/OMB Unified Agenda published at reginfo.gov by `build_unified_agenda`. A Tier-1 rulemaking-lifecycle source: the upstream, forward-looking catalog of rulemakings agencies *plan* to pursue, keyed by the same `rin` that appears in `federal_register` (`regulation_id_numbers_json`). Primary / dedup key is (`rin`, `agenda_edition`). All columns are stored as VARCHAR; array-valued fields are JSON strings.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='unified_agenda'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** True range: every semiannual Unified Agenda edition reginfo.gov serves as readable XML, from 199510 through the latest; agenda_edition names each. No edition is held for 2004 or for spring 2012. A rule has one row per edition that lists it, so count distinct rin, not rows, for a number of rules. *(measured 2026-09-28)*
 
 - **Parquet file:** `unified_agenda.parquet`
@@ -26,9 +28,8 @@ One row per Regulation Identifier Number (RIN) per agenda edition, ingested from
 | `agenda_edition` | `VARCHAR` | Semiannual agenda edition the row was published in, as reginfo.gov's `pubId` `YYYYMM`: MM 04 and 10 are its spring and fall editions, except that reginfo.gov titles 202510 the "2026" agenda (202504 is Spring 2025). The month is not a release date: an edition appears months later (USDA printed 202510 in the Register on 2026-08-14), and no release date is held. Half of the primary/dedup key. Every readable edition since 199510 is held, so filter to one edition, or count distinct `rin`, before counting rules. |
 | `major` | `VARCHAR` | Whether the action is a major rule, as reported by the agenda (e.g. `Yes`/`No`). Often null. |
 | `publication_id` | `VARCHAR` | reginfo.gov publication identifier for this agenda entry, when present. |
-| `timetable_json` | `VARCHAR` | JSON array of planned and actual milestone actions with literal source dates and Federal Register citations. A date with day 00 has month precision; labels such as To Be Determined remain unchanged. |
-| `cfr_references_json` | `VARCHAR` | JSON array of CFR citations affected by the rulemaking. The join key to the CFR. |
-| `legal_authority_json` | `VARCHAR` | JSON array of legal-authority citations the agency cites for the rulemaking. |
+| `timetable` | `STRUCT("action" VARCHAR, date VARCHAR, fr_citation VARCHAR)[]` | Native list of planned and actual milestone actions with literal source dates and Federal Register citations. A date with day 00 has month precision; labels such as To Be Determined remain unchanged. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `cfr_references` | `VARCHAR[]` | Native list of CFR citations affected by the rulemaking. The join key to the CFR. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `legal_authority` | `VARCHAR[]` | Native list of legal-authority citations the agency cites for the rulemaking. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `first_action_date` | `VARCHAR` | Earliest distinct calendar date derived from the timetable, or NULL when none is derivable. Source month-only dates (MM/00/YYYY) use day 01 here; timetable_json retains their original precision. |
 | `next_action_date` | `VARCHAR` | Second distinct calendar date derived from the timetable, or NULL when fewer than two dates are derivable. May be historical; it is not selected relative to today. Source month-only dates use day 01 here; timetable_json retains the literal dates. |
-| `url` | `VARCHAR` | URL of the entry's detail page on reginfo.gov. |

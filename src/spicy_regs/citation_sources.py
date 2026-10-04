@@ -17,7 +17,7 @@ class TextSource:
 TEXT_SOURCES = {
     "court_opinion_derived_pdf": TextSource(
         "court_opinion_pdf_extractions",
-        ("opinion_id", "source_sha256"),
+        ("opinion_body_id",),
         "text_content",
         "pdf",
         "derived_pdf",
@@ -32,7 +32,7 @@ TEXT_SOURCES = {
     "communication_record_entry": TextSource(
         "house_communications", ("congress", "communication_type", "number"), "record_entry_text", "txt"
     ),
-    "bill_section": TextSource("bill_sections", ("bill_id", "version_code", "source", "seq"), "body", "txt"),
+    "bill_section": TextSource("bill_sections", ("bill_id", "version_code", "printing_id", "seq"), "body", "txt"),
     "report_section": TextSource("report_sections", ("package_id", "part_id", "seq"), "body", "txt"),
     "lobbying_activity": TextSource("lobbying_activities", ("filing_uuid", "activity_index"), "description", "txt"),
     "comment_inline": TextSource("comments", ("comment_id",), "comment", "htm"),
@@ -57,12 +57,15 @@ def key_values(kind: str, key: str) -> tuple[str, ...]:
     return values
 
 
-def source_digests(cursor, kind: str, key: str) -> list[tuple[str | None]]:
-    """Hash the actual current field under its full identity; keep duplicate rows ambiguous."""
+def source_digests(cursor, kind: str, key: str, *, table: str | None = None,
+                   digest_field: str | None = None) -> list[tuple[str | None]]:
+    """Read checked digests or hash the held field; keep duplicate source keys ambiguous."""
     spec = TEXT_SOURCES[kind]
     values = key_values(kind, key)
+    relation = table or spec.table
     predicate = " AND ".join(f'CAST("{column}" AS VARCHAR) = ?' for column in spec.keys)
+    digest = f'"{digest_field}"' if digest_field is not None else f'\'sha256:\' || sha256("{spec.field}")'
     return cursor.execute(
-        f'SELECT \'sha256:\' || sha256("{spec.field}") FROM "{spec.table}" WHERE {predicate} LIMIT 2',
+        f'SELECT {digest} FROM "{relation}" WHERE {predicate} LIMIT 2',
         list(values),
     ).fetchall()

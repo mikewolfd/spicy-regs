@@ -349,6 +349,8 @@ def build_cfr_sections(
     since_year: int | None = None,
     replace_all: bool = False,
     acquirer: CfrAcquirer | None = None,
+    granules: Iterable[dict] | None = None,
+    download_prior=None,
 ) -> Path:
     """Build ``cfr_sections.parquet`` (incremental merge with the prior table).
 
@@ -361,16 +363,16 @@ def build_cfr_sections(
     prior_file = output_dir / "_cfr_prior.parquet"
 
     # 1. Pull the prior table (best effort — absence just means full backfill).
-    have_prior = prior_file.exists() or r2.download(OUTPUT, prior_file)
+    have_prior = prior_file.exists() or (download_prior or r2.download)(OUTPUT, prior_file)
     if have_prior:
         logger.info("CFR: merging against prior table {}", prior_file)
     else:
         logger.info("CFR: no prior table found — output covers the selected year window")
 
     # 2. Complete the selected traversal before downloading any volume or writing output.
-    reader = CfrSectionsReader(since_year=since_year)
+    records = CfrSectionsReader(since_year=since_year).iter_records() if granules is None else granules
     packages: dict[str | None, list[dict]] = {}
-    for granule in reader.iter_records():
+    for granule in records:
         row = _shape(granule)
         packages.setdefault(row["package_id"], []).append(row)
     packages = {package_id: compound_parts(rows) for package_id, rows in packages.items()}

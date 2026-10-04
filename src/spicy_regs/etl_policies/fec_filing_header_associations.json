@@ -1,0 +1,12 @@
+{
+  "dataset": "fec_filing_header_associations",
+  "policy_version": "fec-subject-receipts/1",
+  "subject_schema": "/////zAAAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAAAAAA=",
+  "identity_fields": [],
+  "receipt_fields": [
+    "fec_conversion_inputs",
+    "fec_input_columns"
+  ],
+  "receipt_only": true,
+  "nullable_identity_fields": []
+}

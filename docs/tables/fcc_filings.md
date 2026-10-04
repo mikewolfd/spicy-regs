@@ -6,6 +6,8 @@
 
 One row per FCC ECFS filing — the FCC's comment equivalent: comments, reply comments, ex-parte notices, letters, and other submissions — ingested from the FCC ECFS public API (`/filings`) by `build_fcc_filings`. Requires an api.data.gov key (`DATA_GOV_API_KEY`). Incremental by `date_received`, deduped on `id_submission`; each window is pooled over whole walks until one is clean or the pool holds exactly the count ECFS aggregates for it. Because ECFS holds tens of millions of filings, a first run with no prior table is bounded to the trailing 30 days; deeper history is backfilled in slices via `FCC_SINCE` and/or scoped to specific proceedings via `FCC_PROCEEDINGS`. All columns are stored as VARCHAR, array fields serialized as JSON strings.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fcc_filings'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Window, not the ECFS archive: filings ECFS received on or after 2026-08-24, when this table started, extended by a daily run. Earlier filings are held only for proceedings backfilled on purpose, so a proceeding's count here is not its ECFS total. Attachment text is extracted for a few selected PDFs only. Each daily run re-reads the trailing seven days by `date_received` and nothing older, so a filing ECFS disseminates more than a week after receiving it is missed, and `proceeding_names_json` is the assignment as last read: ECFS later moves filings out of `INBOX-…` placeholders into dockets, and a held filing keeps the placeholder. The newest day is partial, ending at the last run. *(measured 2026-09-28)*
 
 - **Parquet file:** `fcc_filings.parquet`
@@ -16,23 +18,19 @@ One row per FCC ECFS filing — the FCC's comment equivalent: comments, reply co
 | Column | Type | Description |
 | --- | --- | --- |
 | `id_submission` | `VARCHAR` | ECFS submission id (e.g. `26109947027`). Primary key / dedup key. |
-| `proceeding_names_json` | `VARCHAR` | JSON array of proceeding (docket) numbers the filing was submitted to (e.g. `["17-108"]`). Join key to `fcc_proceedings.name`. |
+| `proceedings` | `STRUCT("name" VARCHAR, id_proceeding VARCHAR, bureau_code VARCHAR, bureau_name VARCHAR, created_date VARCHAR, date_closed VARCHAR, description VARCHAR, description_display VARCHAR, sunshine_start_date VARCHAR, sunshine_end_date VARCHAR, filing_status VARCHAR)[]` | Source-listed FCC proceedings with their names and identifiers; repeated occurrences remain distinct. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `submission_type` | `VARCHAR` | ECFS submission type description, e.g. `COMMENT`, `REPLY TO COMMENTS`, `NOTICE OF EXPARTE`. |
-| `express_comment` | `VARCHAR` | `1` if the filing is an express comment (text-only, entered in the web form), `0` for standard filings with uploaded documents. |
+| `express_comment` | `BOOLEAN` | `1` if the filing is an express comment (text-only, entered in the web form), `0` for standard filings with uploaded documents. |
 | `date_received` | `VARCHAR` | Timestamp ECFS records the filing as received (ISO 8601 string). Incremental cursor and sort key. |
 | `date_submission` | `VARCHAR` | Timestamp the filer submitted the filing (ISO 8601 string). |
 | `date_disseminated` | `VARCHAR` | Timestamp the filing was disseminated (made public) by ECFS (ISO 8601 string). |
 | `filing_status` | `VARCHAR` | ECFS workflow status description (e.g. `DISSEMINATED`). |
 | `viewing_status` | `VARCHAR` | ECFS viewing status description (e.g. `Unrestricted`, `Confidential`). |
 | `exparte_or_late_filed` | `VARCHAR` | `Y` if the filing is ex-parte or late-filed, else `N`. |
-| `filers_json` | `VARCHAR` | JSON array of filer names (individuals or organizations) on the filing. |
-| `authors_json` | `VARCHAR` | JSON array of author names on the filing, when distinct from the filers. Often empty. |
-| `lawfirms_json` | `VARCHAR` | JSON array of law-firm names on the filing. Often empty. |
-| `bureaus_json` | `VARCHAR` | JSON array of FCC bureau names the filing was routed to. Often empty. |
+| `filers` | `STRUCT("name" VARCHAR)[]` | Native list of filer names (individuals or organizations) on the filing. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `authors` | `STRUCT("name" VARCHAR)[]` | Native list of author names on the filing, when distinct from the filers. Often empty. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `lawfirms` | `STRUCT("name" VARCHAR)[]` | Native list of law-firm names on the filing. Often empty. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `bureaus` | `STRUCT("name" VARCHAR, code VARCHAR, edocs_bureau_code VARCHAR)[]` | Native list of FCC bureau names the filing was routed to. Often empty. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `text_data` | `VARCHAR` | The filing's inline text — for express comments this is the full comment text. Null for document-only filings. |
-| `total_page_count` | `VARCHAR` | Total page count across the filing's attached documents, as a numeric string. |
-| `documents_json` | `VARCHAR` | JSON array of attached documents as `{filename, src}` objects, where `src` is the fcc.gov download URL. |
-| `filing_url` | `VARCHAR` | Canonical fcc.gov URL for the filing (`https://www.fcc.gov/ecfs/filing/<id_submission>`). |
-| `native_fields_json` | `VARCHAR` | Selected named native ECFS fields retained as JSON, preserving absent keys, nulls, empty arrays, objects and roles. SQL null in older output means unread legacy data; rebuilding is required. Not the complete API response. |
-| `native_fields_sha256` | `VARCHAR` | SHA-256 of the exact native_fields_json string; identifies retained field bytes, not the complete API response. |
-| `pdf_extraction_results_json` | `VARCHAR` | Outcomes for selected offered attachment URLs, retaining source SHA-256, page count and extraction status. Null when no attempt is retained. These selected attempts do not establish complete filing text coverage. |
+| `total_page_count` | `BIGINT` | Total page count across the filing's attached documents, as a numeric string. |
+| `documents` | `STRUCT(filename VARCHAR, description VARCHAR)[]` | Native list of attached documents as `{filename, src}` objects, where `src` is the fcc.gov download URL. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |

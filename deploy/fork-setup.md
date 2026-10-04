@@ -76,9 +76,10 @@ uses Iceberg, and comments ingest only through the catalog.
 Set `R2_CATALOG_URI`, `R2_CATALOG_WAREHOUSE`, `R2_CATALOG_TOKEN` and optionally
 `R2_CATALOG_NAMESPACE` in the fork secrets and local environment. Copy the URI
 and warehouse from the actual catalog; do not reuse an upstream catalog token.
-The [catalog and manifest seed runbook](../docs/etl-catalog-seed.md)
-covers enabling the catalog, loading it from the published Parquet, and
-publishing the manifest the ETL needs.
+The first ETL write initializes native subject and receipt tables together.
+Use `--allow-fresh-start` for a deliberate first acquisition. Existing loose
+Parquet tables do not initialize the catalog; readers require its recorded
+initialization and validated receipts.
 
 Cache purge is optional. Set `CLOUDFLARE_ZONE_ID` and `CLOUDFLARE_API_TOKEN` only
 for the zone serving this bucket, using a token scoped to cache purge. This token

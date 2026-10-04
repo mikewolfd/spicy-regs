@@ -18,22 +18,23 @@ from spicy_regs.citation_resolution import SOURCE_TABLES
 from spicy_regs.sources import publication as pub
 from spicy_regs.sources.publication import read_pinned_root  # bound before conftest keeps roots off the network
 from tests.test_mcp_relationships import citation_connection, merged_occurrences
+from tests.citation_fixtures import prepare_citation_inputs
 from tests.test_mcp_server import _listed, _tool_data
 
 
 def _resolve(con, monkeypatch, **arguments):
-    monkeypatch.setattr(server, "_get_connection", lambda: con)
+    monkeypatch.setattr(server, "_get_connection", lambda: prepare_citation_inputs(con))
     return _tool_data(server.build_server(), "resolve_document_citations",
                       {"document_kind": "govinfo_package", "document_key": "CRPT-example", **arguments})
 
 
-def _cite(con, *rows, key="CRPT-example", digest="digest"):
+def _cite(con, *rows, key="CRPT-example", digest="sha256:1111111111111111111111111111111111111111111111111111111111111111"):
     """Add (cite_kind, target_key, span_start) occurrences to a held report."""
     con.executemany("INSERT INTO document_citations VALUES "
                     f"('govinfo_package', '{key}', '{digest}', ?, ?, 'true', ?, '003')", rows)
 
 
-def _report(con, key, digest="other", pages="9", rules="rules", rows="0"):
+def _report(con, key, digest="sha256:2222222222222222222222222222222222222222222222222222222222222222", pages="9", rules="rules", rows="0"):
     con.execute("INSERT INTO house_activity_reports VALUES (?, ?, ?, ?, ?)", [key, digest, pages, rules, rows])
 
 
@@ -109,11 +110,11 @@ def test_every_route_is_a_kind_a_writer_emits():
 def test_rows_tied_on_kind_span_and_key_page_apart_by_their_text(monkeypatch):
     """Rows of two held texts of one document share kind, span and key; the identity's digest orders them."""
     with citation_connection() as con:
-        _cite(con, ("public_law", "114-public-254", "1"), digest="digest-0")
+        _cite(con, ("public_law", "114-public-254", "1"), digest="sha256:3333333333333333333333333333333333333333333333333333333333333333")
         pages = [merged_occurrences(_resolve(con, monkeypatch, max_occurrences=1, offset=offset))
                  for offset in (0, 1, 2)]
     assert [(row["span_start"], row["text_sha256"]) for [row] in pages] == [
-        ("1", "digest"), ("1", "digest-0"), ("2", "digest")]
+        ("1", "sha256:1111111111111111111111111111111111111111111111111111111111111111"), ("1", "sha256:3333333333333333333333333333333333333333333333333333333333333333"), ("2", "sha256:1111111111111111111111111111111111111111111111111111111111111111")]
 
 
 def test_an_offset_past_the_end_is_an_empty_last_page_that_is_partial(monkeypatch):
@@ -399,7 +400,7 @@ def test_replies_state_when_the_publisher_moved_the_pointer(monkeypatch, publish
     with citation_connection() as con:
         family = {"publishedAt": published_at} if published_at else {}
         con.execute("UPDATE _spicy_publication SET snapshot = ?", [json.dumps(_index(**family))])
-        monkeypatch.setattr(server, "_get_connection", lambda: con)
+        monkeypatch.setattr(server, "_get_connection", lambda: prepare_citation_inputs(con))
         mcp = server.build_server()
         described = _tool_data(mcp, "describe_table", {"table": "laws"})["publication"]
         queried = _tool_data(mcp, "query_sql", {"sql": "SELECT count(*) AS n FROM laws"})["publication"]["laws"]

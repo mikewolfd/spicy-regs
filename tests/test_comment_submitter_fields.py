@@ -11,9 +11,10 @@ from spicy_docs.schemas import TABLE_CONTRACTS
 from spicy_docs.schemas.regulations import COMMENT as SOURCE_COMMENT
 
 from spicy_regs.schemas import COMMENT
-from spicy_regs.schemas.regulations import COMMENT_MIRROR_COLUMNS
 from spicy_regs.sources import iceberg
+from spicy_regs.transforms.regulations_receipts import policy
 from spicy_regs.transforms.write_staging import write_staging
+
 
 FIXTURES = Path(__file__).parent / "fixtures/comments_submitter_fields"
 #: comment id -> (subtype, duplicate_comments) as the retained record states them.
@@ -52,11 +53,10 @@ def test_etl_and_source_repair_extract_the_same_row(comment_id):
     assert COMMENT.extract(raw) == {**SOURCE_COMMENT.extract(raw), "pdf_extraction_results_json": None}
 
 
-def test_both_columns_are_appended_last_in_the_contract_order():
-    """Appended, so every live mirror column keeps its position and the catalog's ADD COLUMN order agrees."""
+def test_source_extract_declares_submitter_types_in_table_order():
+    """The source reader and source row schema agree before native conversion."""
     assert tuple(COMMENT.schema) == TABLE_CONTRACTS["comments"].columns
     assert tuple(COMMENT.schema)[-2:] == ("subtype", "duplicate_comments")
-    assert iceberg._COMMENT_ADDED_COLUMNS[-2:] == ("subtype", "duplicate_comments")
 
 
 def test_organization_is_classified_in_subtype_not_organization():
@@ -91,44 +91,32 @@ def test_ingested_values_reach_the_mirror_typed_with_null_and_zero_distinct(tmp_
     iceberg.merge_comments(_stage(tmp_path, [*rows, unread]), COMMENT)
 
     with catalog() as con:
-        # The catalog stores every column as VARCHAR, the count as its decimal text.
+        # The business catalog keeps the campaign count as a native integer.
         types = iceberg._column_types(con, COMMENT)
-        assert types["subtype"] == types["duplicate_comments"] == "VARCHAR"
-        stored = dict(con.execute(f"SELECT comment_id, duplicate_comments FROM {iceberg._qualified(COMMENT)}").fetchall())
-        assert stored["EPA-HQ-OW-2022-0114-1811"] == "15851" and stored["CMS-2016-0123-9999"] is None
+        assert types["subtype"] == "VARCHAR" and types["duplicate_comments"] == "INTEGER"
+        stored = dict(
+            con.execute(f"SELECT comment_id, duplicate_comments FROM {iceberg._qualified(COMMENT)}").fetchall()
+        )
+        assert stored["EPA-HQ-OW-2022-0114-1811"] == 15851 and stored["CMS-2016-0123-9999"] is None
 
-    monkeypatch.setattr(iceberg, "_read_snapshot", lambda *_: iceberg.CatalogSnapshot("local", 1, 1))
-    monkeypatch.setattr(iceberg, "_snapshot_query", lambda rt, _: f"SELECT * FROM {iceberg._qualified(rt)}")
+    monkeypatch.setattr(
+        iceberg, "_read_pair_snapshot",
+        lambda *_: iceberg.CatalogPairSnapshot("local", 1, 1, iceberg.CatalogSnapshot("receipts", 2, 1)),
+    )
     result = iceberg.export_public_comments(tmp_path / "out", COMMENT)
-    assert pl.read_parquet(result["comments"]).columns == [*TABLE_CONTRACTS["comments"].columns, *COMMENT_MIRROR_COLUMNS]
+    assert pl.read_parquet(result["comments"]).columns == policy("comments").subject_schema.names
     with duckdb.connect() as con:
-        described = dict(con.execute(f"SELECT column_name, column_type FROM (DESCRIBE '{result['comments']}')").fetchall())
+        described = dict(
+            con.execute(f"SELECT column_name, column_type FROM (DESCRIBE '{result['comments']}')").fetchall()
+        )
         assert described["duplicate_comments"] == "INTEGER" and described["subtype"] == "VARCHAR"
-        published = {row[0]: row[1:] for row in con.execute(
-            f"SELECT comment_id, subtype, duplicate_comments FROM '{result['comments']}'").fetchall()}
+        published = {
+            row[0]: row[1:]
+            for row in con.execute(
+                f"SELECT comment_id, subtype, duplicate_comments FROM '{result['comments']}'"
+            ).fetchall()
+        }
     assert published == {**STATED, "CMS-2016-0123-9999": (None, None)}
-
-
-def test_legacy_catalog_gains_both_columns_and_old_rows_read_as_unread(tmp_path, catalog, monkeypatch):
-    added = ("subtype", "duplicate_comments")
-    with catalog() as con:
-        con.execute(f"CREATE SCHEMA {iceberg._schema_ref()}")
-        legacy = [c for c in COMMENT.schema if c not in added]
-        con.execute(f"CREATE TABLE {iceberg._qualified(COMMENT)} (" + ", ".join(f'"{c}" VARCHAR' for c in legacy) + ")")
-        con.execute(f"INSERT INTO {iceberg._qualified(COMMENT)} (comment_id, agency_code, docket_id, posted_date) "
-                    "VALUES ('prior', 'EPA', 'EPA-1', '2025-01-01T00:00:00Z')")
-    # A schema-only migration leaves the data snapshot on the old schema: the export fills NULL, typed.
-    monkeypatch.setattr(iceberg, "_read_snapshot", lambda *_: iceberg.CatalogSnapshot("local", 1, 1))
-    monkeypatch.setattr(iceberg, "_snapshot_query", lambda rt, _: f"SELECT * FROM {iceberg._qualified(rt)}")
-    early = iceberg.export_public_comments(tmp_path / "early", COMMENT)
-    assert pl.read_parquet(early["comments"]).columns == [*TABLE_CONTRACTS["comments"].columns, *COMMENT_MIRROR_COLUMNS]
-    assert pl.read_parquet(early["comments"]).select(added).to_dicts() == [dict.fromkeys(added)]
-
-    with iceberg._connect_for_table(COMMENT) as con:
-        physical = iceberg._column_types(con, COMMENT)
-        # ADD COLUMN appends, in migration order: the physical tail is the contract's tail.
-        assert list(physical)[-2:] == list(added) and {c: physical[c] for c in added} == dict.fromkeys(added, "VARCHAR")
-        assert con.execute(f"SELECT subtype, duplicate_comments FROM {iceberg._qualified(COMMENT)}").fetchall() == [(None, None)]
 
 
 def test_a_malformed_count_refuses_the_etl_extract_rather_than_being_coerced():

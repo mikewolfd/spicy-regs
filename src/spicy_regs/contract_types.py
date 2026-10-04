@@ -1,10 +1,9 @@
 """SpicyDocs' contract column types as this repository writes and describes them.
 
-A contract spells a column's type with DocSpec's table-profile name (``spicy_docs.schemas.COLUMN_TYPES``); VARCHAR is
-the default. Here each name maps to the Arrow type the writers use and to DuckDB's ``DESCRIBE`` spelling, which the
-publication descriptors and the dictionary carry and DocSpec's admission compares with the footer. Timestamps are
-microsecond precision, as admission requires. A writer with its own Arrow schema (the rulemaking lifecycle tables) is
-spelled the same way.
+A source declaration spells native SQL column types. Arrow writes their values;
+DuckDB supplies the exact footer spelling, including recursive lists/structs
+and decimals. DocSpec's older row profile requires a separately qualified
+extension before admitting these new types.
 """
 
 from __future__ import annotations
@@ -30,19 +29,9 @@ DESCRIBED: dict[str, str] = {
 
 def arrow_type(name: str) -> pa.DataType:
     """The Arrow type a contract column of type ``name`` is written as."""
-    import pyarrow as pa
+    from spicy_regs.native_types import arrow_type as native_arrow_type
 
-    return {
-        "VARCHAR": pa.string(),
-        "BOOLEAN": pa.bool_(),
-        "INTEGER": pa.int32(),
-        "BIGINT": pa.int64(),
-        "DOUBLE": pa.float64(),
-        "DATE": pa.date32(),
-        "TIMESTAMP": pa.timestamp("us"),
-        "TIMESTAMPTZ": pa.timestamp("us", tz="UTC"),
-        "VARCHAR[]": pa.list_(pa.string()),
-    }[name]
+    return native_arrow_type(name)
 
 
 def arrow_schema(contract) -> pa.Schema:
@@ -54,10 +43,11 @@ def arrow_schema(contract) -> pa.Schema:
 
 def described_columns(contract) -> list[tuple[str, str]]:
     """``[(column, DuckDB type)]`` as a written member's footer describes it."""
-    return [(column, DESCRIBED[contract.column_type(column)]) for column in contract.columns]
+    return described_schema(arrow_schema(contract))
 
 
 def described_schema(schema: pa.Schema) -> list[tuple[str, str]]:
-    """``[(column, DuckDB type)]`` for a writer's own Arrow schema; a type no contract names raises KeyError."""
-    spelled = {arrow_type(name): DESCRIBED[name] for name in DESCRIBED}
-    return [(field.name, spelled[field.type]) for field in schema]
+    """``[(column, DuckDB type)]`` for a writer's complete native Arrow schema."""
+    from spicy_regs.native_types import described_schema as native_described_schema
+
+    return native_described_schema(schema)

@@ -1,0 +1,26 @@
+{
+  "dataset": "court_opinion_pdf_extractions",
+  "policy_version": "courts/1",
+  "subject_schema": "/////xABAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAQAAACoAAAAaAAAADgAAAAEAAAAeP///wAAAQUQAAAAIAAAAAQAAAAAAAAADAAAAHRleHRfY29udGVudAAAAABo////qP///wAAAQUQAAAAHAAAAAQAAAAAAAAACgAAAGNsdXN0ZXJfaWQAAJT////U////AAABBRAAAAAcAAAABAAAAAAAAAAKAAAAb3Bpbmlvbl9pZAAAwP///xAAFAAIAAYABwAMAAAAEAAQAAAAAAABBRAAAAAkAAAABAAAAAAAAAAPAAAAb3Bpbmlvbl9ib2R5X2lkAAQABAAEAAAAAAAAAA==",
+  "identity_fields": [
+    "opinion_body_id"
+  ],
+  "receipt_fields": [
+    "source_url",
+    "resolved_url",
+    "source_sha256",
+    "native_sha1",
+    "actual_sha1",
+    "sha1_matches",
+    "pdf_extraction_results_json",
+    "observed_at",
+    "extractor",
+    "extractor_version",
+    "parent_opinion_publication_json",
+    "conversion_inputs",
+    "raw_source_record",
+    "source_observation"
+  ],
+  "receipt_only": false,
+  "nullable_identity_fields": []
+}

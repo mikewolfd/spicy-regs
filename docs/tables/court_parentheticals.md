@@ -6,6 +6,8 @@
 
 Short summaries of a decision written by the courts that later cite it, the text in parentheses after a citation, such as "(holding that an agency must explain a change in position)". described_opinion_id is the opinion summarized and describing_opinion_id the one that wrote it; join either to court_opinions.opinion_id to reach its decision. score is the publisher's estimate of how descriptive the text is. Rebuilt whole from each quarterly export. All columns are VARCHAR.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='court_parentheticals'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Not a range. The complete 2026-06-30 CourtListener parentheticals export, none with empty text; some have no group. Described and describing opinion ids resolve through court_opinions of the same edition except a small residue (see data_quality). *(measured 2026-09-22)*
 
 **Data quality.** On 2026-09-22 every described opinion id and all but 618 describing ids resolved through court_opinions of the same edition. The text is the citing court's own words, extracted automatically by the publisher, so it can describe a holding, a fact or a procedural point, and score is a model estimate, not a review. Several parentheticals can summarize the same point; group_id links those the publisher grouped.
@@ -21,6 +23,5 @@ Short summaries of a decision written by the courts that later cite it, the text
 | `described_opinion_id` | `VARCHAR` | CourtListener opinion ID of the opinion the parenthetical summarizes. Joins court_opinions.opinion_id. |
 | `describing_opinion_id` | `VARCHAR` | CourtListener opinion ID of the opinion that wrote the parenthetical. Joins court_opinions.opinion_id. |
 | `text` | `VARCHAR` | The parenthetical as the describing opinion wrote it. |
-| `score` | `VARCHAR` | Publisher's 0-to-1 estimate of how descriptive the text is, as text. |
+| `score` | `DOUBLE` | Publisher's 0-to-1 estimate of how descriptive the text is, as text. |
 | `group_id` | `VARCHAR` | Publisher's group of parentheticals making the same point; NULL when ungrouped. |
-| `dump_date` | `VARCHAR` | The CourtListener bulk export the row was copied from (ISO date). |

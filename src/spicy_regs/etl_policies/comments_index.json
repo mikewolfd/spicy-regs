@@ -1,0 +1,23 @@
+{
+  "dataset": "comments_index",
+  "policy_version": "regulations-native-v1",
+  "subject_schema": "/////1ABAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAUAAADsAAAArAAAAHAAAAA8AAAABAAAADj///8AAAECEAAAABwAAAAEAAAAAAAAAAkAAAByb3dfY291bnQAAACg////AAAAAUAAAABs////AAABAhAAAAAYAAAABAAAAAAAAAAFAAAAbW9udGgAAADQ////AAAAAUAAAACc////AAABAhAAAAAgAAAABAAAAAAAAAAEAAAAeWVhcgAAAAAIAAwACAAHAAgAAAAAAAABQAAAANT///8AAAEFEAAAABwAAAAEAAAAAAAAAAkAAABkb2NrZXRfaWQAAADE////EAAUAAgABgAHAAwAAAAQABAAAAAAAAEFEAAAACAAAAAEAAAAAAAAAAsAAABhZ2VuY3lfY29kZQAEAAQABAAAAAAAAAA=",
+  "identity_fields": [
+    "agency_code",
+    "docket_id",
+    "year",
+    "month"
+  ],
+  "receipt_fields": [
+    "raw_conversion_inputs",
+    "input_metadata",
+    "raw_source_record"
+  ],
+  "receipt_only": false,
+  "nullable_identity_fields": [
+    "agency_code",
+    "docket_id",
+    "year",
+    "month"
+  ]
+}

@@ -1829,11 +1829,16 @@ def build_bill_family(
     download_prior: Callable[[str, Path], bool] = r2.download,
     download_members: Callable[[str, Path], Sequence[Path]] = download_prior_members,
     evidence: CaptureEvidence | None = None,
+    receipt_build=None,
 ) -> tuple[Path, ...]:
     """Build bill-family outputs, with a directory for each partitioned table.
 
     ``download_prior`` fetches a single-file prior; ``download_members`` fetches every partitioned member.
     """
+    if receipt_build is not None:
+        return receipt_build.run(build_bill_family, output_dir, **{
+            key: value for key, value in locals().items() if key not in {"output_dir", "receipt_build"}
+        })
     if isinstance(max_version_fetches, bool) or not isinstance(max_version_fetches, int) or max_version_fetches < 0:
         raise ValueError("max_version_fetches must be a nonnegative integer; zero disables acquisition")
     congresses = congresses_from_env()

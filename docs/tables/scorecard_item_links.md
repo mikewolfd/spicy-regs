@@ -6,6 +6,8 @@
 
 One resolution disposition per source item reference occurrence; a bill action does not imply a roll call.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='scorecard_item_links'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Derived exact identity links over pinned scorecard and congressional tables. Historical context constrains member matches; unresolved and ambiguous identities remain visible. No fuzzy matching or score conversion is applied. *(measured 2026-10-03)*
 
 - **Parquet file:** `scorecard_item_links.parquet`
@@ -19,22 +21,10 @@ One resolution disposition per source item reference occurrence; a bill action d
 | `item_id` | `VARCHAR` | Unchanged publisher scoring-item key within the edition. |
 | `reference_id` | `VARCHAR` | Derived occurrence key: item:direct or reference: followed by the source occurrence identifier. |
 | `source_reference_id` | `VARCHAR` | Literal source reference occurrence identifier; NULL for direct item fields. |
-| `congress` | `VARCHAR` | Exactly resolved Congress number; NULL when not established. |
+| `congress` | `INTEGER` | Exactly resolved Congress number; NULL when not established. |
 | `chamber` | `VARCHAR` | Exactly resolved chamber; NULL when not established. |
-| `session` | `VARCHAR` | Exactly resolved congressional session; NULL when not established. |
-| `roll_number` | `VARCHAR` | Exactly resolved roll-call number; never fabricated for sponsorship or cosponsorship. |
+| `session` | `INTEGER` | Exactly resolved congressional session; NULL when not established. |
+| `roll_number` | `INTEGER` | Exactly resolved roll-call number; never fabricated for sponsorship or cosponsorship. |
 | `vote_id` | `VARCHAR` | Exact identifier in the pinned roll_call_votes input; NULL when no roll call resolves. |
 | `bill_id` | `VARCHAR` | Exact identifier in the pinned congress_bills input; NULL when no bill resolves. |
 | `amendment_id` | `VARCHAR` | Exact identifier in the pinned amendments input; NULL when no amendment resolves. |
-| `source_snapshot_id` | `VARCHAR` | Source snapshot used for resolution; require equality when joining to refreshed source facts. |
-| `resolution_status` | `VARCHAR` | Resolution outcome, including resolved, unresolved, ambiguous or conflicting source identifiers. |
-| `resolution_rule` | `VARCHAR` | Exact matching rule that produced this disposition. |
-| `rule_version` | `VARCHAR` | Version of the deterministic resolver rules. |
-| `candidate_count` | `VARCHAR` | Number of candidates, retained as decimal text. |
-| `candidates_json` | `VARCHAR` | JSON array of candidate identifiers retained for review. |
-| `reason` | `VARCHAR` | Explanation of the resolution outcome or refusal. |
-| `source_context_json` | `VARCHAR` | Source identity and period context used by the resolver, retained as JSON. |
-| `input_pins_json` | `VARCHAR` | Immutable input family and artifact pins; sha256 binds a single file and tableDescriptorDigest binds all members of a partitioned table. |
-| `capture_id` | `VARCHAR` | Source capture identifier carried through from the publisher fact. |
-| `source_url` | `VARCHAR` | Original publisher URL for the source fact. |
-| `source_path` | `VARCHAR` | Location of the source fact or reference within the captured document. |

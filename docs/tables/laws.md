@@ -6,6 +6,8 @@
 
 One row per enacted law the Congress.gov law list route states, with the Statutes at Large citation from the law's own PLAW USLM file where captured. Keyed on the law's Congress, type and number, not on the bill; `bill_id` is the foreign key to `congress_bills`, whose `statutes_at_large_cite` the host fills from this table at that table's merge. All columns are stored as VARCHAR.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='laws'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled. Every law the Congress.gov law route lists for the scoped Congresses (the current one by default), walked whole each run; the PLAW USLM citation is added per law, newest first, under a per-run cap. A steady-state run is meant to ask only about laws whose list row moved or whose PLAW the bulk folder had not yet served. *(measured 2026-09-28)*
 
 **Data quality.** `statutes_at_large_cite` is set when `uslm_outcome` is `captured`; read every NULL through `uslm_outcome` and `uslm_reason`. `unavailable` (reason `source_unavailable`) is the publisher's own lag, a `404` from the exact PLAW locator: on 2026-09-19 the route listed 108 laws and the PLAW bulk folder held 104, the four newest (119-103, 119-104, 119-109, 119-110) absent; each is retried every run until the folder serves it.
@@ -36,24 +38,13 @@ A validated row with parsed text is read again when its listing or metadata/text
 | `latest_action_text` | `VARCHAR` | Text of that latestAction entry. |
 | `update_date` | `VARCHAR` | The publisher's updateDate on the list row; the merge prefers the larger value. |
 | `update_date_including_text` | `VARCHAR` | The publisher's updateDateIncludingText on the list row. |
-| `url` | `VARCHAR` | The publisher's own URL for the enacted measure. |
 | `statutes_at_large_cite` | `VARCHAR` | The native Statutes at Large citation, when stated. NULL with captured_partial means the acquired identity-matched USLM does not state this citation; see uslm_reason and uslm_citable_as_json. |
 | `statutes_at_large_volume` | `VARCHAR` | The volume part of that citation. |
 | `statutes_at_large_page` | `VARCHAR` | The page part of that citation. |
 | `approved_date` | `VARCHAR` | The USLM meta's approvedDate, where the PLAW was captured. |
 | `uslm_title` | `VARCHAR` | The USLM meta's dc:title, where the PLAW was captured. |
-| `uslm_processed_date` | `VARCHAR` | The USLM meta's processedDate, where the PLAW was captured. |
-| `uslm_sha256` | `VARCHAR` | Digest of the captured PLAW USLM bytes, so the citation is traceable to one file. |
-| `uslm_observed_at` | `VARCHAR` | When the read whose outcome this row states got its response: the validated file's capture, the refused body's, or the 404's; a later failed read the row does not record leaves it unchanged. NULL when no read was attempted (not_requested) or the attempt got no response. |
-| `uslm_outcome` | `VARCHAR` | captured or captured_partial retain validated native metadata; captured_refused retains a refused capture without unvalidated metadata; request_failed records an attempted read without an accepted body; unavailable records supported source absence; not_requested means no attempt. |
-| `uslm_citable_as_json` | `VARCHAR` | Every literal native USLM meta citableAs value, source order retained. |
-| `uslm_reason` | `VARCHAR` | Bounded outcome reason token; NULL on complete capture or when no read was attempted. |
-| `uslm_reader_version` | `VARCHAR` | Native mapping rule used for this attempted read; old or absent rules require rereading. |
-| `law_text_outcome` | `VARCHAR` | not_requested, parsed or refused: section reading is separate from validated USLM metadata. |
-| `law_text_reader_version` | `VARCHAR` | Section-reader rule for this attempt; NULL when no section read was attempted. |
-| `law_section_count` | `VARCHAR` | Native section occurrences emitted by a successful read, including quoted nested sections; NULL unless parsed. |
-| `law_text_reason` | `VARCHAR` | Bounded reason token for a refused section read; NULL on success or no attempt. |
+| `uslm_citable_as` | `VARCHAR[]` | Every literal native USLM meta citableAs value, source order retained. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `law_section_count` | `BIGINT` | Native section occurrences emitted by a successful read, including quoted nested sections; NULL unless parsed. |
 | `law_body_remainder` | `VARCHAR` | Main-body text outside every native section subtree, including hierarchy headings and enacting formula; block-spaced like section body. Empty string means parsed with no remainder; NULL means not parsed. Print furniture (page numbers, running heads and, from law_text_reader_version law-sections-uslm-v2, the margin notes: the approval date, the bill number, the short-title note) is excluded with an issue in law_text_issues_json. |
-| `law_text_issues_json` | `VARCHAR` | Document-level reading scope and observations about the main-body remainder; section-specific issues are on law_sections. NULL unless parsed. |
 | `law_text_url` | `VARCHAR` | Actual resolved XML acquisition URL for an attempted law-text read, distinct from the bill API url. Supplied from capture evidence, never inferred; NULL when unattempted or the caller retained no URL. A refused read does not validate the target's law identity. |
 | `statutes_at_large_last_page` | `VARCHAR` | The last Statutes at Large page the law is printed on: the last page marker the PLAW USLM states in the cited volume (`<page identifier="/us/stat/140/746">`), so a page from statutes_at_large_page to this one, in statutes_at_large_volume, is inside the law. On the 102 public laws of the 119th's PLAW file (2026-09-14) the first marker is the cited page on every law and the next law starts on the following page on 97 of 98 consecutive pairs (one page between on the other). NULL where no USLM was captured, it states no citation or no marker in its volume, and on a row read under uslm_reader_version laws-uslm-v2 or earlier. |

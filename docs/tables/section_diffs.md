@@ -6,6 +6,8 @@
 
 One row per compared pair of consecutive printings of one bill. `engine_name`, `engine_version` and `engine_revision` record which diff engine produced the row. All columns are stored as VARCHAR.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='section_diffs'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled: consecutive printings of a bill are compared only when both bodies were acquired and parsed, from the Congresses the bill family has read. *(measured 2026-09-28)*
 
 **Data quality.** A consecutive pair that cannot be diffed — because one or both sides has no parsed tree — is a counted refusal named by table, never a row. Measured on the cold-start run of the 119th (receipt `d1-measured-run-2026-09-19/`): **3,185** refusals against 128 published comparisons, which is what a 600-printing cap over 22,064 printings implies, since a pair needs both of its sides fetched in the same run. A pair runs from a printing to its neighbour in spicy-docs' `printing_order`: publisher date, then a dateless enrolled printing by its stage (`pair_rule` `consecutive_by_date_then_stage`). A pair's neighbour can be a procedural printing (a four-section Senate engrossed amendment between the calendar printing and the enrolled bill), which the summary route refuses but this table compares, so the pair reads as nearly everything removed and then everything added. In `section_diff_items`, `financial_amounts_changed` is true on every added or removed row that carries a figure, by construction; only a modified row says a figure changed in place. Floor-amendment annotations (`(increased by $X)`) are left out of `financial_*_amounts_json` though they change the text; `financial_has_amendment_annotations` marks them. Enrolled printings carry new element ids at the publisher, so `element_id` does not join into `enr`. All columns are stored as VARCHAR.
@@ -19,20 +21,14 @@ One row per compared pair of consecutive printings of one bill. `engine_name`, `
 | --- | --- | --- |
 | `bill_id` | `VARCHAR` | The bill both printings belong to. |
 | `from_version_code` | `VARCHAR` | The earlier printing's version code. |
-| `from_source` | `VARCHAR` | Which acquisition path supplied the earlier printing. |
+| `from_printing_id` | `VARCHAR` | Which acquisition path supplied the earlier printing. |
 | `to_version_code` | `VARCHAR` | The later printing's version code. |
-| `to_source` | `VARCHAR` | Which acquisition path supplied the later printing. |
+| `to_printing_id` | `VARCHAR` | Which acquisition path supplied the later printing. |
 | `from_version_date` | `VARCHAR` | The earlier printing's publisher date. |
 | `to_version_date` | `VARCHAR` | The later printing's publisher date; the merge prefers the larger value. |
-| `pair_type` | `VARCHAR` | Which comparison strategy this pair called for: xml-xml, pdf-pdf or pdf-xml. |
-| `pair_rule` | `VARCHAR` | Why these two printings were compared: neighbours by date, then by stage, never every pair. |
-| `added_count` | `VARCHAR` | Sections present only in the later printing. |
-| `removed_count` | `VARCHAR` | Sections present only in the earlier printing. |
-| `modified_count` | `VARCHAR` | Sections present in both whose body text differs. |
-| `unchanged_count` | `VARCHAR` | Sections present in both whose body text is identical. |
-| `moved_count` | `VARCHAR` | Sections the move round paired at a different path. |
-| `item_count` | `VARCHAR` | How many section_diff_items rows this diff produced. |
-| `engine_name` | `VARCHAR` | Which diff engine produced this row; the stand-in for a rule name. |
-| `engine_version` | `VARCHAR` | The engine's declared version. |
-| `engine_revision` | `VARCHAR` | The exact pinned commit the engine was installed from. |
-| `computed_at` | `VARCHAR` | When the comparison ran, from the caller's injected clock. |
+| `added_count` | `BIGINT` | Sections present only in the later printing. |
+| `removed_count` | `BIGINT` | Sections present only in the earlier printing. |
+| `modified_count` | `BIGINT` | Sections present in both whose body text differs. |
+| `unchanged_count` | `BIGINT` | Sections present in both whose body text is identical. |
+| `moved_count` | `BIGINT` | Sections the move round paired at a different path. |
+| `item_count` | `BIGINT` | How many section_diff_items rows this diff produced. |

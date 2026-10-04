@@ -6,6 +6,8 @@
 
 One row per amendment, from the Congress.gov amendment list and detail routes. Keyed on the amendment's own identity, not the bill it amends, because an amendment can amend another amendment; `amended_bill_id` and `amended_amendment_id` are foreign keys. All columns are stored as VARCHAR.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='amendments'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Window: the 119th Congress, each amendment with its detail record (the output ledger records its qualification). Scheduled runs walk an `updateDate` window from the table's watermark, at most ninety days, and fetch detail for each amendment in it. *(measured 2026-09-23)*
 
 **Data quality.** The publisher's `updateDate desc` order repeats and skips amendments across page boundaries when stamps tie, so one walk can serve the declared count while missing some amendments. The builder repeats whole walks, alternating order and page size, and settles on the first of two things: a clean walk (no amendment repeated, its distinct count the declared count), which stands alone, or the walks since the count last changed pooled to exactly the declared count. A pool larger than the count is never published, but a later clean walk can still settle; a query unsettled after its walks refuses the run, as does a record without an `updateDate`. Sponsor, chamber, submitted date and the amended bill or amendment come from each amendment's detail record; the list route carries none of them. 89 House amendments name the Rules Committee as sponsor and have no member sponsor to record. All columns are stored as VARCHAR.
@@ -34,4 +36,3 @@ One row per amendment, from the Congress.gov amendment list and detail routes. K
 | `sponsor_party` | `VARCHAR` | The sponsor's party as the list route states it: a one-letter code (D, R, I); NULL for the House amendments the Rules Committee sponsors, which name no party. |
 | `amended_bill_id` | `VARCHAR` | Natural key of the bill this amendment amends, where it amends a bill. |
 | `amended_amendment_id` | `VARCHAR` | Natural key of the amendment this amendment amends, where it amends one. |
-| `url` | `VARCHAR` | The publisher's own URL for this amendment. |

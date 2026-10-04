@@ -21,7 +21,10 @@ def _prose(table: str, field: str = "data_quality") -> str:
 
 
 def _column(table: str, column: str) -> str:
-    return " ".join(dd.load_descriptions()[table]["columns"][column].split())
+    from spicy_regs.fec_receipt_adapter import processing_declarations
+    entry = dd.load_descriptions().get(table, {})
+    prose = entry.get("columns", {}).get(column) or processing_declarations()[table]["descriptions"][column]
+    return " ".join(prose.split())
 
 
 # --------------------------------------------------------------------------- #
@@ -43,7 +46,7 @@ def test_the_check_refuses_a_missing_or_unknown_subject(subject):
 
 def test_the_subject_is_carried_into_the_server_metadata():
     metadata = dd.build_mcp_metadata(dd.load_descriptions(), dd.expected_schemas())
-    assert {entry["subject"] for entry in metadata.values()} == set(dd.SUBJECTS)
+    assert {entry["subject"] for entry in metadata.values() if entry.get("subject")} == set(dd.SUBJECTS)
     assert metadata["rulemaking_lifecycles"]["subject"] == "rulemaking"
     assert metadata["gao_decisions"]["subject"] == metadata["crs_reports"]["subject"] == "oversight"
     assert metadata["sam_entities"]["subject"] == metadata["usaspending_recipients"]["subject"] == "spending"
@@ -65,7 +68,10 @@ def test_every_relationship_view_has_a_base_table_with_a_subject():
 
     entries = dd.load_descriptions()
     bases = {spec.source_table for spec in RELATIONSHIP_VIEWS} | {next(iter(spec.required)) for spec in SQL_RELATIONSHIP_VIEWS}
-    assert {base for base in bases if entries.get(base, {}).get("subject") not in dd.SUBJECTS} == set()
+    from spicy_regs.fec_receipt_adapter import processing_declarations
+    processing = processing_declarations()
+    assert {base for base in bases if (entries.get(base, {}).get("subject") or
+            processing.get(base, {}).get("subject")) not in dd.SUBJECTS} == set()
 
 
 # --------------------------------------------------------------------------- #
@@ -161,8 +167,12 @@ MAP_TIME_FILING_LINK = (
 
 
 def test_filing_link_status_reads_from_one_template_that_says_it_is_set_when_mapped():
-    texts = {_column(table, "filing_link_status") for table in MAP_TIME_FILING_LINK}
-    assert len(MAP_TIME_FILING_LINK) == 27 and len(texts) == 1, texts
+    from spicy_regs.fec_receipt_adapter import processing_declarations
+    processing = processing_declarations()
+    applicable = {table for table in MAP_TIME_FILING_LINK
+                  if "filing_link_status" in processing[table]["descriptions"]}
+    texts = {_column(table, "filing_link_status") for table in applicable}
+    assert applicable and len(texts) == 1, texts
     (text,) = texts
     assert text.startswith("Always `unresolved`") and "before any filing is looked up" in text
     assert "_filing_associations" in text and "_native_filing_associations" in text

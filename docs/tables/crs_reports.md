@@ -6,6 +6,8 @@
 
 One row per Congressional Research Service (CRS) report, ingested from the Congress.gov v3 REST API (`/crsreport` list endpoint) by `build_crs_reports`. The nonpartisan policy-analysis layer over the same subjects agencies regulate — complementary to `congress_bills` (the legislative record) and `federal_register` (the rule-publication record). Scope is deliberately list-level only (no per-report detail fetches), so every column comes from the list payload. Incremental by `update_date`, deduped on `report_id`; each query is pooled over whole walks, varying the page size, until one walk is clean or the pool holds exactly the declared count, because the list shifts while it is read. All columns are stored as VARCHAR.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='crs_reports'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** True range: reports whose current version is dated from 1993-10-22 on (`published_date` is the current version's date, not first issue). *(measured 2026-09-23)*
 
 - **Parquet file:** `crs_reports.parquet`
@@ -19,7 +21,6 @@ One row per Congressional Research Service (CRS) report, ingested from the Congr
 | `title` | `VARCHAR` | Report title as returned by the list endpoint. |
 | `report_type` | `VARCHAR` | CRS product category from `contentType` (e.g. `Reports`, `Posts`). |
 | `status` | `VARCHAR` | Congress.gov's own status, `Active` or `Archived`, as stated; the list route does not define it, and an `Archived` report can carry a recent `published_date`. |
-| `published_date` | `VARCHAR` | The publisher's `publishDate` for the report's current version, as the list route states it (ISO 8601 string): the latest update's date, not first issue (R44997, first issued in 2017, carries 2026-04-29 at version 16). The list route gives no first-issue date. |
-| `update_date` | `VARCHAR` | Date the Congress.gov record was last updated (ISO 8601 string). Incremental window key. |
-| `version` | `VARCHAR` | Version number of the report as returned by the list endpoint. |
-| `url` | `VARCHAR` | Congress.gov API URL for the report's detail resource. |
+| `published_date` | `TIMESTAMP WITH TIME ZONE` | The publisher's `publishDate` for the report's current version, as the list route states it (ISO 8601 string): the latest update's date, not first issue (R44997, first issued in 2017, carries 2026-04-29 at version 16). The list route gives no first-issue date. |
+| `update_date` | `TIMESTAMP WITH TIME ZONE` | Date the Congress.gov record was last updated (ISO 8601 string). Incremental window key. |
+| `version` | `BIGINT` | Version number of the report as returned by the list endpoint. |

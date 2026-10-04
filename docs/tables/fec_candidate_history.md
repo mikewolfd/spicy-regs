@@ -6,6 +6,8 @@
 
 One row per FEC candidate per two-year cycle, as that cycle's bulk candidate master states it: name, party, election year, office, status and principal committee. Read by the `fec-candidate-history` rollup through SpicyDocs' candidate-master reader, which verifies each file by digest and checks the publisher's header. Codes stay literal. All columns are stored as VARCHAR.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_candidate_history'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** True range. Every cycle from 1980 through the current one: each run reads every cycle's bulk candidate master whole and publishes every row. The current cycle's file is republished daily, so its rows change. *(measured 2026-09-30)*
 
 - **Parquet file:** `fec_candidate_history.parquet`
@@ -16,10 +18,10 @@ One row per FEC candidate per two-year cycle, as that cycle's bulk candidate mas
 | Column | Type | Description |
 | --- | --- | --- |
 | `candidate_id` | `VARCHAR` | The FEC candidate id (`CAND_ID`). |
-| `cycle` | `VARCHAR` | The two-year cycle the file covers, as its closing even year. |
+| `cycle` | `INTEGER` | The two-year cycle the file covers, as its closing even year. |
 | `name` | `VARCHAR` | The candidate's name as that cycle's file states it (`CAND_NAME`); NULL when blank. |
 | `party` | `VARCHAR` | The party affiliation code (`CAND_PTY_AFFILIATION`), literal; NULL when blank. |
-| `election_year` | `VARCHAR` | The candidate's election year as filed (`CAND_ELECTION_YR`); NULL when blank. |
+| `election_year` | `INTEGER` | The candidate's election year as filed (`CAND_ELECTION_YR`); NULL when blank. |
 | `office_state` | `VARCHAR` | The office's state code (`CAND_OFFICE_ST`); NULL when blank. |
 | `office` | `VARCHAR` | The office sought code (`CAND_OFFICE`), literal; NULL when blank. |
 | `office_district` | `VARCHAR` | The office's district (`CAND_OFFICE_DISTRICT`); NULL when blank. |

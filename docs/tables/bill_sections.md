@@ -6,6 +6,8 @@
 
 One row per content-bearing node of one bill version, in document order. All columns are stored as VARCHAR. Published as one file per Congress; the server and the publication readers present them as one table, but a raw download holds one file for each Congress.
 
+Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='bill_sections'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
+
 **Coverage.** Sampled: the sections parsed from printings whose bodies the bill family acquired (source govinfo in bill_versions). *(measured 2026-09-28)*
 
 **Data quality.** A printing with no parsed section tree is a counted refusal, never a row with invented values. On the measured cold-start run of the 119th (receipt `d1-measured-run-2026-09-19/`) the family reported **21,466** such refusals against 6,301 published rows — one per printing whose body the 600-per-run fetch cap did not reach, plus those offered only as PDF. The refusal count is therefore a measure of how far the cap is from the corpus, not of anything wrong with the printings; it falls as successive runs spend the cap on ground earlier ones did not reach. A section is keyed on its `seq` within the printing since spicy-docs 0.35.0; the older key (`match_path`, `body_index`) repeats inside a printing. All columns are stored as VARCHAR.
@@ -19,10 +21,9 @@ One row per content-bearing node of one bill version, in document order. All col
 | --- | --- | --- |
 | `bill_id` | `VARCHAR` | The bill this section belongs to. |
 | `version_code` | `VARCHAR` | The printing this section was read from. |
-| `source` | `VARCHAR` | Which acquisition path supplied the printing; part of the parent version's key. |
-| `match_path` | `VARCHAR` | The normalized, division-free cross-version key, unit-separator joined; it can repeat. |
-| `match_path_json` | `VARCHAR` | The same path as a JSON array, so a consumer need not split on a separator. |
-| `display_path_json` | `VARCHAR` | The human-facing path the engine composes, as a JSON array. |
+| `printing_id` | `VARCHAR` | Which acquisition path supplied the printing; part of the parent version's key. |
+| `match_path` | `VARCHAR[]` | The normalized, division-free cross-version key, unit-separator joined; it can repeat. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `display_path` | `VARCHAR[]` | The human-facing path the engine composes, as a Native list. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `element_id` | `VARCHAR` | The publisher's own id attribute on the element this node came from. |
 | `section_number` | `VARCHAR` | The section's own number as displayed (Sec. 1), where it has one. |
 | `heading` | `VARCHAR` | The section's header text, empty where the node carries none. |
@@ -30,9 +31,9 @@ One row per content-bearing node of one bill version, in document order. All col
 | `display_text` | `VARCHAR` | The engine's display rendering of the body, kept apart from the body itself. |
 | `division_label` | `VARCHAR` | The division this section sits under, as the engine composes the label. |
 | `division_key` | `VARCHAR` | The normalized division key, which is what a cross-version match ignores. |
-| `body_index` | `VARCHAR` | Which body element this node came from; a reported bill carries two. |
-| `seq` | `VARCHAR` | Position in document order; the section's key within its printing, which the match path cannot be. |
-| `body_chars` | `VARCHAR` | Character length of body. |
-| `body_sha256` | `VARCHAR` | Digest of body's UTF-8 bytes, so an unchanged section is recognisable without a join. |
+| `body_index` | `BIGINT` | Which body element this node came from; a reported bill carries two. |
+| `seq` | `BIGINT` | Position in document order; the section's key within its printing, which the match path cannot be. |
+| `body_chars` | `BIGINT` | Character length of body. |
 | `version_date` | `VARCHAR` | The parent printing's date, carried so this table versions with its parent. |
-| `congress` | `VARCHAR` | The Congress of the bill, the prefix of bill_id (119 for 119-hr-1), so a host can store the table one file per Congress. |
+| `congress` | `BIGINT` | The Congress of the bill, the prefix of bill_id (119 for 119-hr-1), so a host can store the table one file per Congress. |
+| `body_version_id` | `VARCHAR` | Stable identity of the substantive captured document body, independent of extraction processing. |

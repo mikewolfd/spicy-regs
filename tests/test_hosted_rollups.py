@@ -33,7 +33,6 @@ from spicy_regs.pipelines.rollups.members import MembersRollup
 from spicy_regs.pipelines.rollups.print_citations import PrintCitationsRollup
 from spicy_regs.pipelines.rollups.press_releases import PressReleasesRollup
 from spicy_regs.pipelines.rollups.roll_call_votes import RollCallVotesRollup
-from spicy_regs.pipelines.rollups.gao_reports import GaoReportsRollup
 from spicy_regs.pipelines.rollups.senate_expenditures import SenateExpendituresRollup
 from spicy_regs.pipelines.rollups.scorecards import ScorecardsRollup
 from spicy_regs.pipelines.rollups.scorecard_analysis import ScorecardAnalysisRollup
@@ -44,6 +43,7 @@ from spicy_regs.pipelines.rollups.fec_candidate_history import FecCandidateHisto
 from spicy_regs.pipelines.rollups.fec_committee_history import FecCommitteeHistoryRollup
 from spicy_regs.pipelines.rollups.federal_register import FederalRegisterRollup
 from spicy_regs.pipelines.rollups.gao_recommendations import GaoRecommendationsRollup
+from spicy_regs.pipelines.rollups.gao_reports import GaoReportsRollup
 from spicy_regs.pipelines.rollups.laws import LawsRollup
 from spicy_regs.pipelines.rollups.native_legal_references import NativeLegalReferencesRollup
 from spicy_regs.transforms.build_bill_family import (
@@ -109,10 +109,9 @@ HOSTED_ROLLUPS = (
     FecCommitteeHistoryRollup,
     # SpicyDocs 0.53.0's gao_recommendations contract, accumulated daily.
     GaoRecommendationsRollup,
+    GaoReportsRollup,
     # The fec-publish branch's fec_candidate_history contract (decision 53's shape).
     FecCandidateHistoryRollup,
-    # SpicyDocs 0.54.0's gao_decisions contract (DRY X1), written beside this repository's own gao_reports.
-    GaoReportsRollup,
 )
 
 #: Rollups that host contracts but run on demand over an explicit retained-input manifest, so they have no schedule
@@ -218,12 +217,11 @@ def test_a_soft_input_is_an_ingest_output_its_writer_produces_first(rollup, soft
     )
 
 
-def test_the_bill_family_declares_all_sixteen_plus_its_own_four():
-    assert {"bill_cosponsors.parquet", "bill_committee_activities.parquet", "cbo_feed_items.parquet"} <= set(
-        BillFamilyRollup.outputs)
-    assert len(BillFamilyRollup.outputs) == 21
+def test_the_bill_family_declares_all_classified_subject_outputs():
+    assert "bill_cosponsors.parquet" in BillFamilyRollup.outputs
+    assert set(BillFamilyRollup.outputs) == {p.dataset + ".parquet" for p in BillFamilyRollup.receipt_policies if not p.receipt_only}
     assert BillFamilyRollup.outputs[0] == "congress_bills.parquet"
-    assert set(BillFamilyRollup.outputs[-4:]) == {f"{name}.parquet" for name in BILL_OWN_TABLES}
+    assert {f"{name}.parquet" for name in BILL_OWN_TABLES if not dd.subject_policies()[name].receipt_only} <= set(BillFamilyRollup.outputs)
     # The property the freshness checker uses resolves to the first key.
     assert BillFamilyRollup(output_dir=None).output == "congress_bills.parquet"
 
@@ -240,12 +238,20 @@ def test_a_non_contract_output_is_declared_once_in_each_place_that_needs_it(tabl
     """
     from spicy_regs import mcp_server
 
-    declared = dd.expected_schemas()[table]
-    assert [column for column, _ in declared] == list(OWN_TABLES[table])
-    assert all(kind == "VARCHAR" for _, kind in declared)
-    assert table not in dd.DERIVED_SCHEMAS, "a transform's own declaration is read, never restated"
-    assert table in dd.TABLES
-    assert table in mcp_server.TABLES
+    from spicy_regs.congress_subjects import INPUT_COLUMNS
+    from spicy_regs.native_types import described_schema
+
+    from spicy_regs.legislative_documents import field_registry
+
+    source_columns = INPUT_COLUMNS.get(table)
+    if source_columns is None:
+        source_columns = [field["name"] for field in field_registry()[table]["fields"]]
+    assert list(source_columns) == list(OWN_TABLES[table])
+    policy = dd.subject_policies()[table]
+    if not policy.receipt_only:
+        assert dd.expected_schemas()[table] == described_schema(policy.subject_schema)
+    assert (table in dd.TABLES) == (not dd.subject_policies()[table].receipt_only)
+    assert (table in mcp_server.TABLES) == (not dd.subject_policies()[table].receipt_only)
     assert table not in dd.CONTRACT_TABLES, "it is this repository's own table, not a hosted contract"
 
 
@@ -262,7 +268,7 @@ def test_every_hosted_table_has_exactly_one_writer():
         for key in _declared_keys(rollup):
             written.setdefault(key.removesuffix(".parquet"), []).append(rollup.name)
 
-    assert set(written) == set(dd.CONTRACT_TABLES) - ETL_TABLES | set(OWN_TABLES) | HOSTED_OWN_TABLES, (
+    assert set(written) == ((set(dd.CONTRACT_TABLES) - ETL_TABLES | set(OWN_TABLES) | HOSTED_OWN_TABLES) & set(dd.TABLES)), (
         "every contract, plus the bill family's own two tables, must be published by exactly one rollup"
     )
     doubled = {table: names for table, names in written.items() if len(names) > 1}
