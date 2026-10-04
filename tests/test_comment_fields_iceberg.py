@@ -107,11 +107,12 @@ def rows(connect) -> dict[str, dict]:
             f'SELECT p.*, s.filename FROM {processing} p JOIN {iceberg._qualified(COMMENT)} s USING (comment_id)').pl().to_dicts()}
 
 
-def update_title(con, title):
+def change_field(con, column, value, comment_id="C-2-3"):
+    """Commit one changed field as a writer does: subject and receipt together, never a bare UPDATE of the subject."""
     from spicy_regs.sources.regulatory_catalog import processing_table
-    prior = processing_table(con, COMMENT, where="comment_id='C-2-3'")
+    prior = processing_table(con, COMMENT, where=f"comment_id='{comment_id}'")
     con.execute(f'CREATE TEMP TABLE foreign_change AS SELECT * FROM {prior}')
-    con.execute('UPDATE foreign_change SET title=?', [title])
+    con.execute(f'UPDATE foreign_change SET "{column}"=?', [value])
     iceberg.replace_rows(con, COMMENT, 'foreign_change', expected_prior=prior)
 
 
@@ -154,7 +155,7 @@ def test_a_replacement_commits_as_one_rewritten_row_and_is_verified(tmp_path, la
     from tests.test_comment_fields_write import HELD, LISTED
 
     with lake() as con:
-        con.execute(f"UPDATE {iceberg._qualified(COMMENT)} SET attachments_json = ? WHERE comment_id = 'C-0-0'", [HELD])
+        change_field(con, "attachments_json", HELD, comment_id="C-0-0")
     part = tmp_path / "parts" / "agency=EPA" / "p.parquet"
     pl.read_parquet(part).with_columns(
         pl.when(pl.col("comment_id") == "C-0-0").then(pl.lit(LISTED)).otherwise(pl.col("attachments_json"))
@@ -212,7 +213,7 @@ def test_a_foreign_commit_mid_run_stops_it_and_preparing_again_finishes(tmp_path
             commits["n"] += 1
             if commits["n"] == 1:  # another writer (an ETL batch, R2 compaction) commits after batch 1
                 with lake() as other:
-                    update_title(other, "t2")
+                    change_field(other, "title", "t2")
 
     with lake() as con, pytest.raises(RuntimeError, match="another writer"):
         cfw.write(tmp_path, con=Proxy(con, after=compaction), batch_bytes=1)
@@ -289,7 +290,7 @@ def test_a_commit_by_another_writer_during_the_batch_is_refused_at_commit(tmp_pa
         if "iceberg_load_table_response" in sql and not seen["n"]:
             seen["n"] += 1
             with lake() as other:
-                update_title(other, "etl")
+                change_field(other, "title", "etl")
 
     with lake() as con, pytest.raises(Exception, match="409|Conflict|conflict") as refused:
         cfw.write(tmp_path, con=Proxy(con, after=foreign), batch_bytes=1)
