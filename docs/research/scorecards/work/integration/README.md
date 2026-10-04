@@ -19,6 +19,9 @@ then pins the reader module, ordered capture manifest, source qualification and
 complete native table reference. Reviewed PDF readers additionally pin their
 semantic observations or named `reader_inputs`. Shared extraction observations
 use the lossless page JSON format; normal replay does not load pickle files.
+Native API readers can select a named `reader_class` without private semantic
+assets. Each still runs the source's completeness checks and exact reference
+comparison; semantic readers continue to require private observation retention.
 
 Capture manifests preserve request method, body and header pins when applicable,
 response bytes, observation time and direct or Zyte provenance. Replay requires

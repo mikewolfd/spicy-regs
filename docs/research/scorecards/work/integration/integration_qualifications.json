@@ -1,7 +1,7 @@
 {
   "schema_version": "1",
-  "observed_at": "2026-10-04T05:18:30.437541+00:00",
-  "input_plan_sha256": "af21fde9e82e0bfe81798ac52ba0ab35e1d7b117fa16525bf8c1d118f946ce0a",
+  "observed_at": "2026-10-04T06:50:00Z",
+  "input_plan_sha256": "6d930f0b4522c9bddee2bd5098affe09a01d3d1616c10850fe70f2a1c1842184",
   "readers": {
     "heritage_action": "heritage_action",
     "afl_cio": "afl_cio",
@@ -22,6 +22,13 @@
     "foreign_policy_america": "foreign_policy_america",
     "ada": "ada",
     "norml": "norml",
+    "nfib": "nfib",
+    "arts_action": "arts_action",
+    "naacp": "naacp",
+    "acec": "acec",
+    "national_parks_action": "national_parks_action",
+    "frc_action": "frc_action",
+    "ffrf_action": "ffrf_action",
     "afp": "afp",
     "ijm": "ijm",
     "lcv": "lcv",
@@ -540,6 +547,125 @@
       "receipt_sha256": "7e58843fa16ecf3707de2f7061c8d91d59092487e3f2dbfa129a31752653e075"
     },
     {
+      "publisher_id": "cpac",
+      "scorecard_id": "cpac:2023",
+      "state": "qualified",
+      "receipt": "qualifications/cpac--2023.json",
+      "receipt_sha256": "82bf08cec530dfad656c8540b6a0a287c56d64a297453e4f6c97889fc9365fd5"
+    },
+    {
+      "publisher_id": "nfib",
+      "scorecard_id": "nfib:119-current-quorum",
+      "state": "qualified",
+      "receipt": "qualifications/nfib--119-current-quorum.json",
+      "receipt_sha256": "e7e912515eb77819f4bb10acedb0f6913f9e36cdef412978cf60e23c2982282c"
+    },
+    {
+      "publisher_id": "arts_action",
+      "scorecard_id": "arts_action:2026",
+      "state": "qualified",
+      "receipt": "qualifications/arts_action--2026.json",
+      "receipt_sha256": "bef14cb226f3c35418a3d06c2be49bd9bf0a6d0f6d3a0b91185d67f25edcada3"
+    },
+    {
+      "publisher_id": "naacp",
+      "scorecard_id": "naacp:115-final-ratings-items",
+      "state": "qualified",
+      "receipt": "qualifications/naacp--115-final-ratings-items.json",
+      "receipt_sha256": "8879dc2c11446b89eb69de1dc902ece1692baafea26c72e869c6f9a28c598580"
+    },
+    {
+      "publisher_id": "acec",
+      "scorecard_id": "acec:116",
+      "state": "qualified",
+      "receipt": "qualifications/acec--116.json",
+      "receipt_sha256": "77815d2bda5788f24a87612eabb8f4d939f7e6954908b1f3b12f497f6d49c54d"
+    },
+    {
+      "publisher_id": "national_parks_action",
+      "scorecard_id": "national_parks_action:2024-pdf",
+      "state": "qualified",
+      "receipt": "qualifications/national_parks_action--2024-pdf.json",
+      "receipt_sha256": "e5fa3f1f738d8efb6b2dce5caf047c5d89c2db533be59bd0b0c1d2b197f0b0d7"
+    },
+    {
+      "publisher_id": "frc_action",
+      "scorecard_id": "frc_action:119-2-2026",
+      "state": "qualified",
+      "receipt": "qualifications/frc_action--119-2-2026.json",
+      "receipt_sha256": "0fc8675c4792f037658a9f4dd4a40ba97b9762744706e228d3f4b84a6e2d5918"
+    },
+    {
+      "publisher_id": "ffrf_action",
+      "scorecard_id": "ffrf_action:119",
+      "state": "qualified",
+      "receipt": "qualifications/ffrf_action--119.json",
+      "receipt_sha256": "2b32408c3dea9829304c49fe670939ad1ff65edb8eb1b8183396cb402a80a21a"
+    },
+    {
+      "publisher_id": "nfib",
+      "scorecard_id": "nfib:119-pre-election",
+      "state": "qualified",
+      "receipt": "qualifications/nfib--119-pre-election.json",
+      "receipt_sha256": "914d2ed17c93d5b8ce2d41a70ce482c749f5321416a3d8082c03cf11847cd6df"
+    },
+    {
+      "publisher_id": "nfib",
+      "scorecard_id": "nfib:118-final",
+      "state": "qualified",
+      "receipt": "qualifications/nfib--118-final.json",
+      "receipt_sha256": "79481e9beb9d77c2e0fa47a9bca1d0fe6faeaa70d53940bf03c06c95badd8c26"
+    },
+    {
+      "publisher_id": "national_parks_action",
+      "scorecard_id": "national_parks_action:api-catalogue%3A3260",
+      "state": "qualified",
+      "receipt": "qualifications/national_parks_action--api-catalogue%3A3260.json",
+      "receipt_sha256": "cb42d31d0db37a3cb4b5f1c52ee7a5caad5689f98af555e452285da407f749b8"
+    },
+    {
+      "publisher_id": "national_parks_action",
+      "scorecard_id": "national_parks_action:api-catalogue%3A2404",
+      "state": "qualified",
+      "receipt": "qualifications/national_parks_action--api-catalogue%3A2404.json",
+      "receipt_sha256": "935ad8ead761cd61704bd72d73515ad4b97a1e80997d56d80b3ac4fdf388249c"
+    },
+    {
+      "publisher_id": "national_parks_action",
+      "scorecard_id": "national_parks_action:api-catalogue%3A2093",
+      "state": "qualified",
+      "receipt": "qualifications/national_parks_action--api-catalogue%3A2093.json",
+      "receipt_sha256": "b9ab7fce2399ccdb0b0c6d77cbd1e2eeda959462793a94ceaf70a8c537416632"
+    },
+    {
+      "publisher_id": "national_parks_action",
+      "scorecard_id": "national_parks_action:api-catalogue%3A2090",
+      "state": "qualified",
+      "receipt": "qualifications/national_parks_action--api-catalogue%3A2090.json",
+      "receipt_sha256": "a1156d6510b83b842bb4154e837e8d775110006a2d16a2202aceb5dcb4372444"
+    },
+    {
+      "publisher_id": "frc_action",
+      "scorecard_id": "frc_action:119-1-2025",
+      "state": "qualified",
+      "receipt": "qualifications/frc_action--119-1-2025.json",
+      "receipt_sha256": "1699abafb9952946e562d34891687dc7efe7248517662b9ef4056e7e34308184"
+    },
+    {
+      "publisher_id": "frc_action",
+      "scorecard_id": "frc_action:118-2-2024",
+      "state": "qualified",
+      "receipt": "qualifications/frc_action--118-2-2024.json",
+      "receipt_sha256": "62f933a1d2463804c8d02066ce52ba5856fc9f4f9ed39c87eeec2e887b765fb8"
+    },
+    {
+      "publisher_id": "frc_action",
+      "scorecard_id": "frc_action:118-1-2023",
+      "state": "qualified",
+      "receipt": "qualifications/frc_action--118-1-2023.json",
+      "receipt_sha256": "a434733b4488d15194e91c26e01dddff9e72ad91a92729f02ef3483d641de631"
+    },
+    {
       "publisher_id": "afp",
       "scorecard_id": "afp:3933",
       "state": "published",
@@ -632,6 +758,102 @@
           "method": "POST",
           "url_template": "https://www.americanenergyalliance.org/wp-admin/admin-ajax.php",
           "purpose": "action=aea_datatable_action; paginated chamber members, ratings, items and member actions"
+        }
+      ]
+    },
+    {
+      "publisher_id": "national_parks_action",
+      "scorecard_id": "national_parks_action:api-catalogue%3A3260",
+      "state": "qualified",
+      "receipt": "qualifications/national_parks_action--api-catalogue%3A3260.json",
+      "receipt_sha256": "cb42d31d0db37a3cb4b5f1c52ee7a5caad5689f98af555e452285da407f749b8",
+      "endpoints": [
+        {
+          "method": "GET",
+          "url_template": "https://nationalparksaction.org/wp-json/rds-bt50-scorecard/v1/legislators/",
+          "purpose": "Native current directory and historical score-set fields"
+        },
+        {
+          "method": "GET",
+          "url_template": "https://nationalparksaction.org/wp-json/rds-bt50-scorecard/v1/bills/",
+          "purpose": "Native period and bill catalogue with declared bill counts"
+        },
+        {
+          "method": "GET",
+          "url_template": "https://nationalparksaction.org/wp-json/rds-bt50-scorecard/v1/styles/",
+          "purpose": "Publisher methodology and presentation settings"
+        }
+      ]
+    },
+    {
+      "publisher_id": "national_parks_action",
+      "scorecard_id": "national_parks_action:api-catalogue%3A2404",
+      "state": "qualified",
+      "receipt": "qualifications/national_parks_action--api-catalogue%3A2404.json",
+      "receipt_sha256": "935ad8ead761cd61704bd72d73515ad4b97a1e80997d56d80b3ac4fdf388249c",
+      "endpoints": [
+        {
+          "method": "GET",
+          "url_template": "https://nationalparksaction.org/wp-json/rds-bt50-scorecard/v1/legislators/",
+          "purpose": "Native current directory and historical score-set fields"
+        },
+        {
+          "method": "GET",
+          "url_template": "https://nationalparksaction.org/wp-json/rds-bt50-scorecard/v1/bills/",
+          "purpose": "Native period and bill catalogue with declared bill counts"
+        },
+        {
+          "method": "GET",
+          "url_template": "https://nationalparksaction.org/wp-json/rds-bt50-scorecard/v1/styles/",
+          "purpose": "Publisher methodology and presentation settings"
+        }
+      ]
+    },
+    {
+      "publisher_id": "national_parks_action",
+      "scorecard_id": "national_parks_action:api-catalogue%3A2093",
+      "state": "qualified",
+      "receipt": "qualifications/national_parks_action--api-catalogue%3A2093.json",
+      "receipt_sha256": "b9ab7fce2399ccdb0b0c6d77cbd1e2eeda959462793a94ceaf70a8c537416632",
+      "endpoints": [
+        {
+          "method": "GET",
+          "url_template": "https://nationalparksaction.org/wp-json/rds-bt50-scorecard/v1/legislators/",
+          "purpose": "Native current directory and historical score-set fields"
+        },
+        {
+          "method": "GET",
+          "url_template": "https://nationalparksaction.org/wp-json/rds-bt50-scorecard/v1/bills/",
+          "purpose": "Native period and bill catalogue with declared bill counts"
+        },
+        {
+          "method": "GET",
+          "url_template": "https://nationalparksaction.org/wp-json/rds-bt50-scorecard/v1/styles/",
+          "purpose": "Publisher methodology and presentation settings"
+        }
+      ]
+    },
+    {
+      "publisher_id": "national_parks_action",
+      "scorecard_id": "national_parks_action:api-catalogue%3A2090",
+      "state": "qualified",
+      "receipt": "qualifications/national_parks_action--api-catalogue%3A2090.json",
+      "receipt_sha256": "a1156d6510b83b842bb4154e837e8d775110006a2d16a2202aceb5dcb4372444",
+      "endpoints": [
+        {
+          "method": "GET",
+          "url_template": "https://nationalparksaction.org/wp-json/rds-bt50-scorecard/v1/legislators/",
+          "purpose": "Native current directory and historical score-set fields"
+        },
+        {
+          "method": "GET",
+          "url_template": "https://nationalparksaction.org/wp-json/rds-bt50-scorecard/v1/bills/",
+          "purpose": "Native period and bill catalogue with declared bill counts"
+        },
+        {
+          "method": "GET",
+          "url_template": "https://nationalparksaction.org/wp-json/rds-bt50-scorecard/v1/styles/",
+          "purpose": "Publisher methodology and presentation settings"
         }
       ]
     }

@@ -1,23 +1,22 @@
 {
   "dataset": "scorecard_integration_progress",
   "schema_version": "1",
-  "observed_at": "2026-10-04T05:18:30.437541+00:00",
+  "observed_at": "2026-10-04T06:50:00Z",
   "input_pins": {
     "adapter_inventory.json": "656a6a93f6b21733e61aae3ed54fc0a69e3dafcf900eaf44fa22cbf1f37c1b98",
     "publisher_api_inventory.json": "c776ad48df5fe970f812d16e8b7464a45a57c177d7c1cf2dde6049870104061a",
-    "integration_qualifications.json": "b7bacac062cb3f46da4fa1bdab994a77e89cbbb10ea0900ae5b834bfa1969b62"
+    "integration_qualifications.json": "fa1bb8f3d16bc5a7b9504bda6d8eb51cd5600436f9b644c922b1674b06809b8c"
   },
   "scope": "Every publisher candidate in both inventories; all available editions and renditions remain in scope",
   "states": {
-    "blocked_access": 2,
     "blocked_authority": 1,
     "identity_review": 1,
     "published_scope": 4,
-    "qualified_scope": 19,
+    "qualified_scope": 26,
     "scope_filter_required": 2,
     "unavailable_original": 1,
     "unverified_lead": 72,
-    "verified_unimplemented": 23
+    "verified_unimplemented": 18
   },
   "publishers": [
     {
@@ -47,9 +46,17 @@
       "publisher_id": "acec",
       "publisher_name": "American Council of Engineering Companies",
       "task_id": "ss-5ibd",
-      "state": "verified_unimplemented",
-      "reader": null,
-      "qualified_editions": [],
+      "state": "qualified_scope",
+      "reader": "acec",
+      "qualified_editions": [
+        {
+          "publisher_id": "acec",
+          "scorecard_id": "acec:116",
+          "state": "qualified",
+          "receipt": "qualifications/acec--116.json",
+          "receipt_sha256": "77815d2bda5788f24a87612eabb8f4d939f7e6954908b1f3b12f497f6d49c54d"
+        }
+      ],
       "verified_api_endpoints": [],
       "discovery_api_status": "html_pdf_only_observed",
       "discovery_support_status": "verified_unimplemented",
@@ -58,7 +65,7 @@
         "https://www.acec.org/wp-content/uploads/2023/03/116th_Senate_Score_Card.pdf",
         "https://www.acec.org/wp-content/uploads/2023/03/Senate_Issues.pdf"
       ],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Integrate remaining available editions and renditions"
     },
     {
       "publisher_id": "aclu",
@@ -278,9 +285,17 @@
       "publisher_id": "arts_action",
       "publisher_name": "Americans for the Arts Action Fund",
       "task_id": "ss-jqjb",
-      "state": "blocked_access",
-      "reader": null,
-      "qualified_editions": [],
+      "state": "qualified_scope",
+      "reader": "arts_action",
+      "qualified_editions": [
+        {
+          "publisher_id": "arts_action",
+          "scorecard_id": "arts_action:2026",
+          "state": "qualified",
+          "receipt": "qualifications/arts_action--2026.json",
+          "receipt_sha256": "bef14cb226f3c35418a3d06c2be49bd9bf0a6d0f6d3a0b91185d67f25edcada3"
+        }
+      ],
       "verified_api_endpoints": [],
       "discovery_api_status": "blocked",
       "discovery_support_status": "blocked_access",
@@ -288,7 +303,7 @@
         "https://www.artsactionfund.org/pages/congressional-report-card",
         "https://www.artsactionfund.org/partners"
       ],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Integrate remaining available editions and renditions"
     },
     {
       "publisher_id": "boilermakers",
@@ -775,6 +790,13 @@
           "state": "qualified",
           "receipt": "qualifications/cpac--2025.json",
           "receipt_sha256": "ccef2c4c18faf949dfd082c3bffb8a9b25ccf9cd8dc9b2a991de97e1129d8c3f"
+        },
+        {
+          "publisher_id": "cpac",
+          "scorecard_id": "cpac:2023",
+          "state": "qualified",
+          "receipt": "qualifications/cpac--2023.json",
+          "receipt_sha256": "82bf08cec530dfad656c8540b6a0a287c56d64a297453e4f6c97889fc9365fd5"
         }
       ],
       "verified_api_endpoints": [
@@ -904,9 +926,17 @@
       "publisher_id": "ffrf_action",
       "publisher_name": "FFRF Action Fund",
       "task_id": "ss-z4wf",
-      "state": "verified_unimplemented",
-      "reader": null,
-      "qualified_editions": [],
+      "state": "qualified_scope",
+      "reader": "ffrf_action",
+      "qualified_editions": [
+        {
+          "publisher_id": "ffrf_action",
+          "scorecard_id": "ffrf_action:119",
+          "state": "qualified",
+          "receipt": "qualifications/ffrf_action--119.json",
+          "receipt_sha256": "2b32408c3dea9829304c49fe670939ad1ff65edb8eb1b8183396cb402a80a21a"
+        }
+      ],
       "verified_api_endpoints": [],
       "discovery_api_status": "blocked",
       "discovery_support_status": "verified_unimplemented",
@@ -916,7 +946,7 @@
         "https://ffrfaction.org/scorecard-calculations/",
         "https://ffrfaction.org/senate-scorecard-calculations/"
       ],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Integrate remaining available editions and renditions"
     },
     {
       "publisher_id": "first_focus",
@@ -986,16 +1016,45 @@
       "publisher_id": "frc_action",
       "publisher_name": "FRC Action",
       "task_id": "ss-p1n0",
-      "state": "verified_unimplemented",
-      "reader": null,
-      "qualified_editions": [],
+      "state": "qualified_scope",
+      "reader": "frc_action",
+      "qualified_editions": [
+        {
+          "publisher_id": "frc_action",
+          "scorecard_id": "frc_action:119-2-2026",
+          "state": "qualified",
+          "receipt": "qualifications/frc_action--119-2-2026.json",
+          "receipt_sha256": "0fc8675c4792f037658a9f4dd4a40ba97b9762744706e228d3f4b84a6e2d5918"
+        },
+        {
+          "publisher_id": "frc_action",
+          "scorecard_id": "frc_action:119-1-2025",
+          "state": "qualified",
+          "receipt": "qualifications/frc_action--119-1-2025.json",
+          "receipt_sha256": "1699abafb9952946e562d34891687dc7efe7248517662b9ef4056e7e34308184"
+        },
+        {
+          "publisher_id": "frc_action",
+          "scorecard_id": "frc_action:118-2-2024",
+          "state": "qualified",
+          "receipt": "qualifications/frc_action--118-2-2024.json",
+          "receipt_sha256": "62f933a1d2463804c8d02066ce52ba5856fc9f4f9ed39c87eeec2e887b765fb8"
+        },
+        {
+          "publisher_id": "frc_action",
+          "scorecard_id": "frc_action:118-1-2023",
+          "state": "qualified",
+          "receipt": "qualifications/frc_action--118-1-2023.json",
+          "receipt_sha256": "a434733b4488d15194e91c26e01dddff9e72ad91a92729f02ef3483d641de631"
+        }
+      ],
       "verified_api_endpoints": [],
       "discovery_api_status": "html_pdf_only_observed",
       "discovery_support_status": "verified_unimplemented",
       "original_source_urls": [
         "https://www.frcaction.org/scorecard"
       ],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Integrate remaining available editions and renditions"
     },
     {
       "publisher_id": "freedomworks",
@@ -1237,9 +1296,17 @@
       "publisher_id": "naacp",
       "publisher_name": "NAACP",
       "task_id": "ss-urt0",
-      "state": "verified_unimplemented",
-      "reader": null,
-      "qualified_editions": [],
+      "state": "qualified_scope",
+      "reader": "naacp",
+      "qualified_editions": [
+        {
+          "publisher_id": "naacp",
+          "scorecard_id": "naacp:115-final-ratings-items",
+          "state": "qualified",
+          "receipt": "qualifications/naacp--115-final-ratings-items.json",
+          "receipt_sha256": "8879dc2c11446b89eb69de1dc902ece1692baafea26c72e869c6f9a28c598580"
+        }
+      ],
       "verified_api_endpoints": [],
       "discovery_api_status": "html_pdf_only_observed",
       "discovery_support_status": "verified_unimplemented",
@@ -1247,7 +1314,7 @@
         "https://naacp.org/find-resources/legislative-report-cards",
         "https://naacp.org/sites/default/files/documents/115th-Final-Report-Card.pdf"
       ],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Integrate remaining available editions and renditions"
     },
     {
       "publisher_id": "national_farmers_union",
@@ -1266,16 +1333,137 @@
       "publisher_id": "national_parks_action",
       "publisher_name": "National Parks Action Fund",
       "task_id": "ss-z276",
-      "state": "verified_unimplemented",
-      "reader": null,
-      "qualified_editions": [],
-      "verified_api_endpoints": [],
+      "state": "qualified_scope",
+      "reader": "national_parks_action",
+      "qualified_editions": [
+        {
+          "publisher_id": "national_parks_action",
+          "scorecard_id": "national_parks_action:2024-pdf",
+          "state": "qualified",
+          "receipt": "qualifications/national_parks_action--2024-pdf.json",
+          "receipt_sha256": "e5fa3f1f738d8efb6b2dce5caf047c5d89c2db533be59bd0b0c1d2b197f0b0d7"
+        },
+        {
+          "publisher_id": "national_parks_action",
+          "scorecard_id": "national_parks_action:api-catalogue%3A3260",
+          "state": "qualified",
+          "receipt": "qualifications/national_parks_action--api-catalogue%3A3260.json",
+          "receipt_sha256": "cb42d31d0db37a3cb4b5f1c52ee7a5caad5689f98af555e452285da407f749b8"
+        },
+        {
+          "publisher_id": "national_parks_action",
+          "scorecard_id": "national_parks_action:api-catalogue%3A2404",
+          "state": "qualified",
+          "receipt": "qualifications/national_parks_action--api-catalogue%3A2404.json",
+          "receipt_sha256": "935ad8ead761cd61704bd72d73515ad4b97a1e80997d56d80b3ac4fdf388249c"
+        },
+        {
+          "publisher_id": "national_parks_action",
+          "scorecard_id": "national_parks_action:api-catalogue%3A2093",
+          "state": "qualified",
+          "receipt": "qualifications/national_parks_action--api-catalogue%3A2093.json",
+          "receipt_sha256": "b9ab7fce2399ccdb0b0c6d77cbd1e2eeda959462793a94ceaf70a8c537416632"
+        },
+        {
+          "publisher_id": "national_parks_action",
+          "scorecard_id": "national_parks_action:api-catalogue%3A2090",
+          "state": "qualified",
+          "receipt": "qualifications/national_parks_action--api-catalogue%3A2090.json",
+          "receipt_sha256": "a1156d6510b83b842bb4154e837e8d775110006a2d16a2202aceb5dcb4372444"
+        }
+      ],
+      "verified_api_endpoints": [
+        {
+          "method": "GET",
+          "url_template": "https://nationalparksaction.org/wp-json/rds-bt50-scorecard/v1/legislators/",
+          "purpose": "Native current directory and historical score-set fields",
+          "qualification_receipt": "qualifications/national_parks_action--api-catalogue%3A3260.json",
+          "parser_version": "national-parks-action-native-api/1"
+        },
+        {
+          "method": "GET",
+          "url_template": "https://nationalparksaction.org/wp-json/rds-bt50-scorecard/v1/bills/",
+          "purpose": "Native period and bill catalogue with declared bill counts",
+          "qualification_receipt": "qualifications/national_parks_action--api-catalogue%3A3260.json",
+          "parser_version": "national-parks-action-native-api/1"
+        },
+        {
+          "method": "GET",
+          "url_template": "https://nationalparksaction.org/wp-json/rds-bt50-scorecard/v1/styles/",
+          "purpose": "Publisher methodology and presentation settings",
+          "qualification_receipt": "qualifications/national_parks_action--api-catalogue%3A3260.json",
+          "parser_version": "national-parks-action-native-api/1"
+        },
+        {
+          "method": "GET",
+          "url_template": "https://nationalparksaction.org/wp-json/rds-bt50-scorecard/v1/legislators/",
+          "purpose": "Native current directory and historical score-set fields",
+          "qualification_receipt": "qualifications/national_parks_action--api-catalogue%3A2404.json",
+          "parser_version": "national-parks-action-native-api/1"
+        },
+        {
+          "method": "GET",
+          "url_template": "https://nationalparksaction.org/wp-json/rds-bt50-scorecard/v1/bills/",
+          "purpose": "Native period and bill catalogue with declared bill counts",
+          "qualification_receipt": "qualifications/national_parks_action--api-catalogue%3A2404.json",
+          "parser_version": "national-parks-action-native-api/1"
+        },
+        {
+          "method": "GET",
+          "url_template": "https://nationalparksaction.org/wp-json/rds-bt50-scorecard/v1/styles/",
+          "purpose": "Publisher methodology and presentation settings",
+          "qualification_receipt": "qualifications/national_parks_action--api-catalogue%3A2404.json",
+          "parser_version": "national-parks-action-native-api/1"
+        },
+        {
+          "method": "GET",
+          "url_template": "https://nationalparksaction.org/wp-json/rds-bt50-scorecard/v1/legislators/",
+          "purpose": "Native current directory and historical score-set fields",
+          "qualification_receipt": "qualifications/national_parks_action--api-catalogue%3A2093.json",
+          "parser_version": "national-parks-action-native-api/1"
+        },
+        {
+          "method": "GET",
+          "url_template": "https://nationalparksaction.org/wp-json/rds-bt50-scorecard/v1/bills/",
+          "purpose": "Native period and bill catalogue with declared bill counts",
+          "qualification_receipt": "qualifications/national_parks_action--api-catalogue%3A2093.json",
+          "parser_version": "national-parks-action-native-api/1"
+        },
+        {
+          "method": "GET",
+          "url_template": "https://nationalparksaction.org/wp-json/rds-bt50-scorecard/v1/styles/",
+          "purpose": "Publisher methodology and presentation settings",
+          "qualification_receipt": "qualifications/national_parks_action--api-catalogue%3A2093.json",
+          "parser_version": "national-parks-action-native-api/1"
+        },
+        {
+          "method": "GET",
+          "url_template": "https://nationalparksaction.org/wp-json/rds-bt50-scorecard/v1/legislators/",
+          "purpose": "Native current directory and historical score-set fields",
+          "qualification_receipt": "qualifications/national_parks_action--api-catalogue%3A2090.json",
+          "parser_version": "national-parks-action-native-api/1"
+        },
+        {
+          "method": "GET",
+          "url_template": "https://nationalparksaction.org/wp-json/rds-bt50-scorecard/v1/bills/",
+          "purpose": "Native period and bill catalogue with declared bill counts",
+          "qualification_receipt": "qualifications/national_parks_action--api-catalogue%3A2090.json",
+          "parser_version": "national-parks-action-native-api/1"
+        },
+        {
+          "method": "GET",
+          "url_template": "https://nationalparksaction.org/wp-json/rds-bt50-scorecard/v1/styles/",
+          "purpose": "Publisher methodology and presentation settings",
+          "qualification_receipt": "qualifications/national_parks_action--api-catalogue%3A2090.json",
+          "parser_version": "national-parks-action-native-api/1"
+        }
+      ],
       "discovery_api_status": "html_pdf_only_observed",
       "discovery_support_status": "verified_unimplemented",
       "original_source_urls": [
         "https://nationalparksaction.org/scorecard/"
       ],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Integrate remaining available editions and renditions"
     },
     {
       "publisher_id": "nea",
@@ -1337,16 +1525,38 @@
       "publisher_id": "nfib",
       "publisher_name": "National Federation of Independent Business",
       "task_id": "ss-x5yz",
-      "state": "blocked_access",
-      "reader": null,
-      "qualified_editions": [],
+      "state": "qualified_scope",
+      "reader": "nfib",
+      "qualified_editions": [
+        {
+          "publisher_id": "nfib",
+          "scorecard_id": "nfib:119-current-quorum",
+          "state": "qualified",
+          "receipt": "qualifications/nfib--119-current-quorum.json",
+          "receipt_sha256": "e7e912515eb77819f4bb10acedb0f6913f9e36cdef412978cf60e23c2982282c"
+        },
+        {
+          "publisher_id": "nfib",
+          "scorecard_id": "nfib:119-pre-election",
+          "state": "qualified",
+          "receipt": "qualifications/nfib--119-pre-election.json",
+          "receipt_sha256": "914d2ed17c93d5b8ce2d41a70ce482c749f5321416a3d8082c03cf11847cd6df"
+        },
+        {
+          "publisher_id": "nfib",
+          "scorecard_id": "nfib:118-final",
+          "state": "qualified",
+          "receipt": "qualifications/nfib--118-final.json",
+          "receipt_sha256": "79481e9beb9d77c2e0fa47a9bca1d0fe6faeaa70d53940bf03c06c95badd8c26"
+        }
+      ],
       "verified_api_endpoints": [],
       "discovery_api_status": "blocked",
       "discovery_support_status": "blocked_access",
       "original_source_urls": [
         "https://www.nfib.com/how-congress-voted/"
       ],
-      "next_action": "Acquire and profile original source; implement explicit reader"
+      "next_action": "Integrate remaining available editions and renditions"
     },
     {
       "publisher_id": "niac_action",

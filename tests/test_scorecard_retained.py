@@ -24,7 +24,7 @@ def rows(value="94%"):
     }
 
 
-def batch(tmp_path, monkeypatch, *, reference_value="94%", **changes):
+def batch(tmp_path, monkeypatch, *, reference_value="94%", named_reader=None, retain_observations=None, **changes):
     (tmp_path / "reader.py").write_bytes(b"SYNTHETIC_READER = True\n")
     (tmp_path / "body").write_bytes(b"94%")
     manifest = [
@@ -47,6 +47,8 @@ def batch(tmp_path, monkeypatch, *, reference_value="94%", **changes):
         return SimpleNamespace(tables=rows(source.body.decode()))
 
     adapter = SimpleNamespace(__file__=str(tmp_path / "reader.py"), parser_version="test/1", acquire_scorecard=acquire)
+    if named_reader is not None:
+        setattr(adapter, named_reader.__name__, named_reader)
     monkeypatch.setattr(retained, "get_adapter", lambda name: adapter)
     entry = dict(
         adapter="lcv",
@@ -58,7 +60,7 @@ def batch(tmp_path, monkeypatch, *, reference_value="94%", **changes):
         reference_sha256=sha256((tmp_path / "reference.json").read_bytes()).hexdigest(),
     )
     entry.update(changes)
-    return retained.RetainedScorecardBatch(tmp_path, [entry])
+    return retained.RetainedScorecardBatch(tmp_path, [entry], retain_observations=retain_observations)
 
 
 def context(reader):
@@ -72,6 +74,48 @@ def test_installed_reader_replays_and_reconciles_exact_native_value(tmp_path, mo
     result = selected.for_edition(EDITION).acquire_scorecard(EDITION, ctx)
     assert result.tables["ratings"][0]["value_text"] == "94%"
     selected.complete()
+
+
+class NativeAPIReader:
+    parser_version = "native-api/test"
+
+    def acquire_scorecard(self, edition, context):
+        source = context.read(URL, stage="scores", hosts=("source.example",))
+        return SimpleNamespace(tables=rows(source.body.decode()))
+
+
+@pytest.mark.parametrize("reference_value", ["94%", "93%"])
+def test_named_native_reader_uses_source_without_semantic_assets(tmp_path, monkeypatch, reference_value):
+    selected = batch(
+        tmp_path,
+        monkeypatch,
+        named_reader=NativeAPIReader,
+        reader_class="NativeAPIReader",
+        reference_value=reference_value,
+    )
+    ctx = context(selected)
+    selected.list_scorecards(ctx)
+    reader = selected.for_edition(EDITION)
+    assert reader.parser_version == "native-api/test"
+    if reference_value == "93%":
+        with pytest.raises(ScorecardReplayError, match="source reference"):
+            reader.acquire_scorecard(EDITION, ctx)
+        assert selected.checked == []
+    else:
+        assert reader.acquire_scorecard(EDITION, ctx).tables["ratings"][0]["value_text"] == "94%"
+        selected.complete()
+
+
+@pytest.mark.parametrize(
+    "assets",
+    [
+        {"observations_file": "missing.json", "observations_sha256": "0" * 64},
+        {"reader_inputs": {"qualified_observations": {"file": "missing.json", "sha256": "0" * 64}}},
+    ],
+)
+def test_named_semantic_reader_still_requires_private_retention(tmp_path, monkeypatch, assets):
+    with pytest.raises(ScorecardReplayError, match="private observation retention"):
+        batch(tmp_path, monkeypatch, named_reader=NativeAPIReader, reader_class="NativeAPIReader", **assets)
 
 
 def test_changed_source_reference_refuses_instead_of_accepting_parser_counts(tmp_path, monkeypatch):

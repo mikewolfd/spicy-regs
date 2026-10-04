@@ -23,7 +23,7 @@ def pinned_bytes(path: Path, pin: str, *, max_bytes=200 * 1024**2):
 def qualified_reader_class(adapter, name):
     constructor = getattr(adapter, name, None)
     if not re.fullmatch(r"[A-Z][A-Za-z0-9_]*Reader", name) or not isinstance(constructor, type):
-        raise ScorecardReplayError("Unknown qualified semantic reader injection")
+        raise ScorecardReplayError("Unknown qualified named reader injection")
     return constructor
 
 
@@ -134,15 +134,18 @@ class RetainedScorecardBatch:
                 raise ScorecardReplayError("Qualified publisher batch exceeds the shared acquisition budget")
             if entry.get("reader_class"):
                 constructor = qualified_reader_class(adapter, entry["reader_class"])
-                if retain_observations is None:
-                    raise ScorecardReplayError("Qualified semantic readers require private observation retention")
+                if entry.get("reader_inputs") or entry.get("observations_file"):
+                    if retain_observations is None:
+                        raise ScorecardReplayError("Qualified semantic readers require private observation retention")
                 if entry.get("reader_inputs"):
                     adapter = constructor(
                         **qualified_reader_inputs(entry, self.path), retain_observations=retain_observations
                     )
-                else:
+                elif entry.get("observations_file"):
                     asset = pinned_bytes(self.path(entry["observations_file"]), entry["observations_sha256"])
                     adapter = constructor(asset, retain_observations)
+                else:
+                    adapter = constructor()
             entry.update(edition_object=edition, reader=adapter, replay=replay)
             self.entries[edition.scorecard_id] = entry
         if not self.entries or len({e["edition_object"].publisher_id for e in self.entries.values()}) != 1:

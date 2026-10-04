@@ -16,6 +16,10 @@ to each named edition and rendition, not an entire historical archive.
 | CPAC Foundation | Historical GraphQL POST at `http://production.data.conservative.org/v1/graphql`; current Wix JSON POST at `https://www.cpac.org/_api/cloud-data/v2/items/query` | Historical annual/lifetime ratings and item results; current `PeopleDatabase` ratings and `BillDatabase` items. The current CMS does not disclose member item results. Wix requests use the ordinary public visitor bootstrap. | [Legacy example](qualifications/cpac--2022.json), [current 2025 qualification](qualifications/cpac--2025.json) |
 | Council for Innovation Promotion | GET JSON at `https://cscp.c4ip.org/public/` | Paginated `members/browse`, `bills`, and `members/{member_id}/complete`; grades and sponsorship facts | [2026 interactive qualification](qualifications/c4ip--2026-interactive.json) |
 | American Energy Alliance | Form POST returning JSON at `https://www.americanenergyalliance.org/wp-admin/admin-ajax.php`, with `action=aea_datatable_action` | Paginated chamber/member ratings, vote and bill catalogs, and member actions | [119th Congress qualification](qualifications/american_energy_alliance--119.json) |
+| National Parks Action Fund | GET JSON at `https://nationalparksaction.org/wp-json/rds-bt50-scorecard/v1/` | `legislators`, `bills`, `styles`, and `legislators/detail/` expose historical score sets and member actions. The current member directory and historical PDF identities differ; each rendition needs separate qualification. | [Original route observations](publisher_api_route_additions.json); the [API source guide](../../../../../../spicy-docs/docs/sources/scorecards-national-parks-action-api.md) defines the qualified native catalogue boundary. Complete member-detail qualification continues. |
+| FRC Action | Public Quorum GET JSON at `https://www.quorum.us/api/sheet/{slug}/` and CSV with `format=csv` | Publisher-linked House and Senate sheets contain member and action caches. CSV exports preserve displayed final percentages where JSON formula caches are empty. | [Original route observations](publisher_api_route_additions.json); the [source guide](../../../../../../spicy-docs/docs/sources/scorecards-frc-action.md) defines the qualified current-sheet boundary |
+| FFRF Action Fund | Public Quorum GET JSON and CSV at the same sheet route | Publisher-linked House and Senate sheets expose vote, sponsorship, caucus and adjustment inputs; CSV exports retain the reported total score. | [Original route observations](publisher_api_route_additions.json); the [source guide](../../../../../../spicy-docs/docs/sources/scorecards-ffrf-action.md) defines the qualified current-sheet boundary |
+| National Federation of Independent Business | Public Quorum GET JSON and CSV at the same sheet route | Complete current House and Senate sheets; displayed score cells, hidden measurement caches and literal action cells. Continuously updated sheets and dated downloadable PDFs are separate renditions. | [Original route observations](publisher_api_route_additions.json); see the [source guide](../../../../../../spicy-docs/docs/sources/scorecards-nfib.md) for the qualified reader boundary |
 
 ## Related structured surfaces
 
@@ -34,6 +38,10 @@ to each named edition and rendition, not an entire historical archive.
 No publisher scorecard **XML API** has been verified in these inspected sources.
 XML inside an XLSX file and generic WordPress feeds do not establish a rating API.
 An API not found in a bounded review remains undiscovered rather than disproven.
+
+The newer route observations retain response metadata and hashes from the
+original JSON bodies. API availability does not establish complete archive
+coverage, reproduction rights or adapter qualification.
 
 Reader completeness checks follow pagination, declared counts, complete member
 detail enumeration, and stable rereads as applicable. Source identity, absence,
