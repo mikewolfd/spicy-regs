@@ -1,7 +1,7 @@
 {
   "schema_version": "1",
-  "observed_at": "2026-10-04T10:54:35.276699+00:00",
-  "input_plan_sha256": "2dc261657b5f5c06bb54709bed8c6c2b243aa58ad4e4cd338506036a7b8fface",
+  "observed_at": "2026-10-04T21:36:09+00:00",
+  "input_plan_sha256": "4d78be92a7009421967b30bba172d1bd8f30a5f5184def96d26f13f38ef1e3ec",
   "readers": {
     "ntu": "ntu",
     "us_chamber": "us_chamber_archive",
@@ -11,6 +11,15 @@
     "nam": "nam",
     "ila": "ila_catalogue",
     "animal_welfare_institute": "awi",
+    "national_farmers_union": "national_farmers_union",
+    "sace_action": "sace_action",
+    "reproductive_freedom": "reproductive_freedom",
+    "afge": "afge_noted_pdf",
+    "lugar_mccourt": "lugar_mccourt",
+    "radical_middle": "radical_middle",
+    "peace_action": "peace_action",
+    "boilermakers": "boilermakers",
+    "freedomworks": "freedomworks",
     "afp": "afp",
     "ijm": "ijm",
     "lcv": "lcv",
@@ -293,6 +302,699 @@
       "state": "qualified",
       "receipt": "qualifications/ila--api-details.json",
       "receipt_sha256": "2fd6a9855b6534b152bd9974725ed67ce85ece886cb7e4cf49d954a3aa9d6523"
+    },
+    {
+      "publisher_id": "national_farmers_union",
+      "scorecard_id": "national_farmers_union:2016-archived-html",
+      "state": "qualified",
+      "receipt": "qualifications/national_farmers_union--2016-archived-html.json",
+      "receipt_sha256": "ea03b005338dfb4b57f6c754a4cc9bca7f21816da36564b0581df0e8cdbe62e5"
+    },
+    {
+      "publisher_id": "sace_action",
+      "scorecard_id": "sace_action:2007",
+      "state": "qualified",
+      "receipt": "qualifications/sace_action--2007.json",
+      "receipt_sha256": "c4bb456155143330d01e3e4bbbb3e1ffef65c2961331f008584a2dff7753399b"
+    },
+    {
+      "publisher_id": "sace_action",
+      "scorecard_id": "sace_action:2008",
+      "state": "qualified",
+      "receipt": "qualifications/sace_action--2008.json",
+      "receipt_sha256": "0fce84216c3dacdf392df3d2588d7630f0c76553a6f99b9a898911bef260358a"
+    },
+    {
+      "publisher_id": "sace_action",
+      "scorecard_id": "sace_action:2009-2010",
+      "state": "qualified",
+      "receipt": "qualifications/sace_action--2009-2010.json",
+      "receipt_sha256": "ef7ae3409133940fb27eb47da0531aa401da5b2999f354ef8af58cd7d6b51395"
+    },
+    {
+      "publisher_id": "sace_action",
+      "scorecard_id": "sace_action:2011",
+      "state": "qualified",
+      "receipt": "qualifications/sace_action--2011.json",
+      "receipt_sha256": "3fe2bd62cb9e7fda75eebaa029ea0d50a745f94e41f21435826ed9967c996ad2"
+    },
+    {
+      "publisher_id": "sace_action",
+      "scorecard_id": "sace_action:2012",
+      "state": "qualified",
+      "receipt": "qualifications/sace_action--2012.json",
+      "receipt_sha256": "2f347a46edf80b3c1ee4416ec3dd1dc89dc80d3c20ff2ac716e632358ad913ea"
+    },
+    {
+      "publisher_id": "reproductive_freedom",
+      "scorecard_id": "reproductive_freedom:2024",
+      "state": "qualified",
+      "receipt": "qualifications/reproductive_freedom--2024.json",
+      "receipt_sha256": "5bebb4fe65004ec34628b46e2459b9fba6fe43e79f1ccb474b10bfce40ec79f1"
+    },
+    {
+      "publisher_id": "reproductive_freedom",
+      "scorecard_id": "reproductive_freedom:2025",
+      "state": "qualified",
+      "receipt": "qualifications/reproductive_freedom--2025.json",
+      "receipt_sha256": "a72a79660fe81cf84644a3823293fb980fdd05d0bdcae73e4fc15f1e1dee2200"
+    },
+    {
+      "publisher_id": "afge",
+      "scorecard_id": "afge:2022",
+      "state": "qualified",
+      "receipt": "qualifications/afge--2022.json",
+      "receipt_sha256": "b81d529fba7f52f98610e27f55fb1d7cb09d410e76bedff645ce952a26b22ac0"
+    },
+    {
+      "publisher_id": "afge",
+      "scorecard_id": "afge:2023",
+      "state": "qualified",
+      "receipt": "qualifications/afge--2023.json",
+      "receipt_sha256": "1d46efdd9fa9eb34a8ea7fc1ceb16b2360376b317aa657e36a0e85f7a3a76fdf"
+    },
+    {
+      "publisher_id": "lugar_mccourt",
+      "scorecard_id": "lugar_mccourt:2023-house-html",
+      "state": "qualified",
+      "receipt": "qualifications/lugar_mccourt--2023-house-html.json",
+      "receipt_sha256": "b64217e3bafb4fb7b06416c5562b45a5da05aa4c3c5175d2f3b6ed65964562b6"
+    },
+    {
+      "publisher_id": "lugar_mccourt",
+      "scorecard_id": "lugar_mccourt:2023-senate-html",
+      "state": "qualified",
+      "receipt": "qualifications/lugar_mccourt--2023-senate-html.json",
+      "receipt_sha256": "6f2660e92289fa1e1ec8de5879ef1157c385d4fc724ba8ed36c78ef0449fdf99"
+    },
+    {
+      "publisher_id": "lugar_mccourt",
+      "scorecard_id": "lugar_mccourt:117-senate-html",
+      "state": "qualified",
+      "receipt": "qualifications/lugar_mccourt--117-senate-html.json",
+      "receipt_sha256": "2014a63c80cef510591c7f4818352c99ed00619d5adf39217409a660afb84afa"
+    },
+    {
+      "publisher_id": "lugar_mccourt",
+      "scorecard_id": "lugar_mccourt:117-house-html",
+      "state": "qualified",
+      "receipt": "qualifications/lugar_mccourt--117-house-html.json",
+      "receipt_sha256": "56de83c9f05e1b10ad5d7743621e3bb6471c74e22a9e886c6294513f355705d0"
+    },
+    {
+      "publisher_id": "lugar_mccourt",
+      "scorecard_id": "lugar_mccourt:2021-senate-html",
+      "state": "qualified",
+      "receipt": "qualifications/lugar_mccourt--2021-senate-html.json",
+      "receipt_sha256": "f8082ed7f646d9cc5a193f3452626b31d87621d1cf300056d7492f005ea8b950"
+    },
+    {
+      "publisher_id": "lugar_mccourt",
+      "scorecard_id": "lugar_mccourt:2021-house-html",
+      "state": "qualified",
+      "receipt": "qualifications/lugar_mccourt--2021-house-html.json",
+      "receipt_sha256": "b8853e440a03cb97a391e7c73ff0ccd22ecbe11058b28db4075eb807c20d268f"
+    },
+    {
+      "publisher_id": "lugar_mccourt",
+      "scorecard_id": "lugar_mccourt:116-senate-html",
+      "state": "qualified",
+      "receipt": "qualifications/lugar_mccourt--116-senate-html.json",
+      "receipt_sha256": "86fd5f37ee2853b5cd984be3e4a6bf6062f67564e2207176022f6f4dbb990194"
+    },
+    {
+      "publisher_id": "lugar_mccourt",
+      "scorecard_id": "lugar_mccourt:116-house-html",
+      "state": "qualified",
+      "receipt": "qualifications/lugar_mccourt--116-house-html.json",
+      "receipt_sha256": "d5dd547c770d62688d0a07d2396dee6e9559d00b1848494a6f0399a46c1819cd"
+    },
+    {
+      "publisher_id": "lugar_mccourt",
+      "scorecard_id": "lugar_mccourt:2019-senate-html",
+      "state": "qualified",
+      "receipt": "qualifications/lugar_mccourt--2019-senate-html.json",
+      "receipt_sha256": "d9368202f795d21441ed4b3f513772dc7e09a5b717f4fd0519dd39b69dc8b463"
+    },
+    {
+      "publisher_id": "lugar_mccourt",
+      "scorecard_id": "lugar_mccourt:2019-house-html",
+      "state": "qualified",
+      "receipt": "qualifications/lugar_mccourt--2019-house-html.json",
+      "receipt_sha256": "3dd354d52dc50ca16a3f2b17efafa528536358a01fe44b0b35da8e7abbd08ada"
+    },
+    {
+      "publisher_id": "lugar_mccourt",
+      "scorecard_id": "lugar_mccourt:lifetime-103-115-senate-html",
+      "state": "qualified",
+      "receipt": "qualifications/lugar_mccourt--lifetime-103-115-senate-html.json",
+      "receipt_sha256": "508d32c9e203ea3cc8fe1279a602baaf40fdb87989f1cf1fdca6526cac4bf582"
+    },
+    {
+      "publisher_id": "lugar_mccourt",
+      "scorecard_id": "lugar_mccourt:115-senate-html",
+      "state": "qualified",
+      "receipt": "qualifications/lugar_mccourt--115-senate-html.json",
+      "receipt_sha256": "6ac5333632b0752a3af0b7f95fbedd27e27d3eefc46780a67913a4d7ead3c7a4"
+    },
+    {
+      "publisher_id": "lugar_mccourt",
+      "scorecard_id": "lugar_mccourt:115-house-html",
+      "state": "qualified",
+      "receipt": "qualifications/lugar_mccourt--115-house-html.json",
+      "receipt_sha256": "f556ff52a98d1575269f6d1dddb712fede8cb90c8cb1a4863517ca6c4afdd147"
+    },
+    {
+      "publisher_id": "lugar_mccourt",
+      "scorecard_id": "lugar_mccourt:2017-senate-html",
+      "state": "qualified",
+      "receipt": "qualifications/lugar_mccourt--2017-senate-html.json",
+      "receipt_sha256": "9c47d23c6faa1f8269f5af454f6f463348e6facc3fc326460f17ff9edb89b39a"
+    },
+    {
+      "publisher_id": "lugar_mccourt",
+      "scorecard_id": "lugar_mccourt:2017-house-html",
+      "state": "qualified",
+      "receipt": "qualifications/lugar_mccourt--2017-house-html.json",
+      "receipt_sha256": "b6ebefc79da16b6c3f9c7c35ba3171b5ec6accdc85d8c6eecef498576f4c0bd6"
+    },
+    {
+      "publisher_id": "lugar_mccourt",
+      "scorecard_id": "lugar_mccourt:114-senate-html",
+      "state": "qualified",
+      "receipt": "qualifications/lugar_mccourt--114-senate-html.json",
+      "receipt_sha256": "b25639f981fafeafb8e14e0120c49da520a8d4eda918d12bf17553646b0d8634"
+    },
+    {
+      "publisher_id": "lugar_mccourt",
+      "scorecard_id": "lugar_mccourt:114-house-html",
+      "state": "qualified",
+      "receipt": "qualifications/lugar_mccourt--114-house-html.json",
+      "receipt_sha256": "c1819c927f49a8fb42d57fc5c946f78c6053acfdcf14511411df9ae983ae12d6"
+    },
+    {
+      "publisher_id": "lugar_mccourt",
+      "scorecard_id": "lugar_mccourt:2015-senate-html",
+      "state": "qualified",
+      "receipt": "qualifications/lugar_mccourt--2015-senate-html.json",
+      "receipt_sha256": "4311c10e54cc92ea10ccaf6de54748e4af880dee036cf6909eb6eb1aabba4ad4"
+    },
+    {
+      "publisher_id": "lugar_mccourt",
+      "scorecard_id": "lugar_mccourt:2015-house-html",
+      "state": "qualified",
+      "receipt": "qualifications/lugar_mccourt--2015-house-html.json",
+      "receipt_sha256": "b529dd47f6b3e8d6189535b57e186720ff1a0734f205a15e20e3e8d94872ae86"
+    },
+    {
+      "publisher_id": "lugar_mccourt",
+      "scorecard_id": "lugar_mccourt:113-senate-html",
+      "state": "qualified",
+      "receipt": "qualifications/lugar_mccourt--113-senate-html.json",
+      "receipt_sha256": "545afc1dac3afa84b975c306c0e06adec54f5628262d75e1d7aa2d50ff764272"
+    },
+    {
+      "publisher_id": "lugar_mccourt",
+      "scorecard_id": "lugar_mccourt:113-house-html",
+      "state": "qualified",
+      "receipt": "qualifications/lugar_mccourt--113-house-html.json",
+      "receipt_sha256": "5c2c6ad88ddecc628f835258808d8227ddccd7955a3f7fbdb222e39352056eb9"
+    },
+    {
+      "publisher_id": "lugar_mccourt",
+      "scorecard_id": "lugar_mccourt:112-senate-html",
+      "state": "qualified",
+      "receipt": "qualifications/lugar_mccourt--112-senate-html.json",
+      "receipt_sha256": "6361fd99c8bf5172594fc0d3e2ce85edaac955109a79cfc90b8cc2c5d355acc7"
+    },
+    {
+      "publisher_id": "lugar_mccourt",
+      "scorecard_id": "lugar_mccourt:111-senate-html",
+      "state": "qualified",
+      "receipt": "qualifications/lugar_mccourt--111-senate-html.json",
+      "receipt_sha256": "f7b9510581ef7e74bb1844690716e7119b9dc1ab5fea75fc074da52ae7039c99"
+    },
+    {
+      "publisher_id": "lugar_mccourt",
+      "scorecard_id": "lugar_mccourt:110-senate-html",
+      "state": "qualified",
+      "receipt": "qualifications/lugar_mccourt--110-senate-html.json",
+      "receipt_sha256": "184529d633e15d07c2dcd4b438279fbe7d4622d6a1096af62bd24c8bd48fd5d0"
+    },
+    {
+      "publisher_id": "lugar_mccourt",
+      "scorecard_id": "lugar_mccourt:109-senate-html",
+      "state": "qualified",
+      "receipt": "qualifications/lugar_mccourt--109-senate-html.json",
+      "receipt_sha256": "99698e313e2fa3144a13f096541c203a2b2b6acd391a698501459689cbd4a518"
+    },
+    {
+      "publisher_id": "lugar_mccourt",
+      "scorecard_id": "lugar_mccourt:108-senate-html",
+      "state": "qualified",
+      "receipt": "qualifications/lugar_mccourt--108-senate-html.json",
+      "receipt_sha256": "55e0680d0b9511f245ed89d38f779f95685eb334cfbff967d057f22e28ecb1e5"
+    },
+    {
+      "publisher_id": "lugar_mccourt",
+      "scorecard_id": "lugar_mccourt:107-senate-html",
+      "state": "qualified",
+      "receipt": "qualifications/lugar_mccourt--107-senate-html.json",
+      "receipt_sha256": "f2b53784c6703cec9114090191306f06c1c994485f711a6c2b85778f60af6d3e"
+    },
+    {
+      "publisher_id": "lugar_mccourt",
+      "scorecard_id": "lugar_mccourt:106-senate-html",
+      "state": "qualified",
+      "receipt": "qualifications/lugar_mccourt--106-senate-html.json",
+      "receipt_sha256": "3d696d901b9a6b87b8b30f0dedecc45cc1bc89399f7e30cc7bc06a44536a76a2"
+    },
+    {
+      "publisher_id": "lugar_mccourt",
+      "scorecard_id": "lugar_mccourt:105-senate-html",
+      "state": "qualified",
+      "receipt": "qualifications/lugar_mccourt--105-senate-html.json",
+      "receipt_sha256": "506a1b7465aa5f5963ca7956a7602bfdd6e24f4a50505946fd4a296333f11dc8"
+    },
+    {
+      "publisher_id": "lugar_mccourt",
+      "scorecard_id": "lugar_mccourt:104-senate-html",
+      "state": "qualified",
+      "receipt": "qualifications/lugar_mccourt--104-senate-html.json",
+      "receipt_sha256": "b41814783a1212ab8f30fec3bd6ab9be2704f70783481c020891f8a4972a6e76"
+    },
+    {
+      "publisher_id": "lugar_mccourt",
+      "scorecard_id": "lugar_mccourt:103-senate-html",
+      "state": "qualified",
+      "receipt": "qualifications/lugar_mccourt--103-senate-html.json",
+      "receipt_sha256": "c7601752ba9a5821c8d06b4c87ab881a5d8d70aad93268e4ac052e7025510808"
+    },
+    {
+      "publisher_id": "radical_middle",
+      "scorecard_id": "radical_middle:107-online-leaders",
+      "state": "qualified",
+      "receipt": "qualifications/radical_middle--107-online-leaders.json",
+      "receipt_sha256": "c7c61220da68e4d3b1e0eb6002e9a4dff29c539959545554f53c608b9de1a101"
+    },
+    {
+      "publisher_id": "radical_middle",
+      "scorecard_id": "radical_middle:108-online-leaders",
+      "state": "qualified",
+      "receipt": "qualifications/radical_middle--108-online-leaders.json",
+      "receipt_sha256": "fe6dcdc139c84b9d649b106661daaaed40ffb79730c24904be7e7e49c1f08647"
+    },
+    {
+      "publisher_id": "radical_middle",
+      "scorecard_id": "radical_middle:109-110-online-poll-winners",
+      "state": "qualified",
+      "receipt": "qualifications/radical_middle--109-110-online-poll-winners.json",
+      "receipt_sha256": "e64197a85d8ead6140298bc1c4ccbec7bce946e112ca1ca43133b8de8c78ba7c"
+    },
+    {
+      "publisher_id": "peace_action",
+      "scorecard_id": "peace_action:api-stored-record",
+      "state": "qualified",
+      "receipt": "qualifications/peace_action--api-stored-record.json",
+      "receipt_sha256": "2666ff8fd142d0891cc8183699dcbfc31e3dcd106531b6ed242d2264999f80fd"
+    },
+    {
+      "publisher_id": "peace_action",
+      "scorecard_id": "peace_action:2024-api-vote-record",
+      "state": "qualified",
+      "receipt": "qualifications/peace_action--2024-api-vote-record.json",
+      "receipt_sha256": "48ef39ad6376d73bccabed286e21ace4fb287f14a83ebaa3a17698a27eac76fb"
+    },
+    {
+      "publisher_id": "peace_action",
+      "scorecard_id": "peace_action:2023-api-vote-record",
+      "state": "qualified",
+      "receipt": "qualifications/peace_action--2023-api-vote-record.json",
+      "receipt_sha256": "1a2ed45ad68b215d05c2021ecfe8c295df3078421b1a6fa794ef8b13cef0baa5"
+    },
+    {
+      "publisher_id": "peace_action",
+      "scorecard_id": "peace_action:2022-api-vote-record",
+      "state": "qualified",
+      "receipt": "qualifications/peace_action--2022-api-vote-record.json",
+      "receipt_sha256": "3b77f0e6e243be9220c6177014db0d32cc06ea71294942a788014b00bc0f8a1b"
+    },
+    {
+      "publisher_id": "peace_action",
+      "scorecard_id": "peace_action:2021-api-vote-record",
+      "state": "qualified",
+      "receipt": "qualifications/peace_action--2021-api-vote-record.json",
+      "receipt_sha256": "271f77cf720c6d61a5abe5835c549fdcf574c0bfc8fdc16f12594cc805b40b7e"
+    },
+    {
+      "publisher_id": "peace_action",
+      "scorecard_id": "peace_action:2020-api-vote-record",
+      "state": "qualified",
+      "receipt": "qualifications/peace_action--2020-api-vote-record.json",
+      "receipt_sha256": "150dd2c0ba098db3ff38d83d39a24ac3b863e03420f67d4c7c25bb6da1020d46"
+    },
+    {
+      "publisher_id": "peace_action",
+      "scorecard_id": "peace_action:2019-api-vote-record",
+      "state": "qualified",
+      "receipt": "qualifications/peace_action--2019-api-vote-record.json",
+      "receipt_sha256": "8d5090728d01840f061136b770f37838b29d01399b02da509c992582725e4493"
+    },
+    {
+      "publisher_id": "peace_action",
+      "scorecard_id": "peace_action:2018-api-vote-record",
+      "state": "qualified",
+      "receipt": "qualifications/peace_action--2018-api-vote-record.json",
+      "receipt_sha256": "e1b9af45287c093c8f291bcfef61e38328b169de2be8b291a5b52beaf0d4e9ed"
+    },
+    {
+      "publisher_id": "peace_action",
+      "scorecard_id": "peace_action:2017-api-vote-record",
+      "state": "qualified",
+      "receipt": "qualifications/peace_action--2017-api-vote-record.json",
+      "receipt_sha256": "c6cf5cbd2f5369cbc713b1fb28d6a052856635724715e0a3881165e37ee5fa90"
+    },
+    {
+      "publisher_id": "peace_action",
+      "scorecard_id": "peace_action:2016-api-vote-record",
+      "state": "qualified",
+      "receipt": "qualifications/peace_action--2016-api-vote-record.json",
+      "receipt_sha256": "e17f47c9307efcbad0e008e8d6360d595110d3e55d1173c37c26609ba93a9b45"
+    },
+    {
+      "publisher_id": "peace_action",
+      "scorecard_id": "peace_action:2015-api-vote-record",
+      "state": "qualified",
+      "receipt": "qualifications/peace_action--2015-api-vote-record.json",
+      "receipt_sha256": "81afce289d5a18bf101402c75ccfe65bb5c0998e4253e1162137ea36d74e0db2"
+    },
+    {
+      "publisher_id": "peace_action",
+      "scorecard_id": "peace_action:2014-api-vote-record",
+      "state": "qualified",
+      "receipt": "qualifications/peace_action--2014-api-vote-record.json",
+      "receipt_sha256": "dfea0bdd8ddce0a436574fe96e6ee3dbe8c1198cee893cac4cc8bcd804dca88b"
+    },
+    {
+      "publisher_id": "peace_action",
+      "scorecard_id": "peace_action:2013-api-vote-record",
+      "state": "qualified",
+      "receipt": "qualifications/peace_action--2013-api-vote-record.json",
+      "receipt_sha256": "11ad690a8b43780ad29e6bcccb8f13cf0537bda0adbf285159fc683030aba7cb"
+    },
+    {
+      "publisher_id": "peace_action",
+      "scorecard_id": "peace_action:2010-joint-pdf",
+      "state": "qualified",
+      "receipt": "qualifications/peace_action--2010-joint-pdf.json",
+      "receipt_sha256": "0bb1f267802d97aa3e3302a7fc240063ba9c2f3fa74b576adb7e59ac3663d2e1"
+    },
+    {
+      "publisher_id": "boilermakers",
+      "scorecard_id": "boilermakers:1997-jan-aug-corrected",
+      "state": "qualified",
+      "receipt": "qualifications/boilermakers--1997-jan-aug-corrected.json",
+      "receipt_sha256": "240c4cb1367ac017553f7fc3623a73ccbb1a64bdb46dde3801353bc529ae7614"
+    },
+    {
+      "publisher_id": "boilermakers",
+      "scorecard_id": "boilermakers:1998-jan-sep",
+      "state": "qualified",
+      "receipt": "qualifications/boilermakers--1998-jan-sep.json",
+      "receipt_sha256": "f97a0bc5a8d12610d53436249dd9e48ec36bf84aa302c81716ed7072f7d2ebbe"
+    },
+    {
+      "publisher_id": "boilermakers",
+      "scorecard_id": "boilermakers:1999",
+      "state": "qualified",
+      "receipt": "qualifications/boilermakers--1999.json",
+      "receipt_sha256": "afbcad1bc831241eb9177948e1a3500f1ea40a1e062d925e0ba1d36faa917441"
+    },
+    {
+      "publisher_id": "boilermakers",
+      "scorecard_id": "boilermakers:2001",
+      "state": "qualified",
+      "receipt": "qualifications/boilermakers--2001.json",
+      "receipt_sha256": "d6ba1bebca4ef1e71cbb1f28aa28f8fc2a2e21f3790b1ccfbe0cf0daa12f8e63"
+    },
+    {
+      "publisher_id": "afge",
+      "scorecard_id": "afge:2015",
+      "state": "qualified",
+      "receipt": "qualifications/afge--2015.json",
+      "receipt_sha256": "9588ee0da56fd62dff233f4fb996d1f4b72d4354f99f8356731301bee676c6e0"
+    },
+    {
+      "publisher_id": "afge",
+      "scorecard_id": "afge:2024",
+      "state": "qualified",
+      "receipt": "qualifications/afge--2024.json",
+      "receipt_sha256": "8d6f9584bba5806c0076e19b26dc8fece6cee381de28c91136deac2e4318f2ac"
+    },
+    {
+      "publisher_id": "afge",
+      "scorecard_id": "afge:2025",
+      "state": "qualified",
+      "receipt": "qualifications/afge--2025.json",
+      "receipt_sha256": "2b7fbcd97fe38a4f4235f515122c04b712d141d413d24ff6feb1084a34137614"
+    },
+    {
+      "publisher_id": "freedomworks",
+      "scorecard_id": "freedomworks:2005-house-archived-print",
+      "state": "qualified",
+      "receipt": "qualifications/freedomworks--2005-house-archived-print.json",
+      "receipt_sha256": "fedcb7a4ff0e5d21dce357b763c933d13b6dfb619648a4c5fbbe669c4a2ed831"
+    },
+    {
+      "publisher_id": "freedomworks",
+      "scorecard_id": "freedomworks:2006-house-archived-print",
+      "state": "qualified",
+      "receipt": "qualifications/freedomworks--2006-house-archived-print.json",
+      "receipt_sha256": "a29be71573bc1d51fc730147e6ff919dabbd3b9055508979af925c23a8729518"
+    },
+    {
+      "publisher_id": "freedomworks",
+      "scorecard_id": "freedomworks:2007-house-archived-print",
+      "state": "qualified",
+      "receipt": "qualifications/freedomworks--2007-house-archived-print.json",
+      "receipt_sha256": "79bb3d300b0f850706835239dc097ec92d359a543fd5de0b308d0ef1d81ad63f"
+    },
+    {
+      "publisher_id": "freedomworks",
+      "scorecard_id": "freedomworks:2008-house-archived-print",
+      "state": "qualified",
+      "receipt": "qualifications/freedomworks--2008-house-archived-print.json",
+      "receipt_sha256": "0a89b845f314784e0266effebce113e7f6f52ed0dd7d938edb63a080a408f40c"
+    },
+    {
+      "publisher_id": "freedomworks",
+      "scorecard_id": "freedomworks:2009-house-archived-print",
+      "state": "qualified",
+      "receipt": "qualifications/freedomworks--2009-house-archived-print.json",
+      "receipt_sha256": "c5853b58e454ea48028ad84329edeaf56bf8bf5ea9a0c0fac2676e26c2985a08"
+    },
+    {
+      "publisher_id": "freedomworks",
+      "scorecard_id": "freedomworks:2010-house-archived-print",
+      "state": "qualified",
+      "receipt": "qualifications/freedomworks--2010-house-archived-print.json",
+      "receipt_sha256": "88d0bbd31dcc6c7bdb53dd2e55be04f08f6080f12909ff3a76382369acaa4276"
+    },
+    {
+      "publisher_id": "freedomworks",
+      "scorecard_id": "freedomworks:2011-house-archived-print",
+      "state": "qualified",
+      "receipt": "qualifications/freedomworks--2011-house-archived-print.json",
+      "receipt_sha256": "cdce82870379969a70dfdda5acf971b567a9b5d1772582fb8504067f76313ca8"
+    },
+    {
+      "publisher_id": "freedomworks",
+      "scorecard_id": "freedomworks:2012-house-archived-print",
+      "state": "qualified",
+      "receipt": "qualifications/freedomworks--2012-house-archived-print.json",
+      "receipt_sha256": "916915686fc56ad28dc5c1fbe4735d7ea46a587a057233c5086367f4e7d1f151"
+    },
+    {
+      "publisher_id": "freedomworks",
+      "scorecard_id": "freedomworks:2013-house-archived-print",
+      "state": "qualified",
+      "receipt": "qualifications/freedomworks--2013-house-archived-print.json",
+      "receipt_sha256": "27412e5d00e8bc6d3f17eaf6ba16a6a762226e87950797912500235e90c1ad8b"
+    },
+    {
+      "publisher_id": "freedomworks",
+      "scorecard_id": "freedomworks:2014-house-archived-print",
+      "state": "qualified",
+      "receipt": "qualifications/freedomworks--2014-house-archived-print.json",
+      "receipt_sha256": "5cd7890eaeb416ee29f0de8567d629377ecd484cf41add0bfc897a416a09e468"
+    },
+    {
+      "publisher_id": "freedomworks",
+      "scorecard_id": "freedomworks:2015-house-archived-print",
+      "state": "qualified",
+      "receipt": "qualifications/freedomworks--2015-house-archived-print.json",
+      "receipt_sha256": "69138a5b1910fafa9b713642b546d46403ea7d191b685ad22bf37c97822eb4a1"
+    },
+    {
+      "publisher_id": "freedomworks",
+      "scorecard_id": "freedomworks:2016-house-archived-print",
+      "state": "qualified",
+      "receipt": "qualifications/freedomworks--2016-house-archived-print.json",
+      "receipt_sha256": "8cf4b06aa7d9e28ffe7e874a870f2332b018ed8f09a633080228efa45ea8e630"
+    },
+    {
+      "publisher_id": "freedomworks",
+      "scorecard_id": "freedomworks:2017-house-archived-print",
+      "state": "qualified",
+      "receipt": "qualifications/freedomworks--2017-house-archived-print.json",
+      "receipt_sha256": "87ddae54488d223a18e35e3565432ab132bf0a3122496b0de72d35347ddf5bf7"
+    },
+    {
+      "publisher_id": "freedomworks",
+      "scorecard_id": "freedomworks:2018-house-archived-print",
+      "state": "qualified",
+      "receipt": "qualifications/freedomworks--2018-house-archived-print.json",
+      "receipt_sha256": "2bce1043bff6d5e888510573241736968ae708495bf4e0fdc22c0412f7e0aaf5"
+    },
+    {
+      "publisher_id": "freedomworks",
+      "scorecard_id": "freedomworks:2019-house-archived-print",
+      "state": "qualified",
+      "receipt": "qualifications/freedomworks--2019-house-archived-print.json",
+      "receipt_sha256": "4d00e0b5fd9fc623f1e82f1bfd22fe4dd8c167d03c66ef2502953a352703b75f"
+    },
+    {
+      "publisher_id": "freedomworks",
+      "scorecard_id": "freedomworks:2020-house-archived-print",
+      "state": "qualified",
+      "receipt": "qualifications/freedomworks--2020-house-archived-print.json",
+      "receipt_sha256": "61a93a0b8c7a7b0c2706ac00a45caaea0112dd7a4835f60bada9d42d3bc32355"
+    },
+    {
+      "publisher_id": "freedomworks",
+      "scorecard_id": "freedomworks:2005-senate-archived-print",
+      "state": "qualified",
+      "receipt": "qualifications/freedomworks--2005-senate-archived-print.json",
+      "receipt_sha256": "5b7f27f9c1f08d3c4d21c041e06e4ce0e802cc5d2931f80cb2bdab74bf5be632"
+    },
+    {
+      "publisher_id": "freedomworks",
+      "scorecard_id": "freedomworks:2006-senate-archived-print",
+      "state": "qualified",
+      "receipt": "qualifications/freedomworks--2006-senate-archived-print.json",
+      "receipt_sha256": "c3063d9d3a658fa7bc36d4f7d7471f8769b4b86730d3aec9a78ca94b1dd16c0d"
+    },
+    {
+      "publisher_id": "freedomworks",
+      "scorecard_id": "freedomworks:2007-senate-archived-print",
+      "state": "qualified",
+      "receipt": "qualifications/freedomworks--2007-senate-archived-print.json",
+      "receipt_sha256": "408475214a9219fd7d5e3f7f761e9b500861e9ea5a25eafb2bf848c63eb197b3"
+    },
+    {
+      "publisher_id": "freedomworks",
+      "scorecard_id": "freedomworks:2008-senate-archived-print",
+      "state": "qualified",
+      "receipt": "qualifications/freedomworks--2008-senate-archived-print.json",
+      "receipt_sha256": "4ef8faf3ceafcb98d869328cd89168f55baafb774be24e0f21ca2a57bfc5fad6"
+    },
+    {
+      "publisher_id": "freedomworks",
+      "scorecard_id": "freedomworks:2009-senate-archived-print",
+      "state": "qualified",
+      "receipt": "qualifications/freedomworks--2009-senate-archived-print.json",
+      "receipt_sha256": "625db04f5b72aa479654cd3aac86602a5473f603a3798c107b5a01286ea05437"
+    },
+    {
+      "publisher_id": "freedomworks",
+      "scorecard_id": "freedomworks:2010-senate-archived-print",
+      "state": "qualified",
+      "receipt": "qualifications/freedomworks--2010-senate-archived-print.json",
+      "receipt_sha256": "34c0e51aec74e4f2a3455b21c25378706d59d746cb5efc2cd15fad5dc911fbb3"
+    },
+    {
+      "publisher_id": "freedomworks",
+      "scorecard_id": "freedomworks:2011-senate-archived-print",
+      "state": "qualified",
+      "receipt": "qualifications/freedomworks--2011-senate-archived-print.json",
+      "receipt_sha256": "af69eeb3a5b98b060e8495f2c6d38acb6ba792eb7d774ae3faead8d62e1ea0c7"
+    },
+    {
+      "publisher_id": "freedomworks",
+      "scorecard_id": "freedomworks:2012-senate-archived-print",
+      "state": "qualified",
+      "receipt": "qualifications/freedomworks--2012-senate-archived-print.json",
+      "receipt_sha256": "31c52648fbd1c187cb114154b1c5fe335cf970ec88a74634aac542f55a179ef8"
+    },
+    {
+      "publisher_id": "freedomworks",
+      "scorecard_id": "freedomworks:2013-senate-archived-print",
+      "state": "qualified",
+      "receipt": "qualifications/freedomworks--2013-senate-archived-print.json",
+      "receipt_sha256": "bb09c95966499c1c4e5cbe266603673f7d6b3d82c7c05c450433741c706708c7"
+    },
+    {
+      "publisher_id": "freedomworks",
+      "scorecard_id": "freedomworks:2014-senate-archived-print",
+      "state": "qualified",
+      "receipt": "qualifications/freedomworks--2014-senate-archived-print.json",
+      "receipt_sha256": "2d1d310b69d853c4755a382bd4bdd84ed12326d3879e03697395e514b6a51bc9"
+    },
+    {
+      "publisher_id": "freedomworks",
+      "scorecard_id": "freedomworks:2015-senate-archived-print",
+      "state": "qualified",
+      "receipt": "qualifications/freedomworks--2015-senate-archived-print.json",
+      "receipt_sha256": "7e616588ecf389f7fad869b727ac7f50506c8d7b98d9ec1b7b11288807266c30"
+    },
+    {
+      "publisher_id": "freedomworks",
+      "scorecard_id": "freedomworks:2016-senate-archived-print",
+      "state": "qualified",
+      "receipt": "qualifications/freedomworks--2016-senate-archived-print.json",
+      "receipt_sha256": "b99541536ce7a20f5cb4fd8de64e01abfc7739db269289e28b1d8317dc49659d"
+    },
+    {
+      "publisher_id": "freedomworks",
+      "scorecard_id": "freedomworks:2017-senate-archived-print",
+      "state": "qualified",
+      "receipt": "qualifications/freedomworks--2017-senate-archived-print.json",
+      "receipt_sha256": "0ef6ba1267fb391576799c4cc677e7448861e565c6f70a67bf17559782fd5ae3"
+    },
+    {
+      "publisher_id": "freedomworks",
+      "scorecard_id": "freedomworks:2018-senate-archived-print",
+      "state": "qualified",
+      "receipt": "qualifications/freedomworks--2018-senate-archived-print.json",
+      "receipt_sha256": "a6816c16053cbd0634c2e9fc105d1f859a57ed53b50900a804be2af1155b6051"
+    },
+    {
+      "publisher_id": "freedomworks",
+      "scorecard_id": "freedomworks:2019-senate-archived-print",
+      "state": "qualified",
+      "receipt": "qualifications/freedomworks--2019-senate-archived-print.json",
+      "receipt_sha256": "877f07c9decf24208bdcb20a68af2767542d755aad57aa677c7c550ebd203609"
+    },
+    {
+      "publisher_id": "freedomworks",
+      "scorecard_id": "freedomworks:2020-senate-archived-print",
+      "state": "qualified",
+      "receipt": "qualifications/freedomworks--2020-senate-archived-print.json",
+      "receipt_sha256": "14e3a94a5517e95897fcc8ecc915566767781d573d9d7e8f7572ea87eb586e02"
+    },
+    {
+      "publisher_id": "freedomworks",
+      "scorecard_id": "freedomworks:senate-wordpress-mixed-periods-archived-table",
+      "state": "qualified",
+      "receipt": "qualifications/freedomworks--senate-wordpress-mixed-periods-archived-table.json",
+      "receipt_sha256": "1830b07a4ee007d8d31af05e780daa31350c7c3d95d4aa6e09b51846486235a6"
+    },
+    {
+      "publisher_id": "freedomworks",
+      "scorecard_id": "freedomworks:house-wordpress-native-periods-archived-table",
+      "state": "qualified",
+      "receipt": "qualifications/freedomworks--house-wordpress-native-periods-archived-table.json",
+      "receipt_sha256": "51a745f6259b475eec0553d3cecff6bfac360f5cd6512320f1597a7fe9e3967b"
     },
     {
       "publisher_id": "aauw",

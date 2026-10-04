@@ -1,11 +1,12 @@
 {
-  "version": "0.54.0+scorecards.1a2bc6409221",
-  "baseline_version": "0.54.0+scorecards.0a04bc543988",
-  "baseline_wheel": "spicy_docs-0.54.0+scorecards.0a04bc543988-py3-none-any.whl",
-  "baseline_sha256": "12a64a15b02b323f5b933351c09206a67123c570a8ad88a220d1a9b3f323f66f",
-  "overlay_sha256": "1a2bc64092210ab3e23790ce4fc4b9e4906c4c37c8e2ab314a828f3eed66c9e8",
+  "version": "0.54.0+scorecards.0a04bc543988",
+  "baseline_version": "0.54.0+scorecards.e62a5197f70b",
+  "baseline_wheel": "spicy_docs-0.54.0+scorecards.e62a5197f70b-py3-none-any.whl",
+  "baseline_sha256": "73a3ac78db94a46dc5bc3440f887ef8fc952d4b9ea62cbf239b4d844fa83dd2e",
+  "overlay_sha256": "0a04bc54398895e01c86e6fcdc51548a3e5a38f9bcd2b9d5e1897a1f1a25f67c",
   "modules": {
-    "spicy_docs/sources/scorecards/__init__.py": "451c72f5c2cee2c194639c35aab0aef3ed17eb39029e1ff85392a9353a55a8e5",
+    "spicy_docs/reading/pdf_bytes.py": "889dc357391a000f5857516c8eca7fd75f44607791247e98d1fb80c31e925b4c",
+    "spicy_docs/sources/scorecards/__init__.py": "90e179513c4277032ae3d794dc3ed17d122e9909dd00b59a71d24a64cd0c4b1e",
     "spicy_docs/sources/scorecards/aauw.py": "14a7da2be96782fa0cdce1220ec003565cd04196bd2dce6bec43f4c0e2fbb837",
     "spicy_docs/sources/scorecards/acec.py": "1c6bec8cee712e5662108c0fa69e219e96195e774f8a80f0d707a4a8b49c4376",
     "spicy_docs/sources/scorecards/aclu.py": "8604f33d5026530f4ec2a3c186c8b7817387b169c65708a3174f3c92b76a1e04",
@@ -38,8 +39,6 @@
     "spicy_docs/sources/scorecards/foreign_policy_america.py": "353b2815986b0086b35e1a836351b3c74e76250af6d35827a7af2437cbde7d6d",
     "spicy_docs/sources/scorecards/frc_action.py": "c843f93f756b47191afce81e7d7fc0023248f707a772f7c23c0d5d50a9121be9",
     "spicy_docs/sources/scorecards/frc_action_pdf.py": "3a0a811aa4072357ea3231eda69aa335b35fa114218835849a599e098c2a5073",
-    "spicy_docs/sources/scorecards/freedomworks.py": "13a798f26215abecd64ee1bf0b1c6c6fbf789718a6551b827b995a38ee26513c",
-    "spicy_docs/sources/scorecards/freedomworks_wordpress.py": "9208acfdd2d780a4d4d3efd7bf3efe60de8a73175952bb5d5bd5793c1d8729ad",
     "spicy_docs/sources/scorecards/goa.py": "66b5fbc53f621c293d9e98d932e86ad0356ffbc3c4a5b65b96cdb7792f88c3aa",
     "spicy_docs/sources/scorecards/govtrack_discovery.py": "6dd905d88ceb261dcc2dc059056838850d8e2dc1ef9e22864a46d7f596dec25b",
     "spicy_docs/sources/scorecards/heritage_action.py": "3f56c0eabd81a65131160f75686dde9fa8174400fd3696a708a689fa4106cf85",
@@ -93,16 +92,42 @@
     "spicy_docs/sources/scorecards/votervoice_public.py": "413b79dc19a8ff1d339bd4aeefea8dd0095c7a0f706309427ceaea92423fc31b",
     "spicy_docs/sources/scorecards/workbooks.py": "7d4481ec02d3f020ea290ead619af46e555680f9450d338bfccf5c0f9d971d11"
   },
-  "explicit_runtime_dependencies": {},
-  "wheel": "spicy_docs-0.54.0+scorecards.1a2bc6409221-py3-none-any.whl",
-  "wheel_sha256": "8d9ab06ef48f20e4359a34299e93d20285a3feec033e4dba526e8d6c37b2cc23",
+  "explicit_runtime_dependencies": {
+    "spicy_docs/reading/pdf_bytes.py": "889dc357391a000f5857516c8eca7fd75f44607791247e98d1fb80c31e925b4c"
+  },
+  "wheel": "spicy_docs-0.54.0+scorecards.0a04bc543988-py3-none-any.whl",
+  "wheel_sha256": "12a64a15b02b323f5b933351c09206a67123c570a8ad88a220d1a9b3f323f66f",
   "repeat_build_identical": true,
   "unrelated_runtime_and_dependency_metadata_preserved": true,
   "changed_runtime_files": [
     "spicy_docs/sources/scorecards/__init__.py",
-    "spicy_docs/sources/scorecards/freedomworks.py",
-    "spicy_docs/sources/scorecards/freedomworks_wordpress.py"
+    "spicy_docs/sources/scorecards/afge_noted_pdf.py",
+    "spicy_docs/sources/scorecards/national_farmers_union.py",
+    "spicy_docs/sources/scorecards/qualified_observations.py",
+    "spicy_docs/sources/scorecards/reproductive_freedom.py",
+    "spicy_docs/sources/scorecards/sace_action.py",
+    "spicy_docs/reading/pdf_bytes.py"
   ],
-  "scope": "Local candidate; tests and source qualification required before adoption",
-  "source_commit": "ae2c71ee55388d4218a5cd8c14c695f7f174067a"
+  "scope": "Reviewed reader package repin; source publication and scheduled refresh remain separate.",
+  "scorecard_modules_source_commit": "a477f80ee4482f2ab2267ecc4dd9cfe8cbe9a14c",
+  "repin_validation": {
+    "retained_source_plan_sha256": "0c3a943d1cb7c1a10a032df7bbd20130f20b471de9b95d68e84c1c0db4c8f1d6",
+    "retained_source_summary_sha256": "147f72ab3a5863332d200be275839ad93fa0afb6600162457dfe9a2c026a5f9c",
+    "package_verification_sha256": "73b261fba7a6358f28efdc6308db4becb9d8262ee871fb108ddcd76b29ab268a",
+    "original_input_replay_complete": true,
+    "new_registry_sources_disabled": true,
+    "publication_performed": false,
+    "checks_passed": [
+      "pytest",
+      "ruff",
+      "types",
+      "dictionary_generate",
+      "dictionary_check",
+      "integration_inventory",
+      "overlay_regression",
+      "registry_regression",
+      "original_input_replay"
+    ],
+    "verification_manifest_sha256": "5a394dcf3e4b4aadf6d42f184dcd32e8e61a039fa9cfdd12942c2ba4f08af684"
+  }
 }

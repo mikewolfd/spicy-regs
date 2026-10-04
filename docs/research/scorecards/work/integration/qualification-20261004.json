@@ -1,0 +1,59 @@
+{
+  "format_version": "scorecard-reader-adoption/1",
+  "observed_at": "2026-10-04T21:36:09+00:00",
+  "provider_version": "0.54.0+scorecards.1a2bc6409221",
+  "wheel_sha256": "8d9ab06ef48f20e4359a34299e93d20285a3feec033e4dba526e8d6c37b2cc23",
+  "source_commit": "ae2c71ee55388d4218a5cd8c14c695f7f174067a",
+  "plan_sha256": "4d78be92a7009421967b30bba172d1bd8f30a5f5184def96d26f13f38ef1e3ec",
+  "source_replay_assessment_sha256": "4139c9d53b4433ce832ad13f6d76dcfa04d8f137c7a625ab1c693cdc943d4971",
+  "qualification_boundary": "All 134 named additional scopes passed across pinned replay runs; whole first run remained refused at the next input constructor",
+  "publisher_network_requests": 0,
+  "wheel_verification": {
+    "status": "passed",
+    "changed_runtime_files": [
+      "spicy_docs/sources/scorecards/__init__.py",
+      "spicy_docs/sources/scorecards/freedomworks.py",
+      "spicy_docs/sources/scorecards/freedomworks_wordpress.py"
+    ],
+    "unchanged_runtime_files": 435,
+    "dependencies_unchanged": true,
+    "record_verified": true,
+    "wheel_sha256": "8d9ab06ef48f20e4359a34299e93d20285a3feec033e4dba526e8d6c37b2cc23",
+    "shared_pdf_validator_unchanged": true
+  },
+  "checks": [
+    {
+      "command": "uv run --frozen pytest -q",
+      "exit_code": 0,
+      "log_sha256": "e5098d552b9a447ee17ac86996e4162aaea7c6294fb413e1255fe3899106e0fc"
+    },
+    {
+      "command": "uv run --frozen ruff check .",
+      "exit_code": 0,
+      "log_sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+    },
+    {
+      "command": "uv run --frozen ty check",
+      "exit_code": 0,
+      "log_sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+    },
+    {
+      "command": "uv run --frozen pytest -q tests/test_scorecard_qualification_inventory.py tests/test_scorecard_publication_inventory.py tests/test_scorecard_retained.py",
+      "exit_code": 0,
+      "log_sha256": "b39f61924eaccfd76abce508e7b00c23680383251bd104e8c15236912533d192"
+    }
+  ],
+  "receipt_readback_benchmark": {
+    "receipts": 19047,
+    "reconstruction_passes_before": 4,
+    "reconstruction_passes_after": 2,
+    "median_seconds_before": 20.2675,
+    "median_seconds_after": 9.8453,
+    "identical_rows": true,
+    "source_hashes": 6,
+    "scope": "Bounded receipt reconstruction boundary; not a full publication forecast",
+    "handoff_sha256": "88edc08f51f00f58e8aaa97971a517735e40c940a98e1fe8c9e8c3b9a8ce2dda"
+  },
+  "publication_status": "Source-qualified; publication tracked separately in integration_publications.json",
+  "scheduled_refresh_status": "Separate configured live acquisition qualification required"
+}
