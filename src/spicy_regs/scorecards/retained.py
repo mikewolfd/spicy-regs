@@ -47,33 +47,77 @@ def qualified_reader_inputs(entry, resolve_path):
     return read(inputs)
 
 
-def canonical(rows, *, observation_ids=False):
+def canonical(rows, *, observation_ids=False, capture_ids=None):
     omitted = {"snapshot_id", "capture_id", "capture_ids_json", "capture_roles_json"} if observation_ids else set()
     uuid = r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}"
 
-    def value(item, field=""):
+    def locator(match, scope):
+        if capture_ids is None:
+            return match[0]
+        selected = capture_ids.get(match[0])
+        if selected is None or (scope is not None and selected[0] != scope):
+            raise ScorecardReplayError("Qualified source reference locator cites an unselected capture")
+        return json.dumps(selected, separators=(",", ":"))
+
+    def value(item, field="", scope=None):
         if isinstance(item, dict):
-            return {key: value(text, key) for key, text in item.items()}
+            return {key: value(text, key, scope) for key, text in item.items()}
         if isinstance(item, list):
-            return [value(text, field) for text in item]
+            return [value(text, field, scope) for text in item]
         if isinstance(item, str) and observation_ids:
             if field.endswith("source_path"):
+                item = re.sub(
+                    r"(?<=capture:)([^#;/]+)(?=[#;/]|$)",
+                    lambda match: locator(match, scope),
+                    item,
+                )
                 item = re.sub(r"(?<=;observation=)" + uuid + r"(?=[;/]|$)", "<observation>", item)
                 item = re.sub(r"((?:extraction|observation)\[)" + uuid + r"(\])", r"\1<observation>\2", item)
             elif field.endswith("_json"):
-                return json.dumps(value(json.loads(item)), sort_keys=True)
+                return json.dumps(value(json.loads(item), scope=scope), sort_keys=True)
         return item
 
     return Counter(
-        json.dumps(value({k: v for k, v in row.items() if k not in omitted}), sort_keys=True) for row in rows
+        json.dumps(
+            value({k: v for k, v in row.items() if k not in omitted}, scope=row.get("scorecard_id")),
+            sort_keys=True,
+        )
+        for row in rows
     )
+
+
+def _capture_locator_ids(tables):
+    """Give selected captures stable keys without changing publisher identifiers.
+
+    Source paths may cite another document in the same snapshot. Match that
+    document by its ordered capture selection, rather than dropping the link
+    or treating every fresh capture ID as the same document.
+    """
+    result = {}
+    for snapshot in tables.get("scorecard_snapshots", []):
+        selected = json.loads(snapshot.get("capture_ids_json", "[]"))
+        if (
+            not isinstance(selected, list)
+            or any(not isinstance(identity, str) or not identity for identity in selected)
+            or len(set(selected)) != len(selected)
+        ):
+            raise ScorecardReplayError("Qualified snapshot capture selection is malformed")
+        for ordinal, identity in enumerate(selected):
+            stable = (snapshot["scorecard_id"], ordinal)
+            if identity in result and result[identity] != stable:
+                raise ScorecardReplayError("Qualified reference repeats a capture in different snapshot positions")
+            result[identity] = stable
+    return result
 
 
 def check_reference(actual, reference):
     if set(actual) != set(reference):
         raise ScorecardReplayError("Qualified reference does not contain the complete source table family")
+    actual_ids, reference_ids = _capture_locator_ids(actual), _capture_locator_ids(reference)
     for name in actual:
-        if canonical(actual[name], observation_ids=True) != canonical(reference[name], observation_ids=True):
+        if canonical(actual[name], observation_ids=True, capture_ids=actual_ids) != canonical(
+            reference[name], observation_ids=True, capture_ids=reference_ids
+        ):
             raise ScorecardReplayError("Reader facts differ from the qualified source reference: " + name)
 
 

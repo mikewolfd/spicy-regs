@@ -196,3 +196,103 @@ def test_semantic_observation_id_normalization_preserves_page_and_field(suffix):
     assert retained.canonical([first], observation_ids=True) != retained.canonical([second], observation_ids=True)
     second = {**first, "value_text": str(uuid4())}
     assert retained.canonical([first], observation_ids=True) != retained.canonical([second], observation_ids=True)
+
+
+def capture_paths(prefix):
+    selected = [prefix + "-catalog", prefix + "-detail"]
+    return {
+        "scorecard_snapshots": [{"scorecard_id": "source:edition", "capture_ids_json": json.dumps(selected)}],
+        "scorecard_items": [
+            {
+                "scorecard_id": "source:edition",
+                "source_url": "https://source.example/catalog",
+                "source_path": "$[0]",
+                "position_source_path": "capture:" + selected[1] + "#$.stance",
+                "references_json": json.dumps(
+                    [{"source_path": "capture:" + selected[0] + "#$.citation", "citation_text": "H.R. 1"}]
+                ),
+                "value_text": "94%",
+            }
+        ],
+    }
+
+
+def test_capture_locator_ids_change_without_changing_selected_document_or_native_facts():
+    retained.check_reference(capture_paths("fresh"), capture_paths("retained"))
+
+
+@pytest.mark.parametrize("change", ["target", "order", "unknown", "field", "native", "native_capture_text"])
+def test_capture_locator_comparison_preserves_attribution_and_literal_values(change):
+    actual, reference = capture_paths("fresh"), capture_paths("retained")
+    row = actual["scorecard_items"][0]
+    if change == "target":
+        row["position_source_path"] = "capture:fresh-catalog#$.stance"
+    elif change == "order":
+        actual["scorecard_snapshots"][0]["capture_ids_json"] = json.dumps(["fresh-detail", "fresh-catalog"])
+    elif change == "unknown":
+        row["position_source_path"] = "capture:unselected#$.stance"
+    elif change == "field":
+        row["position_source_path"] = "capture:fresh-detail#$.different_stance"
+    elif change == "native":
+        row["value_text"] = "93%"
+    else:
+        row["value_text"] = "capture:fresh-detail#$.stance"
+        reference["scorecard_items"][0]["value_text"] = "capture:retained-detail#$.stance"
+    with pytest.raises(ScorecardReplayError, match="source reference"):
+        retained.check_reference(actual, reference)
+
+
+def test_unknown_locator_refuses_even_when_both_inputs_repeat_the_same_unknown_token():
+    actual, reference = capture_paths("fresh"), capture_paths("retained")
+    for tables in (actual, reference):
+        tables["scorecard_items"][0]["position_source_path"] = "capture:unselected#$.stance"
+    with pytest.raises(ScorecardReplayError, match="source reference"):
+        retained.check_reference(actual, reference)
+
+
+def test_locator_cannot_cross_into_another_snapshot_even_when_both_inputs_agree():
+    actual, reference = capture_paths("fresh"), capture_paths("retained")
+    for tables, prefix in ((actual, "fresh"), (reference, "retained")):
+        tables["scorecard_snapshots"].append(
+            {"scorecard_id": "other:edition", "capture_ids_json": json.dumps([prefix + "-other"])}
+        )
+        tables["scorecard_items"][0]["position_source_path"] = "capture:" + prefix + "-other#$.stance"
+    with pytest.raises(ScorecardReplayError, match="source reference"):
+        retained.check_reference(actual, reference)
+
+
+@pytest.mark.parametrize("change", [None, "action_field", "capture_target"])
+def test_compound_member_action_locator_preserves_native_field_and_document(change):
+    actual, reference = capture_paths("fresh"), capture_paths("retained")
+    for tables, prefix in ((actual, "fresh"), (reference, "retained")):
+        tables["scorecard_items"][0]["source_path"] = (
+            "$[0].factors[0];action_source=capture:" + prefix + "-detail#$.positions[3]"
+        )
+    path = actual["scorecard_items"][0]["source_path"]
+    if change == "action_field":
+        actual["scorecard_items"][0]["source_path"] = path.replace("positions[3]", "positions[4]")
+    elif change == "capture_target":
+        actual["scorecard_items"][0]["source_path"] = path.replace("fresh-detail", "fresh-catalog")
+    if change:
+        with pytest.raises(ScorecardReplayError, match="source reference"):
+            retained.check_reference(actual, reference)
+    else:
+        retained.check_reference(actual, reference)
+
+
+def test_nested_native_citation_text_is_not_capture_locator_normalized():
+    actual, reference = capture_paths("fresh"), capture_paths("retained")
+    for tables, prefix in ((actual, "fresh"), (reference, "retained")):
+        refs = json.loads(tables["scorecard_items"][0]["references_json"])
+        refs[0]["citation_text"] = "capture:" + prefix + "-detail#literal-publisher-citation"
+        tables["scorecard_items"][0]["references_json"] = json.dumps(refs)
+    with pytest.raises(ScorecardReplayError, match="source reference"):
+        retained.check_reference(actual, reference)
+
+
+def test_duplicate_capture_selection_refuses_even_when_both_references_agree():
+    actual, reference = capture_paths("fresh"), capture_paths("retained")
+    for tables, prefix in ((actual, "fresh"), (reference, "retained")):
+        tables["scorecard_snapshots"][0]["capture_ids_json"] = json.dumps([prefix + "-detail"] * 2)
+    with pytest.raises(ScorecardReplayError, match="capture selection is malformed"):
+        retained.check_reference(actual, reference)

@@ -28,6 +28,12 @@ response bytes, observation time and direct or Zyte provenance. Replay requires
 the exact request sequence and consumes every capture. An HTML or JSON API
 reader still runs its own pagination, count and stable-reread checks.
 
+Reference comparison preserves the document and field named by each source
+locator. Fresh capture IDs inside locator fields match the selected snapshot's
+ordered captures. Unknown captures and links into another snapshot refuse;
+publisher identifiers, literal values, URLs and locator suffixes stay exact.
+This comparison does not rewrite the acquired or published rows.
+
 ## Build and adopt the provider
 
 Use a frozen provider directory containing the reviewed scorecard modules. Build
