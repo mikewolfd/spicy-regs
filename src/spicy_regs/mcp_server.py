@@ -1826,39 +1826,33 @@ def _tools() -> list[Tool]:
 
     @tool
     def describe_table(table: str, detail: bool = False) -> dict[str, Any]:
-        """Return a table's columns with their meanings, row identity, coverage caveats and joins.
+        """Return columns, meanings, row identity, coverage caveats and joins.
 
-        Coverage metadata describes supported output, not population or
-        freshness. columns are the loaded view's with dictionary meanings
-        (declared ones if unavailable); schema_differences names what the view
-        does not share with the dictionary. publication is the live data
-        version: pinned rows (prefer them to prose counts), coverage kind and
-        published_at, when the publisher moved the pointer, not when data was
-        read (basis last_object_write: the move was at or after it). inputs:
-        the parents its producer recorded (none recorded is not none; a read
-        that bypassed the download helper is not recorded), built_from beside
-        live; input_table_current compares the parent table's bytes (its
-        family can move for another table); inputs_current is false if any
-        lags, else null if any is unknown. prior_generation: the table's own
-        earlier output, not an input. snapshot_inputs: a rulemaking snapshot's
-        sources.
-        qualification: the live pin beside the output ledger's audited pin,
-        date and disposition, for the ledger's publisher only; not_in_ledger:
-        absent from the bundled output ledger, not unevidenced. joins: the
-        declared joins it makes (outgoing) and receives (incoming).
-        detail=true adds outgoing join measurements and the ledger's statements.
-        Incoming measurements reference the child's detailed description; baseline
-        counts and floors remain here. Missing expected_cardinality means unspecified,
-        and missing measured_via means the child is measured directly. detail=false
-        (default) names omitted measurements and statements in detail.omitted.
-        A view column projecting a source column unchanged carries its
-        meaning, else its declared one or null. A FEC view's
-        release_compatibility appears once, in publication (relationship when
-        unavailable); detail=false keeps its pins, reasons, dependency
-        generations and receipt count. compatible means the captured data,
-        interpretation and consumer match the selected release, not
-        current/net money or completeness. A financial row's eligible status
-        is only for its named purpose.
+        Coverage describes supported output, not live population or freshness.
+        columns are loaded columns with dictionary meanings (declared columns
+        if unavailable); schema_differences compares them. publication gives
+        pinned rows, coverage kind and published_at: pointer move, not source
+        read; last_object_write is a lower bound on that move.
+        inputs are recorded producer parents, built_from beside live. Absent
+        inputs do not prove none were used. input_table_current compares parent
+        bytes; a family may move for another table. inputs_current is false if
+        any lags, else null if any is unknown. prior_generation is earlier output,
+        not an input; snapshot_inputs are rulemaking snapshot sources.
+        qualification compares live and audited pins, date and disposition for
+        the ledger's publisher only. not_in_ledger means absent from that ledger,
+        not unevidenced. joins lists outgoing and incoming declarations.
+        detail=true adds full outgoing measurements and ledger statements;
+        incoming measurements link to the child's detailed description, keeping
+        baselines here. Missing expected_cardinality means unspecified; missing
+        measured_via means measure the child. detail=false names omissions in
+        detail.omitted.
+        A view column preserving a source column inherits its meaning; otherwise
+        its declared meaning or null. FEC release_compatibility appears once in
+        publication (relationship if unavailable); detail=false keeps pins,
+        reasons, dependency generations and receipt count. compatible means
+        captured data, interpretation and consumer match the selected release,
+        not current/net money or completeness. Financial eligibility applies
+        only to its named purpose.
         """
         cursor = _get_connection().cursor()
         with _statement_timeout(cursor):
