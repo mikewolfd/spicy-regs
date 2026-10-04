@@ -1254,8 +1254,8 @@
       "treasurer_name": "Name of the committee's treasurer.",
       "organization_type_full": "Human-readable sponsoring organization type (e.g. `Corporation`, `Labor Organization`, `Trade Association`). Often null.",
       "filing_frequency": "Single-letter filing frequency code (e.g. `A` administratively terminated, `M` monthly, `Q` quarterly, `T` terminated).",
-      "first_file_date": "Date the committee first filed with the FEC (ISO 8601 string).",
-      "last_file_date": "Date of the committee's most recent filing (ISO 8601 string).",
+      "first_file_date": "Date the committee first filed with the FEC.",
+      "last_file_date": "Date of the committee's most recent filing.",
       "cycles": "Native list of election-cycle years the committee was active in (e.g. `[2018, 2020, 2022]`). Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "candidate_ids": "Native list of OpenFEC candidate IDs associated with the committee (e.g. `[\"P00008052\"]`). Often `[]`. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
     }

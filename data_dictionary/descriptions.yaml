@@ -1265,16 +1265,17 @@ tables:
       One row per observed Federal Election Commission committee. The current
       reader acquires from the unfiltered OpenFEC `/v1/committees/` endpoint
       through SpicyDocs; the delivered seed's selected scope is stated above.
-      SpicyRegs preserves the existing 16 fields and JSON arrays, merges complete
-      fresh traversals with prior observations by committee_id, and lets a fresh
-      whole row replace its prior row. Raw page captures and acquisition
+      SpicyRegs preserves the registry's fields, merges complete fresh traversals
+      with prior observations by committee_id, and lets a fresh whole row replace
+      its prior row. Raw page captures and acquisition
       manifests remain in FEC_CAPTURE_DIR. This identity/reference table can
       join other records carrying an FEC committee identifier. The company,
       union or association behind a PAC (FEC's connected organization) is not a
       column here: join `fec_committee_history` on committee_id and read
       `connected_organization_name`, one value per two-year cycle as that
       cycle's committee master states it (take the latest cycle for the current
-      sponsor). All columns are VARCHAR; array-valued fields are JSON strings.
+      sponsor). first_file_date and last_file_date are dates, cycles and
+      candidate_ids are native lists, and the other columns are text.
     columns:
       committee_id: "OpenFEC committee identifier (e.g. `C00684373`). Primary key / dedup key. Joins `fec_committee_history.committee_id` for per-cycle names and the connected organization."
       name: "Committee name as registered with the FEC."
@@ -1288,8 +1289,8 @@ tables:
       treasurer_name: "Name of the committee's treasurer."
       organization_type_full: "Human-readable sponsoring organization type (e.g. `Corporation`, `Labor Organization`, `Trade Association`). Often null."
       filing_frequency: "Single-letter filing frequency code (e.g. `A` administratively terminated, `M` monthly, `Q` quarterly, `T` terminated)."
-      first_file_date: "Date the committee first filed with the FEC (ISO 8601 string)."
-      last_file_date: "Date of the committee's most recent filing (ISO 8601 string)."
+      first_file_date: "Date the committee first filed with the FEC."
+      last_file_date: "Date of the committee's most recent filing."
       cycles_json: "JSON array of election-cycle years the committee was active in (e.g. `[2018, 2020, 2022]`)."
       candidate_ids_json: "JSON array of OpenFEC candidate IDs associated with the committee (e.g. `[\"P00008052\"]`). Often `[]`."
   fec_source_catalog:
@@ -1438,14 +1439,19 @@ tables:
       remain visible. This table does not infer organization affiliations or
       replace org_committee_links name matches.
     summary: >-
-      Source-stated roles and associations with their exact evidence. Select
-      value_status before treating rows as positive edges, then use the subject
-      and object types with their ID statuses before joining identifiers.
-      source_locator_json retains collection_id and source_record_id when
-      emitted by the retained-input rollup; extract both to join exactly to
-      fec_source_records. Standalone mapper outputs may lack those parent keys.
-      source_family identifies the mapper's native source family and need not
-      equal the official catalogue ID; use the parent record for that join.
+      Source-stated roles and associations. Explicit absence states (a missing
+      field, null, empty string or list, or a reported none) are rows too, so a
+      row is not by itself an edge. Whether the source reported a value
+      (value_status), the identifier shape statuses, the mapper's source family
+      and the exact evidence (source_sha256, source_url, observed_at,
+      source_locator_json, source_fields_json) are in the row's receipt, not in
+      this table: the etl_receipts row with dataset = 'fec_relationships' and
+      outcome = 'accepted' whose identity_json contains the row's record_id. For
+      example, `regexp_extract(processing_json, '\["value_status",\["str","([^"]*)"', 1)`
+      reads value_status; keep rows where it is `reported` before treating them
+      as edges. A retained-input locator names collection_id and
+      source_record_id, which identify the source record among the
+      fec_source_records receipts.
     columns:
       subject_id: "Source-reported identifier of the relationship subject. Interpret with subject_type and subject_id_status."
       subject_type: "Source entity type of the subject, such as committee or candidate."

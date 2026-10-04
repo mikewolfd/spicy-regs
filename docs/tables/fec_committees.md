@@ -4,7 +4,7 @@
 
 **Political committees**
 
-One row per observed Federal Election Commission committee. The current reader acquires from the unfiltered OpenFEC `/v1/committees/` endpoint through SpicyDocs; the delivered seed's selected scope is stated above. SpicyRegs preserves the existing 16 fields and JSON arrays, merges complete fresh traversals with prior observations by committee_id, and lets a fresh whole row replace its prior row. Raw page captures and acquisition manifests remain in FEC_CAPTURE_DIR. This identity/reference table can join other records carrying an FEC committee identifier. The company, union or association behind a PAC (FEC's connected organization) is not a column here: join `fec_committee_history` on committee_id and read `connected_organization_name`, one value per two-year cycle as that cycle's committee master states it (take the latest cycle for the current sponsor). All columns are VARCHAR; array-valued fields are JSON strings.
+One row per observed Federal Election Commission committee. The current reader acquires from the unfiltered OpenFEC `/v1/committees/` endpoint through SpicyDocs; the delivered seed's selected scope is stated above. SpicyRegs preserves the registry's fields, merges complete fresh traversals with prior observations by committee_id, and lets a fresh whole row replace its prior row. Raw page captures and acquisition manifests remain in FEC_CAPTURE_DIR. This identity/reference table can join other records carrying an FEC committee identifier. The company, union or association behind a PAC (FEC's connected organization) is not a column here: join `fec_committee_history` on committee_id and read `connected_organization_name`, one value per two-year cycle as that cycle's committee master states it (take the latest cycle for the current sponsor). first_file_date and last_file_date are dates, cycles and candidate_ids are native lists, and the other columns are text.
 
 Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_committees'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
 
@@ -29,7 +29,7 @@ Processing fields, source witnesses, conversion inputs and diagnostics reference
 | `treasurer_name` | `VARCHAR` | Name of the committee's treasurer. |
 | `organization_type_full` | `VARCHAR` | Human-readable sponsoring organization type (e.g. `Corporation`, `Labor Organization`, `Trade Association`). Often null. |
 | `filing_frequency` | `VARCHAR` | Single-letter filing frequency code (e.g. `A` administratively terminated, `M` monthly, `Q` quarterly, `T` terminated). |
-| `first_file_date` | `DATE` | Date the committee first filed with the FEC (ISO 8601 string). |
-| `last_file_date` | `DATE` | Date of the committee's most recent filing (ISO 8601 string). |
+| `first_file_date` | `DATE` | Date the committee first filed with the FEC. |
+| `last_file_date` | `DATE` | Date of the committee's most recent filing. |
 | `cycles` | `INTEGER[]` | Native list of election-cycle years the committee was active in (e.g. `[2018, 2020, 2022]`). Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `candidate_ids` | `VARCHAR[]` | Native list of OpenFEC candidate IDs associated with the committee (e.g. `["P00008052"]`). Often `[]`. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
