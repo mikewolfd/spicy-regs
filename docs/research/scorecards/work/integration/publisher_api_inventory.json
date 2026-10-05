@@ -7391,6 +7391,55 @@
       "rights_status": "unreviewed",
       "next_step": "Follow publisher-linked application/archival leads; inspect missing scripts or resolve access/authority, then test only attributable read-only data routes.",
       "retirement_status": "not_established"
+    },
+    {
+      "publisher_id": "smart_transportation",
+      "publisher_name": "SMART Transportation Division",
+      "source_id": "smart_transportation:federal",
+      "original_scorecard_url": "https://www.smart-union.org/house-budget-votes-place-amtrak-in-the-crosshairs/",
+      "homepage_url": "https://www.smart-union.org/",
+      "discovery_status": "html_pdf_only_observed",
+      "observed_at": "2026-10-05T04:04:54.413681+00:00",
+      "search_method": [
+        "Reviewed original publisher HTML and archived original PDF renditions"
+      ],
+      "inspected_urls": [
+        "https://www.smart-union.org/house-budget-votes-place-amtrak-in-the-crosshairs/",
+        "https://web.archive.org/web/20150504132237id_/http://utu.org/worksite/washington/PDFs/SMART_Transportation_Scorecard_House_2013-14_(PRINT).pdf",
+        "https://web.archive.org/web/20150504132238id_/http://utu.org/worksite/washington/PDFs/SMART_Transportation_Scorecard_US_Senate_2013-14_(PRINT).pdf"
+      ],
+      "evidence_refs": [
+        "extension-smart-committee-2023",
+        "extension-smart-house-2013-14",
+        "extension-smart-senate-2013-14"
+      ],
+      "search_refs": [],
+      "endpoints": [],
+      "acquisition_alternatives": {
+        "observed_or_previously_reported_formats": [
+          "html",
+          "pdf"
+        ],
+        "linked_export_urls": [],
+        "original_source_urls": [
+          "https://www.smart-union.org/house-budget-votes-place-amtrak-in-the-crosshairs/",
+          "https://web.archive.org/web/20150504132237id_/http://utu.org/worksite/washington/PDFs/SMART_Transportation_Scorecard_House_2013-14_(PRINT).pdf",
+          "https://web.archive.org/web/20150504132238id_/http://utu.org/worksite/washington/PDFs/SMART_Transportation_Scorecard_US_Senate_2013-14_(PRINT).pdf"
+        ],
+        "profiles": [],
+        "distinction": "Original HTML/PDF and generic WordPress navigation are not publisher rating APIs"
+      },
+      "uninspected_script_urls": [],
+      "blockers": [],
+      "observations": [
+        "No rating API is established by these named document captures; uninspected routes remain in scope",
+        "Named SMART-TD committee assessment and archived SMART Transportation Division House/Senate renditions only. The historical United Transportation Union candidate remains separate; a reused archive host does not establish continuity."
+      ],
+      "complete_scorecard_coverage": false,
+      "production_qualified_by_this_inventory": false,
+      "rights_status": "unreviewed",
+      "next_step": "Adopt reviewed readers, replay retained scopes, publish and verify; recover further editions separately",
+      "retirement_status": "not_established"
     }
   ],
   "evidence": {
@@ -14653,6 +14702,63 @@
       "request_outcome": "response_received",
       "body_retained_publicly": false,
       "evidence_policy": "hash_only"
+    },
+    "extension-smart-committee-2023": {
+      "requested_url": "https://www.smart-union.org/house-budget-votes-place-amtrak-in-the-crosshairs/",
+      "resolved_url": "https://www.smart-union.org/house-budget-votes-place-amtrak-in-the-crosshairs/",
+      "http_status": 200,
+      "content_type": "text/html",
+      "observed_at": "2026-10-05T01:31:40.775048Z",
+      "byte_size": 252724,
+      "sha256": "f7f45851d38702c2deee8b59ee9d8cc8a14ef8fa7d3246641f814df54dd318f7",
+      "method": "GET",
+      "capture_id": "extension-smart-committee-2023",
+      "evidence_policy": "hash_only",
+      "parser_version": "reviewed-smart-inventory-extension/1",
+      "body_retained_publicly": false,
+      "capture_complete": true,
+      "source_snapshot_complete": false,
+      "request_outcome": "response_received",
+      "review_status": "original_source_verified",
+      "scope_boundary": "Research capture metadata; source completeness has a separate qualification receipt"
+    },
+    "extension-smart-house-2013-14": {
+      "requested_url": "https://web.archive.org/web/20150504132237id_/http://utu.org/worksite/washington/PDFs/SMART_Transportation_Scorecard_House_2013-14_(PRINT).pdf",
+      "resolved_url": "https://web.archive.org/web/20150504132237id_/http://utu.org/worksite/washington/PDFs/SMART_Transportation_Scorecard_House_2013-14_(PRINT).pdf",
+      "http_status": 200,
+      "content_type": "application/pdf",
+      "observed_at": "2026-10-05T01:33:22.343217Z",
+      "byte_size": 1432111,
+      "sha256": "a92c226eedcb278d49ecd73aecf545c45a105377d7c735fd43b8d995359de546",
+      "method": "GET",
+      "capture_id": "extension-smart-house-2013-14",
+      "evidence_policy": "hash_only",
+      "parser_version": "reviewed-smart-inventory-extension/1",
+      "body_retained_publicly": false,
+      "capture_complete": true,
+      "source_snapshot_complete": false,
+      "request_outcome": "response_received",
+      "review_status": "original_source_verified",
+      "scope_boundary": "Research capture metadata; source completeness has a separate qualification receipt"
+    },
+    "extension-smart-senate-2013-14": {
+      "requested_url": "https://web.archive.org/web/20150504132238id_/http://utu.org/worksite/washington/PDFs/SMART_Transportation_Scorecard_US_Senate_2013-14_(PRINT).pdf",
+      "resolved_url": "https://web.archive.org/web/20150504132238id_/http://utu.org/worksite/washington/PDFs/SMART_Transportation_Scorecard_US_Senate_2013-14_(PRINT).pdf",
+      "http_status": 200,
+      "content_type": "application/pdf",
+      "observed_at": "2026-10-05T01:33:23.069990Z",
+      "byte_size": 318859,
+      "sha256": "182c884dd32fadfaeb136b7d2a62d53e8162b9320bd865c2af81fc9525b703bf",
+      "method": "GET",
+      "capture_id": "extension-smart-senate-2013-14",
+      "evidence_policy": "hash_only",
+      "parser_version": "reviewed-smart-inventory-extension/1",
+      "body_retained_publicly": false,
+      "capture_complete": true,
+      "source_snapshot_complete": false,
+      "request_outcome": "response_received",
+      "review_status": "original_source_verified",
+      "scope_boundary": "Research capture metadata; source completeness has a separate qualification receipt"
     }
   },
   "search_evidence": {
@@ -15260,6 +15366,15 @@
       "scorecard_id": "environment_america:2009-original-report-pdf",
       "qualification_receipt": "qualifications/environment_america--2009-original-report-pdf.json",
       "qualification_receipt_sha256": "fdc77fd82ea614f3c398f669895cd1cbcd0b235bc1adc1c9149e1cf94d005f2c"
+    }
+  ],
+  "later_inventory_extensions": [
+    {
+      "publisher_id": "smart_transportation",
+      "observed_at": "2026-10-05T04:04:54.413681+00:00",
+      "receipt": "publisher_inventory_extension_smart_20261005.json",
+      "receipt_sha256": "cbcc0d04430a9ad690c388e6ab718a46c243a7df6ec05c3c53508cf38295aa66",
+      "boundary": "The dated pass is preserved; later candidates and evidence are in this pinned supplement"
     }
   ]
 }

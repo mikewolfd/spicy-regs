@@ -876,6 +876,22 @@
       "task_id": "ss-7ukv",
       "source_id": "radical_middle:federal",
       "discovery_status_at_expansion": "verified"
+    },
+    {
+      "publisher_id": "smart_transportation",
+      "publisher_name": "SMART Transportation Division",
+      "task_id": "ss-o13k",
+      "source_id": "smart_transportation:federal",
+      "discovery_status_at_expansion": "verified"
+    }
+  ],
+  "later_inventory_extensions": [
+    {
+      "publisher_id": "smart_transportation",
+      "observed_at": "2026-10-05T04:04:54.413681+00:00",
+      "receipt": "publisher_inventory_extension_smart_20261005.json",
+      "receipt_sha256": "cbcc0d04430a9ad690c388e6ab718a46c243a7df6ec05c3c53508cf38295aa66",
+      "boundary": "The dated pass is preserved; later candidates and evidence are in this pinned supplement"
     }
   ]
 }

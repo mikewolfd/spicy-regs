@@ -1,6 +1,6 @@
 # Scorecard adapter support matrix
 
-Generated from [adapter_inventory.json](adapter_inventory.json), observed 2026-10-03T19:34:49.787516+00:00. Rebuild after disposition changes; this document does not enable any source.
+The original discovery pass used [adapter_inventory.json](adapter_inventory.json), observed 2026-10-03T19:34:49.787516+00:00. Rebuild after disposition changes; this document does not enable any source.
 
 User clarified that every census candidate must be accounted for, while some sources will not work. Document confirmed retirement/deprecation, access/authority blocks, unsupported parsing, unresolved discovery and implemented/unqualified status separately. Do not pursue every dead source indefinitely or label an unverified lead deprecated.
 
@@ -152,3 +152,7 @@ The inventory reconciles the entire catalog against existing profiles and receip
 | Radical Middle (`radical_middle`; `ss-7ukv`) | `verified_unimplemented`; html | [original source](https://radicalmiddle.com/x_scorecard04.htm) | HTTP success or a landing-page verification does not prove rated rows, complete scope, or parse fitness. Next: Profile the verified original 108th HTML report and all rated members; establish the historical edition and methodology without implying ongoing publication. |
 
 The detailed inventory retains original source receipts, profile references, capture dates and hashes, limitations, and task identity. Full captured source bytes remain in the external research corpus. PDF work must use the existing shared OvisOCR2, Docling and defaults infrastructure.
+
+## Later publisher additions
+
+The dated discovery pass above remains unchanged. [SMART publisher extension](publisher_inventory_extension_smart_20261005.json) adds original HTML and archived PDF evidence under an explicit SMART Transportation Division identity. Its historical United Transportation Union lead remains separate. These captures establish document acquisition routes; they do not establish a rating API or redistribution rights. See [current integration progress](integration_progress.md) for the maintained candidate set and qualified or published scopes.

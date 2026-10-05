@@ -5,7 +5,7 @@ Generated from `publisher_api_inventory.json` on 2026-10-03T19:50:42Z. Counts be
 For later verified original routes, see the [publisher API route observations](publisher_api_routes.md).
 This inventory preserves the findings of its dated discovery pass.
 
-The catalog and inventory match exactly: **125 publisher candidates**. Every candidate received a bounded original-surface or search-result review. Search-only reviews do not establish original publisher authority. No complete scorecard edition was qualified by this pass.
+At the date of this discovery pass, the catalog and inventory matched exactly: **125 publisher candidates**. Every candidate received a bounded original-surface or search-result review. Search-only reviews do not establish original publisher authority. No complete scorecard edition was qualified by this pass.
 
 | Discovery result | Publishers |
 |---|---:|
@@ -156,3 +156,7 @@ Prioritize complete, source-defined member and item enumeration for APIs that re
 `irfscorecard.org` redirects to unrelated gambling content; this remains an authority block. `democracyscorecard.org` mirror authority remains unresolved. Discovery failure does not mark a publisher deprecated.
 
 Validation checks the catalog/publisher bijection and every nested endpoint evidence reference. Runtime adapters and publication settings are unchanged.
+
+## Later publisher additions
+
+The dated discovery pass above remains unchanged. [SMART publisher extension](publisher_inventory_extension_smart_20261005.json) adds original HTML and archived PDF evidence under an explicit SMART Transportation Division identity. Its historical United Transportation Union lead remains separate. These captures establish document acquisition routes; they do not establish a rating API or redistribution rights. See [current integration progress](integration_progress.md) for the maintained candidate set and qualified or published scopes.

@@ -1,8 +1,8 @@
 {
   "dataset": "scorecard_source_catalog",
   "schema_version": 1,
-  "surveyed_at": "2026-10-03T17:48:51.414495+00:00",
-  "coverage_statement": "Initial discovery census; candidates include historical leads and mixed candidate guides. Year extrema and congress arrays record evidence observed, never continuous availability. No production-supported publisher.",
+  "surveyed_at": "2026-10-05T04:04:54.413681+00:00",
+  "coverage_statement": "Initial discovery census; candidates include historical leads and mixed candidate guides. Year extrema and congress arrays record evidence observed, never continuous availability. No production-supported publisher. Later verified publisher additions are recorded in later_inventory_extensions; installed readers and published scopes are recorded separately in work/integration/integration_progress.json.",
   "sources": [
     {
       "source_id": "aauw:federal",
@@ -4438,6 +4438,76 @@
         "census-radicalmiddle-108"
       ],
       "scope_status": "federal_congressional"
+    },
+    {
+      "source_id": "smart_transportation:federal",
+      "publisher_id": "smart_transportation",
+      "publisher_name": "SMART Transportation Division",
+      "publisher_aliases": [
+        "SMART-TD"
+      ],
+      "homepage_url": "https://www.smart-union.org/",
+      "scorecard_name": "SMART Transportation Division congressional scorecards and committee assessments",
+      "scorecard_index_url": "https://www.smart-union.org/house-budget-votes-place-amtrak-in-the-crosshairs/",
+      "archive_url": "https://web.archive.org/web/20150504132237id_/http://utu.org/worksite/washington/PDFs/SMART_Transportation_Scorecard_House_2013-14_(PRINT).pdf",
+      "first_known_year": 2013,
+      "last_known_year": 2023,
+      "congresses_available": [
+        113
+      ],
+      "chamber_scope": "both",
+      "source_format": [
+        "html",
+        "pdf"
+      ],
+      "machine_readable": "partial",
+      "discovered_via": [
+        {
+          "kind": "manual_original_publisher_recovery",
+          "url": "https://www.smart-union.org/house-budget-votes-place-amtrak-in-the-crosshairs/",
+          "capture_id": "extension-smart-committee-2023"
+        },
+        {
+          "kind": "manual_original_publisher_recovery",
+          "url": "https://web.archive.org/web/20150504132237id_/http://utu.org/worksite/washington/PDFs/SMART_Transportation_Scorecard_House_2013-14_(PRINT).pdf",
+          "capture_id": "extension-smart-house-2013-14"
+        },
+        {
+          "kind": "manual_original_publisher_recovery",
+          "url": "https://web.archive.org/web/20150504132238id_/http://utu.org/worksite/washington/PDFs/SMART_Transportation_Scorecard_US_Senate_2013-14_(PRINT).pdf",
+          "capture_id": "extension-smart-senate-2013-14"
+        }
+      ],
+      "discovered_at": "2026-10-05T01:31:40.775048Z",
+      "last_verified_at": "2026-10-05T04:04:54.413681+00:00",
+      "discovery_status": "verified",
+      "rights_status": "unreviewed",
+      "notes": "Named SMART-TD committee assessment and archived SMART Transportation Division House/Senate renditions only. The historical United Transportation Union candidate remains separate; a reused archive host does not establish continuity.",
+      "verification_capture_ids": [
+        "extension-smart-committee-2023",
+        "extension-smart-house-2013-14",
+        "extension-smart-senate-2013-14"
+      ],
+      "scope_status": "named_original_renditions_verified",
+      "latest_discovery_outcome": {
+        "outcome": "later_original_publisher_verified",
+        "capture_ids": [
+          "extension-smart-committee-2023",
+          "extension-smart-house-2013-14",
+          "extension-smart-senate-2013-14"
+        ],
+        "notes": "Named SMART-TD committee assessment and archived SMART Transportation Division House/Senate renditions only. The historical United Transportation Union candidate remains separate; a reused archive host does not establish continuity."
+      }
     }
-  ]
+  ],
+  "later_inventory_extensions": [
+    {
+      "publisher_id": "smart_transportation",
+      "observed_at": "2026-10-05T04:04:54.413681+00:00",
+      "receipt": "work/integration/publisher_inventory_extension_smart_20261005.json",
+      "receipt_sha256": "cbcc0d04430a9ad690c388e6ab718a46c243a7df6ec05c3c53508cf38295aa66",
+      "boundary": "The dated pass is preserved; later candidates and evidence are in this pinned supplement"
+    }
+  ],
+  "initial_surveyed_at": "2026-10-03T17:48:51.414495+00:00"
 }

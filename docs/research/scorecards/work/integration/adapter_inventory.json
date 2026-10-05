@@ -11007,6 +11007,137 @@
       "exclusion_status": "not_excluded",
       "reviewed_at": "2026-10-03T19:34:49.787516+00:00",
       "support_status": "verified_unimplemented"
+    },
+    "smart_transportation": {
+      "publisher_id": "smart_transportation",
+      "publisher_name": "SMART Transportation Division",
+      "source_id": "smart_transportation:federal",
+      "task_id": "ss-o13k",
+      "catalog_state": {
+        "discovery_status": "verified",
+        "scope_status": "named_original_renditions_verified",
+        "rights_status": "unreviewed",
+        "last_verified_at": "2026-10-05T04:04:54.413681+00:00"
+      },
+      "implementation_disposition": "named_readers_pending_consumer_adoption",
+      "original_evidence_level": "original_edition_document_observed",
+      "formats_observed_or_reported": [
+        "html",
+        "pdf"
+      ],
+      "original_source_urls": [
+        "https://www.smart-union.org/house-budget-votes-place-amtrak-in-the-crosshairs/",
+        "https://web.archive.org/web/20150504132237id_/http://utu.org/worksite/washington/PDFs/SMART_Transportation_Scorecard_House_2013-14_(PRINT).pdf",
+        "https://web.archive.org/web/20150504132238id_/http://utu.org/worksite/washington/PDFs/SMART_Transportation_Scorecard_US_Senate_2013-14_(PRINT).pdf"
+      ],
+      "profile_ids": [],
+      "profile_assessments": [],
+      "source_evidence": [
+        {
+          "requested_url": "https://www.smart-union.org/house-budget-votes-place-amtrak-in-the-crosshairs/",
+          "resolved_url": "https://www.smart-union.org/house-budget-votes-place-amtrak-in-the-crosshairs/",
+          "http_status": 200,
+          "content_type": "text/html",
+          "observed_at": "2026-10-05T01:31:40.775048Z",
+          "byte_size": 252724,
+          "sha256": "f7f45851d38702c2deee8b59ee9d8cc8a14ef8fa7d3246641f814df54dd318f7",
+          "method": "GET",
+          "capture_id": "extension-smart-committee-2023",
+          "evidence_policy": "hash_only",
+          "parser_version": "reviewed-smart-inventory-extension/1",
+          "body_retained_publicly": false,
+          "capture_complete": true,
+          "source_snapshot_complete": false,
+          "request_outcome": "response_received",
+          "review_status": "original_source_verified",
+          "scope_boundary": "Research capture metadata; source completeness has a separate qualification receipt"
+        },
+        {
+          "requested_url": "https://web.archive.org/web/20150504132237id_/http://utu.org/worksite/washington/PDFs/SMART_Transportation_Scorecard_House_2013-14_(PRINT).pdf",
+          "resolved_url": "https://web.archive.org/web/20150504132237id_/http://utu.org/worksite/washington/PDFs/SMART_Transportation_Scorecard_House_2013-14_(PRINT).pdf",
+          "http_status": 200,
+          "content_type": "application/pdf",
+          "observed_at": "2026-10-05T01:33:22.343217Z",
+          "byte_size": 1432111,
+          "sha256": "a92c226eedcb278d49ecd73aecf545c45a105377d7c735fd43b8d995359de546",
+          "method": "GET",
+          "capture_id": "extension-smart-house-2013-14",
+          "evidence_policy": "hash_only",
+          "parser_version": "reviewed-smart-inventory-extension/1",
+          "body_retained_publicly": false,
+          "capture_complete": true,
+          "source_snapshot_complete": false,
+          "request_outcome": "response_received",
+          "review_status": "original_source_verified",
+          "scope_boundary": "Research capture metadata; source completeness has a separate qualification receipt"
+        },
+        {
+          "requested_url": "https://web.archive.org/web/20150504132238id_/http://utu.org/worksite/washington/PDFs/SMART_Transportation_Scorecard_US_Senate_2013-14_(PRINT).pdf",
+          "resolved_url": "https://web.archive.org/web/20150504132238id_/http://utu.org/worksite/washington/PDFs/SMART_Transportation_Scorecard_US_Senate_2013-14_(PRINT).pdf",
+          "http_status": 200,
+          "content_type": "application/pdf",
+          "observed_at": "2026-10-05T01:33:23.069990Z",
+          "byte_size": 318859,
+          "sha256": "182c884dd32fadfaeb136b7d2a62d53e8162b9320bd865c2af81fc9525b703bf",
+          "method": "GET",
+          "capture_id": "extension-smart-senate-2013-14",
+          "evidence_policy": "hash_only",
+          "parser_version": "reviewed-smart-inventory-extension/1",
+          "body_retained_publicly": false,
+          "capture_complete": true,
+          "source_snapshot_complete": false,
+          "request_outcome": "response_received",
+          "review_status": "original_source_verified",
+          "scope_boundary": "Research capture metadata; source completeness has a separate qualification receipt"
+        }
+      ],
+      "discovery_inputs": [
+        {
+          "kind": "manual_original_publisher_recovery",
+          "url": "https://www.smart-union.org/house-budget-votes-place-amtrak-in-the-crosshairs/",
+          "capture_id": "extension-smart-committee-2023"
+        },
+        {
+          "kind": "manual_original_publisher_recovery",
+          "url": "https://web.archive.org/web/20150504132237id_/http://utu.org/worksite/washington/PDFs/SMART_Transportation_Scorecard_House_2013-14_(PRINT).pdf",
+          "capture_id": "extension-smart-house-2013-14"
+        },
+        {
+          "kind": "manual_original_publisher_recovery",
+          "url": "https://web.archive.org/web/20150504132238id_/http://utu.org/worksite/washington/PDFs/SMART_Transportation_Scorecard_US_Senate_2013-14_(PRINT).pdf",
+          "capture_id": "extension-smart-senate-2013-14"
+        }
+      ],
+      "catalog_notes": "Named SMART-TD committee assessment and archived SMART Transportation Division House/Senate renditions only. The historical United Transportation Union candidate remains separate; a reused archive host does not establish continuity.",
+      "fresh_bounded_review": {
+        "observed_at": "2026-10-05T04:04:54.413681+00:00",
+        "basis": "Frozen original source and independent review pins"
+      },
+      "known_blockers": [
+        "Installed consumer package, public publication and live refresh require separate gates"
+      ],
+      "next_action": "Adopt reviewed readers, replay retained scopes, publish and verify; recover further editions separately",
+      "implementation_state": {
+        "adapter_module_exists": true,
+        "adapter_module_path": "src/spicy_docs/sources/scorecards/smart_transportation.py",
+        "registered_enabled": false,
+        "production_supported": false,
+        "qualified_current_whole_edition": false,
+        "state_basis": "Integrated local source commit f06d19f70ee742e74ce388ea09e6815c2d2ac9d0; consumer adoption is separate"
+      },
+      "fixture_readiness": {
+        "raw_source_captured": true,
+        "checked_full_edition_fixture": true,
+        "qualification_rule": "Reviewed named source references are private; public support requires installed replay and publication readback"
+      },
+      "related_candidate_ids": [
+        "united_transportation"
+      ],
+      "retirement_status": "not_established",
+      "exclusion_status": "not_excluded",
+      "reviewed_at": "2026-10-05T04:04:54.413681+00:00",
+      "pdf_processing_requirement": "Use shared SpicyDocs/DocSpec defaults, Docling/OvisOCR2 and checked data-shaped PDF outcomes",
+      "support_status": "implemented_unqualified"
     }
   },
   "validation": {
@@ -11093,5 +11224,14 @@
       }
     ],
     "proxy_boundary": "Use proxy transport only where already authorized and permitted; it does not turn 403, unrelated redirects or inaccessible source rights into support. No source refusal is reinterpreted as an empty successful read."
-  }
+  },
+  "later_inventory_extensions": [
+    {
+      "publisher_id": "smart_transportation",
+      "observed_at": "2026-10-05T04:04:54.413681+00:00",
+      "receipt": "publisher_inventory_extension_smart_20261005.json",
+      "receipt_sha256": "cbcc0d04430a9ad690c388e6ab718a46c243a7df6ec05c3c53508cf38295aa66",
+      "boundary": "The dated pass is preserved; later candidates and evidence are in this pinned supplement"
+    }
+  ]
 }

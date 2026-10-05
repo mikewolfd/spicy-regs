@@ -3,13 +3,14 @@
   "schema_version": "1",
   "observed_at": "2026-10-05T03:59:13.961676+00:00",
   "input_pins": {
-    "adapter_inventory.json": "656a6a93f6b21733e61aae3ed54fc0a69e3dafcf900eaf44fa22cbf1f37c1b98",
-    "publisher_api_inventory.json": "ff4b3b076c65a7fa2a470770f9710946da97c5a26b9599df6e4789adb7982150",
+    "adapter_inventory.json": "5d7ce442f355c2b7f84d58c6d2df99cbf48574344a101248ee6a04953bf019a4",
+    "publisher_api_inventory.json": "2a699b880c91a46220ac057f30ba50f9f46b8fc932ec92fb0b57d15fc23ec432",
     "integration_qualifications.json": "ac15d66a8eddc1dad1157350797fc30b03c1e7a083c4d25ca63c94a1aed9d2ea"
   },
   "scope": "Every publisher candidate in both inventories; all available editions and renditions remain in scope",
   "states": {
     "identity_review": 1,
+    "implemented_unqualified": 1,
     "published_scope": 66,
     "qualified_scope": 3,
     "unverified_lead": 55
@@ -4696,6 +4697,23 @@
         "https://radicalmiddle.com/x_scorecard04.htm"
       ],
       "next_action": "Integrate remaining available editions and renditions"
+    },
+    {
+      "publisher_id": "smart_transportation",
+      "publisher_name": "SMART Transportation Division",
+      "task_id": "ss-o13k",
+      "state": "implemented_unqualified",
+      "reader": null,
+      "qualified_editions": [],
+      "verified_api_endpoints": [],
+      "discovery_api_status": "html_pdf_only_observed",
+      "discovery_support_status": "implemented_unqualified",
+      "original_source_urls": [
+        "https://www.smart-union.org/house-budget-votes-place-amtrak-in-the-crosshairs/",
+        "https://web.archive.org/web/20150504132237id_/http://utu.org/worksite/washington/PDFs/SMART_Transportation_Scorecard_House_2013-14_(PRINT).pdf",
+        "https://web.archive.org/web/20150504132238id_/http://utu.org/worksite/washington/PDFs/SMART_Transportation_Scorecard_US_Senate_2013-14_(PRINT).pdf"
+      ],
+      "next_action": "Adopt reviewed readers, replay retained scopes, publish and verify; recover further editions separately"
     }
   ],
   "validation": {
