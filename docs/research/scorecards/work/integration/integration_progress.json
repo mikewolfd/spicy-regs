@@ -1,11 +1,11 @@
 {
   "dataset": "scorecard_integration_progress",
   "schema_version": "1",
-  "observed_at": "2026-10-05T22:53:44.782835+00:00",
+  "observed_at": "2026-10-05T23:43:48+00:00",
   "input_pins": {
     "adapter_inventory.json": "db63275cd20d42ae545cca6e454f9add4d264c32a69f683c1bc63ce87c930336",
     "publisher_api_inventory.json": "0de8402dc8e649f2af58ca61f2420be4da0353df6b13bb0977f6550c4149879d",
-    "integration_qualifications.json": "e2697cfdae26f7f55186522154ad85005c02210076d40ea90dace09308394216",
+    "integration_qualifications.json": "bf9491164bb680d93c71ecb61bf3dd7abbf9b2f6f18349a2bb6cc49b44fa3c60",
     "publisher_survey_20261005.json": "7e7431dc37bf8564d16df4f044498e1176f7e654cc0cd694b8bdb8a07944c9c1",
     "publisher_implementation_20261005.json": "02c472173923a4a2f3438155e36b76b83a6dd1d9210504ffec2a76abedbdb2f5",
     "publisher_recovery_20261005.json": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
@@ -122,11 +122,10 @@
   },
   "states": {
     "identity_review": 1,
-    "implemented_unqualified": 1,
     "published_scope": 72,
-    "qualified_scope": 17,
+    "qualified_scope": 19,
     "retired_confirmed": 1,
-    "unverified_lead": 36
+    "unverified_lead": 35
   },
   "publishers": [
     {
@@ -12717,11 +12716,19 @@
       "publisher_id": "united_transportation",
       "publisher_name": "United Transportation Union",
       "task_id": "ss-zhrk",
-      "state": "unverified_lead",
+      "state": "qualified_scope",
       "work_status": "active",
       "work_priority": null,
-      "reader": null,
-      "qualified_editions": [],
+      "reader": "united_transportation",
+      "qualified_editions": [
+        {
+          "publisher_id": "united_transportation",
+          "scorecard_id": "united_transportation:2012-10-26-post-18264-retrospective-assessment",
+          "state": "qualified",
+          "receipt": "qualifications/united_transportation--2012-10-26-post-18264-retrospective-assessment.json",
+          "receipt_sha256": "499be8a16bd112620972bebcc74ce26cd84e82ef6534936aaf3ec967ceb70453"
+        }
+      ],
       "verified_api_endpoints": [],
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
@@ -12916,7 +12923,7 @@
           "byte_size": 12272
         }
       },
-      "next_action": "Review the retained 2012 partial original under an explicitly bounded retrospective scope, preserving both occurrences and null denominator/period details; retain newsletter voting-record references for fuller recovery."
+      "next_action": "Integrate remaining available editions and renditions"
     },
     {
       "publisher_id": "woman_activist",
@@ -13462,11 +13469,26 @@
       "publisher_id": "american_security_council_foundation",
       "publisher_name": "American Security Council Foundation",
       "task_id": "source-qualified:american_security_council_foundation",
-      "state": "implemented_unqualified",
+      "state": "qualified_scope",
       "work_status": "active",
       "work_priority": null,
-      "reader": null,
-      "qualified_editions": [],
+      "reader": "american_security_council_foundation",
+      "qualified_editions": [
+        {
+          "publisher_id": "american_security_council_foundation",
+          "scorecard_id": "american_security_council_foundation:named-2010-house-original",
+          "state": "qualified",
+          "receipt": "qualifications/american_security_council_foundation--named-2010-house-original.json",
+          "receipt_sha256": "4f211f7c0ce51c3e10c87f5a1257cd3968066d377173cc5e6de14d6027c5b0b9"
+        },
+        {
+          "publisher_id": "american_security_council_foundation",
+          "scorecard_id": "american_security_council_foundation:named-2010-senate-original",
+          "state": "qualified",
+          "receipt": "qualifications/american_security_council_foundation--named-2010-senate-original.json",
+          "receipt_sha256": "60fe2306d19425854b7cbace83d9a209248cc774806ae2f57a0e361a31bbda37"
+        }
+      ],
       "verified_api_endpoints": [],
       "discovery_api_status": "html_pdf_only_observed",
       "discovery_support_status": "implemented_unqualified",
@@ -13478,7 +13500,7 @@
       "implementation_finding": null,
       "recovery_finding": null,
       "recovery_api_finding": null,
-      "next_action": "Adopt the independently reviewed 0.60 installed reader and replay the exact retained scopes before ledger admission"
+      "next_action": "Integrate remaining available editions and renditions"
     }
   ],
   "validation": {

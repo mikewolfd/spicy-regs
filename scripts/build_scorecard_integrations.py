@@ -475,7 +475,7 @@ def current_api_inventory(directory, progress):
     """Present current evidence together while retaining each observation's authority."""
     discovery = json.loads((directory / "publisher_api_inventory.json").read_bytes())
     dated = {row["publisher_id"]: row for row in discovery["publishers"]}
-    rows = [
+    rows: list[dict[str, Any]] = [
         {
             "publisher_id": row["publisher_id"],
             "publisher_name": row["publisher_name"],

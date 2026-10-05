@@ -5,6 +5,18 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
+- `spicy_docs-0.60.0`: tagged source `v0.60.0` at merge commit
+  `ec18a2665e2e7764e624cf17a4e718ab4217ae3a`. Its full tree equals the
+  independently reviewed candidate `2d62f887ae9e4972d7abaa6e821387fa3504fc70`.
+  The wheel has SHA-256
+  `4e0bae7cbda92c1af4adbee87000b283c880451b68c8ff14e630f431762cb3f4`;
+  see `spicy_docs-0.60.0.json` for installed replay and review pins. The local
+  consumer adds one named UTU lifetime article assessment and two separately
+  attributed ASCF chamber originals. Source entries stay disabled with
+  `hash_only` retention, unreviewed rights and no historical backfill. Consumer
+  deployment and data publication require separate approval. No PyPI upload is
+  claimed; prior wheels and proofs remain retained.
+
 - `spicy_docs-0.58.0`: release commit
   `ca3a9bd84ca01e296c54856ed20ea71339b6ce57`, tag `v0.58.0`. The exact
   coordinated release wheel has SHA-256

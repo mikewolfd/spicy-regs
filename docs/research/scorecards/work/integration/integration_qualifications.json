@@ -1,6 +1,6 @@
 {
   "schema_version": "1",
-  "observed_at": "2026-10-05T22:53:44.782835+00:00",
+  "observed_at": "2026-10-05T23:43:48+00:00",
   "input_plan_sha256": "8474f8724146a343f672e35e0e0a78e6cfc35d3bd60c244b0dcdf7a5c1cb1163",
   "readers": {
     "common_cause": "common_cause",
@@ -91,7 +91,9 @@
     "railway_clerks": "railway_clerks",
     "carpenters_ncsrcc": "carpenters_ncsrcc",
     "bipac": "bipac",
-    "life_underwriters": "life_underwriters"
+    "life_underwriters": "life_underwriters",
+    "united_transportation": "united_transportation",
+    "american_security_council_foundation": "american_security_council_foundation"
   },
   "editions": [
     {
@@ -3089,6 +3091,27 @@
       "state": "qualified",
       "receipt": "qualifications/life_underwriters--naifa-frontline-2005-02-15-s5-selected-senate-action.json",
       "receipt_sha256": "705c8f3618a565f54588fa052b9f7114d9376c421147fdafbf942b4e4503e974"
+    },
+    {
+      "publisher_id": "united_transportation",
+      "scorecard_id": "united_transportation:2012-10-26-post-18264-retrospective-assessment",
+      "state": "qualified",
+      "receipt": "qualifications/united_transportation--2012-10-26-post-18264-retrospective-assessment.json",
+      "receipt_sha256": "499be8a16bd112620972bebcc74ce26cd84e82ef6534936aaf3ec967ceb70453"
+    },
+    {
+      "publisher_id": "american_security_council_foundation",
+      "scorecard_id": "american_security_council_foundation:named-2010-house-original",
+      "state": "qualified",
+      "receipt": "qualifications/american_security_council_foundation--named-2010-house-original.json",
+      "receipt_sha256": "4f211f7c0ce51c3e10c87f5a1257cd3968066d377173cc5e6de14d6027c5b0b9"
+    },
+    {
+      "publisher_id": "american_security_council_foundation",
+      "scorecard_id": "american_security_council_foundation:named-2010-senate-original",
+      "state": "qualified",
+      "receipt": "qualifications/american_security_council_foundation--named-2010-senate-original.json",
+      "receipt_sha256": "60fe2306d19425854b7cbace83d9a209248cc774806ae2f57a0e361a31bbda37"
     }
   ],
   "api_observations": [
@@ -3129,5 +3152,12 @@
       ]
     }
   ],
-  "publication_observations_sha256": "4cd8b8b135c330721dd91c79b1d9f68b4d5998d31e9778de185b9dcff303a6b3"
+  "publication_observations_sha256": "4cd8b8b135c330721dd91c79b1d9f68b4d5998d31e9778de185b9dcff303a6b3",
+  "later_qualification_plans": [
+    {
+      "plan": "modern_reader_plan_20261005.json",
+      "sha256": "0871fc3f9a8cb62d719783cd2107d81e9d1c20dcbf8f43b4b950de590d148942",
+      "boundary": "Only three independently reviewed named scopes; original ledger records and source proofs remain unchanged"
+    }
+  ]
 }

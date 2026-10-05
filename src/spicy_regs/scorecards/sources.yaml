@@ -801,3 +801,21 @@ sources:
     rights_status: unreviewed
     policy_decision_id: scorecards-research-hash-only-v1
     qualification_id: source-selected-actions-20261005:railway_clerks
+  - publisher_id: united_transportation
+    adapter: united_transportation
+    enabled: false
+    cadence: monthly
+    historical_backfill: false
+    evidence_policy: hash_only
+    rights_status: unreviewed
+    policy_decision_id: scorecards-research-hash-only-v1
+    qualification_id: source-modern-recovery-20261005:united_transportation
+  - publisher_id: american_security_council_foundation
+    adapter: american_security_council_foundation
+    enabled: false
+    cadence: monthly
+    historical_backfill: false
+    evidence_policy: hash_only
+    rights_status: unreviewed
+    policy_decision_id: scorecards-research-hash-only-v1
+    qualification_id: source-modern-recovery-20261005:american_security_council_foundation

@@ -1,0 +1,234 @@
+{
+  "format_version": "scorecard-reader-package-adoption/1",
+  "status": "passed-installed-full-source-reference-and-final-consumer-policy-checks",
+  "version": "0.60.0",
+  "source_commit": "2d62f887ae9e4972d7abaa6e821387fa3504fc70",
+  "source_merge_commit": "ec18a2665e2e7764e624cf17a4e718ab4217ae3a",
+  "source_tag": "v0.60.0",
+  "consumer_base_commit": "f19bb609287d6d09043405ea81398f3c9493e910",
+  "consumer_preparation_commit": "8b9dafc24130a7a5f4a5497c4228af8713f168f9",
+  "runtime": {
+    "provider_version": "0.60.0",
+    "provider_path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/consumer-modern-recovery-v1/.venv/lib/python3.12/site-packages/spicy_docs/__init__.py",
+    "source_path_shadowing": false
+  },
+  "wheel_sha256": "4e0bae7cbda92c1af4adbee87000b283c880451b68c8ff14e630f431762cb3f4",
+  "selected_plan_sha256": "0871fc3f9a8cb62d719783cd2107d81e9d1c20dcbf8f43b4b950de590d148942",
+  "package_proofs": {
+    "source_package_qualification": {
+      "corpus_relative_file": "finish-20261004/root/source-package-060-v1/qualification.json",
+      "sha256": "9918d785e0417c48ed724d689ccbfa773a4c038ef96802e5426f1dc46242f581"
+    },
+    "independent_package_review": {
+      "corpus_relative_file": "finish-20261004/root/source-package-060-v1/independent-review.md",
+      "sha256": "9aa99b60948bf14f84e88288c52d91058dc62dcdac8e1c5c0b66a644d7ef1d91"
+    },
+    "installed_complete_replay": {
+      "corpus_relative_file": "finish-20261004/root/source-package-060-v1/installed124-replay.json",
+      "sha256": "c8a44be9ee402288e25436c9dd77b8b311b6ab77222f1b2c97eab3492f4117cf"
+    },
+    "installed_package_gate": {
+      "corpus_relative_file": "finish-20261004/root/source-package-060-v1/installed-gate.json",
+      "sha256": "a33a188792098280564b33074b77248ef3eea05c4d1899bf634ebe1a17fcea2e"
+    },
+    "complete_replay_plan": {
+      "corpus_relative_file": "finish-20261004/root/source-package-060-v1/plan-qualified124-v1.json",
+      "sha256": "2c11322cec7142930c331a56755d6f16dd2703e858f8a23eb5ec146c24e179ab"
+    },
+    "complete_replay_bindings": {
+      "corpus_relative_file": "finish-20261004/root/source-package-060-v1/plan-bindings.json",
+      "sha256": "3cfd30979dc369bb9227e9d4340c5cab78dae35aa90947b0d686e50638e7007f"
+    },
+    "three_source_entries": {
+      "corpus_relative_file": "finish-20261004/root/source-package-060-v1/integration-entries.json",
+      "sha256": "2f910a93a47335dd9592e5099c7fcc2fc1a521b2fce1debcc4e25dedc16d9668"
+    },
+    "consumer_selection_plan": {
+      "file": "docs/research/scorecards/work/integration/modern_reader_plan_20261005.json",
+      "sha256": "0871fc3f9a8cb62d719783cd2107d81e9d1c20dcbf8f43b4b950de590d148942"
+    }
+  },
+  "scopes": [
+    {
+      "publisher_id": "united_transportation",
+      "scorecard_id": "united_transportation:2012-10-26-post-18264-retrospective-assessment",
+      "counts": {
+        "scorecard_publishers": 1,
+        "scorecards": 1,
+        "scorecard_snapshots": 1,
+        "scorecard_methodologies": 1,
+        "scorecard_metrics": 1,
+        "scorecard_items": 0,
+        "scorecard_metric_items": 0,
+        "scorecard_metric_components": 0,
+        "scorecard_members": 1,
+        "scorecard_member_ratings": 1,
+        "scorecard_member_item_results": 0
+      },
+      "complete_reference": "PASS",
+      "all_source_fields_final_consumer_policy_roundtrip": "PASS",
+      "reader_sha256": "89bcb512cf63c4ebdd27158c6670f3843d6e8b9b1967dda19104966040354e3d"
+    },
+    {
+      "publisher_id": "american_security_council_foundation",
+      "scorecard_id": "american_security_council_foundation:named-2010-house-original",
+      "counts": {
+        "scorecard_publishers": 1,
+        "scorecards": 1,
+        "scorecard_snapshots": 1,
+        "scorecard_methodologies": 66,
+        "scorecard_metrics": 2,
+        "scorecard_items": 10,
+        "scorecard_metric_items": 0,
+        "scorecard_metric_components": 0,
+        "scorecard_members": 437,
+        "scorecard_member_ratings": 874,
+        "scorecard_member_item_results": 4370
+      },
+      "complete_reference": "PASS",
+      "all_source_fields_final_consumer_policy_roundtrip": "PASS",
+      "reader_sha256": "9c5af1f22a44e144c5bcb5c10154ca87b298b966fabc659aced7bbe39159afba"
+    },
+    {
+      "publisher_id": "american_security_council_foundation",
+      "scorecard_id": "american_security_council_foundation:named-2010-senate-original",
+      "counts": {
+        "scorecard_publishers": 1,
+        "scorecards": 1,
+        "scorecard_snapshots": 1,
+        "scorecard_methodologies": 65,
+        "scorecard_metrics": 3,
+        "scorecard_items": 10,
+        "scorecard_metric_items": 0,
+        "scorecard_metric_components": 0,
+        "scorecard_members": 103,
+        "scorecard_member_ratings": 309,
+        "scorecard_member_item_results": 1030
+      },
+      "complete_reference": "PASS",
+      "all_source_fields_final_consumer_policy_roundtrip": "PASS",
+      "reader_sha256": "9c5af1f22a44e144c5bcb5c10154ca87b298b966fabc659aced7bbe39159afba"
+    }
+  ],
+  "captures": [
+    {
+      "publisher_id": "united_transportation",
+      "url": "https://www.smart-union.org/why-obama-biden-deserve-your-vote-nov-6/",
+      "sha256": "fc134e9a91f1f9a8c8869a8eb4411574686eec69ca190b93bb5391d4919c0ebd"
+    },
+    {
+      "publisher_id": "united_transportation",
+      "url": "https://www.smart-union.org/wp-content/uploads/2022/02/October-2012-SMART-Transportation-Newsletter.pdf",
+      "sha256": "6ebb47439bb6030b2d3d65b659d57988f6a2134cf3aea67043cb5ea864260ef2"
+    },
+    {
+      "publisher_id": "united_transportation",
+      "url": "https://www.smart-union.org/why-obama-biden-deserve-your-vote-nov-6/",
+      "sha256": "fc134e9a91f1f9a8c8869a8eb4411574686eec69ca190b93bb5391d4919c0ebd"
+    },
+    {
+      "publisher_id": "american_security_council_foundation",
+      "url": "https://web.archive.org/web/20120125114210id_/http://www.ascfusa.org/files/fckfiles/House_Votes_ASCF.pdf",
+      "sha256": "700b016dccc35695044b9d0a639d799146c6fb3709b1ba7996741374a4560b72"
+    },
+    {
+      "publisher_id": "american_security_council_foundation",
+      "url": "https://web.archive.org/web/20120125114210id_/http://www.ascfusa.org/files/fckfiles/House_Votes_ASCF.pdf",
+      "sha256": "700b016dccc35695044b9d0a639d799146c6fb3709b1ba7996741374a4560b72"
+    },
+    {
+      "publisher_id": "american_security_council_foundation",
+      "url": "https://web.archive.org/web/20120125110853id_/http://www.ascfusa.org/files/fckfiles/Senate_Votes_ASCF.pdf",
+      "sha256": "53f85a3838e06d5a1fe2d1d46da53d9eb3db63070b4bdb5eb6cee5b273228eba"
+    },
+    {
+      "publisher_id": "american_security_council_foundation",
+      "url": "https://web.archive.org/web/20120125110853id_/http://www.ascfusa.org/files/fckfiles/Senate_Votes_ASCF.pdf",
+      "sha256": "53f85a3838e06d5a1fe2d1d46da53d9eb3db63070b4bdb5eb6cee5b273228eba"
+    }
+  ],
+  "private_semantic_inputs": [
+    {
+      "publisher_id": "american_security_council_foundation",
+      "source_sha256": "700b016dccc35695044b9d0a639d799146c6fb3709b1ba7996741374a4560b72",
+      "asset_sha256": "c6249ae42d81768fb76d824751a5ea2e210178576dce0fefaedd6e7cda071619",
+      "stage": "ascf:reviewed-facts"
+    },
+    {
+      "publisher_id": "american_security_council_foundation",
+      "source_sha256": "53f85a3838e06d5a1fe2d1d46da53d9eb3db63070b4bdb5eb6cee5b273228eba",
+      "asset_sha256": "0801bff0d5ff53af60039a323dbee6c546d3e7f0f42df67b4024d8e74e0027a1",
+      "stage": "ascf:reviewed-facts"
+    }
+  ],
+  "consumer_field_policy": {
+    "scope": "All eleven source table families and every original row/field through final map_source_row, split_record, validate_receipt_row and restore_source_row",
+    "persistent_native_writer_runs": 0,
+    "source_semantic_asset_copies": 0
+  },
+  "registry": {
+    "all_installed_publisher_bindings_equal": true,
+    "new_publishers_disabled": true,
+    "historical_backfill": false,
+    "evidence_policy": "hash_only",
+    "rights_status": "unreviewed"
+  },
+  "measured_wall_seconds": 3.0463518329779617,
+  "network_requests": 0,
+  "model_calls": 0,
+  "native_writer_runs": 0,
+  "boundary": "Only the three named scopes; in-memory source-family compatibility check and hermetic synthetic pipeline tests. No native generation, public data publication, hosted deployment or live source activation.",
+  "preservation": {
+    "prior_ledger_records_equal": 428,
+    "new_named_scopes": 3,
+    "prior_qualification_files_byte_equal": 429,
+    "historical_vendor_files_byte_equal": 38,
+    "publication_ledger_byte_equal": true,
+    "work_policy_byte_equal": true,
+    "existing_work_statuses_equal": true,
+    "existing_stage_changes": {
+      "united_transportation": [
+        "unverified_lead",
+        "qualified_scope"
+      ]
+    },
+    "new_publisher_stage": "american_security_council_foundation:qualified_scope",
+    "original_asc_stage": "unverified_lead",
+    "all_current_candidate_identity_sets_equal": true,
+    "source_semantic_assets_and_frozen_entries_changed": false
+  },
+  "installed_wheel_runtime_files_byte_equal": 487,
+  "checks": {
+    "focused_source_family_pipeline_registry_etl": {
+      "command": "uv run --frozen --no-sync pytest -q tests/test_scorecard_*.py tests/test_source_evidence.py tests/test_etl_receipts.py",
+      "result": "546 passed in 23.43s"
+    },
+    "shared_source_receiving": {
+      "command": "uv run --frozen --no-sync pytest -q tests/test_contract_tables.py tests/test_member_vote_terms.py tests/test_bill_subjects.py tests/test_unified_agenda*.py tests/test_pdf_text*.py tests/test_courtlistener_bulk.py tests/test_courtlistener_shared.py tests/test_court_scope.py tests/test_cluster_court_scope_backfill.py",
+      "result": "430 passed in 11.42s"
+    },
+    "ruff": "uv run --frozen --no-sync ruff check .: PASS",
+    "ty": "uv run --frozen --no-sync ty check: PASS whole declared gate",
+    "format": "uv run --frozen --no-sync ruff format --check scripts/build_scorecard_integrations.py: PASS",
+    "lock": "uv lock --offline; uv sync --frozen --offline; uv lock --check --offline: PASS",
+    "generators": "Existing survey and integration builders/checks: PASS",
+    "dictionary": "uv run --frozen --no-sync spicy-regs-dict check: PASS"
+  },
+  "typing_correction": {
+    "baseline": "Four reproduced errors at build_scorecard_integrations.py:518,522,526",
+    "change": "One rows: list[dict[str, Any]] annotation follows existing dynamic JSON style; no suppression or runtime behavior change",
+    "before_ledger_change_generated_output": "Byte-identical existing generator outputs",
+    "actual_current_whole_ty_gate": "PASS"
+  },
+  "unrelated_live_integration_failure": {
+    "reported_by_parent": "Published proceedings schema authority_refs versus authority_refs_json",
+    "scope": "Unrelated held live-data failure; no source, live data or schema repair attempted",
+    "consumer_full_ci_claimed": false
+  },
+  "read_only_replay": {
+    "command": "uv run --frozen --no-sync python -c \"import json; exec(json.load(open('docs/research/scorecards/work/integration/reader_adoption_modern_20261005.json'))['read_only_replay']['program'])\"",
+    "program": "from collections import defaultdict\nfrom hashlib import sha256\nfrom importlib.metadata import version\nimport json\nfrom pathlib import Path\nimport time\nfrom uuid import uuid4\n\nimport spicy_docs\nfrom spicy_docs.sources.scorecards import get_adapter, validate_scorecard_bundle\nfrom spicy_docs.sources.scorecards.common import ScorecardContext\nfrom spicy_regs.etl_receipts import ReceiptContext, decode_exact_json, split_record, validate_receipt_row\nfrom spicy_regs.scorecards.etl import POLICIES, SOURCE_NAMES, _witnesses\nfrom spicy_regs.scorecards.registry import load_registry\nfrom spicy_regs.scorecards.retained import RetainedScorecardBatch\nfrom spicy_regs.scorecards.subject_shapes import map_source_row, restore_source_row\n\n\nROOT = Path.cwd()\nF = ROOT.parent\nCORPUS = F.parent.parent\nOUT = ROOT / 'docs/research/scorecards/work/integration/reader_adoption_modern_20261005.json'\nPLAN = OUT.parent / 'modern_reader_plan_20261005.json'\nplan = json.loads(PLAN.read_text())\nassert version('spicy-docs') == '0.60.0'\nassert Path(spicy_docs.__file__).resolve().is_relative_to((ROOT / '.venv').resolve())\nassert set(SOURCE_NAMES) == set(POLICIES) - {'scorecard_member_links', 'scorecard_item_links'}\ngroups = defaultdict(list)\nfor entry in plan['entries']:\n    groups[entry['edition']['publisher_id']].append(entry)\ncaptures, semantic_inputs, scopes = [], [], []\nstarted = time.perf_counter()\nfor publisher, entries in groups.items():\n    def retain(document, body, *, stage):\n        pin = sha256(body).hexdigest()\n        assert pin in {entry.get('observations_sha256') for entry in entries}\n        semantic_inputs.append({'publisher_id': publisher, 'source_sha256': sha256(document.body).hexdigest(), 'asset_sha256': pin, 'stage': stage})\n        # Read-only replay uses the existing hash-pinned private asset in place.\n        # The parent installed gate already qualified its private retention path.\n        return {'observation_id': str(uuid4())}\n\n    batch = RetainedScorecardBatch(CORPUS, entries, retain_observations=retain)\n\n    def capture(response, **kwargs):\n        captures.append({'publisher_id': publisher, 'url': response.requested_url, 'sha256': sha256(response.body).hexdigest(), 'stage': kwargs.get('stage')})\n        return {'capture_id': str(uuid4())}\n\n    context = ScorecardContext(batch, capture, max_requests=20)\n    for edition in batch.list_scorecards(context):\n        entry = batch.entries[edition.scorecard_id]\n        adapter = get_adapter(entry['adapter'])\n        installed = Path(adapter.__file__).resolve()\n        assert installed.is_relative_to((ROOT / '.venv').resolve())\n        assert sha256(installed.read_bytes()).hexdigest() == entry['reader_sha256']\n        for relative, expected in entry.get('shared_source_dependencies', {}).items():\n            dependency = installed.parents[2] / relative.removeprefix('src/spicy_docs/')\n            assert sha256(dependency.read_bytes()).hexdigest() == expected\n        result = batch.for_edition(edition).acquire_scorecard(edition, context)\n        tables = result.tables\n        validate_scorecard_bundle(tables)\n        assert set(tables) == set(SOURCE_NAMES)\n        for name, rows in tables.items():\n            policy = POLICIES[name]\n            for index, raw in enumerate(rows):\n                mapped = map_source_row(name, raw)\n                subject, receipt = split_record(policy, mapped, ReceiptContext('consumer-modern-memory-check', f'{edition.scorecard_id}:{name}:{index}', policy.policy_version, _witnesses(raw)))\n                validate_receipt_row(receipt, POLICIES)\n                processing = decode_exact_json(receipt['processing_json'])\n                restored = restore_source_row(name, (subject or {}) | processing)\n                assert restored == raw, (edition.scorecard_id, name, index)\n        scopes.append({'publisher_id': publisher, 'scorecard_id': edition.scorecard_id, 'counts': {name: len(rows) for name, rows in tables.items()}, 'complete_reference': 'PASS', 'all_source_fields_final_consumer_policy_roundtrip': 'PASS', 'reader_sha256': entry['reader_sha256']})\n    batch.complete()\n    assert len(batch.checked) == len(entries)\n\nfrom spicy_docs.sources.scorecards import ADAPTER_PUBLISHERS\nregistry = load_registry()\nassert {row.publisher_id for row in registry} == set(ADAPTER_PUBLISHERS.values())\nfor row in registry:\n    if row.publisher_id in groups:\n        assert row.enabled is False and row.historical_backfill is False\n        assert row.evidence_policy == 'hash_only' and row.rights_status == 'unreviewed'\n\nprint(json.dumps({'scopes': scopes, 'captures': captures, 'private_semantic_inputs': semantic_inputs, 'all_source_rows_checked': sum(sum(scope['counts'].values()) for scope in scopes)}))\n",
+    "executed_program_sha256": "363405cc421e587d850e04e92395c335f33674e5c5017df3bf6d48ba8f83b453",
+    "difference_from_executed_program": "Same reader/reference/pin/registry/full-field-policy checks; stdout summary replaces final metadata-file write for frozen review"
+  }
+}
