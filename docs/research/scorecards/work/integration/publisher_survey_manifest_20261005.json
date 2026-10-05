@@ -1,0 +1,330 @@
+{
+  "observed_on": "2026-10-05",
+  "dispatch": {
+    "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-survey-20261005/dispatch-plan.json",
+    "sha256": "3a4b5cbd675ba7c1e7f38a0a1911b3d6817fd4a0d0cf65219f3b997046670cae"
+  },
+  "task_status": {
+    "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-survey-20261005/final-task-status.json",
+    "sha256": "222b9c39564775b6ef085ba3ecd6a5cfb36ca04121811459270cbe7fd690b4aa"
+  },
+  "input_verification": {
+    "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-survey-20261005/aggregation-input-check-v2.json",
+    "sha256": "d0668a845532e1ac18f488985e0b1a44fc01adda18be4f50c67cc995fa9bf303"
+  },
+  "groups": [
+    {
+      "key": "civic-issue",
+      "survey": {
+        "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-survey-20261005/civic-issue/survey.json",
+        "sha256": "dbf3c35286bc63bbfb1f78d292aa08d2ff948bb9bd53e0955a97a53b9533728e"
+      },
+      "report": {
+        "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-survey-20261005/civic-issue/survey.md",
+        "sha256": "6885e775990ede7fd86e29df99ccb7c6509b99398a974d103a49941a739bfa6e"
+      }
+    },
+    {
+      "key": "business",
+      "survey": {
+        "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-survey-20261005/business/survey.json",
+        "sha256": "4d76eba1629a1d2056eb5a83a5e5c2bb80e9962a58470d8652b52ebb19a585bb"
+      },
+      "report": {
+        "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-survey-20261005/business/survey.md",
+        "sha256": "90f39dd98ca1fb42c0073d7c3f150ea8dbaa76f052659e48f992a148ea1be96c"
+      }
+    },
+    {
+      "key": "labor",
+      "survey": {
+        "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-survey-20261005/labor/survey.json",
+        "sha256": "694d5733cf54ec1e9d5313f9bf3df9845a8977952553575383f60fc771b0d38a"
+      },
+      "report": {
+        "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-survey-20261005/labor/survey.md",
+        "sha256": "39000a0a43302d291fcc6f5d8c66f2e8cd0fb4ecf7e453b5edd6c3ab8d849107"
+      }
+    },
+    {
+      "key": "social-archives",
+      "survey": {
+        "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-survey-20261005/social-archives/survey.json",
+        "sha256": "41c92f56bb20bf0d6bd6ee98e6053d2f9b2fe62e4494513e9f124ad08210fe73"
+      },
+      "report": {
+        "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-survey-20261005/social-archives/survey.md",
+        "sha256": "394bb9d96b704adadb9565155f94572536fcbe177485315a5adcce4278acef4f"
+      }
+    },
+    {
+      "key": "political-archives",
+      "survey": {
+        "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-survey-20261005/political-archives/survey.json",
+        "sha256": "0a31a9331b4c4cb675f75cf110d387ad94b6f7cf458eb26db74d88c10d48a70a"
+      },
+      "report": {
+        "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-survey-20261005/political-archives/survey.md",
+        "sha256": "eb4fbc26a5849980e27407abc056557e0fe9001d6ec4885290341a04140f91f6"
+      }
+    },
+    {
+      "key": "publications",
+      "survey": {
+        "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-survey-20261005/publications/survey.json",
+        "sha256": "040d0759f7a0db359fc88bf11baf9f0a8ae4f19035d3eaa29125eec2a4db216f"
+      },
+      "report": {
+        "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-survey-20261005/publications/survey.md",
+        "sha256": "cecdec75e4568318619997b411bc7d0920b25c9f09f34078437bd67590d094fb"
+      }
+    }
+  ],
+  "format_version": "scorecard-publisher-survey-manifest/1",
+  "assessments": {
+    "american_bakers": {
+      "category": "reader_candidate",
+      "finding": "VoterVoice catalog offers the 117th House and 116th House/Senate. Native score arrays and all criteria recovered; one 117th score is absent."
+    },
+    "congressional_quarterly": {
+      "category": "reader_candidate",
+      "finding": "Original 2025 CQ Roll Call support and attendance tables recovered. Different denominators, blank cells and irregular headings require explicit handling."
+    },
+    "fcnl": {
+      "category": "reader_candidate",
+      "finding": "Four Quorum JSON/CSV pairs pass the existing decoder. Current trackers contain selected votes and sponsorships, with no aggregate score."
+    },
+    "alaska_wilderness_action": {
+      "category": "reader_candidate",
+      "finding": "2015 original PDF recovered and sampled; archived 2016 offering remains unrecovered. Legacy Google sheet feed failed."
+    },
+    "ipaa": {
+      "category": "source_or_identity_qualification",
+      "finding": "119th Congress item evidence recovered through mplatform. Scores are computed in the publisher's browser; a complete displayed rating table was not retained."
+    },
+    "carpenters": {
+      "category": "source_or_identity_qualification",
+      "finding": "2024 regional Carpenters issue-mark grid recovered. National publisher attribution is unresolved and OCR missed graphic cells."
+    },
+    "league_women_voters": {
+      "category": "catalog_or_source_discovery",
+      "finding": "Current publisher verified; Political Accountability Rating survives as physical archival holdings. No post-2000 rating edition recovered."
+    },
+    "now": {
+      "category": "catalog_or_source_discovery",
+      "finding": "Current search yields advocacy and externally authored voting reports; the historical NOW rating series remains unverified."
+    },
+    "national_womens_caucus": {
+      "category": "candidate_scope_decision",
+      "finding": "2026 endorsements and screening process recovered. Prospective candidates and state/local endorsements need a separate supported shape."
+    },
+    "united_church_christ": {
+      "category": "catalog_or_source_discovery",
+      "finding": "Current action center uses VoterVoice campaigns and registration; no scorecard payload established."
+    },
+    "flyersrights": {
+      "category": "catalog_or_source_discovery",
+      "finding": "Current advocacy and alternate WordPress archive verified. A negative scorecard search does not establish absence."
+    },
+    "march_for_life": {
+      "category": "candidate_scope_decision",
+      "finding": "2020 Senate election comparisons recovered from March for Life Action. Sister-publisher identity and candidate scope need explicit decisions."
+    },
+    "ccrkba": {
+      "category": "catalog_or_source_discovery",
+      "finding": "Original news search recovered; the named congressional rating edition remains unidentified."
+    },
+    "bipac": {
+      "category": "catalog_or_source_discovery",
+      "finding": "Same mplatform client family as IPAA; its vote catalog returned an empty array. Historical Review of the Congress remains unrecovered."
+    },
+    "aia": {
+      "category": "catalog_or_source_discovery",
+      "finding": "Current Quorum advocacy verified; no public rating sheet found. Modern Punch List policy language does not establish the historical series."
+    },
+    "life_underwriters": {
+      "category": "catalog_or_source_discovery",
+      "finding": "NALU/NAIFA identity context and current Quorum advocacy verified; the historical Voting Report remains unrecovered."
+    },
+    "write_congressman": {
+      "category": "catalog_or_source_discovery",
+      "finding": "Member and vote routes lead to login; terms restrict automated copying and redistribution. Publisher authorization is required."
+    },
+    "national_farmers_organization": {
+      "category": "catalog_or_source_discovery",
+      "finding": "Current magazine archive and September–October 2026 PDF recovered; no rating edition established."
+    },
+    "atlantic_richfield": {
+      "category": "catalog_or_source_discovery",
+      "finding": "Circa 1981–1982 civic-action packet is an archival lead. Current ARCO retail domain does not prove scorecard-program continuity."
+    },
+    "united_mine_workers": {
+      "category": "catalog_or_source_discovery",
+      "finding": "Policy, journal and publisher-linked archive surfaces captured; no named rating table identified."
+    },
+    "united_transportation": {
+      "category": "catalog_or_source_discovery",
+      "finding": "UTU endorsements, an isolated 2008 rating claim and explicit SMART succession evidence recovered; no complete UTU grid."
+    },
+    "amalgamated_clothing_workers": {
+      "category": "catalog_or_source_discovery",
+      "finding": "Cornell collection 5619/033 locates political files through 2002; collection dates do not establish scorecard coverage. Access is restricted."
+    },
+    "railway_clerks": {
+      "category": "catalog_or_source_discovery",
+      "finding": "March 1974 Senate voting-record catalog lead; original table remains unrecovered. BRAC/TCU/IAM series continuity is unresolved."
+    },
+    "retail_clerks": {
+      "category": "catalog_or_source_discovery",
+      "finding": "UFCW original history verifies organizational succession; no original Retail Clerks rating edition recovered."
+    },
+    "food_beverage_trades": {
+      "category": "catalog_or_source_discovery",
+      "finding": "Departmental catalog records recovered; the located press release is not the named voting record."
+    },
+    "us_student_association": {
+      "category": "catalog_or_source_discovery",
+      "finding": "NSA/USSA merger evidence recovered; former USSA domain serves unrelated casino content and is excluded."
+    },
+    "environmental_action": {
+      "category": "catalog_or_source_discovery",
+      "finding": "Current identity and historical Dirty Dozen archive leads recovered; selected electoral targets are not a full-member scorecard."
+    },
+    "national_council_seniors": {
+      "category": "existing_source_attribution",
+      "finding": "Historical NCSC 2000 edition remains unrecovered. Successor ARA 2025 PDF exactly matches the existing ARA reader pin."
+    },
+    "national_alliance_seniors": {
+      "category": "catalog_or_source_discovery",
+      "finding": "1980 Golden Age Index candidate retained without extraction; no post-2000 edition established."
+    },
+    "committee_education_funding": {
+      "category": "catalog_or_source_discovery",
+      "finding": "Current CEF context and gala program recovered; exact historical funding voting record and name continuity remain unresolved."
+    },
+    "interreligious_food": {
+      "category": "catalog_or_source_discovery",
+      "finding": "Finding aid and Food Policy Notes packet recovered; the named Hunger Issues voting record remains unidentified."
+    },
+    "sane_historical": {
+      "category": "existing_source_attribution",
+      "finding": "Peace Action history verifies SANE lineage; successor 2024 score-specific APIs sampled. Use the existing Peace Action identity."
+    },
+    "taxation_representation": {
+      "category": "catalog_or_source_discovery",
+      "finding": "Historical reporting describes committee and floor ratings; no original House/Senate Rated edition recovered."
+    },
+    "american_security_council": {
+      "category": "catalog_or_source_discovery",
+      "finding": "Current ASCF site verified; authority over historical ASC National Security Voting Index remains unresolved."
+    },
+    "americans_constitutional_action": {
+      "category": "catalog_or_source_discovery",
+      "finding": "ACA/ACARI catalog and secondary continuity leads recovered; no original member ratings or post-2000 edition established."
+    },
+    "american_cause": {
+      "category": "catalog_or_source_discovery",
+      "finding": "Historical George Murphy organization and Buchanan's 1993 organization are distinct namesakes; no scorecard continuity established."
+    },
+    "american_parents": {
+      "category": "catalog_or_source_discovery",
+      "finding": "Historical children's-legislation newsletter located; archival challenge responses and similar modern names do not establish a scorecard."
+    },
+    "free_congress_survival": {
+      "category": "catalog_or_source_discovery",
+      "finding": "Named committee holdings and a 1985 Free Congress PAC voting-record folder located; imprint and series continuity unresolved."
+    },
+    "john_birch_historical": {
+      "category": "existing_source_attribution",
+      "finding": "JBS documents Conservative Index/Freedom Index continuity. Current 119-3 shapes pass existing New American readers; avoid duplicate JBS ratings."
+    },
+    "liberty_lobby": {
+      "category": "catalog_or_source_discovery",
+      "finding": "Archived publisher notice records closure on July 27, 2001; last rating edition is unknown. Capitol Advantage tools are not a scorecard."
+    },
+    "coalition_foreign_military": {
+      "category": "catalog_or_source_discovery",
+      "finding": "Repository identifies 1988 rename and exact voting-record/errata folders; original rating bytes remain unrecovered."
+    },
+    "human_events": {
+      "category": "existing_source_attribution",
+      "finding": "2009 original article republishes ACU's 2008 ratings. Human Events editorial selection must not become a second rating source."
+    },
+    "joint_center": {
+      "category": "catalog_or_source_discovery",
+      "finding": "FOCUS archive recovered, with November–December 2011 PDF retained but unprofiled; no relevant rating page established."
+    },
+    "ripon_society": {
+      "category": "catalog_or_source_discovery",
+      "finding": "Current Forum archive and September 2026 issue recovered; historical 1972 rating candidate retained without extraction."
+    },
+    "national_associated_businessmen": {
+      "category": "catalog_or_source_discovery",
+      "finding": "1967/1968 Economy Voting Record archival candidate retained; no post-2000 edition or publisher continuity established."
+    },
+    "national_audiovisual": {
+      "category": "catalog_or_source_discovery",
+      "finding": "AVIXA original history verifies organizational name changes; no continuity of the historical voting-record series established."
+    },
+    "woman_activist": {
+      "category": "catalog_or_source_discovery",
+      "finding": "Precise Library of Virginia and Smithsonian holdings located; original voting-analysis issue remains unrecovered."
+    },
+    "womens_lobby": {
+      "category": "catalog_or_source_discovery",
+      "finding": "US organization identity and Harvard/SMU holdings located; original Voting Chart remains unrecovered."
+    }
+  },
+  "priorities": [
+    "american_bakers",
+    "congressional_quarterly",
+    "fcnl",
+    "alaska_wilderness_action",
+    "ipaa",
+    "carpenters"
+  ],
+  "shared_patterns": [
+    {
+      "name": "VoterVoice",
+      "finding": "American Bakers has actual scoring and criterion arrays. Reuse votervoice_public.py and existing readers; add only its observed /Home bootstrap variation. Campaign links from UCC prove no rating API."
+    },
+    {
+      "name": "Quorum public sheets",
+      "finding": "FCNL has matching public JSON/CSV payloads. Reuse quorum_public.py for row and column reconciliation; add explicit District syntax while keeping source-selected actions, periods and cohort specific. AIA/NAIFA action centers are discovery only."
+    },
+    {
+      "name": "mplatform/Momentum",
+      "finding": "IPAA and BIPAC have identical client bytes and tenant-specific routes. Share anonymous-authentication and bounded endpoint capture mechanics. IPAA scoring executes in the publisher client; BIPAC's empty array is not a completeness or retirement witness."
+    },
+    {
+      "name": "Native HTML tables",
+      "finding": "CQ needs explicit selectors, source row types and metric definitions. Reuse bounded capture and literal cell handling; AGC provides a completeness-check example, not reusable CQ selectors."
+    },
+    {
+      "name": "Reviewed PDF observations",
+      "finding": "Alaska and regional Carpenters reuse DefaultReader, Docling/OvisOCR2 and reviewed private observations. Use data-shaped Gemini outcomes when required. Native/OCR conversion alone is not a complete graphic-cell extraction."
+    },
+    {
+      "name": "Existing qualified source families",
+      "finding": "ARA, Peace Action and New American have attributable successor/current sources. Reuse their own readers and publisher IDs; store historical relationships separately. Human Events' ACU republication remains an editorial occurrence."
+    },
+    {
+      "name": "Archive and CMS discovery",
+      "finding": "Share bounded direct/Zyte captures, hashes, exact collection/item locators, literal links, and access metadata. CMS presence and archive holdings are not scorecard schemas. Keep original source-time publisher names, preliminary editions and errata separate."
+    },
+    {
+      "name": "Google Sheets/DataTables and Datawrapper",
+      "finding": "Alaska's legacy feed syntax is observed but rows are unavailable. CQ's versioned Datawrapper asset is a tab-separated subset with inconsistent counts. Preserve asset versions and raw delimiters; neither is a complete full-member grid."
+    }
+  ],
+  "schema_findings": [
+    "Retain selected-action grids without an aggregate score. FCNL and regional Carpenters should not require invented ratings or official roll calls.",
+    "Preserve signed percentages, values above 100, annual/lifetime measures, weighted items, credits, penalties and member excusals; Alaska disproves a universal 0–100 constraint.",
+    "Keep metric definitions and denominators separate. CQ support, opposition, presidential-vote participation and general attendance are distinct measures; rounded values need not sum to 100.",
+    "Treat campaign labels, member cohorts and item Congresses separately. FCNL's current roster and mixed-period items do not establish a historical-Congress snapshot; retain its SJ Res 83/93 disagreement.",
+    "Record publisher, affiliate, successor, namesake and republisher relationships explicitly. A relationship never authorizes copying an edition into a second publisher scope.",
+    "Candidate endorsements and election comparisons require an explicit candidate shape. Preserve them as documented scope decisions until supported; do not assign challengers congressional member identities.",
+    "Retain source spelling, blanks, graphic symbols, footnotes, conflicting counts, preliminary editions and errata. CQ's Datawrapper subset remains unsupported pending review.",
+    "Catalog dates describe holdings, not scorecard coverage. Record discovered, recovered, profiled, qualified and published stages separately; preserve unknown latest-publication and historical intervals."
+  ]
+}
