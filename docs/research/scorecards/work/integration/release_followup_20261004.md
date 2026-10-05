@@ -12,11 +12,11 @@ receipts. Prior editions remain present. The public index is
 The next provider package adopts Common Cause, Bread for the World, NASW,
 Defenders Action Fund, Food Policy Action's lifetime report, Federally Employed
 Women, IAVA Action Fund, and Public Citizen. Its
-[package receipt](../../../../../vendor/spicy_docs-scorecards.json) pins the
+[package receipt](https://github.com/mikewolfd/spicy-regs/blob/6c10a302b050fc05c6b992064a717a994ddbf01f/vendor/spicy_docs-scorecards.json) pins the
 frozen source commit and wheel. The builder starts from the previously adopted
 `1a2bc6409221` wheel; it preserves unrelated runtime files, dependencies and the
 reviewed shared PDF checks. The historical
-[baseline receipt](../../../../../vendor/spicy_docs-scorecards-1a2bc6409221.json)
+[baseline receipt](https://github.com/mikewolfd/spicy-regs/blob/6c10a302b050fc05c6b992064a717a994ddbf01f/vendor/spicy_docs-scorecards-1a2bc6409221.json)
 remains available.
 
 The [qualification ledger](integration_qualifications.json) and
