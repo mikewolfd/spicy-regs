@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from pathlib import Path
+from types import MappingProxyType
 import json
 
 from spicy_docs.sources.legislators import LegislatorsAcquirer, LegislatorsSourceError
@@ -25,6 +26,8 @@ class ReviewedMemberRosters(LegislatorsAcquirer):
     def __init__(self, *, evidence: CaptureEvidence | None = None,
                  selection: Mapping | None = None, **kwargs):
         selected = json.loads(SELECTION.read_bytes()) if selection is None else selection
+        if not isinstance(selected, Mapping) or any(not isinstance(value, Mapping) for value in selected.values()):
+            raise ValueError("Reviewed member roster selection must contain roster mappings")
         self.selection = {key: dict(value) for key, value in selected.items()}
         if set(self.selection) != {"current", "historical"}:
             raise ValueError("Both reviewed member rosters are required")
@@ -41,11 +44,29 @@ class ReviewedMemberRosters(LegislatorsAcquirer):
             commit = member["url"].split("/")[-2]
             if len(commit) != 40 or any(value not in "0123456789abcdef" for value in commit):
                 raise ValueError("Reviewed member roster URL must name an immutable commit")
+            if member["url"] != f"https://raw.githubusercontent.com/mikewolfd/congress-legislators/{commit}/legislators-{roster}.json":
+                raise ValueError("Reviewed member roster URL must name the selected repository file")
             commits.add(commit)
         if len(commits) != 1:
             raise ValueError("Reviewed member rosters must belong to one source commit")
+        self.selection = MappingProxyType({key: MappingProxyType(value) for key, value in self.selection.items()})
         self.evidence = evidence
+        self._current_capture = None
         super().__init__(**kwargs)
+
+    def acquire_current(self, *, max_bytes: int | None = None):
+        self._current_capture = None
+        try:
+            return super().acquire_current(max_bytes=max_bytes)
+        except LegislatorsSourceError as error:
+            # The maintained by-LIS postcondition runs after acquisition. Its
+            # default URL must follow this adapter's actual captured request.
+            if self._current_capture is not None:
+                context = dict(getattr(error, "legislators_acquisition", {}))
+                context["url"] = self._current_capture.requested_url
+                error.__dict__["legislators_acquisition"] = context
+                attach_capture(error, self._current_capture)
+            raise
 
     def _acquire(self, url: str, operation: str, max_bytes: int):
         member = self.selection[operation]
@@ -59,4 +80,6 @@ class ReviewedMemberRosters(LegislatorsAcquirer):
             error = LegislatorsSourceError("Reviewed member roster bytes differ from the approved input")
             attach_capture(error, result.capture)
             raise error
+        if operation == "current":
+            self._current_capture = result.capture
         return result
