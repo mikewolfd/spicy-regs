@@ -23,3 +23,7 @@ jobs:
       command: run-rollup-cfr-sections
       skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
       cfr_replace_all: ${{ github.event_name == 'workflow_dispatch' && inputs.replace_all || false }}
+      # The GovInfo walk alone took 12-20 min in the five runs to 2026-10-03, under the default 30. A native run
+      # also restores, rewrites and admits the whole table row by row: 322,378 rows at the slowest per-row rate a
+      # hosted runner showed on 2026-10-04 (sam_entities, 3.06 ms a row) is 16 min more, so 36 min; 60 leaves room.
+      timeout_minutes: 60
