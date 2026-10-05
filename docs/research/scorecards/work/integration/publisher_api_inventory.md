@@ -5,6 +5,10 @@ Generated from `publisher_api_inventory.json` on 2026-10-03T19:50:42Z. Counts be
 For later verified original routes, see the [publisher API route observations](publisher_api_routes.md).
 This inventory preserves the findings of its dated discovery pass.
 
+The generated [integration progress](integration_progress.md) identifies later
+qualified editions and public readback. An observed API, an installed reader and
+a published complete source scope are separate stages.
+
 At the date of this discovery pass, the catalog and inventory matched exactly: **125 publisher candidates**. Every candidate received a bounded original-surface or search-result review. Search-only reviews do not establish original publisher authority. No complete scorecard edition was qualified by this pass.
 
 | Discovery result | Publishers |

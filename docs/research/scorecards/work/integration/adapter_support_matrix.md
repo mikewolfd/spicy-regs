@@ -2,6 +2,12 @@
 
 The original discovery pass used [adapter_inventory.json](adapter_inventory.json), observed 2026-10-03T19:34:49.787516+00:00. Rebuild after disposition changes; this document does not enable any source.
 
+For current qualified editions and published scopes, use the generated
+[integration progress](integration_progress.md) and its pinned qualification
+receipts. The dated discovery dispositions below do not describe current
+production coverage. Each accepted edition advances only its named source
+scope; further renditions remain in the queue.
+
 User clarified that every census candidate must be accounted for, while some sources will not work. Document confirmed retirement/deprecation, access/authority blocks, unsupported parsing, unresolved discovery and implemented/unqualified status separately. Do not pursue every dead source indefinitely or label an unverified lead deprecated.
 
 The inventory reconciles the entire catalog against existing profiles and receipts. New live checks are identified per publisher; discovery-only entries are not newly verified. Publisher retirement and source deprecation require affirmative evidence. None is inferred from an old date, failed request, or missing page.

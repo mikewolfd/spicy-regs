@@ -1,5 +1,9 @@
 # Reproduce scorecard integration
 
+The [current coverage priority](coverage_priority_20261005.md) focuses on
+publisher breadth through complete editions from 2000 onward. Earlier material
+remains catalog evidence when encountered.
+
 The [October 4 stopping point](stopping_point_20261004.md) records pushed code,
 published data, the preserved interrupted batch and the next required checks.
 The [merge follow-up](merge_20261004.md) records the provider package selected
