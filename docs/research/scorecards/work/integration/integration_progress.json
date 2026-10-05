@@ -1,17 +1,17 @@
 {
   "dataset": "scorecard_integration_progress",
   "schema_version": "1",
-  "observed_at": "2026-10-05T01:29:00Z",
+  "observed_at": "2026-10-05T01:47:27.248165+00:00",
   "input_pins": {
     "adapter_inventory.json": "656a6a93f6b21733e61aae3ed54fc0a69e3dafcf900eaf44fa22cbf1f37c1b98",
     "publisher_api_inventory.json": "c776ad48df5fe970f812d16e8b7464a45a57c177d7c1cf2dde6049870104061a",
-    "integration_qualifications.json": "65f03232eeb027b26f857b702e682f81f785f4582081d6a8420dfec2dc2bab11"
+    "integration_qualifications.json": "09e169a1d83e076b44d283e956caf0f8cd5f4f47a233bc6649b6a2b2fe190be1"
   },
   "scope": "Every publisher candidate in both inventories; all available editions and renditions remain in scope",
   "states": {
     "identity_review": 1,
-    "published_scope": 53,
-    "qualified_scope": 13,
+    "published_scope": 61,
+    "qualified_scope": 5,
     "unverified_lead": 58
   },
   "publishers": [
@@ -189,8 +189,8 @@
           "publisher_id": "afscme",
           "scorecard_id": "afscme:2025-2026",
           "state": "published",
-          "receipt": "publications/c2479058bffe9f5520db2acd7e4c1956edeaba4a842b95985870c207092c72b1/6550e443eb1a76ec7787575032c97293118473cd512f87fafd9ce8174e067204.json",
-          "receipt_sha256": "e50b5838782d5ea5806899cf28e04b7d46e088f763e0459bd87b521df5e0125c"
+          "receipt": "publications/2c677a811f4c049225915d8d02bb883a725812f76ec626304a56ee04ad6f6917/6550e443eb1a76ec7787575032c97293118473cd512f87fafd9ce8174e067204.json",
+          "receipt_sha256": "77be739c76f5ac241526d9f4c2f5255633010914b13704c374ad8ffe80115bde"
         }
       ],
       "verified_api_endpoints": [],
@@ -913,22 +913,22 @@
       "publisher_id": "defenders_action",
       "publisher_name": "Defenders of Wildlife Action Fund",
       "task_id": "ss-8b7o",
-      "state": "qualified_scope",
+      "state": "published_scope",
       "reader": "defenders_action",
       "qualified_editions": [
         {
           "publisher_id": "defenders_action",
           "scorecard_id": "defenders_action:2005",
-          "state": "qualified",
-          "receipt": "qualifications/defenders_action--2005.json",
-          "receipt_sha256": "9d2514f82c92c82b95cc91a6aa2c4543b236ce459480ace279153649ba9aa6bc"
+          "state": "published",
+          "receipt": "publications/2c677a811f4c049225915d8d02bb883a725812f76ec626304a56ee04ad6f6917/e426186e07e342a6c5f8903d9c2b833a3a6d3ec424790cae9afddf19e959fe8e.json",
+          "receipt_sha256": "70c8ab7a88f901ee6eab341c3e9257a5efdb04e05887322ab6b780ca0760e6a3"
         },
         {
           "publisher_id": "defenders_action",
           "scorecard_id": "defenders_action:2005-2006",
-          "state": "qualified",
-          "receipt": "qualifications/defenders_action--2005-2006.json",
-          "receipt_sha256": "5da300ba6a237c54b14b54abc649ab9e521c82a22c2052986ae62c520e5da1ba"
+          "state": "published",
+          "receipt": "publications/2c677a811f4c049225915d8d02bb883a725812f76ec626304a56ee04ad6f6917/96a57ef0c9706774c7a45113fe0c4cc3db2362c0a95993e784dd91cbd88c9cbd.json",
+          "receipt_sha256": "1d143e329a59747ffc789cd3ae2cf7061279db5a406abd48a62e968a5cd31dbb"
         }
       ],
       "verified_api_endpoints": [],
@@ -1011,22 +1011,22 @@
       "publisher_id": "few",
       "publisher_name": "Federally Employed Women",
       "task_id": "ss-d6x3",
-      "state": "qualified_scope",
+      "state": "published_scope",
       "reader": "few",
       "qualified_editions": [
         {
           "publisher_id": "few",
           "scorecard_id": "few:117-first",
-          "state": "qualified",
-          "receipt": "qualifications/few--117-first.json",
-          "receipt_sha256": "d6eab8861e222632cc3254ee453d34980e92ba565d2a66e9353bf86c89e12f7a"
+          "state": "published",
+          "receipt": "publications/2c677a811f4c049225915d8d02bb883a725812f76ec626304a56ee04ad6f6917/5e8a02d8a15fe33719244d133a08e00a3d4786801af9b10dae05368e16b13369.json",
+          "receipt_sha256": "9441291d4a2bbd154a3f7298078d9273f96498f5d1cb0c9081c4fa3d8f62c241"
         },
         {
           "publisher_id": "few",
           "scorecard_id": "few:117-second",
-          "state": "qualified",
-          "receipt": "qualifications/few--117-second.json",
-          "receipt_sha256": "926763408581b5190441d6b15d9b1ef34c831bbf812018d4df2f5183c3e77bee"
+          "state": "published",
+          "receipt": "publications/2c677a811f4c049225915d8d02bb883a725812f76ec626304a56ee04ad6f6917/5ca4f44924a2b63b2e4113061d76c7f39a982a3990c95cb0bb4f9ef606ee6e4d.json",
+          "receipt_sha256": "ef3b862871c0098f87b0232437963a80684bde366f67327969d748c06bd544a7"
         }
       ],
       "verified_api_endpoints": [],
@@ -1108,15 +1108,15 @@
       "publisher_id": "food_policy_action",
       "publisher_name": "Food Policy Action",
       "task_id": "ss-ir67",
-      "state": "qualified_scope",
+      "state": "published_scope",
       "reader": "food_policy_action_lifetime",
       "qualified_editions": [
         {
           "publisher_id": "food_policy_action",
           "scorecard_id": "food_policy_action:lifetime-archived-pdf",
-          "state": "qualified",
-          "receipt": "qualifications/food_policy_action--lifetime-archived-pdf.json",
-          "receipt_sha256": "5d278d608b2a31559d44338ed3a640e19dcfb26b0eee9a142ec7227154a15208"
+          "state": "published",
+          "receipt": "publications/2c677a811f4c049225915d8d02bb883a725812f76ec626304a56ee04ad6f6917/d0b10bb0d37238ec4618218cd5729ba4d18bee1231b75f6097193c4330b5144f.json",
+          "receipt_sha256": "5330218c4d9d9ba8619ce694c79ecbeaf08f52cbc74606181fb2f77e115e5ba9"
         }
       ],
       "verified_api_endpoints": [],
@@ -1611,15 +1611,15 @@
       "publisher_id": "iava",
       "publisher_name": "Iraq and Afghanistan Veterans of America",
       "task_id": "ss-l2kq",
-      "state": "qualified_scope",
+      "state": "published_scope",
       "reader": "iava",
       "qualified_editions": [
         {
           "publisher_id": "iava",
           "scorecard_id": "iava:2008-original-report-pdf",
-          "state": "qualified",
-          "receipt": "qualifications/iava--2008-original-report-pdf.json",
-          "receipt_sha256": "c69bf2699ab567bb6d4719af56192054cdc39c8a08069ad4dfabd0d89fbd048d"
+          "state": "published",
+          "receipt": "publications/2c677a811f4c049225915d8d02bb883a725812f76ec626304a56ee04ad6f6917/69483ec9961ecb0187ba55c8a3b65203692dc7d73830b62373549d13a1c07d88.json",
+          "receipt_sha256": "d4917426d93652b0fa033d74954f31be5ee14eedb7f4ff403da061aea72d60e1"
         }
       ],
       "verified_api_endpoints": [],
@@ -1697,8 +1697,8 @@
           "publisher_id": "lcv",
           "scorecard_id": "lcv:2025",
           "state": "published",
-          "receipt": "qualifications/lcv--2025--published.json",
-          "receipt_sha256": "16044676b8ffeebbd4b255aed5e8a416ca7361c5b017e295727f0e8fe52e0b5e"
+          "receipt": "publications/2c677a811f4c049225915d8d02bb883a725812f76ec626304a56ee04ad6f6917/8d2b3bd212f6c072bf4de4edf2266a4935b5af292d9bd773ee733f10a5607d95.json",
+          "receipt_sha256": "99b38fddf9cf82064ec0e5c2a45cfcd91ca0833e44a09c769c07b7d809392065"
         }
       ],
       "verified_api_endpoints": [],
@@ -3792,15 +3792,15 @@
       "publisher_id": "bread_world",
       "publisher_name": "Bread for the World",
       "task_id": "ss-iktu",
-      "state": "qualified_scope",
+      "state": "published_scope",
       "reader": "bread_world",
       "qualified_editions": [
         {
           "publisher_id": "bread_world",
           "scorecard_id": "bread_world:113-as-of-july-2014-pdf",
-          "state": "qualified",
-          "receipt": "qualifications/bread_world--113-as-of-july-2014-pdf.json",
-          "receipt_sha256": "54dfcb25dc0b0693e68737b588f7e4d7965a186daf479b69cc4d93dbea7eba32"
+          "state": "published",
+          "receipt": "publications/2c677a811f4c049225915d8d02bb883a725812f76ec626304a56ee04ad6f6917/9592782d38138cc5eab7cdcc9390a2a44240d3d0b2e6c995c8adc6d61db7b4a1.json",
+          "receipt_sha256": "46dedd13890159196fb92d9a50ce88141b62ed238517d9f65dba606e41d7b9b6"
         }
       ],
       "verified_api_endpoints": [],
@@ -3891,50 +3891,50 @@
       "publisher_id": "common_cause",
       "publisher_name": "Common Cause",
       "task_id": "ss-j1a7",
-      "state": "qualified_scope",
+      "state": "published_scope",
       "reader": "common_cause",
       "qualified_editions": [
         {
           "publisher_id": "common_cause",
           "scorecard_id": "common_cause:2016-original",
-          "state": "qualified",
-          "receipt": "qualifications/common_cause--2016-original.json",
-          "receipt_sha256": "c596757875fe81446d0aa97b633df1df67d7928aa05b55c8458351e631b0c665"
+          "state": "published",
+          "receipt": "publications/2c677a811f4c049225915d8d02bb883a725812f76ec626304a56ee04ad6f6917/a41a8eb3151f7e02630520b2d662779c3613402463b9781c18d8471e39ef840d.json",
+          "receipt_sha256": "cdd87f56521a65879d75b3d50e47788bcde5eff6ef374aad0e5a26e0d0a84fcc"
         },
         {
           "publisher_id": "common_cause",
           "scorecard_id": "common_cause:2016-revised",
-          "state": "qualified",
-          "receipt": "qualifications/common_cause--2016-revised.json",
-          "receipt_sha256": "00d0aaa0c79215d716407d2eb238d2d706a4072fd5cb5fb406c45f93bf246b41"
+          "state": "published",
+          "receipt": "publications/2c677a811f4c049225915d8d02bb883a725812f76ec626304a56ee04ad6f6917/0897640b1a5280534342d86499652a06cce2a0f627b26e8a7b75942fd9d17181.json",
+          "receipt_sha256": "d77299a9b9a94537697b4ebb151551d1b5097c2539f9eda8428e8a7da32c2b03"
         },
         {
           "publisher_id": "common_cause",
           "scorecard_id": "common_cause:2018-archived",
-          "state": "qualified",
-          "receipt": "qualifications/common_cause--2018-archived.json",
-          "receipt_sha256": "d1ad3a6bb20d0c5621f9fde7aa0a791044eba56a8879fccd8bb6d328b5e1fe6a"
+          "state": "published",
+          "receipt": "publications/2c677a811f4c049225915d8d02bb883a725812f76ec626304a56ee04ad6f6917/63ce41b129b8629a5520ec34744627226bd4b3d9220aa66da0825dc2f0467c14.json",
+          "receipt_sha256": "896618490cb166d07fbe6952d71fba8ce879b445d9246615457dc19089788208"
         },
         {
           "publisher_id": "common_cause",
           "scorecard_id": "common_cause:2020-archived",
-          "state": "qualified",
-          "receipt": "qualifications/common_cause--2020-archived.json",
-          "receipt_sha256": "bd8712999d5d4e1192a47d544f629a087e093e03e4ed26051ae9b12f0542f670"
+          "state": "published",
+          "receipt": "publications/2c677a811f4c049225915d8d02bb883a725812f76ec626304a56ee04ad6f6917/d880433ee820a4ad6ba1666ffc43ae08292dc3465160ebea6e244e1aef51c93a.json",
+          "receipt_sha256": "453ae2bde55a8f35418a1868c481c22eec231a50aa9daccb8667ead3b2a1880b"
         },
         {
           "publisher_id": "common_cause",
           "scorecard_id": "common_cause:2022-archived",
-          "state": "qualified",
-          "receipt": "qualifications/common_cause--2022-archived.json",
-          "receipt_sha256": "1c9d074594423f8666dddd782d36cc5c5a4c570ac9797623f368e47abf130e39"
+          "state": "published",
+          "receipt": "publications/2c677a811f4c049225915d8d02bb883a725812f76ec626304a56ee04ad6f6917/c86b88053e39ee6517ca2130387b53b900ea8e16569af660f5fe091c76cdbd09.json",
+          "receipt_sha256": "3c4b65260647e667868cafef2ac7c627083bbbd4674c0310ad5701de6da00836"
         },
         {
           "publisher_id": "common_cause",
           "scorecard_id": "common_cause:2024-publisher-linked",
-          "state": "qualified",
-          "receipt": "qualifications/common_cause--2024-publisher-linked.json",
-          "receipt_sha256": "8e9cdf1c26a014a8daa80abee091891404fdf73fbc8f7d2e5d5f79d90ee4e283"
+          "state": "published",
+          "receipt": "publications/2c677a811f4c049225915d8d02bb883a725812f76ec626304a56ee04ad6f6917/ad23ecf9568a0e0096d21f615c0b697db99b7288a80cac9c69acf958040b50a8.json",
+          "receipt_sha256": "310a07bef6a0a686ed786085d1b6ac0a340bd0bdba177ef2ec0daed7b00893c0"
         }
       ],
       "verified_api_endpoints": [],
@@ -4228,22 +4228,22 @@
       "publisher_id": "nasw",
       "publisher_name": "National Association of Social Workers",
       "task_id": "ss-h3fc",
-      "state": "qualified_scope",
+      "state": "published_scope",
       "reader": "nasw",
       "qualified_editions": [
         {
           "publisher_id": "nasw",
           "scorecard_id": "nasw:4135-1848",
-          "state": "qualified",
-          "receipt": "qualifications/nasw--4135-1848.json",
-          "receipt_sha256": "80d9f27b24254de71de6b8d7ac21047d01155b2c7f916ad0ff7e7d009fb46daf"
+          "state": "published",
+          "receipt": "publications/2c677a811f4c049225915d8d02bb883a725812f76ec626304a56ee04ad6f6917/d451d4da60ab49938da4ad720460a115fbcdf546a549498e9bb76d367d708409.json",
+          "receipt_sha256": "216fbe55a1f321fdcf286255cd26d315a128b90d1f0e354028a8597203a98941"
         },
         {
           "publisher_id": "nasw",
           "scorecard_id": "nasw:4135-1729",
-          "state": "qualified",
-          "receipt": "qualifications/nasw--4135-1729.json",
-          "receipt_sha256": "fdd9d3745fda1d414246f1a627acd5e98757044a31c111bec150f4cba87a52e6"
+          "state": "published",
+          "receipt": "publications/2c677a811f4c049225915d8d02bb883a725812f76ec626304a56ee04ad6f6917/c759f84a223bc522ea0e2a8572fbf4426b2706301fd0f5b4cc4152fd6fd93e19.json",
+          "receipt_sha256": "3d80c4dbc47086b471500fdd4711f6d0775c0d6ee4cf63355a182c03863b3b7e"
         }
       ],
       "verified_api_endpoints": [
@@ -4357,22 +4357,22 @@
       "publisher_id": "public_citizen",
       "publisher_name": "Public Citizen/Congress Watch",
       "task_id": "ss-gh64",
-      "state": "qualified_scope",
+      "state": "published_scope",
       "reader": "public_citizen",
       "qualified_editions": [
         {
           "publisher_id": "public_citizen",
           "scorecard_id": "public_citizen:vchart00-senate-archived-html",
-          "state": "qualified",
-          "receipt": "qualifications/public_citizen--vchart00-senate-archived-html.json",
-          "receipt_sha256": "6d2b15638028e5c73f0e81ecb8ee13b4a3c2a0fe7e537b4fa9f3b936280e7251"
+          "state": "published",
+          "receipt": "publications/2c677a811f4c049225915d8d02bb883a725812f76ec626304a56ee04ad6f6917/d32002b5fe6081ebf5c2e6f0d29254b45351f83ef46403a149e277df335c6f52.json",
+          "receipt_sha256": "5c76e4d20c888d337dd440edb80b00a2204e06ec81754d8edb5d5c039538e045"
         },
         {
           "publisher_id": "public_citizen",
           "scorecard_id": "public_citizen:vchart00-house-archived-html",
-          "state": "qualified",
-          "receipt": "qualifications/public_citizen--vchart00-house-archived-html.json",
-          "receipt_sha256": "8ef22203f1f086f8ae45a64cbb8111b0bf0bbbcc89675ce28ea3a19798b2c6cc"
+          "state": "published",
+          "receipt": "publications/2c677a811f4c049225915d8d02bb883a725812f76ec626304a56ee04ad6f6917/a2bb1538f5bf130e49742eea0ca418ed6b3747c129ab1af2e87d0ff6537567f9.json",
+          "receipt_sha256": "18b2810396ce15c89707c36a662296cae26d54f4c7a0c2cee748e5d8f75a30ec"
         }
       ],
       "verified_api_endpoints": [],

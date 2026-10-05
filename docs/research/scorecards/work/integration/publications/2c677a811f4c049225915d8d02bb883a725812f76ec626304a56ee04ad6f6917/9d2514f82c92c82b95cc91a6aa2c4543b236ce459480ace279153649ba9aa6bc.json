@@ -1,0 +1,32 @@
+{
+  "format_version": "scorecard-integration-qualified-scope/1",
+  "qualified": true,
+  "publisher_id": "defenders_action",
+  "scorecard_id": "defenders_action:2005",
+  "source_url": "https://defenders.org/sites/default/files/publications/2005reportcard.pdf",
+  "parser_version": "defenders-action-named-original-pdf/1",
+  "reader_sha256": "f8ab4d4d7e2b10033610e44b18b6e70ab2a59fb62871081ad79249b53dc457e7",
+  "capture_manifest_sha256": "724b5d48175ce0d56a638d0ca7d80320e4dfc2872763c34cdf5b3e61256260af",
+  "native_reference_sha256": "9abc0921401cc089f88001c050fedc3c14e5a8d3c5cf47af25f6535aa868a5eb",
+  "native_reference_kind": "source_table_family",
+  "source_qualification_sha256": "8736899a2a7b9e85e7b80070a4ab3c38d9ed140c44c0c435f34a1d5d3e643852",
+  "completeness_rule": "exact complete named PDF and private reviewed observations; source member/page/ordinal/item/glyph bounds reconciled; identical original PDF reread before closing",
+  "counts": {
+    "scorecard_items": 17,
+    "scorecard_member_item_results": 4742,
+    "scorecard_member_ratings": 538,
+    "scorecard_members": 538,
+    "scorecard_methodologies": 19,
+    "scorecard_metric_components": 0,
+    "scorecard_metric_items": 17,
+    "scorecard_metrics": 2,
+    "scorecard_publishers": 1,
+    "scorecard_snapshots": 1,
+    "scorecards": 1
+  },
+  "capture_count": 2,
+  "evidence_policy": "hash_only",
+  "qualification_boundary": "Named source rendition; remaining editions and renditions stay in scope",
+  "published": false,
+  "qualified_observations_sha256": "0c425db13a22b7d54857130cce571557927d5aa054094708235752fa398bde81"
+}

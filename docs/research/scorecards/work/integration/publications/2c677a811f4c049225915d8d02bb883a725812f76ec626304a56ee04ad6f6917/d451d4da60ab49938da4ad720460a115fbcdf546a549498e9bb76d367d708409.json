@@ -1,0 +1,24 @@
+{
+  "format_version": "scorecard-integration-published-observation/2",
+  "publisher_id": "nasw",
+  "scorecard_id": "nasw:4135-1848",
+  "parser_version": "nasw-national-federal-votervoice/1",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 3,
+    "scorecard_metrics": 1,
+    "scorecard_items": 2,
+    "scorecard_metric_items": 2,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 447,
+    "scorecard_member_ratings": 447,
+    "scorecard_member_item_results": 872
+  },
+  "source_qualification": "publications/2c677a811f4c049225915d8d02bb883a725812f76ec626304a56ee04ad6f6917/80d9f27b24254de71de6b8d7ac21047d01155b2c7f916ad0ff7e7d009fb46daf.json",
+  "source_qualification_sha256": "80d9f27b24254de71de6b8d7ac21047d01155b2c7f916ad0ff7e7d009fb46daf",
+  "public_readback": "publications/2c677a811f4c049225915d8d02bb883a725812f76ec626304a56ee04ad6f6917/readback.json",
+  "public_readback_sha256": "755e2f09279e51708a4c2d84ded9d65397074eeb16e37035497094a1c059fc3d",
+  "observed_source_generation": "sha256:2c677a811f4c049225915d8d02bb883a725812f76ec626304a56ee04ad6f6917"
+}

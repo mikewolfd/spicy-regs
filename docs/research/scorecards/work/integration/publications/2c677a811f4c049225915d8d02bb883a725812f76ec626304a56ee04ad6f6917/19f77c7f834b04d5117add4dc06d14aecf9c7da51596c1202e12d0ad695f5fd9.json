@@ -1,0 +1,31 @@
+{
+  "format_version": "scorecard-integration-qualified-scope/1",
+  "qualified": true,
+  "publisher_id": "lcv",
+  "scorecard_id": "lcv:2025",
+  "source_url": "https://www.lcv.org/congressional-scorecard/members-of-congress/",
+  "parser_version": "lcv-2025-csv-html/2",
+  "reader_sha256": "12b42fc4b44c2cfb2605cf8ef517c474b2091d6156e5866d55d7c3e40092021f",
+  "capture_manifest_sha256": "30740747abf8deab25d8ed490003fa7c6f4f12f61a7ea61bdb06370d1867bb44",
+  "native_reference_sha256": "78de519334db40aac039ea785cc67b3a0d0d419bdac3df35ae18d0dcf98648c1",
+  "native_reference_kind": "source_table_family",
+  "source_qualification_sha256": "a3242c19ef9387665276c931ac6e8ecc421afeefbc111ac54fec98fb41f6618f",
+  "completeness_rule": "Both chamber member and item catalogs reconcile between complete HTML and CSV; every listed item export is acquired, its identity checked, and all reported member results reconcile by source member URL and literal data-vote-type to its complete HTML table. Edition CSV ratings are selected; incidental item-export current ratings are corroborating context and never replace edition ratings. Item dates retain each item export Year literally. The current publisher annual/lifetime calculation paragraphs are captured as partial methodology disclosure; no historical effective date or score reproduction is asserted.",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 2,
+    "scorecard_metrics": 2,
+    "scorecard_items": 66,
+    "scorecard_metric_items": 66,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 551,
+    "scorecard_member_ratings": 1102,
+    "scorecard_member_item_results": 17255
+  },
+  "capture_count": 138,
+  "evidence_policy": "hash_only",
+  "qualification_boundary": "Named source rendition; remaining editions and renditions stay in scope",
+  "published": false
+}
