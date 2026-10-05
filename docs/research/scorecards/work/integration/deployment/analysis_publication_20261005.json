@@ -1,0 +1,58 @@
+{
+  "format_version": "scorecard-analysis-public-readback/1",
+  "status": "APPROVE_PUBLIC_ANALYSIS_READBACK",
+  "source_generation": "sha256:87a6e35800a9f983ade179b8d55e3bbdb56548fa52e955afc659d1eac8e18447",
+  "analysis_generation": "sha256:766a7cbb4c1f9ae08830618360906855b38b35a983010c2efd141da55ab8fc81",
+  "semantic_outcome_counts": {
+    "scorecard_member_links": 202639,
+    "scorecard_item_links": 46645
+  },
+  "resolution_statuses": {
+    "scorecard_member_links": {
+      "resolved": 98731,
+      "unresolved": 103843,
+      "ambiguous": 37,
+      "conflict": 28
+    },
+    "scorecard_item_links": {
+      "resolved": 8881,
+      "unresolved": 37756,
+      "conflict": 8
+    }
+  },
+  "physical_accepted_link_rows": {
+    "scorecard_member_links": 98731,
+    "scorecard_item_links": 8881,
+    "etl_receipts": 249284
+  },
+  "parent_validation": "Exact qualified eight input pins, captured parent index, current source family, and each outcome’s parent JSON/witnesses match. Existing shared complete receipt admission passed. No origin congressional data fetched.",
+  "hosted_validation": {
+    "original_replies": 16,
+    "exact_columns_and_pins": "Both physical link tables",
+    "all_status_queries": 7,
+    "member_attribution_publishers": 72,
+    "accepted_item_attribution_publishers": 42,
+    "truncated_rows_or_cells": false,
+    "receipt_pins": "All managed-receipt nested family/digest/generation/hash/row/dataset pins equal retained public index; attributed queries require scorecards plus scorecard-analysis"
+  },
+  "preparation": {
+    "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/candidate-analysis72-v1/preparation.json",
+    "sha256": "ac330206a7ad094c0498d56c116e2a0d37942366ada5c2f87c04aa539bb0f8ed"
+  },
+  "authenticated_publication": {
+    "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publication-analysis72-v1/receipt.json",
+    "sha256": "4cdfd226874629741563582bd8ab56387b7902cccff08348dc0f90710aad2c1f"
+  },
+  "independent_public_readback": {
+    "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/readback-analysis72-v1/retry-v3/summary.json",
+    "sha256": "1b4fdc5d666380a16c39d28e57d30050a2f323ea3de11fabbbc09e8336564e9e"
+  },
+  "frozen_independent_review": {
+    "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/readback-analysis72-v1/frozen-handoff-v2.json",
+    "sha256": "80c92f5c098a71a3b7d9071f0d5819dcc0d87406b3e079d622afa141611a916d"
+  },
+  "shared_readback_recipe_sha256": "1c44a427dfb4edab220b13f35cd783fbc9ea12effd35dfa2b44050f71dbf71a7",
+  "focused_tests_sha256": "6357bb2ef8ef2c426266633b5f3fa382c401507436e0c087378a90ea07cf5bfb",
+  "rule_version": "scorecard-resolution-v1.5",
+  "boundary": "Exact published source and existing official-input generations. All outcomes remain in generation-bound ETL receipts; accepted resolved links occupy the physical analysis tables. Third-party source bodies remain private. No new congressional source acquisition."
+}
