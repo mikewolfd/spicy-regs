@@ -1,0 +1,31 @@
+{
+  "format_version": "scorecard-integration-qualified-scope/1",
+  "qualified": true,
+  "publisher_id": "peace_action",
+  "scorecard_id": "peace_action:api-stored-record",
+  "source_url": "https://www.peaceaction.org/wp-json/wp/v2/legislators/?nopaging=true",
+  "parser_version": "peace-action-native-wordpress/2",
+  "reader_sha256": "8cf4cac60d4f2a5b77a8d9a0de6266b80cd9d2507b8ed87d03adc823be948ed7",
+  "capture_manifest_sha256": "a5cfea6740cf49c3469b8701a77d24246a558ce3c504f7b7395845cac137b272",
+  "native_reference_sha256": "3bef99b4cc6616b4e047d0687a6a46b3fc4086bea589e941f0d02fcb80a2a5df",
+  "native_reference_kind": "source_table_family",
+  "source_qualification_sha256": "8e402206da3ac74c9f25b355d3f64917c77a272769118508ddba1a044b31d036",
+  "completeness_rule": "Complete source directory reconciles its exact native ID census including duplicate crosswalk values; explicit bounded vote pagination reaches a nonempty short final page and all source-defined periods and distinct WP item identities reconcile. Stable complete rereads preserve every literal stored/query score and native member-group occurrence, including overlaps, blank collections and identifier-only references. Annual reported-query cohort is separate from complete vote records; no inferred annual missing scores, official votes, weights or reproduced formula.",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 246,
+    "scorecard_metrics": 3,
+    "scorecard_items": 244,
+    "scorecard_metric_items": 0,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 1021,
+    "scorecard_member_ratings": 3009,
+    "scorecard_member_item_results": 76088
+  },
+  "capture_count": 16,
+  "evidence_policy": "hash_only",
+  "qualification_boundary": "Named source rendition; remaining editions and renditions stay in scope",
+  "published": false
+}

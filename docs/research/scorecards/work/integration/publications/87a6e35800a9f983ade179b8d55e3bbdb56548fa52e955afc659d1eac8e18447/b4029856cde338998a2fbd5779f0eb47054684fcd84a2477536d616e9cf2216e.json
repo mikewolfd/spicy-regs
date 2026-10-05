@@ -1,0 +1,31 @@
+{
+  "format_version": "scorecard-integration-qualified-scope/1",
+  "qualified": true,
+  "publisher_id": "sba",
+  "scorecard_id": "sba:119-profile-catalog",
+  "source_url": "https://sbaprolife.org/scorecard",
+  "parser_version": "sba-complete-native-profile-catalog/2",
+  "reader_sha256": "59af6ee49df0e9f4d1331ab560b39fd17d7a127e0d6984a17079617927535fec",
+  "capture_manifest_sha256": "96fe160fcda0bf0c5fa184866d4afac094af357c18e7ce9c2a7b173e20490934",
+  "native_reference_sha256": "fc598fb34826aeeb4624a28963f34c5a8b8a1e4ffd6944e58cc7a7bf1211893a",
+  "native_reference_kind": "source_table_family",
+  "source_qualification_sha256": "dfa952dd313cc962bbaba15805ade12053c45504d366a546520593807c3b6fad",
+  "completeness_rule": "Both full native catalog tables reach HTML EOF and agree on reread. Every listed Current and Former original member profile is acquired, its publisher-configured successful JSON body is complete, and every current/past term and item array is walked to EOF. Every full JSON member/term/item object agrees with an exact-request reread; shared term cores and item objects reconcile across members. Missing/error/incomplete/different responses refuse the entire catalog.",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 2175,
+    "scorecard_metrics": 16,
+    "scorecard_items": 176,
+    "scorecard_metric_items": 475,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 799,
+    "scorecard_member_ratings": 1974,
+    "scorecard_member_item_results": 46344
+  },
+  "capture_count": 2402,
+  "evidence_policy": "hash_only",
+  "qualification_boundary": "Named source rendition; remaining editions and renditions stay in scope",
+  "published": false
+}

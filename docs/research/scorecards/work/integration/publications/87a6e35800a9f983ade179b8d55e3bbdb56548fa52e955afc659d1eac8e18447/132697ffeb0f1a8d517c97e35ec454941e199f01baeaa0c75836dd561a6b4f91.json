@@ -1,0 +1,32 @@
+{
+  "format_version": "scorecard-integration-qualified-scope/1",
+  "qualified": true,
+  "publisher_id": "drum_major",
+  "scorecard_id": "drum_major:2005-original-pdf",
+  "source_url": "https://web.archive.org/web/20060822204435id_/http://www.drummajorinstitute.org:80/pdfs/DMI%202005%20Scorecard.pdf",
+  "parser_version": "drum-major-2005-qualified-visible-pdf/1",
+  "reader_sha256": "1376b1d6cc21ffb223ff00501cccad49c63e09b7a87f9a4a6f28d3a95b8e333d",
+  "capture_manifest_sha256": "5563cf4e210ff755ebf6a351763792dd794363a68ca229ccf58a23c625b29b19",
+  "native_reference_sha256": "e39083c1ab7d6f417b7ce599c394db247d76099258dda91d90556fa107b78c77",
+  "native_reference_kind": "source_table_family",
+  "source_qualification_sha256": "be66ef4a00e81ccb12ebd2c9316063b767b8f2c12f7ecef2549f3512170b5c18",
+  "completeness_rule": "The exact complete 21-physical-page original and stable reread match qualified visible source facts. All printed member grids, ordered comparison glyphs, SCORE/GRADE columns, repeated headers, original method and complete native narrative/context spans reconcile with independent PDF paint/text enumeration, structured image observations and a separate Ovis check. Covered earlier text is retained privately rather than emitted as visible members.",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 40,
+    "scorecard_metrics": 4,
+    "scorecard_items": 16,
+    "scorecard_metric_items": 16,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 535,
+    "scorecard_member_ratings": 1070,
+    "scorecard_member_item_results": 4280
+  },
+  "capture_count": 2,
+  "evidence_policy": "hash_only",
+  "qualification_boundary": "Named source rendition; remaining editions and renditions stay in scope",
+  "published": false,
+  "qualified_observations_sha256": "23b0c318700fe28c583534acb34ad49f662b7fcafa10b7956572208799013f96"
+}

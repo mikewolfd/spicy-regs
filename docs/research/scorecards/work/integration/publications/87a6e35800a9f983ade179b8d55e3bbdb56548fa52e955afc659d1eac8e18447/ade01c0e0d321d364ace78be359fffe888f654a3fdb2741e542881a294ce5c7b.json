@@ -1,0 +1,31 @@
+{
+  "format_version": "scorecard-integration-qualified-scope/1",
+  "qualified": true,
+  "publisher_id": "nra_pvf",
+  "scorecard_id": "nra_pvf:2026-11-03-general-nevada-federal-incumbents",
+  "source_url": "https://www.nrapvf.org/grades/nevada",
+  "parser_version": "nra-pvf-public-election-federal-incumbents/2",
+  "reader_sha256": "8368eb8586428877d6a71cb44bcb9256973922d2d1834f12f026d1148edd9f54",
+  "capture_manifest_sha256": "fe5d756b550bf47356ffc3c70f0129cbf3013ea0dbe06efe296f8c6168432256",
+  "native_reference_sha256": "3f2db3c625c0178a3ea3ffa920d0b379024da493d2f76ae24d6f072805e27be1",
+  "native_reference_kind": "source_table_family",
+  "source_qualification_sha256": "372bd67d241dbb851d828a9c5da27f704b5df94508f84100889277f3c831d5c7",
+  "completeness_rule": "Complete advertised state/election HTML through EOF; every tab, office and candidate context accounted for; exact federal-office/Incumbent filter; source facts and navigation agree on reread. This is the publisher-listed election incumbent cohort, not a complete congressional roster.",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 1,
+    "scorecard_metrics": 1,
+    "scorecard_items": 0,
+    "scorecard_metric_items": 0,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 3,
+    "scorecard_member_ratings": 3,
+    "scorecard_member_item_results": 0
+  },
+  "capture_count": 4,
+  "evidence_policy": "hash_only",
+  "qualification_boundary": "Named source rendition; remaining editions and renditions stay in scope",
+  "published": false
+}

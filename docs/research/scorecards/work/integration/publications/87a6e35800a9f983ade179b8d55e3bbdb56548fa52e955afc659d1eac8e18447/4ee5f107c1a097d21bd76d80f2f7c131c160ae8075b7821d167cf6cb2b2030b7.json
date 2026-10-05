@@ -1,0 +1,31 @@
+{
+  "format_version": "scorecard-integration-qualified-scope/1",
+  "qualified": true,
+  "publisher_id": "planned_parenthood",
+  "scorecard_id": "planned_parenthood:4473-307%3Acriteria",
+  "source_url": "https://www.plannedparenthoodaction.org/congressional-scorecard",
+  "parser_version": "planned_parenthood-votervoice-criteria-federal/1",
+  "reader_sha256": "70eec8c1e37847efe6b514927faf049ad2ac8400327eb35f566705dabb609e7f",
+  "capture_manifest_sha256": "056215c911e49fee145ddcd0ed99424d44195fcfd1b119aa444f7cd3e59c1d00",
+  "native_reference_sha256": "ad83afac4ef1a2e1946683dd7a386858f53baecc38c9b9f671c4d41275dabd73",
+  "native_reference_kind": "source_table_family",
+  "source_qualification_sha256": "4856a8a09396c24a3c275789ec6770c435488f6f380b6c3e4e91654904c3b9c6",
+  "completeness_rule": "Complete catalog/detail arrays reached EOF; unique edition/member/item/factor identities; complete literal criterion action groups, with no fabricated ratings; entire active/inactive federal catalogs, selected scoring array and all detail objects agree on independent reread",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 4,
+    "scorecard_metrics": 0,
+    "scorecard_items": 3,
+    "scorecard_metric_items": 0,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 531,
+    "scorecard_member_ratings": 0,
+    "scorecard_member_item_results": 630
+  },
+  "capture_count": 16,
+  "evidence_policy": "hash_only",
+  "qualification_boundary": "Named source rendition; remaining editions and renditions stay in scope",
+  "published": false
+}

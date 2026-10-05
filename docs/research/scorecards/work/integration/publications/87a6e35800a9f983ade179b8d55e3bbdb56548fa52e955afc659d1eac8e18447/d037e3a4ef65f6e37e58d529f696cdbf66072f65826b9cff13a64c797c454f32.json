@@ -1,0 +1,32 @@
+{
+  "format_version": "scorecard-integration-qualified-scope/1",
+  "qualified": true,
+  "publisher_id": "national_parks_action",
+  "scorecard_id": "national_parks_action:2020-pdf",
+  "source_url": "https://drive.usercontent.google.com/download?id=1jog5c3nxMmIAYqvWbpoH0gcWH5zEK_vs&export=download",
+  "parser_version": "national-parks-action-2020-qualified-semantic/1",
+  "reader_sha256": "bd77cbed8ec889399d44f17e9366c4a59b593db2d7390dd1727278a3dd8d467f",
+  "capture_manifest_sha256": "79b2eb4e44833f1cc4fbd01805c93f07c2544ea1142e56fcd230c5825cf4df8e",
+  "native_reference_sha256": "00746a1a9b049e0d603d22cb98b052d2ea4a8d60e7acdcefbc993f95a7c2a383",
+  "native_reference_kind": "source_table_family",
+  "source_qualification_sha256": "d5efc21a4c66a3886aaee95d77da2824776e411b64ccfd6d4b4b76f6c6bc0cae",
+  "completeness_rule": "Complete publisher-linked 2020 PDF: every historical member row, independently reported percent/grade, original Senate and House item narratives, chamber-specific eligibility/exclusions and every native vector-color cell reconcile to the source text and printed legends. Doubled weighting, source dates/citations, N/A ratings and distinct not-applicable/ineligible categories remain literal. No inferred session, official action, grade conversion or score reproduction.",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 38,
+    "scorecard_metrics": 4,
+    "scorecard_items": 18,
+    "scorecard_metric_items": 36,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 546,
+    "scorecard_member_ratings": 1092,
+    "scorecard_member_item_results": 5946
+  },
+  "capture_count": 1,
+  "evidence_policy": "hash_only",
+  "qualification_boundary": "Named source rendition; remaining editions and renditions stay in scope",
+  "published": false,
+  "qualified_reader_input_sha256": "11933f558ed058c77b720a7df92f64391caf662c5fd7e94a94ad1a3ab798c28e"
+}
