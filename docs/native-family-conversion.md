@@ -49,7 +49,12 @@ for a cheaper writer. Evidence for everything below:
 Each run writes `conversion.json` in its `--work` directory. It holds the
 captured entry and the generation the run intends to publish, and it is
 saved before the pointer write, so `--rollback` works even when the process
-died or lost the write's response.
+died or lost the write's response. Updates write and sync a sibling temporary
+file before replacing the receipt, preserving the previous complete record
+if a write is interrupted. A confirmed version-2 publication is recorded
+before repairing the derived version-1 index. If recovery cannot read the
+stored index, the command reports an unknown outcome and keeps the rollback
+record; it does not claim that nothing was published.
 
 The command refuses a family outside `--allow`, one that is already native,
 and one with no subject/receipt rollup or court writer (the regulations

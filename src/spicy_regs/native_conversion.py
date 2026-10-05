@@ -454,6 +454,26 @@ def _published_state(family: str, entry: Mapping | None, receipt_path: Path, buc
             f"{receipt_path} --expect-bucket {bucket} (and the same --env-file)")
 
 
+def _uncertain_state(action: str, receipt_path: Path, bucket: str | None) -> str:
+    return (f"a {action} was attempted and its result is not known. "
+            f"{SCRIPT} --rollback {receipt_path} --expect-bucket {bucket} reads the stored index and "
+            "restores the captured entry if this conversion's generation is what it names")
+
+
+def _write_receipt(path: Path, receipt: Mapping) -> None:
+    """Keep the previous complete rollback record until its replacement is written and synced."""
+    temporary = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
+    try:
+        with temporary.open("x", encoding="utf-8") as stream:
+            json.dump(receipt, stream, indent=2, sort_keys=True)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: str, expected_spicy_docs: str,
             publish: bool = False, remote: str = "origin", state: Callable[[str], dict] | None = None,
             expect_bucket: str | None = None) -> dict:
@@ -597,7 +617,7 @@ def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: s
     }
 
     def save() -> dict:
-        (work / RECEIPT).write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        _write_receipt(work / RECEIPT, receipt)
         return receipt
 
     if problems:
@@ -624,8 +644,15 @@ def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: s
     except Exception as failure:
         # The publish call did not return. A conditional write whose response was lost has still moved the pointer,
         # so the stored index, read with credentials, says which of three states holds.
-        entry = publication.stored_family(client, bucket, family)
         reason = f"{type(failure).__name__}: {failure}"
+        try:
+            entry = publication.stored_family(client, bucket, family)
+        except Exception as unreadable:
+            attempt |= {"error": reason, "verification_error": f"{type(unreadable).__name__}: {unreadable}"}
+            save()
+            raise ConversionRefused(
+                f"{family}: {reason}; stored index could not be read ({attempt['verification_error']})",
+                state=_uncertain_state("publish", work / RECEIPT, bucket)) from unreadable
         if _same_generation(entry, old):
             attempt |= {"outcome": "not moved", "error": reason}
             save()
@@ -638,7 +665,14 @@ def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: s
                 "neither the captured generation nor this conversion's: another writer published it, and this "
                 "receipt rolls nothing back") from failure
         attempt |= {"outcome": "moved to this conversion's generation", "error": reason}
-        publication.rederive_v1(client, bucket)
+        receipt["published"] = {"entry": entry}
+        save()
+        try:
+            publication.rederive_v1(client, bucket)
+        except Exception as repair:
+            raise ConversionRefused(
+                f"{family}: published, but the derived index could not be repaired ({type(repair).__name__}: {repair})",
+                state=_published_state(family, entry, work / RECEIPT, bucket)) from repair
     else:
         attempt["outcome"] = "published"
     receipt["published"] = {"entry": entry}
@@ -695,15 +729,23 @@ def rollback(receipt_path: Path, *, discard_newer: bool = False, expect_bucket: 
     receipt["rollback_attempt"] = attempt
 
     def save() -> None:
-        receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        _write_receipt(receipt_path, receipt)
 
     save()
     try:
         publication.restore_family(client, target["bucket"], family, captured,
                                    expected=None if discard_newer else stored)
     except Exception as failure:
-        observed = publication.stored_family(client, target["bucket"], family)
         attempt["error"] = f"{type(failure).__name__}: {failure}"
+        try:
+            observed = publication.stored_family(client, target["bucket"], family)
+        except Exception as unreadable:
+            attempt["verification_error"] = f"{type(unreadable).__name__}: {unreadable}"
+            save()
+            raise ConversionRefused(
+                f"{family}: rollback failed ({attempt['error']}); stored index could not be read "
+                f"({attempt['verification_error']})",
+                state=_uncertain_state("rollback", receipt_path, expect_bucket)) from unreadable
         if observed != captured:
             attempt.update(outcome="not restored", entry=observed)
             save()
@@ -731,7 +773,7 @@ def rollback(receipt_path: Path, *, discard_newer: bool = False, expect_bucket: 
     receipt["rolled_back"] = {"at": _now(), "entry": entry, "discarded_newer": discard_newer,
                               "found": "this conversion's generation" if ours else
                                        "the captured generation" if _same_generation(stored, captured) else "another generation"}
-    receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    save()
     if entry != captured:
         raise ConversionRefused(f"{family} does not read back as its captured entry after the rollback",
                                 state=f"{family} names {(entry or {}).get('artifactDigest')} when read publicly")
@@ -793,9 +835,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         attempted = operation_receipt and operation_receipt.exists() and json.loads(
             operation_receipt.read_text(encoding="utf-8")).get("rollback_attempt" if args.rollback else "publish_attempt")
         print(f"FAILED: {type(failure).__name__}: {failure}", file=sys.stderr)
-        print("STATE: " + (f"a {'rollback' if args.rollback else 'publish'} was attempted and its result is not known. "
-                           f"{SCRIPT} --rollback {operation_receipt} --expect-bucket {args.expect_bucket} reads the stored index and "
-                           "restores the captured entry if this conversion's generation is what it names"
+        print("STATE: " + (_uncertain_state("rollback" if args.rollback else "publish", operation_receipt, args.expect_bucket)
                            if attempted else NOTHING_PUBLISHED), file=sys.stderr)
         return 130 if isinstance(failure, KeyboardInterrupt) else 2
     for name, table in done["tables"].items():

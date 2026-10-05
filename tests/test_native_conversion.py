@@ -347,6 +347,89 @@ def test_a_pointer_write_whose_response_was_lost_is_found_and_finished(tmp_path,
     assert "published and read back" in capsys.readouterr().out
 
 
+@pytest.mark.parametrize("failed_step", ["read-stored", "repair-v1"])
+def test_lost_publish_response_followed_by_recovery_failure_reports_actual_uncertainty(
+    tmp_path, monkeypatch, bucket, capsys, failed_step
+):
+    from tests.generation_fakes import error
+
+    old = publish_old(bucket, monkeypatch, tmp_path, "cfr-sections", {"cfr_sections": CFR})
+    monkeypatch.setattr(conversion, "source_state", lambda remote: dict(STATE))
+    real, lost = bucket.put_object, []
+
+    def put_object(**kwargs):
+        result = real(**kwargs)
+        if kwargs["Key"] == V2 and not lost:
+            lost.append(True)
+            raise error("PreconditionFailed")
+        return result
+
+    def fail(*args, **kwargs):
+        raise publication.PublicationError("recovery failed")
+
+    work = tmp_path / "work"
+    with monkeypatch.context() as recovery:
+        recovery.setattr(bucket, "put_object", put_object)
+        recovery.setattr(publication, "stored_family" if failed_step == "read-stored" else "rederive_v1", fail)
+        assert conversion.main(["cfr-sections", *COMMON, "--work", str(work), "--publish", "--expect-bucket", BUCKET]) == 1
+    report = capsys.readouterr().err
+    assert conversion.NOTHING_PUBLISHED not in report
+    assert ("result is not known" if failed_step == "read-stored" else "IS published") in report
+    receipt = json.loads((work / conversion.RECEIPT).read_text())
+    assert stored(bucket)["artifactDigest"] == receipt["generation"]["artifactDigest"]
+    assert receipt["captured"]["entry"] == old
+    if failed_step == "repair-v1":
+        assert receipt["published"]["entry"] == stored(bucket)
+    conversion.rollback(work / conversion.RECEIPT, expect_bucket=BUCKET)
+    assert stored(bucket) == old
+
+
+@pytest.mark.parametrize("failed_step", ["write", "replace"])
+def test_interrupted_receipt_rewrite_keeps_previous_complete_record(tmp_path, monkeypatch, failed_step):
+    path = tmp_path / conversion.RECEIPT
+    original = {"captured": {"entry": {"artifactDigest": "retained"}}, "publish_attempt": {"outcome": "attempted"}}
+    conversion._write_receipt(path, original)
+    before = path.read_bytes()
+
+    def fail(*args, **kwargs):
+        if failed_step == "write":
+            args[1].write('{"captured":')
+        raise KeyboardInterrupt()
+
+    if failed_step == "write":
+        monkeypatch.setattr(conversion.json, "dump", fail)
+    else:
+        monkeypatch.setattr(conversion.os, "replace", fail)
+    with pytest.raises(KeyboardInterrupt):
+        conversion._write_receipt(path, {**original, "published": {"entry": {"artifactDigest": "new"}}})
+    assert path.read_bytes() == before and json.loads(path.read_text()) == original
+    assert list(tmp_path.iterdir()) == [path]
+
+
+def test_receipt_replace_failure_after_publish_preserves_rollback_record(tmp_path, monkeypatch, bucket, capsys):
+    old = publish_old(bucket, monkeypatch, tmp_path, "cfr-sections", {"cfr_sections": CFR})
+    monkeypatch.setattr(conversion, "source_state", lambda remote: dict(STATE))
+    work = tmp_path / "work"
+    path = work / conversion.RECEIPT
+    real = conversion.os.replace
+
+    def fail_after_publish(source, target):
+        if target == path and json.loads(source.read_text()).get("published"):
+            raise OSError("interrupted receipt replacement")
+        return real(source, target)
+
+    with monkeypatch.context() as interrupted:
+        interrupted.setattr(conversion.os, "replace", fail_after_publish)
+        assert conversion.main(["cfr-sections", *COMMON, "--work", str(work), "--publish", "--expect-bucket", BUCKET]) == 2
+    report = capsys.readouterr().err
+    assert conversion.NOTHING_PUBLISHED not in report and "result is not known" in report
+    receipt = json.loads(path.read_text())
+    assert receipt["captured"]["entry"] == old and receipt["published"] is None
+    assert receipt["generation"]["artifactDigest"] == stored(bucket)["artifactDigest"]
+    conversion.rollback(path, expect_bucket=BUCKET)
+    assert stored(bucket) == old
+
+
 def test_a_process_stopped_after_the_pointer_write_leaves_a_receipt_that_rolls_back(tmp_path, monkeypatch, bucket, capsys):
     old = publish_old(bucket, monkeypatch, tmp_path, "cfr-sections", {"cfr_sections": CFR})
     monkeypatch.setattr(conversion, "source_state", lambda remote: dict(STATE))
@@ -627,6 +710,36 @@ def test_interrupted_rollback_reports_the_attempt_and_can_be_retried(tmp_path, m
     assert stored(bucket) == old and json.loads(path.read_text())["rollback_attempt"]["outcome"] == "attempted"
     monkeypatch.setattr(bucket, "put_object", real)
     assert conversion.main(["--rollback", str(path), "--expect-bucket", BUCKET]) == 0
+
+
+def test_rollback_verification_failure_reports_uncertainty_after_saved_attempt(tmp_path, monkeypatch, bucket, capsys):
+    old = publish_old(bucket, monkeypatch, tmp_path, "cfr-sections", {"cfr_sections": CFR})
+    convert("cfr-sections", tmp_path / "work", publish=True)
+    path = tmp_path / "work" / conversion.RECEIPT
+    restore, read = publication.restore_family, publication.stored_family
+    reads = []
+
+    def lost(*args, **kwargs):
+        restore(*args, **kwargs)
+        raise publication.PublicationError("lost restore response")
+
+    def unavailable(*args, **kwargs):
+        reads.append(True)
+        if len(reads) > 1:
+            raise publication.PublicationError("stored index unavailable")
+        return read(*args, **kwargs)
+
+    with monkeypatch.context() as recovery:
+        recovery.setattr(publication, "restore_family", lost)
+        recovery.setattr(publication, "stored_family", unavailable)
+        assert conversion.main(["--rollback", str(path), "--expect-bucket", BUCKET]) == 1
+    report = capsys.readouterr().err
+    assert "a rollback was attempted and its result is not known" in report and conversion.NOTHING_PUBLISHED not in report
+    assert stored(bucket) == old
+    receipt = json.loads(path.read_text())
+    assert receipt["captured"]["entry"] == old and receipt["rollback_attempt"]["verification_error"]
+    conversion.rollback(path, expect_bucket=BUCKET)
+    assert stored(bucket) == old
 
 
 @pytest.mark.parametrize('family,tables', [('cfr-sections', {'cfr_sections': CFR}),
