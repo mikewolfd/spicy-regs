@@ -523,6 +523,19 @@
     },
     "scorecard-analysis": {
       "sources": []
+    },
+    "comments": {
+      "sources": [
+        "regulations",
+        "mirrulations"
+      ]
+    },
+    "rulemaking": {
+      "sources": [
+        "regulations",
+        "register",
+        "agenda"
+      ]
     }
   },
   "tables": {
@@ -902,6 +915,91 @@
       ],
       "transformation": "Extracts references from selected held text fields and original package bodies. The read records identify which source and field were selected; this does not mean every input row was read.",
       "evidence": "src/spicy_regs/citation_sources.py; src/spicy_regs/transforms/build_print_citations.py; src/spicy_regs/transforms/held_citations.py"
+    },
+    "comments_index": {
+      "inputs": [
+        "comments"
+      ],
+      "transformation": "Counts comments by agency, docket and posting month."
+    },
+    "rule_targets": {
+      "inputs": [
+        "dockets",
+        "documents",
+        "federal_register",
+        "fr_docket_links"
+      ],
+      "transformation": "Connects source-stated dockets, regulatory identifiers and legal references."
+    },
+    "proceedings": {
+      "inputs": [
+        "dockets",
+        "documents",
+        "federal_register",
+        "fr_docket_links",
+        "rule_targets"
+      ],
+      "transformation": "Groups related regulatory actions into proceedings, retaining unresolved cases."
+    },
+    "regulatory_agenda_items": {
+      "inputs": [
+        "dockets",
+        "documents",
+        "federal_register",
+        "unified_agenda",
+        "proceedings"
+      ],
+      "transformation": "Groups agenda entries by Regulation Identifier Number."
+    },
+    "agenda_item_proceedings": {
+      "inputs": [
+        "dockets",
+        "documents",
+        "federal_register",
+        "unified_agenda",
+        "proceedings"
+      ],
+      "transformation": "Records supported connections between agenda items and proceedings."
+    },
+    "comment_periods": {
+      "inputs": [
+        "proceedings",
+        "dockets",
+        "documents",
+        "federal_register",
+        "fr_docket_links"
+      ],
+      "transformation": "Groups source-reported submission dates into candidate windows; these are not verified legal deadlines or extensions."
+    },
+    "rulemaking_lifecycles": {
+      "inputs": [
+        "proceedings",
+        "rule_targets",
+        "agenda_item_proceedings",
+        "dockets",
+        "documents",
+        "federal_register",
+        "unified_agenda"
+      ],
+      "transformation": "Pairs proposals with later final actions or withdrawals within each proceeding."
+    },
+    "lifecycle_events": {
+      "inputs": [
+        "proceedings",
+        "rule_targets",
+        "agenda_item_proceedings",
+        "dockets",
+        "documents",
+        "federal_register",
+        "unified_agenda"
+      ],
+      "transformation": "Records the regulatory actions used to calculate lifecycles."
+    },
+    "agency_lifecycle_stats": {
+      "inputs": [
+        "rulemaking_lifecycles"
+      ],
+      "transformation": "Calculates time to a final action by agency and rule family."
     }
   }
 }

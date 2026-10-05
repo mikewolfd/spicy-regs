@@ -1,7 +1,8 @@
 # Explorer metadata
 
 `explorer-metadata.v1.json` is a public, versioned companion to
-`publication.v2.json` at the configured data host. It lets an explorer pick up
+`publication.v2.json` and the separate rulemaking and comments publications at
+the configured data host. It lets an explorer pick up
 new descriptions, source attribution and declared joins without rebuilding its
 website. The publication index remains the authority for which tables exist,
 their current files, columns, row counts and publication times.
@@ -19,7 +20,8 @@ quality notes and column descriptions. It also records:
 
 - `family` and `publicationSchema`: the publication family and exact ordered
   `[column name, type]` pairs this metadata was checked against.
-- `sources`: named original publishers with HTTPS links, source kinds and notes.
+- `sources`: named original publishers, source kinds and notes. Saved historical
+  scorecard publisher links may use HTTP; data access still requires HTTPS.
 - `inputs`: documented input table IDs. An input outside the public index stays
   listed; consumers must label it unavailable instead of making a broken link.
 - `transformation`, `modelGenerated` and optional `sourceEvidence`: how derived
@@ -30,12 +32,28 @@ quality notes and column descriptions. It also records:
 - Optional `emptyReason` and `joinAudit`: documented empty-output reasons and
   relationship dispositions. Counts never establish completeness.
 
-`src/spicy_regs/table_metadata.json` and `table_joins.json` remain the primary
-dictionary. `explorer_sources.json` owns source attribution and derived inputs.
+`data_dictionary/descriptions.yaml` owns curated table descriptions, generated
+into `src/spicy_regs/table_metadata.json`. Still-published processing tables use
+that same curated dictionary when absent from the subject-only generated file.
+`explorer_sources.json` owns source attribution and derived inputs.
 Source mappings are explicit: a shared column name never creates a relationship.
 Scorecard publisher names and URLs are read from the current published
-`scorecard_publishers` table, with size and digest checks. The tiny table is the
-only Parquet data read by the metadata publisher.
+`scorecard_publishers` table, with size and digest checks. This is the only table
+whose record bodies the metadata publisher reads.
+
+The publisher also resolves `materialized/rulemaking/latest.json` and
+`comments-publication.json` through the existing publication readers. Only
+public files they name enter the bundle; main-index tables take precedence.
+`extra_tables` records each separate file's family, exact schema, normalized
+file descriptor and `publicationIdentity`. The identity is SHA-256 of the
+sorted-key compact UTF-8 descriptor JSON, including the snapshot ID or mutable
+file ETag. It does not change the main index's hash or family digests.
+
+For a new separate file identity, bounded range requests read its Parquet
+footer, checking the advertised byte size, ETag and row count. They inspect
+metadata rather than scan records or independently recompute the file checksum.
+The previous validated bundle supplies reusable schemas for unchanged file
+identities. Mutable comments still require a matching ETag and size each run.
 
 All table descriptions, including scorecards, come from the primary dictionary.
 All relationships are authored in `table_joins.py` and generated into
@@ -51,7 +69,9 @@ CI checks complete composite keys, declared parent cardinality, and resolution
 against each join's measured minimum. A `scope` join may have missing parent
 keys for its documented reason; a measured rate does not establish that an
 unexplained missing record is correct. Empty joins have no measured minimum;
-newly populated keys require a baseline before the check passes. Existing lag
+newly populated keys require a baseline before the check passes. Native-key
+connections marked `unmeasured` retain that uncertainty and do not borrow their
+previous processing-key baseline. Existing lag
 allowances remain in effect for independently published tables.
 
 `join_measurements.json` packages full-input measurements and their source
@@ -66,7 +86,10 @@ remain standalone or need special handling; it does not define executable joins.
 Before publishing, the builder validates every declared join's table names,
 columns, complete composite-key length, resolution kind and declared
 cardinality. Measurements establish data cardinality; this structural check
-does not invent it. Valid joins with an unpublished endpoint are retained in
+does not invent it. A previously documented key missing from the current files
+pauses that connection with the exact missing fields; unrelated connections and
+descriptions still refresh. Malformed or never-documented keys fail validation.
+Valid joins with an unpublished endpoint are retained in
 `omittedJoins` with an explanation, and are excluded from actionable navigation.
 
 ## Refresh and deployment
@@ -83,7 +106,8 @@ it does not require a website change. Metadata failures do not fail a data
 publication or replace the previous valid metadata object.
 
 The workflow uses the existing `R2_*` secrets and the existing public URL/domain
-configuration. It reads the current index directly from R2 and writes only
+configuration. It reads the current index and separate publication controls
+directly from R2 and writes only
 `explorer-metadata.v1.json`; it never changes the index, Parquet objects or MCP
 container. The write is one complete JSON object, followed by an R2 readback.
 It uses a 60-second cache lifetime and the existing best-effort Cloudflare URL
@@ -110,7 +134,9 @@ uv run --frozen python scripts/publish_explorer_metadata.py --publish
 
 Fetch the publication index and metadata independently. Always show current
 tables from the index, including unknown ones. Compare `publicationSchema`
-before using descriptions or navigation for each table; reject joins unless
+before using descriptions or navigation for each table. For separate tables,
+also match the current file descriptor and `publicationIdentity` before using
+the verified footer schema. Reject joins unless
 both endpoint schemas and all key columns match. A newer family digest with an
 unchanged schema can keep its metadata, but must display its older-publication
 status separately. A failed or invalid bundle must show an explicit unavailable
