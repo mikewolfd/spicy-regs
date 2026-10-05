@@ -53,11 +53,11 @@ def test_restoration_preserves_subject_and_exact_financial_processing(tmp_path):
         assert con.execute(cte.query({})).fetchall() == [("mapped",)]
 
 
-@pytest.mark.parametrize("fault", ["generation", "bytes", "subject_version", "missing_receipt"])
+@pytest.mark.parametrize("fault", ["publisher", "bytes", "subject_version", "missing_receipt"])
 def test_bad_receipts_never_create_restored_relation(tmp_path, fault):
     subject, receipt, index = fixture(tmp_path)
-    if fault == "generation":
-        index["families"]["fec-query"]["etlReceipts"]["generationId"] = "other"
+    if fault == "publisher":
+        index["families"]["fec-query"]["etlReceipts"]["generationId"] = ""
     elif fault == "bytes":
         receipt.write_bytes(b"bad")
     elif fault == "missing_receipt":
