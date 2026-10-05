@@ -65,8 +65,8 @@ the measurement covers that captured edition rather than full-corpus throughput.
 
 See `src/spicy_regs/etl_policies/scorecard*.json` for installed receipt requirements.
 Both rollups use the shared `receipt_policies` path and its build identity.
-Unchanged prior observations retain their original witnesses and attempt through
-the shared `rebind_receipt` helper. New attempts remain specific to the new build;
+Unchanged prior observations retain their complete original receipts through
+the shared `carry_receipt_history` helper. New attempts remain specific to the new build;
 earlier failures remain available in their retained immutable generations.
 Official inputs with receipts use `CongressInput.materialize` before resolution.
 The reader restores every selected partition under its generation-bound receipts.
