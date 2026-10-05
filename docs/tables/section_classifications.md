@@ -4,7 +4,7 @@
 
 **Section classifications (model)**
 
-One row per label a model assigned to one section of one printing. `vocabulary_hash` is a digest over the sealed label list, so a vocabulary change is visible in the data rather than silently reinterpreting old rows. All columns are stored as VARCHAR.
+One row per label a model assigned to one section of one printing. `vocabulary_hash` is a digest over the sealed label list, so a vocabulary change is visible in the data rather than silently reinterpreting old rows.
 
 Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='section_classifications'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
 

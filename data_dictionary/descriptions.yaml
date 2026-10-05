@@ -354,7 +354,7 @@ tables:
     measured_on: "2026-10-03"
     summary: >-
       The Federal Register ↔ docket bridge, from the Register's two statements:
-      each `federal_register` row's printed `docket_ids_json` array exploded to
+      each `federal_register` row's printed `docket_ids` array exploded to
       one row per occurrence, and the docket of its regulations.gov link
       (`regulations_dot_gov_docket_id`) as a row of its own where no printed
       label carries it; `link_source` says which statement carries the pair.
@@ -365,7 +365,7 @@ tables:
       kept verbatim, with the id in `normalized_docket_candidates_json`
       (receipt `round6/impl-W/m2/printed_vs_info.out`). Carries the FR display
       columns. Use this instead of an
-      `ILIKE` scan over `federal_register.docket_ids_json`: it is sorted by
+      `ILIKE` scan over `federal_register.docket_ids`: it is sorted by
       `docket_id`, so `WHERE docket_id = ?` prunes row groups. The rulemaking
       tables read the printed statement only (`link_source` `printed` or
       `both`). Built by `build_fr_docket_links`.
@@ -464,7 +464,7 @@ tables:
       volume cannot be read, keeps its prior rows. Missing credentials and
       incomplete source traversals refuse before output replacement. GovInfo's
       annual index package (`GPO-CFR-INDEX-2025`) is not a title volume and is
-      not in the table. All columns are stored as VARCHAR.
+      not in the table.
     columns:
       granule_id: "GovInfo granule identifier. Primary key / dedup key, including non-section structural units."
       package_id: "GovInfo package identifier for the enclosing annual CFR title and volume."
@@ -506,8 +506,8 @@ tables:
       routes apart by Congress and by the NULLs: a row for a Congress below the
       108th is the detail route's, its `schema_version` is NULL because the
       detail record states no BILLSTATUS schema, and its `action_count`,
-      `committee_count`, `version_count`, `subject_count`, `subjects_json`,
-      `related_bill_count` and `related_bills_json` are NULL because the detail
+      `committee_count`, `version_count`, `subject_count`, `subjects`,
+      `related_bill_count` and `related_bills` are NULL because the detail
       record states those only as sub-route counts the backfill does not walk —
       a zero would contradict the count the publisher declared. `cosponsor_count`
       is the one count the record does state, as its `cosponsors` sub-route's
@@ -522,7 +522,7 @@ tables:
       a row of a Congress the family has not been scoped to keeps the prefix
       that walk last stated. Because rows from the two routes state different
       columns, this is the one table merged column-wise: a family row's NULL
-      cannot erase a list-era value. All columns are stored as VARCHAR.
+      cannot erase a list-era value.
     data_quality: >-
       **Historical cosponsor-count defect:** the 2026-09-21 native-XML audit
       found 13,154 wrong zero counts in the then-retained 118th Congress HR/S
@@ -582,9 +582,9 @@ tables:
     summary: >-
       Subject assignments returned by Congress.gov or GovInfo BILLSTATUS,
       keyed by bill_id for a left join to congress_bills.bill_id. policy_area
-      is one publisher category; subjects_json is a JSON array of legislative
+      is one publisher category; subjects is a list of legislative
       subject names, not separate bill records. The consumer trims and
-      deduplicates names. All columns are VARCHAR, including subject_count.
+      deduplicates names.
       carrier and enriched_at record how and when the answer was obtained.
     data_quality: >-
       A missing row can mean pending, failed or outside the configured scope.
@@ -617,9 +617,8 @@ tables:
       `build_unified_agenda`. A Tier-1 rulemaking-lifecycle source: the upstream,
       forward-looking catalog of rulemakings agencies *plan* to pursue, keyed by
       the same `rin` that appears in `federal_register`
-      (`regulation_id_numbers_json`). Primary / dedup key is (`rin`,
-      `agenda_edition`). All columns are stored as VARCHAR; array-valued fields
-      are JSON strings.
+      (`regulation_id_numbers`). Primary / dedup key is (`rin`,
+      `agenda_edition`).
     columns:
       rin: "Regulation Identifier Number (e.g. `2060-AV12`). The RIN join key to `federal_register`. Half of the primary/dedup key."
       agency_code: "Short code of the agency that owns the RIN."
@@ -657,8 +656,7 @@ tables:
       inventing one, and a `docket_document_cites_action_notice` row is a
       citation, with both targets NULL. Keyed (`docket_id`, `cfr_ref`, `rin`,
       `source`), NULLs included; joins `dockets` on `docket_id` and
-      `unified_agenda` on `rin`. Built by `build_rule_targets`; all columns are
-      VARCHAR.
+      `unified_agenda` on `rin`. Built by `build_rule_targets`.
     grain: "One observed docket, CFR and RIN edge per evidence source class."
     identity_columns: [docket_id, cfr_ref, rin, source]
     columns:
@@ -700,7 +698,7 @@ tables:
       generations when its dockets or Register documents overlap a prior one.
       Joined by `agenda_item_proceedings`, `comment_periods` and
       `rulemaking_lifecycles` on `proceeding_id`. Built by
-      `build_proceedings`; all columns are VARCHAR, lists as JSON strings.
+      `build_proceedings`.
     grain: "One rulemaking proceeding: the dockets and Register documents that are one action."
     identity_columns: [proceeding_id]
     columns:
@@ -737,7 +735,7 @@ tables:
       and whether its scope is resolved. Keyed `agenda_item_id`
       (`urn:rkaf:us:rin:<rin>`), one per `rin`; joined by
       `agenda_item_proceedings` on `agenda_item_id`, and to `unified_agenda`
-      on `rin`. Built by `build_regulatory_agenda`; all columns are VARCHAR.
+      on `rin`. Built by `build_regulatory_agenda`.
     grain: "One durable Regulatory Agenda item per RIN."
     identity_columns: [agenda_item_id]
     columns:
@@ -813,8 +811,8 @@ tables:
       legal extensions or supersession. A docket or proceeding anchors a group
       (`anchor_kind`) but never merges two; Federal Register feed dockets
       (`AGENCY_FRDOC_0001` and the like) anchor nothing. Keyed `comment_period_id`.
-      Proceedings, dockets and RINs are JSON lists used for navigation. Built by
-      `build_comment_periods`; all columns are VARCHAR.
+      Proceedings, dockets and RINs are lists used for navigation. Built by
+      `build_comment_periods`.
     grain: "One rule-derived group of source-reported date windows for a notice and its candidate extensions; not a legally adjudicated comment period."
     data_quality: >-
       For date-range discovery, test all three date columns (`close_date`,
@@ -1075,9 +1073,9 @@ tables:
       `publication_date`), ingested from the federalregister.gov
       REST API by `build_federal_register`. The authoritative rule-publication
       record — proposed rules, final rules, and notices — complementary to the
-      regulations.gov `dockets`/`documents` view. `regulation_id_numbers_json`
-      (RIN) and `cfr_references_json` are the join keys to the Unified Agenda and
-      the CFR. All columns are stored as VARCHAR; array-valued fields are JSON.
+      regulations.gov `dockets`/`documents` view. `regulation_id_numbers`
+      (RIN) and `cfr_references` are the join keys to the Unified Agenda and
+      the CFR.
     data_quality: >-
       Document numbers are not globally unique: `00-111` names different
       records on 2000-01-14 and 2000-01-18. Current merging preserves both dates
@@ -1092,7 +1090,7 @@ tables:
       tells them apart (`Final rule; correction.`) where the Register states
       one. The API lists no RIN on a large share of `Rule` documents every
       year, some of which state one in the printed text or inside
-      `docket_ids_json`. A row not read since the Register's regulations.gov
+      `docket_ids`. A row not read since the Register's regulations.gov
       link and `action` were first requested (2026-10-03) is NULL in all nine
       of those columns, which means not read: test
       `regulations_dot_gov_info_json`, which a row read since holds as `'{}'`
@@ -1136,7 +1134,7 @@ tables:
       commenting organization reaches this table only by a name match on
       `legal_business_name` or `dba_name`, which is not an identity. Filtered
       to public active registrations (`registrationStatus=A`); list-level
-      fields only. All columns are stored as VARCHAR.
+      fields only.
     columns:
       uei: "Unique Entity ID (SAM `ueiSAM`, 12-char alphanumeric, e.g. `Q93HWX24PGA4`). With `entity_eft_indicator`, the registration key; alone, the entity-resolution join key."
       entity_eft_indicator: "SAM `entityEFTIndicator`: which of an entity's registrations this is, one per EFT (bank-account) indicator. NULL for an entity's sole registration."
@@ -1174,8 +1172,7 @@ tables:
       clients they lobby for, the money involved, the issues raised, and the
       government entities (agencies/chambers) lobbied — so this table links the
       comment campaigns in `comments`/`dockets` to the same organizations'
-      *direct* agency lobbying. Primary / dedup key is `filing_uuid`. All columns
-      are stored as VARCHAR; nested/array fields are JSON strings.
+      *direct* agency lobbying. Primary / dedup key is `filing_uuid`.
     columns:
       filing_uuid: >-
         LDA filing UUID (e.g. `7866327b-c892-4430-b9f0-1f0f679c58c6`). Primary key / dedup key. The filing's
@@ -1211,8 +1208,7 @@ tables:
       and the government entities contacted for that activity. Keyed
       `(filing_uuid, activity_index)`, the position in the filing's own list,
       which is stable because LDA never edits a filing (an amendment is a new
-      filing). Joins to `lobbying_filings` on `filing_uuid`. All columns are
-      stored as VARCHAR.
+      filing). Joins to `lobbying_filings` on `filing_uuid`.
     columns:
       filing_uuid: "The filing this activity belongs to; joins to `lobbying_filings.filing_uuid`."
       activity_index: "The activity's position in the filing's list, from `0`. With `filing_uuid`, the key."
@@ -1236,7 +1232,7 @@ tables:
       held, and whether the filing lists them as new. Keyed `(filing_uuid,
       activity_index, lobbyist_index)`, positions in the filing's own lists.
       Joins to `lobbying_activities` on `(filing_uuid, activity_index)` and to
-      `lobbying_filings` on `filing_uuid`. All columns are stored as VARCHAR.
+      `lobbying_filings` on `filing_uuid`.
     columns:
       filing_uuid: "The filing; joins to `lobbying_filings.filing_uuid`."
       activity_index: "The activity's position in the filing; with `filing_uuid`, joins to `lobbying_activities`."
@@ -1603,7 +1599,7 @@ tables:
       title, date, abstract and url on its own and upstream-copied rows, and
       only fills NULLs of those on rows another route supplied; its placeholder
       type and tag lists fill nothing. A row keeps the `source` that first
-      supplied it. The three counts are BIGINT; every other column is VARCHAR.
+      supplied it. The three counts are BIGINT.
     columns:
       report_id: "GAO product id as gao.gov's product URL spells it (e.g. `gao-26-107974`, `t-rced-94-121`), lowercased. Primary key / dedup key. A GovInfo package id maps to that spelling (`GAOREPORTS-GAO-HEHS-00-73` is `hehs-00-73`, `GAOREPORTS-RCED-AIMD-94-221FS` is `rcedaimd-94-221fs`); a few keep GovInfo's spelling where the package id cannot recover gao.gov's."
       title: "Product title as the route states it; on a listing row, the teaser's label and heading joined as `label: heading`, which is how the feed titles the same products. A few GovInfo titles are GovInfo's placeholder `GAO Report from` and the number. Where our own routes leave it NULL, it may come from the CetiAlphaFive/gao R package (GPL-3.0-or-later, commit 6f61230), which fills only empty cells. GAO double-escapes some headings, so a few listing titles keep `&mdash;`, `&#151;` or `&amp;` literally, as GAO's page displays them; apply `html.unescape` when matching."
@@ -1712,8 +1708,7 @@ tables:
       every column comes from the list payload. Incremental by `update_date`,
       deduped on `report_id`; each query is pooled over whole walks, varying
       the page size, until one walk is clean or the pool holds exactly the
-      declared count, because the list shifts while it is read. All columns
-      are stored as VARCHAR.
+      declared count, because the list shifts while it is read.
     columns:
       report_id: "CRS report id (e.g. `R48641`, `IN12713`). Primary key / dedup key."
       title: "Report title as returned by the list endpoint."
@@ -1731,7 +1726,7 @@ tables:
       True range with a density caveat: dockets filed from 1992 on, but only the
       nature-of-suit 899 (Administrative Procedure Act) selection, not the full
       docket record. Party names of dockets from the bulk edition are read a
-      bounded slice per run; until read, parties_json is NULL. Recall against
+      bounded slice per run; until read, parties is NULL. Recall against
       the publisher's nature-of-suit coding is unmeasured.
     measured_on: "2026-09-28"
     summary: >-
@@ -1745,7 +1740,7 @@ tables:
       decisions, including appeals and Supreme Court cases, search
       `court_opinion_clusters` by `case_name`. There is no RIN, Federal Register
       or agency identifier on a court docket: the defendant agency appears only
-      as text in `case_name` and `parties_json`, so a name search finds
+      as text in `case_name` and `parties`, so a name search finds
       candidates, not confirmed links, and `cause` names the statute invoked.
       Primary / dedup key is `cl_docket_id`, a CourtListener docket object, not
       a case: CourtListener keeps more than one docket object for some cases (a
@@ -1754,7 +1749,7 @@ tables:
       several rows. Count cases on (`court_id`, `docket_number`) rather than
       rows, bearing in mind that a court can reuse a number for a different
       case, and see `court_docket_groups` for which rows are records of one
-      case. All columns are stored as VARCHAR; array fields are JSON strings.
+      case.
     columns:
       cl_docket_id: "CourtListener docket id (e.g. `73613631`). Primary key / dedup key of a docket object, not of a case: one case can be several rows (`court_docket_groups`). Distinct from the regulations.gov `docket_id`."
       case_name: "Short case name (e.g. `HENNEPIN COUNTY, MINNESOTA v. U.S. DEPARTMENT OF HEALTH AND HUMAN SERVICES`). Names the defendant agency as text, not as an identifier. For decisions in cases missing here, including appeals of agency orders, search `court_opinion_clusters.case_name`."
@@ -1851,7 +1846,6 @@ tables:
       on the docket number when the id does not join. Court identity comes from a bulk docket
       map or a search result; jurisdiction classification uses CourtListener's
       court reference data. This table does not hold individual opinion bodies.
-      All columns are VARCHAR; native numeric and boolean spellings are strings.
     data_quality: >-
       Bulk and search records expose different fields. ingest_source identifies
       the selected row's route; unavailable fields are NULL and metadata empty
@@ -1965,7 +1959,7 @@ tables:
       resolved it. Both ids are opinion ids, not decision ids: join each to
       court_opinions.opinion_id, then court_opinions.cluster_id to
       court_opinion_clusters, to ask what cites a decision or which decisions are
-      cited most. Rebuilt whole from each quarterly export. All columns are VARCHAR.
+      cited most. Rebuilt whole from each quarterly export.
     data_quality: >-
       On 2026-09-22 all but 3,758 citing ids and one cited id resolved through
       court_opinions of the same edition. The edges are the publisher's
@@ -2003,7 +1997,7 @@ tables:
       summarized and describing_opinion_id the one that wrote it; join either to
       court_opinions.opinion_id to reach its decision. score is the publisher's
       estimate of how descriptive the text is. Rebuilt whole from each quarterly
-      export. All columns are VARCHAR.
+      export.
     data_quality: >-
       On 2026-09-22 every described opinion id and all but 618 describing ids
       resolved through court_opinions of the same edition. The text is the
@@ -2040,7 +2034,7 @@ tables:
       from either, then cluster_id to court_opinion_clusters.cluster_id. local_path
       and download_url locate the original document. Rebuilt whole from each
       quarterly export, locally rather than on a schedule, because the source
-      export is 54.6 GB. All columns are VARCHAR.
+      export is 54.6 GB.
     data_quality: >-
       Author strings are the publisher's text and are not resolved to people;
       author_id is set only where the publisher linked a judge. opinion_type is
@@ -2091,7 +2085,6 @@ tables:
       row, so a recipient outside a run's selection keeps its earlier amount and
       its original observation columns. A recipient absent here had no positive
       trailing-12-month amount at the last weekly walk, or is newer than it.
-      All columns are stored as VARCHAR.
     columns:
       recipient_id: "USASpending recipient hash + level suffix (e.g. `7fe0d08f-...-R`). Primary key / dedup key — unique per recipient_level."
       uei: "Unique Entity Identifier (SAM.gov UEI, e.g. `JE73CDQUAPA7`). The org-resolution join key to SAM and other UEI-keyed sources. May be null for older records."
@@ -2172,8 +2165,7 @@ tables:
       aggregates for it. Because ECFS holds tens of
       millions of filings, a first run with no prior table is bounded to the
       trailing 30 days; deeper history is backfilled in slices via `FCC_SINCE`
-      and/or scoped to specific proceedings via `FCC_PROCEEDINGS`. All columns
-      are stored as VARCHAR, array fields serialized as JSON strings.
+      and/or scoped to specific proceedings via `FCC_PROCEEDINGS`.
     columns:
       id_submission: >-
         ECFS submission id (e.g. `26109947027`). Primary key / dedup key. The filing's page on fcc.gov
@@ -2234,7 +2226,7 @@ tables:
       SpicyDocs' committee-master reader, which verifies each file by digest
       and checks the publisher's header. Codes stay literal. `fec_committees`
       is the current registry from the API; this is the history, keyed on
-      (`committee_id`, `cycle`). All columns are stored as VARCHAR.
+      (`committee_id`, `cycle`).
     columns_from: spicy_docs
 
   gao_recommendations:
@@ -2271,8 +2263,7 @@ tables:
       <department>` letters in `gao_reports` (title `ILIKE 'Priority Open
       Recommendations%'`); a count over `priority` here is bounded by this
       table's window. The director's phone GAO lists is deliberately not
-      published, and the retained source evidence has it emptied. All columns
-      are stored as VARCHAR.
+      published, and the retained source evidence has it emptied.
     columns_from: spicy_docs
 
   fec_candidate_history:
@@ -2288,8 +2279,7 @@ tables:
       candidate master states it: name, party, election year, office, status
       and principal committee. Read by the `fec-candidate-history` rollup
       through SpicyDocs' candidate-master reader, which verifies each file by
-      digest and checks the publisher's header. Codes stay literal. All
-      columns are stored as VARCHAR.
+      digest and checks the publisher's header. Codes stay literal.
     columns_from: spicy_docs
 
   document_attributes:
@@ -2368,8 +2358,7 @@ tables:
       bill's amendments (`amendments/amendment/actions`) are not rows, so a roll
       call on an amendment can have no action here. Each row also carries the
       stage the action text implies, with the rule and matcher that fired, which
-      makes `congress_bills.stage` auditable action by action. All columns are
-      stored as VARCHAR.
+      makes `congress_bills.stage` auditable action by action.
     data_quality: >-
       One event is often entered by more than one system (`source_system_name`).
       Library of Congress and House floor rows carry an `action_code`; Senate and
@@ -2398,8 +2387,7 @@ tables:
       with their dates) are not published, so find a committee's report in
       `bill_actions`. `bill_committee_actions` is a different source, the House
       committees' activity-report prints, filed at the end of each Congress, so
-      it holds no rows for the sitting Congress. All columns are stored as
-      VARCHAR.
+      it holds no rows for the sitting Congress.
     columns_from: spicy_docs
 
   bill_publisher_summaries:
@@ -2414,7 +2402,7 @@ tables:
     summary: >-
       One row per CRS summary the publisher states on a bill, at the version and
       action it describes. `summary_html` is kept exactly as the publisher escaped
-      it. All columns are stored as VARCHAR.
+      it.
     columns_from: spicy_docs
 
   bill_versions:
@@ -2430,8 +2418,7 @@ tables:
     summary: >-
       One row per printing of a bill, per source that supplied it. The full text is
       deliberately not a column here: `bill_sections.body` carries it at the grain
-      people query, and the body is re-fetchable by package id and digest. All
-      columns are stored as VARCHAR.
+      people query, and the body is re-fetchable by package id and digest.
     data_quality: >-
       A numbered reprint is its own printing since spicy-docs 0.37.0: the
       publisher types it exactly like the printing it follows, so its
@@ -2455,15 +2442,13 @@ tables:
       corpus, not of anything wrong with the printings; it falls as successive
       runs spend the cap on ground earlier ones did not reach. A section is
       keyed on its `seq` within the printing since spicy-docs 0.35.0; the older
-      key (`match_path`, `body_index`) repeats inside a printing. All columns
-      are stored as VARCHAR.
+      key (`match_path`, `body_index`) repeats inside a printing.
     coverage: >-
       Sampled: the sections parsed from printings whose bodies the bill family
       acquired (source govinfo in bill_versions).
     measured_on: "2026-09-28"
     summary: >-
-      One row per content-bearing node of one bill version, in document order. All
-      columns are stored as VARCHAR. Published as one file per Congress; the
+      One row per content-bearing node of one bill version, in document order. Published as one file per Congress; the
       server and the publication readers present them as one table, but a raw
       download holds one file for each Congress.
     columns_from: spicy_docs
@@ -2491,7 +2476,7 @@ tables:
       left out of `financial_*_amounts_json` though they change the text;
       `financial_has_amendment_annotations` marks them. Enrolled printings
       carry new element ids at the publisher, so `element_id` does not join
-      into `enr`. All columns are stored as VARCHAR.
+      into `enr`.
     coverage: >-
       Sampled: consecutive printings of a bill are compared only when both
       bodies were acquired and parsed, from the Congresses the bill family has
@@ -2500,7 +2485,7 @@ tables:
     summary: >-
       One row per compared pair of consecutive printings of one bill. `engine_name`,
       `engine_version` and `engine_revision` record which diff engine produced the
-      row. All columns are stored as VARCHAR.
+      row.
     columns_from: spicy_docs
 
   section_diff_items:
@@ -2512,8 +2497,8 @@ tables:
     measured_on: "2026-09-28"
     summary: >-
       One row per settled correspondence in one version-pair comparison.
-      `text_diff_json` is byte-capped, and `text_diff_truncated` says when the cap
-      was reached. All columns are stored as VARCHAR.
+      `text_diff` is byte-capped, and `text_diff_truncated` says when the cap
+      was reached.
     columns_from: spicy_docs
 
   financial_changes:
@@ -2522,13 +2507,13 @@ tables:
     coverage: >-
       Empty by owner decision 34: the amount pairing that would fill it is not
       run (spicy-docs `pair_amounts=False`), so no row is produced;
-      `section_diff_items.financial_from_amounts_json` and
-      `financial_to_amounts_json` carry the figures.
+      `section_diff_items.financial_from_amounts` and
+      `financial_to_amounts` carry the figures.
     measured_on: "2026-10-03"
     summary: >-
       One row per aligned pair of dollar figures in a section whose amounts changed.
       `pairing_claim` names how the two figures were aligned; it is word alignment,
-      not a semantic match. All columns are stored as VARCHAR.
+      not a semantic match.
     columns_from: spicy_docs
 
   section_classifications:
@@ -2542,7 +2527,6 @@ tables:
       One row per label a model assigned to one section of one printing.
       `vocabulary_hash` is a digest over the sealed label list, so a vocabulary
       change is visible in the data rather than silently reinterpreting old rows.
-      All columns are stored as VARCHAR.
     columns_from: spicy_docs
 
   bill_summaries:
@@ -2554,8 +2538,7 @@ tables:
     measured_on: "2026-10-03"
     summary: >-
       One row per plain-language summary of one printing of a bill. `frame` is
-      stored because without it the summary is not reproducible from the row. All
-      columns are stored as VARCHAR.
+      stored because without it the summary is not reproducible from the row.
     columns_from: spicy_docs
 
   diff_summaries:
@@ -2567,7 +2550,7 @@ tables:
     measured_on: "2026-10-03"
     summary: >-
       One row per model-written summary of the change between two printings of a
-      bill. All columns are stored as VARCHAR.
+      bill.
     columns_from: spicy_docs
 
   public_activity_events:
@@ -2638,7 +2621,7 @@ tables:
     summary: >-
       One row per item in one appropriations committee press-release feed capture.
       `bill_id` is an inferred candidate when a pattern matches a published bill
-      identifier in the title or description. All columns are stored as VARCHAR.
+      identifier in the title or description.
     data_quality: >-
       The bill linkage is a pattern match over the release's own words, not a
       publisher statement. An earlier local run falsely matched `s 2027` inside
@@ -2702,11 +2685,10 @@ tables:
     summary: >-
       One row per roll call: the publisher's own tally, and the bill it refers to.
       The four tally columns are the publisher's own counts, NULL on a candidate
-      election (a Speaker vote), whose choices `tallies_json` keeps under their
+      election (a Speaker vote), whose choices `tallies` keeps under their
       own labels. A Senate count element the file leaves empty or omits
       (`<present/>`, `<absent/>`) is read as 0, which is what the Senate means
-      by it (119-senate-1-15: 50 yea, 50 nay, 0 present, 0 absent). All columns
-      are stored as VARCHAR.
+      by it (119-senate-1-15: 50 yea, 50 nay, 0 present, 0 absent).
     data_quality: >-
       Two statements link a roll call to a bill, and `match_rule` names the one
       that did. `bill_action_recorded_vote`: a `recordedVotes` entry on the
@@ -2807,7 +2789,7 @@ tables:
       independently complete official roster. Receipts:
       fork-execution-2026-09-21/members-qualification/.
       The October 3, 2026 rebuild also qualifies votesmart_id,
-      bioguide_previous_json and other_names_json against the retained originals.
+      bioguide_previous and other_names against the retained originals.
       That members generation was published with the scorecard integration;
       see docs/research/scorecards/work/integration/member_rebuild/qualification.json
       and docs/research/scorecards/work/integration/deployment/deployment_receipt.json.
@@ -2816,8 +2798,7 @@ tables:
     measured_on: "2026-09-22"
     summary: >-
       One row per legislator in one capture of the community crosswalk. Split from
-      `member_terms` because one row cannot hold a chamber switch. All columns are
-      stored as VARCHAR.
+      `member_terms` because one row cannot hold a chamber switch.
     columns_from: spicy_docs
 
   member_terms:
@@ -2835,8 +2816,7 @@ tables:
       fork-execution-2026-09-21/members-qualification/.
     measured_on: "2026-09-22"
     summary: >-
-      One row per term a legislator served, in the crosswalk's own order. All
-      columns are stored as VARCHAR.
+      One row per term a legislator served, in the crosswalk's own order.
     columns_from: spicy_docs
 
   member_vote_terms:
@@ -2862,7 +2842,7 @@ tables:
       `build_member_vote_terms` from `member_votes`, `members` (a Senate row's
       LIS id resolves to its Bioguide id there) and `member_terms`. Join to
       `member_votes` on (`vote_id`, `member_key`) and to `member_terms` on
-      (`bioguide_id`, `term_index`). All columns are stored as VARCHAR.
+      (`bioguide_id`, `term_index`).
     columns:
       vote_id: "The roll call, as in `member_votes`."
       member_key: "The member's key within the roll call, as in `member_votes`."
@@ -2886,7 +2866,7 @@ tables:
     summary: >-
       One row per published part of a captured GovInfo committee report package,
       keyed `(package_id, part_id)`. `bill_id` is the measure the report accompanies,
-      read from the package's own MODS metadata. All columns are stored as VARCHAR.
+      read from the package's own MODS metadata.
     data_quality: >-
       Only the MODS PRIMARY bill fills bill_id. The thirteen CBO columns come from spicy-docs
       read_cbo_estimate on the same body already acquired. The cover recital gates publication
@@ -2927,7 +2907,7 @@ tables:
       One row per heading or unheaded text block in one part of a committee report,
       keyed `(package_id, part_id, seq)`. `heading` preserves the source title; agency
       identity fields remain unresolved. `pattern` records which header pattern fired,
-      which is this table's provenance column. All columns are stored as VARCHAR.
+      which is this table's provenance column.
     data_quality: >-
       part_id names the committee_reports row a block was parsed from, so (package_id, part_id)
       is its parent, and seq counts from zero within that part. By decision 29
@@ -2951,7 +2931,6 @@ tables:
     summary: >-
       One row per captured GovInfo hearing transcript. bill_id is always NULL:
       a hearing can concern several bills, represented in hearing_bill_links.
-      All columns are stored as VARCHAR.
     data_quality: >-
       Cover bills come from the package's MODS and cost no extra requests.
       BODY mentions do not become hearing links. event_id is the meeting the
@@ -2959,7 +2938,7 @@ tables:
       publisher pairs them. NULL means that record names no meeting, or was
       refused, and `committee_report_reads` says which (its `outcome`). It
       does not mean no meeting exists: a meeting can list the
-      transcript's jacket in `committee_meetings.hearing_jackets_json` without
+      transcript's jacket in `committee_meetings.hearing_jackets` without
       the hearing record naming it. That jacket route is the publisher's
       many-to-many listing, not a declared join: on committee-meetings
       generation 31e62420… (2026-10-03) 1,021 meetings list two or more
@@ -3044,12 +3023,11 @@ tables:
       one roll call can appear here under more than one index, one per capture
       that saw it at a new position (`count(*)` per bill, chamber, Congress,
       session and roll number is the measure); `roll_call_votes.match_action_index`
-      takes the lowest. All columns are stored as VARCHAR.
+      takes the lowest.
     summary: >-
       One row per recorded vote on one bill action: which roll call the bill's own
       actions say settled it. Read by the `roll-call-votes` rollup to fill
-      `roll_call_votes.bill_id` and its match columns. All columns are stored as
-      VARCHAR.
+      `roll_call_votes.bill_id` and its match columns.
     columns:
       bill_id: "The bill whose action carried this entry, keyed as every bill table keys it."
       chamber: "The chamber that took the roll call, lowercased (house, senate)."
@@ -3162,7 +3140,7 @@ tables:
       `captured_partial` is a validated USLM file that states no Statutes at
       Large citation (reason `statutes_citation_not_stated`): the two private
       laws of the 119th (`PLAW-119pvtl1`, `PLAW-119pvtl2`), whose own
-      `citableAs` values are kept in `uslm_citable_as_json`. Until reader rule
+      `citableAs` values are kept in `uslm_citable_as`. Until reader rule
       `laws-uslm-v2` (2026-09-25) the contract refused those two files and
       their rows said `not_requested`, although both were requested and
       served. `captured_refused` keeps the digest of a `200` body the reader
@@ -3195,14 +3173,14 @@ tables:
       `resolve_document_citations` resolves a Statutes citation to a page
       inside a law's range to that law and says the match is by range
       (`match_basis`); a law with no last page is matched by its first page
-      only. All columns are stored as VARCHAR.
+      only.
     summary: >-
       One row per enacted law the Congress.gov law list route states, with the
       Statutes at Large citation from the law's own PLAW USLM file where
       captured. Keyed on the law's Congress, type and number, not on the bill;
       `bill_id` is the foreign key to `congress_bills`, whose
       `statutes_at_large_cite` the host fills from this table at that table's
-      merge. All columns are stored as VARCHAR.
+      merge.
     columns_from: spicy_docs
 
   law_sections:
@@ -3267,12 +3245,11 @@ tables:
       `act_key`), title, key and place. A law can be classified in the session table
       after the one its number suggests (119-70 is in the session-2 table,
       whose caption names it); filter by `law_id`, not by `session`, and
-      `stated_laws` carries each table's caption. All columns are stored as
-      VARCHAR.
+      `stated_laws` carries each table's caption.
     summary: >-
       One row per line of an OLRC per-Congress classification table: a U.S.
       Code place one public law section touched, with the Statutes at Large
-      page and the publisher's action word. All columns are stored as VARCHAR.
+      page and the publisher's action word.
     columns_from: spicy_docs
 
   table3_records:
@@ -3343,11 +3320,10 @@ tables:
       `usc_place` (until 2026-10-03 they stayed in the key, on 1,121 of 2,983
       rows). Every laws run derives both again on every row from its stored
       `usc_section`, so held rows need no read of the file for them.
-      All columns are stored as VARCHAR.
     summary: >-
       One row per classification record of one public law in OLRC's Table III:
       which U.S. Code place each section of the law went to, as Table III's
-      bulk file states it. All columns are stored as VARCHAR.
+      bulk file states it.
     columns_from: spicy_docs
 
   committees:
@@ -3377,12 +3353,11 @@ tables:
       Indian Affairs, 1820-1946), which their history states as
       `locLinkedDataId`; none is current. A code the detail route cannot
       address is a list row with `detail_captured` false.
-      All columns are stored as VARCHAR.
     summary: >-
       One row per committee or subcommittee of any Congress the Congress.gov
       committee list route states, keyed on the publisher's `systemCode`, with
       the detail record's history, subcommittees, parent and currency folded on
-      where captured. All columns are stored as VARCHAR.
+      where captured.
     columns_from: spicy_docs
 
   committee_assignments:
@@ -3414,11 +3389,10 @@ tables:
       (`EC00`, `IT00`, `JL00`, `JP00`, typed `joint` in the Clerk file with no
       Congress.gov code), and three Senate seats on `JSIK00`, the 2024
       inaugural committee, which Congress.gov does not list in any Congress.
-      All columns are stored as VARCHAR.
     summary: >-
       One row per member per committee or subcommittee seat a chamber roster
       file lists today, from the House Clerk's MemberData.xml and the Senate's
-      cvc_member_data.xml. All columns are stored as VARCHAR.
+      cvc_member_data.xml.
     columns_from: spicy_docs
 
   # The Congress.gov index tables (gaps A5, A7, A10), each written by its own
@@ -3442,14 +3416,13 @@ tables:
       publisher's own address. The regulatory bridge: `is_rulemaking`, the cited
       `legal_authority`, the committee referral, the matching House requirement
       and the RIN read from `report_nature`. A Federal Register RIN join must
-      unnest `regulation_id_numbers_json` (the scalar `federal_register.rin` is
+      unnest `regulation_id_numbers` (the scalar `federal_register.rin` is
       the first value only) and retain number plus publication date. The
       Register API lists no RIN on many `Rule` documents, including some whose
       printed text states one, and sometimes prints the RIN inside
-      `docket_ids_json`, so a RIN join misses those and can land on a
+      `docket_ids`, so a RIN join misses those and can land on a
       correction or effective-date notice that shares the rule's RIN, docket
       and title; `federal_register.action` tells such a notice from its rule.
-      All columns are stored as VARCHAR.
     data_quality: >-
       A row whose `detail_read` is `false` is list-only: its detail has not been
       read yet (not reached under the cap, or refused), and every detail-only
@@ -3495,7 +3468,7 @@ tables:
       committee-meeting list and detail routes state it, keyed `(congress,
       chamber, event_id)`. The detail carries the hearing transcript jackets
       (`hearing_transcripts` joins on `event_id`), the related bills, the
-      witnesses and every document URL. All columns are stored as VARCHAR.
+      witnesses and every document URL.
     data_quality: >-
       A row whose `detail_read` is `false` is list-only: its detail has not
       been read yet, and every detail-only column is NULL with it. A read
@@ -3560,7 +3533,7 @@ tables:
       legislative-day calendar (which chambers sat), and the stem of the
       whole-issue link for part 1 gives the GovInfo CREC `package_id`
       (`entire_issue_url_stem/2`). The volume is the year minus 1854 (volume
-      172 is 2026). All columns are stored as VARCHAR.
+      172 is 2026).
     data_quality: >-
       A row whose `detail_read` is `false` is list-only: its detail has not been
       read yet, so `chambers`, `package_id` and every other detail-only column
@@ -3569,7 +3542,7 @@ tables:
       2026-09-29 read the first whole-issue link listed, and an issue printed in
       several books lists a later book's `-bk{N}` link first on 7 of 368 held
       rows, which GovInfo holds no package under; a one-time rebuild re-reads
-      every held row's own `entire_issue_json` under the new rule.
+      every held row's own `entire_issue` under the new rule.
     columns_from: spicy_docs
 
   treaties:
@@ -3590,8 +3563,7 @@ tables:
       (`https://www.govinfo.gov/metadata/pkg/{package_id}/mods.xml`) states
       the committee the treaty was referred to, which this table does not
       carry (CDOC-119tdoc1 and -tdoc2: Foreign Relations); the id is derived by
-      rule, so GovInfo may not have published it yet. All columns are stored
-      as VARCHAR.
+      rule, so GovInfo may not have published it yet.
     data_quality: >-
       On 2026-09-21 the list's stated total agreed with the capture. A row
       whose `detail_read` is `false` is list-only. A partitioned treaty (a
@@ -3615,7 +3587,7 @@ tables:
     summary: >-
       One row per nomination or part, as the Congress.gov nomination list route
       states it, keyed `(congress, citation)`; the citation carries the part
-      number. All columns are stored as VARCHAR.
+      number.
     data_quality: >-
       The shared Congress index reader pools complete walks with varied
       page sizes, keyed by `(congress, citation)`, keeping each identity's
@@ -3643,7 +3615,7 @@ tables:
       id's `hrpt`/`srpt` says which), with what its print adds to its own MODS
       index. Joins
       `document_citations` on `package_id` = `document_key` and
-      `text_sha256`. All columns are stored as VARCHAR.
+      `text_sha256`.
     data_quality: >-
       **The MODS is authoritative for bills, laws and Code sections, and this
       table's own columns say so.** Read at full page depth across the eight
@@ -3717,8 +3689,7 @@ tables:
     summary: >-
       One row per published volume of the President's budget, with what its
       print adds to its own MODS index. Thirteen measured package parts are
-      accepted; only volumes offering a supported package-root body yield rows. All columns are stored as
-      VARCHAR.
+      accepted; only volumes offering a supported package-root body yield rows.
     data_quality: >-
       **The bill counts are congress-blind and are not join keys.** A BUDGET
       package states no Congress anywhere — not in its id, not in its summary
@@ -3738,7 +3709,7 @@ tables:
       depth, against 43 of 69 at a 60-page cap. `fiscal_year` is not the issue
       year — `BUDGET-2026-MSR` was issued 2025-09-05 — and is stated twice, by
       the package id and by the MODS, which spicy-docs asserts agree.
-      `associated_bills_json` is published whole because it is the only
+      `associated_bills` is published whole because it is the only
       statement of this edge that carries a Congress.
 
 
@@ -3766,7 +3737,7 @@ tables:
       names in the same sentence: the print's own phrasing, the sealed stage
       and BILLSTATUS action codes it maps to, and how reliable the pairing is.
       Joins `document_citations` through `document_key`, `text_sha256` and
-      `mention_span_start` = `span_start`. All columns are stored as VARCHAR.
+      `mention_span_start` = `span_start`.
     data_quality: >-
       **These are rule-derived interpretations with measured errors.**
       `attachment_confidence` is `single` where the sentence names one
@@ -3838,8 +3809,7 @@ tables:
       at. Citation kinds run from bill numbers and public laws to RINs,
       agency dockets and GAO product ids (`SELECT DISTINCT cite_kind` lists
       them). One shared link table over every
-      document family, written by exactly one rollup. All columns are stored
-      as VARCHAR.
+      document family, written by exactly one rollup.
     data_quality: >-
       **The span is in the identity because the span is the yield.** Keying on
       document, kind and target alone would collapse CRPT-118hrpt968's repeated mentions of one bill into
@@ -3905,8 +3875,7 @@ tables:
       and the roles its own header band names. Keyed on package, file, page,
       table, row and the page text's digest — the package id alone is not a
       key, because each package publishes Part I (`-1.pdf`) and Part II
-      (`-2.pdf`), which repeat the `A-` summary pages before diverging. All
-      columns are stored as VARCHAR.
+      (`-2.pdf`), which repeat the `A-` summary pages before diverging.
     data_quality: >-
       **Most rows carry one cell, not a row of cells, and `cells_ruled` is how
       you tell.** Of the ruled body rows across the pages spicy-docs measured
@@ -3917,8 +3886,8 @@ tables:
       contract has no `payee_name`, `document_number`, `date_posted` or
       singular `amount` column — those would be a parse of one cell's
       newlines presented as separate facts. `WHERE cells_ruled` selects the
-      rows whose cells are separate facts; everything else is in `cells_json`
-      exactly as printed. **`cells_json` is the row**; every other content
+      rows whose cells are separate facts; everything else is in `cells`
+      exactly as printed. **`cells` is the row**; every other content
       column is a promotion out of it. `office`, `funding_year`,
       `appropriation_title` and `section_heading` are read from the page text
       and are **NULL on a continuation page**, which is 56 of the 139 measured
@@ -3926,7 +3895,7 @@ tables:
       not `page`, is what the report's own contents index by. `grid_kind` is
       NULL where the first row states none of the three known labels, so an
       unrecognised grid is visible rather than mislabelled. An amount must
-      carry a decimal point to be parsed into `amounts_json`: without that
+      carry a decimal point to be parsed into `amounts`: without that
       rule a bare integer read stacked fiscal years and account numbers as
       money, and every amount-shaped line measured carries a `.dd` tail while
       the lines that do not are all account numbers or fiscal years. The check
@@ -3976,11 +3945,11 @@ tables:
       an empty result. Unread or refused bodies retain their prior links.
       held_date is the one date the hearing's MODS states. A compiled volume
       that states several dates has held_date NULL and every native date, in
-      source order, in held_dates_json; the list does not establish that each
+      source order, in held_dates; the list does not establish that each
       bill was considered on each date. Before link rule d06e0bd80ca1
       (2026-09-25) such a volume's links carried its first date
       (CHRG-117shrg56721 states eleven), and rows not re-read since keep
-      held_dates_json NULL.
+      held_dates NULL.
     columns_from: spicy_docs
 
   cbo_feed_items:
@@ -4003,7 +3972,7 @@ tables:
       items with no estimate row are the ones naming no bill: CBO's weekly
       estimates of the bills the House takes up under suspension of the
       rules, a committee's reconciliation recommendations, and estimates filed
-      under no number. All columns are stored as VARCHAR.
+      under no number.
     data_quality: >-
       An item that names no bill is the publisher's statement, not an
       extraction miss; its bills are listed only in CBO's own document, which
@@ -4039,7 +4008,7 @@ tables:
       cbo_cost_estimates output and spicy-docs' feed builder, merged by
       `merge_cbo_cost_estimates`: where both routes state one bill and
       publication, the BILLSTATUS row stands. One publication can stand under
-      two bills, and both rows publish. All columns are stored as VARCHAR.
+      two bills, and both rows publish.
     data_quality: >-
       The bill's cbo_cost_estimates_outcome distinguishes an absent or empty
       element, an unexpected shape, and populated estimates. An empty index
@@ -4187,7 +4156,7 @@ tables:
       tables resolve some occurrences; missing, unsupported and unqueried
       targets remain explicit. Rows read before spicy-docs 0.52.0 name
       native-legal-reference/002, the reading this repository ran; the next
-      build names /003, which re-spells target_candidates_json that held a
+      build names /003, which re-spells target_candidates that held a
       non-ASCII character and re-versions the text candidates citation rules
       004 read, and moves no other value. Receipt:
       native-legal-full-2026-09-27/resolved-verification.json.

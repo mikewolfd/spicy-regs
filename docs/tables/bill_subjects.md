@@ -4,7 +4,7 @@
 
 **Bill policy areas and legislative subjects**
 
-Subject assignments returned by Congress.gov or GovInfo BILLSTATUS, keyed by bill_id for a left join to congress_bills.bill_id. policy_area is one publisher category; subjects_json is a JSON array of legislative subject names, not separate bill records. The consumer trims and deduplicates names. All columns are VARCHAR, including subject_count. carrier and enriched_at record how and when the answer was obtained.
+Subject assignments returned by Congress.gov or GovInfo BILLSTATUS, keyed by bill_id for a left join to congress_bills.bill_id. policy_area is one publisher category; subjects is a list of legislative subject names, not separate bill records. The consumer trims and deduplicates names. carrier and enriched_at record how and when the answer was obtained.
 
 Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='bill_subjects'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
 
@@ -22,4 +22,4 @@ Processing fields, source witnesses, conversion inputs and diagnostics reference
 | `bill_id` | `VARCHAR` | Stable bill key shared with congress_bills.bill_id, such as 119-hr-1. Primary/dedup key; join by this identifier rather than title. |
 | `policy_area` | `VARCHAR` | Publisher policy-area name after trimming, or NULL when the returned answer has no policy area. |
 | `subjects` | `VARCHAR[]` | Native list of trimmed, deduplicated legislative subject names. An empty array alone does not distinguish unassigned from not held. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
-| `subject_count` | `BIGINT` | Length of subjects_json, stored as a decimal string; not a count of bills or independent source responses. |
+| `subject_count` | `BIGINT` | Length of subjects, stored as a decimal string; not a count of bills or independent source responses. |

@@ -4,7 +4,7 @@
 
 **Nominations**
 
-One row per nomination or part, as the Congress.gov nomination list route states it, keyed `(congress, citation)`; the citation carries the part number. All columns are stored as VARCHAR.
+One row per nomination or part, as the Congress.gov nomination list route states it, keyed `(congress, citation)`; the citation carries the part number.
 
 Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='nominations'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
 

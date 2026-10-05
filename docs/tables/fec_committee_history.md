@@ -4,7 +4,7 @@
 
 **FEC committees by cycle**
 
-One row per FEC committee per two-year cycle, as that cycle's bulk committee master states it: name, treasurer, address, designation, type, party, filing frequency, interest-group category, connected organization and linked candidate. Read by the `fec-committee-history` rollup through SpicyDocs' committee-master reader, which verifies each file by digest and checks the publisher's header. Codes stay literal. `fec_committees` is the current registry from the API; this is the history, keyed on (`committee_id`, `cycle`). All columns are stored as VARCHAR.
+One row per FEC committee per two-year cycle, as that cycle's bulk committee master states it: name, treasurer, address, designation, type, party, filing frequency, interest-group category, connected organization and linked candidate. Read by the `fec-committee-history` rollup through SpicyDocs' committee-master reader, which verifies each file by digest and checks the publisher's header. Codes stay literal. `fec_committees` is the current registry from the API; this is the history, keyed on (`committee_id`, `cycle`).
 
 Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_committee_history'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
 

@@ -4,7 +4,7 @@
 
 **Planned agency actions**
 
-One row per Regulation Identifier Number (RIN) per agenda edition, ingested from the OIRA/OMB Unified Agenda published at reginfo.gov by `build_unified_agenda`. A Tier-1 rulemaking-lifecycle source: the upstream, forward-looking catalog of rulemakings agencies *plan* to pursue, keyed by the same `rin` that appears in `federal_register` (`regulation_id_numbers_json`). Primary / dedup key is (`rin`, `agenda_edition`). All columns are stored as VARCHAR; array-valued fields are JSON strings.
+One row per Regulation Identifier Number (RIN) per agenda edition, ingested from the OIRA/OMB Unified Agenda published at reginfo.gov by `build_unified_agenda`. A Tier-1 rulemaking-lifecycle source: the upstream, forward-looking catalog of rulemakings agencies *plan* to pursue, keyed by the same `rin` that appears in `federal_register` (`regulation_id_numbers`). Primary / dedup key is (`rin`, `agenda_edition`).
 
 Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='unified_agenda'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
 
@@ -31,5 +31,5 @@ Processing fields, source witnesses, conversion inputs and diagnostics reference
 | `timetable` | `STRUCT("action" VARCHAR, date VARCHAR, fr_citation VARCHAR)[]` | Native list of planned and actual milestone actions with literal source dates and Federal Register citations. A date with day 00 has month precision; labels such as To Be Determined remain unchanged. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `cfr_references` | `VARCHAR[]` | Native list of CFR citations affected by the rulemaking. The join key to the CFR. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `legal_authority` | `VARCHAR[]` | Native list of legal-authority citations the agency cites for the rulemaking. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
-| `first_action_date` | `VARCHAR` | Earliest distinct calendar date derived from the timetable, or NULL when none is derivable. Source month-only dates (MM/00/YYYY) use day 01 here; timetable_json retains their original precision. |
-| `next_action_date` | `VARCHAR` | Second distinct calendar date derived from the timetable, or NULL when fewer than two dates are derivable. May be historical; it is not selected relative to today. Source month-only dates use day 01 here; timetable_json retains the literal dates. |
+| `first_action_date` | `VARCHAR` | Earliest distinct calendar date derived from the timetable, or NULL when none is derivable. Source month-only dates (MM/00/YYYY) use day 01 here; timetable retains their original precision. |
+| `next_action_date` | `VARCHAR` | Second distinct calendar date derived from the timetable, or NULL when fewer than two dates are derivable. May be historical; it is not selected relative to today. Source month-only dates use day 01 here; timetable retains the literal dates. |
