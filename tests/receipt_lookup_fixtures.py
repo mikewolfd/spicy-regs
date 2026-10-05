@@ -89,16 +89,14 @@ def serving(monkeypatch, root: Path, index: dict) -> duckdb.DuckDBPyConnection:
 
 
 def one_family(tmp_path: Path, monkeypatch, tables: dict[str, list[dict]], *, family: str = "family-under-test",
-               order: bool = False, row_group: int = 2000, edit=None) -> duckdb.DuckDBPyConnection:
-    """Publish ``tables`` as one family and serve it. ``order`` sorts the member by (dataset, record_id); ``edit``
-    changes the combined receipt table before it is published, for members a writer would refuse to produce."""
+               row_group: int = 2000, edit=None) -> duckdb.DuckDBPyConnection:
+    """Publish ``tables`` as one family and serve it. ``edit`` changes the combined receipt table before it is
+    published, for members a writer would refuse to produce."""
     subjects, parts = {}, []
     for table, rows in tables.items():
         subjects[table], receipts = written(tmp_path / "work", table, rows)
         parts.append(pq.read_table(receipts))
     combined = pa.concat_tables(parts)
-    if order:
-        combined = combined.sort_by([("dataset", "ascending"), ("record_id", "ascending")])
     if edit is not None:
         combined = edit(combined)
     root = tmp_path / "bucket"
