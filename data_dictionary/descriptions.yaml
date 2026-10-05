@@ -1579,15 +1579,21 @@ tables:
       major-rule reports; they are ordinary rows with no `product_type`. The
       three `major_rule_` columns are read from each major-rule report's
       letter, on its product page or in its PDF as captured on 2026-10-04; a
-      report listed after that capture is blank in them until a later capture
-      of its page is read. B-numbered legal decisions and Contract Appeals
+      report listed after that capture is blank in them until a product-page
+      read reads its letter. B-numbered legal decisions and Contract Appeals
       Board dockets are in `gao_decisions`; entries GAO gives no number are
       left out. Products issued from late 2008 to mid-2026 are absent unless a
       repair or a listing added them. The requester, recommendation,
       matters, page-count and subject-term columns come from the R package
       for the reports it lists; reports issued after its copy (package commit
-      6f61230, 2026-09-26) are blank in them until a GAO product-page reader
-      fills them. The `gao_r_package` rows are the
+      6f61230, 2026-09-26) are blank in them. A read of the report's GAO
+      product page fills the two counts, the page count and the subject terms
+      where one is blank, newest reports first and a bounded number a run, and
+      its values replace the package's. A report is not read on the day GAO
+      releases it, and in its first week only where its page agrees with GAO's
+      open recommendations (`gao_recommendations`). That read is built and
+      switched off, so it has filled nothing; the page's own topic and
+      agencies are not read into this table. The `gao_r_package` rows are the
       reports no other route held, copied once from the CetiAlphaFive/gao R
       package by Jack T. Rametta (GPL-3.0-or-later; commit 6f61230,
       `inst/extdata/gao_links.rds`). They run from 1922, mostly the 1970s to
@@ -1616,8 +1622,8 @@ tables:
       already held the listing fills only a NULL `report_number`, makes
       whole a title its own row holds cut, and sets the Federal Agency Major
       Rule Report `product_type` on a report GAO's major-rule listings state.
-      A major-rule report's letter sets its own columns on whatever row holds
-      the report. The daily feed sets
+      A major-rule report's letter and a product-page read each set their own
+      columns on whatever row holds the report. The daily feed sets
       title, date, abstract and url on its own and upstream-copied rows, and
       only fills NULLs of those on rows another route supplied; its placeholder
       type and tag lists fill nothing. A row keeps the `source` that first
@@ -1641,10 +1647,10 @@ tables:
       requester_type: "Why GAO did the work, as the R package states it: `congressional_request`, `testimony`, `correspondence`, `cg_initiated` (the Comptroller General's own initiative) or `statutory_mandate`. NULL where the package states none, and on reports issued after its copy (2026-09-26) until a GAO product-page reader fills them."
       requester_committees_json: "JSON array of the requesting congressional committees, as the R package extracted them from the report (e.g. `Committee on Armed Services (Senate)`). NULL where it states none, and on reports issued after its copy."
       requester_members_json: "JSON array of the requesting members of Congress, as the R package extracted them from the report's text, with its OCR errors kept (e.g. `Charles H. Percy (Senate)`). NULL where it states none, and on reports issued after its copy."
-      recommendation_count: "How many recommendations the product makes, as the R package counts them (0 for none). BIGINT. NULL on reports it does not list, and on reports issued after its copy."
-      matters_for_congress_count: "How many matters for congressional consideration the product raises, as the R package counts them (0 for none). BIGINT. NULL on reports it does not list, and on reports issued after its copy."
-      page_count: "The report's page count as the R package states it. BIGINT. NULL where it states none, and on reports issued after its copy."
-      subject_terms_json: "JSON array of GAO's subject index terms for the product, as the R package states them (e.g. `Cost control`, `Financial management`), finer than `topics_json`. NULL where it states none, and on reports issued after its copy."
+      recommendation_count: "How many recommendations the product makes (0 for none): the rows of \"Recommendations for Executive Action\" on the report's GAO product page where a page read has set it, else the R package's count. BIGINT. NULL on reports the package does not list and no page read has reached."
+      matters_for_congress_count: "How many matters for congressional consideration the product raises (0 for none): the rows of \"Matter for Congressional Consideration\" on the report's GAO product page where a page read has set it, else the R package's count. BIGINT. NULL on reports the package does not list and no page read has reached."
+      page_count: "The report's page count: the pages GAO's product page states for the file it labels Full Report where a page read has set it, else the R package's. BIGINT. NULL where neither states one."
+      subject_terms_json: "JSON array of GAO's subject index terms for the product (e.g. `Cost control`, `Financial management`), finer than `topics_json`: the terms the report's GAO product page lists, as GAO spells them and in page order, where a page read has set it, else the R package's. GAO retags products, so the two can differ. NULL where neither states any."
       major_rule_agency: >-
         The agency that issued the rule a Federal Agency Major Rule Report is on, as the report's letter prints it in
         its opening sentence (e.g. `Department of Health and Human Services, Health Care Financing Administration

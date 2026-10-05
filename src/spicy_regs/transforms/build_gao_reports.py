@@ -26,7 +26,7 @@ agency/topic tags, so they default to ``[]`` until a later enrichment pass.
 memory, by ``report_id``. Each step below reads a product's row as the run has it
 so far (its own rows over the prior's) and writes a whole row back, so two steps
 that touch one product in one run compose. O(prior) memory and time; only the
-capped MODS reads make a request per row.
+capped MODS and product-page reads make a request per row.
 
 **GovInfo history.** ``govinfo_history`` adds one walk of the GAOREPORTS
 listing (17 keyed requests) to the run. Its rows fill only product ids no row
@@ -77,6 +77,15 @@ route holds it, takes its agency clause, RINs and Federal Register citations
 from its letter, once per reader rule. The reading itself, each blank's reason
 included, is a receipt field.
 
+**GAO's product pages.** ``product_pages`` reads the newest pending rows' pages
+through Zyte for the counts, page count and subject terms, the page outranking
+the R package (:mod:`spicy_regs.sources.gao_product_pages`), and reads a new
+major-rule report's letter from the same page. Off unless asked for, and then
+only under a reader rule that module admits, after its known pages read as they
+must, and for a product's first week against ``gao_recommendations``, read from
+the published table. ``product_pages_undo`` puts back what a named day's or
+rule's reads replaced.
+
 **GAO's decision pages.** ``decision_pages`` names a local capture of the decision
 pages (:mod:`spicy_regs.sources.gao_decision_pages`), read by reference with the
 walk: each decision's caption completes a number list the listing cut and states
@@ -91,6 +100,7 @@ import json
 from collections import Counter
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import nullcontext
+from datetime import date
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -107,6 +117,7 @@ from spicy_regs.sources import (
     gao_govinfo,
     gao_listing,
     gao_major_rule_letters,
+    gao_product_pages,
     gao_r_package,
     r2,
 )
@@ -364,6 +375,131 @@ def _letter_reads(
         evidence.event(gao_major_rule_letters.STAGE, rule=LETTER_RULE, captures=captures, **counts)
 
 
+def _product_page_reads(
+    held: Mapping[str, dict],
+    changed: dict[str, dict],
+    acquirer: Any,
+    evidence: CaptureEvidence | None,
+    *,
+    on: date,
+    export: gao_product_pages.OpenRecommendations | None,
+) -> None:
+    """Read the known pages, then the newest pending rows' product pages, each setting what it states.
+
+    The pass commits whole or not at all: a known page that reads otherwise stops it before a row is asked for, and
+    a second refusal that says a table may not be whole stops it with nothing it read written. ``on`` is the day,
+    and ``export`` GAO's open recommendations as the host holds them, for a product's first week. O(rows) to choose
+    the pending ones, then at most :data:`gao_product_pages.PAGES_PER_RUN` requests, one per row.
+    """
+    from spicy_docs.sources.gao.month_in_review import MAJOR_RULE_REPORT
+    from spicy_docs.sources.gao.product_details import (
+        PRODUCT_PAGE_DETAILS_RULE,
+        GaoProductDetailsError,
+        GaoProductPageUnavailableError,
+    )
+
+    def stop(why: str, **fields: Any) -> None:
+        logger.error("GAO reports: product pages under {} stopped, nothing written: {}", PRODUCT_PAGE_DETAILS_RULE, why)
+        if evidence:
+            evidence.event(gao_product_pages.STAGE, rule=PRODUCT_PAGE_DETAILS_RULE, stopped=why, **fields)
+
+    for product_id, expected in gao_product_pages.KNOWN_PAGES:
+        failure, witness = gao_product_pages.known_page_failure(acquirer, product_id, expected)
+        if evidence and isinstance(witness, Exception):
+            evidence.refusal(witness, stage=gao_product_pages.KNOWN_STAGE)
+        elif evidence:
+            evidence.capture(witness, stage=gao_product_pages.KNOWN_STAGE)
+        if failure is not None:
+            return stop(f"known page {failure}")
+    wanted = gao_product_pages.newest_first(_table(held, changed))
+    counts: Counter[str] = Counter(pending=len(wanted))
+    read: dict[str, dict] = {}
+    refusals: list[dict[str, str]] = []
+    failures = requests = not_whole = 0
+    for row in wanted:
+        if requests >= gao_product_pages.PAGES_PER_RUN:
+            break
+        report_id = row["report_id"]
+        if (wait := gao_product_pages.not_yet(row, on, export)) is not None:
+            counts[wait] += 1
+            continue
+        requests += 1
+        try:
+            details, capture = acquirer.acquire_details(report_id)
+        except GaoProductPageUnavailableError as error:
+            failures = 0
+            counts[gao_product_pages.UNAVAILABLE] += 1
+            if evidence:
+                evidence.refusal(error, stage=gao_product_pages.STAGE)
+            read[report_id] = {**row, **gao_product_pages.unavailable_cells(error.capture)}
+            continue
+        except GaoProductDetailsError as error:
+            reason = getattr(error, "reason", gao_product_pages.ACQUISITION)
+            if reason == gao_product_pages.ACQUISITION:
+                counts["failed"] += 1
+                failures += 1
+                if failures >= gao_product_pages.MAX_CONSECUTIVE_FAILURES:
+                    counts["stopped_after_failures"] = 1
+                    break
+                continue
+            # A refusal writes nothing for the product and leaves it for a later run; its reason is journaled.
+            failures = 0
+            counts[gao_product_pages.REFUSED] += 1
+            refusals.append({"report_id": report_id, "reason": reason})
+            if evidence:
+                evidence.refusal(error, stage=gao_product_pages.STAGE)
+            not_whole += reason in gao_product_pages.THEME_REASONS
+            if not_whole > 1:
+                return stop("more than one page refused as not whole: GAO's theme may have changed",
+                            refusals=refusals, read_and_discarded=len(read))
+            continue
+        failures = 0
+        if evidence:
+            evidence.capture(capture, stage=gao_product_pages.STAGE)
+        if not gao_product_pages.agrees(row, details, on, export):
+            counts["export_disagrees"] += 1
+            continue
+        cells = gao_product_pages.page_cells(row, details, capture)
+        counts[gao_product_pages.READ] += 1
+        for column in gao_product_pages.FILL_COLUMNS:
+            counts[f"set_{column}"] += column in cells
+            counts[f"outranked_{column}"] += column in cells and row.get(column) not in (None, cells[column])
+        # A major-rule report listed after the letters' capture: the page just read prints its letter.
+        if (row.get("product_type") == MAJOR_RULE_REPORT and row.get("report_number")
+                and gao_major_rule_letters.unread(row)):
+            cells |= gao_major_rule_letters.letter_cells(capture.body, product_id=report_id,
+                                                         product_number=row["report_number"])
+            counts["letters_read"] += 1
+        read[report_id] = {**row, **cells}
+    changed.update(read)
+    counts["left_pending"] = counts["pending"] - len(read)
+    logger.info("GAO reports: product pages under {} {} refusals {}", PRODUCT_PAGE_DETAILS_RULE, dict(counts),
+                refusals)
+    if evidence:
+        evidence.event(gao_product_pages.STAGE, rule=PRODUCT_PAGE_DETAILS_RULE,
+                       per_run=gao_product_pages.PAGES_PER_RUN, on=on.isoformat(),
+                       export_as_of=None if export is None else export.as_of, refusals=refusals, **counts)
+
+
+def _undo_page_reads(
+    held: Mapping[str, dict], changed: dict[str, dict], selector: str, evidence: CaptureEvidence | None
+) -> None:
+    """Put back what every product-page read ``selector`` names replaced: a rule's, or a day's. O(rows), no request."""
+    counts: Counter[str] = Counter()
+    for row in list(_table(held, changed)):
+        restored = gao_product_pages.undone(row, selector)
+        if restored is None:
+            continue
+        counts["rows"] += 1
+        counts["letters"] += row.get(gao_major_rule_letters.RECEIPT) != restored.get(gao_major_rule_letters.RECEIPT)
+        for column in gao_product_pages.FILL_COLUMNS:
+            counts[f"restored_{column}"] += row.get(column) != restored.get(column)
+        changed[row["report_id"]] = restored
+    logger.info("GAO reports: product-page reads named by {} undone {}", selector, dict(counts))
+    if evidence:
+        evidence.event("gao-product-page-undo", selector=selector, **counts)
+
+
 def _mods_reads(
     held: Mapping[str, dict], changed: dict[str, dict], acquirer: Any, evidence: CaptureEvidence | None
 ) -> None:
@@ -415,6 +551,10 @@ def build_gao_reports(
     major_rule_run: Path | None = None,
     old_index_run: Path | None = None,
     major_rule_letters: Sequence[Path] = (),
+    product_pages: bool = False,
+    pages: Any = None,
+    product_pages_undo: str | None = None,
+    today: date | None = None,
 ) -> tuple[Path, Path]:
     """Build ``gao_reports.parquet`` (append-only merge with the prior table).
 
@@ -425,13 +565,19 @@ def build_gao_reports(
     and ``decision_pages`` a capture of its decisions' pages, read with that walk.
     ``major_rule_run`` and ``old_index_run`` are finished walks of GAO's two major-rule
     listings, read with ``listing_run`` and refused without it; ``major_rule_letters``
-    are captures of those reports' pages and PDFs.
+    are captures of those reports' pages and PDFs. ``product_pages`` reads pending rows'
+    product pages, through ``pages`` when a caller supplies the acquirer, and only under a
+    reader rule the pass admits; ``today`` is the day that pass takes it to be, GAO's
+    own unless a caller states one. ``product_pages_undo`` names a reader rule, a day,
+    or a day and hour, whose product-page reads are put back first.
     Returns ``gao_reports.parquet`` and ``gao_decisions.parquet``.
     """
     import duckdb
 
     if listing_run is None and (major_rule_run is not None or old_index_run is not None):
         raise ValueError("GAO's major-rule listings are read with a Month in Review walk, whose rows stand first")
+    if product_pages_undo is not None:
+        product_pages_undo = gao_product_pages.undo_selector(product_pages_undo)
     out_file = output_dir / OUTPUT
     prior_file = output_dir / "_gao_prior.parquet"
 
@@ -450,6 +596,8 @@ def build_gao_reports(
     rows, feed_counts = _feed_over_held(held, [_shape(item) for item in reader.iter_records()])
     logger.info("GAO reports: fetched {:,} items this run {}", len(rows), dict(feed_counts))
     changed = {row["report_id"]: row for row in rows}
+    if product_pages_undo is not None:
+        _undo_page_reads(held, changed, product_pages_undo, evidence)
     if govinfo_history:
         with nullcontext(govinfo) if govinfo is not None else gao_govinfo.discovery_reader(evidence) as source:
             changed.update((row["report_id"], row) for row in _govinfo_additions(held, changed, source, evidence))
@@ -468,6 +616,16 @@ def build_gao_reports(
     letters = gao_major_rule_letters.LetterPages(major_rule_letters, stated.pages)
     if letters:
         _letter_reads(held, changed, letters, stated.numbers, evidence)
+    if product_pages and (refusal := gao_product_pages.reader_refusal()) is not None:
+        # Asked for, and not run: the switch alone does not turn the pass on.
+        logger.warning("GAO reports: product pages not read: {}", refusal)
+        if evidence:
+            evidence.event(gao_product_pages.STAGE, not_run=refusal)
+    elif product_pages:
+        export = gao_product_pages.open_recommendations(output_dir)
+        with nullcontext(pages) if pages is not None else gao_product_pages.page_acquirer(evidence) as acquirer:
+            _product_page_reads(held, changed, acquirer, evidence, on=today or gao_product_pages.today(),
+                                export=export)
     rows, taken_over = _over_lowest(held, list(changed.values()))
     if taken_over:
         logger.info("GAO reports: {:,} rows of ours take over the R package's rows, which fill their NULLs", taken_over)

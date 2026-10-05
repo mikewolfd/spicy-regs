@@ -26,6 +26,18 @@ Entries link to the pull request that introduced the change.
     and its reason is in the row's receipt, with each value's place in the
     letter. `gao_reports` moves to policy `government-sources/2`; a prior
     published under `/1` is read once and rewritten.
+  - **Product pages, built and off.** `GAO_PRODUCT_PAGES=true` reads the
+    newest rows missing a count, a page count or subject terms from GAO's
+    product pages through Zyte, a bounded number a run, the page outranking
+    the R package. `rollup-gao-reports.yml` passes `false`, and the pass
+    refuses to run under a reader rule before `gao-product-page-details/2`
+    (SpicyDocs 0.57.0). When on, each run reads two pages whose values are
+    known first and stops if either reads otherwise; a refusal writes
+    nothing; a product is not read on its release day, and in its first
+    week only where its page agrees with `gao_recommendations`. A read
+    records what it replaced, and `GAO_PRODUCT_PAGES_UNDO` puts a day's or a
+    rule's reads back. The rollup's cron moves from 17:00 to 17:20 UTC, after
+    `rollup-gao-recommendations`.
 
 ### Changed
 

@@ -1,8 +1,9 @@
 name: Rollup — gao_reports
 on:
   schedule:
-    # 17:00 UTC — ingest new GAO products into the append-only accumulator.
-    - cron: '0 17 * * *'
+    # 17:20 UTC — ingest new GAO products into the append-only accumulator, after rollup-gao-recommendations
+    # (17:10): the product-page read holds a new product's counts against that day's open recommendations.
+    - cron: '20 17 * * *'
   workflow_dispatch:
     inputs:
       skip_upload:
@@ -20,6 +21,11 @@ on:
         required: false
         default: false
         type: boolean
+      product_pages_undo:
+        description: "Put back what product-page reads replaced: those captured on a UTC day (2026-10-12, 2026-10-12T17) or under a reader rule (gao-product-page-details/2)"
+        required: false
+        default: ''
+        type: string
 jobs:
   run:
     uses: ./.github/workflows/_rollup.yml
@@ -29,4 +35,12 @@ jobs:
       skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
       gao_govinfo_history: ${{ github.event_name == 'workflow_dispatch' && inputs.govinfo_history || false }}
       gao_govinfo_mods: ${{ github.event_name == 'workflow_dispatch' && inputs.govinfo_mods || false }}
+      # OFF. The product-page read (recommendation and matter counts, page count, subject terms; a new major-rule
+      # report's letter) is built and tested. Two things switch it on, and the code checks the first:
+      # 1. the vendored SpicyDocs reader's rule is gao-product-page-details/2 or later (0.57.0). Under /1 the pass
+      #    refuses to run whatever this value says: /1 can state 0 recommendations for a page it did not read whole;
+      # 2. this value is true. The job then gets ZYTE_TOKEN and, each run, reads two known pages and up to
+      #    PAGES_PER_RUN pages (src/spicy_regs/sources/gao_product_pages.py).
+      gao_product_pages: false
+      gao_product_pages_undo: ${{ github.event_name == 'workflow_dispatch' && inputs.product_pages_undo || '' }}
       timeout_minutes: ${{ github.event_name == 'workflow_dispatch' && inputs.govinfo_mods && 90 || 30 }}

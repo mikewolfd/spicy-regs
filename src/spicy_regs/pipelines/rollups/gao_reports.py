@@ -22,6 +22,17 @@ finished SpicyDocs walks of "Reports on Major Rules" and of GAO's index of 2000-
 captures of the reports' product pages and PDFs, separated as ``PATH`` is, read by
 reference for each report's agency, RINs and Federal Register citations
 (``spicy_regs.sources.gao_major_rule_letters``).
+
+``GAO_PRODUCT_PAGES=true`` reads pending rows' product pages through Zyte
+(``spicy_regs.sources.gao_product_pages``; needs ``ZYTE_TOKEN``). It is off: the
+workflow passes ``false`` and gives this rollup no token. Set to ``true`` it still
+reads nothing until the installed SpicyDocs reader's rule is
+``gao-product-page-details/2`` or later; each run then reads two known pages first,
+and holds a product's first week against ``gao_recommendations`` (a soft input:
+this rollup's cron fires after gao-recommendations', so it reads the day's export).
+``GAO_PRODUCT_PAGES_UNDO=<day, day and hour, or reader rule>`` puts back what the
+product-page reads so named replaced (``2026-10-12``, ``2026-10-12T17``,
+``gao-product-page-details/2``); it needs no token and works with the read off.
 """
 
 import os
@@ -45,6 +56,8 @@ class GaoReportsRollup(GovernmentReceiptRollup):
     name: ClassVar[str] = "gao-reports"
     retain_source_evidence: ClassVar[bool] = True
     inputs: ClassVar[tuple[str, ...]] = ()
+    #: The product-page pass holds a product's first week against GAO's open recommendations; absent, it waits.
+    soft_inputs: ClassVar[tuple[str, ...]] = ("gao_recommendations.parquet",)
     outputs: ClassVar[tuple[str, ...]] = ("gao_reports.parquet", "gao_decisions.parquet")
     #: GAO's legal decisions from its own listing join the family as their own table (owner, 2026-09-28).
     added_tables: ClassVar[tuple[str, ...]] = ("gao_decisions.parquet",)
@@ -62,6 +75,8 @@ class GaoReportsRollup(GovernmentReceiptRollup):
             major_rule_letters=tuple(
                 Path(part.strip()) for part in (text_env("GAO_MAJOR_RULE_LETTERS") or "").split(os.pathsep) if part.strip()
             ),
+            product_pages=flag_env("GAO_PRODUCT_PAGES"),
+            product_pages_undo=text_env("GAO_PRODUCT_PAGES_UNDO"),
         )
 
 

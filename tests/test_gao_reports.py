@@ -39,7 +39,7 @@ _RAW_ITEM = {
 def test_shape_produces_exact_schema():
     row = _shape(_RAW_ITEM)
     assert set(row) == set(COLUMNS)
-    assert len(COLUMNS) == 22
+    assert len(COLUMNS) == 23
     assert row["source"] == "gao_rss"
 
 
@@ -602,11 +602,11 @@ def test_the_rollup_reads_the_major_rule_walks_and_letters_only_when_they_are_na
 
     calls = []
     monkeypatch.setattr(rollup, "build_gao_reports", lambda *_, **kwargs: calls.append(
-        (kwargs["major_rule_run"], kwargs["old_index_run"], kwargs["major_rule_letters"])))
+        (kwargs["major_rule_run"], kwargs["old_index_run"], kwargs["major_rule_letters"], kwargs["product_pages"])))
     rollup.GaoReportsRollup(output_dir=tmp_path).build(tmp_path)
     monkeypatch.setenv("GAO_MAJOR_RULE_RUN", str(tmp_path / "cra"))
     monkeypatch.setenv("GAO_MAJOR_RULE_OLD_INDEX_RUN", str(tmp_path / "early"))
     monkeypatch.setenv("GAO_MAJOR_RULE_LETTERS", os.pathsep.join([str(tmp_path / "letters"), str(tmp_path / "pdfs")]))
     rollup.GaoReportsRollup(output_dir=tmp_path).build(tmp_path)
-    assert calls == [(None, None, ()),
-                     (tmp_path / "cra", tmp_path / "early", (tmp_path / "letters", tmp_path / "pdfs"))]
+    assert calls == [(None, None, (), False),
+                     (tmp_path / "cra", tmp_path / "early", (tmp_path / "letters", tmp_path / "pdfs"), False)]
