@@ -166,7 +166,7 @@ class _Group(NamedTuple):
 #: read twice.
 _FOOTERS: dict[tuple[str, str], tuple[_Group, ...]] = {}
 #: What a pinned member's receipts state for a dataset (:func:`_stated_identities`), by (location, sha256, dataset).
-_STATED: dict[tuple[str, str, str], dict[str, list]] = {}
+_STATED: dict[tuple[str, str, str], dict[str, tuple[str, list]]] = {}
 
 
 def _cached(cache: dict, key: tuple, pinned: bool, read: Callable[[], Any]) -> Any:
@@ -244,8 +244,8 @@ def _runs(groups: Sequence[_Group], indexes: Sequence[int]) -> list[tuple[int, i
 
 
 def _stated_identities(cursor: Any, member: Member, groups: Sequence[_Group], candidates: Sequence[int],
-                       dataset: str) -> dict[str, list]:
-    """One accepted receipt's decoded identity for every policy_version the dataset's receipts state.
+                       dataset: str) -> dict[str, tuple[str, list]]:
+    """One accepted receipt's record id and decoded identity for every policy_version the dataset's receipts state.
 
     Admission refuses a receipt whose policy_version is not its dataset's policy's (``etl_receipts._load_receipts``),
     and a carried receipt keeps its version (``rebind_receipt``), so a published member states one version per
@@ -254,7 +254,7 @@ def _stated_identities(cursor: Any, member: Member, groups: Sequence[_Group], ca
     """
     from spicy_regs.etl_receipts import _unpack
 
-    def read() -> dict[str, list]:
+    def read() -> dict[str, tuple[str, list]]:
         versions = {groups[i].versions[0] for i in candidates
                     if groups[i].versions[0] is not None and groups[i].versions[0] == groups[i].versions[1]}
         mixed = [i for i in candidates if groups[i].versions[0] is None or groups[i].versions[0] != groups[i].versions[1]]
@@ -265,12 +265,12 @@ def _stated_identities(cursor: Any, member: Member, groups: Sequence[_Group], ca
         stated = {}
         for version in sorted(versions - {None}):
             row = cursor.execute(
-                f"SELECT identity_json FROM {_ROWS} WHERE file_row_number >= ? AND file_row_number < ? "
+                f"SELECT record_id, identity_json FROM {_ROWS} WHERE file_row_number >= ? AND file_row_number < ? "
                 "AND dataset = ? AND policy_version = ? AND outcome = 'accepted' LIMIT 1",
                 [member.location, groups[candidates[0]].start, groups[candidates[-1]].end, dataset, version],
             ).fetchone()
             if row is not None:
-                stated[version] = _unpack(json.loads(row[0]))
+                stated[version] = (row[0], _unpack(json.loads(row[1])))
         return stated
 
     if not candidates:
@@ -298,13 +298,19 @@ def _identity_words(policy: Any) -> str:
         for name in policy.identity_fields)
 
 
-def _refuse_other_identity(policy: Any, stated: Mapping[str, list]) -> None:
-    """Refuse where a version present names or types the row identity differently from the installed policy.
+def _refuse_other_identity(policy: Any, stated: Mapping[str, tuple[str, list]]) -> None:
+    """Refuse where this server would not compute the record ids a version present was written with.
 
-    A differing version alone is not refused: the record id digests the dataset and its identity pairs, so an
+    A version that names or types the row identity differently from the installed policy is refused in those
+    words. One that names and types it alike is then held to the end-to-end statement: its sampled receipt's
+    stored record id must equal the id this server computes from that receipt's own identity. That catches what
+    names and types cannot show, such as another digest, another encoding of a value, or a renamed dataset. A
+    differing version alone is not refused: the record id digests the dataset and its identity pairs, so an
     equal identity definition finds its receipts under any version.
     """
-    for version, pairs in stated.items():
+    from spicy_regs.etl_receipts import subject_identity
+
+    for version, (record_id, pairs) in stated.items():
         names = tuple(name for name, _ in pairs)
         typed = names == policy.identity_fields and all(
             value is None or type(value).__name__ == {"integer": "int", "text": "str"}[
@@ -317,6 +323,12 @@ def _refuse_other_identity(policy: Any, stated: Mapping[str, list]) -> None:
                 f"{policy.dataset} receipts were written under policy_version {version!r}, whose row identity is "
                 f"{held}; this server's policy ({policy.policy_version!r}) identifies a row by "
                 f"{_identity_words(policy)}. Every key would miss, so nothing is looked up until the server and "
+                "the publication agree.")
+        if subject_identity(policy, dict(pairs))[0] != record_id:
+            raise ValueError(
+                f"{policy.dataset} receipts written under policy_version {version!r} hold record ids this server "
+                f"does not reproduce: a receipt's own row identity ({_identity_words(policy)}) computes to another "
+                "id here than the one stored. Every key would miss, so nothing is looked up until the server and "
                 "the publication agree.")
 
 

@@ -156,7 +156,8 @@ def read_markers() -> tuple[ReadMarker, ...]:
     markers.extend(
         ReadMarker("roll_call_votes", columns, columns, where=(("chamber", chamber),),
                    basis=f"Every captured {chamber} vote file states these columns ('' at least), so a NULL in "
-                         "any says the row was published before they were read.")
+                         "any says the row was published before they were read. It speaks for these columns "
+                         "only, not for the row's other file-backed fields.")
         for chamber, columns in _READ_COLUMNS.items())
     return tuple(markers)
 
