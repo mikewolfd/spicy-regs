@@ -101,6 +101,21 @@ def test_shape_handles_missing_fields():
     assert row["date_created"] is None
 
 
+def test_record_text_is_json_dumps_when_no_number_is_decimal():
+    assert source.record_json(_RAW_DOCKET) == json.dumps(_RAW_DOCKET, ensure_ascii=False)
+
+
+def test_read_search_scores_stay_exact_in_the_retained_record():
+    # Every live RECAP result carries meta.score.bm25; the reader parses it as Decimal (2026-10-04 dry run).
+    served = {**_RAW_DOCKET, "meta": {"date_created": "2026-07-14T17:38:04.836183Z", "score": {"bm25": 1407600000.0}}}
+    page = {"count": 1, "next": None, "previous": None, "results": [served]}
+    (record,) = CourtListenerReader(transport=Transport(page)).iter_records()
+    row = _shape(record)
+    assert '"score": {"bm25": 1407600000.0}' in row["raw_source_record"]
+    assert json.loads(row["raw_source_record"]) == served
+    assert json.loads(row["parties_json"]) == _RAW_DOCKET["party"]
+
+
 def test_incremental_rerun_uses_latest_complete_local_pair(tmp_path, monkeypatch):
     from spicy_regs.court_receipts import read_court_rows
     from spicy_regs.transforms.build_courtlistener import build_courtlistener

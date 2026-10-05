@@ -122,6 +122,21 @@ class SelectedPriors:
 
             output.parent.mkdir(parents=True, exist_ok=True)
             write_rows(original_rows(), output, _SCHEMA)
+        elif dataset == "fec_committee_history":
+            import pyarrow as pa
+            from spicy_regs.transforms.parquet_rows import write_rows
+
+            # Its builder writes these columns as text and each is a subject column. The mapper converts one of them
+            # (cycle) and keeps that original in the receipt, so the rows org-committee-links reads restore exactly.
+            columns = FEC[dataset]["input_fields"]
+
+            def stated_rows():
+                for row in read_with_receipts(subjects, [scoped], selected_policy, generation_id=generation):
+                    originals = row["conversion_inputs"]
+                    yield {name: originals.get(name, row[name]) for name in columns}
+
+            output.parent.mkdir(parents=True, exist_ok=True)
+            write_rows(stated_rows(), output, pa.schema([(name, pa.string()) for name in columns]))
         elif dataset in FEC:
             raise ValueError(f"No processing reconstruction declared for {dataset}")
         else:
