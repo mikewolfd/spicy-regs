@@ -307,6 +307,12 @@ def build_generation(
         raise ValueError("Receipt admission cannot omit the shared receipt member")
     from spicy_regs.etl_policy_registry import require_registered_receipts
     require_registered_receipts(tables, receipt_spec)
+    if receipt_spec is not None:
+        from spicy_regs.receipt_key_index_writer import build_key_index
+        key_index = build_key_index(directory / "etl_receipts.parquet")
+        if key_index is not None:
+            receipt_spec["keyIndex"] = key_index
+            rows[key_index["key"]] = key_index["rows"]
     source = LocalMemberSource(directory)
     members = [
         describe_member(

@@ -98,6 +98,9 @@ def _verify_remote(source, *, expected_pin=None):
     expected = set(artifact.root["spec"]["tables"])
     if "etlReceipts" in artifact.root["spec"]:
         expected.add("etl_receipts.parquet")
+        key_index = artifact.root["spec"]["etlReceipts"].get("keyIndex")
+        if key_index is not None:
+            expected.add(key_index["key"])
     if expected != set(source.members):
         raise ValueError("Staged receipts differ from the declared generation")
     for descriptor in iter_member_descriptors(artifact, source):
@@ -114,6 +117,7 @@ def prepare_remote_generation(
     schemas: Mapping[str, list[tuple[str, str]]], read_snapshot: Mapping | None = None,
     carried_forward: Mapping[str, str] | None = None, publication_status: str = "complete-family", inputs=(),
     receipt_policies: Sequence | None = None, receipt_generation_id: str | None = None,
+    receipt_key_index: Mapping | None = None,
 ):
     """Create and fully verify the standard artifact using pinned remote tables.
 
@@ -131,7 +135,8 @@ def prepare_remote_generation(
     tables = {}
     descriptors = []
     for key, member in sorted(source.members.items()):
-        columns = schemas[Path(key).stem]
+        from spicy_regs.receipt_key_index import KEY, COLUMNS
+        columns = list(COLUMNS) if key == KEY else schemas[Path(key).stem]
         tables[key] = {"columns": [list(column) for column in columns], "rows": member.rows}
         descriptors.append(MemberDescriptor(
             object_key=key, role="table", media_type="application/vnd.apache.parquet",
@@ -146,6 +151,19 @@ def prepare_remote_generation(
                         **tables.pop("etl_receipts.parquet")}
     elif receipt_policies is not None or receipt_generation_id is not None:
         raise ValueError("Remote receipt admission cannot omit receipts")
+    from spicy_regs.receipt_key_index import KEY, THRESHOLD, validate_descriptor
+    if receipt_key_index is not None:
+        if receipt_spec is None or KEY not in tables:
+            raise ValueError("Remote key index requires its declared receipt and sidecar members")
+        member = source.members["etl_receipts.parquet"]
+        validate_descriptor(receipt_key_index, {"sha256": member.sha256, "byteSize": member.byte_size,
+                                               "rows": member.rows})
+        receipt_spec["keyIndex"] = dict(receipt_key_index)
+        tables.pop(KEY)
+    elif KEY in tables:
+        raise ValueError("Remote sidecar requires its exact key index declaration")
+    elif receipt_spec is not None and source.members["etl_receipts.parquet"].rows > THRESHOLD:
+        raise ValueError("Remote receipt members above the bound require a key index")
     from spicy_regs.etl_policy_registry import require_registered_receipts
     require_registered_receipts(tables, receipt_spec)
     _write_generation_metadata(
