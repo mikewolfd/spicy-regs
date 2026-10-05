@@ -284,7 +284,9 @@ def _native(dataset, field, value):
             if item.get("type") != "attachments":
                 raise RegulationsShapeError(f"{field}: source record is not an attachment")
             attrs = _object(
-                item.get("attributes") or {}, ("title", "fileFormats", "restrictReason", "restrictReasonType"), field
+                item.get("attributes") or {},
+                ("title", "fileFormats", "restrictReason", "restrictReasonType",
+                 "agencyNote", "authors", "docAbstract", "docOrder", "modifyDate", "publication"), field
             )
             item = {
                 "attachment_id": item.get("id"),

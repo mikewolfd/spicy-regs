@@ -342,6 +342,7 @@ def write_dataset(
     *,
     failures: Iterable[dict] = (),
     batch_size: int = 2000,
+    prior_receipts: Sequence[Path] = (),
 ) -> tuple[Path | None, Path]:
     """Atomically expose a new local directory with subject data and receipts.
 
@@ -405,6 +406,8 @@ def write_dataset(
                 if len(receipts) >= batch_size:
                     flush()
             flush()
+        if prior_receipts:
+            carry_receipt_history(receipt_path, prior_receipts, receipt_path)
         validate_receipt_bundle(
             {policy.dataset: [] if policy.receipt_only else [subject_path]}, [receipt_path], [policy]
         )
@@ -581,6 +584,29 @@ def _bundle_policies(subjects, receipt_paths, policies):
 
 
 def validate_receipt_bundle(
+    subjects: Mapping[str, Sequence[ParquetInput]],
+    receipt_paths: Sequence[ParquetInput],
+    policies: Sequence[DatasetPolicy],
+    *,
+    generation_id: str | None = None,
+    bulk: bool = True,
+) -> None:
+    """Validate complete bundles in bounded sets, falling back only when SQL cannot decide.
+
+    ``bulk=False`` selects the stable row validator for independent parity checks.
+    Qualified refusals propagate unchanged; fallback never turns them into acceptance.
+    """
+    if bulk:
+        from spicy_regs.etl_bulk import NotBulkEligible, validate_bundle
+        try:
+            validate_bundle(subjects, receipt_paths, policies, generation_id=generation_id)
+            return
+        except NotBulkEligible:
+            pass
+    _validate_receipt_bundle_rows(subjects, receipt_paths, policies, generation_id=generation_id)
+
+
+def _validate_receipt_bundle_rows(
     subjects: Mapping[str, Sequence[ParquetInput]],
     receipt_paths: Sequence[ParquetInput],
     policies: Sequence[DatasetPolicy],
@@ -869,3 +895,9 @@ def retire_receipt(receipt: Mapping, *, generation_id: str, reason: str) -> dict
     )
     result["receipt_id"] = _digest({k: v for k, v in result.items() if k != "receipt_id"})
     return result
+
+
+def carry_receipt_history(current_path: Path, prior_paths: Sequence[Path], destination: Path) -> Path:
+    """Finalize fresh attempts against the exact selected prior occurrences."""
+    from spicy_regs.receipt_history import carry_receipt_history as carry
+    return carry(current_path, prior_paths, destination)
