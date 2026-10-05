@@ -273,3 +273,21 @@ def test_resealed_catalog_receipt_cannot_restore_inconsistent_source_input(con):
     con.execute(f'INSERT INTO {native.receipts_table()} SELECT * FROM altered_receipt')
     with pytest.raises(ValueError, match='retained processor input differs'):
         native.processing_table(con, COMMENT)
+
+
+@pytest.mark.parametrize("null_field", ["attempt_id", "outcome", "generation_id", "processor", "receipt_id"])
+def test_export_retirement_filter_preserves_invalid_nonmarkers_for_admission(con, tmp_path, null_field):
+    import pyarrow as pa
+    from spicy_regs.etl_receipts import RECEIPT_SCHEMA, _digest, retire_receipt
+    source(con)
+    iceberg.replace_rows(con, COMMENT, 'source')
+    accepted = con.execute(f"SELECT * FROM {native.receipts_table()} WHERE outcome='accepted'").to_arrow_table().to_pylist()[0]
+    damaged = retire_receipt(accepted, generation_id='retired', reason='explicit scope replacement')
+    damaged[null_field] = None
+    if null_field != 'receipt_id':
+        damaged['receipt_id'] = _digest({k: v for k, v in damaged.items() if k != 'receipt_id'})
+    con.register('_damaged_observation', pa.Table.from_pylist([damaged], schema=RECEIPT_SCHEMA))
+    con.execute(f'INSERT INTO {native.receipts_table()} SELECT * FROM _damaged_observation')
+    con.unregister('_damaged_observation')
+    with pytest.raises(ValueError):
+        native.export_pair(con, COMMENT, tmp_path, generation_id='invalid-selected')

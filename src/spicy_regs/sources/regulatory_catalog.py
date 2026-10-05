@@ -464,19 +464,26 @@ def export_pair(con, record_type, output_dir, *, generation_id, snapshot=None):
             raise RuntimeError('Catalog snapshot changed before paired export; retry')
         _copy(con, f'SELECT * FROM {qualified(record_type)}', subjects)
         raw_receipts = Path(temporary) / 'receipts.parquet'
+        _copy(con, f"SELECT * FROM {receipts_table()} WHERE dataset='{dataset}'", raw_receipts)
+        from spicy_regs import etl_bulk
+        from spicy_regs.etl_receipts import validate_receipt_bundle
+        try:
+            etl_bulk.validate_bundle({dataset: [subjects]}, [raw_receipts], [policy(dataset)], generation_id=generation_id)
+        except etl_bulk.NotBulkEligible:
+            validate_receipt_bundle({dataset: [subjects]}, [raw_receipts], [policy(dataset)], generation_id=generation_id)
+        # Complete admission precedes filtering, so malformed audit markers cannot
+        # hide context or digest errors. Only nonaccepted observations are removed;
+        # the already qualified accepted joins and exact receipt values remain.
         # Explicit scope deletion retains an internal audit receipt. It is no
         # longer a selected attempt, so omit only that exact retirement marker.
         # Other observed/rejected/refused receipts remain part of the selection.
-        _copy(con, f"""SELECT * FROM {receipts_table()} r WHERE dataset='{dataset}' AND NOT (
+        _copy(con, f"""SELECT * FROM read_parquet('{iceberg._sql_str(str(raw_receipts))}') r WHERE NOT coalesce((
             outcome='observed' AND record_id IS NOT NULL AND subject_version IS NULL
             AND ends_with(attempt_id, ':retired') AND EXISTS (
                 SELECT 1 FROM json_each(r.diagnostic_json, '$[1]') d
                 WHERE json_extract_string(d.value, '$[0]')='retired_reason'
                   AND json_extract_string(d.value, '$[1][0]')='str'
-                  AND json_extract_string(d.value, '$[1][1]')='explicit scope replacement'))""", raw_receipts)
-        shutil.copyfile(raw_receipts, receipts)
-        for _ in read_with_receipts([subjects], [receipts], policy(dataset), generation_id=generation_id):
-            pass
+                  AND json_extract_string(d.value, '$[1][1]')='explicit scope replacement')), false)""", receipts)
     metadata = {'generation_id': generation_id, 'dataset': dataset}
     if snapshot is not None:
         metadata['snapshot'] = asdict(snapshot)

@@ -20,6 +20,7 @@ from contextlib import contextmanager
 from itertools import zip_longest
 from pathlib import Path
 
+import pyarrow as pa
 import pyarrow.parquet as pq
 
 from spicy_regs import congress_bulk, etl_bulk
@@ -101,6 +102,35 @@ def row_check(source: Path, receipts: Path, *, dataset: str, generation_id: str)
             ['Congress', 'chamber', 'accepted/rejected source shape', 'reference route'], 'sourceColumns': fields}
 
 
+
+def sample_writers(source: Path, output: Path, *, dataset: str, generation_id: str):
+    """Compare complete row and bulk writers on a bounded stratified source sample.
+
+    Full-file row_check separately retains original source ordinals and context.
+    This sample checks both writers against exactly the same private source bytes.
+    """
+    selected, schema = policy(dataset), pq.read_schema(source)
+    reference = congress_bulk._context_reference(source.resolve(), dataset, selected, generation_id, PROCESSOR, ())
+    raw = congress_bulk._source_sql(source.resolve(), schema, dataset, selected, reference)
+    names = ','.join('"'+name+'"' for name in schema.names)
+    query = f"""WITH s AS ({raw}), ranked AS (SELECT *, row_number() OVER (
+        PARTITION BY split_part(vote_id,'-',1), chamber, _rejected, _reference ORDER BY _ordinal) AS shape_row FROM s)
+        SELECT {names} FROM ranked WHERE shape_row<=8 OR _ordinal%100003=0 ORDER BY _ordinal LIMIT 20001"""
+    sample = output/'writer-sample.parquet'
+    count = 0
+    with etl_bulk.bulk_connection() as (con, _), pq.ParquetWriter(sample, schema, compression='zstd') as writer:
+        for batch in con.execute(query).to_arrow_reader(2000):
+            count += batch.num_rows
+            if count > 20000:
+                raise ValueError('Writer sample exceeds declared 20000-row bound')
+            writer.write_table(pa.Table.from_batches([batch]).cast(schema))
+    fast = write_congress_dataset(sample, output/'sample-bulk', dataset=dataset, generation_id=generation_id)
+    row = write_congress_dataset(sample, output/'sample-row', dataset=dataset, generation_id=generation_id, bulk=False)
+    for expected, actual in zip(row, fast):
+        assert expected is not None and actual is not None
+        compare_files(expected, actual)
+    return {'sampleRows': count, 'bound': 20000, 'strata': ['Congress','chamber','accepted/rejected shape','reference route']}
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('source', type=Path)
@@ -111,12 +141,20 @@ def main():
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=False)
     log = args.output/'phases.jsonl'
+    original_source = args.source.resolve()
+    snapshot = args.output/'pinned-input.parquet'
     with measured(log, 'input-pin') as record:
-        with args.source.open('rb') as stream:
-            digest = hashlib.file_digest(stream, 'sha256').hexdigest()
+        hasher = hashlib.sha256()
+        with original_source.open('rb') as stream, snapshot.open('xb') as frozen:
+            for chunk in iter(lambda: stream.read(1024*1024), b''):
+                hasher.update(chunk)
+                frozen.write(chunk)
+        digest = hasher.hexdigest()
+        args.source = snapshot.resolve()
         if digest != args.sha256.removeprefix('sha256:'):
             raise ValueError('Source hash differs from the pinned member')
-        record.update(sha256=digest, bytes=args.source.stat().st_size, rows=pq.read_metadata(args.source).num_rows)
+        record.update(sha256=digest, bytes=args.source.stat().st_size, rows=pq.read_metadata(args.source).num_rows,
+                      originalSource=str(original_source), snapshot=str(args.source))
     with measured(log, 'write-and-admit') as record:
         subjects, receipts = write_congress_dataset(args.source, args.output/'bundle', dataset=args.dataset,
                                                     generation_id=args.generation)
@@ -126,6 +164,8 @@ def main():
         etl_bulk.validate_bundle({args.dataset:[subjects]}, [receipts], [policy(args.dataset)], generation_id=args.generation)
     with measured(log, 'independent-row-path') as record:
         record.update(row_check(args.source, receipts, dataset=args.dataset, generation_id=args.generation))
+    with measured(log, 'complete-sample-writers') as record:
+        record.update(sample_writers(args.source, args.output, dataset=args.dataset, generation_id=args.generation))
     with measured(log, 'restore-and-admit'):
         restored = restore_processing_input(subjects, receipts, args.output/'restored.parquet', dataset=args.dataset,
                                              generation_id=args.generation)
@@ -143,6 +183,17 @@ def main():
         carried = carry_receipt_history(receipts, [receipts], args.output/'carried-receipts.parquet')
         record['rows'] = compare_files(receipts, carried)
         etl_bulk.validate_bundle({args.dataset:[subjects]}, [carried], [policy(args.dataset)], generation_id=args.generation)
+    with measured(log, 'final-input-pin') as record:
+        with args.source.open('rb') as stream:
+            final_digest = hashlib.file_digest(stream, 'sha256').hexdigest()
+        if final_digest != digest:
+            raise ValueError('Pinned snapshot changed during qualification')
+        with etl_bulk.bulk_connection() as (con, _):
+            changed_witness = con.execute('SELECT count(*) FROM read_parquet(?) WHERE witnesses[1].sha256 IS DISTINCT FROM ?',
+                                          [str(receipts), 'sha256:'+digest]).fetchone()
+            if changed_witness != (0,):
+                raise ValueError('Written source witnesses differ from the pinned snapshot')
+        record['sha256'] = final_digest
     (args.output/'LIMITATIONS.json').write_text(json.dumps({'changedHistory': 'bounded regression only',
         'index': 'not measured by this command', 'upload': 'not measured by this command',
         'serving': 'not measured by this command', 'productionApproval': 'required separately'},indent=2)+'\n')
