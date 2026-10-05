@@ -8,7 +8,7 @@ from collections.abc import Mapping
 import pyarrow as pa
 
 POLICY_VERSION = "scorecards-etl-v1"
-RATING_POLICY_VERSION = "scorecards-etl-ratings-v2"
+RATING_POLICY_VERSION = "scorecards-etl-ratings-v3"
 SOURCE_COLUMNS = {
     "scorecard_item_links": (
         "scorecard_id",
@@ -452,13 +452,11 @@ NATIVE_LISTS = {
 BOOLEAN_FIELDS = frozenset({"is_primary", "counts_toward_metric"})
 INTEGER_FIELDS = frozenset({"congress", "session", "roll_number"})
 DECIMAL_FIELDS = frozenset({"value_number", "weight_number", "contribution_number"})
-# Both types preserve exact source decimals in Arrow and DuckDB. The retained
-# ILA detail ratings require 19 fractional digits; ratings permit 19 integer
-# digits. Weights and contributions keep their original 18-digit scale.
-# See the pinned census in receipts/scorecards-expansion-20261004/etl-conversion-review/.
-# Values outside either declared bound refuse; no numeric rounding is allowed.
+# Weights and contributions keep their declared exact 18-digit scale. Ratings
+# retain validated decimal text: observed publisher JSON exceeds DuckDB's
+# decimal precision, and wider Arrow decimals become inexact DOUBLE values.
+# Historical rating policies retain their original decimal types separately.
 DECIMAL_TYPE = pa.decimal128(38, 18)
-RATING_DECIMAL_TYPE = pa.decimal128(38, 19)
 
 
 def subject_schema(name: str) -> pa.Schema:
@@ -469,8 +467,8 @@ def subject_schema(name: str) -> pa.Schema:
             dtype = pa.bool_()
         elif column in INTEGER_FIELDS:
             dtype = pa.int32()
-        elif column in DECIMAL_FIELDS:
-            dtype = RATING_DECIMAL_TYPE if column == "value_number" else DECIMAL_TYPE
+        elif column in DECIMAL_FIELDS and column != "value_number":
+            dtype = DECIMAL_TYPE
         fields.append(pa.field(target, dtype, nullable=column not in IDENTITIES[name]))
     return pa.schema(fields)
 
@@ -556,10 +554,10 @@ def map_source_row(name: str, row: Mapping) -> dict:
             if value is not None and not re.fullmatch(r"[+-]?(?:\d+(?:\.\d+)?|\.\d+)", value):
                 raise ValueError(f"{column}: not exact decimal text")
             originals[column] = value
-            mapped[column] = None if value is None else Decimal(value)
+            mapped[column] = value if column == "value_number" else None if value is None else Decimal(value)
     if originals:
         mapped["conversion_inputs"] = originals
-    # Arrow rejects overflow or loss of fractional digits; never cast via float.
+    # Arrow rejects loss in bounded numeric fields; ratings retain their lexemes.
     if DOMAIN_COLUMNS[name]:
         mapped.update(pa.Table.from_pylist([mapped], schema=subject_schema(name)).to_pylist()[0])
     return mapped
