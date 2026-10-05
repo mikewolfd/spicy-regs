@@ -10,11 +10,22 @@ import pyarrow as pa
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def shared_logs():
+    """The logs every family reading one source writes for itself; none owns one (``subject_catalog.SHARED_LOG``).
+
+    Declare a log here only when each family's rows are its own run history, read back through that family's own
+    subjects. A retry checkpoint or any dataset a reader finds by name belongs to one family and is not listed.
+    """
+    from spicy_regs.congress_receipts import ACQUISITION_POLICY
+    from spicy_regs.legislative_receipts import FILE_POLICY
+    return ACQUISITION_POLICY, FILE_POLICY
+
+
 def family_policies():
-    from spicy_regs.congress_receipts import policy as congress_policy, ACQUISITION_POLICY
+    from spicy_regs.congress_receipts import policy as congress_policy
     from spicy_regs.congress_subjects import INPUT_COLUMNS
     from spicy_regs.court_receipts import POLICIES as courts
-    from spicy_regs.legislative_receipts import policy as legislative_policy, FILE_POLICY
+    from spicy_regs.legislative_receipts import policy as legislative_policy
     from spicy_regs.legislative_documents import field_registry
     from spicy_regs.scorecards.etl import POLICIES as scorecards
     from spicy_regs.transforms.government_receipts import POLICIES as government
@@ -29,7 +40,7 @@ def family_policies():
         if old is not None and old.descriptor() != policy.descriptor():
             raise ValueError(f'Family policy conflict: {policy.dataset}')
         result[policy.dataset] = policy
-    for policy in (*courts.values(), *scorecards.values(), *government.values(), ACQUISITION_POLICY, FILE_POLICY):
+    for policy in (*courts.values(), *scorecards.values(), *government.values(), *shared_logs()):
         add(policy)
     for name in INPUT_COLUMNS:
         add(congress_policy(name))
@@ -46,11 +57,23 @@ def family_policies():
     return result
 
 
+def declarations():
+    """Each installed declaration as written: the policy's descriptor, and the marker on a shared log."""
+    from spicy_regs.subject_catalog import SHARED_LOG, is_shared_log
+
+    shared = {policy.dataset for policy in shared_logs()}
+    result = {name: {**policy.descriptor(), **({SHARED_LOG: True} if name in shared else {})}
+              for name, policy in family_policies().items()}
+    if {name for name, declared in result.items() if is_shared_log(declared)} != shared:
+        raise ValueError('A shared log has no declared policy')
+    return result
+
+
 def main():
     directory = ROOT / 'src/spicy_regs/etl_policies'
-    policies = family_policies()
-    for name, policy in policies.items():
-        (directory / f'{name}.json').write_text(json.dumps(policy.descriptor(), indent=2) + '\n')
+    policies = declarations()
+    for name, declared in policies.items():
+        (directory / f'{name}.json').write_text(json.dumps(declared, indent=2) + '\n')
     stale = {p.stem for p in directory.glob('*.json')} - policies.keys()
     if stale:
         raise ValueError(f'Unowned installed policy declarations: {sorted(stale)}')
