@@ -109,7 +109,7 @@ Held.
 | Family | Why | What releases it |
 |---|---|---|
 | `unified-agenda` | `materialize-rulemaking` downloads the table raw and requires `timetable_json`, `cfr_references_json`, `legal_authority_json` and `url` (`pipelines/materialized.py:253`, `rulemaking_dataset.py:133`), which all leave the native table. | That reader reads the native table. The same change raises the rollup's 30-minute limit: measured on loopback storage 10 to 14 minutes here and 862.9 s and 476.0 s by the reviewer, so a hosted runner at half the speed lands near it. |
-| `court-opinion-pdf-extractions` | The hosted citation tool keys `court_opinion_derived_pdf` by `(opinion_id, source_sha256)`; natively the table is `opinion_body_id`, `opinion_id`, `cluster_id`, `text_content`. | The release window, below. |
+| `court-opinion-pdf-extractions` | The hosted citation tool keys `court_opinion_derived_pdf` by `(opinion_id, source_sha256)`; natively the table is `opinion_body_id`, `opinion_id`, `cluster_id`, `text_content`. | Verified new hosted server, below. |
 | `amendments`, `committee-meetings`, `house-communications`, `nominations`, `record-issues`, `treaties`, `members` | The receipt-dataset rule (Congress.gov log). Each converts cleanly in a dry run. | The rule is decided. |
 | `committee-reports`, `senate-expenditures`, `native-legal-references` | The same rule (GovInfo file-state log). | The same. |
 
@@ -127,23 +127,34 @@ has been checked for outside readers.
 A Congress.gov or GovInfo receipt also records the local path of the file it
 was converted from. Run those conversions from a neutral `--work` path.
 
-## The release window
+## Hosted-server precondition
 
-The hosted server and main's server need opposite shapes for the citation
-tool's tables, so these families convert only between "the old server stops
-serving" and "the new server starts": convert, then the server switches.
+Deploy and verify the new hosted server before converting citation families.
+The server switch keeps the selected data unchanged and runs independently.
+There is no conversion release window. Until each parent table converts,
+the new citation tool reports that its native input is unavailable.
 
-| Order | Family | Why it waits | Rollback |
-|---|---|---|---|
-| 1 | `court-opinion-pdf-extractions` (3 rows) | parent table of citation kind `court_opinion_derived_pdf` | `--rollback` with its receipt, before the new server starts |
+`court-opinion-pdf-extractions` waits for this verification because the
+hosted reader at `3a1d3140` keys its body by `(opinion_id, source_sha256)`;
+the new reader keys by `opinion_body_id`. `print-citations`,
+`committee-meetings`, `house-communications` and `members` also wait for the
+new hosted reader. The shared-log branch qualifies those families separately.
 
-Rehearsal for the window: convert on the loopback copy, then run the
-citation tool's own reader against the result (`install_citation_inputs` in
-`citation_receipts.py`) and replay each citation kind's sample document.
+The historical audit permits `courtlistener`, dependent
+`court-docket-groups`, and independent `cfr-sections` before the server from
+merged converter code and an approved run package. The coordinated execution
+of 2026-10-05 orders these canaries after the first verified switch as well.
+
+Rehearse each conversion on a pinned loopback copy, build the server's own
+connection over it, and call the citation tool for each supported kind.
+Keep rollback serving and data compatible together: restoring old-shape
+citation tables makes the new tool refuse their input; restoring the old
+server while its dependent tables remain native breaks its readers. Verify
+the chosen server/data pair before either rollback.
 
 ## Before a production run
 
-- The owner has approved the run and the list.
+- The owner has approved the concrete merged-head run package and the list.
 - Tell the server release session, which replays the server's controls
   before and after: a converted table changes shape for readers (its field
   policy is `src/spicy_regs/etl_policies/<table>.json`).
@@ -152,12 +163,12 @@ citation tool's own reader against the result (`install_citation_inputs` in
   both against the remote immediately before it publishes.
 - No run of the family's own rollup is in flight (`gh run list --workflow
   rollup-<name>.yml`). A concurrent publication is refused, not overwritten.
-- Know when the rollback closes. `plan-generation-retention.yml` deletes on
+- Record the prior objects, restore proof and rollback recovery date for the actual run. `plan-generation-retention.yml` deletes on
   its own every Sunday at 05:45Z and keeps each family's last three
   generations. The conversion is one generation and each scheduled run adds
   one, so for a daily family the captured generation is the fourth by the
   third run after conversion, and the next Sunday's retention deletes it:
-  for a conversion on 2026-10-05, 2026-10-11. To keep a rollback open
+  recalculate the date from the actual conversion date, subsequent run cadence and next retention run. To keep a rollback open
   longer, disable that workflow's schedule first (`gh workflow disable
   plan-generation-retention.yml`) and enable it again once the rollback is
   no longer wanted.
@@ -265,5 +276,5 @@ The dry run fixed the order, which the bulk conversion keeps:
 6. Let one sweep run, then the refresh.
 
 Rollbacks rehearsed: an agency's rows through `replace_native(...,
-delete_scope=True)`; the whole catalog by dropping the three native tables;
+delete_scope=True)`; the whole catalog requires an explicit reviewed recovery plan preserving native tables;
 each family by its index entry.
