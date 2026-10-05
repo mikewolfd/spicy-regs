@@ -569,12 +569,44 @@ def rollback(receipt_path: Path, *, discard_newer: bool = False, expect_bucket: 
         raise ConversionRefused(
             f"{family} names {(stored or {}).get('artifactDigest')}, neither the captured generation nor this "
             "conversion's", state=f"{family} is unchanged by this rollback; --discard-newer would replace that generation")
-    publication.restore_family(client, target["bucket"], family, captured, expected=None if discard_newer else stored)
+    attempt = {"at": _now(), "outcome": "attempted", "found_entry": stored,
+               "discarded_newer": discard_newer}
+    receipt["rollback_attempt"] = attempt
+
+    def save() -> None:
+        receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    save()
+    try:
+        publication.restore_family(client, target["bucket"], family, captured,
+                                   expected=None if discard_newer else stored)
+    except Exception as failure:
+        observed = publication.stored_family(client, target["bucket"], family)
+        attempt["error"] = f"{type(failure).__name__}: {failure}"
+        if observed != captured:
+            attempt.update(outcome="not restored", entry=observed)
+            save()
+            raise ConversionRefused(
+                f"{family}: rollback failed ({attempt['error']})",
+                state=f"{family} names {(observed or {}).get('artifactDigest')} in the stored index; "
+                      f"retry {SCRIPT} --rollback {receipt_path} --expect-bucket {expect_bucket}") from failure
+        attempt["outcome"] = "restored after lost response"
+    else:
+        attempt["outcome"] = "restored"
+    save()
+    # Also repairs an interrupted earlier rollback whose v2 write already landed.
     from spicy_regs.sources.cloudflare import purge_urls
 
     base = receipt["public_url"]
-    purge_urls([f"{base}/{key}" for key in (publication.INDEX_V2_KEY, publication.INDEX_KEY)])
-    entry = publication.current_index(base)["families"].get(family)
+    try:
+        publication.rederive_v1(client, target["bucket"])
+        purge_urls([f"{base}/{key}" for key in (publication.INDEX_V2_KEY, publication.INDEX_KEY)])
+        entry = publication.current_index(base)["families"].get(family)
+    except Exception as failure:
+        raise ConversionRefused(
+            f"{family}: rollback read-back or derived index failed ({type(failure).__name__}: {failure})",
+            state=f"{family}'s stored v2 entry was restored; public read-back and derived index are unverified. "
+                  f"Retry {SCRIPT} --rollback {receipt_path} --expect-bucket {expect_bucket}") from failure
     receipt["rolled_back"] = {"at": _now(), "entry": entry, "discarded_newer": discard_newer,
                               "found": "this conversion's generation" if ours else
                                        "the captured generation" if _same_generation(stored, captured) else "another generation"}
@@ -636,11 +668,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
     except (Exception, KeyboardInterrupt) as failure:
         # Anything else is not a refusal the command chose, so it does not claim to know the bucket's state.
-        attempted = args.work and (args.work / RECEIPT).exists() and json.loads(
-            (args.work / RECEIPT).read_text(encoding="utf-8")).get("publish_attempt")
+        operation_receipt = args.rollback or (args.work / RECEIPT if args.work else None)
+        attempted = operation_receipt and operation_receipt.exists() and json.loads(
+            operation_receipt.read_text(encoding="utf-8")).get("rollback_attempt" if args.rollback else "publish_attempt")
         print(f"FAILED: {type(failure).__name__}: {failure}", file=sys.stderr)
-        print("STATE: " + (f"a publish was attempted and its result is not known. {SCRIPT} --rollback "
-                           f"{args.work / RECEIPT} --expect-bucket {args.expect_bucket} reads the stored index and "
+        print("STATE: " + (f"a {'rollback' if args.rollback else 'publish'} was attempted and its result is not known. "
+                           f"{SCRIPT} --rollback {operation_receipt} --expect-bucket {args.expect_bucket} reads the stored index and "
                            "restores the captured entry if this conversion's generation is what it names"
                            if attempted else NOTHING_PUBLISHED), file=sys.stderr)
         return 130 if isinstance(failure, KeyboardInterrupt) else 2
