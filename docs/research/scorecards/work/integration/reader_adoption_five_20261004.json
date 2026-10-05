@@ -1055,5 +1055,14 @@
       "uv.lock"
     ],
     "boundary": "Existing source release version change; qualified reader modules remain byte-identical"
+  },
+  "integration_review": {
+    "status": "passed_bounded_reuse_and_shape_review",
+    "handoff_sha256": "2e7b53aa5805f7a79a985e37d52d57d81a3fa91d0d6cc581c0d2e6deefab392f",
+    "report_sha256": "ddbe86d743a6ac9115958fad0da35f41afbf800109d2345c8a225b2cb6dc4dfb",
+    "source_commit": "7358ba8d80456ee4e8264fb964734683fab9ad0c",
+    "consumer_commit": "72cb68dea885151a813e997f7744d6fd74c307cd",
+    "proposed_code_changes": [],
+    "boundary": "Static bounded reuse/integration review; does not reopen source acquisition qualification or establish live refresh/publication. Parent full gates and public readback are separate authorities."
   }
 }
