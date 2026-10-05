@@ -316,8 +316,10 @@ def test_what_sql_cannot_decide_is_not_bulk_eligible(tmp_path) -> None:
     with pytest.raises(etl_bulk.NotBulkEligible, match="double"):
         etl_bulk.validate_bundle({"measured": [subject]}, [receipts], [measured])
     cased = DatasetPolicy("cased", pa.schema([("id", pa.string()), ("pair", pa.struct([("a", pa.string()), ("A", pa.string())]))]), ("id",), ())
+    cased_subject, cased_receipts = write_dataset(
+        [({"id": "one", "pair": {"a": "lower", "A": "upper"}}, context)], tmp_path / "cased", cased)
     with pytest.raises(etl_bulk.NotBulkEligible, match="case"):
-        etl_bulk.validate_bundle({"cased": []}, [receipts], [cased])
+        etl_bulk.validate_bundle({"cased": [cased_subject]}, [cased_receipts], [cased])
     # Text the row reader cannot decode: the row validator raises on it, and the bulk one hands the bundle back.
     bundle = build(tmp_path)
     subjects, paths, policies = bundle.write(tmp_path / "undecodable")
@@ -419,7 +421,8 @@ def test_scoped_multiple_policies_and_receipt_only(tmp_path):
     copied = [select_receipts(receipts[0], tmp_path / (p.dataset + "-selected.parquet"), dataset=p.dataset)
               for p in selected]
     wanted = {p.dataset: subjects[p.dataset] for p in selected}
-    assert outcome(etl_bulk.validate_bundle, wanted, receipts, selected, generation_id="g1", scoped=True) is None
+    with pytest.raises(etl_bulk.NotBulkEligible, match="first-error"):
+        etl_bulk.validate_bundle(wanted, receipts, selected, generation_id="g1", scoped=True)
     assert outcome(validate_receipt_bundle, wanted, copied, selected, generation_id="g1") is None
 
 

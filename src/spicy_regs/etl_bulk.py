@@ -524,6 +524,8 @@ def validate_bundle(
     policy's dataset out of a shared file; the receipts then keep their order in that file.
     """
     registered = _bundle_policies(subjects, receipt_paths, policies)
+    if scoped and len(registered) > 1:
+        raise NotBulkEligible("Multiple scoped policies require grouped row selection to preserve first-error order")
     try:
         for policy in registered.values():
             if not policy.receipt_only and subjects[policy.dataset]:
