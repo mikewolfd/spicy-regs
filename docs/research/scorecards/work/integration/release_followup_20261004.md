@@ -28,6 +28,12 @@ Public Citizen's conflicting House periods remain unresolved; IAVA's grades
 and points remain separate. FEW's recognition and departure occurrences retain
 their exact original locations without inventing bonus points.
 
+The [independent reader reviews](reader_independent_reviews_20261004.json)
+approved the named IAVA and Public Citizen renditions. Each review checked
+the original source fields, complete retained-input replay and refusal tests;
+the receipt binds those results to the adopted module hashes. Original bodies
+and detailed review packets remain in the private campaign corpus.
+
 Only the qualified LCV and AFSCME readers are enabled for weekly live refresh.
 The workflow preserves manual build defaults and publishes scheduled complete
 reads. Its [live qualification](live_refresh_20261004.json) and executable

@@ -1,0 +1,39 @@
+{
+  "format_version": "scorecard-reader-independent-review/1",
+  "boundary": "Named retained-source renditions; no new source qualification or publication status inferred",
+  "reviews": [
+    {
+      "publisher_id": "iava",
+      "status": "approved",
+      "reviewed_source_commit": "224aaf79b1f9910dca9ac90615eddc833ac58f5d",
+      "handoff_sha256": "434d3186fc2928061dd94d49c94cb3a2a68f6a73f32e76eb0e7935b7e5efc78f",
+      "module_sha256": "2ecb0ef016f5d3a952375a55e8ceff1732008bc273b826c783f086b910ff8f3d",
+      "closure_sha256": "56aca8de0d036c8987560c79e1be19cf0c3bda2a67f200efea581a6ca2067e8e",
+      "report_sha256": "46576c71c9fa1ba122df2763968a1b735c37078667900deda1b74aedde33a2ee",
+      "original_field_comparisons": 17442,
+      "replay_field_comparisons": 71753,
+      "focused_tests": 31,
+      "findings": []
+    },
+    {
+      "publisher_id": "public_citizen",
+      "status": "approved",
+      "reviewed_source_commit": "e23b95ba6a72e4aeb15e6dbcbb58fa1aca5af944",
+      "handoff_sha256": "4ef8525a247190e2420a04c4dc5e188f18ab73c780d37408a10f4e20f3cc6fd4",
+      "module_sha256": "166c7ea5210e815dc6931a7947b2281a10412d758384fddc70b1b148f4eb9512",
+      "closure_sha256": "508924d02f1db2689b59eb24caeb7ee994c5419b7de5c0d3515fd23e430ed81c",
+      "report_sha256": "d0902f81beee2d25e46adb3d0d44d7724c9a71d86f000246da6f46922e067762",
+      "original_field_comparisons": 69060,
+      "replay_field_comparisons": 155809,
+      "focused_tests": 29,
+      "findings": [],
+      "limitations": [
+        "House source chronology unresolved and preserved",
+        "Senate #12 missing anchor retained",
+        "House 0 has no acquired-key definition; no action inferred",
+        "Additional archives remain discovery work; no retirement inference",
+        "Rights unestablished; hash_only retained"
+      ]
+    }
+  ]
+}

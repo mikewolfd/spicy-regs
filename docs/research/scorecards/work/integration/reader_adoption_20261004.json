@@ -405,5 +405,9 @@
       "status": "passed"
     }
   },
-  "boundary": "Named retained inputs and installed consumer package; public edition status requires separate publication readback; hosted container unchanged"
+  "boundary": "Named retained inputs and installed consumer package; public edition status requires separate publication readback; hosted container unchanged",
+  "independent_reviews": {
+    "receipt": "reader_independent_reviews_20261004.json",
+    "sha256": "4f5051a0f69890ad0b5839c403c880ff5c2cb899c83fa6d00dc83a146b5e0788"
+  }
 }
