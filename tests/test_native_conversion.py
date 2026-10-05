@@ -193,26 +193,55 @@ def test_only_a_named_old_shape_family_with_a_writer_converts(tmp_path, monkeypa
         convert("cfr-sections", tmp_path / "first", publish=True)
 
 
-def test_a_receipt_dataset_another_family_owns_refuses_before_converting(tmp_path, monkeypatch, bucket):
-    """Every Congress.gov family's receipts hold ``congress_acquisition``; the index gives a dataset one owner.
+def test_families_of_one_source_convert_in_turn_and_roll_back_alone(tmp_path, monkeypatch, bucket):
+    """Every Congress.gov family's receipts hold ``congress_acquisition``; it is a shared log, so no entry claims it.
 
-    The first such family converts; the second is refused by publication ("already belongs to family"), which a run
-    without ``--publish`` would never reach. Found rehearsing the small families, 2026-10-05.
+    Before logs were shared the first such family took the dataset and publication refused the second ("already
+    belongs to family"). Found rehearsing the small families, 2026-10-05.
     """
     from spicy_regs.congress_subjects import INPUT_COLUMNS
+    from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
 
     treaty = dict.fromkeys(INPUT_COLUMNS["treaties"]) | {"treaty_id": "119-1", "congress_received": "119"}
     nomination = dict.fromkeys(INPUT_COLUMNS["nominations"]) | {"citation": "PN1-119", "congress": "119"}
-    publish_old(bucket, monkeypatch, tmp_path, "treaties", {"treaties": [treaty]})
-    old = publish_old(bucket, monkeypatch, tmp_path, "nominations", {"nominations": [nomination]})
-    receipt = convert("treaties", tmp_path / "treaties", publish=True)
-    assert set(receipt["published"]["entry"]["etlReceipts"]["datasets"]) == {"treaties", "congress_acquisition"}
+    old = publish_old(bucket, monkeypatch, tmp_path, "treaties", {"treaties": [treaty]})
+    publish_old(bucket, monkeypatch, tmp_path, "nominations", {"nominations": [nomination]})
+
+    receipts = {family: convert(family, tmp_path / family, publish=True) for family in ("treaties", "nominations")}
+
+    families = publication.current_index(BASE)["families"]
+    for family in receipts:
+        entry = families[family]
+        assert entry == receipts[family]["published"]["entry"] and entry["etlReceipts"]["datasets"] == [family]
+        held = pq.read_table(receipts[family]["generation"]["directory"] + "/etl_receipts.parquet")
+        assert set(held["generation_id"].to_pylist()) == {entry["etlReceipts"]["generationId"]}
+        assert set(held["dataset"].to_pylist()) == {family, "congress_acquisition"}
+    # Each family's next scheduled run restores its own rows from its own receipt member.
+    for family, row in (("treaties", treaty), ("nominations", nomination)):
+        assert pq.read_table(SelectedPriors(tmp_path / "after" / family, public_url=BASE).get(family)).to_pylist() == [row]
+
+    conversion.rollback(tmp_path / "treaties" / conversion.RECEIPT, expect_bucket=BUCKET)
+    families = publication.current_index(BASE)["families"]
+    assert families["treaties"] == old and families["nominations"] == receipts["nominations"]["published"]["entry"]
+    refused_read(tmp_path, "treaties")
+    assert pq.read_table(SelectedPriors(tmp_path / "kept", public_url=BASE).get("nominations")).to_pylist() == [nomination]
+
+
+def test_a_receipt_dataset_another_family_owns_refuses_before_converting(tmp_path, monkeypatch, bucket):
+    """A dataset an entry lists has one owner; publication would refuse a second, which a dry run never reaches."""
+    from spicy_regs.congress_receipts import policy
+    from spicy_regs.pipelines.rollups.congress_index import TreatiesRollup
+
+    publish_old(bucket, monkeypatch, tmp_path, "nominations", {"nominations": [{"citation": "PN1-119"}]})
+    old = publish_old(bucket, monkeypatch, tmp_path, "treaties", {"treaties": [{"treaty_id": "119-1"}]})
+    # Stands for any dataset without the shared-log marker that a second family's rollup comes to declare.
+    monkeypatch.setattr(TreatiesRollup, "receipt_policies", (*TreatiesRollup.receipt_policies, policy("nominations")))
 
     with pytest.raises(conversion.ConversionRefused,
-                       match=r"would hold \['congress_acquisition'\], which already belongs to family treaties"):
-        convert("nominations", tmp_path / "nominations")
-    assert not (tmp_path / "nominations" / "build").exists()
-    assert publication.current_index(BASE)["families"]["nominations"] == old
+                       match=r"would hold \['nominations'\], which already belongs to family nominations"):
+        convert("treaties", tmp_path / "treaties")
+    assert not (tmp_path / "treaties" / "build").exists()
+    assert publication.current_index(BASE)["families"]["treaties"] == old
 
 
 def test_a_row_the_writer_refuses_stops_the_conversion(tmp_path, monkeypatch, bucket):

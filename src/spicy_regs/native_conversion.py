@@ -403,7 +403,11 @@ def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: s
             claimed = {policy.dataset for policy in cls.receipt_policies}
         else:
             raise ConversionRefused(f"{family} has no subject/receipt rollup or court writer to convert it through")
-        # The index gives every dataset one owning family, receipt-only ones included; publication would refuse this.
+        # The index gives every dataset an entry lists one owning family; publication would refuse a second. A
+        # shared log is listed by none.
+        from spicy_regs.subject_catalog import shared_receipt_logs
+
+        claimed -= shared_receipt_logs()
         for other, entry in captured["families"].items():
             owned = {key.removesuffix(".parquet") for key in entry["tables"]} | set(entry.get("etlReceipts", {}).get("datasets", ()))
             if other != family and (shared := sorted(claimed & owned)):
