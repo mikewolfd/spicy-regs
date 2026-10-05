@@ -9,6 +9,11 @@ Entries link to the pull request that introduced the change.
 
 ### Changed
 
+- Selected native inputs record their publication pin from the build's captured
+  index alongside admitted subject, receipt, and processing hashes. Dynamic
+  member reads now reach generation parent tracking. Local selections retain
+  file witnesses; inputs with no published subject state that disposition.
+
 - **A House member vote of 1990-2002 carries a `bioguide_id` where one member
   answers to the Clerk's label** (owner decisions, 2026-10-05; rule
   `house-name-crosswalk-v3`, `transforms/member_name_crosswalk.py`). Those
