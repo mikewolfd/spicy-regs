@@ -232,9 +232,10 @@ def assemble_subject_table(
     """Assemble this FEC family's subjects and receipts from qualified mapper files.
 
     Namespace partitions are checked on the input processing rows. Subject output
-    uses ordinary Parquet members because source_namespace now lives in receipts;
-    removing that field never bypasses input partition validation. The original
-    assembly entry point remains available for legacy, unmigrated datasets.
+    uses ordinary Parquet members whether the table keeps source_namespace as a
+    subject column or moves it to receipts; moving it never bypasses input
+    partition validation. The original assembly entry point remains available
+    for legacy, unmigrated datasets.
     """
     from .fec_subject_receipts import write_fec_subjects, read_fec_with_receipts
     from .fec_native_subjects import FIELD_RULES

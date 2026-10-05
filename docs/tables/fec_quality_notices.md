@@ -4,7 +4,7 @@
 
 **Source-issued FEC quality notices**
 
-One source notice observation about an explicitly stated filing/committee scope. Makes the publisher's warning and linked scope inspectable. A notice does not automatically identify a donor, prove an allegation, resolve an affected transaction, or exclude money from a total. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates.
+One source notice observation about an explicitly stated filing/committee scope. Makes the publisher's warning and linked scope inspectable. A notice does not automatically identify a donor, prove an allegation, resolve an affected transaction, or exclude money from a total. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. Every row comes from `fec-bulk-false-fictitious-notice`; the source namespace is kept in the receipt.
 
 Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_quality_notices'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
 

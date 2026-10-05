@@ -4,7 +4,7 @@
 
 **Reported committee-to-committee transaction observations**
 
-One reported intercommittee transaction record version. Preserves reporting committee, counterparty references, literal transaction type, memo and amount. Direction remains unresolved unless source definitions prove it; both sides of a transfer are observations until an explicit flow rule qualifies consolidation. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates.
+One reported intercommittee transaction record version. Preserves reporting committee, counterparty references, literal transaction type, memo and amount. Direction remains unresolved unless source definitions prove it; both sides of a transfer are observations until an explicit flow rule qualifies consolidation. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. Every row has the amount status `exact`; the amount status is kept in the receipt.
 
 Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_intercommittee_transactions'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
 
@@ -24,6 +24,7 @@ Processing fields, source witnesses, conversion inputs and diagnostics reference
 | `filing_key` | `VARCHAR` | Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. It does not by itself say whether the row's filing is held: where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`). `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist. |
 | `currency` | `VARCHAR` | Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately. |
 | `amount_kind` | `VARCHAR` | Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It is not an aggregation permission. |
+| `source_namespace` | `VARCHAR` | Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent. |
 | `reporting_committee_id` | `VARCHAR` | Literal FEC ID of the reporting committee where that source field identifies a committee. It does not by itself identify the sender or recipient of money. |
 | `amendment_indicator` | `VARCHAR` | Literal source amendment flag. It does not by itself prove the amendment chain, replacement scope or current record. |
 | `report_type` | `VARCHAR` | Source-reported report classification, interpreted within its namespace rather than as a universal period code. |

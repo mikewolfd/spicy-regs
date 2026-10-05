@@ -21,6 +21,7 @@ Processing fields, source witnesses, conversion inputs and diagnostics reference
 | `matter_id` | `VARCHAR` | Authority-, matter-type- and namespace-qualified logical case key. Multiple retained observations may share it. |
 | `matter_record_id` | `VARCHAR` | Exact fec_legal_matters.record_id observation supporting this child event, party, document or finding. |
 | `matter_type` | `VARCHAR` | Legal source family such as advisory opinion, enforcement, administrative fine, dispute resolution, rulemaking or audit. |
+| `source_namespace` | `VARCHAR` | Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent. |
 | `native_matter_id` | `VARCHAR` | Literal case identifier within its legal source namespace; similar numbers across matter types do not identify the same case. |
 | `native_document_id` | `VARCHAR` | Literal document identifier in its native matter/document namespace. |
 | `title` | `VARCHAR` | Source title or explicitly labeled mapper title; consult title_basis or title_status when present. |

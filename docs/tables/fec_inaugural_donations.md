@@ -24,6 +24,7 @@ Processing fields, source witnesses, conversion inputs and diagnostics reference
 | `filing_key` | `VARCHAR` | Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. It does not by itself say whether the row's filing is held: where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`). `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist. |
 | `currency` | `VARCHAR` | Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately. |
 | `amount_kind` | `VARCHAR` | Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It is not an aggregation permission. |
+| `source_namespace` | `VARCHAR` | Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent. |
 | `form_type` | `VARCHAR` | Literal filing form or record-type code from the source layout; does not prove submission conformance. |
 | `reporting_committee_id` | `VARCHAR` | Literal FEC ID of the reporting committee where that source field identifies a committee. It does not by itself identify the sender or recipient of money. |
 | `transaction_id` | `VARCHAR` | Literal transaction identifier within its source filing/layout scope; not a globally unique transaction or economic-event key. |
@@ -44,6 +45,7 @@ Processing fields, source witnesses, conversion inputs and diagnostics reference
 | `memo_indicator` | `VARCHAR` | Literal memo flag from this layout. Eligibility depends on source definitions and analytic purpose; no blanket memo exclusion is implied. |
 | `memo_text` | `VARCHAR` | Source memo or explanation text associated with the reported record. |
 | `activity_kind` | `VARCHAR` | Source-defined activity classification for the inaugural or other reported financial record. |
+| `amount_status` | `VARCHAR` | Source-presence or conversion state for amount, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
 | `source_cycle` | `INTEGER` | Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year. |
 | `amount` | `DECIMAL(38,9)` | Exact decimal for the source-reported amount for this record and its amount_kind. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations. |
 | `reported_aggregate_amount` | `DECIMAL(38,9)` | Exact decimal for the source-stated aggregate accompanying this expenditure. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations. |

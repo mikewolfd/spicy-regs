@@ -209,7 +209,12 @@ def test_discovery_fits_sse_limit_with_many_views_and_partitioned_dependencies(t
     view_receipt = receipt["views"][base.view.name]
     view_receipt["dependencies"]["fec_receipts"] = release.captured_table(index, "fec_receipts")
     receipt["views"] = {s.view.name: deepcopy(view_receipt) for s in specs}
-    raw = json.dumps(receipt).encode()
+    # Written without padding, as fec_release serializes. Every view record here repeats the fec_receipts
+    # descriptor (each column, each of the 40 members), so the padded spelling sat 1,254 bytes under the
+    # receipt limit and the two columns returned to fec_receipts on 2026-10-05 put it 3,378 over: all views
+    # then read disabled for the receipt's size, not for anything this test is about.
+    raw = json.dumps(receipt, separators=(",", ":")).encode()
+    assert len(raw) <= release.LIMIT
     path.write_bytes(raw)
     monkeypatch.setenv("SPICY_REGS_FEC_RELEASE_SHA256", release.sha256(raw))
     monkeypatch.setattr(server, "FEC_QUALIFIED_VIEWS", specs)
