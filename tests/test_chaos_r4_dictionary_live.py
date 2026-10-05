@@ -111,9 +111,27 @@ def test_the_always_claims_are_found():
 
 
 @pytest.mark.parametrize(("table", "column", "value"), _always_claims())
-def test_a_column_described_as_always_empty_is_empty(urls, con, table, column, value):
+def test_a_column_described_as_always_empty_is_empty(urls, con, table, column, value, record_property):
     """Regression guard: the published column holds what its prose says it always holds."""
-    quoted = '"' + column.replace('"', '""') + '"'
-    condition = f"{quoted} IS NOT NULL" if value == "NULL" else f"{quoted} IS DISTINCT FROM '[]'"
+    columns = {r[0]: r[1] for r in con.execute(f"DESCRIBE SELECT * FROM {_scan(urls, table)}").fetchall()}
+    condition, observed_column = _empty_claim_condition(table, column, value, columns)
+    record_property("observed_column", observed_column)
+    record_property("observed_type", columns[observed_column])
     (found,) = con.execute(f"SELECT count(*) FROM {_scan(urls, table)} WHERE {condition}").fetchone()
     assert found == 0, f"{table}.{column}: {found} rows contradict 'always {value}'"
+
+
+def _empty_claim_condition(table, column, value, columns):
+    """Audit a literal historical field or its declared native representation.
+
+    This is a read-only publication audit. Observing a historical field does not
+    qualify its generation as native or make it an operational processing input.
+    """
+    observed = column
+    if observed not in columns and (table, column) == ("proceedings", "authority_refs"):
+        observed = "authority_refs_json"
+    if observed not in columns:
+        raise ValueError(f"Published {table} has neither the documented field nor its declared historical input")
+    quoted = '"' + observed.replace('"', '""') + '"'
+    empty = "[]::VARCHAR[]" if columns[observed] == "VARCHAR[]" else "'[]'"
+    return (f"{quoted} IS NOT NULL" if value == "NULL" else f"{quoted} IS DISTINCT FROM {empty}"), observed
