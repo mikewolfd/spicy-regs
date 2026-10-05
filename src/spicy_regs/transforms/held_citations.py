@@ -193,27 +193,8 @@ def build_held_citations(
     if current.exists():
         shutil.copyfile(current, prior_scratch_path(output_dir, "document_citations"))
     prior = published_table(output_dir, "document_citations", download_prior)
-    from spicy_regs.legislative_documents import native_document_key
-
-    # Receipt restoration preserves original capture keys. This builder replaces
-    # scopes using native source keys, so normalize findings and checkpoints together
-    # before comparing or retaining them; otherwise a first reread duplicates a scope.
-    checkpoints = [{**s, "document_key": native_document_key(s.get("document_kind"), s.get("document_key"))}
-                   for s in read_checkpoints(prior, NAMESPACE)]
-    states = {(s.get("document_kind"), s.get("document_key"), s.get("text_sha256")): s for s in checkpoints}
-    if prior is not None:
-        from spicy_regs.transforms.parquet_rows import write_rows
-
-        def normalized_rows():
-            with pq.ParquetFile(prior) as parquet:
-                for batch in parquet.iter_batches(batch_size=2000):
-                    for row in batch.to_pylist():
-                        yield {**row, "document_key": native_document_key(row["document_kind"], row["document_key"])}
-
-        schema = pq.read_schema(prior).with_metadata(checkpoint_metadata(prior, NAMESPACE, checkpoints))
-        normalized = prior.with_name("." + prior.name + ".native-keys")
-        write_rows(normalized_rows(), normalized, schema)
-        normalized.replace(prior)
+    states = {(s.get("document_kind"), s.get("document_key"), s.get("text_sha256")): s
+              for s in read_checkpoints(prior, NAMESPACE)}
     rows, replaced, receipts = [], set(), []
     reads = _read_fields(cursor, selections, max_field_bytes)
     for selection, (text, status, error_type) in zip(selections, reads, strict=True):
