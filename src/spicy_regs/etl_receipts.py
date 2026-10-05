@@ -438,51 +438,76 @@ def _rows(path):
             yield from batch.to_pylist()
 
 
+def validate_publisher_generation(generation_id: str | None) -> None:
+    """Validate the selected publisher label; original receipt generations are immutable."""
+    if generation_id is not None and (not isinstance(generation_id, str) or not generation_id):
+        raise ValueError("Selected receipt publisher generation must be nonempty")
+
+
+def receipt_policies(policy: DatasetPolicy) -> tuple[DatasetPolicy, ...]:
+    """The explicit current policy and its declared earlier policies, with no source-reader imports."""
+    from spicy_regs.earlier_receipt_policies import earlier_policies
+
+    return (policy, *earlier_policies(policy))
+
+
+def receipt_policy(policies: Mapping[str, DatasetPolicy], dataset: str, policy_version: str) -> DatasetPolicy | None:
+    policy = policies.get(dataset)
+    if policy is None:
+        return None
+    return next((p for p in receipt_policies(policy) if p.policy_version == policy_version), None)
+
+
+def validate_receipt_row(receipt: Mapping, policies: Mapping[str, DatasetPolicy], *, accepted_policies=None) -> None:
+    """Validate one receipt with the same policy, digest and outcome rules as bundle admission."""
+    policy = (accepted_policies if accepted_policies is not None else {
+        (name, p.policy_version): p for name, item in policies.items() for p in receipt_policies(item)
+    }).get((receipt["dataset"], receipt["policy_version"]))
+    if policy is None:
+        raise ValueError("Receipt has no matching dataset policy")
+    if _digest({k: v for k, v in receipt.items() if k != "receipt_id"}) != receipt["receipt_id"]:
+        raise ValueError("Receipt digest differs from its contents")
+    ReceiptContext(
+        receipt["generation_id"],
+        receipt["attempt_id"],
+        receipt["processor"],
+        receipt["witnesses"],
+        _unpack(json.loads(receipt["diagnostic_json"])),
+    )
+    accepted = receipt["outcome"] == "accepted"
+    if (
+        receipt["outcome"] not in OUTCOMES
+        or accepted
+        and policy.receipt_only
+        or accepted != (receipt["subject_version"] is not None)
+        or accepted
+        and (not receipt["record_id"] or not receipt["identity_json"])
+    ):
+        raise ValueError("Invalid receipt outcome or subject identity")
+    processing = _unpack(json.loads(receipt["processing_json"]))
+    allowed = (
+        policy.input_fields
+        if receipt["outcome"] in {"error", "rejected", "refused"}
+        else set(policy.receipt_fields)
+    )
+    if not isinstance(processing, dict) or set(processing) - allowed:
+        raise ValueError("Receipt contains unclassified processing fields")
+
+
 def _load_receipts(connection, receipt_paths, policies, generation_id, *, retain_processing=True):
     connection.execute(
         "CREATE TABLE receipts (dataset TEXT, record_id TEXT, version TEXT, identity_json TEXT, "
         "receipt_id TEXT UNIQUE, outcome TEXT, processing BLOB, used INTEGER DEFAULT 0)"
     )
     connection.execute("CREATE UNIQUE INDEX accepted_identity ON receipts(dataset, record_id) WHERE outcome='accepted'")
-    generations = set()
+    validate_publisher_generation(generation_id)
+    accepted_policies = {(name, p.policy_version): p for name, policy in policies.items() for p in receipt_policies(policy)}
     for path in receipt_paths:
         with _parquet(path) as parquet:
             if not parquet.schema_arrow.equals(RECEIPT_SCHEMA):
                 raise ValueError("Receipt schema differs from the shared schema")
         for receipt in _rows(path):
-            policy = policies.get(receipt["dataset"])
-            if policy is None or policy.policy_version != receipt["policy_version"]:
-                raise ValueError("Receipt has no matching dataset policy")
-            if _digest({k: v for k, v in receipt.items() if k != "receipt_id"}) != receipt["receipt_id"]:
-                raise ValueError("Receipt digest differs from its contents")
-            ReceiptContext(
-                receipt["generation_id"],
-                receipt["attempt_id"],
-                receipt["processor"],
-                receipt["witnesses"],
-                _unpack(json.loads(receipt["diagnostic_json"])),
-            )
-            generations.add(receipt["generation_id"])
-            if len(generations) > 1 or (generation_id is not None and generations != {generation_id}):
-                raise ValueError("Receipts mix or differ from the selected generation")
-            accepted = receipt["outcome"] == "accepted"
-            if (
-                receipt["outcome"] not in OUTCOMES
-                or accepted
-                and policy.receipt_only
-                or accepted != (receipt["subject_version"] is not None)
-                or accepted
-                and (not receipt["record_id"] or not receipt["identity_json"])
-            ):
-                raise ValueError("Invalid receipt outcome or subject identity")
-            processing = _unpack(json.loads(receipt["processing_json"]))
-            allowed = (
-                policy.input_fields
-                if receipt["outcome"] in {"error", "rejected", "refused"}
-                else set(policy.receipt_fields)
-            )
-            if not isinstance(processing, dict) or set(processing) - allowed:
-                raise ValueError("Receipt contains unclassified processing fields")
+            validate_receipt_row(receipt, policies, accepted_policies=accepted_policies)
             try:
                 connection.execute(
                     "INSERT INTO receipts VALUES (?,?,?,?,?,?,?,0)",

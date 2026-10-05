@@ -15,7 +15,6 @@ import re
 import shutil
 import sqlite3
 from contextvars import ContextVar
-from dataclasses import replace
 from functools import wraps
 from pathlib import Path
 from typing import Any
@@ -24,6 +23,7 @@ from uuid import uuid4
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from spicy_regs.earlier_receipt_policies import earlier_policies
 from spicy_regs.etl_receipts import (
     RECEIPT_SCHEMA,
     DatasetPolicy,
@@ -65,21 +65,9 @@ POLICIES = {
 }
 
 
-def _without(dataset: str, *columns: str) -> DatasetPolicy:
-    """The dataset's ``government-sources/1`` policy: today's subject schema less the columns returned since."""
-    schema = POLICIES[dataset].subject_schema
-    for column in columns:
-        schema = schema.remove(schema.get_field_index(column))
-    return replace(POLICIES[dataset], subject_schema=schema, policy_version="government-sources/1")
+# Source replay and generic receipt readers use the same explicit earlier policies.
 
-
-#: Exact policies a published prior may still carry. A prior is read under one only to restore its receipts' whole
-#: original rows; every write uses POLICIES. On 2026-10-04 gao-reports published gao_decisions without
-#: ``b_numbers_truncated`` and gao-recommendations published without ``first_seen`` and ``last_seen``.
-EARLIER_POLICIES = {
-    "gao_decisions": (_without("gao_decisions", "b_numbers_truncated"),),
-    "gao_recommendations": (_without("gao_recommendations", "first_seen", "last_seen"),),
-}
+EARLIER_POLICIES = {name: earlier_policies(policy) for name, policy in POLICIES.items() if earlier_policies(policy)}
 _ACTIVE: ContextVar[bool] = ContextVar("government_receipt_build", default=False)
 _INHERITED: ContextVar[dict[str, Path] | None] = ContextVar("government_prior_receipts", default=None)
 # This is local build metadata for forwarding the shared API's admission arguments,
