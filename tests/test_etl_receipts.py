@@ -150,7 +150,7 @@ def test_complete_bundle_read_preserves_exact_values_and_explicit_attempts(tmp_p
     assert result == {"payments": [row, row], "parser_reads": [{"checkpoint": [None, "", 0]}]}
 
 
-@pytest.mark.parametrize("fault", ["late-subject", "orphan", "duplicate", "generation", "receipt", "schema"])
+@pytest.mark.parametrize("fault", ["late-subject", "orphan", "duplicate", "publisher", "receipt", "schema"])
 def test_complete_bundle_read_refuses_inconsistent_later_dataset(tmp_path, policy, context, row, fault):
     other = replace(policy, dataset="refunds")
     first, first_receipt = write_dataset([(row, context)], tmp_path / "payments", policy)
@@ -171,8 +171,8 @@ def test_complete_bundle_read_refuses_inconsistent_later_dataset(tmp_path, polic
         else:
             receipts[-1]["processor"] = "altered"
         pq.write_table(pa.Table.from_pylist(receipts, schema=RECEIPT_SCHEMA), shared)
-    elif fault == "generation":
-        selected_generation = "other-generation"
+    elif fault == "publisher":
+        selected_generation = ""
     else:
         pq.write_table(pq.read_table(second).append_column("extra", pa.array(["x"])), second)
     with pytest.raises(ValueError):
@@ -263,8 +263,7 @@ def test_late_failure_leaves_no_partial_bundle(tmp_path, policy, context, row):
 def test_generation_and_content_join(tmp_path, policy, context, row):
     subject, receipts = write_dataset([(row, context)], tmp_path / "bundle", policy)
     assert subject is not None
-    with pytest.raises(ValueError, match="selected generation"):
-        list(read_with_receipts([subject], [receipts], policy, generation_id="other"))
+    assert list(read_with_receipts([subject], [receipts], policy, generation_id="other")) == [row]
     pq.write_table(
         pa.Table.from_pylist(
             [split_record(policy, row | {"amount": Decimal("1.00")}, context)[0]], schema=policy.subject_schema
@@ -538,8 +537,7 @@ def test_receipt_only_checkpoints_preserve_order_attempts_and_refusals(tmp_path,
     assert [r["attempt_id"] for r in attempts] == ["attempt-0", "attempt-1", "failed"]
     checkpoints = list(read_attempts([receipt], policy, generation_id="build-1", outcomes=frozenset({"observed"})))
     assert [r["processing_fields"] for r in checkpoints] == [{"cursor": "same"}, {"cursor": "same"}]
-    with pytest.raises(ValueError, match="generation"):
-        list(read_attempts([receipt], policy, generation_id="another-build"))
+    assert list(read_attempts([receipt], policy, generation_id="another-build")) == attempts
 
 
 def test_installed_receipt_only_policy_cannot_be_replaced_or_duplicated(monkeypatch):
@@ -754,3 +752,36 @@ def test_update_and_rebind_preserve_prior_processing_context(policy, row, contex
     diagnostics = _unpack(json.loads(carried["diagnostic_json"]))
     assert {key: diagnostics[key] for key in evidence} == evidence
     assert diagnostics["prior_receipts"][0]["diagnostics"] == evidence
+
+
+def test_member_carries_receipts_from_original_generations_for_all_outcomes(tmp_path, policy, context, row):
+    from spicy_regs.etl_receipts import observation_receipt
+    accepted = split_record(policy, row, context)[1]
+    observed = observation_receipt(policy, replace(context, generation_id="older", attempt_id="observed"),
+                                   processing_fields={"source_url": "https://source.test"})
+    failures = [failure_receipt(policy, replace(context, generation_id="older-" + outcome, attempt_id=outcome),
+                               outcome=outcome, raw_fields={"source_url": "same"})
+                for outcome in ("rejected", "refused", "error")]
+    subject, receipts = write_dataset([(row, context)], tmp_path / "mixed", policy, failures=[observed, *failures])
+    assert subject is not None
+    before = receipts.read_bytes()
+    validate_receipt_bundle({policy.dataset: [subject]}, [receipts], [policy], generation_id="new-publisher")
+    assert list(read_with_receipts([subject], [receipts], policy, generation_id="new-publisher")) == [row]
+    assert receipts.read_bytes() == before
+    assert pq.read_table(receipts).to_pylist()[0] == accepted
+
+
+def test_only_declared_earlier_policies_are_admitted(tmp_path):
+    from spicy_regs.etl_receipts import receipt_policies, validate_receipt_row
+    from spicy_regs.transforms.government_receipts import POLICIES, EARLIER_POLICIES
+    current = POLICIES["gao_decisions"]
+    assert receipt_policies(current)[1:] == EARLIER_POLICIES["gao_decisions"]
+    prior = EARLIER_POLICIES["gao_decisions"][0]
+    witness = {"source_id": "test", "source_uri": "https://source.test", "sha256": "a" * 64, "locator": "/"}
+    context = ReceiptContext("old", "attempt", "test", [witness])
+    failed = failure_receipt(prior, context, outcome="rejected", raw_fields={"raw_record": {}})
+    validate_receipt_row(failed, {current.dataset: current})
+    unknown = replace(prior, policy_version="government-sources/unknown")
+    failed = failure_receipt(unknown, context, outcome="rejected", raw_fields={"raw_record": {}})
+    with pytest.raises(ValueError, match="matching dataset policy"):
+        validate_receipt_row(failed, {current.dataset: current})
