@@ -7,7 +7,8 @@
     "publisher_survey_20261005.json": "7e7431dc37bf8564d16df4f044498e1176f7e654cc0cd694b8bdb8a07944c9c1",
     "publisher_implementation_20261005.json": "02c472173923a4a2f3438155e36b76b83a6dd1d9210504ffec2a76abedbdb2f5",
     "publisher_recovery_20261005.json": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
-    "publisher_recovery_api_20261005.json": "a56098666af454d924dc15a63832fc1fd40dbd7b74053e35518548667b64a1d6"
+    "publisher_recovery_api_20261005.json": "a56098666af454d924dc15a63832fc1fd40dbd7b74053e35518548667b64a1d6",
+    "publisher_work_policy.json": "09224c662959e2505eccfbda16ee8042815eb7243276a17049a4416029d70d92"
   },
   "boundary": "Dated discovery, source-qualified routes and recovery observations retain separate authority. Catalog, CMS, archive, metadata and third-party endpoints do not establish a complete original rating API.",
   "publishers": [
@@ -15,6 +16,7 @@
       "publisher_id": "aauw",
       "publisher_name": "American Association of University Women",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "aauw",
@@ -29,6 +31,7 @@
       "publisher_id": "acec",
       "publisher_name": "American Council of Engineering Companies",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "acec",
@@ -43,6 +46,7 @@
       "publisher_id": "aclu",
       "publisher_name": "American Civil Liberties Union",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "aclu",
@@ -57,6 +61,7 @@
       "publisher_id": "ada",
       "publisher_name": "Americans for Democratic Action",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "ada",
@@ -71,6 +76,7 @@
       "publisher_id": "afl_cio",
       "publisher_name": "AFL-CIO",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "afl_cio",
@@ -85,6 +91,7 @@
       "publisher_id": "afp",
       "publisher_name": "Americans for Prosperity",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "afp",
@@ -127,6 +134,7 @@
       "publisher_id": "afscme",
       "publisher_name": "American Federation of State, County and Municipal Employees",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "afscme",
@@ -141,6 +149,7 @@
       "publisher_id": "ajp_action",
       "publisher_name": "Americans for Justice in Palestine Action",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "ajp_action",
@@ -155,6 +164,7 @@
       "publisher_id": "alaska_wilderness_action",
       "publisher_name": "Alaska Wilderness Action",
       "integration_state": "qualified_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "alaska_wilderness_action",
@@ -169,6 +179,7 @@
       "publisher_id": "animal_welfare_institute",
       "publisher_name": "Animal Welfare Institute",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "animal_welfare_institute",
@@ -183,6 +194,7 @@
       "publisher_id": "ara",
       "publisher_name": "Alliance for Retired Americans",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "ara",
@@ -197,6 +209,7 @@
       "publisher_id": "arts_action",
       "publisher_name": "Americans for the Arts Action Fund",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "arts_action",
@@ -211,6 +224,7 @@
       "publisher_id": "boilermakers",
       "publisher_name": "International Brotherhood of Boilermakers",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "boilermakers",
@@ -225,6 +239,7 @@
       "publisher_id": "c4ip",
       "publisher_name": "Council for Innovation Promotion",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "c4ip",
@@ -239,6 +254,7 @@
       "publisher_id": "childrens_defense",
       "publisher_name": "Children's Defense Fund",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "childrens_defense",
@@ -253,6 +269,7 @@
       "publisher_id": "club_for_growth",
       "publisher_name": "Club for Growth Foundation",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "club_for_growth",
@@ -267,6 +284,7 @@
       "publisher_id": "cpac",
       "publisher_name": "CPAC Foundation",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "cpac",
@@ -291,6 +309,7 @@
       "publisher_id": "dav",
       "publisher_name": "Disabled American Veterans",
       "integration_state": "qualified_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "dav",
@@ -305,6 +324,7 @@
       "publisher_id": "defenders_action",
       "publisher_name": "Defenders of Wildlife Action Fund",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "defenders_action",
@@ -319,6 +339,7 @@
       "publisher_id": "drug_policy_action",
       "publisher_name": "Drug Policy Action",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "drug_policy_action",
@@ -333,6 +354,7 @@
       "publisher_id": "drum_major",
       "publisher_name": "Drum Major Institute for Public Policy",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "drum_major",
@@ -347,6 +369,7 @@
       "publisher_id": "end_citizens_united",
       "publisher_name": "End Citizens United",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "end_citizens_united",
@@ -361,6 +384,7 @@
       "publisher_id": "environment_america",
       "publisher_name": "Environment America",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "environment_america",
@@ -375,6 +399,7 @@
       "publisher_id": "few",
       "publisher_name": "Federally Employed Women",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "few",
@@ -389,6 +414,7 @@
       "publisher_id": "ffrf_action",
       "publisher_name": "FFRF Action Fund",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "ffrf_action",
@@ -403,6 +429,7 @@
       "publisher_id": "first_focus",
       "publisher_name": "First Focus Campaign for Children",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "first_focus",
@@ -417,6 +444,7 @@
       "publisher_id": "flyersrights",
       "publisher_name": "FlyersRights.org",
       "integration_state": "unverified_lead",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "flyersrights",
@@ -506,6 +534,7 @@
       "publisher_id": "food_policy_action",
       "publisher_name": "Food Policy Action",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "food_policy_action",
@@ -520,6 +549,7 @@
       "publisher_id": "foreign_policy_america",
       "publisher_name": "Foreign Policy for America",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "foreign_policy_america",
@@ -534,6 +564,7 @@
       "publisher_id": "frc_action",
       "publisher_name": "FRC Action",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "frc_action",
@@ -548,6 +579,7 @@
       "publisher_id": "freedomworks",
       "publisher_name": "FreedomWorks",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "freedomworks",
@@ -562,6 +594,7 @@
       "publisher_id": "global_solutions",
       "publisher_name": "Citizens for Global Solutions",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "global_solutions",
@@ -576,6 +609,7 @@
       "publisher_id": "goa",
       "publisher_name": "Gun Owners of America",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "goa",
@@ -590,6 +624,7 @@
       "publisher_id": "heritage_action",
       "publisher_name": "Heritage Action for America",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "heritage_action",
@@ -632,6 +667,7 @@
       "publisher_id": "hrc",
       "publisher_name": "Human Rights Campaign",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "hrc",
@@ -646,6 +682,7 @@
       "publisher_id": "humane_world_action",
       "publisher_name": "Humane World Action Fund",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "humane_world_action",
@@ -660,6 +697,7 @@
       "publisher_id": "iava",
       "publisher_name": "Iraq and Afghanistan Veterans of America",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "iava",
@@ -674,6 +712,7 @@
       "publisher_id": "ila",
       "publisher_name": "Institute for Legislative Analysis",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "ila",
@@ -688,6 +727,7 @@
       "publisher_id": "lcv",
       "publisher_name": "League of Conservation Voters",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "lcv",
@@ -702,6 +742,7 @@
       "publisher_id": "leadership_conference",
       "publisher_name": "Leadership Conference on Civil and Human Rights",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "leadership_conference",
@@ -716,6 +757,7 @@
       "publisher_id": "lugar_mccourt",
       "publisher_name": "The Lugar Center and Georgetown McCourt School",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "lugar_mccourt",
@@ -730,6 +772,7 @@
       "publisher_id": "naacp",
       "publisher_name": "NAACP",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "naacp",
@@ -744,6 +787,7 @@
       "publisher_id": "national_farmers_union",
       "publisher_name": "National Farmers Union",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "national_farmers_union",
@@ -758,6 +802,7 @@
       "publisher_id": "national_parks_action",
       "publisher_name": "National Parks Action Fund",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "national_parks_action",
@@ -772,6 +817,7 @@
       "publisher_id": "nea",
       "publisher_name": "National Education Association",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "nea",
@@ -786,6 +832,7 @@
       "publisher_id": "network",
       "publisher_name": "NETWORK Lobby",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "network",
@@ -800,6 +847,7 @@
       "publisher_id": "new_american",
       "publisher_name": "The New American",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "new_american",
@@ -814,6 +862,7 @@
       "publisher_id": "nfib",
       "publisher_name": "National Federation of Independent Business",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "nfib",
@@ -828,6 +877,7 @@
       "publisher_id": "niac_action",
       "publisher_name": "NIAC Action",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "niac_action",
@@ -842,6 +892,7 @@
       "publisher_id": "norml",
       "publisher_name": "National Organization for the Reform of Marijuana Laws",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "norml",
@@ -856,6 +907,7 @@
       "publisher_id": "nra_pvf",
       "publisher_name": "NRA Political Victory Fund",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "nra_pvf",
@@ -898,6 +950,7 @@
       "publisher_id": "nrf",
       "publisher_name": "National Retail Federation",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "nrf",
@@ -912,6 +965,7 @@
       "publisher_id": "ntu",
       "publisher_name": "National Taxpayers Union",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "ntu",
@@ -926,6 +980,7 @@
       "publisher_id": "numbersusa",
       "publisher_name": "NumbersUSA Action",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "numbersusa",
@@ -977,6 +1032,7 @@
       "publisher_id": "peace_action",
       "publisher_name": "Peace Action",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "peace_action",
@@ -991,6 +1047,7 @@
       "publisher_id": "planned_parenthood",
       "publisher_name": "Planned Parenthood Action Fund",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "planned_parenthood",
@@ -1005,6 +1062,7 @@
       "publisher_id": "reproductive_freedom",
       "publisher_name": "NARAL Pro-Choice America",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "reproductive_freedom",
@@ -1019,6 +1077,7 @@
       "publisher_id": "sace_action",
       "publisher_name": "Southern Alliance for Clean Energy Action Fund",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "sace_action",
@@ -1033,6 +1092,7 @@
       "publisher_id": "sba",
       "publisher_name": "Susan B. Anthony Pro-Life America",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "sba",
@@ -1047,6 +1107,7 @@
       "publisher_id": "shriver",
       "publisher_name": "Sargent Shriver National Center on Poverty Law",
       "integration_state": "qualified_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "shriver",
@@ -1061,6 +1122,7 @@
       "publisher_id": "us_chamber",
       "publisher_name": "U.S. Chamber of Commerce",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "us_chamber",
@@ -1075,6 +1137,7 @@
       "publisher_id": "wilberforce",
       "publisher_name": "21Wilberforce",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "wilberforce",
@@ -1089,6 +1152,7 @@
       "publisher_id": "amalgamated_clothing_workers",
       "publisher_name": "Amalgamated Clothing Workers of America",
       "integration_state": "unverified_lead",
+      "work_status": "deferred_pre_2000",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "amalgamated_clothing_workers",
@@ -1191,6 +1255,7 @@
       "publisher_id": "american_bakers",
       "publisher_name": "American Bakers Association",
       "integration_state": "qualified_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "american_bakers",
@@ -1205,6 +1270,7 @@
       "publisher_id": "american_cause",
       "publisher_name": "American Cause, Inc.",
       "integration_state": "unverified_lead",
+      "work_status": "deferred_pre_2000",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "american_cause",
@@ -1373,6 +1439,7 @@
       "publisher_id": "farm_bureau",
       "publisher_name": "American Farm Bureau Federation",
       "integration_state": "qualified_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "farm_bureau",
@@ -1387,6 +1454,7 @@
       "publisher_id": "afge",
       "publisher_name": "American Federation of Government Employees",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "afge",
@@ -1401,6 +1469,7 @@
       "publisher_id": "aft",
       "publisher_name": "American Federation of Teachers",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "aft",
@@ -1415,6 +1484,7 @@
       "publisher_id": "aia",
       "publisher_name": "American Institute of Architects",
       "integration_state": "unverified_lead",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "aia",
@@ -1543,6 +1613,7 @@
       "publisher_id": "american_parents",
       "publisher_name": "American Parents Committee, Inc.",
       "integration_state": "unverified_lead",
+      "work_status": "deferred_pre_2000",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "american_parents",
@@ -1621,6 +1692,7 @@
       "publisher_id": "american_security_council",
       "publisher_name": "American Security Council",
       "integration_state": "unverified_lead",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "american_security_council",
@@ -1697,6 +1769,7 @@
       "publisher_id": "americans_constitutional_action",
       "publisher_name": "Americans for Constitutional Action",
       "integration_state": "unverified_lead",
+      "work_status": "deferred_pre_2000",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "americans_constitutional_action",
@@ -1820,6 +1893,7 @@
       "publisher_id": "agc",
       "publisher_name": "Associated General Contractors of America",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "agc",
@@ -1834,6 +1908,7 @@
       "publisher_id": "atlantic_richfield",
       "publisher_name": "Atlantic Richfield Civic Action Program",
       "integration_state": "unverified_lead",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "atlantic_richfield",
@@ -1924,6 +1999,7 @@
       "publisher_id": "bread_world",
       "publisher_name": "Bread for the World",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "bread_world",
@@ -1938,6 +2014,7 @@
       "publisher_id": "railway_clerks",
       "publisher_name": "Brotherhood of Railway, Airline and Steamship Clerks, Freight Handlers, Express and Station Employes",
       "integration_state": "unverified_lead",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "railway_clerks",
@@ -1999,6 +2076,7 @@
       "publisher_id": "bipac",
       "publisher_name": "Business-Industry Political Action Committee",
       "integration_state": "unverified_lead",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "bipac",
@@ -2078,6 +2156,7 @@
       "publisher_id": "ccrkba",
       "publisher_name": "Citizens Committee for the Right to Keep and Bear Arms",
       "integration_state": "unverified_lead",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "ccrkba",
@@ -2147,6 +2226,7 @@
       "publisher_id": "coalition_foreign_military",
       "publisher_name": "Coalition for a New Foreign and Military Policy",
       "integration_state": "unverified_lead",
+      "work_status": "deferred_pre_2000",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "coalition_foreign_military",
@@ -2214,6 +2294,7 @@
       "publisher_id": "committee_education_funding",
       "publisher_name": "Committee for Full Funding of Education Programs",
       "integration_state": "unverified_lead",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "committee_education_funding",
@@ -2265,6 +2346,7 @@
       "publisher_id": "free_congress_survival",
       "publisher_name": "Committee for the Survival of a Free Congress",
       "integration_state": "unverified_lead",
+      "work_status": "deferred_pre_2000",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "free_congress_survival",
@@ -2373,6 +2455,7 @@
       "publisher_id": "common_cause",
       "publisher_name": "Common Cause",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "common_cause",
@@ -2387,6 +2470,7 @@
       "publisher_id": "communication_workers",
       "publisher_name": "Communication Workers of America",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "communication_workers",
@@ -2401,6 +2485,7 @@
       "publisher_id": "congressional_quarterly",
       "publisher_name": "Congressional Quarterly, Inc.",
       "integration_state": "qualified_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "congressional_quarterly",
@@ -2415,6 +2500,7 @@
       "publisher_id": "consumer_federation",
       "publisher_name": "Consumer Federation of America",
       "integration_state": "qualified_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "consumer_federation",
@@ -2429,6 +2515,7 @@
       "publisher_id": "environmental_action",
       "publisher_name": "Environmental Action",
       "integration_state": "unverified_lead",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "environmental_action",
@@ -2530,6 +2617,7 @@
       "publisher_id": "food_beverage_trades",
       "publisher_name": "Food and Beverage Trades Department AFL-CIO",
       "integration_state": "unverified_lead",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "food_beverage_trades",
@@ -2601,6 +2689,7 @@
       "publisher_id": "fcnl",
       "publisher_name": "Friends Committee on National Legislation",
       "integration_state": "qualified_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "fcnl",
@@ -2615,6 +2704,7 @@
       "publisher_id": "human_events",
       "publisher_name": "Human Events",
       "integration_state": "unverified_lead",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "human_events",
@@ -2677,6 +2767,7 @@
       "publisher_id": "ipaa",
       "publisher_name": "Independent Petroleum Association of America",
       "integration_state": "qualified_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "ipaa",
@@ -2691,6 +2782,7 @@
       "publisher_id": "machinists",
       "publisher_name": "International Association of Machinists & Aerospace Workers",
       "integration_state": "qualified_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "machinists",
@@ -2705,6 +2797,7 @@
       "publisher_id": "teamsters",
       "publisher_name": "International Brotherhood of Teamsters",
       "integration_state": "qualified_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "teamsters",
@@ -2719,6 +2812,7 @@
       "publisher_id": "interreligious_food",
       "publisher_name": "Interreligious Taskforce on US Food Policy",
       "integration_state": "unverified_lead",
+      "work_status": "deferred_pre_2000",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "interreligious_food",
@@ -2773,6 +2867,7 @@
       "publisher_id": "john_birch_historical",
       "publisher_name": "John Birch Society",
       "integration_state": "identity_review",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "john_birch_historical",
@@ -2833,6 +2928,7 @@
       "publisher_id": "joint_center",
       "publisher_name": "Joint Center for Political Studies",
       "integration_state": "unverified_lead",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "joint_center",
@@ -3009,6 +3105,7 @@
       "publisher_id": "league_women_voters",
       "publisher_name": "League of Women Voters of the United States",
       "integration_state": "unverified_lead",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "league_women_voters",
@@ -3090,6 +3187,7 @@
       "publisher_id": "liberty_lobby",
       "publisher_name": "Liberty Lobby",
       "integration_state": "retired_confirmed",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "liberty_lobby",
@@ -3176,6 +3274,7 @@
       "publisher_id": "march_for_life",
       "publisher_name": "March for Life, Inc.",
       "integration_state": "unverified_lead",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "march_for_life",
@@ -3264,6 +3363,7 @@
       "publisher_id": "national_alliance_seniors",
       "publisher_name": "National Alliance of Senior Citizens",
       "integration_state": "unverified_lead",
+      "work_status": "deferred_pre_2000",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "national_alliance_seniors",
@@ -3344,6 +3444,7 @@
       "publisher_id": "national_associated_businessmen",
       "publisher_name": "National Associated Businessmen, Inc.",
       "integration_state": "unverified_lead",
+      "work_status": "deferred_pre_2000",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "national_associated_businessmen",
@@ -3442,6 +3543,7 @@
       "publisher_id": "life_underwriters",
       "publisher_name": "National Association of Life Underwriters",
       "integration_state": "unverified_lead",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "life_underwriters",
@@ -3565,6 +3667,7 @@
       "publisher_id": "nam",
       "publisher_name": "National Association of Manufacturers",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "nam",
@@ -3579,6 +3682,7 @@
       "publisher_id": "nasw",
       "publisher_name": "National Association of Social Workers",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "nasw",
@@ -3618,6 +3722,7 @@
       "publisher_id": "national_audiovisual",
       "publisher_name": "National Audio-Visual Association, Inc.",
       "integration_state": "unverified_lead",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "national_audiovisual",
@@ -3690,6 +3795,7 @@
       "publisher_id": "national_council_seniors",
       "publisher_name": "National Council of Senior Citizens, Inc.",
       "integration_state": "unverified_lead",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "national_council_seniors",
@@ -3773,6 +3879,7 @@
       "publisher_id": "national_farmers_organization",
       "publisher_name": "National Farmers Organization",
       "integration_state": "unverified_lead",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "national_farmers_organization",
@@ -3851,6 +3958,7 @@
       "publisher_id": "now",
       "publisher_name": "National Organization for Women",
       "integration_state": "unverified_lead",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "now",
@@ -3945,6 +4053,7 @@
       "publisher_id": "national_womens_caucus",
       "publisher_name": "National Women's Political Caucus",
       "integration_state": "unverified_lead",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "national_womens_caucus",
@@ -4026,6 +4135,7 @@
       "publisher_id": "write_congressman",
       "publisher_name": "National Write Your Congressman Club, Inc.",
       "integration_state": "unverified_lead",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "write_congressman",
@@ -4094,6 +4204,7 @@
       "publisher_id": "public_citizen",
       "publisher_name": "Public Citizen/Congress Watch",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "public_citizen",
@@ -4108,6 +4219,7 @@
       "publisher_id": "retail_clerks",
       "publisher_name": "Retail Clerks International Union",
       "integration_state": "unverified_lead",
+      "work_status": "deferred_pre_2000",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "retail_clerks",
@@ -4173,6 +4285,7 @@
       "publisher_id": "ripon_society",
       "publisher_name": "Ripon Society",
       "integration_state": "unverified_lead",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "ripon_society",
@@ -4251,6 +4364,7 @@
       "publisher_id": "sane_historical",
       "publisher_name": "SANE",
       "integration_state": "unverified_lead",
+      "work_status": "deferred_pre_2000",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "sane_historical",
@@ -4312,6 +4426,7 @@
       "publisher_id": "taxation_representation",
       "publisher_name": "Taxation with Representation",
       "integration_state": "unverified_lead",
+      "work_status": "deferred_pre_2000",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "taxation_representation",
@@ -4361,6 +4476,7 @@
       "publisher_id": "us_student_association",
       "publisher_name": "US National Student Association",
       "integration_state": "unverified_lead",
+      "work_status": "deferred_pre_2000",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "us_student_association",
@@ -4589,6 +4705,7 @@
       "publisher_id": "uaw",
       "publisher_name": "United Auto Workers",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "uaw",
@@ -4603,6 +4720,7 @@
       "publisher_id": "carpenters",
       "publisher_name": "United Brotherhood of Carpenters and Joiners of America",
       "integration_state": "unverified_lead",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "carpenters",
@@ -4661,6 +4779,7 @@
       "publisher_id": "united_church_christ",
       "publisher_name": "United Church of Christ",
       "integration_state": "unverified_lead",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "united_church_christ",
@@ -4796,6 +4915,7 @@
       "publisher_id": "united_mine_workers",
       "publisher_name": "United Mine Workers of America",
       "integration_state": "unverified_lead",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "united_mine_workers",
@@ -4870,6 +4990,7 @@
       "publisher_id": "united_transportation",
       "publisher_name": "United Transportation Union",
       "integration_state": "unverified_lead",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "united_transportation",
@@ -4943,6 +5064,7 @@
       "publisher_id": "woman_activist",
       "publisher_name": "The Woman Activist",
       "integration_state": "unverified_lead",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "woman_activist",
@@ -5030,6 +5152,7 @@
       "publisher_id": "womens_lobby",
       "publisher_name": "Women's Lobby",
       "integration_state": "unverified_lead",
+      "work_status": "deferred_pre_2000",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "womens_lobby",
@@ -5105,6 +5228,7 @@
       "publisher_id": "american_energy_alliance",
       "publisher_name": "American Energy Alliance",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "american_energy_alliance",
@@ -5119,6 +5243,7 @@
       "publisher_id": "ijm",
       "publisher_name": "International Justice Mission",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "ijm",
@@ -5161,6 +5286,7 @@
       "publisher_id": "radical_middle",
       "publisher_name": "Radical Middle",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "radical_middle",
@@ -5175,6 +5301,7 @@
       "publisher_id": "smart_transportation",
       "publisher_name": "SMART Transportation Division",
       "integration_state": "published_scope",
+      "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "smart_transportation",

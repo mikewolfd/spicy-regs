@@ -111,6 +111,69 @@ def test_older_inventory_without_survey_still_generates(directory):
     assert report["publishers"][0]["survey_finding"] is None
 
 
+def write_work_policy(directory, *, year=1999):
+    value = {
+        "format_version": "scorecard-publisher-work-policy/1",
+        "minimum_activity_year": 2000,
+        "publishers": [
+            {
+                "publisher_id": "example",
+                "last_documented_activity_year": year,
+                "activity_basis": "historical_scorecard_only",
+                "reason": "Only pre-2000 scorecard evidence is documented; later activity remains unknown.",
+                "source_file": "publisher_survey_20261005.json",
+            }
+        ],
+    }
+    path = directory / "publisher_work_policy.json"
+    path.write_text(json.dumps(value))
+    return path
+
+
+def test_historical_deferral_keeps_source_stage_and_missing_work(directory):
+    path = write_work_policy(directory)
+    report, markdown = integrations.generate(directory)
+    row = report["publishers"][0]
+    assert row["work_status"] == "deferred_pre_2000"
+    assert row["state"] == "unverified"
+    assert row["next_action"] == "Qualify the retained original table"
+    assert row["qualified_editions"] == [] and row["reader"] is None
+    assert row["work_priority"]["last_documented_activity_year"] == 1999
+    assert report["input_pins"][path.name] == sha256(path.read_bytes()).hexdigest()
+    assert "deferred_pre_2000" in markdown
+    assert report["work_policy"]["minimum_activity_year"] == 2000
+
+
+def test_no_activity_policy_keeps_unknown_publishers_in_the_queue(directory):
+    report, _ = integrations.generate(directory)
+    row = report["publishers"][0]
+    assert row["work_status"] == "active"
+    assert row["work_priority"] is None
+    assert report["work_policy"] is None
+
+
+@pytest.mark.parametrize("change", ["boundary", "bool_year", "unknown", "duplicate", "empty_reason", "unbound_source"])
+def test_invalid_historical_deferral_is_refused(directory, change):
+    path = write_work_policy(directory)
+    value = json.loads(path.read_text())
+    row = value["publishers"][0]
+    if change == "boundary":
+        row["last_documented_activity_year"] = 2000
+    elif change == "bool_year":
+        row["last_documented_activity_year"] = True
+    elif change == "unknown":
+        row["publisher_id"] = "unregistered"
+    elif change == "duplicate":
+        value["publishers"].append(deepcopy(row))
+    elif change == "empty_reason":
+        row["reason"] = ""
+    else:
+        row["source_file"] = "unread.json"
+    path.write_text(json.dumps(value))
+    with pytest.raises(ValueError, match="Work policy"):
+        integrations.generate(directory)
+
+
 def recovery_document(directory, api=False):
     filename = "publisher_recovery_api_20261005.json" if api else "publisher_recovery_20261005.json"
     document = {

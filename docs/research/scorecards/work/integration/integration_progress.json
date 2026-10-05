@@ -9,9 +9,117 @@
     "publisher_survey_20261005.json": "7e7431dc37bf8564d16df4f044498e1176f7e654cc0cd694b8bdb8a07944c9c1",
     "publisher_implementation_20261005.json": "02c472173923a4a2f3438155e36b76b83a6dd1d9210504ffec2a76abedbdb2f5",
     "publisher_recovery_20261005.json": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
-    "publisher_recovery_api_20261005.json": "a56098666af454d924dc15a63832fc1fd40dbd7b74053e35518548667b64a1d6"
+    "publisher_recovery_api_20261005.json": "a56098666af454d924dc15a63832fc1fd40dbd7b74053e35518548667b64a1d6",
+    "publisher_work_policy.json": "09224c662959e2505eccfbda16ee8042815eb7243276a17049a4416029d70d92"
   },
-  "scope": "Every publisher candidate in both inventories; all available editions and renditions remain in scope",
+  "scope": "Every publisher candidate remains cataloged; the work policy defers pre-2000-only publishers without changing source stages or retained editions",
+  "work_policy": {
+    "format_version": "scorecard-publisher-work-policy/1",
+    "updated_on": "2026-10-05",
+    "minimum_activity_year": 2000,
+    "instruction": "Defer publishers without documented activity since 2000; focus on newest editions first.",
+    "boundary": "This is an implementation priority, not a finding of retirement or comprehensive absence. Historical-only scorecard leads are provisionally deferred and reopen upon attributable activity dated 2000 or later. Original entities and successor publishers retain separate attribution. Unknown modern activity remains unknown; no source, qualification or published row is removed.",
+    "publishers": [
+      {
+        "publisher_id": "retail_clerks",
+        "last_documented_activity_year": 1979,
+        "activity_basis": "original_entity_ended",
+        "reason": "Original Retail Clerks entity merged into UFCW in 1979. Defer this original imprint; later UFCW sources remain separate.",
+        "source_file": "publisher_recovery_20261005.json"
+      },
+      {
+        "publisher_id": "sane_historical",
+        "last_documented_activity_year": 1987,
+        "activity_basis": "original_entity_ended",
+        "reason": "Original SANE merged in 1987; later Peace Action identity and its supported scorecards remain separate.",
+        "source_file": "publisher_recovery_20261005.json"
+      },
+      {
+        "publisher_id": "american_parents",
+        "last_documented_activity_year": 1977,
+        "activity_basis": "original_entity_ended",
+        "reason": "Original American Parents Committee merged into CWLA as a division in 1977. The division continued; later scorecard activity is unknown. Defer only the original imprint.",
+        "source_file": "publisher_recovery_20261005.json"
+      },
+      {
+        "publisher_id": "us_student_association",
+        "last_documented_activity_year": 1978,
+        "activity_basis": "original_entity_ended",
+        "reason": "The census names the original National Student Association, merged with NSL in 1978. Later USSA guides and modern activity are separately attributed; do not infer their ratings belong to NSA.",
+        "source_file": "publisher_recovery_20261005.json"
+      },
+      {
+        "publisher_id": "amalgamated_clothing_workers",
+        "last_documented_activity_year": 1976,
+        "activity_basis": "historical_scorecard_only",
+        "reason": "Original Advance holdings through 1976; ACTWU 1992 belongs to the successor. Original 2000+ scorecard activity remains unknown.",
+        "source_file": "publisher_recovery_20261005.json"
+      },
+      {
+        "publisher_id": "american_cause",
+        "last_documented_activity_year": 1979,
+        "activity_basis": "historical_scorecard_only",
+        "reason": "Latest dated rating lead is a November 1979 secondary newspaper reference; no original edition or linked modern continuation. Actual retirement remains unknown.",
+        "source_file": "publisher_recovery_20261005.json"
+      },
+      {
+        "publisher_id": "americans_constitutional_action",
+        "last_documented_activity_year": 1984,
+        "activity_basis": "historical_scorecard_only",
+        "reason": "ACARI 1983 holding and 1984 secondary publication lead; preserve ACA/ACARI continuity as reported. No attributable 2000+ edition documented; retirement remains unknown.",
+        "source_file": "publisher_recovery_20261005.json"
+      },
+      {
+        "publisher_id": "coalition_foreign_military",
+        "last_documented_activity_year": 1986,
+        "activity_basis": "historical_scorecard_only",
+        "reason": "Exact 1986 Voting Record holding; rename chronology is unresolved. No attributable 2000+ scorecard documented; retirement remains unknown.",
+        "source_file": "publisher_recovery_20261005.json"
+      },
+      {
+        "publisher_id": "free_congress_survival",
+        "last_documented_activity_year": 1982,
+        "activity_basis": "historical_scorecard_only",
+        "reason": "1979–1982 Conservative Register Vote Analysis holding. Later Free Congress Foundation is separate authority; final original series year remains unknown.",
+        "source_file": "publisher_recovery_20261005.json"
+      },
+      {
+        "publisher_id": "interreligious_food",
+        "last_documented_activity_year": 1977,
+        "activity_basis": "historical_scorecard_only",
+        "reason": "October 1977 voting-record enclosure witness; 1980 HUNGER serial is not a verified voting issue. No attributable 2000+ scorecard documented; related entities are not retirement evidence.",
+        "source_file": "publisher_recovery_20261005.json"
+      },
+      {
+        "publisher_id": "national_alliance_seniors",
+        "last_documented_activity_year": 1982,
+        "activity_basis": "historical_scorecard_only",
+        "reason": "1980 original recovered and 1982 secondary rating lead; later original activity and successor status remain unknown.",
+        "source_file": "publisher_recovery_20261005.json"
+      },
+      {
+        "publisher_id": "national_associated_businessmen",
+        "last_documented_activity_year": 1980,
+        "activity_basis": "historical_scorecard_only",
+        "reason": "1969–1970 original holding, 1975–1976 bibliographic lead and unverified 1980 rating claim. 1999–2000 Watchdogs award continuity is unresolved; original scorecard activity remains unknown.",
+        "source_file": "publisher_recovery_20261005.json"
+      },
+      {
+        "publisher_id": "taxation_representation",
+        "last_documented_activity_year": 1978,
+        "activity_basis": "historical_scorecard_only",
+        "reason": "1978 original-newsletter citation and bibliography; current Tax Notes does not establish continuation of this rating series. Later original scorecard activity remains unknown.",
+        "source_file": "publisher_recovery_20261005.json"
+      },
+      {
+        "publisher_id": "womens_lobby",
+        "last_documented_activity_year": 1978,
+        "activity_basis": "historical_scorecard_only",
+        "reason": "June 1977 Alert holding and 1978 directory attestation of a biennial voting chart; no recovered chart edition. Later original scorecard activity remains unknown.",
+        "source_file": "publisher_recovery_20261005.json"
+      }
+    ]
+  },
   "states": {
     "identity_review": 1,
     "published_scope": 72,
@@ -25,6 +133,8 @@
       "publisher_name": "American Association of University Women",
       "task_id": "ss-5k94",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "aauw",
       "qualified_editions": [
         {
@@ -52,6 +162,8 @@
       "publisher_name": "American Council of Engineering Companies",
       "task_id": "ss-5ibd",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "acec",
       "qualified_editions": [
         {
@@ -81,6 +193,8 @@
       "publisher_name": "American Civil Liberties Union",
       "task_id": "ss-zeen",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "aclu",
       "qualified_editions": [
         {
@@ -108,6 +222,8 @@
       "publisher_name": "Americans for Democratic Action",
       "task_id": "ss-wi08",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "ada",
       "qualified_editions": [
         {
@@ -137,6 +253,8 @@
       "publisher_name": "AFL-CIO",
       "task_id": "ss-loj4",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "afl_cio",
       "qualified_editions": [
         {
@@ -169,6 +287,8 @@
       "publisher_name": "Americans for Prosperity",
       "task_id": "ss-onbt",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "afp",
       "qualified_editions": [
         {
@@ -224,6 +344,8 @@
       "publisher_name": "American Federation of State, County and Municipal Employees",
       "task_id": "ss-h993",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "afscme",
       "qualified_editions": [
         {
@@ -251,6 +373,8 @@
       "publisher_name": "Americans for Justice in Palestine Action",
       "task_id": "ss-7xp4",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "ajp_action",
       "qualified_editions": [
         {
@@ -278,6 +402,8 @@
       "publisher_name": "Alaska Wilderness Action",
       "task_id": "ss-kwza",
       "state": "qualified_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "alaska_wilderness_action",
       "qualified_editions": [
         {
@@ -341,6 +467,8 @@
       "publisher_name": "Animal Welfare Institute",
       "task_id": "ss-6a2y",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "awi",
       "qualified_editions": [
         {
@@ -432,6 +560,8 @@
       "publisher_name": "Alliance for Retired Americans",
       "task_id": "ss-6xl5",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "ara",
       "qualified_editions": [
         {
@@ -460,6 +590,8 @@
       "publisher_name": "Americans for the Arts Action Fund",
       "task_id": "ss-jqjb",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "arts_action",
       "qualified_editions": [
         {
@@ -488,6 +620,8 @@
       "publisher_name": "International Brotherhood of Boilermakers",
       "task_id": "ss-hsa2",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "boilermakers",
       "qualified_editions": [
         {
@@ -537,6 +671,8 @@
       "publisher_name": "Council for Innovation Promotion",
       "task_id": "ss-o7zz",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "c4ip_api",
       "qualified_editions": [
         {
@@ -571,6 +707,8 @@
       "publisher_name": "Children's Defense Fund",
       "task_id": "ss-lbl4",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "childrens_defense",
       "qualified_editions": [
         {
@@ -598,6 +736,8 @@
       "publisher_name": "Club for Growth Foundation",
       "task_id": "ss-g095",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "club_for_growth",
       "qualified_editions": [
         {
@@ -627,6 +767,8 @@
       "publisher_name": "CPAC Foundation",
       "task_id": "ss-dycq",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "cpac",
       "qualified_editions": [
         {
@@ -1036,6 +1178,8 @@
       "publisher_name": "Disabled American Veterans",
       "task_id": "ss-2nn4",
       "state": "qualified_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "dav",
       "qualified_editions": [
         {
@@ -1068,6 +1212,8 @@
       "publisher_name": "Defenders of Wildlife Action Fund",
       "task_id": "ss-8b7o",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "defenders_action",
       "qualified_editions": [
         {
@@ -1100,6 +1246,8 @@
       "publisher_name": "Drug Policy Action",
       "task_id": "ss-1eyy",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "drug_policy_action",
       "qualified_editions": [
         {
@@ -1125,6 +1273,8 @@
       "publisher_name": "Drum Major Institute for Public Policy",
       "task_id": "ss-1vy4",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "drum_major_2005",
       "qualified_editions": [
         {
@@ -1157,6 +1307,8 @@
       "publisher_name": "End Citizens United",
       "task_id": "ss-spx2",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "end_citizens_united",
       "qualified_editions": [
         {
@@ -1184,6 +1336,8 @@
       "publisher_name": "Environment America",
       "task_id": "ss-j0hf",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "environment_america",
       "qualified_editions": [
         {
@@ -1209,6 +1363,8 @@
       "publisher_name": "Federally Employed Women",
       "task_id": "ss-d6x3",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "few",
       "qualified_editions": [
         {
@@ -1241,6 +1397,8 @@
       "publisher_name": "FFRF Action Fund",
       "task_id": "ss-z4wf",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "ffrf_action",
       "qualified_editions": [
         {
@@ -1271,6 +1429,8 @@
       "publisher_name": "First Focus Campaign for Children",
       "task_id": "ss-wjwd",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "first_focus",
       "qualified_editions": [
         {
@@ -1305,6 +1465,8 @@
       "publisher_name": "FlyersRights.org",
       "task_id": "ss-ir9q",
       "state": "unverified_lead",
+      "work_status": "active",
+      "work_priority": null,
       "reader": null,
       "qualified_editions": [],
       "verified_api_endpoints": [],
@@ -1499,6 +1661,8 @@
       "publisher_name": "Food Policy Action",
       "task_id": "ss-ir67",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "food_policy_action_lifetime",
       "qualified_editions": [
         {
@@ -1524,6 +1688,8 @@
       "publisher_name": "Foreign Policy for America",
       "task_id": "ss-migi",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "foreign_policy_america",
       "qualified_editions": [
         {
@@ -1551,6 +1717,8 @@
       "publisher_name": "FRC Action",
       "task_id": "ss-p1n0",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "frc_action",
       "qualified_editions": [
         {
@@ -1599,6 +1767,8 @@
       "publisher_name": "FreedomWorks",
       "task_id": "ss-nyt2",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "freedomworks",
       "qualified_editions": [
         {
@@ -1858,6 +2028,8 @@
       "publisher_name": "Citizens for Global Solutions",
       "task_id": "ss-sbsd",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "global_solutions",
       "qualified_editions": [
         {
@@ -1883,6 +2055,8 @@
       "publisher_name": "Gun Owners of America",
       "task_id": "ss-iaw7",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "goa",
       "qualified_editions": [
         {
@@ -1938,6 +2112,8 @@
       "publisher_name": "Heritage Action for America",
       "task_id": "ss-ngac",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "heritage_action",
       "qualified_editions": [
         {
@@ -1999,6 +2175,8 @@
       "publisher_name": "Human Rights Campaign",
       "task_id": "ss-s50y",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "hrc",
       "qualified_editions": [
         {
@@ -2028,6 +2206,8 @@
       "publisher_name": "Humane World Action Fund",
       "task_id": "ss-p337",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "humane_world_action",
       "qualified_editions": [
         {
@@ -2058,6 +2238,8 @@
       "publisher_name": "Iraq and Afghanistan Veterans of America",
       "task_id": "ss-l2kq",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "iava",
       "qualified_editions": [
         {
@@ -2083,6 +2265,8 @@
       "publisher_name": "Institute for Legislative Analysis",
       "task_id": "ss-l797",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "ila_catalogue",
       "qualified_editions": [
         {
@@ -2145,6 +2329,8 @@
       "publisher_name": "League of Conservation Voters",
       "task_id": "ss-dylz",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "lcv",
       "qualified_editions": [
         {
@@ -2179,6 +2365,8 @@
       "publisher_name": "Leadership Conference on Civil and Human Rights",
       "task_id": "ss-0owh",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "leadership_conference",
       "qualified_editions": [
         {
@@ -2206,6 +2394,8 @@
       "publisher_name": "The Lugar Center and Georgetown McCourt School",
       "task_id": "ss-pvj2",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "lugar_mccourt",
       "qualified_editions": [
         {
@@ -2443,6 +2633,8 @@
       "publisher_name": "NAACP",
       "task_id": "ss-urt0",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "naacp",
       "qualified_editions": [
         {
@@ -2471,6 +2663,8 @@
       "publisher_name": "National Farmers Union",
       "task_id": "ss-c5qy",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "national_farmers_union",
       "qualified_editions": [
         {
@@ -2496,6 +2690,8 @@
       "publisher_name": "National Parks Action Fund",
       "task_id": "ss-z276",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "national_parks_action",
       "qualified_editions": [
         {
@@ -2586,6 +2782,8 @@
       "publisher_name": "National Education Association",
       "task_id": "ss-0h08",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "nea",
       "qualified_editions": [
         {
@@ -2615,6 +2813,8 @@
       "publisher_name": "NETWORK Lobby",
       "task_id": "ss-6u83",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "network",
       "qualified_editions": [
         {
@@ -2643,6 +2843,8 @@
       "publisher_name": "The New American",
       "task_id": "ss-2gxg",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "new_american",
       "qualified_editions": [
         {
@@ -3034,6 +3236,8 @@
       "publisher_name": "National Federation of Independent Business",
       "task_id": "ss-x5yz",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "nfib",
       "qualified_editions": [
         {
@@ -3075,6 +3279,8 @@
       "publisher_name": "NIAC Action",
       "task_id": "ss-8ak8",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "niac_action",
       "qualified_editions": [
         {
@@ -3109,6 +3315,8 @@
       "publisher_name": "National Organization for the Reform of Marijuana Laws",
       "task_id": "ss-06u8",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "norml",
       "qualified_editions": [
         {
@@ -3138,6 +3346,8 @@
       "publisher_name": "NRA Political Victory Fund",
       "task_id": "ss-c07w",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "nra_pvf",
       "qualified_editions": [
         {
@@ -3529,6 +3739,8 @@
       "publisher_name": "National Retail Federation",
       "task_id": "ss-20fa",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "nrf",
       "qualified_editions": [
         {
@@ -3592,6 +3804,8 @@
       "publisher_name": "National Taxpayers Union",
       "task_id": "ss-4oht",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "ntu",
       "qualified_editions": [
         {
@@ -3663,6 +3877,8 @@
       "publisher_name": "NumbersUSA Action",
       "task_id": "ss-0f2k",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "numbersusa",
       "qualified_editions": [
         {
@@ -3735,6 +3951,8 @@
       "publisher_name": "Peace Action",
       "task_id": "ss-fe5f",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "peace_action",
       "qualified_editions": [
         {
@@ -3853,6 +4071,8 @@
       "publisher_name": "Planned Parenthood Action Fund",
       "task_id": "ss-iadh",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "planned_parenthood",
       "qualified_editions": [
         {
@@ -3915,6 +4135,8 @@
       "publisher_name": "NARAL Pro-Choice America",
       "task_id": "ss-lbgh",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "reproductive_freedom",
       "qualified_editions": [
         {
@@ -3949,6 +4171,8 @@
       "publisher_name": "Southern Alliance for Clean Energy Action Fund",
       "task_id": "ss-f4h7",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "sace_action",
       "qualified_editions": [
         {
@@ -4004,6 +4228,8 @@
       "publisher_name": "Susan B. Anthony Pro-Life America",
       "task_id": "ss-1tcf",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "sba",
       "qualified_editions": [
         {
@@ -4038,6 +4264,8 @@
       "publisher_name": "Sargent Shriver National Center on Poverty Law",
       "task_id": "ss-crhh",
       "state": "qualified_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "shriver_2013",
       "qualified_editions": [
         {
@@ -4063,6 +4291,8 @@
       "publisher_name": "U.S. Chamber of Commerce",
       "task_id": "ss-f1u2",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "us_chamber_archive",
       "qualified_editions": [
         {
@@ -4146,6 +4376,8 @@
       "publisher_name": "21Wilberforce",
       "task_id": "ss-f5j5",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "wilberforce",
       "qualified_editions": [
         {
@@ -4175,6 +4407,14 @@
       "publisher_name": "Amalgamated Clothing Workers of America",
       "task_id": "ss-efbg",
       "state": "unverified_lead",
+      "work_status": "deferred_pre_2000",
+      "work_priority": {
+        "publisher_id": "amalgamated_clothing_workers",
+        "last_documented_activity_year": 1976,
+        "activity_basis": "historical_scorecard_only",
+        "reason": "Original Advance holdings through 1976; ACTWU 1992 belongs to the successor. Original 2000+ scorecard activity remains unknown.",
+        "source_file": "publisher_recovery_20261005.json"
+      },
       "reader": null,
       "qualified_editions": [],
       "verified_api_endpoints": [],
@@ -4378,6 +4618,8 @@
       "publisher_name": "American Bakers Association",
       "task_id": "ss-s9o7",
       "state": "qualified_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "american_bakers",
       "qualified_editions": [
         {
@@ -4428,6 +4670,14 @@
       "publisher_name": "American Cause, Inc.",
       "task_id": "ss-apz3",
       "state": "unverified_lead",
+      "work_status": "deferred_pre_2000",
+      "work_priority": {
+        "publisher_id": "american_cause",
+        "last_documented_activity_year": 1979,
+        "activity_basis": "historical_scorecard_only",
+        "reason": "Latest dated rating lead is a November 1979 secondary newspaper reference; no original edition or linked modern continuation. Actual retirement remains unknown.",
+        "source_file": "publisher_recovery_20261005.json"
+      },
       "reader": null,
       "qualified_editions": [],
       "verified_api_endpoints": [],
@@ -4710,6 +4960,8 @@
       "publisher_name": "American Farm Bureau Federation",
       "task_id": "ss-rdez",
       "state": "qualified_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "farm_bureau",
       "qualified_editions": [
         {
@@ -4735,6 +4987,8 @@
       "publisher_name": "American Federation of Government Employees",
       "task_id": "ss-hp1g",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "afge_noted_pdf",
       "qualified_editions": [
         {
@@ -4790,6 +5044,8 @@
       "publisher_name": "American Federation of Teachers",
       "task_id": "ss-4wgu",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "aft",
       "qualified_editions": [
         {
@@ -4817,6 +5073,8 @@
       "publisher_name": "American Institute of Architects",
       "task_id": "ss-7aoh",
       "state": "unverified_lead",
+      "work_status": "active",
+      "work_priority": null,
       "reader": null,
       "qualified_editions": [],
       "verified_api_endpoints": [],
@@ -5020,6 +5278,14 @@
       "publisher_name": "American Parents Committee, Inc.",
       "task_id": "ss-hf7w",
       "state": "unverified_lead",
+      "work_status": "deferred_pre_2000",
+      "work_priority": {
+        "publisher_id": "american_parents",
+        "last_documented_activity_year": 1977,
+        "activity_basis": "original_entity_ended",
+        "reason": "Original American Parents Committee merged into CWLA as a division in 1977. The division continued; later scorecard activity is unknown. Defer only the original imprint.",
+        "source_file": "publisher_recovery_20261005.json"
+      },
       "reader": null,
       "qualified_editions": [],
       "verified_api_endpoints": [],
@@ -5212,6 +5478,8 @@
       "publisher_name": "American Security Council",
       "task_id": "ss-uzdk",
       "state": "unverified_lead",
+      "work_status": "active",
+      "work_priority": null,
       "reader": null,
       "qualified_editions": [],
       "verified_api_endpoints": [],
@@ -5396,6 +5664,14 @@
       "publisher_name": "Americans for Constitutional Action",
       "task_id": "ss-8oii",
       "state": "unverified_lead",
+      "work_status": "deferred_pre_2000",
+      "work_priority": {
+        "publisher_id": "americans_constitutional_action",
+        "last_documented_activity_year": 1984,
+        "activity_basis": "historical_scorecard_only",
+        "reason": "ACARI 1983 holding and 1984 secondary publication lead; preserve ACA/ACARI continuity as reported. No attributable 2000+ edition documented; retirement remains unknown.",
+        "source_file": "publisher_recovery_20261005.json"
+      },
       "reader": null,
       "qualified_editions": [],
       "verified_api_endpoints": [],
@@ -5633,6 +5909,8 @@
       "publisher_name": "Associated General Contractors of America",
       "task_id": "ss-22nu",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "agc",
       "qualified_editions": [
         {
@@ -5679,6 +5957,8 @@
       "publisher_name": "Atlantic Richfield Civic Action Program",
       "task_id": "ss-2by5",
       "state": "unverified_lead",
+      "work_status": "active",
+      "work_priority": null,
       "reader": null,
       "qualified_editions": [],
       "verified_api_endpoints": [],
@@ -5841,6 +6121,8 @@
       "publisher_name": "Bread for the World",
       "task_id": "ss-iktu",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "bread_world",
       "qualified_editions": [
         {
@@ -5866,6 +6148,8 @@
       "publisher_name": "Brotherhood of Railway, Airline and Steamship Clerks, Freight Handlers, Express and Station Employes",
       "task_id": "ss-8tdl",
       "state": "unverified_lead",
+      "work_status": "active",
+      "work_priority": null,
       "reader": null,
       "qualified_editions": [],
       "verified_api_endpoints": [],
@@ -6028,6 +6312,8 @@
       "publisher_name": "Business-Industry Political Action Committee",
       "task_id": "ss-vzyo",
       "state": "unverified_lead",
+      "work_status": "active",
+      "work_priority": null,
       "reader": null,
       "qualified_editions": [],
       "verified_api_endpoints": [],
@@ -6176,6 +6462,8 @@
       "publisher_name": "Citizens Committee for the Right to Keep and Bear Arms",
       "task_id": "ss-bdfr",
       "state": "unverified_lead",
+      "work_status": "active",
+      "work_priority": null,
       "reader": null,
       "qualified_editions": [],
       "verified_api_endpoints": [],
@@ -6350,6 +6638,14 @@
       "publisher_name": "Coalition for a New Foreign and Military Policy",
       "task_id": "ss-l6y0",
       "state": "unverified_lead",
+      "work_status": "deferred_pre_2000",
+      "work_priority": {
+        "publisher_id": "coalition_foreign_military",
+        "last_documented_activity_year": 1986,
+        "activity_basis": "historical_scorecard_only",
+        "reason": "Exact 1986 Voting Record holding; rename chronology is unresolved. No attributable 2000+ scorecard documented; retirement remains unknown.",
+        "source_file": "publisher_recovery_20261005.json"
+      },
       "reader": null,
       "qualified_editions": [],
       "verified_api_endpoints": [],
@@ -6531,6 +6827,8 @@
       "publisher_name": "Committee for Full Funding of Education Programs",
       "task_id": "ss-xipa",
       "state": "unverified_lead",
+      "work_status": "active",
+      "work_priority": null,
       "reader": null,
       "qualified_editions": [],
       "verified_api_endpoints": [],
@@ -6654,6 +6952,14 @@
       "publisher_name": "Committee for the Survival of a Free Congress",
       "task_id": "ss-jthe",
       "state": "unverified_lead",
+      "work_status": "deferred_pre_2000",
+      "work_priority": {
+        "publisher_id": "free_congress_survival",
+        "last_documented_activity_year": 1982,
+        "activity_basis": "historical_scorecard_only",
+        "reason": "1979–1982 Conservative Register Vote Analysis holding. Later Free Congress Foundation is separate authority; final original series year remains unknown.",
+        "source_file": "publisher_recovery_20261005.json"
+      },
       "reader": null,
       "qualified_editions": [],
       "verified_api_endpoints": [],
@@ -6876,6 +7182,8 @@
       "publisher_name": "Common Cause",
       "task_id": "ss-j1a7",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "common_cause",
       "qualified_editions": [
         {
@@ -6942,6 +7250,8 @@
       "publisher_name": "Communication Workers of America",
       "task_id": "ss-nuez",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "communication_workers",
       "qualified_editions": [
         {
@@ -6967,6 +7277,8 @@
       "publisher_name": "Congressional Quarterly, Inc.",
       "task_id": "ss-8zgu",
       "state": "qualified_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "congressional_quarterly",
       "qualified_editions": [
         {
@@ -7029,6 +7341,8 @@
       "publisher_name": "Consumer Federation of America",
       "task_id": "ss-sra5",
       "state": "qualified_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "consumer_federation",
       "qualified_editions": [
         {
@@ -7054,6 +7368,8 @@
       "publisher_name": "Environmental Action",
       "task_id": "ss-qd9d",
       "state": "unverified_lead",
+      "work_status": "active",
+      "work_priority": null,
       "reader": null,
       "qualified_editions": [],
       "verified_api_endpoints": [],
@@ -7226,6 +7542,8 @@
       "publisher_name": "Food and Beverage Trades Department AFL-CIO",
       "task_id": "ss-per7",
       "state": "unverified_lead",
+      "work_status": "active",
+      "work_priority": null,
       "reader": null,
       "qualified_editions": [],
       "verified_api_endpoints": [],
@@ -7398,6 +7716,8 @@
       "publisher_name": "Friends Committee on National Legislation",
       "task_id": "ss-ldbc",
       "state": "qualified_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "fcnl",
       "qualified_editions": [
         {
@@ -7479,6 +7799,8 @@
       "publisher_name": "Human Events",
       "task_id": "ss-mvjk",
       "state": "unverified_lead",
+      "work_status": "active",
+      "work_priority": null,
       "reader": null,
       "qualified_editions": [],
       "verified_api_endpoints": [],
@@ -7621,6 +7943,8 @@
       "publisher_name": "Independent Petroleum Association of America",
       "task_id": "ss-e2ra",
       "state": "qualified_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "ipaa_momentum",
       "qualified_editions": [
         {
@@ -7777,6 +8101,8 @@
       "publisher_name": "International Association of Machinists & Aerospace Workers",
       "task_id": "ss-t12h",
       "state": "qualified_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "machinists",
       "qualified_editions": [
         {
@@ -7802,6 +8128,8 @@
       "publisher_name": "International Brotherhood of Teamsters",
       "task_id": "ss-gj1b",
       "state": "qualified_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "teamsters",
       "qualified_editions": [
         {
@@ -7827,6 +8155,14 @@
       "publisher_name": "Interreligious Taskforce on US Food Policy",
       "task_id": "ss-sqp9",
       "state": "unverified_lead",
+      "work_status": "deferred_pre_2000",
+      "work_priority": {
+        "publisher_id": "interreligious_food",
+        "last_documented_activity_year": 1977,
+        "activity_basis": "historical_scorecard_only",
+        "reason": "October 1977 voting-record enclosure witness; 1980 HUNGER serial is not a verified voting issue. No attributable 2000+ scorecard documented; related entities are not retirement evidence.",
+        "source_file": "publisher_recovery_20261005.json"
+      },
       "reader": null,
       "qualified_editions": [],
       "verified_api_endpoints": [],
@@ -7952,6 +8288,8 @@
       "publisher_name": "John Birch Society",
       "task_id": "ss-t57j",
       "state": "identity_review",
+      "work_status": "active",
+      "work_priority": null,
       "reader": null,
       "qualified_editions": [],
       "verified_api_endpoints": [],
@@ -8176,6 +8514,8 @@
       "publisher_name": "Joint Center for Political Studies",
       "task_id": "ss-fy4q",
       "state": "unverified_lead",
+      "work_status": "active",
+      "work_priority": null,
       "reader": null,
       "qualified_editions": [],
       "verified_api_endpoints": [],
@@ -8459,6 +8799,8 @@
       "publisher_name": "League of Women Voters of the United States",
       "task_id": "ss-eizy",
       "state": "unverified_lead",
+      "work_status": "active",
+      "work_priority": null,
       "reader": null,
       "qualified_editions": [],
       "verified_api_endpoints": [],
@@ -8624,6 +8966,8 @@
       "publisher_name": "Liberty Lobby",
       "task_id": "ss-y529",
       "state": "retired_confirmed",
+      "work_status": "active",
+      "work_priority": null,
       "reader": null,
       "qualified_editions": [],
       "verified_api_endpoints": [],
@@ -8824,6 +9168,8 @@
       "publisher_name": "March for Life, Inc.",
       "task_id": "ss-9l9v",
       "state": "unverified_lead",
+      "work_status": "active",
+      "work_priority": null,
       "reader": null,
       "qualified_editions": [],
       "verified_api_endpoints": [],
@@ -9009,6 +9355,14 @@
       "publisher_name": "National Alliance of Senior Citizens",
       "task_id": "ss-r349",
       "state": "unverified_lead",
+      "work_status": "deferred_pre_2000",
+      "work_priority": {
+        "publisher_id": "national_alliance_seniors",
+        "last_documented_activity_year": 1982,
+        "activity_basis": "historical_scorecard_only",
+        "reason": "1980 original recovered and 1982 secondary rating lead; later original activity and successor status remain unknown.",
+        "source_file": "publisher_recovery_20261005.json"
+      },
       "reader": null,
       "qualified_editions": [],
       "verified_api_endpoints": [],
@@ -9164,6 +9518,14 @@
       "publisher_name": "National Associated Businessmen, Inc.",
       "task_id": "ss-vte5",
       "state": "unverified_lead",
+      "work_status": "deferred_pre_2000",
+      "work_priority": {
+        "publisher_id": "national_associated_businessmen",
+        "last_documented_activity_year": 1980,
+        "activity_basis": "historical_scorecard_only",
+        "reason": "1969–1970 original holding, 1975–1976 bibliographic lead and unverified 1980 rating claim. 1999–2000 Watchdogs award continuity is unresolved; original scorecard activity remains unknown.",
+        "source_file": "publisher_recovery_20261005.json"
+      },
       "reader": null,
       "qualified_editions": [],
       "verified_api_endpoints": [],
@@ -9340,6 +9702,8 @@
       "publisher_name": "National Association of Life Underwriters",
       "task_id": "ss-wcy0",
       "state": "unverified_lead",
+      "work_status": "active",
+      "work_priority": null,
       "reader": null,
       "qualified_editions": [],
       "verified_api_endpoints": [],
@@ -9538,6 +9902,8 @@
       "publisher_name": "National Association of Manufacturers",
       "task_id": "ss-dk6h",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "nam",
       "qualified_editions": [
         {
@@ -9566,6 +9932,8 @@
       "publisher_name": "National Association of Social Workers",
       "task_id": "ss-h3fc",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "nasw",
       "qualified_editions": [
         {
@@ -9623,6 +9991,8 @@
       "publisher_name": "National Audio-Visual Association, Inc.",
       "task_id": "ss-r87q",
       "state": "unverified_lead",
+      "work_status": "active",
+      "work_priority": null,
       "reader": null,
       "qualified_editions": [],
       "verified_api_endpoints": [],
@@ -9778,6 +10148,8 @@
       "publisher_name": "National Council of Senior Citizens, Inc.",
       "task_id": "ss-ddnv",
       "state": "unverified_lead",
+      "work_status": "active",
+      "work_priority": null,
       "reader": null,
       "qualified_editions": [],
       "verified_api_endpoints": [],
@@ -9938,6 +10310,8 @@
       "publisher_name": "National Farmers Organization",
       "task_id": "ss-vnzg",
       "state": "unverified_lead",
+      "work_status": "active",
+      "work_priority": null,
       "reader": null,
       "qualified_editions": [],
       "verified_api_endpoints": [],
@@ -10113,6 +10487,8 @@
       "publisher_name": "National Organization for Women",
       "task_id": "ss-vb7c",
       "state": "unverified_lead",
+      "work_status": "active",
+      "work_priority": null,
       "reader": null,
       "qualified_editions": [],
       "verified_api_endpoints": [],
@@ -10328,6 +10704,8 @@
       "publisher_name": "National Women's Political Caucus",
       "task_id": "ss-t8fq",
       "state": "unverified_lead",
+      "work_status": "active",
+      "work_priority": null,
       "reader": null,
       "qualified_editions": [],
       "verified_api_endpoints": [],
@@ -10507,6 +10885,8 @@
       "publisher_name": "National Write Your Congressman Club, Inc.",
       "task_id": "ss-qdfv",
       "state": "unverified_lead",
+      "work_status": "active",
+      "work_priority": null,
       "reader": null,
       "qualified_editions": [],
       "verified_api_endpoints": [],
@@ -10646,6 +11026,8 @@
       "publisher_name": "Public Citizen/Congress Watch",
       "task_id": "ss-gh64",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "public_citizen",
       "qualified_editions": [
         {
@@ -10681,6 +11063,14 @@
       "publisher_name": "Retail Clerks International Union",
       "task_id": "ss-2dw2",
       "state": "unverified_lead",
+      "work_status": "deferred_pre_2000",
+      "work_priority": {
+        "publisher_id": "retail_clerks",
+        "last_documented_activity_year": 1979,
+        "activity_basis": "original_entity_ended",
+        "reason": "Original Retail Clerks entity merged into UFCW in 1979. Defer this original imprint; later UFCW sources remain separate.",
+        "source_file": "publisher_recovery_20261005.json"
+      },
       "reader": null,
       "qualified_editions": [],
       "verified_api_endpoints": [],
@@ -10849,6 +11239,8 @@
       "publisher_name": "Ripon Society",
       "task_id": "ss-dl7x",
       "state": "unverified_lead",
+      "work_status": "active",
+      "work_priority": null,
       "reader": null,
       "qualified_editions": [],
       "verified_api_endpoints": [],
@@ -11026,6 +11418,14 @@
       "publisher_name": "SANE",
       "task_id": "ss-ep5r",
       "state": "unverified_lead",
+      "work_status": "deferred_pre_2000",
+      "work_priority": {
+        "publisher_id": "sane_historical",
+        "last_documented_activity_year": 1987,
+        "activity_basis": "original_entity_ended",
+        "reason": "Original SANE merged in 1987; later Peace Action identity and its supported scorecards remain separate.",
+        "source_file": "publisher_recovery_20261005.json"
+      },
       "reader": null,
       "qualified_editions": [],
       "verified_api_endpoints": [],
@@ -11165,6 +11565,14 @@
       "publisher_name": "Taxation with Representation",
       "task_id": "ss-wpaq",
       "state": "unverified_lead",
+      "work_status": "deferred_pre_2000",
+      "work_priority": {
+        "publisher_id": "taxation_representation",
+        "last_documented_activity_year": 1978,
+        "activity_basis": "historical_scorecard_only",
+        "reason": "1978 original-newsletter citation and bibliography; current Tax Notes does not establish continuation of this rating series. Later original scorecard activity remains unknown.",
+        "source_file": "publisher_recovery_20261005.json"
+      },
       "reader": null,
       "qualified_editions": [],
       "verified_api_endpoints": [],
@@ -11285,6 +11693,14 @@
       "publisher_name": "US National Student Association",
       "task_id": "ss-auyo",
       "state": "unverified_lead",
+      "work_status": "deferred_pre_2000",
+      "work_priority": {
+        "publisher_id": "us_student_association",
+        "last_documented_activity_year": 1978,
+        "activity_basis": "original_entity_ended",
+        "reason": "The census names the original National Student Association, merged with NSL in 1978. Later USSA guides and modern activity are separately attributed; do not infer their ratings belong to NSA.",
+        "source_file": "publisher_recovery_20261005.json"
+      },
       "reader": null,
       "qualified_editions": [],
       "verified_api_endpoints": [],
@@ -11614,6 +12030,8 @@
       "publisher_name": "United Auto Workers",
       "task_id": "ss-jros",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "uaw",
       "qualified_editions": [
         {
@@ -11639,6 +12057,8 @@
       "publisher_name": "United Brotherhood of Carpenters and Joiners of America",
       "task_id": "ss-nn2s",
       "state": "unverified_lead",
+      "work_status": "active",
+      "work_priority": null,
       "reader": null,
       "qualified_editions": [],
       "verified_api_endpoints": [],
@@ -11809,6 +12229,8 @@
       "publisher_name": "United Church of Christ",
       "task_id": "ss-8dur",
       "state": "unverified_lead",
+      "work_status": "active",
+      "work_priority": null,
       "reader": null,
       "qualified_editions": [],
       "verified_api_endpoints": [],
@@ -12045,6 +12467,8 @@
       "publisher_name": "United Mine Workers of America",
       "task_id": "ss-7u7l",
       "state": "unverified_lead",
+      "work_status": "active",
+      "work_priority": null,
       "reader": null,
       "qualified_editions": [],
       "verified_api_endpoints": [],
@@ -12225,6 +12649,8 @@
       "publisher_name": "United Transportation Union",
       "task_id": "ss-zhrk",
       "state": "unverified_lead",
+      "work_status": "active",
+      "work_priority": null,
       "reader": null,
       "qualified_editions": [],
       "verified_api_endpoints": [],
@@ -12428,6 +12854,8 @@
       "publisher_name": "The Woman Activist",
       "task_id": "ss-inkm",
       "state": "unverified_lead",
+      "work_status": "active",
+      "work_priority": null,
       "reader": null,
       "qualified_editions": [],
       "verified_api_endpoints": [],
@@ -12596,6 +13024,14 @@
       "publisher_name": "Women's Lobby",
       "task_id": "ss-i55l",
       "state": "unverified_lead",
+      "work_status": "deferred_pre_2000",
+      "work_priority": {
+        "publisher_id": "womens_lobby",
+        "last_documented_activity_year": 1978,
+        "activity_basis": "historical_scorecard_only",
+        "reason": "June 1977 Alert holding and 1978 directory attestation of a biennial voting chart; no recovered chart edition. Later original scorecard activity remains unknown.",
+        "source_file": "publisher_recovery_20261005.json"
+      },
       "reader": null,
       "qualified_editions": [],
       "verified_api_endpoints": [],
@@ -12750,6 +13186,8 @@
       "publisher_name": "American Energy Alliance",
       "task_id": "ss-yajm",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "american_energy_alliance",
       "qualified_editions": [
         {
@@ -12777,6 +13215,8 @@
       "publisher_name": "International Justice Mission",
       "task_id": "ss-1jkr",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "ijm",
       "qualified_editions": [
         {
@@ -12837,6 +13277,8 @@
       "publisher_name": "Radical Middle",
       "task_id": "ss-7ukv",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "radical_middle",
       "qualified_editions": [
         {
@@ -12878,6 +13320,8 @@
       "publisher_name": "SMART Transportation Division",
       "task_id": "ss-o13k",
       "state": "published_scope",
+      "work_status": "active",
+      "work_priority": null,
       "reader": "smart_transportation",
       "qualified_editions": [
         {

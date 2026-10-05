@@ -17,6 +17,35 @@ SURVEY_FILE = "publisher_survey_20261005.json"
 IMPLEMENTATION_FILE = "publisher_implementation_20261005.json"
 RECOVERY_FILE = "publisher_recovery_20261005.json"
 RECOVERY_API_FILE = "publisher_recovery_api_20261005.json"
+WORK_POLICY_FILE = "publisher_work_policy.json"
+
+
+def work_priorities(document, inventory, inputs):
+    """Defer historical work without changing source or publication evidence."""
+    if document is None:
+        return {}
+    cutoff = document.get("minimum_activity_year")
+    entries = document.get("publishers", [])
+    identifiers = [entry.get("publisher_id") for entry in entries]
+    if (
+        document.get("format_version") != "scorecard-publisher-work-policy/1"
+        or type(cutoff) is not int
+        or cutoff < 1
+        or len(set(identifiers)) != len(identifiers)
+        or not set(identifiers) <= set(inventory)
+        or any(
+            type(entry.get("last_documented_activity_year")) is not int
+            or not 0 < entry["last_documented_activity_year"] < cutoff
+            or entry.get("activity_basis") not in {"historical_scorecard_only", "original_entity_ended"}
+            or not isinstance(entry.get("reason"), str)
+            or not entry["reason"].strip()
+            or entry.get("source_file") not in inputs
+            or entry.get("source_file") == WORK_POLICY_FILE
+            for entry in entries
+        )
+    ):
+        raise ValueError("Work policy requires distinct known publishers, pre-cutoff evidence and a pinned source")
+    return {entry["publisher_id"]: entry for entry in entries}
 
 
 def recovery_findings(document, inventory, *, api=False):
@@ -254,7 +283,7 @@ def read_receipt(directory, record):
 def generate(directory: Path):
     names = ("adapter_inventory.json", "publisher_api_inventory.json", "integration_qualifications.json")
     raw = {name: (directory / name).read_bytes() for name in names}
-    for name in (SURVEY_FILE, IMPLEMENTATION_FILE, RECOVERY_FILE, RECOVERY_API_FILE):
+    for name in (SURVEY_FILE, IMPLEMENTATION_FILE, RECOVERY_FILE, RECOVERY_API_FILE, WORK_POLICY_FILE):
         if (directory / name).exists():
             raw[name] = (directory / name).read_bytes()
     data = {name: json.loads(body) for name, body in raw.items()}
@@ -269,6 +298,8 @@ def generate(directory: Path):
     )
     recoveries = recovery_findings(data[RECOVERY_FILE], inventory) if RECOVERY_FILE in data else {}
     recovery_apis = recovery_findings(data[RECOVERY_API_FILE], inventory, api=True) if RECOVERY_API_FILE in data else {}
+    work_policy = data.get(WORK_POLICY_FILE)
+    priorities = work_priorities(work_policy, inventory, raw)
     if recoveries and recovery_apis and set(recoveries) != set(recovery_apis):
         raise ValueError("Recovery catalog and API review cover different publishers")
     qualifications = {}
@@ -339,6 +370,8 @@ def generate(directory: Path):
                 "publisher_name": source["publisher_name"],
                 "task_id": source["task_id"],
                 "state": state,
+                "work_status": "deferred_pre_2000" if publisher in priorities else "active",
+                "work_priority": priorities.get(publisher),
                 "reader": readers.get(publisher),
                 "qualified_editions": editions,
                 "verified_api_endpoints": routes,
@@ -374,7 +407,8 @@ def generate(directory: Path):
         "schema_version": "1",
         "observed_at": ledger["observed_at"],
         "input_pins": {name: sha256(body).hexdigest() for name, body in raw.items()},
-        "scope": "Every publisher candidate in both inventories; all available editions and renditions remain in scope",
+        "scope": "Every publisher candidate remains cataloged; the work policy defers pre-2000-only publishers without changing source stages or retained editions",
+        "work_policy": work_policy,
         "states": dict(sorted(Counter(r["state"] for r in rows).items())),
         "publishers": rows,
         "validation": {"candidate_sets_equal": True, "qualification_receipt_pins_match": True},
@@ -385,10 +419,10 @@ def generate(directory: Path):
         "",
         f"Generated from pinned inputs at {ledger['observed_at']}.",
         "",
-        "Edition receipts supersede the older discovery matrix only for their named scopes. The queue retains every candidate and every remaining rendition.",
+        "Edition receipts supersede the older discovery matrix only for their named scopes. The queue retains every candidate and every remaining rendition. Work priority is separate from source readiness and retirement.",
         "",
-        "| Publisher | Stage | Qualified editions | Reader | Next action | Latest survey | Implementation result | Recovery finding |",
-        "|---|---|---|---|---|---|---|---|",
+        "| Publisher | Work status | Stage | Qualified editions | Reader | Remaining action | Latest survey | Implementation result | Recovery finding |",
+        "|---|---|---|---|---|---|---|---|---|",
     ]
     for r in rows:
         editions = ", ".join(f"[{e['scorecard_id']}]({e['receipt']})" for e in r["qualified_editions"]) or "Pending"
@@ -423,7 +457,7 @@ def generate(directory: Path):
             else "Not assigned to recovery review"
         )
         markdown.append(
-            f"| {r['publisher_name']} (`{r['publisher_id']}`) | `{r['state']}` | {editions} | `{r['reader'] or 'pending'}` | {r['next_action'].replace('|', r'\|')} | {survey_note} | {implementation_note} | {recovery_note} |"
+            f"| {r['publisher_name']} (`{r['publisher_id']}`) | `{r['work_status']}` | `{r['state']}` | {editions} | `{r['reader'] or 'pending'}` | {r['next_action'].replace('|', r'\|')} | {survey_note} | {implementation_note} | {recovery_note} |"
         )
     markdown.extend(
         [
@@ -446,6 +480,7 @@ def current_api_inventory(directory, progress):
             "publisher_id": row["publisher_id"],
             "publisher_name": row["publisher_name"],
             "integration_state": row["state"],
+            "work_status": row["work_status"],
             "dated_discovery": {
                 "source_file": "publisher_api_inventory.json",
                 "publisher_id": row["publisher_id"],
@@ -475,8 +510,8 @@ def current_api_inventory(directory, progress):
         "",
         result["boundary"],
         "",
-        "| Publisher | Dated API discovery | Source-qualified routes | Latest recovery API finding |",
-        "|---|---|---|---|",
+        "| Publisher | Work status | Dated API discovery | Source-qualified routes | Latest recovery API finding |",
+        "|---|---|---|---|---|",
     ]
     for row in rows:
         routes = (
@@ -485,7 +520,13 @@ def current_api_inventory(directory, progress):
         )
         recovery = row["recovery_review"]
         finding = recovery["finding"] if recovery else "Not assigned to recovery review"
-        values = (row["publisher_name"], row["dated_discovery"]["discovery_status"], routes, finding)
+        values = (
+            row["publisher_name"],
+            row["work_status"],
+            row["dated_discovery"]["discovery_status"],
+            routes,
+            finding,
+        )
         lines.append("| " + " | ".join(str(value).replace("|", r"\|").replace("\n", " ") for value in values) + " |")
     lines.extend(
         [
