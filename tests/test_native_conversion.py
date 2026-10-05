@@ -598,3 +598,25 @@ def test_interrupted_rollback_reports_the_attempt_and_can_be_retried(tmp_path, m
     assert stored(bucket) == old and json.loads(path.read_text())["rollback_attempt"]["outcome"] == "attempted"
     monkeypatch.setattr(bucket, "put_object", real)
     assert conversion.main(["--rollback", str(path), "--expect-bucket", BUCKET]) == 0
+
+
+@pytest.mark.parametrize('family,tables', [('cfr-sections', {'cfr_sections': CFR}),
+                                         ('courtlistener', {'court_dockets': [DOCKET]})])
+def test_anonymous_readback_uses_one_index_for_subjects_and_receipts(tmp_path, monkeypatch, bucket, family, tables):
+    from spicy_regs.sources import cloudflare
+
+    publish_old(bucket, monkeypatch, tmp_path, family, tables)
+    real, reads = publication.current_index, []
+    reading_back = []
+    monkeypatch.setattr(cloudflare, 'purge_urls', lambda *_: reading_back.append(True))
+
+    def current_index(*args, **kwargs):
+        if reading_back:
+            reads.append(True)
+            assert len(reads) == 1, 'read-back must not select a different generation per dataset/member'
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(publication, 'current_index', current_index)
+    receipt = convert(family, tmp_path / 'work', publish=True)
+    assert reads == [True]
+    assert receipt['read_back']['artifactDigest'] == receipt['generation']['artifactDigest']
