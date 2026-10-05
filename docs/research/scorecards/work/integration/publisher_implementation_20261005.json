@@ -34,11 +34,16 @@
   },
   "reproduction": {
     "recipe": {
-      "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/generate_predry_aggregate_v1.py",
-      "sha256": "10c9893b20e7e2c1b66043cf6502e415ba912f4913d72b1cee92d76b83725ce1"
+      "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/consumer-followup-release-v3/../generate_predry_review_update_v2.py",
+      "sha256": "aa95bd01c35f778880b62ce862c99ced4097fb36e2d1e2691252cf7e412f62a3"
     },
-    "command": "uv run --project consumer-breadth-release-v2 --frozen --no-sync python generate_predry_aggregate_v1.py --check",
-    "retained_inputs": "Original implementation JSON documents remain private and preserve every task field."
+    "command": "uv run --project consumer-followup-release-v3 --frozen --no-sync python generate_predry_review_update_v2.py --check",
+    "frozen_aggregate": {
+      "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/consumer-followup-release-v3/../consumer-predry-aggregate-v1/docs/research/scorecards/work/integration/publisher_implementation_20261005.json",
+      "sha256": "576f536238f310ded181460a25fe78eb2c47876fe9b13f23f036abe7ae02ef27"
+    },
+    "frozen_aggregate_commit": "a241afb58c6fb68a74bff77debe2f4cf734e04e9",
+    "boundary": "Review-only metadata update; original task handoffs and prior qualification/publication claims remain unchanged."
   },
   "groups": [
     {
@@ -1187,7 +1192,7 @@
       "publisher_name": "Independent Petroleum Association of America",
       "group": "momentum",
       "task_result": "implemented",
-      "integration_state": "independent_reader_review_pending",
+      "integration_state": "reviewed_named_source_package_pending",
       "source_document": {
         "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/momentum/implementation.json",
         "sha256": "9fa6de047cf577e860e70728e2a5787c1de7d55a49efa6e6ab603376b527df6a"
@@ -1212,7 +1217,11 @@
         "index_url": "https://ipaagrassroots.org/voting-records"
       },
       "canonical_entry_proposal": "canonical-entry-proposals.json",
-      "source_family_readiness": "Named source scopes require independent qualification before package adoption; task completion alone does not authorize row publication"
+      "source_family_readiness": "Independent original review approved named item/action scopes. Installed package replay and consumer adoption remain separate. No aggregate or lifetime ratings, chamber-roster completeness, or BIPAC qualification.",
+      "independent_review": {
+        "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/consumer-followup-release-v3/../ipaa-independent-review-v1/frozen-handoff-v1.json",
+        "sha256": "95e7a87e4b32ce7c21e244d049a8329ae557488be52433a14c7a6332f66957b7"
+      }
     },
     {
       "publisher_id": "john_birch_historical",
@@ -2311,5 +2320,24 @@
     "Candidate comparisons and mixed federal/state endorsement lists are documented unsupported shapes for the current congressional-member scorecard model. Private extracted data remains available for a later deliberate extension.",
     "Selected archive metadata can be complete while the underlying scorecard remains unrecovered. Keep completeness scoped to the actual input.",
     "Retirement requires a dated publisher closure statement. Failed requests, empty arrays and older holdings establish no retirement."
+  ],
+  "integration_reviews": {
+    "ipaa-independent-review-v1": {
+      "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/consumer-followup-release-v3/../ipaa-independent-review-v1/frozen-handoff-v1.json",
+      "sha256": "95e7a87e4b32ce7c21e244d049a8329ae557488be52433a14c7a6332f66957b7"
+    },
+    "predry-infrastructure-review-v1": {
+      "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/consumer-followup-release-v3/../predry-infrastructure-review-v1/frozen-review.json",
+      "sha256": "94d6157ffd61cb64cb9764eaba3409242524b8bc1e57402252834f82ad0d031b"
+    },
+    "predry-grid-repair-independent-review-v1": {
+      "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/consumer-followup-release-v3/../predry-grid-repair-independent-review-v1/frozen-review.json",
+      "sha256": "59f8f0fc297e72fe07e23be2452389d6ffefc3ff81b872f5f9a7bdceafb7224d"
+    }
+  },
+  "review_decisions": [
+    "Reuse existing PDF completeness and private-retention helpers; corrected callback failures refuse with credential-safe errors. The reviewed repair preserves all private extracted outcomes and does not admit canonical rows.",
+    "Regional Carpenters marks fit the existing metric-free model after actual regional publisher attribution and scope qualification. Candidate comparisons and mixed federal/state endorsements require a separate deliberately scoped model.",
+    "Keep catalog probes, source-time identity relationships and unsupported private-grid utilities outside the supported-adapter registry. BIPAC remains unregistered."
   ]
 }

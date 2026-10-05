@@ -1,7 +1,7 @@
 {
   "schema_version": "1",
-  "observed_at": "2026-10-05T15:21:59+00:00",
-  "input_plan_sha256": "aa0654c774780a9f74ddd68cfe004a658ed9722cddc135a95ab33bf43edb9a40",
+  "observed_at": "2026-10-05T16:40:47Z",
+  "input_plan_sha256": "8474f8724146a343f672e35e0e0a78e6cfc35d3bd60c244b0dcdf7a5c1cb1163",
   "readers": {
     "common_cause": "common_cause",
     "bread_world": "bread_world",
@@ -32,6 +32,9 @@
     "consumer_federation": "consumer_federation",
     "congressional_quarterly": "congressional_quarterly",
     "american_bakers": "american_bakers",
+    "fcnl": "fcnl",
+    "alaska_wilderness_action": "alaska_wilderness_action",
+    "ipaa": "ipaa_momentum",
     "afp": "afp",
     "ijm": "ijm",
     "hrc": "hrc",
@@ -749,6 +752,118 @@
       "state": "qualified",
       "receipt": "qualifications/american_bakers--2351-1413.json",
       "receipt_sha256": "54798acf83f39baff7fc7b153211f45981d086f3fed3bf42a3da2e19a2a12d69"
+    },
+    {
+      "publisher_id": "fcnl",
+      "scorecard_id": "fcnl:2026-war-powers-current-roster",
+      "state": "qualified",
+      "receipt": "qualifications/fcnl--2026-war-powers-current-roster.json",
+      "receipt_sha256": "3f865556626afcc9236dbaf451fcdc2a9409dc172b8da0b850c52f6d24a3fc73"
+    },
+    {
+      "publisher_id": "fcnl",
+      "scorecard_id": "fcnl:118-votes-current-roster",
+      "state": "qualified",
+      "receipt": "qualifications/fcnl--118-votes-current-roster.json",
+      "receipt_sha256": "ca40efb31a068828c0dfc9a0b91a807590bd638e5d93b490656a9351763523ee"
+    },
+    {
+      "publisher_id": "alaska_wilderness_action",
+      "scorecard_id": "alaska_wilderness_action:linked-public-score-sheet-1lMvylVu5fiQLOgSJnrqJ5eyik2WAMLyN4q8t04c3Yp4",
+      "state": "qualified",
+      "receipt": "qualifications/alaska_wilderness_action--linked-public-score-sheet-1lMvylVu5fiQLOgSJnrqJ5eyik2WAMLyN4q8t04c3Yp4.json",
+      "receipt_sha256": "8d7b9916a95c28de48ea23ed6e42406064eeb25c85645c69ed3df26db49a8205"
+    },
+    {
+      "publisher_id": "ipaa",
+      "scorecard_id": "ipaa:119th-FH-native-items-20261005",
+      "state": "qualified",
+      "receipt": "qualifications/ipaa--119th-FH-native-items-20261005.json",
+      "receipt_sha256": "4b1fdbd8901028ede3496cb63166e344b3846982bb38fa1d8a485aa338d977d2"
+    },
+    {
+      "publisher_id": "ipaa",
+      "scorecard_id": "ipaa:119th-FS-native-items-20261005",
+      "state": "qualified",
+      "receipt": "qualifications/ipaa--119th-FS-native-items-20261005.json",
+      "receipt_sha256": "67d9bade5b5fcbe5ed855a9402577554607827c37304cd6b34441f6b2742187e"
+    },
+    {
+      "publisher_id": "ipaa",
+      "scorecard_id": "ipaa:118th-FH-native-items-20261005",
+      "state": "qualified",
+      "receipt": "qualifications/ipaa--118th-FH-native-items-20261005.json",
+      "receipt_sha256": "25479ddcae46268e4a76a897b0d8270517ff982ee00092bacd357517f6968655"
+    },
+    {
+      "publisher_id": "ipaa",
+      "scorecard_id": "ipaa:118th-FS-native-items-20261005",
+      "state": "qualified",
+      "receipt": "qualifications/ipaa--118th-FS-native-items-20261005.json",
+      "receipt_sha256": "8bc1d647ebe80e305ff554d837e5e3ced92011e0a8d40d9eaefc16747afbd5f7"
+    },
+    {
+      "publisher_id": "ipaa",
+      "scorecard_id": "ipaa:117th-FH-native-items-20261005",
+      "state": "qualified",
+      "receipt": "qualifications/ipaa--117th-FH-native-items-20261005.json",
+      "receipt_sha256": "a9a36a219328224dd5a9ce2940fe8f0bc8b8abe38d67617959df01c5f31edf35"
+    },
+    {
+      "publisher_id": "ipaa",
+      "scorecard_id": "ipaa:117th-FS-native-items-20261005",
+      "state": "qualified",
+      "receipt": "qualifications/ipaa--117th-FS-native-items-20261005.json",
+      "receipt_sha256": "5d34c4b2ed835ff222767571b8d48ed71968b8789238f94e491e9db65ac1f03e"
+    },
+    {
+      "publisher_id": "ipaa",
+      "scorecard_id": "ipaa:116th-FH-native-items-20261005",
+      "state": "qualified",
+      "receipt": "qualifications/ipaa--116th-FH-native-items-20261005.json",
+      "receipt_sha256": "99bc8e61e45c5cf2b7a68c78ed8d566e53b782c6335ad67db9cf75034a581624"
+    },
+    {
+      "publisher_id": "ipaa",
+      "scorecard_id": "ipaa:116th-FS-native-items-20261005",
+      "state": "qualified",
+      "receipt": "qualifications/ipaa--116th-FS-native-items-20261005.json",
+      "receipt_sha256": "edc4dcd8b2958d44ef9a694ff5c1e0289c206bd17b12d3d419f8367a90f5e76c"
+    },
+    {
+      "publisher_id": "ipaa",
+      "scorecard_id": "ipaa:115th-FH-native-items-20261005",
+      "state": "qualified",
+      "receipt": "qualifications/ipaa--115th-FH-native-items-20261005.json",
+      "receipt_sha256": "cbdc42049653c80c59cc34043939b41c50b56c566cf6fdfdb996155712bfbcf9"
+    },
+    {
+      "publisher_id": "ipaa",
+      "scorecard_id": "ipaa:115th-FS-native-items-20261005",
+      "state": "qualified",
+      "receipt": "qualifications/ipaa--115th-FS-native-items-20261005.json",
+      "receipt_sha256": "656cb6ae3a20244df8383e88601fd0da901b15b8b7929d5b6ad6276670170bdb"
+    },
+    {
+      "publisher_id": "ipaa",
+      "scorecard_id": "ipaa:114th-FH-native-items-20261005",
+      "state": "qualified",
+      "receipt": "qualifications/ipaa--114th-FH-native-items-20261005.json",
+      "receipt_sha256": "e8f20431b07785ea94beda6a6933b07d09c7b1ee855f6f4f91d149acbc149908"
+    },
+    {
+      "publisher_id": "ipaa",
+      "scorecard_id": "ipaa:114th-FS-native-items-20261005",
+      "state": "qualified",
+      "receipt": "qualifications/ipaa--114th-FS-native-items-20261005.json",
+      "receipt_sha256": "a37407dc81d8522acb9e96bfb6dc2193b9dd0cd6087da7b6c42f16f2469c88b5"
+    },
+    {
+      "publisher_id": "ipaa",
+      "scorecard_id": "ipaa:113th-FH-native-items-20261005",
+      "state": "qualified",
+      "receipt": "qualifications/ipaa--113th-FH-native-items-20261005.json",
+      "receipt_sha256": "24f5820a6a8b7b4457cac984796f7941221b020a60a3d2c4c12c7cab4d95ecd0"
     },
     {
       "publisher_id": "aauw",
@@ -2938,5 +3053,5 @@
       ]
     }
   ],
-  "publication_observations_sha256": "ce7fc2cb754e595cfea0c8f728a39c9419328ac6e60ee2f093b8eb5925f05a1d"
+  "publication_observations_sha256": "4cd8b8b135c330721dd91c79b1d9f68b4d5998d31e9778de185b9dcff303a6b3"
 }

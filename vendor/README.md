@@ -5,6 +5,13 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
+See the [current scorecard package receipt](spicy_docs-scorecards.json) for the
+pinned overlay and the [follow-up adoption evidence](../docs/research/scorecards/work/integration/reader_adoption_followup_20261005.json)
+for its named source scopes, installed replay and consumer checks. The overlay
+preserves the released baseline's unrelated runtime and dependencies. Data
+publication, deployed server images and scheduled refresh have separate evidence.
+Earlier packages and receipts below remain records of their original adoptions.
+
 - `spicy_docs-0.57.0`: the SpicyDocs 0.57.0 release, from release commit
   `080762574c16e5eef2f3b56cfac876f5e09b00a3`. SHA-256
   `4efc149a18f2222e53dee8e7588cc59fdbd33cadb9a9fcf1851e51329def1dc2`, 2,478,280 bytes;
@@ -45,7 +52,7 @@ Base CLI and MCP installs do not require them.
 - `spicy_docs-0.56.0+scorecards.ef0b64b3121f`: the released `0.56.0` baseline
   with the qualified AGC, CGS and Environment America readers from SpicyDocs
   `554dfba52246773a103601d3987d46a7755ef7ae`. The
-  [package receipt](spicy_docs-scorecards.json) records identical repeated builds,
+  [package receipt](spicy_docs-scorecards-ef0b64b3121f.json) records identical repeated builds,
   exact module pins and unchanged baseline runtime files and dependencies.
   The [adoption evidence](../docs/research/scorecards/work/integration/reader_adoption_three_20261005.json)
   records fresh installed replay and consumer checks. Earlier wheels and

@@ -15,7 +15,7 @@ All nine tasks committed clean worktrees and passed their repository gates. The 
 | source-recovered-but-unsupported-shape | 4 |
 | verified-retired | 1 |
 
-IPAA implements thirteen named item/action editions: sixty-nine items and 22,403 publisher member-action occurrences, with no aggregate ratings. Independent original-source review is pending. The reviewed-grid task retains seventeen private extracted editions covering regional marks, candidate comparisons and endorsements; their current canonical admission is withheld with documented reasons.
+IPAA implements thirteen named item/action editions: sixty-nine items and 22,403 publisher member-action occurrences, with no aggregate ratings. Independent original-source review approved those named item/action scopes; installed package replay and consumer adoption remain separate. The reviewed-grid task retains seventeen private extracted editions covering regional marks, candidate comparisons and endorsements; their current canonical admission is withheld with documented reasons.
 
 The results above are a dated measurement linked to the structured input pins. Task completion and catalog coverage remain separate from production support.
 
@@ -27,6 +27,14 @@ The results above are a dated measurement linked to the structured input pins. T
 - **Catalog, availability and identity:** Normalize their metadata into the publisher inventory. Compare repeated observation/provenance records before adopting a shared type; retain archive-specific field locators and access meanings. Dated availability code remains separate from registered scorecard readers.
 - **Publisher relationships:** Retain source-time identities and exact republishing or successor relationships. Reuse existing reader scopes; do not publish the same rating twice under historical aliases.
 - **Reviewed PDF data:** Use existing DefaultReader, Docling/Ovis and data-shaped Gemini observations plus independent original review. Candidate comparisons and endorsements require a separately defined data shape; regional Carpenters requires its actual regional publisher attribution. Keep those private until canonical fit and source authority are established.
+
+## Independent review
+
+- Reuse existing PDF completeness and private-retention helpers; corrected callback failures refuse with credential-safe errors. The reviewed repair preserves all private extracted outcomes and does not admit canonical rows.
+- Regional Carpenters marks fit the existing metric-free model after actual regional publisher attribution and scope qualification. Candidate comparisons and mixed federal/state endorsements require a separate deliberately scoped model.
+- Keep catalog probes, source-time identity relationships and unsupported private-grid utilities outside the supported-adapter registry. BIPAC remains unregistered.
+
+The structured report pins the independent approvals and the unchanged original task aggregate. Review completion changes no qualification or publication state.
 
 ## Remaining publisher work
 

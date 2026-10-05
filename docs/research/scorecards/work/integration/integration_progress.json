@@ -1,20 +1,20 @@
 {
   "dataset": "scorecard_integration_progress",
   "schema_version": "1",
-  "observed_at": "2026-10-05T15:21:59+00:00",
+  "observed_at": "2026-10-05T16:40:47Z",
   "input_pins": {
     "adapter_inventory.json": "5d7ce442f355c2b7f84d58c6d2df99cbf48574344a101248ee6a04953bf019a4",
     "publisher_api_inventory.json": "097e102c3af4ebb5ad87731be5d40ea4ad283b8ec21f188b1e7460755755925d",
-    "integration_qualifications.json": "91f6a8849cd188ad552c72026e3afbb1fa531d48f3f17cb39d254e58fccd3ea8",
+    "integration_qualifications.json": "a9a1f0601f10bea40354e9d2f9e01f5037ea2ad0dc4d50727aa21d47cfed5d85",
     "publisher_survey_20261005.json": "7e7431dc37bf8564d16df4f044498e1176f7e654cc0cd694b8bdb8a07944c9c1",
-    "publisher_implementation_20261005.json": "576f536238f310ded181460a25fe78eb2c47876fe9b13f23f036abe7ae02ef27"
+    "publisher_implementation_20261005.json": "cdc6f2a58ac283566431326d2540b427dbd6b0cb917e0ec92d0ef03eb487bdf3"
   },
   "scope": "Every publisher candidate in both inventories; all available editions and renditions remain in scope",
   "states": {
     "identity_review": 1,
     "published_scope": 72,
-    "qualified_scope": 8,
-    "unverified_lead": 45
+    "qualified_scope": 11,
+    "unverified_lead": 42
   },
   "publishers": [
     {
@@ -246,9 +246,17 @@
       "publisher_id": "alaska_wilderness_action",
       "publisher_name": "Alaska Wilderness Action",
       "task_id": "ss-kwza",
-      "state": "unverified_lead",
-      "reader": null,
-      "qualified_editions": [],
+      "state": "qualified_scope",
+      "reader": "alaska_wilderness_action",
+      "qualified_editions": [
+        {
+          "publisher_id": "alaska_wilderness_action",
+          "scorecard_id": "alaska_wilderness_action:linked-public-score-sheet-1lMvylVu5fiQLOgSJnrqJ5eyik2WAMLyN4q8t04c3Yp4",
+          "state": "qualified",
+          "receipt": "qualifications/alaska_wilderness_action--linked-public-score-sheet-1lMvylVu5fiQLOgSJnrqJ5eyik2WAMLyN4q8t04c3Yp4.json",
+          "receipt_sha256": "8d7b9916a95c28de48ea23ed6e42406064eeb25c85645c69ed3df26db49a8205"
+        }
+      ],
       "verified_api_endpoints": [],
       "discovery_api_status": "blocked",
       "discovery_support_status": "unverified_lead",
@@ -293,7 +301,7 @@
         "next_step": "Recover the named 2016 PDF if an alternate original rendition appears; otherwise qualify the retained 2015 PDF as an explicitly historical rendition. Qualify the complete 2015 PDF with retained page observations and independent review; preserve signed/out-of-range percentages, N/A, glyphs, weights, excusals and credit/debit actions. Inspect the later archived spreadsheet rendition before choosing a PDF-only reader."
       },
       "implementation_finding": null,
-      "next_action": "Recover the named 2016 PDF if an alternate original rendition appears; otherwise qualify the retained 2015 PDF as an explicitly historical rendition. Qualify the complete 2015 PDF with retained page observations and independent review; preserve signed/out-of-range percentages, N/A, glyphs, weights, excusals and credit/debit actions. Inspect the later archived spreadsheet rendition before choosing a PDF-only reader."
+      "next_action": "Integrate remaining available editions and renditions"
     },
     {
       "publisher_id": "animal_welfare_institute",
@@ -5483,9 +5491,24 @@
       "publisher_id": "fcnl",
       "publisher_name": "Friends Committee on National Legislation",
       "task_id": "ss-ldbc",
-      "state": "unverified_lead",
-      "reader": null,
-      "qualified_editions": [],
+      "state": "qualified_scope",
+      "reader": "fcnl",
+      "qualified_editions": [
+        {
+          "publisher_id": "fcnl",
+          "scorecard_id": "fcnl:2026-war-powers-current-roster",
+          "state": "qualified",
+          "receipt": "qualifications/fcnl--2026-war-powers-current-roster.json",
+          "receipt_sha256": "3f865556626afcc9236dbaf451fcdc2a9409dc172b8da0b850c52f6d24a3fc73"
+        },
+        {
+          "publisher_id": "fcnl",
+          "scorecard_id": "fcnl:118-votes-current-roster",
+          "state": "qualified",
+          "receipt": "qualifications/fcnl--118-votes-current-roster.json",
+          "receipt_sha256": "ca40efb31a068828c0dfc9a0b91a807590bd638e5d93b490656a9351763523ee"
+        }
+      ],
       "verified_api_endpoints": [],
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
@@ -5541,7 +5564,7 @@
         "next_step": "Integrate a bounded FCNL selected-action reader using quorum_public.decode. Add explicit House District handling and preserve mixed periods/current cohort. Refuse automatic reconciliation of introductory SJ Res 83 versus sheet SJ Res 93. Preserve source stance separately from an inferred publisher rating."
       },
       "implementation_finding": null,
-      "next_action": "Integrate a bounded FCNL selected-action reader using quorum_public.decode. Add explicit House District handling and preserve mixed periods/current cohort. Refuse automatic reconciliation of introductory SJ Res 83 versus sheet SJ Res 93. Preserve source stance separately from an inferred publisher rating."
+      "next_action": "Integrate remaining available editions and renditions"
     },
     {
       "publisher_id": "human_events",
@@ -5612,9 +5635,101 @@
       "publisher_id": "ipaa",
       "publisher_name": "Independent Petroleum Association of America",
       "task_id": "ss-e2ra",
-      "state": "unverified_lead",
-      "reader": null,
-      "qualified_editions": [],
+      "state": "qualified_scope",
+      "reader": "ipaa_momentum",
+      "qualified_editions": [
+        {
+          "publisher_id": "ipaa",
+          "scorecard_id": "ipaa:119th-FH-native-items-20261005",
+          "state": "qualified",
+          "receipt": "qualifications/ipaa--119th-FH-native-items-20261005.json",
+          "receipt_sha256": "4b1fdbd8901028ede3496cb63166e344b3846982bb38fa1d8a485aa338d977d2"
+        },
+        {
+          "publisher_id": "ipaa",
+          "scorecard_id": "ipaa:119th-FS-native-items-20261005",
+          "state": "qualified",
+          "receipt": "qualifications/ipaa--119th-FS-native-items-20261005.json",
+          "receipt_sha256": "67d9bade5b5fcbe5ed855a9402577554607827c37304cd6b34441f6b2742187e"
+        },
+        {
+          "publisher_id": "ipaa",
+          "scorecard_id": "ipaa:118th-FH-native-items-20261005",
+          "state": "qualified",
+          "receipt": "qualifications/ipaa--118th-FH-native-items-20261005.json",
+          "receipt_sha256": "25479ddcae46268e4a76a897b0d8270517ff982ee00092bacd357517f6968655"
+        },
+        {
+          "publisher_id": "ipaa",
+          "scorecard_id": "ipaa:118th-FS-native-items-20261005",
+          "state": "qualified",
+          "receipt": "qualifications/ipaa--118th-FS-native-items-20261005.json",
+          "receipt_sha256": "8bc1d647ebe80e305ff554d837e5e3ced92011e0a8d40d9eaefc16747afbd5f7"
+        },
+        {
+          "publisher_id": "ipaa",
+          "scorecard_id": "ipaa:117th-FH-native-items-20261005",
+          "state": "qualified",
+          "receipt": "qualifications/ipaa--117th-FH-native-items-20261005.json",
+          "receipt_sha256": "a9a36a219328224dd5a9ce2940fe8f0bc8b8abe38d67617959df01c5f31edf35"
+        },
+        {
+          "publisher_id": "ipaa",
+          "scorecard_id": "ipaa:117th-FS-native-items-20261005",
+          "state": "qualified",
+          "receipt": "qualifications/ipaa--117th-FS-native-items-20261005.json",
+          "receipt_sha256": "5d34c4b2ed835ff222767571b8d48ed71968b8789238f94e491e9db65ac1f03e"
+        },
+        {
+          "publisher_id": "ipaa",
+          "scorecard_id": "ipaa:116th-FH-native-items-20261005",
+          "state": "qualified",
+          "receipt": "qualifications/ipaa--116th-FH-native-items-20261005.json",
+          "receipt_sha256": "99bc8e61e45c5cf2b7a68c78ed8d566e53b782c6335ad67db9cf75034a581624"
+        },
+        {
+          "publisher_id": "ipaa",
+          "scorecard_id": "ipaa:116th-FS-native-items-20261005",
+          "state": "qualified",
+          "receipt": "qualifications/ipaa--116th-FS-native-items-20261005.json",
+          "receipt_sha256": "edc4dcd8b2958d44ef9a694ff5c1e0289c206bd17b12d3d419f8367a90f5e76c"
+        },
+        {
+          "publisher_id": "ipaa",
+          "scorecard_id": "ipaa:115th-FH-native-items-20261005",
+          "state": "qualified",
+          "receipt": "qualifications/ipaa--115th-FH-native-items-20261005.json",
+          "receipt_sha256": "cbdc42049653c80c59cc34043939b41c50b56c566cf6fdfdb996155712bfbcf9"
+        },
+        {
+          "publisher_id": "ipaa",
+          "scorecard_id": "ipaa:115th-FS-native-items-20261005",
+          "state": "qualified",
+          "receipt": "qualifications/ipaa--115th-FS-native-items-20261005.json",
+          "receipt_sha256": "656cb6ae3a20244df8383e88601fd0da901b15b8b7929d5b6ad6276670170bdb"
+        },
+        {
+          "publisher_id": "ipaa",
+          "scorecard_id": "ipaa:114th-FH-native-items-20261005",
+          "state": "qualified",
+          "receipt": "qualifications/ipaa--114th-FH-native-items-20261005.json",
+          "receipt_sha256": "e8f20431b07785ea94beda6a6933b07d09c7b1ee855f6f4f91d149acbc149908"
+        },
+        {
+          "publisher_id": "ipaa",
+          "scorecard_id": "ipaa:114th-FS-native-items-20261005",
+          "state": "qualified",
+          "receipt": "qualifications/ipaa--114th-FS-native-items-20261005.json",
+          "receipt_sha256": "a37407dc81d8522acb9e96bfb6dc2193b9dd0cd6087da7b6c42f16f2469c88b5"
+        },
+        {
+          "publisher_id": "ipaa",
+          "scorecard_id": "ipaa:113th-FH-native-items-20261005",
+          "state": "qualified",
+          "receipt": "qualifications/ipaa--113th-FH-native-items-20261005.json",
+          "receipt_sha256": "24f5820a6a8b7b4457cac984796f7941221b020a60a3d2c4c12c7cab4d95ecd0"
+        }
+      ],
       "verified_api_endpoints": [],
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
@@ -5643,7 +5758,7 @@
         "source_file": "publisher_implementation_20261005.json",
         "group": "momentum",
         "task_result": "implemented",
-        "integration_state": "independent_reader_review_pending",
+        "integration_state": "reviewed_named_source_package_pending",
         "period_fields": {
           "latest_publication": "unknown outside surveyed source",
           "newest_offered": "119th Congress FH and FS, ongoing at capture",
@@ -5668,7 +5783,7 @@
           "sha256": "44b5f5b5b0d4ba4f1dc65bfff8ef271bfd302f36d793620c8e0a2528c6de8cf4"
         }
       },
-      "next_action": "Complete publisher-rendered score table, including all pages, session/lifetime cells and member/item/roster reconciliation, before rating admission."
+      "next_action": "Integrate remaining available editions and renditions"
     },
     {
       "publisher_id": "machinists",

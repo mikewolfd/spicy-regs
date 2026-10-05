@@ -1,0 +1,476 @@
+{
+  "format_version": "scorecard-reader-package-adoption/1",
+  "status": "passed-installed-replay-and-complete-consumer-gates",
+  "source_commit": "9756d7180f8b77e73a6de261e99c0e3f3ee98207",
+  "version": "0.57.0+scorecards.06a7bf463ac3",
+  "baseline_version": "0.57.0",
+  "wheel": {
+    "file": "spicy_docs-0.57.0+scorecards.06a7bf463ac3-py3-none-any.whl",
+    "sha256": "5ff130a35db25e42a12313dd18074f362a35450d478e9295eded8465a20da576"
+  },
+  "wheel_build": {
+    "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/consumer-followup-release-v3/../wheel-followup111-main057-v1/wheel.json",
+    "sha256": "a899805562d64b84daa1beeede0ca0efe7de3816a451b8ed25ac2336f81c08a9"
+  },
+  "replay_plan": {
+    "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/consumer-followup-release-v3/../plan-qualified111-v1.json",
+    "sha256": "8474f8724146a343f672e35e0e0a78e6cfc35d3bd60c244b0dcdf7a5c1cb1163"
+  },
+  "replay_summary": {
+    "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/consumer-followup-release-v3/../followup111-installed-replay-v1/summary.json",
+    "sha256": "feec27710159118d439b643515a04d14b50e92c54fcaad38f407dce0aaf2c1f7"
+  },
+  "source_network_requests_during_replay": 0,
+  "scopes": [
+    {
+      "scorecard_id": "fcnl:2026-war-powers-current-roster",
+      "publisher_id": "fcnl",
+      "status": "passed-full-source-reference-replay",
+      "counts": {
+        "scorecard_publishers": 1,
+        "scorecards": 1,
+        "scorecard_snapshots": 1,
+        "scorecard_methodologies": 14,
+        "scorecard_metrics": 0,
+        "scorecard_items": 9,
+        "scorecard_metric_items": 0,
+        "scorecard_metric_components": 0,
+        "scorecard_members": 539,
+        "scorecard_member_ratings": 0,
+        "scorecard_member_item_results": 2256
+      }
+    },
+    {
+      "scorecard_id": "fcnl:118-votes-current-roster",
+      "publisher_id": "fcnl",
+      "status": "passed-full-source-reference-replay",
+      "counts": {
+        "scorecard_publishers": 1,
+        "scorecards": 1,
+        "scorecard_snapshots": 1,
+        "scorecard_methodologies": 11,
+        "scorecard_metrics": 0,
+        "scorecard_items": 5,
+        "scorecard_metric_items": 0,
+        "scorecard_metric_components": 0,
+        "scorecard_members": 539,
+        "scorecard_member_ratings": 0,
+        "scorecard_member_item_results": 1517
+      }
+    },
+    {
+      "scorecard_id": "alaska_wilderness_action:linked-public-score-sheet-1lMvylVu5fiQLOgSJnrqJ5eyik2WAMLyN4q8t04c3Yp4",
+      "publisher_id": "alaska_wilderness_action",
+      "status": "passed-full-source-reference-replay",
+      "counts": {
+        "scorecard_publishers": 1,
+        "scorecards": 1,
+        "scorecard_snapshots": 1,
+        "scorecard_methodologies": 4,
+        "scorecard_metrics": 1,
+        "scorecard_items": 0,
+        "scorecard_metric_items": 0,
+        "scorecard_metric_components": 0,
+        "scorecard_members": 535,
+        "scorecard_member_ratings": 535,
+        "scorecard_member_item_results": 0
+      }
+    },
+    {
+      "scorecard_id": "ipaa:119th-FH-native-items-20261005",
+      "publisher_id": "ipaa",
+      "status": "passed-full-source-reference-replay",
+      "counts": {
+        "scorecard_publishers": 1,
+        "scorecards": 1,
+        "scorecard_snapshots": 1,
+        "scorecard_methodologies": 8,
+        "scorecard_metrics": 0,
+        "scorecard_items": 4,
+        "scorecard_metric_items": 0,
+        "scorecard_metric_components": 0,
+        "scorecard_members": 1729,
+        "scorecard_member_ratings": 0,
+        "scorecard_member_item_results": 1729
+      }
+    },
+    {
+      "scorecard_id": "ipaa:119th-FS-native-items-20261005",
+      "publisher_id": "ipaa",
+      "status": "passed-full-source-reference-replay",
+      "counts": {
+        "scorecard_publishers": 1,
+        "scorecards": 1,
+        "scorecard_snapshots": 1,
+        "scorecard_methodologies": 4,
+        "scorecard_metrics": 0,
+        "scorecard_items": 2,
+        "scorecard_metric_items": 0,
+        "scorecard_metric_components": 0,
+        "scorecard_members": 200,
+        "scorecard_member_ratings": 0,
+        "scorecard_member_item_results": 200
+      }
+    },
+    {
+      "scorecard_id": "ipaa:118th-FH-native-items-20261005",
+      "publisher_id": "ipaa",
+      "status": "passed-full-source-reference-replay",
+      "counts": {
+        "scorecard_publishers": 1,
+        "scorecards": 1,
+        "scorecard_snapshots": 1,
+        "scorecard_methodologies": 5,
+        "scorecard_metrics": 0,
+        "scorecard_items": 4,
+        "scorecard_metric_items": 0,
+        "scorecard_metric_components": 0,
+        "scorecard_members": 1759,
+        "scorecard_member_ratings": 0,
+        "scorecard_member_item_results": 1759
+      }
+    },
+    {
+      "scorecard_id": "ipaa:118th-FS-native-items-20261005",
+      "publisher_id": "ipaa",
+      "status": "passed-full-source-reference-replay",
+      "counts": {
+        "scorecard_publishers": 1,
+        "scorecards": 1,
+        "scorecard_snapshots": 1,
+        "scorecard_methodologies": 6,
+        "scorecard_metrics": 0,
+        "scorecard_items": 3,
+        "scorecard_metric_items": 0,
+        "scorecard_metric_components": 0,
+        "scorecard_members": 305,
+        "scorecard_member_ratings": 0,
+        "scorecard_member_item_results": 305
+      }
+    },
+    {
+      "scorecard_id": "ipaa:117th-FH-native-items-20261005",
+      "publisher_id": "ipaa",
+      "status": "passed-full-source-reference-replay",
+      "counts": {
+        "scorecard_publishers": 1,
+        "scorecards": 1,
+        "scorecard_snapshots": 1,
+        "scorecard_methodologies": 2,
+        "scorecard_metrics": 0,
+        "scorecard_items": 1,
+        "scorecard_metric_items": 0,
+        "scorecard_metric_components": 0,
+        "scorecard_members": 433,
+        "scorecard_member_ratings": 0,
+        "scorecard_member_item_results": 433
+      }
+    },
+    {
+      "scorecard_id": "ipaa:117th-FS-native-items-20261005",
+      "publisher_id": "ipaa",
+      "status": "passed-full-source-reference-replay",
+      "counts": {
+        "scorecard_publishers": 1,
+        "scorecards": 1,
+        "scorecard_snapshots": 1,
+        "scorecard_methodologies": 12,
+        "scorecard_metrics": 0,
+        "scorecard_items": 8,
+        "scorecard_metric_items": 0,
+        "scorecard_metric_components": 0,
+        "scorecard_members": 808,
+        "scorecard_member_ratings": 0,
+        "scorecard_member_item_results": 808
+      }
+    },
+    {
+      "scorecard_id": "ipaa:116th-FH-native-items-20261005",
+      "publisher_id": "ipaa",
+      "status": "passed-full-source-reference-replay",
+      "counts": {
+        "scorecard_publishers": 1,
+        "scorecards": 1,
+        "scorecard_snapshots": 1,
+        "scorecard_methodologies": 9,
+        "scorecard_metrics": 0,
+        "scorecard_items": 5,
+        "scorecard_metric_items": 0,
+        "scorecard_metric_components": 0,
+        "scorecard_members": 2171,
+        "scorecard_member_ratings": 0,
+        "scorecard_member_item_results": 2171
+      }
+    },
+    {
+      "scorecard_id": "ipaa:116th-FS-native-items-20261005",
+      "publisher_id": "ipaa",
+      "status": "passed-full-source-reference-replay",
+      "counts": {
+        "scorecard_publishers": 1,
+        "scorecards": 1,
+        "scorecard_snapshots": 1,
+        "scorecard_methodologies": 2,
+        "scorecard_metrics": 0,
+        "scorecard_items": 1,
+        "scorecard_metric_items": 0,
+        "scorecard_metric_components": 0,
+        "scorecard_members": 101,
+        "scorecard_member_ratings": 0,
+        "scorecard_member_item_results": 101
+      }
+    },
+    {
+      "scorecard_id": "ipaa:115th-FH-native-items-20261005",
+      "publisher_id": "ipaa",
+      "status": "passed-full-source-reference-replay",
+      "counts": {
+        "scorecard_publishers": 1,
+        "scorecards": 1,
+        "scorecard_snapshots": 1,
+        "scorecard_methodologies": 14,
+        "scorecard_metrics": 0,
+        "scorecard_items": 7,
+        "scorecard_metric_items": 0,
+        "scorecard_metric_components": 0,
+        "scorecard_members": 3126,
+        "scorecard_member_ratings": 0,
+        "scorecard_member_item_results": 3126
+      }
+    },
+    {
+      "scorecard_id": "ipaa:115th-FS-native-items-20261005",
+      "publisher_id": "ipaa",
+      "status": "passed-full-source-reference-replay",
+      "counts": {
+        "scorecard_publishers": 1,
+        "scorecards": 1,
+        "scorecard_snapshots": 1,
+        "scorecard_methodologies": 10,
+        "scorecard_metrics": 0,
+        "scorecard_items": 5,
+        "scorecard_metric_items": 0,
+        "scorecard_metric_components": 0,
+        "scorecard_members": 505,
+        "scorecard_member_ratings": 0,
+        "scorecard_member_item_results": 505
+      }
+    },
+    {
+      "scorecard_id": "ipaa:114th-FH-native-items-20261005",
+      "publisher_id": "ipaa",
+      "status": "passed-full-source-reference-replay",
+      "counts": {
+        "scorecard_publishers": 1,
+        "scorecards": 1,
+        "scorecard_snapshots": 1,
+        "scorecard_methodologies": 24,
+        "scorecard_metrics": 0,
+        "scorecard_items": 13,
+        "scorecard_metric_items": 0,
+        "scorecard_metric_components": 0,
+        "scorecard_members": 5830,
+        "scorecard_member_ratings": 0,
+        "scorecard_member_item_results": 5830
+      }
+    },
+    {
+      "scorecard_id": "ipaa:114th-FS-native-items-20261005",
+      "publisher_id": "ipaa",
+      "status": "passed-full-source-reference-replay",
+      "counts": {
+        "scorecard_publishers": 1,
+        "scorecards": 1,
+        "scorecard_snapshots": 1,
+        "scorecard_methodologies": 8,
+        "scorecard_metrics": 0,
+        "scorecard_items": 5,
+        "scorecard_metric_items": 0,
+        "scorecard_metric_components": 0,
+        "scorecard_members": 505,
+        "scorecard_member_ratings": 0,
+        "scorecard_member_item_results": 505
+      }
+    },
+    {
+      "scorecard_id": "ipaa:113th-FH-native-items-20261005",
+      "publisher_id": "ipaa",
+      "status": "passed-full-source-reference-replay",
+      "counts": {
+        "scorecard_publishers": 1,
+        "scorecards": 1,
+        "scorecard_snapshots": 1,
+        "scorecard_methodologies": 19,
+        "scorecard_metrics": 0,
+        "scorecard_items": 11,
+        "scorecard_metric_items": 0,
+        "scorecard_metric_components": 0,
+        "scorecard_members": 4931,
+        "scorecard_member_ratings": 0,
+        "scorecard_member_item_results": 4931
+      }
+    }
+  ],
+  "compatible_prior_scopes": [
+    "common_cause:2016-original",
+    "common_cause:2016-revised",
+    "common_cause:2018-archived",
+    "common_cause:2020-archived",
+    "common_cause:2022-archived",
+    "common_cause:2024-publisher-linked",
+    "bread_world:113-as-of-july-2014-pdf",
+    "nasw:4135-1848",
+    "nasw:4135-1729",
+    "lcv:2025",
+    "afscme:2025-2026",
+    "defenders_action:2005",
+    "defenders_action:2005-2006",
+    "food_policy_action:lifetime-archived-pdf",
+    "few:117-first",
+    "few:117-second",
+    "iava:2008-original-report-pdf",
+    "public_citizen:vchart00-senate-archived-html",
+    "public_citizen:vchart00-house-archived-html",
+    "nra_pvf:2026-11-03-general-alabama-federal-incumbents",
+    "nra_pvf:2026-11-03-general-alaska-federal-incumbents",
+    "nra_pvf:2026-11-03-general-arizona-federal-incumbents",
+    "nra_pvf:2026-11-03-general-arkansas-federal-incumbents",
+    "nra_pvf:2026-11-03-general-california-federal-incumbents",
+    "nra_pvf:2026-11-03-general-colorado-federal-incumbents",
+    "nra_pvf:2026-11-03-general-connecticut-federal-incumbents",
+    "nra_pvf:2026-11-03-general-delaware-federal-incumbents",
+    "nra_pvf:2026-11-03-general-florida-federal-incumbents",
+    "nra_pvf:2026-11-03-general-georgia-federal-incumbents",
+    "nra_pvf:2026-11-03-general-hawaii-federal-incumbents",
+    "nra_pvf:2026-11-03-general-idaho-federal-incumbents",
+    "nra_pvf:2026-11-03-general-illinois-federal-incumbents",
+    "nra_pvf:2026-11-03-general-indiana-federal-incumbents",
+    "nra_pvf:2026-11-03-general-iowa-federal-incumbents",
+    "nra_pvf:2026-11-03-general-kansas-federal-incumbents",
+    "nra_pvf:2026-11-03-general-kentucky-federal-incumbents",
+    "nra_pvf:2026-11-03-general-louisiana-federal-incumbents",
+    "nra_pvf:2026-11-03-general-maine-federal-incumbents",
+    "nra_pvf:2026-11-03-general-maryland-federal-incumbents",
+    "nra_pvf:2026-11-03-general-massachusetts-federal-incumbents",
+    "nra_pvf:2026-11-03-general-michigan-federal-incumbents",
+    "nra_pvf:2026-11-03-general-minnesota-federal-incumbents",
+    "nra_pvf:2026-11-03-general-mississippi-federal-incumbents",
+    "nra_pvf:2026-11-03-general-missouri-federal-incumbents",
+    "nra_pvf:2026-11-03-general-montana-federal-incumbents",
+    "nra_pvf:2026-11-03-general-nebraska-federal-incumbents",
+    "nra_pvf:2026-11-03-general-nevada-federal-incumbents",
+    "nra_pvf:2026-11-03-general-new-hampshire-federal-incumbents",
+    "nra_pvf:2026-11-03-general-new-jersey-federal-incumbents",
+    "nra_pvf:2026-11-03-general-new-mexico-federal-incumbents",
+    "nra_pvf:2026-11-03-general-new-york-federal-incumbents",
+    "nra_pvf:2026-11-03-general-north-carolina-federal-incumbents",
+    "nra_pvf:2026-11-03-general-north-dakota-federal-incumbents",
+    "nra_pvf:2026-11-03-general-ohio-federal-incumbents",
+    "nra_pvf:2026-11-03-general-oklahoma-federal-incumbents",
+    "nra_pvf:2026-11-03-general-oregon-federal-incumbents",
+    "nra_pvf:2026-11-03-general-pennsylvania-federal-incumbents",
+    "nra_pvf:2026-11-03-general-rhode-island-federal-incumbents",
+    "nra_pvf:2026-11-03-general-south-carolina-federal-incumbents",
+    "nra_pvf:2026-11-03-general-south-dakota-federal-incumbents",
+    "nra_pvf:2026-11-03-general-tennessee-federal-incumbents",
+    "nra_pvf:2026-11-03-general-texas-federal-incumbents",
+    "nra_pvf:2026-11-03-general-utah-federal-incumbents",
+    "nra_pvf:2026-11-03-general-vermont-federal-incumbents",
+    "nra_pvf:2026-11-03-general-virginia-federal-incumbents",
+    "nra_pvf:2026-11-03-general-washington-federal-incumbents",
+    "nra_pvf:2026-11-03-general-west-virginia-federal-incumbents",
+    "nra_pvf:2026-11-03-general-wisconsin-federal-incumbents",
+    "wilberforce:116-revised-5.12.21-pdf",
+    "drug_policy_action:2016-house-all-representatives-archived-html",
+    "uaw:2019-senate-original-pdf",
+    "aft:111-original-pdf",
+    "agc:119-aggregate-key-vote-index",
+    "agc:118-aggregate-key-vote-index",
+    "agc:117-aggregate-key-vote-index",
+    "agc:116-aggregate-key-vote-index",
+    "global_solutions:2010-original-report-pdf",
+    "environment_america:2009-original-report-pdf",
+    "smart_transportation:2023-house-thud-committee",
+    "smart_transportation:2013-14-house-original-pdf",
+    "smart_transportation:2013-14-senate-original-pdf",
+    "communication_workers:2025-native-descending-lists-and-key-vote-grids",
+    "drum_major:2005-original-pdf",
+    "drum_major:2007-original-pdf",
+    "dav:110-2-house-archived-native",
+    "dav:109-2-both-archived-native",
+    "farm_bureau:115-senate-original-archived-key-vote-tables",
+    "machinists:3709",
+    "shriver:2013-original-pdf",
+    "teamsters:115-2-house-archived-native",
+    "consumer_federation:2000-november-defeated-senators-lifetime-ratings",
+    "congressional_quarterly:2025-presidential-support-native-tables",
+    "congressional_quarterly:2025-participation-native-tables",
+    "american_bakers:2351-1541",
+    "american_bakers:2351-1413"
+  ],
+  "source_archive_and_plan_review": {
+    "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/consumer-followup-release-v3/../predry-central-source-review-v1/frozen-review-v1.json",
+    "sha256": "1a4b7436687d735598e56e69bcf23b83fe1b8318a6a4a5cc2ee6bb26ae7e05d0"
+  },
+  "previous_package_adoption": {
+    "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/consumer-followup-release-v3/../consumer-followup-release-v3/docs/research/scorecards/work/integration/reader_adoption_breadth_20261005.json",
+    "sha256": "fa75662f334c4e8e1433f80deb43c60aa8486368368a13f30fbbe0f9b1ce2770"
+  },
+  "checks": {
+    "predry-source-gate-v1.log": {
+      "status": "passed",
+      "log": {
+        "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/consumer-followup-release-v3/../predry-source-gate-v1.log",
+        "sha256": "574cc277a467a0b3f36935a26863f0024dfb6dc00414cdcfb49e5dedd1fca024"
+      },
+      "result": "15749 passed, 4 skipped, 51 deselected"
+    },
+    "followup111-consumer-gate-v1.log": {
+      "status": "passed",
+      "log": {
+        "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/consumer-followup-release-v3/../followup111-consumer-gate-v1.log",
+        "sha256": "d160d4694509dc15e5b98c90d00f2e6cd513c88540eca180dd23ea7ee40b520b"
+      },
+      "result": "6631 passed, 2 skipped, 35 deselected"
+    },
+    "followup111-consumer-ruff-v1.log": {
+      "status": "passed",
+      "log": {
+        "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/consumer-followup-release-v3/../followup111-consumer-ruff-v1.log",
+        "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+      },
+      "result": "All checks passed!"
+    },
+    "followup111-consumer-ty-v1.log": {
+      "status": "passed",
+      "log": {
+        "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/consumer-followup-release-v3/../followup111-consumer-ty-v1.log",
+        "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+      },
+      "result": "All checks passed!"
+    },
+    "followup111-consumer-dictionary-v1.log": {
+      "status": "passed",
+      "log": {
+        "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/consumer-followup-release-v3/../followup111-consumer-dictionary-v1.log",
+        "sha256": "49ddbbb360358a4ea39a2a06dc8c9cb4b4013bda47dc683d76b9ca127049fa3a"
+      },
+      "result": "Data dictionary check passed"
+    }
+  },
+  "unchanged_prior_ledger": {
+    "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/consumer-followup-release-v3/../consumer-predry-aggregate-v1/docs/research/scorecards/work/integration/integration_qualifications.json",
+    "sha256": "91f6a8849cd188ad552c72026e3afbb1fa531d48f3f17cb39d254e58fccd3ea8"
+  },
+  "qualification_boundary": "FCNL2 selected action tables; AWA /2 one complete linked sheet with unknown period; IPAA13 item/action snapshots with no aggregate or lifetime rating admission. BIPAC and catalog/private-grid utilities remain unregistered.",
+  "publication_boundary": "All391 prior published scope records remain unchanged. Added16 are qualified only; automatic refresh disabled. Current source and analysis pointers, server-image baseline, historical evidence and prior wheels remain intact.",
+  "consumer_independent_review": "pending-final-committed-package-review",
+  "baseline_format_check": {
+    "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/consumer-followup-release-v3/../followup111-consumer-baseline-format-v1.json",
+    "sha256": "6adb1bf8d941a0d2266af02f709dbe33a23dff55f146e07c9b2154810f3008a7"
+  },
+  "recipe": {
+    "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/consumer-followup-release-v3/../record_followup111_adoption_v1.py",
+    "sha256": "cb567971e33fce8fc8c87fc30198754f435d9154863b94c2c24e3e7064281e5b"
+  }
+}
