@@ -4,7 +4,7 @@
 
 **FEC CSV context observations**
 
-One physical CSV row exposed by retained collection context. Preserves source values, amounts and dates under the context's actual coverage status. A complete retained prefix is still not an asserted complete source population or current financial total. Resolve collection_id to fec_collections in the captured source generation and source_context_pointer into its retained context. Context witnesses use their own digest and native coordinates; they do not require a fictional source_record_id.
+One physical CSV row exposed by retained collection context. Preserves source values, amounts and dates under the context's actual coverage status. A complete retained prefix is still not an asserted complete source population or current financial total. Resolve collection_id to fec_collections in the captured source generation and source_context_pointer into its retained context. Context witnesses use their own digest and native coordinates; they do not require a fictional source_record_id. Every row has the amount status `exact`; the amount status is kept in the receipt.
 
 Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_retained_csv_observations'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
 

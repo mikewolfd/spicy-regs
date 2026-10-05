@@ -4239,6 +4239,7 @@ tables:
       definition_set_id joins fec_filing_definitions.record_id and its fec_filing_definition_evidence context witnesses;
       filing_header_record_id and filing_header_locator_json identify the separate actual header witness. Other source
       layouts retain their own dictionary evidence.
+      Every row comes from `fec-electronic-filing-schedule`; the source namespace is kept in the receipt.
     columns:
       record_id: Deterministic key for this mapped source observation within its table and generation; repeated captures
         remain distinct from a single economic event.
@@ -4817,6 +4818,7 @@ tables:
       definition_set_id joins fec_filing_definitions.record_id and its fec_filing_definition_evidence context witnesses;
       filing_header_record_id and filing_header_locator_json identify the separate actual header witness. Other source
       layouts retain their own dictionary evidence.
+      Every row comes from `fec-electronic-filing-schedule`; the source namespace is kept in the receipt.
     columns:
       record_id: Deterministic key for this mapped source observation within its table and generation; repeated captures
         remain distinct from a single economic event.
@@ -5102,6 +5104,7 @@ tables:
       is not an aggregate enforcement total. Resolve collection_id and source_record_id against fec_source_records
       in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses.
       Stored or release-matched derived evidence routes preserve the same exact source coordinates.
+      Every row has the amount status `source_missing`; the amount status is kept in the receipt.
     columns:
       record_id: Deterministic key for this mapped source observation within its table and generation; repeated captures
         remain distinct from a single economic event.
@@ -5166,6 +5169,7 @@ tables:
       For original-filing rows, definition_set_id joins fec_filing_definitions.record_id and its fec_filing_definition_evidence
       context witnesses; filing_header_record_id and filing_header_locator_json identify the separate actual header
       witness. Other source layouts retain their own dictionary evidence.
+      Every row comes from `fec-electronic-filing-schedule`; the source namespace is kept in the receipt.
     columns:
       record_id: Deterministic key for this mapped source observation within its table and generation; repeated captures
         remain distinct from a single economic event.
@@ -5304,6 +5308,7 @@ tables:
       NULL, empty and unsupported distinctions. Resolve collection_id and source_record_id against fec_source_records
       in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses.
       Stored or release-matched derived evidence routes preserve the same exact source coordinates.
+      Every row comes from `fec-retained-candidate-api`; the source namespace is kept in the receipt.
     columns:
       record_id: Deterministic key for this mapped source observation within its table and generation; repeated captures
         remain distinct from a single economic event.
@@ -5462,6 +5467,7 @@ tables:
       preserve duplicate or overlapping source observations. Resolve collection_id and source_record_id against fec_source_records
       in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses.
       Stored or release-matched derived evidence routes preserve the same exact source coordinates.
+      Every row comes from `fec-retained-committee-history`; the source namespace is kept in the receipt.
     columns:
       record_id: Deterministic key for this mapped source observation within its table and generation; repeated captures
         remain distinct from a single economic event.
@@ -5534,6 +5540,7 @@ tables:
       limitations remain explicit. Resolve collection_id and source_record_id against fec_source_records in the captured
       source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or
       release-matched derived evidence routes preserve the same exact source coordinates.
+      Every row comes from `fec-retained-committee-api`; the source namespace is kept in the receipt.
     columns:
       record_id: Deterministic key for this mapped source observation within its table and generation; repeated captures
         remain distinct from a single economic event.
@@ -5650,6 +5657,7 @@ tables:
       and campaign contributions. Resolve collection_id and source_record_id against fec_source_records in the captured
       source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or
       release-matched derived evidence routes preserve the same exact source coordinates.
+      Every row comes from `fec-bulk-communication-cost-csv`; the source namespace is kept in the receipt.
     columns:
       record_id: Deterministic key for this mapped source observation within its table and generation; repeated captures
         remain distinct from a single economic event.
@@ -5752,6 +5760,7 @@ tables:
       is not a resolved person. Resolve collection_id and source_record_id against fec_source_records in the captured
       source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or
       release-matched derived evidence routes preserve the same exact source coordinates.
+      Every row has the amount status `exact`; the amount status is kept in the receipt.
     columns:
       record_id: Deterministic key for this mapped source observation within its table and generation; repeated captures
         remain distinct from a single economic event.
@@ -5837,6 +5846,7 @@ tables:
       routes preserve the same exact source coordinates. For original-filing rows, definition_set_id joins fec_filing_definitions.record_id
       and its fec_filing_definition_evidence context witnesses; filing_header_record_id and filing_header_locator_json
       identify the separate actual header witness. Other source layouts retain their own dictionary evidence.
+      Every row has the amount status `exact`; the amount status is kept in the receipt.
     columns:
       record_id: Deterministic key for this mapped source observation within its table and generation; repeated captures
         remain distinct from a single economic event.
@@ -6193,6 +6203,7 @@ tables:
       rows, definition_set_id joins fec_filing_definitions.record_id and its fec_filing_definition_evidence context
       witnesses; filing_header_record_id and filing_header_locator_json identify the separate actual header witness.
       Other source layouts retain their own dictionary evidence.
+      Every row has the amount status `exact`; the amount status is kept in the receipt.
     columns:
       record_id: Deterministic key for this mapped source observation within its table and generation; repeated captures
         remain distinct from a single economic event.
@@ -6374,6 +6385,8 @@ tables:
       and source_record_id against fec_source_records in the captured source generation, using source_locator_json
       and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve
       the same exact source coordinates.
+      Every row comes from `fec-bulk-electioneering-candidate-disbursement-csv` and has the amount status `exact`;
+      the source namespace and the amount status are kept in the receipt.
     columns:
       record_id: Deterministic key for this mapped source observation within its table and generation; repeated captures
         remain distinct from a single economic event.
@@ -6616,6 +6629,7 @@ tables:
       against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to
       distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source
       coordinates.
+      Every row comes from `fec-openfec-file-number`; the source namespace is kept in the receipt.
     columns:
       record_id: Deterministic key for this mapped source observation within its table and generation; repeated captures
         remain distinct from a single economic event.
@@ -6880,6 +6894,7 @@ tables:
       selection is implied. Resolve collection_id and source_record_id against fec_source_records in the captured
       source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or
       release-matched derived evidence routes preserve the same exact source coordinates.
+      Every row comes from `fec-openfec-file-number`; the source namespace is kept in the receipt.
     columns:
       record_id: Deterministic key for this mapped source observation within its table and generation; repeated captures
         remain distinct from a single economic event.
@@ -7246,6 +7261,7 @@ tables:
       coordinates. For original-filing rows, definition_set_id joins fec_filing_definitions.record_id and its fec_filing_definition_evidence
       context witnesses; filing_header_record_id and filing_header_locator_json identify the separate actual header
       witness. Other source layouts retain their own dictionary evidence.
+      Every row has the amount status `exact`; the amount status is kept in the receipt.
     columns:
       record_id: Deterministic key for this mapped source observation within its table and generation; repeated captures
         remain distinct from a single economic event.
@@ -7422,6 +7438,7 @@ tables:
       and source_record_id against fec_source_records in the captured source generation, using source_locator_json
       and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve
       the same exact source coordinates.
+      Every row has the amount status `exact`; the amount status is kept in the receipt.
     columns:
       record_id: Deterministic key for this mapped source observation within its table and generation; repeated captures
         remain distinct from a single economic event.
@@ -7881,6 +7898,7 @@ tables:
       rows, definition_set_id joins fec_filing_definitions.record_id and its fec_filing_definition_evidence context
       witnesses; filing_header_record_id and filing_header_locator_json identify the separate actual header witness.
       Other source layouts retain their own dictionary evidence.
+      Every row comes from `fec-electronic-filing-schedule`; the source namespace is kept in the receipt.
     columns:
       record_id: Deterministic key for this mapped source observation within its table and generation; repeated captures
         remain distinct from a single economic event.
@@ -7983,6 +8001,7 @@ tables:
       For original-filing rows, definition_set_id joins fec_filing_definitions.record_id and its fec_filing_definition_evidence
       context witnesses; filing_header_record_id and filing_header_locator_json identify the separate actual header
       witness. Other source layouts retain their own dictionary evidence.
+      Every row comes from `fec-electronic-filing-schedule`; the source namespace is kept in the receipt.
     columns:
       record_id: Deterministic key for this mapped source observation within its table and generation; repeated captures
         remain distinct from a single economic event.
@@ -8338,6 +8357,7 @@ tables:
       affiliation. Resolve collection_id and source_record_id against fec_source_records in the captured source generation,
       using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived
       evidence routes preserve the same exact source coordinates.
+      Every row comes from `fec-bulk-lobbyist`; the source namespace is kept in the receipt.
     columns:
       record_id: Deterministic key for this mapped source observation within its table and generation; repeated captures
         remain distinct from a single economic event.
@@ -8458,6 +8478,7 @@ tables:
       or used to replace the current registry. Resolve collection_id and source_record_id against fec_source_records
       in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses.
       Stored or release-matched derived evidence routes preserve the same exact source coordinates.
+      Every row comes from `fec-retained-committee-history`; the source namespace is kept in the receipt.
     columns:
       record_id: Deterministic key for this mapped source observation within its table and generation; repeated captures
         remain distinct from a single economic event.
@@ -8667,6 +8688,7 @@ tables:
       resolve an affected transaction, or exclude money from a total. Resolve collection_id and source_record_id against
       fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish
       repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates.
+      Every row comes from `fec-bulk-false-fictitious-notice`; the source namespace is kept in the receipt.
     columns:
       record_id: Deterministic key for this mapped source observation within its table and generation; repeated captures
         remain distinct from a single economic event.
@@ -9491,6 +9513,7 @@ tables:
       population or current financial total. Resolve collection_id to fec_collections in the captured source generation
       and source_context_pointer into its retained context. Context witnesses use their own digest and native coordinates;
       they do not require a fictional source_record_id.
+      Every row has the amount status `exact`; the amount status is kept in the receipt.
     columns:
       record_id: Deterministic key for this mapped source observation within its table and generation; repeated captures
         remain distinct from a single economic event.

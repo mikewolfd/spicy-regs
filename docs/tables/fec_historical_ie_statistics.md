@@ -31,6 +31,7 @@ Processing fields, source witnesses, conversion inputs and diagnostics reference
 | `report_type` | `VARCHAR` | Source-reported report classification, interpreted within its namespace rather than as a universal period code. |
 | `amendment_indicator` | `VARCHAR` | Literal source amendment flag. It does not by itself prove the amendment chain, replacement scope or current record. |
 | `image_number` | `VARCHAR` | Literal FEC image reference; it is not a transaction ID or filing number. |
+| `amount_status` | `VARCHAR` | Source-presence or conversion state for amount, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
 | `unit` | `VARCHAR` | Unit established by the source-specific definition, such as USD, count or days; unknown units must remain explicit. |
 | `amount` | `DECIMAL(38,9)` | Exact decimal for the source-reported amount for this record and its amount_kind. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations. |
 | `reported_date` | `DATE` | Date parsed from the date stated for this historical/context observation. NULL requires the source value and conversion status; capture time is not substituted. |

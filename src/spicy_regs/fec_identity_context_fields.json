@@ -1482,6 +1482,7 @@
   "fec_registration_statements": {
     "subject_fields": {
       "record_id": "VARCHAR",
+      "source_namespace": "VARCHAR",
       "committee_id": "VARCHAR",
       "committee_name": "VARCHAR",
       "committee_street_1": "VARCHAR",
@@ -1531,7 +1532,6 @@
       "selection_evidence_sha256",
       "source_representation_role",
       "current_record_status",
-      "source_namespace",
       "source_pointer",
       "committee_id_status",
       "candidate_id_status",

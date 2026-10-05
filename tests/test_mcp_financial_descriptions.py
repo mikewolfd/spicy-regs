@@ -243,3 +243,21 @@ def test_one_row_qualified_publication_budget(financial_server):
     reply = _tool_data(mcp, "query_sql", {"sql": f"SELECT value FROM {NAME}"})
     assert _records(reply) == [{"value": "50.000000000"}]
     assert len(json.dumps(reply["publication"], separators=(",", ":")).encode()) < 4096
+
+
+def test_public_receipts_state_their_namespace_and_amount_status_beside_a_compatible_decision(financial_server):
+    """Owner decision 2026-10-05: both are columns of fec_receipts. The pinned decision view still reads them."""
+    mcp, _, _, _ = financial_server
+    raw = _tool_data(mcp, "query_sql", {"sql": "SELECT source_namespace, amount_status, amount FROM fec_receipts"})
+    assert _records(raw) == [{"source_namespace": OBSERVATION["source_namespace"],
+                              "amount_status": OBSERVATION["amount_status"], "amount": "50.000000000"}]
+    described = _tool_data(mcp, "describe_table", {"table": "fec_receipts"})
+    assert described["schema_matches_declared"] is True
+    columns = {c["column_name"]: c for c in described["columns"]}
+    for name in ("source_namespace", "amount_status"):
+        assert columns[name]["column_type"] == "VARCHAR" and columns[name]["description"]
+    # What qualifies a row for a purpose is still not a column of the public table.
+    assert not {"mapping_status", "current_record_status", "source_representation_role"} & set(columns)
+    decision = _tool_data(mcp, "query_sql", {"sql": f"SELECT status, reason FROM {NAME}"})
+    assert _records(decision) == [{"status": "eligible", "reason": "source_defined_purpose"}]
+    assert decision["publication"][NAME]["release_compatibility"]["status"] == "compatible"

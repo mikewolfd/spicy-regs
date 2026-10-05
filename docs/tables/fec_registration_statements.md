@@ -18,6 +18,7 @@ Processing fields, source witnesses, conversion inputs and diagnostics reference
 | Column | Type | Description |
 | --- | --- | --- |
 | `record_id` | `VARCHAR` | Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event. |
+| `source_namespace` | `VARCHAR` | Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent. |
 | `committee_id` | `VARCHAR` | Literal FEC committee identifier as reported in this observation. Use cycle and source scope for historical joins. |
 | `committee_name` | `VARCHAR` | The committee's name as reported, without a name-based identity merge. |
 | `committee_street_1` | `VARCHAR` | The committee's first reported street-address line. |

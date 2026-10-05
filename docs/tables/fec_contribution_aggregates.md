@@ -4,7 +4,7 @@
 
 **Source-reported contribution aggregates**
 
-One group in a source-defined contribution population and period. Compare reported groups using dimensions_json and aggregate_type. These amounts do not identify individual transactions; a candidate-shaped aggregate code is not a resolved person. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates.
+One group in a source-defined contribution population and period. Compare reported groups using dimensions_json and aggregate_type. These amounts do not identify individual transactions; a candidate-shaped aggregate code is not a resolved person. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. Every row has the amount status `exact`; the amount status is kept in the receipt.
 
 Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_contribution_aggregates'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
 
@@ -24,6 +24,7 @@ Processing fields, source witnesses, conversion inputs and diagnostics reference
 | `candidate_native_id` | `VARCHAR` | Literal candidate-like reference as reported. Aggregate codes or unresolved references do not establish a person. |
 | `candidate_name` | `VARCHAR` | The candidate's name as reported, without a name-based identity merge. |
 | `currency` | `VARCHAR` | Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately. |
+| `source_namespace` | `VARCHAR` | Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent. |
 | `period_basis` | `VARCHAR` | Evidence and source definition establishing the covered period; unknown or overlapping periods remain explicit. |
 | `source_cycle` | `INTEGER` | Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year. |
 | `amount` | `DECIMAL(38,9)` | Exact decimal for the source-reported amount for this record and its amount_kind. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations. |
