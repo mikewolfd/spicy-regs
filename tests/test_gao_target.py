@@ -116,6 +116,20 @@ def test_complete_generation_candidate_uses_prior_pin_without_publication(tmp_pa
     assert 'parents' not in artifact.root['spec']
     assert [i['artifactDigest'] for i in artifact.root['inputs'] if i['role']=='prior-generation']==[prior_digest]
     assert report['candidate_rows']==2
+    if product_page:
+        assert page is not None
+        from hashlib import sha256
+        from spicy_regs.source_evidence import verify_evidence
+        evidence_dir = Path(report['evidence_directory'])
+        admitted = verify_evidence(evidence_dir)
+        publication._publish_evidence(store, 'test', evidence_dir, admitted)
+        events = [json.loads(line) for line in (evidence_dir/'journal.jsonl').read_text().splitlines()]
+        page_event = next(event for event in events if event.get('stage') == 'gao-retained-product-page')
+        assert page_event['evidence_policy'] == 'hash_only' and page_event['body_retained'] is False
+        assert page_event['sha256'] == 'sha256:' + sha256(page).hexdigest()
+        assert page_event['byte_size'] == len(page) and 'blob_member' not in page_event
+        assert 'source-evidence/blobs/sha256/' + sha256(page).hexdigest() not in store.objects
+        assert not any(page == body for body in store.objects.values())
     if with_decisions:
         assert pq.read_table(tmp_path/'target/generation/gao_decisions.parquet').equals(before)
 
@@ -233,3 +247,36 @@ def test_one_candidate_appends_several_retained_pages_and_carries_the_familys_ot
     replays = [e for e in events if e['event'] == 'retained-product-page-replay']
     assert {e['product_id'] for e in replays} == set(ANNUAL_REPORTS)
     assert {e['rule'] for e in replays} == {PRODUCT_PAGE_METADATA_RULE}
+
+
+def test_retained_page_failure_keeps_exception_body_and_message_out_of_evidence(tmp_path, monkeypatch):
+    import json
+    from spicy_docs.sources.gao import product_metadata
+    from spicy_regs.sources import publication
+    from spicy_regs.transforms import build_gao_target as target
+    from spicy_docs.sources.gao.product_details import GaoProductDetailsError
+
+    contact = b'Named official: (202) 512-1234 official@gao.gov'
+    capture = CapturedBodyResponse('https://www.gao.gov/products/'+PRODUCT,
+        'https://www.gao.gov/products/'+PRODUCT, 200, 'text/html', '2026-10-05T00:00:00Z', contact)
+    error = GaoProductDetailsError('Named official: official@gao.gov')
+    setattr(error, 'capture', capture)
+    def refused(*_):
+        raise error
+    monkeypatch.setattr(product_metadata, 'product_page_metadata', refused)
+    monkeypatch.setattr(publication, 'table_owner', lambda *_: ('gao-reports', {'tables': ['gao_reports.parquet']}))
+    monkeypatch.setattr(target, '_verified_member', lambda *_: None)
+    from spicy_regs.source_evidence import CaptureEvidence, verify_evidence
+    monkeypatch.setattr(CaptureEvidence, 'inherit', lambda *_args, **_kwargs: None)
+    with pytest.raises(GaoProductDetailsError):
+        target.prepare_target_generation(tmp_path/'target', prior_file=tmp_path/'prior', prior_index={},
+            public_url='https://test.invalid', retained_product_pages={PRODUCT: contact})
+    journal = next((tmp_path/'target').rglob('journal.jsonl'))
+    events = [json.loads(line) for line in journal.read_text().splitlines()]
+    assert 'official@gao.gov' not in json.dumps(events)
+    assert not any(contact in path.read_bytes() for path in journal.parent.rglob('*') if path.is_file())
+    from spicy_regs.source_evidence import SourceEvidenceError
+    with pytest.raises(SourceEvidenceError, match='Only completed-build evidence'):
+        verify_evidence(journal.parent)
+    from rulespec_artifacts import admit_artifact, LocalMemberSource
+    admit_artifact(LocalMemberSource(journal.parent))
