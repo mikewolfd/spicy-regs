@@ -206,6 +206,43 @@ def test_native_diff_endpoints_and_held_citation_keys_resolve():
         assert len(source_digests(cursor, "bill_section", citation["document_key"])) == 1
 
 
+def test_a_held_court_opinion_citation_is_published_under_the_key_the_tool_asks_with():
+    """Held rows were written under ``[opinion_id, source_sha256]``; the native table names a body by one id.
+
+    Without the translation the 18 held rows for two opinions sat under a key the citation tool never asks for,
+    and both documents read as having no citations, with no error (found before the release, 2026-10-05).
+    """
+    import duckdb
+    from spicy_regs.citation_sources import TEXT_SOURCES, source_digests
+    from spicy_regs.court_subjects import SUBJECT_SCHEMAS, opinion_body_id
+
+    digest = "sha256:" + "d" * 64
+    native = opinion_body_id("11209378", digest)
+
+    def occurrence(key):
+        return required_subject("document_citations", row(
+            "document_citations", document_kind="court_opinion_derived_pdf", document_key=key, cite_kind="usc_section",
+            target_key="5-552", span_start="0", text_sha256="a" * 64))
+
+    held = occurrence(json.dumps(["11209378", digest], separators=(",", ":")))
+    assert held["document_key"] == native and TEXT_SOURCES["court_opinion_derived_pdf"].keys == ("opinion_body_id",)
+    # A row a later read writes is already under the native key, and stays there.
+    assert occurrence(native)["document_key"] == native
+    body = {"opinion_body_id": native, "opinion_id": "11209378", "cluster_id": "1", "text_content": "held text"}
+    with duckdb.connect() as cursor:
+        cursor.register("court_opinion_pdf_extractions",
+                        pa.Table.from_pylist([body], schema=SUBJECT_SCHEMAS["court_opinion_pdf_extractions"]))
+        assert len(source_digests(cursor, "court_opinion_derived_pdf", held["document_key"])) == 1
+    # The read markers translate through the same map; every other kind is published as written.
+    from spicy_regs.legislative_documents import HELD_KEY_TRANSLATIONS, native_document_key
+
+    assert native_document_key("court_opinion_derived_pdf", '["11209378","' + digest + '"]') == native
+    assert native_document_key("report_section", '["CRPT-1","1","0"]') == '["CRPT-1","1","0"]'
+    with pytest.raises(LegislativeShapeError, match="court-opinion document key"):
+        native_document_key("court_opinion_derived_pdf", '["11209378"]')
+    assert set(HELD_KEY_TRANSLATIONS) == {"bill_section", "court_opinion_derived_pdf"}
+
+
 def test_repeated_object_properties_refuse_with_raw_input_retained():
     with pytest.raises(LegislativeShapeError, match="invalid retained JSON"):
         required_subject("budget_volumes", row("budget_volumes", package_id="x",
