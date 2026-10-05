@@ -22,6 +22,7 @@ from typing import Any
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from spicy_regs import congress_bulk
 from spicy_regs.congress_subjects import IDENTITIES, INPUT_COLUMNS, RECEIPT_ONLY, map_record, subject_schema
 from spicy_regs.etl_receipts import (
     RECEIPT_SCHEMA,
@@ -36,6 +37,7 @@ from spicy_regs.etl_receipts import (
     select_receipts,
     split_record,
     validate_receipt_bundle,
+    _unpack,
 )
 from spicy_regs.transforms.parquet_rows import write_rows
 
@@ -176,63 +178,71 @@ def write_congress_dataset(
                 return lineage.inherit(current, selected, subject)
             return lineage.inherit_processing(current, processing) if processing is not None else current
 
-        with pq.ParquetWriter(receipts, RECEIPT_SCHEMA, compression="zstd") as rw:
-            sw = None if subjects is None else pq.ParquetWriter(subjects, selected.subject_schema, compression="zstd")
+        def attempt(ordinal, raw):
+            """One source row's subject, where it has one, and its receipt."""
             try:
-                receipt_batch, subject_batch = [], []
-                metadata = {
-                    "source_metadata": list(footer.items()),
-                    "source_schema": pq.read_schema(source).serialize().to_pybytes(),
-                    "entry_kind": "table_metadata",
-                }
-                receipt = observation_receipt(
-                    selected, context("metadata", processing=metadata), processing_fields=metadata
+                mapped = map_record(dataset, raw)
+                processing = {"source_fields": mapped.source_fields, "entry_kind": "row"}
+                if mapped.subject is None and not selected.receipt_only:
+                    return None, failure_receipt(
+                        selected,
+                        context(ordinal, {"reason": "no_domain_subject"}),
+                        outcome="rejected",
+                        raw_fields=processing,
+                    )
+                return split_record(
+                    selected,
+                    (mapped.subject or {}) | processing,
+                    context(ordinal, subject=mapped.subject, processing=processing),
                 )
-                receipt_batch.append(receipt)
-                for ordinal, raw in enumerate(_rows(source)):
-                    try:
-                        mapped = map_record(dataset, raw)
-                        processing = {"source_fields": mapped.source_fields, "entry_kind": "row"}
-                        if mapped.subject is None and not selected.receipt_only:
-                            receipt = failure_receipt(
-                                selected,
-                                context(ordinal, {"reason": "no_domain_subject"}),
-                                outcome="rejected",
-                                raw_fields=processing,
-                            )
-                        else:
-                            subject, receipt = split_record(
-                                selected,
-                                (mapped.subject or {}) | processing,
-                                context(ordinal, subject=mapped.subject, processing=processing),
-                            )
-                            if subject is not None:
-                                subject_batch.append(subject)
-                    except (ValueError, TypeError, pa.ArrowException) as error:
-                        # Missing identity and bad native values both remain attempts.
-                        # Arbitrary exception text can contain source content or credentials.
-                        receipt = failure_receipt(
-                            selected,
-                            context(ordinal, {"reason": "conversion_refused", "error_type": type(error).__name__}),
-                            outcome="refused",
-                            raw_fields={"source_fields": raw, "entry_kind": "row"},
-                        )
-                    receipt_batch.append(receipt)
-                    if len(receipt_batch) >= 2000:
-                        if subject_batch:
-                            assert sw is not None
-                            sw.write_table(pa.Table.from_pylist(subject_batch, schema=selected.subject_schema))
-                            subject_batch.clear()
+            except (ValueError, TypeError, pa.ArrowException) as error:
+                # Missing identity and bad native values both remain attempts.
+                # Arbitrary exception text can contain source content or credentials.
+                return None, failure_receipt(
+                    selected,
+                    context(ordinal, {"reason": "conversion_refused", "error_type": type(error).__name__}),
+                    outcome="refused",
+                    raw_fields={"source_fields": raw, "entry_kind": "row"},
+                )
+
+        metadata = {
+            "source_metadata": list(footer.items()),
+            "source_schema": pq.read_schema(source).serialize().to_pybytes(),
+            "entry_kind": "table_metadata",
+        }
+        first = observation_receipt(selected, context("metadata", processing=metadata), processing_fields=metadata)
+        # One scan for a flat dataset with no prior to inherit; the row loop below is its reference.
+        if prior is None and subjects is not None and congress_bulk.eligible(dataset, pq.read_schema(source)):
+            congress_bulk.write_bundle(
+                source, subjects, receipts, dataset=dataset, policy=selected, generation_id=generation_id,
+                processor=PROCESSOR, digest=digest, first_receipts=[first], witnesses=witnesses,
+                row_receipt=lambda raw, ordinal: attempt(ordinal, raw),
+            )
+        else:
+            with pq.ParquetWriter(receipts, RECEIPT_SCHEMA, compression="zstd") as rw:
+                sw = None if subjects is None else pq.ParquetWriter(subjects, selected.subject_schema, compression="zstd")
+                try:
+                    receipt_batch, subject_batch = [first], []
+                    for ordinal, raw in enumerate(_rows(source)):
+                        subject, receipt = attempt(ordinal, raw)
+                        if subject is not None:
+                            subject_batch.append(subject)
+                        receipt_batch.append(receipt)
+                        if len(receipt_batch) >= 2000:
+                            if subject_batch:
+                                assert sw is not None
+                                sw.write_table(pa.Table.from_pylist(subject_batch, schema=selected.subject_schema))
+                                subject_batch.clear()
+                            rw.write_table(pa.Table.from_pylist(receipt_batch, schema=RECEIPT_SCHEMA))
+                            receipt_batch.clear()
+                    if subject_batch:
+                        assert sw is not None
+                        sw.write_table(pa.Table.from_pylist(subject_batch, schema=selected.subject_schema))
+                    if receipt_batch:
                         rw.write_table(pa.Table.from_pylist(receipt_batch, schema=RECEIPT_SCHEMA))
-                        receipt_batch.clear()
-                if subject_batch:
-                    assert sw is not None
-                    sw.write_table(pa.Table.from_pylist(subject_batch, schema=selected.subject_schema))
-                if receipt_batch:
-                    rw.write_table(pa.Table.from_pylist(receipt_batch, schema=RECEIPT_SCHEMA))
-            finally:
-                if sw is not None:
-                    sw.close()
+                finally:
+                    if sw is not None:
+                        sw.close()
         validate_receipt_bundle(
             {dataset: [] if subjects is None else [subjects]}, [receipts], [selected], generation_id=generation_id
         )
@@ -277,6 +287,15 @@ def restore_processing_input(
                     yield data["source_fields"]
 
         schema = pa.ipc.read_schema(pa.BufferReader(retained["source_schema"]))
+        if congress_bulk.eligible(dataset, schema):
+
+            def fields(receipt):
+                data, diagnostic = _unpack(json.loads(receipt["processing_json"])), _unpack(json.loads(receipt["diagnostic_json"]))
+                kept = data.get("entry_kind") == "row" and diagnostic.get("reason") != "conversion_refused"
+                return data["source_fields"] if kept else None
+
+            congress_bulk.restore_input(scoped, destination, dataset=dataset, schema=schema, row_fields=fields)
+            return destination
         return write_rows(original_rows(), destination, schema)
 
 
