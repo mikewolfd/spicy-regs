@@ -7,6 +7,11 @@ from tempfile import TemporaryDirectory
 from collections.abc import Sequence
 
 
+def _processing_key(column: str) -> str:
+    """A narrow candidate key; matching raw values are checked before output."""
+    return f"unhex(sha256({column}))"
+
+
 def carry_receipt_history(current_path: Path, prior_paths: Sequence[Path], destination: Path) -> Path:
     """Keep identical attempts exactly; reference only the direct accepted predecessor on change.
 
@@ -22,7 +27,10 @@ def carry_receipt_history(current_path: Path, prior_paths: Sequence[Path], desti
 
     destination = Path(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    with TemporaryDirectory(prefix="receipt-history-", dir=destination.parent) as temporary, duckdb.connect() as con:
+    with (
+        TemporaryDirectory(prefix="receipt-history-", dir=destination.parent) as temporary,
+        duckdb.connect(str(Path(temporary) / "history.duckdb")) as con,
+    ):
         con.execute("SET threads=4")
         con.execute("SET memory_limit='1GB'")
         con.execute("SET max_temp_directory_size='32GB'")
@@ -56,27 +64,54 @@ def carry_receipt_history(current_path: Path, prior_paths: Sequence[Path], desti
             raise ValueError("Conflicting selected prior receipts")
         for name in ("current", "prior"):
             con.execute(
-                f"CREATE VIEW {name}_ranked AS SELECT *, row_number() OVER(PARTITION BY dataset,outcome,"
-                "processing_json, CASE WHEN outcome='accepted' THEN record_id END, "
-                "CASE WHEN outcome='accepted' THEN subject_version END, "
-                "CASE WHEN outcome<>'accepted' THEN diagnostic_json END ORDER BY ordinal) AS occurrence "
+                f"CREATE TABLE {name}_keys AS SELECT ordinal,dataset,outcome,record_id,subject_version, "
+                f"{_processing_key('processing_json')} AS processing_key, "
+                f"CASE WHEN outcome<>'accepted' THEN {_processing_key('diagnostic_json')} END AS diagnostic_key "
                 f"FROM {name}"
             )
-        fields = ",".join(
-            f'CASE WHEN p.ordinal IS NULL THEN c."{n}" ELSE p."{n}" END AS "{n}"' for n in RECEIPT_SCHEMA.names
-        )
-        query = f"""SELECT {fields}, c.ordinal AS current_ordinal,
-            CASE WHEN p.ordinal IS NULL AND c.outcome='accepted' THEN predecessor.receipt_id END AS predecessor_id,
-            CASE WHEN p.ordinal IS NULL AND c.outcome='accepted' THEN predecessor.generation_id END AS predecessor_generation,
-            CASE WHEN p.ordinal IS NULL AND c.outcome='accepted' THEN predecessor.processing_json END AS predecessor_processing
+            con.execute(
+                f"CREATE TABLE {name}_ranked AS SELECT *, row_number() OVER(PARTITION BY dataset,outcome,"
+                "processing_key, CASE WHEN outcome='accepted' THEN record_id END, "
+                "CASE WHEN outcome='accepted' THEN subject_version END, "
+                "diagnostic_key ORDER BY ordinal) AS occurrence "
+                f"FROM {name}_keys"
+            )
+        con.execute("""CREATE TABLE matches AS SELECT c.ordinal AS current_ordinal,p.ordinal AS prior_ordinal,
+            CASE WHEN p.ordinal IS NULL AND c.outcome='accepted' THEN predecessor.ordinal END AS predecessor_ordinal
             FROM current_ranked c LEFT JOIN prior_ranked p ON c.dataset=p.dataset AND c.outcome=p.outcome
-            AND c.processing_json=p.processing_json AND c.occurrence=p.occurrence
+            AND c.processing_key=p.processing_key AND c.occurrence=p.occurrence
             AND (c.outcome<>'accepted' OR (c.record_id=p.record_id AND c.subject_version=p.subject_version))
-            AND (c.outcome='accepted' OR c.diagnostic_json=p.diagnostic_json)
-            LEFT JOIN prior predecessor ON c.dataset=predecessor.dataset AND c.record_id=predecessor.record_id
-            AND predecessor.outcome='accepted' ORDER BY c.ordinal"""
+            AND (c.outcome='accepted' OR c.diagnostic_key=p.diagnostic_key)
+            LEFT JOIN prior_keys predecessor ON c.dataset=predecessor.dataset AND c.record_id=predecessor.record_id
+            AND predecessor.outcome='accepted'""")
+        # Hashes reduce rank/join working sets, never authorize a raw-value
+        # substitution. A collision that misaligns a FIFO pair must refuse.
+        mismatch = con.execute("""SELECT EXISTS(SELECT 1 FROM matches m
+            JOIN current c ON c.ordinal=m.current_ordinal JOIN prior p ON p.ordinal=m.prior_ordinal
+            WHERE c.processing_json IS DISTINCT FROM p.processing_json
+            OR (c.outcome<>'accepted' AND c.diagnostic_json IS DISTINCT FROM p.diagnostic_json))""").fetchone()
+        assert mismatch is not None
+        if mismatch[0]:
+            raise ValueError("Receipt history candidate keys differ from exact values")
+        con.execute("""CREATE TABLE predecessors AS SELECT m.current_ordinal,p.receipt_id,p.generation_id,p.processing_json
+            FROM prior p JOIN matches m ON p.ordinal=m.predecessor_ordinal""")
+        fields = ",".join(f'p."{n}"' for n in RECEIPT_SCHEMA.names)
+        fresh = ",".join(f'c."{n}"' for n in RECEIPT_SCHEMA.names)
+        query = f"""SELECT * FROM (
+            SELECT {fields},m.current_ordinal,NULL::VARCHAR AS predecessor_id,
+                NULL::VARCHAR AS predecessor_generation,NULL::VARCHAR AS predecessor_processing
+            FROM prior p JOIN matches m ON p.ordinal=m.prior_ordinal
+            UNION ALL
+            SELECT {fresh},m.current_ordinal,predecessor.receipt_id AS predecessor_id,
+                predecessor.generation_id AS predecessor_generation,predecessor.processing_json AS predecessor_processing
+            FROM current c JOIN matches m ON c.ordinal=m.current_ordinal AND m.prior_ordinal IS NULL
+            LEFT JOIN predecessors predecessor ON m.current_ordinal=predecessor.current_ordinal
+            )"""
+        # Finish full-row joins before sorting. The private database stores this
+        # intermediate as well as narrow keys; its disk use is additional to spill.
+        con.execute("CREATE TABLE output_rows AS " + query)
         # No statements may run while this Arrow result is open.
-        reader = con.execute(query).to_arrow_reader(batch_size=2000)
+        reader = con.execute("SELECT * FROM output_rows ORDER BY current_ordinal").to_arrow_reader(batch_size=2000)
         target = Path(temporary) / "receipts.parquet"
         with pq.ParquetWriter(target, RECEIPT_SCHEMA, compression="zstd") as writer:
             expected_count = pq.ParquetFile(current_path).metadata.num_rows
