@@ -5,6 +5,22 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
+- `spicy_docs-0.56.0`: the SpicyDocs 0.56.0 release, from release commit
+  `1e56604a28883ea90dda68351daca10a3149b96c`. SHA-256
+  `36d28dc6e3255224eed395cfa9dd097fc13872aa53c1625551d78ba71010a144`, 2,415,227 bytes;
+  two builds from a clean archive of that commit are byte-identical, and every packaged
+  source file matches the commit. It replaces the local `0.54.0+scorecards.0bee5afcac95`
+  build, an overlay whose scorecard modules came from SpicyDocs `7358ba8`, an ancestor of
+  the release. The release is a superset: 447 of that build's 451 package files are
+  byte-identical (every scorecard module among them), none is removed, five are added
+  (GAO's `listing`, `major_rule_reports`, `major_rule_letters`, `major_rule_old_index` and
+  `product_details`) and four move forward to later commits of the same files (Senate
+  expenditure rows accept a table without geometry; GAO's `month_in_review`,
+  `decision_pages` and `product_metadata` carry the listing refactor and the Congressional
+  Review Act work, their exported names kept). Table contracts, dependencies and entry
+  points are unchanged. This is a release build, vendored rather than uploaded to a
+  package index.
+
 - `spicy_docs-0.54.0+etl.cf9f88e8c4b7`: merged native ETL, source-reader, and scorecard work from
   SpicyDocs commit `cf9f88e8c4b7967b73edc190d326650306af9308`. Two archive
   builds produced identical wheels and every packaged source file matches the commit.
