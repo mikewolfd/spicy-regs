@@ -101,13 +101,15 @@ def test_explicit_scope_replacement_retains_removed_evidence(con, tmp_path):
     from spicy_regs.etl_receipts import resolve_receipt_witness
     source(con)
     iceberg.replace_rows(con, COMMENT, 'source')
+    previous = con.execute(f"SELECT * FROM {native.receipts_table()} WHERE outcome='accepted'").to_arrow_table().to_pylist()[0]
     source(con, identity='c2', text='replacement')
     native.replace_native(con, COMMENT, 'source', scope={'agency_code': 'EPA'}, delete_scope=True)
     assert con.execute(f'SELECT comment_id FROM {native.qualified(COMMENT)}').fetchall() == [('c2',)]
     retired = con.execute(f"SELECT * FROM {native.receipts_table()} WHERE attempt_id LIKE '%:retired'").to_arrow_table().to_pylist()
     assert len(retired) == 1 and retired[0]['outcome'] == 'observed'
-    references = [w for w in retired[0]['witnesses'] if (w['source_uri'] or '').startswith('receipt-processing:')]
-    assert references and all(resolve_receipt_witness(retired[0], w) for w in references)
+    assert retired[0]['processing_json'] == previous['processing_json']
+    assert retired[0]['witnesses'] == previous['witnesses']
+    assert all(resolve_receipt_witness(retired[0], w) for w in retired[0]['witnesses'])
     native.processing_table(con, COMMENT)
     # A similarly shaped observed attempt with a different reason remains selected.
     from spicy_regs.etl_receipts import RECEIPT_SCHEMA, _digest, decode_exact_json, exact_json

@@ -461,3 +461,54 @@ def test_fec_committee_multipart_prior_reads_all_members_without_mutating_select
         p.relative_to(tmp_path / "selected"): p.read_bytes() for p in (tmp_path / "selected").rglob("*") if p.is_file()
     }
     assert after == before
+
+
+def test_scheduled_held_dataset_carries_exact_prior_and_direct_predecessor(tmp_path, monkeypatch):
+    import pyarrow as pa
+    from spicy_regs.etl_receipts import decode_exact_json
+
+    class Held(SubjectReceiptRollup):
+        name = "held-history-test"
+        output = "rule_targets.parquet"
+
+        def build(self, output_dir):
+            raise NotImplementedError
+
+    current = {'docket_id': 'D', 'source': 'docket_rin', 'rin': '1000-AA00', 'evidence_id': 'capture-1'}
+    def builder(work, *, download_prior):
+        path = work / 'rule_targets.parquet'
+        download_prior(path.name, path)
+        pq.write_table(pa.Table.from_pylist([current]), path)
+        return path
+
+    monkeypatch.delenv('R2_PUBLIC_URL', raising=False)
+    Held().build_receipts(tmp_path, builder)
+    before = pq.read_table(tmp_path / 'etl_receipts.parquet').to_pylist()
+    Held().build_receipts(tmp_path, builder)
+    assert pq.read_table(tmp_path / 'etl_receipts.parquet').to_pylist() == before
+    current['evidence_id'] = 'capture-2'
+    Held().build_receipts(tmp_path, builder)
+    after = pq.read_table(tmp_path / 'etl_receipts.parquet').to_pylist()
+    previous = next(row for row in before if row['outcome'] == 'accepted')
+    changed = next(row for row in after if row['outcome'] == 'accepted')
+    assert changed['receipt_id'] != previous['receipt_id']
+    diagnostics = decode_exact_json(changed['diagnostic_json'])
+    assert diagnostics['prior_receipt']['receipt_id'] == previous['receipt_id']
+    assert diagnostics['prior_receipt']['generation_id'] == previous['generation_id']
+    assert 'prior_receipts' not in diagnostics
+    assert len(changed['witnesses']) == len(previous['witnesses']) == 1
+    assert changed['witnesses'][0]['source_id'] == previous['witnesses'][0]['source_id']
+    assert changed['witnesses'][0]['sha256'] != previous['witnesses'][0]['sha256']
+
+
+@pytest.mark.parametrize('same_selected_member', [True, False])
+def test_prior_aliases_deduplicate_only_same_pinned_member(tmp_path, monkeypatch, same_selected_member):
+    from spicy_regs.sources.publication import Member
+    prior = SelectedPriors(tmp_path / 'prior', index=publication.empty_index(), public_url='https://selected.invalid')
+    left, right = tmp_path / 'left.parquet', tmp_path / 'right.parquet'
+    prior.selections = {'laws': ([], left, 'label'), 'members': ([], right, 'label')}
+    def members(index, *, dataset):
+        prefix = 'same' if same_selected_member or dataset == 'laws' else 'different'
+        return (Member(f'generations/{prefix}/etl_receipts.parquet', 'sha256:'+'a'*64, 1, 1),)
+    monkeypatch.setattr(publication, 'receipt_members', members)
+    assert prior.receipt_paths() == ([left] if same_selected_member else [left, right])

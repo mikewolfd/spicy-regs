@@ -73,6 +73,23 @@ class SelectedPriors:
         self.restored = {}
         self.selections = {}
 
+    def receipt_paths(self):
+        """Return each immutable selected member once across dataset-local copies."""
+        from spicy_regs.sources import publication
+        seen, paths = set(), []
+        for dataset, (_, path, _) in self.selections.items():
+            if self.selected.index is None:
+                identity = ('local', str(path.resolve()))
+            else:
+                members = publication.receipt_members(self.selected.index, dataset=dataset)
+                if len(members) != 1:
+                    raise ValueError(f'{dataset}: ambiguous selected receipt member')
+                identity = ('published', members[0].path, members[0].sha256)
+            if identity not in seen:
+                seen.add(identity)
+                paths.append(path)
+        return paths
+
     def get(self, dataset):
         if dataset in self.restored:
             return self.restored[dataset]
@@ -299,7 +316,8 @@ class SubjectReceiptRollup(NativeReceiptLifecycle):
                 )
             else:
                 subject, receipt = write_held_dataset(
-                    dataset, path, destination, generation_id=self.receipt_generation_id
+                    dataset, path, destination, generation_id=self.receipt_generation_id,
+                    prior_receipts=[prior.selections[dataset][1]] if dataset in prior.selections else [],
                 )
             receipts.append(receipt)
             if subject is not None:
@@ -312,7 +330,7 @@ class SubjectReceiptRollup(NativeReceiptLifecycle):
                 legislative,
                 bundle,
                 generation_id=self.receipt_generation_id,
-                prior_receipts=list(dict.fromkeys(v[1] for v in prior.selections.values())),
+                prior_receipts=prior.receipt_paths(),
             )
             if manifest["unowned_outputs"] or any(manifest["refused_rows"].values()):
                 raise ValueError("Legislative output conversion refused")
