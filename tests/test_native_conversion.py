@@ -14,7 +14,11 @@ from tests.regulatory_publication_fakes import install
 BASE = "https://test.invalid"
 MAIN = "0f" * 20
 WHEEL = "0.56.0"
-STATE = {"checkout": MAIN, "uncommitted": [], "main": MAIN, "spicy_docs": WHEEL, "pinned_spicy_docs": WHEEL}
+PINNED = "sha256:" + "ab" * 32
+PINNED_WHEEL: dict = {"locked_sha256": PINNED, "file_sha256": PINNED, "installed_differs": []}
+STATE: dict = {"checkout": MAIN, "uncommitted": [], "untracked": [], "remote": "git@example.invalid:spicy-regs.git",
+               "main": MAIN, "spicy_docs": WHEEL, "pinned_spicy_docs": WHEEL, "spicy_docs_wheel": PINNED_WHEEL}
+BUCKET = "spicy-regs"
 
 CFR = [
     {"granule_id": "CFR-2025-title1-vol1-sec1-1", "part_granule": "false", "package_id": "CFR-2025-title1-vol1",
@@ -40,6 +44,8 @@ DOCKET = {
 def bucket(monkeypatch):
     """The shared in-memory bucket, also answering the public reads the conversion makes outside the index."""
     store = install(monkeypatch)
+    monkeypatch.setenv("R2_BUCKET_NAME", BUCKET)
+    monkeypatch.setenv("R2_ENDPOINT", "https://account.r2.invalid")
 
     def stored(url):
         return url.removeprefix(BASE + "/")
@@ -72,6 +78,7 @@ def publish_old(store, monkeypatch, directory, family, tables):
 def convert(family, work, **options):
     options.setdefault("allowed", [family])
     options.setdefault("state", lambda remote: dict(STATE))
+    options.setdefault("expect_bucket", BUCKET)
     return conversion.convert(family, work=work, expected_main=MAIN, expected_spicy_docs=WHEEL, **options)
 
 
@@ -97,7 +104,7 @@ def test_a_rollup_family_converts_publishes_and_reads_back(tmp_path, monkeypatch
     assert receipt["policy_versions"] == {"cfr_sections": "regulations-native-v1"}
     assert receipt["tables"]["cfr_sections"] == {
         "retained_rows": 2, "subject_rows": 2, "rows_only_in_restored": 0, "rows_only_in_retained": 0,
-        "columns_only_in_restored": [], "columns_only_in_retained": [], "type_changes": {}}
+        "columns_only_in_restored": [], "columns_only_in_retained": [], "type_changes": {}, "metadata_changes": []}
     assert receipt["read_back"]["anonymous_read_rows"] == {"cfr_sections": 2}
     assert json.loads((tmp_path / "work" / conversion.RECEIPT).read_text()) == receipt
     # The read every scheduled run makes now restores exactly the rows the builder last wrote.
@@ -227,7 +234,7 @@ def test_rollback_restores_the_captured_entry_and_keeps_the_converted_objects(tm
     receipt = convert("cfr-sections", tmp_path / "work", publish=True)
     converted = receipt["published"]["entry"]
 
-    rolled = conversion.rollback(tmp_path / "work" / conversion.RECEIPT)
+    rolled = conversion.rollback(tmp_path / "work" / conversion.RECEIPT, expect_bucket=BUCKET)
 
     assert publication.current_index(BASE)["families"]["cfr-sections"] == old == rolled["rolled_back"]["entry"]
     assert json.loads(bucket.objects[publication.INDEX_KEY])["families"]["cfr-sections"]["artifactDigest"] == old["artifactDigest"]
@@ -235,11 +242,11 @@ def test_rollback_restores_the_captured_entry_and_keeps_the_converted_objects(tm
     refused_read(tmp_path, "cfr_sections")
     # Rolling back again changes nothing, and a dry receipt has nothing to roll back.
     writes = list(bucket.writes)
-    conversion.rollback(tmp_path / "work" / conversion.RECEIPT)
+    conversion.rollback(tmp_path / "work" / conversion.RECEIPT, expect_bucket=BUCKET)
     assert bucket.writes == writes
     convert("cfr-sections", tmp_path / "dry")
-    with pytest.raises(conversion.ConversionRefused, match="records no publication"):
-        conversion.rollback(tmp_path / "dry" / conversion.RECEIPT)
+    with pytest.raises(conversion.ConversionRefused, match="records no publish attempt"):
+        conversion.rollback(tmp_path / "dry" / conversion.RECEIPT, expect_bucket=BUCKET)
 
 
 def test_rollback_does_not_discard_a_later_generation_unasked(tmp_path, monkeypatch, bucket):
@@ -249,10 +256,10 @@ def test_rollback_does_not_discard_a_later_generation_unasked(tmp_path, monkeypa
     later = index["families"]["cfr-sections"] | {"artifactDigest": "sha256:" + "c" * 64, "prefix": "generations/cfr-sections/" + "c" * 64}
     bucket.objects[publication.INDEX_V2_KEY] = canonical_json_bytes(index | {"families": index["families"] | {"cfr-sections": later}})
 
-    with pytest.raises(publication.PublicationError, match="names another generation than the one being rolled back"):
-        conversion.rollback(tmp_path / "work" / conversion.RECEIPT)
+    with pytest.raises(conversion.ConversionRefused, match="neither the captured generation nor this conversion's"):
+        conversion.rollback(tmp_path / "work" / conversion.RECEIPT, expect_bucket=BUCKET)
     assert publication.current_index(BASE)["families"]["cfr-sections"] == later
-    conversion.rollback(tmp_path / "work" / conversion.RECEIPT, discard_newer=True)
+    conversion.rollback(tmp_path / "work" / conversion.RECEIPT, discard_newer=True, expect_bucket=BUCKET)
     assert publication.current_index(BASE)["families"]["cfr-sections"] == old
     # An earlier generation whose table is gone cannot be pointed at.
     del bucket.objects[f"{old['prefix']}/cfr_sections.parquet"]
@@ -272,3 +279,266 @@ def test_the_command_line_names_one_family_and_its_allow_list(tmp_path, monkeypa
     assert conversion.main(["cfr-sections", "--allow", "amendments,cfr-sections", *common]) == 0
     assert "not published (no --publish)" in capsys.readouterr().out
     assert "etlReceipts" not in publication.current_index(BASE)["families"]["cfr-sections"]
+
+
+V2 = publication.INDEX_V2_KEY
+COMMON = ["--allow", "cfr-sections", "--expect-main", MAIN, "--expect-spicy-docs", WHEEL, "--remote", "fork"]
+
+
+def stored(store, family="cfr-sections"):
+    return publication.parse_index(store.objects[V2])["families"][family]
+
+
+def test_a_pointer_write_whose_response_was_lost_is_found_and_finished(tmp_path, monkeypatch, bucket, capsys):
+    """The conditional PUT lands, the client's retry answers 412, and publication raises: the family IS converted."""
+    from tests.generation_fakes import error
+
+    old = publish_old(bucket, monkeypatch, tmp_path, "cfr-sections", {"cfr_sections": CFR})
+    monkeypatch.setattr(conversion, "source_state", lambda remote: dict(STATE))
+    real, lost = bucket.put_object, []
+
+    def put_object(**kwargs):
+        result = real(**kwargs)
+        if kwargs["Key"] == V2 and not lost:
+            lost.append(kwargs["Key"])
+            raise error("PreconditionFailed")
+        return result
+
+    monkeypatch.setattr(bucket, "put_object", put_object)
+    work = tmp_path / "work"
+    assert conversion.main(["cfr-sections", *COMMON, "--work", str(work), "--publish", "--expect-bucket", BUCKET]) == 0
+
+    receipt = json.loads((work / conversion.RECEIPT).read_text())
+    assert lost and stored(bucket) == receipt["published"]["entry"] != old
+    assert receipt["publish_attempt"]["outcome"] == "moved to this conversion's generation"
+    assert "Family changed since the build read its inputs" in receipt["publish_attempt"]["error"]
+    assert receipt["read_back"]["anonymous_read_rows"] == {"cfr_sections": 2}
+    # The derived version 1 index was written although the publish call never reached it.
+    assert json.loads(bucket.objects[publication.INDEX_KEY])["families"]["cfr-sections"]["artifactDigest"] == stored(bucket)["artifactDigest"]
+    assert "published and read back" in capsys.readouterr().out
+
+
+def test_a_process_stopped_after_the_pointer_write_leaves_a_receipt_that_rolls_back(tmp_path, monkeypatch, bucket, capsys):
+    old = publish_old(bucket, monkeypatch, tmp_path, "cfr-sections", {"cfr_sections": CFR})
+    monkeypatch.setattr(conversion, "source_state", lambda remote: dict(STATE))
+    work = tmp_path / "work"
+    with monkeypatch.context() as stopped:
+        stopped.setattr(publication, "_write_v1", lambda *_a, **_k: (_ for _ in ()).throw(KeyboardInterrupt()))
+        assert conversion.main(["cfr-sections", *COMMON, "--work", str(work), "--publish", "--expect-bucket", BUCKET]) == 130
+    report = capsys.readouterr().err
+    assert "a publish was attempted and its result is not known" in report
+    assert f"--rollback {work / conversion.RECEIPT} --expect-bucket {BUCKET}" in report
+    receipt = json.loads((work / conversion.RECEIPT).read_text())
+    assert receipt["publish_attempt"]["outcome"] == "attempted" and receipt["published"] is None
+    assert stored(bucket)["artifactDigest"] == receipt["generation"]["artifactDigest"]  # the pointer did move
+
+    assert conversion.main(["--rollback", str(work / conversion.RECEIPT), "--expect-bucket", BUCKET]) == 0
+    assert stored(bucket) == old and "found this conversion's generation" in capsys.readouterr().out
+
+
+def test_a_refused_pointer_write_reports_the_state_it_left(tmp_path, monkeypatch, bucket, capsys):
+    """Another writer moves the family between capture and publish: refused, and the report names what is stored."""
+    old = publish_old(bucket, monkeypatch, tmp_path, "cfr-sections", {"cfr_sections": CFR})
+    monkeypatch.setattr(conversion, "source_state", lambda remote: dict(STATE))
+    other = old | {"artifactDigest": "sha256:" + "c" * 64, "prefix": "generations/cfr-sections/" + "c" * 64}
+    real = publication.publish_generation
+
+    def publish(*arguments, **options):
+        index = publication.parse_index(bucket.objects[V2])
+        bucket.objects[V2] = canonical_json_bytes({**index, "version": 2, "families": index["families"] | {"cfr-sections": other}})
+        return real(*arguments, **options)
+
+    monkeypatch.setattr(publication, "publish_generation", publish)
+    work = tmp_path / "work"
+    assert conversion.main(["cfr-sections", *COMMON, "--work", str(work), "--publish", "--expect-bucket", BUCKET]) == 1
+    report = capsys.readouterr().err
+    assert "REFUSED: cfr-sections: PublicationError: Family changed since the build read its inputs" in report
+    assert "STATE: cfr-sections now names sha256:" + "c" * 64 in report and "rolls nothing back" in report
+    assert json.loads((work / conversion.RECEIPT).read_text())["publish_attempt"]["outcome"] == "moved elsewhere"
+    assert stored(bucket) == other
+    # The same refusal with the family untouched says nothing was published.
+    bucket.objects[V2] = canonical_json_bytes({"format": publication.parse_index(bucket.objects[V2])["format"], "version": 2,
+                                               "families": {"cfr-sections": old}})
+    monkeypatch.setattr(publication, "publish_generation",
+                        lambda *_a, **_k: (_ for _ in ()).throw(publication.PublicationError("Refusing to shrink")))
+    assert conversion.main(["cfr-sections", *COMMON, "--work", str(tmp_path / "again"), "--publish", "--expect-bucket", BUCKET]) == 1
+    report = capsys.readouterr().err
+    assert "REFUSED: cfr-sections: PublicationError: Refusing to shrink" in report and f"STATE: {conversion.NOTHING_PUBLISHED}" in report
+
+
+def test_the_write_target_is_named_checked_first_and_recorded(tmp_path, monkeypatch, bucket, capsys):
+    publish_old(bucket, monkeypatch, tmp_path, "cfr-sections", {"cfr_sections": CFR})
+    monkeypatch.setattr(conversion, "source_state", lambda remote: dict(STATE))
+    run = ["cfr-sections", *COMMON, "--publish"]
+    with pytest.raises(SystemExit):
+        conversion.main([*run, "--work", str(tmp_path / "unnamed")])
+    assert conversion.main([*run, "--work", str(tmp_path / "other"), "--expect-bucket", "another-bucket"]) == 1
+    assert "would write to bucket spicy-regs, not the --expect-bucket another-bucket" in capsys.readouterr().err
+    assert not (tmp_path / "other").exists()  # refused before anything was converted
+    # A setting exported in the shell that the env-file contradicts is refused by name, never by value.
+    env = tmp_path / "r2.env"
+    env.write_text("R2_BUCKET_NAME=some-other-bucket\nR2_ENDPOINT=https://account.r2.invalid\n")
+    assert conversion.main([*run, "--work", str(tmp_path / "env"), "--expect-bucket", BUCKET, "--env-file", str(env)]) == 1
+    report = capsys.readouterr().err
+    assert "R2_BUCKET_NAME in the environment differ from" in report and "some-other-bucket" not in report
+    monkeypatch.setattr(r2, "require_credentials", lambda action: (_ for _ in ()).throw(RuntimeError(f"{action} requires R2 credentials")))
+    assert conversion.main([*run, "--work", str(tmp_path / "keyless"), "--expect-bucket", BUCKET]) == 1
+    assert "requires R2 credentials" in capsys.readouterr().err and not (tmp_path / "keyless").exists()
+    monkeypatch.undo()
+    with pytest.raises(SystemExit):  # a rollback takes no conversion arguments
+        conversion.main(["cfr-sections", "--rollback", str(tmp_path / "x.json"), "--expect-bucket", BUCKET])
+
+
+def test_the_published_receipt_names_its_target(tmp_path, monkeypatch, bucket):
+    publish_old(bucket, monkeypatch, tmp_path, "cfr-sections", {"cfr_sections": CFR})
+    receipt = convert("cfr-sections", tmp_path / "work", publish=True)
+    assert receipt["target"] == {"bucket": BUCKET, "endpoint_host": "account.r2.invalid"}
+    monkeypatch.setenv("R2_ENDPOINT", "https://elsewhere.r2.invalid")
+    with pytest.raises(conversion.ConversionRefused, match="was written to"):
+        conversion.rollback(tmp_path / "work" / conversion.RECEIPT, expect_bucket=BUCKET)
+
+
+def test_a_checkout_that_could_load_something_else_is_refused():
+    def refused(**changed):
+        with pytest.raises(conversion.ConversionRefused) as refusal:
+            conversion._refuse_moved(STATE | changed, main=MAIN, spicy_docs=WHEEL)
+        return str(refusal.value)
+
+    conversion._refuse_moved(STATE, main=MAIN, spicy_docs=WHEEL)
+    assert "untracked files the command could load: src/spicy_regs/pipelines/rollups/extra.py" in refused(
+        untracked=["src/spicy_regs/pipelines/rollups/extra.py"])
+    wheel = PINNED_WHEEL
+    assert "uv.lock pins" in refused(spicy_docs_wheel=wheel | {"file_sha256": "sha256:" + "cd" * 32})
+    assert "uv.lock pins" in refused(spicy_docs_wheel=wheel | {"locked_sha256": None, "file_sha256": None})
+    assert "differs from the pinned wheel in spicy_docs/reader.py" in refused(
+        spicy_docs_wheel=wheel | {"installed_differs": ["spicy_docs/reader.py"]})
+
+
+def test_main_is_read_from_a_hosted_remote_and_the_installed_wheel_is_the_pinned_one(monkeypatch):
+    import subprocess
+
+    with pytest.raises(conversion.ConversionRefused, match="git remote failed"):
+        conversion.source_state("no-such-remote")
+    real = subprocess.run
+
+    def local(command, **options):
+        if command[3:5] == ["remote", "get-url"]:
+            return subprocess.CompletedProcess(command, 0, stdout="/tmp/a-clone\n", stderr="")
+        return real(command, **options)
+
+    monkeypatch.setattr(subprocess, "run", local)
+    with pytest.raises(conversion.ConversionRefused, match="not a hosted repository"):
+        conversion.source_state("anything")
+    monkeypatch.undo()
+    # This checkout's own lock, vendored wheel and installed files agree; the check re-hashes the installed files.
+    from pathlib import Path
+    import tomllib
+
+    root = Path(conversion.__file__).resolve().parents[2]
+    locked = next(p for p in tomllib.loads((root / "uv.lock").read_text())["package"] if p["name"] == "spicy-docs")
+    state = conversion._wheel_state(root, locked)
+    assert state["locked_sha256"] == state["file_sha256"] and state["installed_differs"] == []
+    assert conversion._wheel_state(root, locked | {"source": {"registry": "https://example.invalid"}})["file_sha256"] is None
+
+
+GROUP = {"cl_docket_id": "1", "parent_cl_docket_id": "2", "confidence_tier": "exact", "edition": "2026-06-30",
+         "rule_version": "v1", "match_basis": "docket_number", "group_size": "3"}
+
+
+def test_a_court_table_published_with_a_type_the_native_schema_does_not_declare_is_refused(tmp_path, monkeypatch, bucket):
+    """The court restore takes the retained table's own types, so they are held against the declared native ones."""
+    publish_old(bucket, monkeypatch, tmp_path, "court-docket-groups", {"court_docket_groups": [GROUP]})
+    with pytest.raises(conversion.ConversionRefused, match="court_docket_groups does not restore to its retained table"):
+        convert("court-docket-groups", tmp_path / "work")
+    check = json.loads((tmp_path / "work" / conversion.RECEIPT).read_text())["tables"]["court_docket_groups"]
+    assert check["type_changes"] == {"group_size": ["string", "int64"]} and check["rows_only_in_retained"] == 0
+
+
+def test_file_metadata_a_later_run_reads_must_survive(tmp_path, monkeypatch, bucket):
+    """The CFR placement marker is file metadata the next CFR run depends on; any metadata change is a difference."""
+    import importlib
+
+    cfr = importlib.import_module("spicy_regs.transforms.build_cfr_sections")  # the package exports a function by this name
+    table = pa.Table.from_pylist(CFR, schema=pa.schema([(column, pa.string()) for column in CFR[0]]))
+    marked, plain = tmp_path / "marked.parquet", tmp_path / "plain.parquet"
+    pq.write_table(table.replace_schema_metadata(dict(cfr.PLACEMENT_MARKER)), marked)
+    pq.write_table(table, plain)
+    assert conversion._differences(marked, marked)["metadata_changes"] == []
+    assert conversion._differences(plain, marked)["metadata_changes"] == sorted(cfr.PLACEMENT_MARKER)
+    # Through the converter: the marker the published table carries is on the table the next run restores.
+    from spicy_regs import etl_policy_registry
+    from spicy_regs.generations import build_generation
+
+    path = tmp_path / "old" / "cfr_sections.parquet"
+    path.parent.mkdir()
+    pq.write_table(table.replace_schema_metadata(dict(cfr.PLACEMENT_MARKER)), path)
+    with monkeypatch.context() as patch:
+        patch.setattr(etl_policy_registry, "require_registered_receipts", lambda *_: None)
+        build_generation(tmp_path / "old-generation", family="cfr-sections", files=[path], expected_keys=[path.name])
+        publication.publish_generation(tmp_path / "old-generation", client=bucket, bucket=BUCKET,
+                                       prior_index=publication.current_index(BASE))
+    assert convert("cfr-sections", tmp_path / "work")["tables"]["cfr_sections"]["metadata_changes"] == []
+
+
+def test_a_rejected_row_stops_the_conversion_like_a_refused_one():
+    assert conversion.CONVERTED_OUTCOMES == {"accepted", "observed"}
+    from spicy_regs.etl_receipts import OUTCOMES
+
+    assert OUTCOMES - conversion.CONVERTED_OUTCOMES == {"rejected", "refused", "error"}
+
+
+def test_every_journal_event_a_run_reads_back_is_handed_on():
+    """A builder that starts reading another event back from its prior must be added to the conversion's list."""
+    import re
+    from pathlib import Path
+
+    source = Path(conversion.__file__).parent
+    read_back = {name for path in source.rglob("*.py") for name in re.findall(r'inherited_event\(\s*"([^"]+)"', path.read_text())}
+    assert read_back == set(conversion.INHERITED_EVENTS)
+
+
+def test_a_converted_family_keeps_its_evidence_lineage(tmp_path, monkeypatch, bucket):
+    """The converted generation names the one it replaces and hands on what the next run reads from its journal."""
+    from spicy_regs import etl_policy_registry
+    from spicy_regs.generations import build_generation
+    from spicy_regs.source_evidence import INPUT_ROLE, PRIOR_ROLE, CaptureEvidence
+
+    def old_with_evidence(family, name, rows, **journaled):
+        path = tmp_path / family / f"{name}.parquet"
+        path.parent.mkdir()
+        pq.write_table(pa.Table.from_pylist(rows, schema=pa.schema([(column, pa.string()) for column in rows[0]])), path)
+        evidence = CaptureEvidence(tmp_path / family, family)
+        evidence.inherit(publication.current_index(BASE), public_url=BASE)
+        for event, fields in journaled.items():
+            evidence.event(event.replace("_", "-"), **fields)
+        with monkeypatch.context() as patch:
+            patch.setattr(etl_policy_registry, "require_registered_receipts", lambda *_: None)
+            build_generation(tmp_path / family / "generation", family=family, files=[path], expected_keys=[path.name],
+                             inputs=evidence.inputs(), read_snapshot=publication.current_index(BASE))
+            index = publication.publish_generation(tmp_path / family / "generation", client=bucket, bucket=BUCKET,
+                                                   prior_index=publication.current_index(BASE),
+                                                   evidence_directories=(evidence.artifact_dir,))
+        evidence.finish()
+        return index["families"][family]
+
+    def next_run(family):
+        evidence = CaptureEvidence(tmp_path / "next" / family, family)
+        evidence.inherit(publication.current_index(BASE), public_url=BASE)
+        lineage = [json.loads(line) for line in (evidence.artifact_dir / "journal.jsonl").read_text().splitlines()][-1]
+        return evidence, lineage["evidence_status"]
+
+    remainder = {"table": "treaties", "unevidenced": [["119-1"]], "shape_version": 2}
+    old = {"courtlistener": old_with_evidence("courtlistener", "court_dockets", [DOCKET]),
+           "treaties": old_with_evidence("treaties", "treaties", [{"treaty_id": "119-1"}], congress_index_selection=remainder)}
+    for family in old:
+        receipt = convert(family, tmp_path / "work" / family, publish=True)
+        entry = publication.current_index(BASE)["families"][family]
+        root = json.loads(bucket.objects[entry["prefix"] + "/artifact.json"])
+        assert {"role": PRIOR_ROLE, "logicalId": old[family]["logicalId"], "artifactDigest": old[family]["artifactDigest"]} in root["inputs"]
+        assert [item["role"] for item in root["inputs"]].count(INPUT_ROLE) == 1 and receipt["lineage"]["inputs"] == root["inputs"]
+        evidence, status = next_run(family)
+        assert status == "Inherited pins; prior source coverage is not requalified by this run."
+        if family == "treaties":
+            assert receipt["lineage"]["handed_on_events"] == 1
+            handed = evidence.inherited_event("congress-index-selection", table="treaties")
+            assert handed is not None and handed["unevidenced"] == [["119-1"]] and handed["shape_version"] == 2
