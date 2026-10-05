@@ -24,6 +24,7 @@ from typing import Any
 import duckdb
 import pyarrow.parquet as pq
 
+from spicy_regs.duckdb_settings import load_public_http
 from spicy_regs.receipt_key_index import KEY, check_reader, lookup_receipts, verify_key_index
 from spicy_regs.receipt_key_index_writer import build_key_index
 from spicy_regs.sources.publication import file_identity
@@ -221,7 +222,7 @@ def connection(paths: list[str], *, remote: bool):
         con.execute("SET max_temp_directory_size='32GB'")
         con.execute('SET allow_persistent_secrets=false')
         if remote:
-            con.execute('LOAD httpfs')
+            load_public_http(con, retries={})
             con.execute('SET http_timeout=60')
         _apply_security_settings(con, paths)
         return con
