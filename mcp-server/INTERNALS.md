@@ -584,6 +584,39 @@ number)` in record-id order: built in 2.1 s for sam-entities and 1.5 s for
 scorecards the same day, about 40 bytes a row. It needs a place in the
 publication index, whose `etlReceipts` entry is held to exactly seven keys.
 
+**What the bound counts.** The count compared with `SCAN_ROW_BOUND` is the rows of every row group whose
+`dataset` bounds admit the table's name, so it includes other tables' receipts in a group they share and is
+an upper bound on the table's own. Exact for a table alone in its member; over by at most its shared groups
+otherwise. On 2026-10-05, for every table published with receipts, it refused only the one table whose own
+receipts exceed the bound:
+
+| table | rows | receipts the footer counts | |
+|---|---:|---:|---|
+| `crs_reports` | 14,162 | 14,162 |  |
+| `fcc_filings` | 6,609 | 6,609 |  |
+| `fcc_proceedings` | 21,696 | 21,696 |  |
+| `fec_candidate_history` | 130,678 | 130,678 |  |
+| `fec_committee_history` | 298,452 | 298,452 |  |
+| `gao_recommendations` | 5,427 | 5,427 |  |
+| `gao_decisions` | 6,616 | 7,695 |  |
+| `gao_reports` | 53,079 | 54,000 |  |
+| `sam_entities` | 797,525 | 797,525 |  |
+| `scorecard_items` | 19,491 | 22,000 |  |
+| `scorecard_member_item_results` | 2,197,878 | 2,203,402 | refused |
+| `scorecard_member_ratings` | 881,712 | 888,000 |  |
+| `scorecard_members` | 201,569 | 206,000 |  |
+| `scorecard_methodologies` | 12,291 | 20,000 |  |
+| `scorecard_metric_components` | 123 | 10,000 |  |
+| `scorecard_metric_items` | 13,415 | 22,000 |  |
+| `scorecard_metrics` | 2,074 | 6,000 |  |
+| `scorecard_publishers` | 71 | 2,000 |  |
+| `scorecard_snapshots` | receipt-only | 2,000 |  |
+| `scorecards` | 389 | 2,000 |  |
+| `usaspending_recipients` | 232,265 | 232,265 |  |
+
+A table could be refused on other tables' receipts only if its rows were spread through more than a thousand
+shared groups; counting its own rows first would cost a read of the `dataset` column over those groups.
+
 **Policy versions.** Admission refuses a receipt whose `policy_version` is not
 its dataset's policy's, and a carried receipt keeps its version, so a
 published member states one version per dataset. The tool still reads every
