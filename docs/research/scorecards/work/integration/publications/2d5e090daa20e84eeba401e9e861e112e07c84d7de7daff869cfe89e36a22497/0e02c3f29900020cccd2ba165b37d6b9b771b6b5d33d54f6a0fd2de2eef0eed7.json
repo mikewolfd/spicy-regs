@@ -1,0 +1,24 @@
+{
+  "format_version": "scorecard-integration-published-observation/2",
+  "publisher_id": "goa",
+  "scorecard_id": "goa:4358-1413",
+  "parser_version": "goa-votervoice-detailed-federal/1",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 14,
+    "scorecard_metrics": 1,
+    "scorecard_items": 14,
+    "scorecard_metric_items": 14,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 555,
+    "scorecard_member_ratings": 555,
+    "scorecard_member_item_results": 3769
+  },
+  "source_qualification": "publications/2d5e090daa20e84eeba401e9e861e112e07c84d7de7daff869cfe89e36a22497/e1d23af75d84302221176535a40d2c3d191005653f6b741d5a764e9589c91dbb.json",
+  "source_qualification_sha256": "e1d23af75d84302221176535a40d2c3d191005653f6b741d5a764e9589c91dbb",
+  "public_readback": "publications/2d5e090daa20e84eeba401e9e861e112e07c84d7de7daff869cfe89e36a22497/readback.json",
+  "public_readback_sha256": "e6e9ae9a8e53a0d1258d9f5028b5ba28f2b4f1dcdb442c7d72536ba4ad814fec",
+  "observed_source_generation": "sha256:2d5e090daa20e84eeba401e9e861e112e07c84d7de7daff869cfe89e36a22497"
+}

@@ -1,0 +1,31 @@
+{
+  "format_version": "scorecard-integration-qualified-scope/1",
+  "qualified": true,
+  "publisher_id": "nra_pvf",
+  "scorecard_id": "nra_pvf:2026-11-03-general-utah-federal-incumbents",
+  "source_url": "https://www.nrapvf.org/grades/utah",
+  "parser_version": "nra-pvf-public-election-federal-incumbents/2",
+  "reader_sha256": "8368eb8586428877d6a71cb44bcb9256973922d2d1834f12f026d1148edd9f54",
+  "capture_manifest_sha256": "49c3f2fdd3322cbde555fd945673c5df950c314c1b9c21e3afd5fa2efbe78f94",
+  "native_reference_sha256": "ff158c7fc554b3fe9eb6639653b717a2205cc0b34d8311c3c9dfffe61b95f305",
+  "native_reference_kind": "source_table_family",
+  "source_qualification_sha256": "1cc98f95566c9744466a4500ce21fbcbd15531c58dacaeb35ef7a0d39b45dba2",
+  "completeness_rule": "Complete advertised state/election HTML through EOF; every tab, office and candidate context accounted for; exact federal-office/Incumbent filter; source facts and navigation agree on reread. This is the publisher-listed election incumbent cohort, not a complete congressional roster.",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 1,
+    "scorecard_metrics": 1,
+    "scorecard_items": 0,
+    "scorecard_metric_items": 0,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 3,
+    "scorecard_member_ratings": 3,
+    "scorecard_member_item_results": 0
+  },
+  "capture_count": 4,
+  "evidence_policy": "hash_only",
+  "qualification_boundary": "Named source rendition; remaining editions and renditions stay in scope",
+  "published": false
+}

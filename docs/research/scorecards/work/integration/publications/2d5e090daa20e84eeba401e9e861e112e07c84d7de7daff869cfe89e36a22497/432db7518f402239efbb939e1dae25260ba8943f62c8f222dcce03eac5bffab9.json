@@ -1,0 +1,31 @@
+{
+  "format_version": "scorecard-integration-qualified-scope/1",
+  "qualified": true,
+  "publisher_id": "us_chamber",
+  "scorecard_id": "us_chamber:2012",
+  "source_url": "https://www.uschamber.com/how-they-voted-2012-house",
+  "parser_version": "us-chamber-named-archived-html/1",
+  "reader_sha256": "5b907f345300481ef9226f2b3fb73878dcdcc8f470bd16961e365558674bfd0f",
+  "capture_manifest_sha256": "08a31fee575a03ef905a7411b7e053c37f4d57281294c61098dc7b996517becf",
+  "native_reference_sha256": "a5e4e0b5e7b61a0ae92b5c0bb9cc82de126a39d55b8806e909397eaf0ce06ef4",
+  "native_reference_kind": "source_table_family",
+  "source_qualification_sha256": "ecad45574b7070757996a12867b7f2dc1066f54351fc304db129b01133d79ed4",
+  "completeness_rule": "Both selected original archived chamber HTML documents reached their final trailer. Complete table columns reconcile with every numbered item declaration, every member row has all rating/item cells and explicit state context, and complete native rows/legend/headers/item declarations agree on reread. No absent member, action or rating is fabricated.",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 2,
+    "scorecard_metrics": 4,
+    "scorecard_items": 20,
+    "scorecard_metric_items": 0,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 539,
+    "scorecard_member_ratings": 1078,
+    "scorecard_member_item_results": 6068
+  },
+  "capture_count": 4,
+  "evidence_policy": "hash_only",
+  "qualification_boundary": "Named source rendition; remaining editions and renditions stay in scope",
+  "published": false
+}

@@ -1,0 +1,32 @@
+{
+  "format_version": "scorecard-integration-qualified-scope/1",
+  "qualified": true,
+  "publisher_id": "few",
+  "scorecard_id": "few:117-first",
+  "source_url": "https://web.archive.org/web/20230803185543id_/https://www.few.org/wp-content/uploads/2022/03/FEW-Legislative-Score-Card-117th-First-Session-2022.pdf",
+  "parser_version": "few-qualified-117-session-pdfs/2",
+  "reader_sha256": "1e22ff88f27f76bc927f68d026e70c0adc70a9eac6d97f4d5aedc59858dc2a44",
+  "capture_manifest_sha256": "edce291f3423fe3e4fd57f5ee0a429ce753633a03959d29a6bba25f61cf00939",
+  "native_reference_sha256": "fccce166ea98c1106012563c351b85f8a6a09d64012c1fa6376be796a5941e03",
+  "native_reference_kind": "source_table_family",
+  "source_qualification_sha256": "d7f6505dd5f4a54e031b19829d9853f9a82127318e8c2b86ead558655c7b768f",
+  "completeness_rule": "Complete reviewed original FEW archived session PDF: every authored member/action/percent and separate item, source method, recognition and departure context reconciles against native text and original rendered pages. Source pin, page population, item/header order and independently reviewed semantic asset are required; reread drift refuses. Blank cells, source dates/tallies/citations/term years and 33% weights remain literal. No official IDs/actions, score reproduction, recognition bonuses, live API or whole-archive coverage inferred.",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 22,
+    "scorecard_metrics": 2,
+    "scorecard_items": 11,
+    "scorecard_metric_items": 6,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 535,
+    "scorecard_member_ratings": 535,
+    "scorecard_member_item_results": 2275
+  },
+  "capture_count": 2,
+  "evidence_policy": "hash_only",
+  "qualification_boundary": "Named source rendition; remaining editions and renditions stay in scope",
+  "published": false,
+  "qualified_observations_sha256": "2778461a8240815b6d0354f1bb1a888b664d1b0a4b021aa115de07c82b3887db"
+}

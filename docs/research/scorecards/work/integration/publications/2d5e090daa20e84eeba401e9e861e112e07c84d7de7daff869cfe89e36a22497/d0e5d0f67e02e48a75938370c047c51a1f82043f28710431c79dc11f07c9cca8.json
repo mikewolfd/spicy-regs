@@ -1,0 +1,31 @@
+{
+  "format_version": "scorecard-integration-qualified-scope/1",
+  "qualified": true,
+  "publisher_id": "new_american",
+  "scorecard_id": "new_american:report%3A1",
+  "source_url": "https://freedomindex.us/us/report/1/",
+  "parser_version": "new-american-native-report/2",
+  "reader_sha256": "8666e4ede554e641fcaed55ddea450eeb98b40caa42218402e6703b8ae84319e",
+  "capture_manifest_sha256": "532c414acfc79393e13bd276e8bb435fd26f5a6cb08cd481601951512a07e7de",
+  "native_reference_sha256": "f031520f6844874d51b1243b3bbf4d44338747f941ce9937be64a5412f14f15c",
+  "native_reference_kind": "source_table_family",
+  "source_qualification_sha256": "a7028c86018311d0dcb382eb8eb35c2c35fbb2fd4c72189712aa3734598f1d88",
+  "completeness_rule": "Complete original report rendition: every chamber's finite member table, embedded native vote map, full card grid and explicit item headers reconcile; final table, catalogue and methodology rereads remain unchanged. Report products stay separate; native icons and reported scores remain literal.",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 30,
+    "scorecard_metrics": 2,
+    "scorecard_items": 12,
+    "scorecard_metric_items": 12,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 535,
+    "scorecard_member_ratings": 535,
+    "scorecard_member_item_results": 3210
+  },
+  "capture_count": 10,
+  "evidence_policy": "hash_only",
+  "qualification_boundary": "Named source rendition; remaining editions and renditions stay in scope",
+  "published": false
+}
