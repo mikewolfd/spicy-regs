@@ -291,5 +291,65 @@
       "exit_code": 0
     },
     "boundary": "Final merge preserves unrelated official-data work and the tested scorecard package; hosted publication remains separately verified"
-  }
+  },
+  "later_consumer_merges": [
+    {
+      "status": "passed",
+      "tested_consumer_commit": "0fdcf0197db784d2b8478c4fd15acdbc92618f18",
+      "upstream_commit": "9f107809",
+      "qualified_package_and_source_scope_unchanged": true,
+      "checks": {
+        "consumer_pytest": {
+          "command": "uv run --frozen pytest --ignore=site",
+          "exit_code": 0,
+          "log_sha256": "6e8c1151f112e8e0a184d371ec9220de888bee2475a88aa1b42826feeee95cd9"
+        },
+        "consumer_ruff": {
+          "command": "uv run --frozen ruff check .",
+          "exit_code": 0,
+          "log_sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+        },
+        "consumer_ty": {
+          "command": "uv run --frozen ty check",
+          "exit_code": 0,
+          "log_sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+        },
+        "dictionary_check": {
+          "command": "uv run --frozen spicy-regs-dict check",
+          "exit_code": 0,
+          "log_sha256": "49ddbbb360358a4ea39a2a06dc8c9cb4b4013bda47dc683d76b9ca127049fa3a"
+        },
+        "documentation_build": {
+          "command": "uv run --frozen --group docs mkdocs build --strict",
+          "exit_code": 0,
+          "log_sha256": "473c4f23455cd4a18a667b7c541b04da5b301b5d13a03d545c3c010c358630db"
+        }
+      },
+      "boundary": "Unrelated upstream conversion corrections are preserved; qualified scorecard runtime and package bytes are unchanged"
+    },
+    {
+      "status": "passed",
+      "tested_consumer_commit": "efffad864d5d46acc79d81ad26ca6b02c9c30751",
+      "upstream_commit": "219114d5",
+      "qualified_package_and_source_scope_unchanged": true,
+      "checks": {
+        "affected_scorecard_and_shared_etl_tests": {
+          "command": "uv run --frozen pytest tests/test_etl_receipts.py tests/test_mcp_etl_receipts.py tests/test_subject_receipt_rollups.py tests/test_fec_subject_receipts.py tests/test_scorecard_*.py tests/test_mcp_scorecard_guidance.py",
+          "status": "passed",
+          "log_sha256": "300461499ffeb4073fda99e04274f7f6e1d2df620424e215cef3ae626f66cd95"
+        },
+        "ruff": {
+          "command": "uv run --frozen ruff check .",
+          "status": "passed",
+          "log_sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+        },
+        "ty": {
+          "command": "uv run --frozen ty check",
+          "status": "passed",
+          "log_sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+        }
+      },
+      "boundary": "Upstream shared ETL batch normalization retained; affected scorecard and receipt suites verified after the previous complete consumer gate"
+    }
+  ]
 }
