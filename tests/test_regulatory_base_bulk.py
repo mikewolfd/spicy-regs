@@ -1,4 +1,5 @@
 """Original regulatory base inputs keep the row producer's exact evidence."""
+import json
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
@@ -178,3 +179,27 @@ def test_unchanged_callers_keep_row_authority_until_explicit_bulk_opt_in(tmp_pat
     selected = ReceiptInput('dockets', (pair[0],), pair[1], 'g')
     restored = materialize_internal(selected, tmp_path/'restored')
     assert pq.read_table(restored)['title'].to_pylist() == ['retained']
+
+
+@pytest.mark.parametrize('bulk', [False, True])
+def test_existing_native_attachment_policy_keeps_all_classified_source_attributes(tmp_path, bulk):
+    # Same ten attributes already classified in the reviewed native converter
+    # cohort (5892f5bf, FAA-2016-6907-0001 from original generation232d654a).
+    attrs = {'title': 't', 'fileFormats': None, 'restrictReason': None, 'restrictReasonType': 'Restricted',
+             'agencyNote': None, 'authors': ['source author'], 'docAbstract': None, 'docOrder': 1,
+             'modifyDate': '2016-05-13T10:59:51Z', 'publication': None}
+    records = [{'id': 'a', 'type': 'attachments', 'attributes': attrs}]
+    literal = json.dumps(records, ensure_ascii=False, indent=2)
+    source = tmp_path/'source.parquet'
+    pq.write_table(pa.table({'document_id': ['supported', 'unknown'],
+                            'attachment_records_json': [literal, json.dumps([{'id': 'u', 'type': 'attachments',
+                                'attributes': {**attrs, 'unclassified': 'do not drop'}}])]}), source)
+    subject, receipts = write_held_dataset('documents', source, tmp_path/'native', generation_id='g', bulk=bulk)
+    assert pq.read_table(subject)['document_id'].to_pylist() == ['supported']
+    from spicy_regs.etl_receipts import decode_exact_json
+    rows = pq.read_table(receipts).to_pylist()
+    assert [row['outcome'] for row in rows] == ['accepted', 'observed', 'refused']
+    raw = decode_exact_json(rows[0]['processing_json'])['raw_conversion_inputs']
+    assert raw['attachment_records_json'] == literal
+    restored = materialize_internal(ReceiptInput('documents', (subject,), receipts, 'g'), tmp_path/'restored', bulk=bulk)
+    assert pq.read_table(restored)['attachment_records_json'].to_pylist() == [literal]
