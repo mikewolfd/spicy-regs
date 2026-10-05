@@ -575,6 +575,7 @@ def test_native_selection_is_bound_to_the_restored_crosswalk_bytes(tmp_path):
         raw = tmp_path / (name + "-raw.parquet")
         _write(raw, [dict.fromkeys(columns) | row for row in rows], columns)
         subject, receipt = write_congress_dataset(raw, tmp_path / (name + "-native"), dataset=name, generation_id="native")
+        assert subject is not None
         selected.append(SelectedDataset(name, (subject,), receipt, "native"))
     remember_selection(tmp_path, selected)
     prior = SelectedPriors(tmp_path / "reader", root=tmp_path, public_url="")
