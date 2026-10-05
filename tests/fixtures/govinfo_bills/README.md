@@ -93,3 +93,18 @@ published for it, except `eas2`, which that generation refused.
 | `text-119hr6644eah.xml` | 12,868 | `d9b86cb4fbdbe181bc06a5b22f5263a83d1e8f827a7f6c29c2995122015f312a` | `BILLS-119hr6644eah` (561,415, `9b35145c0e9db247f0710e85064b7724413e58b66ca5c51b82885bcf0c82f16a`) |
 | `text-119hr6644eas2.xml` | 18,307 | `b7bd3b907138980453729d71fbe7f304dcc5b481140a1cd9f700c763ab4131f1` | `BILLS-119hr6644eas2` (680,326, `2cb469edb93517edd8ef4434c054bc62381769c4c611c1acd1578e5f6f03c8e2`) |
 | `text-119hr6644enr.xml` | 12,429 | `a4c3e8991492e683059b7487b3e68a449018c4e399550104cb4780747abfeeae` | `BILLS-119hr6644enr` (677,824, `874b8e04260ece8075b3d8a97af3ffa3820e0af46ec6115434e1a1f35ed03492`) |
+
+## A measure cleared by its enrolled text (2026-10-05)
+
+`status-119sconres29.xml` backs the test in `tests/test_bill_family_cbo.py` that a bill the build reads `cleared`
+from its listed enrolled text (spicy-docs 0.57.0, `stage_rule` `enrolled_text_listed`) is not put back to
+`passed_both` by the host's re-readings of its published rows. It is 119 S.Con.Res. 29's whole BILLSTATUS document,
+one of the 134 bills the rule moves in bill family `6afdbce3…`: the House agreed to it "without objection", naming no
+amendment, and its `textVersions` lists an `Enrolled Bill` with `<date/>`.
+
+| File | Bytes | SHA-256 | Source |
+| --- | --- | --- | --- |
+| `status-119sconres29.xml` | 9,678 | `00c87d0017179295712ee518ffc83b64ac6b0722f0b441628bc40a25b8dce39d` | `https://www.govinfo.gov/bulkdata/BILLSTATUS/119/sconres/BILLSTATUS-119sconres29.xml`, whole, read keyless 2026-10-05T04:17:49Z (GET log `mcp-chaos-2026-10-02/round6/impl-E/pub/get.log`, under `~/Work/corpora`) |
+
+Byte-identical to spicy-docs 0.57.0's `tests/fixtures/bill_stage/BILLSTATUS-119sconres29.xml`. A U.S. government
+work in the public domain.

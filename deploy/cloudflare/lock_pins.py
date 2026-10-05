@@ -5,7 +5,9 @@
 
 The image installs a few root packages with the constraints, so every package pip resolves for them is the locked
 version, then ``check`` refuses any installed package the lock does not hold or holds at another version (pip, the
-installer the base image brings, excepted). Standard library only, because it runs in the image.
+installer the base image brings, excepted). It cannot see a package the server needs and the image never installed:
+nothing is installed to differ. The Dockerfile's import step covers that. Standard library only, because it runs in
+the image.
 """
 
 from __future__ import annotations

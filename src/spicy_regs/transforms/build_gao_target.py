@@ -172,8 +172,9 @@ def prepare_target_generation(output_dir: Path, *, prior_file: Path, prior_index
         evidence.inherit(prior_index,public_url=public_url)
         indexes=[]
         for page_product,page in (retained_product_pages or {}).items():
-            # The product-page rule spicy-docs states (/2 from 0.54.0: a page with no topic and an unlabeled
-            # publication-block date is read; every value read under /1 reads the same).
+            # The product-page rule spicy-docs states (/3 from 0.57.0: a page with no topic states its unlabeled
+            # publication-block date beside the number that names the page, where /2, from 0.54.0, read it only
+            # beside the page id in capitals; every value read under /1 or /2 reads the same).
             index=product_page_metadata(page,page_product)
             digest='sha256:'+hashlib.sha256(page).hexdigest()
             evidence.retain_bytes(page,stage="gao-retained-product-page",

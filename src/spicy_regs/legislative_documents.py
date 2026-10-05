@@ -160,6 +160,15 @@ def _key(kind: str, values: list[Any]) -> str:
     return kind + ":" + hashlib.sha256(encoded).hexdigest()
 
 
+def printing_id(bill_id: Any, version_code: Any, source: Any) -> str:
+    """The native key of one printing: a digest of its bill, version code and ``source``, which it does not spell.
+
+    One way: a reader holding native rows learns a printing's ``source`` only by keying each candidate and comparing.
+    Public for that reader: the bill family's stage rule reads a row by its source (``build_bill_family``).
+    """
+    return _key("printing", [bill_id, version_code, source])
+
+
 def body_version_id(value: Any) -> str | None:
     """An explicit content-version key, consistent across occurrences and readers."""
     if value is None:
@@ -180,7 +189,7 @@ def bill_section_document_key(value: Any) -> str:
     bill, version, source, seq = parts
     if re.fullmatch(r"printing:[0-9a-f]{64}", source):
         return json.dumps(parts, ensure_ascii=False, separators=(",", ":"))
-    return json.dumps([bill, version, _key("printing", [bill, version, source]), seq], ensure_ascii=False, separators=(",", ":"))
+    return json.dumps([bill, version, printing_id(bill, version, source), seq], ensure_ascii=False, separators=(",", ":"))
 
 
 def _identity_value(column: str, row: Mapping[str, Any]) -> str | None:
@@ -192,9 +201,9 @@ def _identity_value(column: str, row: Mapping[str, Any]) -> str | None:
     if column == "equivalent_xml_source":
         if value is None and row.get("equivalent_xml_version_code") is None:
             return None
-        return _key("printing", [row.get("bill_id"), row.get("equivalent_xml_version_code"), value])
+        return printing_id(row.get("bill_id"), row.get("equivalent_xml_version_code"), value)
     prefix = column.removesuffix("source")
-    return _key("printing", [row.get("bill_id"), row.get(prefix + "version_code"), value])
+    return printing_id(row.get("bill_id"), row.get(prefix + "version_code"), value)
 
 
 def map_subject(dataset: str, row: Mapping[str, Any]) -> dict[str, Any] | None:

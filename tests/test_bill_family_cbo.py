@@ -8,6 +8,8 @@ A prior stage is re-derived under the running rule, so a rule change emits no ``
 
 import importlib
 import json
+import shutil
+from collections import Counter
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -18,6 +20,7 @@ from spicy_docs.schemas import TABLE_CONTRACTS
 from spicy_docs.sources.cbo import parse_cbo_cost_estimates_feed
 from spicy_docs.sources.congress.bill_status import BillIdentity, parse_bill_status
 
+from spicy_regs.pipelines.prior_repairs import stage_suppression
 from tests.test_bill_family import (
     FIXTURES,
     StubBodyAcquirer,
@@ -257,6 +260,169 @@ def test_a_real_stage_move_emits_one_event_from_the_running_rules_prior_stage(tm
     events = _events(run(tmp_path / "second", prior=tmp_path / "first", feed=None, bulk=moved()))
     assert [json.loads(event["event_data_json"])["from"] for event in events] == [before]
     assert [json.loads(event["event_data_json"])["to"] for event in events] == [now]
+
+
+SCONRES29 = BillIdentity(119, "sconres", 29)
+
+
+class Enrolled29(StubBulkAcquirer):
+    """Serves 119 S.Con.Res. 29, whose BILLSTATUS lists an enrolled text and whose actions read `passed_both`."""
+
+    def acquire(self, congress, bill_type, **kwargs):
+        result = super().acquire(congress, bill_type, **kwargs)
+        if result.archive is not None and (congress, bill_type) == (119, "sconres"):
+            body = (FIXTURES / "status-119sconres29.xml").read_bytes()
+            result.archive = _Archive([_Member(parse_bill_status(body, identity=SCONRES29))])
+        return result
+
+
+@pytest.fixture
+def restaged(monkeypatch):
+    """What each run's re-stage pass moved: ``(bill rows, action rows)``, one entry per run."""
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "119")
+    monkeypatch.setenv("BILL_FAMILY_BILL_TYPES", "sconres")
+    moved: list[tuple[int, int]] = []
+    restage = build.restage_held_rows
+    monkeypatch.setattr(build, "restage_held_rows", lambda *tables: moved.append(restage(*tables)) or moved[-1])
+    return moved
+
+
+def _stage(paths):
+    (row,) = pq.read_table(paths["congress_bills"]).to_pylist()
+    return row["stage"], row["stage_rule"], row["stage_action_index"]
+
+
+CLEARED_BY_ITS_TEXT = ("cleared", "enrolled_text_listed", None)
+
+
+def test_a_bill_cleared_by_its_enrolled_text_is_not_put_back_and_emits_no_event(tmp_path, restaged):
+    """spicy-docs 0.57.0 reads `cleared` from the enrolled text a BILLSTATUS document lists, so both of the host's
+    re-readings of published rows take the bill's published ``bill_versions`` as that listing.
+
+    The House agreed to 119 S.Con.Res. 29 "without objection", naming no amendment, so its actions alone read
+    `passed_both`. Re-read from them alone, the run that rebuilt the bill put it back to `passed_both` in its own
+    re-stage pass, and its next read emitted `stage_changed` for a move the rule made.
+    """
+    first = run(tmp_path / "first", prior=None, feed=None, bulk=Enrolled29())
+    assert build.rederived_stages(first["bill_actions"]) == {"119-sconres-29": "passed_both"}, "the actions alone"
+    assert _stage(first) == CLEARED_BY_ITS_TEXT
+    # The next run does not read the bill: its held row is re-staged from its stored actions and versions.
+    held = run(tmp_path / "held", prior=tmp_path / "first", feed=None, bulk=Enrolled29())
+    assert _stage(held) == CLEARED_BY_ITS_TEXT and _events(held) == []
+    # Or it reads the bill again, against a prior that still says `passed_both`, as bill family 6afdbce3 does:
+    # the measurement counts that as the rule's move, and the run emits no event for it.
+    _reread(tmp_path / "first", stage="passed_both")
+    prior = (tmp_path / "first" / f"{table}.parquet" for table in ("congress_bills", "bill_actions", "bill_versions"))
+    assert stage_suppression(*prior)["largest_moves"] == [{"from": "passed_both", "to": "cleared", "bills": 1}]
+    again = run(tmp_path / "again", prior=tmp_path / "first", feed=None,
+                bulk=Enrolled29(entry=lambda c, t: zip_entry(c, t, size=31_658_670)))
+    assert _stage(again) == CLEARED_BY_ITS_TEXT and _events(again) == [], "the rule moved it, not Congress"
+    assert restaged == [(0, 0)] * 3, "no run's re-stage pass moves a row the build just read, or a held one"
+
+
+def _versions(path: Path, *rows: dict, native: bool = False) -> Path:
+    """``bill_versions`` rows as published: every contract column, or the native layout the host's mapper writes."""
+    from spicy_regs.legislative_documents import map_subject, subject_schema
+
+    whole = [dict.fromkeys(TABLE_CONTRACTS["bill_versions"].columns) | row for row in rows]
+    if native:
+        table = pa.Table.from_pylist([map_subject("bill_versions", row) for row in whole],
+                                     schema=subject_schema("bill_versions"))
+    else:
+        table = pa.Table.from_pylist(whole, schema=pa.schema([(c, pa.string()) for c in whole[0]]))
+    pq.write_table(table, path)
+    return path
+
+
+#: An enrolled text listed with its body read, one listed only, a PDF twin of one (no listing), and another printing.
+PRINTINGS = (
+    {"bill_id": "119-sconres-29", "version_code": "enrolled-bill", "source": "govinfo", "label": "Enrolled Bill"},
+    {"bill_id": "119-sconres-33", "version_code": "enrolled-bill", "source": "congress", "label": "Enrolled Bill"},
+    {"bill_id": "119-hr-1", "version_code": "enrolled-bill", "source": "govinfo-pdf", "label": "Enrolled Bill"},
+    {"bill_id": "119-sconres-29", "version_code": "engrossed-in-senate", "source": "govinfo",
+     "label": "Engrossed in Senate"},
+)
+
+
+@pytest.mark.parametrize("native", [False, True])
+def test_listed_versions_read_each_rows_source_in_both_layouts(tmp_path, native):
+    """The native layout states no source: ``printing_id`` is a digest of the bill, the version code and the source,
+    the row's key, so it is matched against each source's key. A PDF twin is no listing in either layout."""
+    path = _versions(tmp_path / "bill_versions.parquet", *PRINTINGS, native=native)
+    assert ("printing_id" in pq.read_schema(path).names) is native
+    listed = build._listed_versions(path)
+    assert {bill: [row["source"] for row in rows] for bill, rows in listed.items()} == {
+        "119-sconres-29": ["govinfo"], "119-sconres-33": ["congress"]}
+    assert set(build._listed_versions(path, ["119-sconres-33", "119-hr-1"])) == {"119-sconres-33"}
+    assert build._listed_versions(None) == {}, "a cold start lists nothing"
+
+
+def test_a_version_row_that_states_none_of_the_contracts_sources_refuses_the_reading(tmp_path):
+    """spicy-docs' ``ValueError`` is the tripwire, in either layout: a listing is never read as absent. It fires for
+    a ``printing_id`` named ``source`` too, which once read every row as unlisted and raised nothing."""
+    import duckdb
+
+    unsourced = _versions(tmp_path / "contract.parquet", PRINTINGS[0] | {"source": None})
+    with pytest.raises(ValueError, match="must state its source"):
+        build._listed_versions(unsourced)
+    native = _versions(tmp_path / "native.parquet", *PRINTINGS, native=True)
+    for name, select in (("unkeyed", "* REPLACE ('printing:' || repeat('0', 64) AS printing_id)"),
+                         ("renamed", "* EXCLUDE (printing_id), printing_id AS source")):
+        path = tmp_path / f"{name}.parquet"
+        duckdb.sql(f"COPY (SELECT {select} FROM read_parquet('{native}')) TO '{path}' (FORMAT parquet)")
+        with pytest.raises(ValueError, match="must state its source"):
+            build._listed_versions(path)
+
+
+#: Bill family 6afdbce3's own rows, where the enrolled-text rule was measured (``fixtures/bill_family_enrolled``).
+ENROLLED = Path(__file__).parent / "fixtures" / "bill_family_enrolled"
+
+
+def _generation_versions(directory: Path, layout: str) -> Path:
+    """All 226,033 ``bill_versions`` rows of 6afdbce3, the columns the host reads: as published (``contract``), each
+    ``source`` replaced by the row's native ``printing_id`` (``native``), or that key named ``source`` (``renamed``)."""
+    from spicy_regs.legislative_documents import printing_id
+
+    published = ENROLLED / "6afdbce3-bill_versions.parquet"
+    if layout == "contract":
+        return published
+    table = pq.read_table(published)
+    keys = [printing_id(*row) for row in zip(*(table[c].to_pylist() for c in ("bill_id", "version_code", "source")))]
+    column = "printing_id" if layout == "native" else "source"
+    path = directory / f"bill_versions.{layout}.parquet"
+    pq.write_table(table.drop_columns(["source"]).append_column(column, pa.array(keys, pa.string())), path)
+    return path
+
+
+@pytest.mark.parametrize("layout", ["contract", "native"])
+def test_the_measured_generations_enrolled_texts_are_listed_and_its_134_bills_move(tmp_path, layout):
+    """The witness is bill family 6afdbce3's own row counts, in the layout it publishes and in the native one.
+
+    4,990 of its 226,033 ``bill_versions`` rows list an enrolled text, and of the 233 bills it publishes
+    `passed_both` the re-stage pass moves 134 to `cleared` and no action row; read from their actions alone, none
+    moves. Zero on either count is the failure this guards, and nothing raises for it: a reading that lists no row
+    leaves every bill where its actions put it.
+    """
+    versions = _generation_versions(tmp_path, layout)
+    assert pq.read_metadata(versions).num_rows == 226_033
+    listed = build._listed_versions(versions)
+    assert (len(listed), sum(map(len, listed.values()))) == (4_990, 4_990)
+    bills, actions = (
+        Path(shutil.copyfile(ENROLLED / f"6afdbce3-passed_both-{table}.parquet", tmp_path / f"{table}.parquet"))
+        for table in ("congress_bills", "bill_actions")
+    )
+    assert build.restage_held_rows(bills, actions) == (0, 0), "as published: the actions' own reading"
+    assert build.restage_held_rows(bills, actions, versions) == (134, 0)
+    stages = pq.read_table(bills, columns=["stage", "stage_rule"]).to_pylist()
+    assert Counter((row["stage"], row["stage_rule"]) for row in stages) == {
+        ("cleared", "enrolled_text_listed"): 134, ("passed_both", "passed_both"): 99}
+    assert build.restage_held_rows(bills, actions, versions) == (0, 0), "a second pass moves nothing"
+
+
+def test_a_printing_id_named_source_refuses_the_measured_generation(tmp_path):
+    """Read as unlisted, it listed none of the 4,990 and moved none of the 134, and nothing was raised."""
+    with pytest.raises(ValueError, match="must state its source"):
+        build._listed_versions(_generation_versions(tmp_path, "renamed"))
 
 
 #: Two bills' rows as bill family e264e62b published them under the round-5 rule (``fixtures/bill_family_held``).

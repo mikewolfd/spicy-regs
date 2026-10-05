@@ -94,6 +94,7 @@ NATIVE_FIELDS = {
         "rins_json": ("rins", STRINGS),
         "docket_ids_json": ("docket_ids", STRINGS),
         "opened_by_artifact_ids_json": ("opened_by_artifact_ids", STRINGS),
+        "evidence_ids_json": ("evidence_ids", STRINGS),
     },
     "proceedings": {
         "docket_ids_json": ("docket_ids", STRINGS),
