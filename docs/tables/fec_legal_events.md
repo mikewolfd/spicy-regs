@@ -27,6 +27,7 @@ Processing fields, source witnesses, conversion inputs and diagnostics reference
 | `vote_type` | `VARCHAR` | Source-stated vote classification in a legal event. |
 | `respondent_name` | `VARCHAR` | Respondent name reported for this matter/event, with no name-based identity merge. |
 | `related_document_record_id` | `VARCHAR` | Typed document observation explicitly linked by the source to this legal event. |
+| `amount_status` | `VARCHAR` | Source-presence or conversion state for amount, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
 | `amount_kind` | `VARCHAR` | Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It is not an aggregation permission. |
 | `currency` | `VARCHAR` | Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately. |
 | `event_date` | `DATE` | Date parsed from the source-stated legal event date. NULL requires the source value and conversion status; capture time is not substituted. |

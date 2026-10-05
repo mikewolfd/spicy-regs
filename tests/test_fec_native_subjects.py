@@ -128,9 +128,12 @@ def test_financial_source_corrections_are_data_and_qualification_is_receipt():
             current_record_status="unqualified",
         ),
     )
-    assert subject == dict(record_id="r", correction_operation="deletion", amount=Decimal("1"))
-    assert inputs["amount_status"] == "exact"
+    # The amount's own status is published beside it on fec_receipts (owner decision, 2026-10-05), once: it is
+    # not also a conversion input. What qualifies the row for a purpose stays in the receipt.
+    assert subject == dict(record_id="r", correction_operation="deletion", amount=Decimal("1"), amount_status="exact")
+    assert "amount_status" not in inputs
     assert inputs["source_representation_role"] == "deletion"
+    assert inputs["current_record_status"] == "unqualified"
 
 
 def test_native_child_views_keep_decimal_order_and_hierarchy():
@@ -230,3 +233,34 @@ def test_agency_text_keeps_reading_order_without_source_locator():
     assert subject["text_ordinal"] == 17
     assert "source_locator_json" not in subject
     assert inputs["source_locator_json"] == row["source_locator_json"]
+
+
+@pytest.mark.parametrize("column", ["source_namespace", "amount_status"])
+def test_returned_column_is_a_text_column_of_exactly_the_decided_tables(column):
+    """Owner decision, 2026-10-05: the column returns where its published value varies, and nowhere else."""
+    from spicy_regs.etl_policy_registry import installed_policies
+    from spicy_regs.fec_receipt_adapter import processing_declarations
+    from spicy_regs.transforms.fec_identity_receipts import dataset_policy as identity_policy
+    from spicy_regs.transforms.fec_subject_receipts import dataset_policy
+    from tests.test_fec_subject_receipts import RETURNED, declared_schema
+
+    installed = installed_policies()
+    holders = {name for name, policy in installed.items() if name.startswith("fec_") and column in policy.subject_schema.names}
+    assert holders == RETURNED[column]
+    for name in sorted(holders):
+        policy = installed[name]
+        assert policy.subject_schema.field(column).type == pa.string()
+        assert column not in policy.receipt_fields
+        # None of these tables had published natively when the column returned, so the version did not move.
+        if policy.policy_version == "fec-identity-context-receipts/1":
+            declared = identity_policy(name)
+        else:
+            assert policy.policy_version == "fec-subject-receipts/1"
+            declared = dataset_policy(name, declared_schema(name))
+        # Publication admits a generation against the installed declaration, not the registry it was made from.
+        assert policy.descriptor() == declared.descriptor()
+    # A table whose producer writes the column and which is not on the list still does not publish it.
+    produced = {name for name, item in processing_declarations().items() if column in {c[0] for c in item["columns"]}}
+    withheld = {name for name in produced - holders if name in installed and not installed[name].receipt_only}
+    assert {"source_namespace": "fec_communication_costs", "amount_status": "fec_disbursements"}[column] in withheld
+    assert all(column not in installed[name].subject_schema.names for name in withheld)

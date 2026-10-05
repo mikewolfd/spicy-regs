@@ -14,8 +14,9 @@ from suffixes at runtime.
 Financial values stay exact decimals. Correction operations, reported measure
 roles, period bases, legal business statuses, and the publisher's historical
 amendment methodology remain business data. Parser and qualification statuses
-remain available to financial readers through receipts. The separate legal
-identifiers `rm_id` and `rm_number` retain their meanings.
+remain available to financial readers through receipts, except `amount_status`
+on the tables where its published value varies: there it is a subject column.
+The separate legal identifiers `rm_id` and `rm_number` retain their meanings.
 
 Legal citations and subjects, agency organizations and dimensions, report
 measures, and narrative fragments use native lists and structures. They preserve
@@ -34,7 +35,9 @@ subject rows. An unknown column never disappears silently.
 `assemble_subject_table` accepts qualified `TypedInput` members. It verifies
 file digests, row membership, compatible schemas, and any declared source
 namespace partition before splitting the rows. Subject output uses ordinary
-Parquet membership; `source_namespace` belongs to the receipt. The assembler
+Parquet membership. `source_namespace` is a subject column on the tables where
+its published value varies and a receipt field where every row has the same
+value; each table's entry in the field policies says which. The assembler
 restores and compares every input cell when all inputs are admitted. Refused
 inputs make `full_rebuild_qualified` false.
 

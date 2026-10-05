@@ -18,6 +18,7 @@ Processing fields, source witnesses, conversion inputs and diagnostics reference
 | Column | Type | Description |
 | --- | --- | --- |
 | `record_id` | `VARCHAR` | Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event. |
+| `source_namespace` | `VARCHAR` | Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent. |
 | `filing_key` | `VARCHAR` | Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. |
 | `form_type` | `VARCHAR` | Literal filing form or record-type code from the source layout; does not prove submission conformance. |
 | `reporting_committee_id` | `VARCHAR` | Literal FEC ID of the reporting committee where that source field identifies a committee. It does not by itself identify the sender or recipient of money. |

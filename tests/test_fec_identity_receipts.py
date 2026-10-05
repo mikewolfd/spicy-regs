@@ -389,3 +389,72 @@ def test_committee_history_parent_restores_the_rows_its_builder_wrote(tmp_path, 
     # A parent with no declared reconstruction still refuses rather than hand a reader converted values.
     with pytest.raises(ValueError, match="No processing reconstruction declared for fec_candidate_history"):
         priors.get("fec_candidate_history")
+
+
+def test_registration_statements_publish_the_source_namespace_that_tells_form_1_from_form_2(tmp_path):
+    """Owner decision 2026-10-05: source_namespace is a subject column where its published value varies.
+
+    Statements of organization (Form 1) and of candidacy (Form 2) share this table. The rows come from the real
+    registry mapper, and the pair restores every field it wrote.
+    """
+    import duckdb
+    import pyarrow as pa
+
+    from spicy_regs.etl_receipts import decode_exact_json
+    from spicy_regs.fec_receipt_adapter import ReceiptAdapter
+    from spicy_regs.transforms import fec_identity_observations as identity
+    from spicy_regs.transforms.fec_identity_receipts import dataset_policy
+    from tests.test_fec_identity_observations import SELECTION, registry
+
+    table = identity.STATEMENTS
+    policy = dataset_policy(table)
+    assert policy.subject_schema.field("source_namespace").type == pa.string()
+    assert "source_namespace" not in policy.receipt_fields
+    # fec_filings is not on the list: every published row there is fec-openfec-file-number, kept in the receipt.
+    filings = dataset_policy(identity.FILINGS)
+    assert "source_namespace" in filings.receipt_fields and "source_namespace" not in filings.subject_schema.names
+
+    built = []
+    for ordinal, mapping in enumerate((identity.FORM1, identity.FORM2)):
+        source = registry(mapping)
+        record = f"row/{ordinal}"
+        locator = {**json.loads(source["source_locator_json"]), "source_record_id": record, "ordinal": ordinal}
+        source.update(source_record_id=record, source_locator_json=json.dumps(locator))
+        built.append(identity.map_registry(source, SELECTION, mapping)[0])
+    expected = {built[0]["record_id"]: "fec-bulk-form1", built[1]["record_id"]: "fec-bulk-form2"}
+    assert len(expected) == 2 and {row["record_id"]: row["source_namespace"] for row in built} == expected
+
+    output = tmp_path / "statements"
+    with IdentityReceiptWriter(output, generation_id="g1", tables=[table]) as writer:
+        for row in built:
+            writer.emit(table, row, input_witness=WITNESS)
+    stored = pq.read_table(output / (table + ".parquet"))
+    assert stored.schema.equals(policy.subject_schema)
+    assert dict(zip(stored["record_id"].to_pylist(), stored["source_namespace"].to_pylist())) == expected
+    receipts = pq.read_table(output / "etl_receipts.parquet").to_pylist()
+    assert [receipt["outcome"] for receipt in receipts] == ["accepted"] * 2
+    # Once: the receipt binds the subject row by version and does not hold a second copy of the value.
+    assert all("source_namespace" not in decode_exact_json(receipt["processing_json"]) for receipt in receipts)
+
+    fields = REGISTRY[table]["input_fields"]
+    restored = [
+        {name: row["conversion_inputs"][name] if name in row["conversion_inputs"] else row[name] for name in fields}
+        for row in read_identity_rows(output, table, generation_id="g1")
+    ]
+    by_id = {row["record_id"]: row for row in built}
+    assert {row["record_id"]: row for row in restored} == {key: {name: row.get(name) for name in fields} for key, row in by_id.items()}
+
+    # The serving adapter restores the processing relation with the value read once, from the subject.
+    selected = {table: {"subjects": [str(output / (table + ".parquet"))], "receipts": str(output / "etl_receipts.parquet"),
+                        "generation_id": "g1"}}
+    with duckdb.connect() as con:
+        relation = ReceiptAdapter(con, {"families": {}}, "unused", local_native=selected).restore(table)
+        assert [r[0] for r in con.execute(f'DESCRIBE "{relation}"').fetchall()].count("source_namespace") == 1
+        assert dict(con.execute(f'SELECT record_id, source_namespace FROM "{relation}"').fetchall()) == expected
+
+    # A changed namespace no longer joins its receipt.
+    changed = stored.to_pylist()
+    changed[0]["source_namespace"] = "changed"
+    pq.write_table(pa.Table.from_pylist(changed, schema=stored.schema), output / (table + ".parquet"))
+    with pytest.raises(ValueError, match="subject receipt"):
+        list(read_identity_rows(output, table, generation_id="g1"))

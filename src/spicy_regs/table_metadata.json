@@ -2326,7 +2326,7 @@
     "table": "fec_account_transfers",
     "label": "Reported transfers between accounts",
     "category": "query_data",
-    "summary": "One source-reported account-transfer or allocated-activity record version. Keeps transferred amounts, activity amounts and totals separate. An account transfer is not automatically a receipt to the reporting committee or a payment to a third party. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. For original-filing rows, definition_set_id joins fec_filing_definitions.record_id and its fec_filing_definition_evidence context witnesses; filing_header_record_id and filing_header_locator_json identify the separate actual header witness. Other source layouts retain their own dictionary evidence.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_account_transfers'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
+    "summary": "One source-reported account-transfer or allocated-activity record version. Keeps transferred amounts, activity amounts and totals separate. An account transfer is not automatically a receipt to the reporting committee or a payment to a third party. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. For original-filing rows, definition_set_id joins fec_filing_definitions.record_id and its fec_filing_definition_evidence context witnesses; filing_header_record_id and filing_header_locator_json identify the separate actual header witness. Other source layouts retain their own dictionary evidence. Every row comes from `fec-electronic-filing-schedule`; the source namespace is kept in the receipt.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_account_transfers'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
     "coverage": "Sampled. Supported observations from retained Schedule H3/H5 account-transfer and activity layouts. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
     "kind": "sampled",
     "measured_on": "2026-10-01",
@@ -2761,6 +2761,11 @@
         "description": "Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It is not an aggregation permission."
       },
       {
+        "column_name": "source_namespace",
+        "column_type": "VARCHAR",
+        "description": "Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent."
+      },
+      {
         "column_name": "reporting_committee_id",
         "column_type": "VARCHAR",
         "description": "Literal FEC ID of the reporting committee where that source field identifies a committee. It does not by itself identify the sender or recipient of money."
@@ -3131,7 +3136,7 @@
     "table": "fec_allocation_bases",
     "label": "Reported allocation basis observations",
     "category": "query_data",
-    "summary": "One source-reported allocation method, ratio or supporting-basis record version. Makes source ratios, percentage text, ballot points and supporting amounts inspectable. These are allocation bases and do not create additional payment events. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. For original-filing rows, definition_set_id joins fec_filing_definitions.record_id and its fec_filing_definition_evidence context witnesses; filing_header_record_id and filing_header_locator_json identify the separate actual header witness. Other source layouts retain their own dictionary evidence.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_allocation_bases'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
+    "summary": "One source-reported allocation method, ratio or supporting-basis record version. Makes source ratios, percentage text, ballot points and supporting amounts inspectable. These are allocation bases and do not create additional payment events. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. For original-filing rows, definition_set_id joins fec_filing_definitions.record_id and its fec_filing_definition_evidence context witnesses; filing_header_record_id and filing_header_locator_json identify the separate actual header witness. Other source layouts retain their own dictionary evidence. Every row comes from `fec-electronic-filing-schedule`; the source namespace is kept in the receipt.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_allocation_bases'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
     "coverage": "Sampled. Supported observations from retained Schedule H1/H2 allocation layouts. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
     "kind": "sampled",
     "measured_on": "2026-10-01",
@@ -3403,7 +3408,7 @@
     "table": "fec_audit_findings",
     "label": "Reported FEC audit finding observations",
     "category": "query_data",
-    "summary": "One native audit finding occurrence associated with a retained matter observation. Compare source categories and wording while preserving native category IDs, source disposition and supporting documents. A finding amount is not an aggregate enforcement total. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_audit_findings'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
+    "summary": "One native audit finding occurrence associated with a retained matter observation. Compare source categories and wording while preserving native category IDs, source disposition and supporting documents. A finding amount is not an aggregate enforcement total. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. Every row has the amount status `source_missing`; the amount status is kept in the receipt.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_audit_findings'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
     "coverage": "Sampled. Supported observations from retained audit case metadata and finding/category structures. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
     "kind": "sampled",
     "measured_on": "2026-10-01",
@@ -3490,7 +3495,7 @@
     "table": "fec_bundled_contributions",
     "label": "Reported bundler and recipient observations",
     "category": "query_data",
-    "summary": "One identified bundler/recipient amount for a source period and filing version. Preserves the reported bundler identity, period amount and semiannual amount. Bulk recipient-period summaries that do not identify a bundler belong in fec_reported_financial_summaries instead. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. For original-filing rows, definition_set_id joins fec_filing_definitions.record_id and its fec_filing_definition_evidence context witnesses; filing_header_record_id and filing_header_locator_json identify the separate actual header witness. Other source layouts retain their own dictionary evidence.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_bundled_contributions'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
+    "summary": "One identified bundler/recipient amount for a source period and filing version. Preserves the reported bundler identity, period amount and semiannual amount. Bulk recipient-period summaries that do not identify a bundler belong in fec_reported_financial_summaries instead. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. For original-filing rows, definition_set_id joins fec_filing_definitions.record_id and its fec_filing_definition_evidence context witnesses; filing_header_record_id and filing_header_locator_json identify the separate actual header witness. Other source layouts retain their own dictionary evidence. Every row comes from `fec-electronic-filing-schedule`; the source namespace is kept in the receipt.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_bundled_contributions'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
     "coverage": "Sampled. Supported observations from retained Schedule A-L and other explicitly mapped bundler records. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
     "kind": "sampled",
     "measured_on": "2026-10-01",
@@ -3767,7 +3772,7 @@
     "table": "fec_candidate_api_observations",
     "label": "FEC candidate API observations",
     "category": "query_data",
-    "summary": "One candidate result occurrence in a retained API response. Provides the captured candidate attributes without replacing candidate history or selecting a current profile. Arrays and native field states retain missing, NULL, empty and unsupported distinctions. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_candidate_api_observations'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
+    "summary": "One candidate result occurrence in a retained API response. Provides the captured candidate attributes without replacing candidate history or selecting a current profile. Arrays and native field states retain missing, NULL, empty and unsupported distinctions. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. Every row comes from `fec-retained-candidate-api`; the source namespace is kept in the receipt.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_candidate_api_observations'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
     "coverage": "Sampled. Supported observations from retained candidate API results and literal native arrays. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
     "kind": "sampled",
     "measured_on": "2026-10-01",
@@ -3904,7 +3909,7 @@
     "table": "fec_committee_master_observations",
     "label": "FEC committee master observations",
     "category": "query_data",
-    "summary": "One physical committee-master row within its retained cycle/file capture. Keeps all source snapshots and raw named fields. Unlike the existing committee history table's logical committee/cycle grain, these rows preserve duplicate or overlapping source observations. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_committee_master_observations'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
+    "summary": "One physical committee-master row within its retained cycle/file capture. Keeps all source snapshots and raw named fields. Unlike the existing committee history table's logical committee/cycle grain, these rows preserve duplicate or overlapping source observations. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. Every row comes from `fec-retained-committee-history`; the source namespace is kept in the receipt.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_committee_master_observations'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
     "coverage": "Sampled. Supported observations from retained committee-master files and their verified ordered header definitions. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
     "kind": "sampled",
     "measured_on": "2026-10-01",
@@ -4006,7 +4011,7 @@
     "table": "fec_committee_observations",
     "label": "FEC committee API observations",
     "category": "query_data",
-    "summary": "One committee result occurrence in a retained API response. Makes captured committee profiles inspectable without replacing the broader fec_committees reference table. Repeated captures, literal arrays and response limitations remain explicit. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_committee_observations'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
+    "summary": "One committee result occurrence in a retained API response. Makes captured committee profiles inspectable without replacing the broader fec_committees reference table. Repeated captures, literal arrays and response limitations remain explicit. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. Every row comes from `fec-retained-committee-api`; the source namespace is kept in the receipt.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_committee_observations'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
     "coverage": "Sampled. Supported observations from retained committee API result pages. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
     "kind": "sampled",
     "measured_on": "2026-10-01",
@@ -4203,7 +4208,7 @@
     "table": "fec_communication_costs",
     "label": "Reported communication-cost observations",
     "category": "query_data",
-    "summary": "One source-reported communication-cost record observation. Keeps organization, communication class, candidate association, date and amount at the source record grain. Communication costs are distinct from independent expenditures and campaign contributions. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_communication_costs'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
+    "summary": "One source-reported communication-cost record observation. Keeps organization, communication class, candidate association, date and amount at the source record grain. Communication costs are distinct from independent expenditures and campaign contributions. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. Every row comes from `fec-bulk-communication-cost-csv`; the source namespace is kept in the receipt.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_communication_costs'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
     "coverage": "Sampled. Supported observations from retained bulk communication-cost records under their source dictionary. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
     "kind": "sampled",
     "measured_on": "2026-10-01",
@@ -4350,6 +4355,11 @@
         "description": "Source-reported purpose of the payment, event, debt or other financial record."
       },
       {
+        "column_name": "amount_status",
+        "column_type": "VARCHAR",
+        "description": "Source-presence or conversion state for amount, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility."
+      },
+      {
         "column_name": "source_cycle",
         "column_type": "INTEGER",
         "description": "Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year."
@@ -4375,7 +4385,7 @@
     "table": "fec_contribution_aggregates",
     "label": "Source-reported contribution aggregates",
     "category": "query_data",
-    "summary": "One group in a source-defined contribution population and period. Compare reported groups using dimensions_json and aggregate_type. These amounts do not identify individual transactions; a candidate-shaped aggregate code is not a resolved person. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_contribution_aggregates'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
+    "summary": "One group in a source-defined contribution population and period. Compare reported groups using dimensions_json and aggregate_type. These amounts do not identify individual transactions; a candidate-shaped aggregate code is not a resolved person. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. Every row has the amount status `exact`; the amount status is kept in the receipt.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_contribution_aggregates'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
     "coverage": "Sampled. Supported observations from retained contribution geography/size-band tables and inaugural contributor aggregates. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
     "kind": "sampled",
     "measured_on": "2026-10-01",
@@ -4415,6 +4425,11 @@
         "column_name": "currency",
         "column_type": "VARCHAR",
         "description": "Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately."
+      },
+      {
+        "column_name": "source_namespace",
+        "column_type": "VARCHAR",
+        "description": "Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent."
       },
       {
         "column_name": "period_basis",
@@ -4492,7 +4507,7 @@
     "table": "fec_coordinated_party_expenditures",
     "label": "Reported coordinated party expenditure observations",
     "category": "query_data",
-    "summary": "One Schedule F expenditure record version. Preserves party authorization roles, candidate, payee, reported amount and accompanying aggregates. Coordinated spending remains distinct from independent spending and receipts. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. For original-filing rows, definition_set_id joins fec_filing_definitions.record_id and its fec_filing_definition_evidence context witnesses; filing_header_record_id and filing_header_locator_json identify the separate actual header witness. Other source layouts retain their own dictionary evidence.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_coordinated_party_expenditures'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
+    "summary": "One Schedule F expenditure record version. Preserves party authorization roles, candidate, payee, reported amount and accompanying aggregates. Coordinated spending remains distinct from independent spending and receipts. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. For original-filing rows, definition_set_id joins fec_filing_definitions.record_id and its fec_filing_definition_evidence context witnesses; filing_header_record_id and filing_header_locator_json identify the separate actual header witness. Other source layouts retain their own dictionary evidence. Every row has the amount status `exact`; the amount status is kept in the receipt.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_coordinated_party_expenditures'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
     "coverage": "Sampled. Supported observations from retained coordinated party expenditure filing layouts. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
     "kind": "sampled",
     "measured_on": "2026-10-01",
@@ -4522,6 +4537,11 @@
         "column_name": "amount_kind",
         "column_type": "VARCHAR",
         "description": "Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It is not an aggregation permission."
+      },
+      {
+        "column_name": "source_namespace",
+        "column_type": "VARCHAR",
+        "description": "Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent."
       },
       {
         "column_name": "reporting_committee_id",
@@ -4921,6 +4941,11 @@
         "description": "Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It is not an aggregation permission."
       },
       {
+        "column_name": "source_namespace",
+        "column_type": "VARCHAR",
+        "description": "Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent."
+      },
+      {
         "column_name": "reporting_committee_id",
         "column_type": "VARCHAR",
         "description": "Literal FEC ID of the reporting committee where that source field identifies a committee. It does not by itself identify the sender or recipient of money."
@@ -5191,7 +5216,7 @@
     "table": "fec_disbursements",
     "label": "Reported disbursement observations",
     "category": "query_data",
-    "summary": "One source-reported payment or disbursement record version. Retains payment amount, payee, purpose, codes and memo fields. Refunds, transfers and other source types keep their own meanings; mapping does not select current amendments or a net spending total. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. For original-filing rows, definition_set_id joins fec_filing_definitions.record_id and its fec_filing_definition_evidence context witnesses; filing_header_record_id and filing_header_locator_json identify the separate actual header witness. Other source layouts retain their own dictionary evidence.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_disbursements'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
+    "summary": "One source-reported payment or disbursement record version. Retains payment amount, payee, purpose, codes and memo fields. Refunds, transfers and other source types keep their own meanings; mapping does not select current amendments or a net spending total. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. For original-filing rows, definition_set_id joins fec_filing_definitions.record_id and its fec_filing_definition_evidence context witnesses; filing_header_record_id and filing_header_locator_json identify the separate actual header witness. Other source layouts retain their own dictionary evidence. Every row has the amount status `exact`; the amount status is kept in the receipt.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_disbursements'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
     "coverage": "Sampled. Supported observations from retained bulk operating-expense files, supported Schedule B layouts and payment APIs. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
     "kind": "sampled",
     "measured_on": "2026-10-01",
@@ -5221,6 +5246,11 @@
         "column_name": "amount_kind",
         "column_type": "VARCHAR",
         "description": "Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It is not an aggregation permission."
+      },
+      {
+        "column_name": "source_namespace",
+        "column_type": "VARCHAR",
+        "description": "Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent."
       },
       {
         "column_name": "reporting_committee_id",
@@ -5598,7 +5628,7 @@
     "table": "fec_electioneering_communications",
     "label": "Candidate-associated electioneering observations",
     "category": "query_data",
-    "summary": "One source candidate-associated disbursement observation. Keeps each candidate association, the full disbursement amount and the publisher-calculated candidate share. Similar dates/payees/images do not prove a shared event key; unresolved event equivalence prevents summing full amounts once per candidate. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_electioneering_communications'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
+    "summary": "One source candidate-associated disbursement observation. Keeps each candidate association, the full disbursement amount and the publisher-calculated candidate share. Similar dates/payees/images do not prove a shared event key; unresolved event equivalence prevents summing full amounts once per candidate. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. Every row comes from `fec-bulk-electioneering-candidate-disbursement-csv` and has the amount status `exact`; the source namespace and the amount status are kept in the receipt.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_electioneering_communications'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
     "coverage": "Sampled. Supported observations from retained electioneering CSV records and their source definitions. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
     "kind": "sampled",
     "measured_on": "2026-10-01",
@@ -5745,7 +5775,7 @@
     "table": "fec_filing_links",
     "label": "Source-reported filing-version references",
     "category": "query_data",
-    "summary": "One directed native filing reference from a retained filing observation. Follow explicit source references without selecting a latest report. Unknown target resolution, replacement mode and membership completeness remain visible; absence from a partial amendment does not imply deletion. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_filing_links'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
+    "summary": "One directed native filing reference from a retained filing observation. Follow explicit source references without selecting a latest report. Unknown target resolution, replacement mode and membership completeness remain visible; absence from a partial amendment does not imply deletion. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. Every row comes from `fec-openfec-file-number`; the source namespace is kept in the receipt.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_filing_links'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
     "coverage": "Sampled. Supported observations from retained filing metadata amendment and related-file references. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
     "kind": "sampled",
     "measured_on": "2026-10-01",
@@ -5822,6 +5852,11 @@
         "column_name": "amount_kind",
         "column_type": "VARCHAR",
         "description": "Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It is not an aggregation permission."
+      },
+      {
+        "column_name": "source_namespace",
+        "column_type": "VARCHAR",
+        "description": "Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent."
       },
       {
         "column_name": "form_type",
@@ -5956,6 +5991,11 @@
         "description": "Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event."
       },
       {
+        "column_name": "source_namespace",
+        "column_type": "VARCHAR",
+        "description": "Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent."
+      },
+      {
         "column_name": "filing_key",
         "column_type": "VARCHAR",
         "description": "Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining."
@@ -6016,7 +6056,7 @@
     "table": "fec_filings",
     "label": "FEC filing metadata observations",
     "category": "query_data",
-    "summary": "One retained metadata observation of a submitted report or statement version. Use record_id for observation identity and nullable filing_key for a proved logical filing version. Group repeated observations by qualified filing identity before reference joins. Linked originals and PDFs retain explicit body status; no current-amendment selection is implied. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_filings'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
+    "summary": "One retained metadata observation of a submitted report or statement version. Use record_id for observation identity and nullable filing_key for a proved logical filing version. Group repeated observations by qualified filing identity before reference joins. Linked originals and PDFs retain explicit body status; no current-amendment selection is implied. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. Every row comes from `fec-openfec-file-number`; the source namespace is kept in the receipt.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_filings'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
     "coverage": "Sampled. Supported observations from retained filing API metadata with native file numbers and original-document references. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
     "kind": "sampled",
     "measured_on": "2026-10-01",
@@ -6330,6 +6370,11 @@
         "description": "Literal FEC image reference; it is not a transaction ID or filing number."
       },
       {
+        "column_name": "amount_status",
+        "column_type": "VARCHAR",
+        "description": "Source-presence or conversion state for amount, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility."
+      },
+      {
         "column_name": "unit",
         "column_type": "VARCHAR",
         "description": "Unit established by the source-specific definition, such as USD, count or days; unknown units must remain explicit."
@@ -6395,6 +6440,11 @@
         "column_name": "amount_kind",
         "column_type": "VARCHAR",
         "description": "Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It is not an aggregation permission."
+      },
+      {
+        "column_name": "source_namespace",
+        "column_type": "VARCHAR",
+        "description": "Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent."
       },
       {
         "column_name": "form_type",
@@ -6497,6 +6547,11 @@
         "description": "Source-defined activity classification for the inaugural or other reported financial record."
       },
       {
+        "column_name": "amount_status",
+        "column_type": "VARCHAR",
+        "description": "Source-presence or conversion state for amount, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility."
+      },
+      {
         "column_name": "source_cycle",
         "column_type": "INTEGER",
         "description": "Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year."
@@ -6532,7 +6587,7 @@
     "table": "fec_independent_expenditures",
     "label": "Reported independent-expenditure observations",
     "category": "query_data",
-    "summary": "One source-reported independent-expenditure record version. Separates spender, payee, candidate target, expenditure date, dissemination date and report metadata. Generic spender_name, payee_name, candidate_name and expenditure_date apply only to layouts that supply those fields. Original-filing Schedule E rows instead retain payee organization/person-name fields, candidate name components, and separate dissemination_date, disbursement_date and signed_date. For an original-filing row, the filing's cover is the fec_filing_report_observations row with the same collection_id and `report_record_role` `reported-form`; its form_type ends N for a new filing and A for an amendment (`F24N`, `F24A`), with source_amendment_date. The header association view (fec_independent_expenditures_filing_associations) finds no filing for any row, original-filing or bulk. These native fields are valid without synthesizing generic names or choosing one date. Target expansion must not multiply the record's full amount; current/net totals need a qualified selection and financial rule. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. For original-filing rows, definition_set_id joins fec_filing_definitions.record_id and its fec_filing_definition_evidence context witnesses; filing_header_record_id and filing_header_locator_json identify the separate actual header witness. Other source layouts retain their own dictionary evidence.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_independent_expenditures'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
+    "summary": "One source-reported independent-expenditure record version. Separates spender, payee, candidate target, expenditure date, dissemination date and report metadata. Generic spender_name, payee_name, candidate_name and expenditure_date apply only to layouts that supply those fields. Original-filing Schedule E rows instead retain payee organization/person-name fields, candidate name components, and separate dissemination_date, disbursement_date and signed_date. For an original-filing row, the filing's cover is the fec_filing_report_observations row with the same collection_id and `report_record_role` `reported-form`; its form_type ends N for a new filing and A for an amendment (`F24N`, `F24A`), with source_amendment_date. The header association view (fec_independent_expenditures_filing_associations) finds no filing for any row, original-filing or bulk. These native fields are valid without synthesizing generic names or choosing one date. Target expansion must not multiply the record's full amount; current/net totals need a qualified selection and financial rule. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. For original-filing rows, definition_set_id joins fec_filing_definitions.record_id and its fec_filing_definition_evidence context witnesses; filing_header_record_id and filing_header_locator_json identify the separate actual header witness. Other source layouts retain their own dictionary evidence. Every row has the amount status `exact`; the amount status is kept in the receipt.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_independent_expenditures'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
     "coverage": "Sampled. The bulk rows are FEC's 2024-cycle independent-expenditure file (`source_cycle` 2024). The original-filing rows are the Schedule E and Form 5 lines of the filings in the daily electronic-filing archives this service retained, not a cycle: `source_cycle` is NULL on them, and `fec_collections` names each archive (join on `collection_id`). This declaration does not establish complete FEC history or current publication.",
     "kind": "sampled",
     "measured_on": "2026-10-03",
@@ -6562,6 +6617,11 @@
         "column_name": "amount_kind",
         "column_type": "VARCHAR",
         "description": "Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It is not an aggregation permission."
+      },
+      {
+        "column_name": "source_namespace",
+        "column_type": "VARCHAR",
+        "description": "Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent."
       },
       {
         "column_name": "spender_native_id",
@@ -6869,7 +6929,7 @@
     "table": "fec_intercommittee_transactions",
     "label": "Reported committee-to-committee transaction observations",
     "category": "query_data",
-    "summary": "One reported intercommittee transaction record version. Preserves reporting committee, counterparty references, literal transaction type, memo and amount. Direction remains unresolved unless source definitions prove it; both sides of a transfer are observations until an explicit flow rule qualifies consolidation. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_intercommittee_transactions'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
+    "summary": "One reported intercommittee transaction record version. Preserves reporting committee, counterparty references, literal transaction type, memo and amount. Direction remains unresolved unless source definitions prove it; both sides of a transfer are observations until an explicit flow rule qualifies consolidation. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. Every row has the amount status `exact`; the amount status is kept in the receipt.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_intercommittee_transactions'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
     "coverage": "Sampled. Supported observations from retained other-committee transaction bulk files. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
     "kind": "sampled",
     "measured_on": "2026-10-01",
@@ -6899,6 +6959,11 @@
         "column_name": "amount_kind",
         "column_type": "VARCHAR",
         "description": "Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It is not an aggregation permission."
+      },
+      {
+        "column_name": "source_namespace",
+        "column_type": "VARCHAR",
+        "description": "Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent."
       },
       {
         "column_name": "reporting_committee_id",
@@ -7190,6 +7255,11 @@
         "description": "Typed document observation explicitly linked by the source to this legal event."
       },
       {
+        "column_name": "amount_status",
+        "column_type": "VARCHAR",
+        "description": "Source-presence or conversion state for amount, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility."
+      },
+      {
         "column_name": "amount_kind",
         "column_type": "VARCHAR",
         "description": "Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It is not an aggregation permission."
@@ -7245,6 +7315,11 @@
         "column_name": "matter_type",
         "column_type": "VARCHAR",
         "description": "Legal source family such as advisory opinion, enforcement, administrative fine, dispute resolution, rulemaking or audit."
+      },
+      {
+        "column_name": "source_namespace",
+        "column_type": "VARCHAR",
+        "description": "Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent."
       },
       {
         "column_name": "native_matter_id",
@@ -7514,7 +7589,7 @@
     "table": "fec_loan_guarantors",
     "label": "Reported loan guarantor associations",
     "category": "query_data",
-    "summary": "One source guarantor record associated with a reported loan state. Keeps each guarantor's name, address and guaranteed amount separate from loan principal. Unresolved back-references remain explicit; multiple guarantors do not duplicate borrowing activity. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. For original-filing rows, definition_set_id joins fec_filing_definitions.record_id and its fec_filing_definition_evidence context witnesses; filing_header_record_id and filing_header_locator_json identify the separate actual header witness. Other source layouts retain their own dictionary evidence.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_loan_guarantors'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
+    "summary": "One source guarantor record associated with a reported loan state. Keeps each guarantor's name, address and guaranteed amount separate from loan principal. Unresolved back-references remain explicit; multiple guarantors do not duplicate borrowing activity. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. For original-filing rows, definition_set_id joins fec_filing_definitions.record_id and its fec_filing_definition_evidence context witnesses; filing_header_record_id and filing_header_locator_json identify the separate actual header witness. Other source layouts retain their own dictionary evidence. Every row comes from `fec-electronic-filing-schedule`; the source namespace is kept in the receipt.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_loan_guarantors'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
     "coverage": "Sampled. Supported observations from retained Schedule C2 guarantor layouts. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
     "kind": "sampled",
     "measured_on": "2026-10-01",
@@ -7661,7 +7736,7 @@
     "table": "fec_loan_terms",
     "label": "Reported loan terms observations",
     "category": "query_data",
-    "summary": "One source loan-terms or credit-line record version. Preserves rate/due-date wording, collateral, security, signers and stated amounts. Loan principal, credit draw and balances are distinct concepts; this table does not infer a new disbursement for each repeated terms record. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. For original-filing rows, definition_set_id joins fec_filing_definitions.record_id and its fec_filing_definition_evidence context witnesses; filing_header_record_id and filing_header_locator_json identify the separate actual header witness. Other source layouts retain their own dictionary evidence.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_loan_terms'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
+    "summary": "One source loan-terms or credit-line record version. Preserves rate/due-date wording, collateral, security, signers and stated amounts. Loan principal, credit draw and balances are distinct concepts; this table does not infer a new disbursement for each repeated terms record. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. For original-filing rows, definition_set_id joins fec_filing_definitions.record_id and its fec_filing_definition_evidence context witnesses; filing_header_record_id and filing_header_locator_json identify the separate actual header witness. Other source layouts retain their own dictionary evidence. Every row comes from `fec-electronic-filing-schedule`; the source namespace is kept in the receipt.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_loan_terms'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
     "coverage": "Sampled. Supported observations from retained Schedule C1 loan agreement and credit-line layouts. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
     "kind": "sampled",
     "measured_on": "2026-10-01",
@@ -7985,6 +8060,11 @@
         "description": "Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It is not an aggregation permission."
       },
       {
+        "column_name": "source_namespace",
+        "column_type": "VARCHAR",
+        "description": "Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent."
+      },
+      {
         "column_name": "reporting_committee_id",
         "column_type": "VARCHAR",
         "description": "Literal FEC ID of the reporting committee where that source field identifies a committee. It does not by itself identify the sender or recipient of money."
@@ -8285,7 +8365,7 @@
     "table": "fec_lobbyist_registrations",
     "label": "FEC lobbyist registration observations",
     "category": "query_data",
-    "summary": "One native committee registration/lobbyist observation. Preserves literal lobbyist flags and their boolean interpretation status. Image links keep body-processing status; the observation does not infer an unreported affiliation. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_lobbyist_registrations'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
+    "summary": "One native committee registration/lobbyist observation. Preserves literal lobbyist flags and their boolean interpretation status. Image links keep body-processing status; the observation does not infer an unreported affiliation. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. Every row comes from `fec-bulk-lobbyist`; the source namespace is kept in the receipt.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_lobbyist_registrations'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
     "coverage": "Sampled. Supported observations from retained lobbyist registration source records and image references. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
     "kind": "sampled",
     "measured_on": "2026-10-01",
@@ -8424,7 +8504,7 @@
     "table": "fec_postgres_committee_history_observations",
     "label": "FEC PostgreSQL committee history observations",
     "category": "query_data",
-    "summary": "One native COPY row from a selected retained history derivation. Preserves original COPY strings alongside named fields, including SQL NULL and array/date/boolean text. Overlapping derivations are not silently deduplicated or used to replace the current registry. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_postgres_committee_history_observations'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
+    "summary": "One native COPY row from a selected retained history derivation. Preserves original COPY strings alongside named fields, including SQL NULL and array/date/boolean text. Overlapping derivations are not silently deduplicated or used to replace the current registry. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. Every row comes from `fec-retained-committee-history`; the source namespace is kept in the receipt.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_postgres_committee_history_observations'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
     "coverage": "Sampled. Supported observations from retained PostgreSQL committee-history dump derivations and exact source column definitions. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
     "kind": "sampled",
     "measured_on": "2026-10-01",
@@ -8801,7 +8881,7 @@
     "table": "fec_quality_notices",
     "label": "Source-issued FEC quality notices",
     "category": "query_data",
-    "summary": "One source notice observation about an explicitly stated filing/committee scope. Makes the publisher's warning and linked scope inspectable. A notice does not automatically identify a donor, prove an allegation, resolve an affected transaction, or exclude money from a total. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_quality_notices'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
+    "summary": "One source notice observation about an explicitly stated filing/committee scope. Makes the publisher's warning and linked scope inspectable. A notice does not automatically identify a donor, prove an allegation, resolve an affected transaction, or exclude money from a total. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. Every row comes from `fec-bulk-false-fictitious-notice`; the source namespace is kept in the receipt.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_quality_notices'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
     "coverage": "Sampled. Supported observations from retained false/fictitious or other source quality-notice metadata. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
     "kind": "sampled",
     "measured_on": "2026-10-01",
@@ -8915,6 +8995,11 @@
         "description": "Occupation reported by the source for the named person."
       },
       {
+        "column_name": "amount_status",
+        "column_type": "VARCHAR",
+        "description": "Source-presence or conversion state for amount, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility."
+      },
+      {
         "column_name": "currency",
         "column_type": "VARCHAR",
         "description": "Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately."
@@ -8938,6 +9023,11 @@
         "column_name": "source_record_identifier",
         "column_type": "VARCHAR",
         "description": "Source-reported row identifier such as sub_id; it is not promoted to a global event key or file number."
+      },
+      {
+        "column_name": "source_namespace",
+        "column_type": "VARCHAR",
+        "description": "Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent."
       },
       {
         "column_name": "report_number",
@@ -9342,6 +9432,11 @@
         "description": "Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event."
       },
       {
+        "column_name": "source_namespace",
+        "column_type": "VARCHAR",
+        "description": "Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent."
+      },
+      {
         "column_name": "committee_id",
         "column_type": "VARCHAR",
         "description": "Literal FEC committee identifier as reported in this observation. Use cycle and source scope for historical joins."
@@ -9644,6 +9739,11 @@
         "column_name": "summary_type",
         "column_type": "VARCHAR",
         "description": "Namespaced source summary layout or report type; measures from different layouts and periods are not interchangeable."
+      },
+      {
+        "column_name": "source_namespace",
+        "column_type": "VARCHAR",
+        "description": "Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent."
       },
       {
         "column_name": "currency",
@@ -10139,7 +10239,7 @@
     "table": "fec_retained_csv_observations",
     "label": "FEC CSV context observations",
     "category": "bounded_samples",
-    "summary": "One physical CSV row exposed by retained collection context. Preserves source values, amounts and dates under the context's actual coverage status. A complete retained prefix is still not an asserted complete source population or current financial total. Resolve collection_id to fec_collections in the captured source generation and source_context_pointer into its retained context. Context witnesses use their own digest and native coordinates; they do not require a fictional source_record_id.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_retained_csv_observations'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
+    "summary": "One physical CSV row exposed by retained collection context. Preserves source values, amounts and dates under the context's actual coverage status. A complete retained prefix is still not an asserted complete source population or current financial total. Resolve collection_id to fec_collections in the captured source generation and source_context_pointer into its retained context. Context witnesses use their own digest and native coordinates; they do not require a fictional source_record_id. Every row has the amount status `exact`; the amount status is kept in the receipt.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_retained_csv_observations'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
     "coverage": "Sampled. Supported observations from supported retained CSV context rows with exact native fields and addresses. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
     "kind": "sampled",
     "measured_on": "2026-10-01",
@@ -19613,7 +19713,6 @@
           "selection_evidence_sha256",
           "source_representation_role",
           "current_record_status",
-          "source_namespace",
           "source_pointer",
           "committee_id_status",
           "candidate_id_status",

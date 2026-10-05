@@ -29,11 +29,13 @@ Processing fields, source witnesses, conversion inputs and diagnostics reference
 | `contributor_zip` | `VARCHAR` | The contributor's reported postal code, preserving leading zeroes. |
 | `employer` | `VARCHAR` | Employer name reported for the contributor or other named person; not an inferred organization identity. |
 | `occupation` | `VARCHAR` | Occupation reported by the source for the named person. |
+| `amount_status` | `VARCHAR` | Source-presence or conversion state for amount, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
 | `currency` | `VARCHAR` | Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately. |
 | `amount_kind` | `VARCHAR` | Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It is not an aggregation permission. |
 | `transaction_type` | `VARCHAR` | Literal source transaction-type code; direction and gross/net treatment require the applicable definitions. |
 | `transaction_id` | `VARCHAR` | Literal transaction identifier within its source filing/layout scope; not a globally unique transaction or economic-event key. |
 | `source_record_identifier` | `VARCHAR` | Source-reported row identifier such as sub_id; it is not promoted to a global event key or file number. |
+| `source_namespace` | `VARCHAR` | Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent. |
 | `report_number` | `VARCHAR` | Literal source file/report number, retained separately from source row, image and transaction identifiers. A filing join requires a qualified number namespace. |
 | `report_type` | `VARCHAR` | Source-reported report classification, interpreted within its namespace rather than as a universal period code. |
 | `image_number` | `VARCHAR` | Literal FEC image reference; it is not a transaction ID or filing number. |
