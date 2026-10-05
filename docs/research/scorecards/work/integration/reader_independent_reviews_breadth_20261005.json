@@ -1,0 +1,80 @@
+{
+  "format_version": "scorecard-reader-independent-review-summary/1",
+  "status": "approved-named-original-scopes-and-installed-package",
+  "scope": "Named source renditions only; discovery and historical publisher availability remain separate",
+  "source_assembly_commit": "93a674f4ae74d094bf4213cc2c0e1fc9396140be",
+  "original_source_reviews": {
+    "farm_bureau": {
+      "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/farm-bureau-independent-review/frozen-independent-review-v1.json",
+      "sha256": "4f05e92c1c67c8e7a6dbc0efbcb1f796d40577ef63b744026be831eb5ca9c067"
+    },
+    "dav_and_teamsters": {
+      "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/capwiz-independent-review-v2/review.json",
+      "sha256": "7dd1f986d1bb7f5e87e27b2ed15196adb427ad61e93a4c1f8e36be8c64a1f28a"
+    },
+    "machinists": {
+      "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/iam-independent-review-v2/review.json",
+      "sha256": "54ee74338f44353fc665af3d0db0e799b0a3d4e3879bc749eebbeb59c3aa9a31"
+    },
+    "shriver": {
+      "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/shriver-independent-review-v2/review.json",
+      "sha256": "d2a118720ffb9f190e3c79a439d42725835c69130a7da40d808812fbbab94b05"
+    },
+    "consumer_federation": {
+      "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/consumer-federation-independent-review-v2/frozen-handoff-v1.json",
+      "sha256": "77e073eba7737dedc3a55bc0cc39d79ca6601777108adacdcf4ef8b07aa3748b"
+    },
+    "consumer_federation_assembly": {
+      "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/consumer-federation-assembly-closure-v1/frozen-handoff-v1.json",
+      "sha256": "b8c9cf5f3fb2813e76d4d4d8f45ed229843037443be433ad59118c79a78fe91f"
+    },
+    "congressional_quarterly": {
+      "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/cq-independent-review-v1/review.json",
+      "sha256": "5201a9896054c0102d0ea693b1e94404a243ff3df26c6f012c38b11369d1cf96"
+    },
+    "american_bakers": {
+      "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/aba-independent-review-v1/review.json",
+      "sha256": "907d646f72980d50dad895ef42745dc4b18e2945077880e6dd4ad720b919605d"
+    }
+  },
+  "independent_archive_and_input_review": {
+    "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/wheel-breadth95-peer-review-v1/archive-and-plan-review.json",
+    "sha256": "fa1e92402c517dc9b7fd58e4bc20a65f8054f15f04f989d383e6a080a938566e"
+  },
+  "independent_installed_byte_binding": {
+    "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/wheel-breadth95-peer-review-v1/installed-byte-binding-and-focused-tests.json",
+    "sha256": "be1ab1ed2d25c044f9bf3c9ce0f448ae4b1934b4c97d0da96a89a43c40e38827"
+  },
+  "independent_frozen_package_review": {
+    "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/wheel-breadth95-peer-review-v1/frozen-review-v1.json",
+    "sha256": "b9a985abd9bca9375a6e5e78f3190b25ebc0365e722b2d13ae21e31d3b3adb73"
+  },
+  "parent_record_review": {
+    "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/wheel-breadth95-main057-v1/independent-record-review-v1.json",
+    "sha256": "cdd902acd2c65abc6b09d880b7f837cb444b4dc69645912c714d83939f95876b"
+  },
+  "cq_fresh_parent_batches": [
+    {
+      "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/cq-independent-batch-replay-v2/summary.json",
+      "sha256": "6e197a72ee6520748154d831eab13b108df5fda8a0ef0680d6f2aceb5d1ac3c8"
+    },
+    {
+      "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/cq-independent-batch-replay-v3/summary.json",
+      "sha256": "6e197a72ee6520748154d831eab13b108df5fda8a0ef0680d6f2aceb5d1ac3c8"
+    }
+  ],
+  "aba_fresh_parent_batches": [
+    {
+      "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/aba-independent-batch-replay-v1/summary.json",
+      "sha256": "adfa6432e9ee2691601ff41a91807f01a063f31adff26f34b1d8e27667b8777d"
+    },
+    {
+      "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/aba-independent-batch-replay-v2/summary.json",
+      "sha256": "adfa6432e9ee2691601ff41a91807f01a063f31adff26f34b1d8e27667b8777d"
+    }
+  ],
+  "source_batch_boundary": "Parent CQ/ABA batch proofs used an explicit source-assembly override; the separate installed95 replay verifies the actual wheel",
+  "source_http_requests_during_replay": 0,
+  "superseded_inputs": "DAV /1 wrong detail-link locators and CFA /1 inferred shared lifetime period are retained privately and excluded from adoption",
+  "candidate_source_boundaries": "CQ full native authored tables are accepted; Datawrapper subset remains unsupported. CFA preserves a named four-person excerpt, with lifetime explicit only for Ashcroft. Farm Bureau has selected actions and no aggregate rating."
+}

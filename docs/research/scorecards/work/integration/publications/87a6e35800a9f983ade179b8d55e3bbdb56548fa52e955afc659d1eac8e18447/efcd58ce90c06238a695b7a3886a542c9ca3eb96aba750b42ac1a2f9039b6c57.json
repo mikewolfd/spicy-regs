@@ -1,0 +1,31 @@
+{
+  "format_version": "scorecard-integration-qualified-scope/1",
+  "qualified": true,
+  "publisher_id": "nra_pvf",
+  "scorecard_id": "nra_pvf:2026-11-03-general-west-virginia-federal-incumbents",
+  "source_url": "https://www.nrapvf.org/grades/west-virginia",
+  "parser_version": "nra-pvf-public-election-federal-incumbents/2",
+  "reader_sha256": "8368eb8586428877d6a71cb44bcb9256973922d2d1834f12f026d1148edd9f54",
+  "capture_manifest_sha256": "f93cf1f8ced3a6ca3c743fd1a9e8d919a2e6c1a52fdeffb1c3b839e648d154ef",
+  "native_reference_sha256": "6408e6d8f89c0cc052c68e7a8c1c7382effdd65a1f13d3ec58539660929ba229",
+  "native_reference_kind": "source_table_family",
+  "source_qualification_sha256": "4f4e6e610d6a137f51d87a6048a74d7729733550dd938c3fb9e945362daaebfe",
+  "completeness_rule": "Complete advertised state/election HTML through EOF; every tab, office and candidate context accounted for; exact federal-office/Incumbent filter; source facts and navigation agree on reread. This is the publisher-listed election incumbent cohort, not a complete congressional roster.",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 1,
+    "scorecard_metrics": 1,
+    "scorecard_items": 0,
+    "scorecard_metric_items": 0,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 3,
+    "scorecard_member_ratings": 3,
+    "scorecard_member_item_results": 0
+  },
+  "capture_count": 4,
+  "evidence_policy": "hash_only",
+  "qualification_boundary": "Named source rendition; remaining editions and renditions stay in scope",
+  "published": false
+}

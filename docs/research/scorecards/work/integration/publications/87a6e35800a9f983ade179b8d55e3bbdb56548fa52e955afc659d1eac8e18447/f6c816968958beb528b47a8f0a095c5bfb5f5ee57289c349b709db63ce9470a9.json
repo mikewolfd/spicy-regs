@@ -1,0 +1,24 @@
+{
+  "format_version": "scorecard-integration-published-observation/2",
+  "publisher_id": "first_focus",
+  "scorecard_id": "first_focus:2025",
+  "parser_version": "first-focus-named-qualified-tier-pdf/1",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 173,
+    "scorecard_metrics": 1,
+    "scorecard_items": 172,
+    "scorecard_metric_items": 172,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 120,
+    "scorecard_member_ratings": 120,
+    "scorecard_member_item_results": 0
+  },
+  "source_qualification": "publications/87a6e35800a9f983ade179b8d55e3bbdb56548fa52e955afc659d1eac8e18447/90cec23e773028d009d83c32acac5326a7866f9b910ae99d2588c1757fd33a69.json",
+  "source_qualification_sha256": "90cec23e773028d009d83c32acac5326a7866f9b910ae99d2588c1757fd33a69",
+  "public_readback": "publications/87a6e35800a9f983ade179b8d55e3bbdb56548fa52e955afc659d1eac8e18447/readback.json",
+  "public_readback_sha256": "c7c3927a710c46c75711bc197026de9a2e19fc2451a299646411547d9fdf1af1",
+  "observed_source_generation": "sha256:87a6e35800a9f983ade179b8d55e3bbdb56548fa52e955afc659d1eac8e18447"
+}

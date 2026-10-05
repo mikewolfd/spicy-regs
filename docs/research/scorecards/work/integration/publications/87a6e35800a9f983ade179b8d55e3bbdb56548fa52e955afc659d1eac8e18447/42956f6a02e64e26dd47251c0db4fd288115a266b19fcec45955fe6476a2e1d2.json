@@ -1,0 +1,31 @@
+{
+  "format_version": "scorecard-integration-qualified-scope/1",
+  "qualified": true,
+  "publisher_id": "new_american",
+  "scorecard_id": "new_american:roster%3Asession%3A6",
+  "source_url": "https://freedomindex.us/us/legislators/session/6/",
+  "parser_version": "new-american-native-roster/1",
+  "reader_sha256": "1bb6825cf8c5613562da0bec52002cb090e2c41b46c92a0311b780f619d10618",
+  "capture_manifest_sha256": "d10da2b904fc2e80bed81a8767ad70df453c2c0e777aaf395950ae63b7f8a02a",
+  "native_reference_sha256": "83b26a9197e9a81f6123b97a82a80dd1a95f71ed9a32c81c543edc1e2cb8555d",
+  "native_reference_kind": "source_table_family",
+  "source_qualification_sha256": "947c095088ea14829f10df5e720d82b63c03a74aada183c8bbfd827d6e082ca0",
+  "completeness_rule": "Complete native roster for one explicit source Congress filter: declared member count, contiguous card indexes and exact issue-map membership reconcile. All native score attributes, grades and labeled or unlabeled issue JSON values are retained; stable roster, filter and methodology rereads complete. Cumulative/issue values do not assert an undisclosed historical cutoff.",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 13,
+    "scorecard_metrics": 54,
+    "scorecard_items": 0,
+    "scorecard_metric_items": 0,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 546,
+    "scorecard_member_ratings": 15880,
+    "scorecard_member_item_results": 0
+  },
+  "capture_count": 6,
+  "evidence_policy": "hash_only",
+  "qualification_boundary": "Named source rendition; remaining editions and renditions stay in scope",
+  "published": false
+}
