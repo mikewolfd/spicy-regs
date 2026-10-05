@@ -240,14 +240,22 @@ def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: s
                 raise ConversionRefused(f"{member.path} is not readable")
         from spicy_regs.court_receipts import POLICIES as court_policies
 
+        cls = None
+        if all(key.removesuffix(".parquet") in court_policies for key in old["tables"]):
+            claimed = {key.removesuffix(".parquet") for key in old["tables"]}
+        elif (cls := _rollup_class(family)) is not None:
+            claimed = {policy.dataset for policy in cls.receipt_policies}
+        else:
+            raise ConversionRefused(f"{family} has no subject/receipt rollup or court writer to convert it through")
+        # The index gives every dataset one owning family, receipt-only ones included; publication would refuse this.
+        for other, entry in captured["families"].items():
+            owned = {key.removesuffix(".parquet") for key in entry["tables"]} | set(entry.get("etlReceipts", {}).get("datasets", ()))
+            if other != family and (shared := sorted(claimed & owned)):
+                raise ConversionRefused(f"{family}: its receipts would hold {shared}, which already belongs to family {other}")
         elapsed = time.monotonic()
         try:
-            if all(key.removesuffix(".parquet") in court_policies for key in old["tables"]):
-                built = _convert_court(family, old, captured, retained, base, work)
-            elif (cls := _rollup_class(family)) is not None:
-                built = _convert_rollup(cls, old, retained, base, work)
-            else:
-                raise ConversionRefused(f"{family} has no subject/receipt rollup or court writer to convert it through")
+            built = (_convert_court(family, old, captured, retained, base, work) if cls is None
+                     else _convert_rollup(cls, old, retained, base, work))
         except ValueError as refusal:  # how the writers refuse a row or a family they cannot classify
             raise ConversionRefused(f"{family}: {refusal}") from refusal
         receipt["convert_seconds"] = round(time.monotonic() - elapsed, 1)
