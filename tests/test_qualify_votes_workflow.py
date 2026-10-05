@@ -8,6 +8,30 @@ from typing import Any
 
 import pyarrow as pa
 import pyarrow.parquet as pq
+import pytest
+
+from scripts import qualify_votes_workflow as workflow
+
+
+@pytest.mark.parametrize('key', ['codeHead', 'dirty', 'implementationId', 'qualificationScriptsSha256',
+                               'spicyDocsCodeSha256', 'rulespecCodeSha256', 'lockSha256', 'packages'])
+def test_final_code_drift_refuses_with_retained_phase(tmp_path, monkeypatch, key):
+    frozen = workflow.capture_code_pins()
+    changed = dict(frozen, **{key: 'changed'})
+    monkeypatch.setattr(workflow, 'capture_code_pins', lambda: changed)
+    log = tmp_path / 'phases.jsonl'
+    with pytest.raises(ValueError, match=key):
+        workflow.verify_code_pins(log, frozen)
+    phases = [json.loads(line) for line in log.read_text().splitlines()]
+    assert phases[-1]['phase'] == 'final-code-and-dependency-pins'
+    assert phases[-1]['status'] == 'failed'
+    assert phases[-1][key] == 'changed'
+
+
+def test_unchanged_code_pins_pass(tmp_path):
+    log = tmp_path / 'phases.jsonl'
+    workflow.verify_code_pins(log, workflow.capture_code_pins())
+    assert json.loads(log.read_text().splitlines()[-1])['status'] == 'passed'
 
 
 def test_wrong_original_pin_retains_failure_and_never_starts_private_publication(tmp_path):

@@ -27,7 +27,7 @@ from scripts.qualify_receipt_index import assert_pin, bind_key_index_for_qualifi
 from scripts.qualify_congress_bulk import compare_files
 from spicy_regs.congress_receipts import policy, restore_processing_input, write_congress_dataset
 from spicy_regs.etl_receipts import combine_receipts
-from spicy_regs.generations import build_generation, implementation_id
+from spicy_regs.generations import build_generation, implementation_id, source_digest
 from spicy_regs.receipt_key_index import KEY
 from spicy_regs.sources import publication
 
@@ -35,6 +35,34 @@ from spicy_regs.sources import publication
 def child(script: str, arguments: list[str]):
     subprocess.run([sys.executable, '-m', 'scripts.' + script.removesuffix('.py'), *arguments],
                    cwd=Path(__file__).resolve().parent.parent, check=True)
+
+
+def capture_code_pins():
+    """Read code and dependency identity afresh, including subprocess helpers."""
+    import rulespec_artifacts
+    import spicy_docs
+
+    checkout = Path(__file__).resolve().parent.parent
+    return {
+        'codeHead': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=checkout, text=True).strip(),
+        'dirty': subprocess.check_output(['git', 'status', '--porcelain'], cwd=checkout, text=True),
+        'implementationId': implementation_id(),
+        'qualificationScriptsSha256': source_digest(checkout / 'scripts'),
+        'spicyDocsCodeSha256': source_digest(Path(spicy_docs.__file__).parent, ('.py', '.json', '.xsd')),
+        'rulespecCodeSha256': source_digest(Path(rulespec_artifacts.__file__).parent, ('.py', '.json', '.xsd')),
+        'lockSha256': hashlib.sha256((checkout / 'uv.lock').read_bytes()).hexdigest(),
+        'packages': {name: version(name) for name in
+                     ('spicy-regs', 'spicy-docs', 'rulespec-artifacts', 'duckdb', 'pyarrow')},
+    }
+
+
+def verify_code_pins(log: Path, frozen: dict):
+    with phase(log, 'final-code-and-dependency-pins') as record:
+        current = capture_code_pins()
+        record.update(current)
+        if current != frozen:
+            changed = sorted(key for key in current.keys() | frozen.keys() if current.get(key) != frozen.get(key))
+            raise ValueError('Code or dependency pins changed during qualification: ' + ', '.join(changed))
 
 
 def call(http, name, arguments):
@@ -129,15 +157,10 @@ def main():
         raw_plan = args.plan.read_bytes()
         plan = json.loads(raw_plan)
         (args.output / 'plan-pinned.json').write_bytes(raw_plan)
-        checkout = Path(__file__).resolve().parent.parent
-        head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=checkout, text=True).strip()
-        dirty = subprocess.check_output(['git', 'status', '--porcelain'], cwd=checkout, text=True).strip()
-        if dirty and not args.fixture:
+        frozen_code = capture_code_pins()
+        if frozen_code['dirty'] and not args.fixture:
             raise ValueError('Full qualification requires a clean frozen checkout')
-        record.update(codeHead=head, fixture=args.fixture, dirty=bool(dirty), implementationId=implementation_id(),
-            planSha256=hashlib.sha256(raw_plan).hexdigest(),
-            lockSha256=hashlib.sha256((checkout / 'uv.lock').read_bytes()).hexdigest(),
-            packages={name: version(name) for name in ('spicy-regs', 'spicy-docs', 'rulespec-artifacts', 'duckdb', 'pyarrow')})
+        record.update(frozen_code, fixture=args.fixture, planSha256=hashlib.sha256(raw_plan).hexdigest())
     inputs = {entry['dataset']: entry for entry in plan['sources']}
     if len(plan['sources']) != 2 or set(inputs) != {'member_votes', 'member_vote_terms'}:
         raise ValueError('Whole workflow requires both exact vote inputs')
@@ -221,6 +244,7 @@ def main():
         entry = inputs['roll_call_votes']
         assert_pin(args.output / 'roll-call-original.parquet', {name: entry['bytes' if name == 'byteSize' else name]
             for name in ('sha256', 'byteSize', 'rows')})
+    verify_code_pins(log, frozen_code)
     result = {'status': 'passed', 'seconds': time.monotonic() - started, 'fixture': args.fixture,
               'scope': 'private disk-store publication and actual loopback MCP; hosted R2/public MCP unqualified',
               'productionActions': [], 'driverSha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}
