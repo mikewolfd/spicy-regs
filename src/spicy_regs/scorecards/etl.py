@@ -6,6 +6,7 @@ from collections.abc import Mapping
 
 import hashlib
 from dataclasses import replace
+from importlib.resources import files
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -35,7 +36,6 @@ from spicy_regs.scorecards.subject_shapes import (
     INTEGER_FIELDS,
     POLICY_VERSION,
     RATING_POLICY_VERSION,
-    DECIMAL_TYPE,
     SOURCE_COLUMNS,
     map_source_row,
     restore_source_row,
@@ -62,16 +62,10 @@ def policy(name):
 
 
 POLICIES = {name: policy(name) for name in SOURCE_COLUMNS}
-_rating = POLICIES["scorecard_member_ratings"]
-_rating_field = _rating.subject_schema.field("value_number")
-LEGACY_RATING_POLICY = replace(
-    _rating,
-    subject_schema=_rating.subject_schema.set(
-        _rating.subject_schema.get_field_index("value_number"),
-        _rating_field.with_type(DECIMAL_TYPE),
-    ),
-    policy_version=POLICY_VERSION,
-)
+_historical_ratings = json.loads(files("spicy_regs.scorecards").joinpath("historical_rating_policies.json").read_text())
+# Historical declarations are frozen independently of the current row shape.
+LEGACY_RATING_POLICY = DatasetPolicy.from_descriptor(_historical_ratings["scorecards-etl-v1"])
+LEGACY_RATING_POLICY_V2 = DatasetPolicy.from_descriptor(_historical_ratings["scorecards-etl-ratings-v2"])
 
 
 def admitted_read_policies(names, *, descriptors=None, columns=None):
@@ -81,10 +75,12 @@ def admitted_read_policies(names, *, descriptors=None, columns=None):
     if (descriptors is None) == (columns is None):
         raise ValueError("Scorecard reads require exactly one admitted policy declaration")
     current = {name: POLICIES[name] for name in names}
-    legacy = dict(current)
-    if "scorecard_member_ratings" in legacy:
-        legacy["scorecard_member_ratings"] = LEGACY_RATING_POLICY
-    for selected in (current, legacy):
+    selections = [current]
+    if "scorecard_member_ratings" in current:
+        selections.extend(
+            dict(current, scorecard_member_ratings=rating) for rating in (LEGACY_RATING_POLICY_V2, LEGACY_RATING_POLICY)
+        )
+    for selected in selections:
         if descriptors is not None:
             if not isinstance(descriptors, list) or len(descriptors) != len(selected):
                 continue
@@ -149,7 +145,11 @@ def generation_options(directory: Path, names) -> dict:
 
 
 def write_family(
-    directory: Path, tables: dict, *, generation_id: str | None = None, attempt_failures=(),
+    directory: Path,
+    tables: dict,
+    *,
+    generation_id: str | None = None,
+    attempt_failures=(),
     prior_receipts: Path | None = None,
 ) -> tuple[Path, ...]:
     """Write subjects and every source/resolution attempt, then verify persisted joins."""
@@ -204,7 +204,9 @@ def write_family(
         if subject:
             outputs.append(subject)
     shared = combine_receipts(receipts, stage / RECEIPT_KEY)
-    if prior_receipts is not None:
+    if prior_receipts is not None and not errors:
+        # A refused conversion cannot advance the family. Retain and validate
+        # this attempt, without reading or rebinding the prior receipt history.
         # The caller already admitted the complete prior family. Carry exact
         # unchanged observations, including their original witnesses and attempt.
         # Matching the processing values prevents reusing evidence after a new capture.
@@ -212,9 +214,10 @@ def write_family(
         from spicy_regs.transforms.parquet_rows import write_rows
 
         def observation_key(receipt):
-            return tuple(receipt[k] for k in (
-                "dataset", "policy_version", "record_id", "subject_version", "outcome", "processing_json"
-            ))
+            return tuple(
+                receipt[k]
+                for k in ("dataset", "policy_version", "record_id", "subject_version", "outcome", "processing_json")
+            )
 
         previous = defaultdict(deque)
         for batch in pq.ParquetFile(prior_receipts).iter_batches():
@@ -250,19 +253,23 @@ def write_family(
 
 
 def read_family(
-    directory: Path, names, *, receipt_path: Path | None = None, generation_id: str | None = None,
+    directory: Path,
+    names,
+    *,
+    receipt_path: Path | None = None,
+    generation_id: str | None = None,
     policies: Mapping[str, DatasetPolicy] | None = None,
 ) -> dict:
     """Reconstruct provider rows only after validating the entire selected native family."""
     receipt_path = receipt_path or directory / RECEIPT_KEY
     if generation_id is None:
         generation_id = generation_options(directory, names)["receipt_generation_id"]
-    if policies is not None and (
-        set(policies) != set(names) or any(p.dataset != name for name, p in policies.items())
-    ):
+    if policies is not None and (set(policies) != set(names) or any(p.dataset != name for name, p in policies.items())):
         raise ValueError("Scorecard read policy keys differ from their selected datasets")
-    selected = {n: POLICIES[n] for n in names} if policies is None else admitted_read_policies(
-        names, descriptors=[p.descriptor() for p in policies.values()]
+    selected = (
+        {n: POLICIES[n] for n in names}
+        if policies is None
+        else admitted_read_policies(names, descriptors=[p.descriptor() for p in policies.values()])
     )
     subjects = {n: [] if selected[n].receipt_only else [directory / (n + ".parquet")] for n in names}
     joined = read_receipt_bundle(
