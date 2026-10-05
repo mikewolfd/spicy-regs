@@ -177,9 +177,12 @@ the chosen server/data pair before either rollback.
 - Record the prior objects, restore proof and rollback recovery date for the actual run. `plan-generation-retention.yml` deletes on
   its own every Sunday at 05:45Z and keeps each family's last three
   generations. The conversion is one generation and each scheduled run adds
-  one, so for a daily family the captured generation is the fourth by the
-  third run after conversion, and the next Sunday's retention deletes it:
-  recalculate the date from the actual conversion date, subsequent run cadence and next retention run. To keep a rollback open
+  one. After two successful publications following conversion, the captured
+  generation falls outside those three. The next weekly retention may delete
+  its members unless docs, DocSpec, rulemaking inputs, managed parents, or the
+  grace period still protect it. Recalculate the earliest eligible cleanup
+  from the actual conversion date, successful subsequent publications, fresh
+  retention plan, and next retention run. To keep a rollback open
   longer, disable that workflow's schedule first (`gh workflow disable
   plan-generation-retention.yml`) and enable it again once the rollback is
   no longer wanted.

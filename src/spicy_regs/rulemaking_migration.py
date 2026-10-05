@@ -5,7 +5,7 @@ The normal scheduled pipeline continues to require native receipts.
 """
 from __future__ import annotations
 
-from hashlib import file_digest
+from hashlib import file_digest, sha256
 import json
 from pathlib import Path
 import shutil
@@ -14,13 +14,30 @@ import pyarrow.parquet as pq
 
 from spicy_regs.ontology.common import RunContext
 from spicy_regs.pipelines.rulemaking_dataset import RulemakingDatasetPipeline
-from spicy_regs.sources.publication import SNAPSHOT_FORMAT_VERSIONS, SNAPSHOT_ID
+from spicy_regs.sources.publication import INDEX_LIMIT, SNAPSHOT_FORMAT_VERSIONS, SNAPSHOT_ID
 from spicy_regs.transforms.regulations_receipts import ReceiptInput, materialize_internal
 
 
 def digest(path: Path) -> str:
     with path.open('rb') as stream:
         return file_digest(stream, 'sha256').hexdigest()
+
+
+def _object(raw: bytes) -> dict:
+    def unique(pairs):
+        result = {}
+        for name, value in pairs:
+            if name in result:
+                raise ValueError('Snapshot JSON repeats a property')
+            result[name] = value
+        return result
+
+    if len(raw) > INDEX_LIMIT:
+        raise ValueError('Snapshot JSON exceeds reader limit')
+    value = json.loads(raw, object_pairs_hook=unique)
+    if not isinstance(value, dict):
+        raise ValueError('Snapshot JSON must be an object')
+    return value
 
 
 def _exact_rows(original: Path, restored: Path) -> int:
@@ -39,9 +56,10 @@ def prepare_snapshot(*, pointer: Path, manifest: Path, sources: Path, destinatio
                      expected_pointer_sha256: str, expected_manifest_sha256: str,
                      generation_id: str, asserted_at: str) -> Path:
     """Admit only the named, hash-pinned complete legacy snapshot; never reset IDs."""
-    if digest(pointer) != expected_pointer_sha256 or digest(manifest) != expected_manifest_sha256:
+    pointer_bytes, manifest_bytes = pointer.read_bytes(), manifest.read_bytes()
+    if sha256(pointer_bytes).hexdigest() != expected_pointer_sha256 or sha256(manifest_bytes).hexdigest() != expected_manifest_sha256:
         raise ValueError('Pinned rulemaking pointer or manifest changed')
-    old_pointer, old = json.loads(pointer.read_bytes()), json.loads(manifest.read_bytes())
+    old_pointer, old = _object(pointer_bytes), _object(manifest_bytes)
     snapshot = old_pointer.get('snapshot_id', '')
     prefix = f'materialized/rulemaking/snapshots/{snapshot}/'
     if (not SNAPSHOT_ID.fullmatch(snapshot) or old_pointer.get('dataset') != 'rulemaking'
@@ -62,8 +80,8 @@ def prepare_snapshot(*, pointer: Path, manifest: Path, sources: Path, destinatio
     destination.mkdir(parents=True, exist_ok=False)
     retained = destination / 'retained'
     retained.mkdir()
-    shutil.copyfile(pointer, retained / 'latest.json')
-    shutil.copyfile(manifest, retained / 'manifest.json')
+    (retained / 'latest.json').write_bytes(pointer_bytes)
+    (retained / 'manifest.json').write_bytes(manifest_bytes)
     if digest(retained / 'latest.json') != expected_pointer_sha256 or digest(retained / 'manifest.json') != expected_manifest_sha256:
         raise ValueError('Retained pointer or manifest changed during capture')
     for name in pipeline.published_outputs:
