@@ -2132,7 +2132,7 @@ tables:
       placeholder close dates (see `date_closed`). All columns are stored as
       VARCHAR.
     columns:
-      name: "Proceeding (docket) number, e.g. `17-108` or `23-320`. Primary key / dedup key, and the join key to `fcc_filings.proceeding_names_json`."
+      name: "Proceeding (docket) number, e.g. `17-108` or `23-320`. Primary key / dedup key, and the join key to the `name` of each entry in `fcc_filings.proceedings`."
       id_proceeding: "ECFS numeric identifier, reused across some docket names in retained data (301759 appears with both 17-108 and 87-432). Native filing-to-proceeding joins require name AND id_proceeding; the numeric ID alone is not globally unique. The table's primary key remains name."
       description: "Proceeding title/subject (ECFS `description_display`, falling back to `description`), e.g. `Restoring Internet Freedom`. There is no program or topic field, and titles often leave the program out: Universal Service dockets include 13-184 (`Modernizing the E-rate Program for Schools and Libraries.`) and 02-60 (`In the Matter of Rural Health Care Support Mechanism`), neither of which says universal service, and high-cost programs such as the Rural Digital Opportunity Fund (19-126) and the 5G Fund (20-32) use their own names. Search titles together with bureau_code (WC, or CC for older dockets) and known docket numbers, and find related dockets by the proceedings filings name alongside an anchor docket in fcc_filings.proceeding_names_json (for Universal Service, the umbrella docket 96-45 and 10-90). A title search gives a floor, not a complete list."
       bureau_code: "Code of the FCC bureau that owns the proceeding (e.g. `WC`)."
@@ -2158,7 +2158,7 @@ tables:
       extracted for a few selected PDFs only. Each daily run re-reads the
       trailing seven days by `date_received` and nothing older, so a filing
       ECFS disseminates more than a week after receiving it is missed, and
-      `proceeding_names_json` is the assignment as last read: ECFS later moves
+      `proceedings` is the assignment as last read: ECFS later moves
       filings out of `INBOX-…` placeholders into dockets, and a held filing
       keeps the placeholder. The newest day is partial, ending at the last run.
     measured_on: "2026-09-28"
@@ -2175,7 +2175,12 @@ tables:
       and/or scoped to specific proceedings via `FCC_PROCEEDINGS`. All columns
       are stored as VARCHAR, array fields serialized as JSON strings.
     columns:
-      id_submission: "ECFS submission id (e.g. `26109947027`). Primary key / dedup key."
+      id_submission: >-
+        ECFS submission id (e.g. `26109947027`). Primary key / dedup key. The filing's page on fcc.gov
+        (`https://www.fcc.gov/ecfs/filing/<id_submission>`, the former `filing_url` column) is kept in the filing's
+        receipt, not in this table:
+        `SELECT regexp_extract(processing_json, '\["filing_url",\["str","([^"]*)"', 1) FROM etl_receipts
+        WHERE dataset = 'fcc_filings' AND outcome = 'accepted' AND contains(identity_json, '"<id_submission>"')`.
       proceeding_names_json: "JSON array of proceeding (docket) numbers the filing was submitted to (e.g. `[\"17-108\"]`). Join key to `fcc_proceedings.name`."
       submission_type: "ECFS submission type description, e.g. `COMMENT`, `REPLY TO COMMENTS`, `NOTICE OF EXPARTE`."
       express_comment: "`1` if the filing is an express comment (text-only, entered in the web form), `0` for standard filings with uploaded documents."

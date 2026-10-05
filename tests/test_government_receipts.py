@@ -263,6 +263,7 @@ def test_later_listing_keeps_held_gao_caption_and_domain_status(tmp_path, monkey
     assert subject["decided_date"].isoformat() == "2026-01-02"
     assert subject["b_numbers"] == ["B-1", "B-2"]
     assert subject["decision_status"] == "We deny the protest." and subject["outcome"] == "denied"
+    assert subject["b_numbers_truncated"] is False
     assert "outcome_rule" not in subject
     [joined] = read_with_receipts(
         [output], [tmp_path / "etl_receipts.parquet"], POLICIES[dataset], generation_id="listing"
@@ -270,6 +271,68 @@ def test_later_listing_keeps_held_gao_caption_and_domain_status(tmp_path, monkey
     from spicy_docs.interpretation.gao_decisions import GAO_OUTCOME_RULE
 
     assert joined["raw_record"]["outcome_rule"] == GAO_OUTCOME_RULE
+
+
+def test_gao_prior_published_without_the_cut_flag_is_read_once_and_rewritten_with_it(tmp_path, monkeypatch):
+    """gao-reports published gao_decisions under government-sources/1 on 2026-10-04, the flag only in its receipts."""
+    import json
+    import shutil
+    from importlib import import_module
+
+    from spicy_regs.etl_receipts import ReceiptContext, write_dataset
+    from spicy_regs.transforms.government_receipts import EARLIER_POLICIES, _digest
+
+    module = import_module("spicy_regs.transforms.build_gao_reports")
+    dataset = "gao_decisions"
+    [earlier] = EARLIER_POLICIES[dataset]
+    assert earlier.policy_version != POLICIES[dataset].policy_version
+    raw = {
+        **dict.fromkeys(_legacy_schema(dataset).names),
+        "decision_number": "B-412940",
+        "url": "https://www.gao.gov/products/b-412940",
+        "released_date": "2016-07-01",
+        "b_numbers_json": '["B-412940"]',
+        "b_numbers_truncated": "true",
+        "source": "gao_listing",
+    }
+    subject = {name: value for name, value in map_subject(dataset, raw).items() if name in earlier.subject_schema.names}
+    witness = {
+        "source_id": "test:listing",
+        "source_uri": None,
+        "sha256": "sha256:" + "0" * 64,
+        "locator": None,
+        "body_version": None,
+    }
+    context = ReceiptContext("earlier", dataset + ":0", earlier.policy_version, [witness])
+    held, receipts = write_dataset([({**subject, "raw_record": raw}, context)], tmp_path / "published", earlier)
+    assert held is not None
+    prior = tmp_path / "_gao_decisions_prior.parquet"
+    shutil.copyfile(held, prior)
+    assert "b_numbers_truncated" not in pq.read_schema(prior).names
+    (tmp_path / BUILD_METADATA).write_text(
+        json.dumps(
+            {
+                "generation_id": "earlier",
+                "receipt_path": str(receipts),
+                "receipt_sha256": _digest(receipts),
+                "subjects": {dataset: {"path": str(prior), "sha256": _digest(prior)}},
+            }
+        )
+    )
+    monkeypatch.setattr(module.r2, "download", lambda *_: False)
+
+    output = module._build_decisions(tmp_path, [], receipt_generation_id="upgrade")
+
+    assert pq.read_schema(output).equals(SUBJECT_SCHEMAS[dataset])
+    [row] = pq.read_table(output).to_pylist()
+    assert row["b_numbers_truncated"] is True and row["b_numbers"] == ["B-412940"]
+    [joined] = read_with_receipts(
+        [output], [tmp_path / "etl_receipts.parquet"], POLICIES[dataset], generation_id="upgrade"
+    )
+    assert joined["raw_record"]["b_numbers_truncated"] == "true"
+    [receipt] = pq.read_table(tmp_path / "etl_receipts.parquet").to_pylist()
+    assert receipt["policy_version"] == POLICIES[dataset].policy_version
+    assert receipt["witnesses"][0]["source_id"] == "test:listing"
 
 
 def test_acquisition_failure_receipt_pins_shared_evidence_without_exception_text(tmp_path):
