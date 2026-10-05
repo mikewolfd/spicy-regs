@@ -869,3 +869,9 @@ def retire_receipt(receipt: Mapping, *, generation_id: str, reason: str) -> dict
     )
     result["receipt_id"] = _digest({k: v for k, v in result.items() if k != "receipt_id"})
     return result
+
+
+def carry_receipt_history(current_path: Path, prior_paths: Sequence[Path], destination: Path) -> Path:
+    """Finalize fresh attempts against the exact selected prior occurrences."""
+    from spicy_regs.receipt_history import carry_receipt_history as carry
+    return carry(current_path, prior_paths, destination)
