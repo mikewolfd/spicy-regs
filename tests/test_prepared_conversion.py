@@ -140,6 +140,83 @@ def test_prepared_cli_and_second_publication_refusal(tmp_path, monkeypatch, buck
     assert bucket.writes == before
 
 
+def _prepared_with_history(tmp_path, monkeypatch, bucket, history):
+    publish_old(bucket, monkeypatch, tmp_path, "cfr-sections", {"cfr_sections": CFR})
+    work = tmp_path / "work"
+    receipt = convert("cfr-sections", work)
+    path = work / conversion.RECEIPT
+    if history == "published":
+        publish_prepared(path)
+    else:
+        receipt["publish_attempt"] = {"outcome": "attempted", "error": None}
+        path.write_text(json.dumps(receipt))
+    return path
+
+
+def _assert_no_new_attempt(state, path):
+    assert "no new publication attempt" in state
+    assert "read-only" in state and str(path) in state
+    assert conversion.NOTHING_PUBLISHED not in state
+
+
+@pytest.mark.parametrize("history", ["attempted", "published"])
+@pytest.mark.parametrize("refusal", ["journal", "main", "wheel", "environment"])
+def test_prepared_cli_prior_history_never_claims_an_unchanged_pointer(
+    tmp_path, monkeypatch, bucket, capsys, history, refusal,
+):
+    path = _prepared_with_history(tmp_path, monkeypatch, bucket, history)
+    state = dict(STATE)
+    if refusal == "main":
+        state["main"] = "be" * 20
+    elif refusal == "wheel":
+        state["spicy_docs_wheel"] = STATE["spicy_docs_wheel"] | {"installed_differs": ["changed.py"]}
+    monkeypatch.setattr(conversion, "source_state", lambda _: state)
+    args = ["--publish-prepared", str(path), *COMMON, "--expect-bucket", BUCKET]
+    if refusal == "environment":
+        env = tmp_path / "conflicting.env"
+        env.write_text("R2_PUBLIC_URL=https://another.invalid\n")
+        args += ["--env-file", str(env)]
+    before = (list(bucket.writes), dict(bucket.reads), path.read_bytes())
+    assert conversion.main(args) == 1
+    _assert_no_new_attempt(capsys.readouterr().err, path)
+    assert (bucket.writes, bucket.reads, path.read_bytes()) == before
+
+
+@pytest.mark.parametrize("history", ["attempted", "published"])
+@pytest.mark.parametrize("refusal", ["journal", "main", "wheel"])
+def test_prepared_api_prior_history_requires_read_only_reconciliation(tmp_path, monkeypatch, bucket, history, refusal):
+    path = _prepared_with_history(tmp_path, monkeypatch, bucket, history)
+    state = dict(STATE)
+    if refusal == "main":
+        state["main"] = "be" * 20
+    elif refusal == "wheel":
+        state["spicy_docs"] = "other"
+    before = (list(bucket.writes), dict(bucket.reads), path.read_bytes())
+    with pytest.raises(conversion.ConversionRefused) as failure:
+        conversion.publish_prepared(path, allowed=["cfr-sections"], expected_main=MAIN, expected_spicy_docs=WHEEL,
+                                    expect_bucket=BUCKET, state=lambda _: state)
+    _assert_no_new_attempt(failure.value.state, path)
+    assert (bucket.writes, bucket.reads, path.read_bytes()) == before
+
+
+def test_prepared_current_attempt_retains_its_confirmed_not_moved_state(tmp_path, monkeypatch, bucket, capsys):
+    old = publish_old(bucket, monkeypatch, tmp_path, "cfr-sections", {"cfr_sections": CFR})
+    work = tmp_path / "work"
+    convert("cfr-sections", work)
+    path = work / conversion.RECEIPT
+    monkeypatch.setattr(conversion, "source_state", lambda _: dict(STATE))
+
+    def refuse(*args, **kwargs):
+        raise publication.PublicationError("injected publication refusal")
+
+    monkeypatch.setattr(publication, "publish_generation", refuse)
+    assert conversion.main(["--publish-prepared", str(path), *COMMON, "--expect-bucket", BUCKET]) == 1
+    state = capsys.readouterr().err
+    assert conversion.NOTHING_PUBLISHED in state and "no new publication attempt" not in state
+    assert json.loads(path.read_bytes())["publish_attempt"]["outcome"] == "not moved"
+    assert stored(bucket) == old
+
+
 def test_prepared_native_admission_is_repeated_instead_of_trusting_saved_success(tmp_path, monkeypatch, bucket):
     from spicy_regs import etl_receipts
 
@@ -163,9 +240,10 @@ def test_prepared_rechecks_code_after_qualification_before_upload(tmp_path, monk
     convert("cfr-sections", work)
     states = iter([dict(STATE), STATE | {"main": "be" * 20}])
     before = list(bucket.writes)
-    with pytest.raises(conversion.ConversionRefused, match="Main or the pinned wheel moved"):
+    with pytest.raises(conversion.ConversionRefused, match="Main or the pinned wheel moved") as failure:
         conversion.publish_prepared(work / conversion.RECEIPT, allowed=["cfr-sections"], expected_main=MAIN,
                                     expected_spicy_docs=WHEEL, expect_bucket=BUCKET, state=lambda _: next(states))
+    _assert_no_new_attempt(failure.value.state, work / conversion.RECEIPT)
     assert bucket.writes == before
 
 

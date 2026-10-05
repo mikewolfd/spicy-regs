@@ -519,6 +519,12 @@ def _prepared_path(work: Path, value: str) -> Path:
     return path
 
 
+def _prepared_refusal_state(receipt_path: Path) -> str:
+    return ("This invocation made no new publication attempt. The saved receipt does not establish the current "
+            f"stored pointer. Reconcile any previous publication outcome read-only using {receipt_path} before "
+            "another write.")
+
+
 def _retained_inputs(captured: Mapping, old: Mapping, work: Path) -> dict[str, Path]:
     """Recheck retained bytes against publisher pins; no cached proof substitutes for these checks."""
     from spicy_regs.generations import _table_info
@@ -550,12 +556,12 @@ def publish_prepared(receipt_path: Path, *, allowed: Sequence[str], expected_mai
     must name this receipt's exact artifact; their reports do not replace native admission or restoration.
     """
     state = state or source_state
-    now = state(remote)
-    _refuse_moved(now, main=expected_main, spicy_docs=expected_spicy_docs)
     work = receipt_path.parent
-    if receipt_path.name != RECEIPT or receipt_path.is_symlink() or not receipt_path.is_file():
-        raise ConversionRefused("--publish-prepared needs an existing official conversion.json")
     try:
+        now = state(remote)
+        _refuse_moved(now, main=expected_main, spicy_docs=expected_spicy_docs)
+        if receipt_path.name != RECEIPT or receipt_path.is_symlink() or not receipt_path.is_file():
+            raise ConversionRefused("--publish-prepared needs an existing official conversion.json")
         receipt = json.loads(receipt_path.read_bytes())
         sealed = receipt.get("prepared", {})
         if (sealed.get("format") != "spicy-regs-native-conversion-prepared" or sealed.get("version") != 1
@@ -635,8 +641,11 @@ def publish_prepared(receipt_path: Path, *, allowed: Sequence[str], expected_mai
         proof, problems = _qualify_conversion(family, built, old, retained, replaced, retains, _handed_on(base, replaced))
         if problems or any(receipt.get(key) != value for key, value in proof.items()):
             raise ConversionRefused(f"Prepared restoration proof differs: {problems}")
+    except (ConversionRefused, publication.PublicationError) as failure:
+        raise ConversionRefused(str(failure), state=_prepared_refusal_state(receipt_path)) from failure
     except (KeyError, TypeError, ValueError, OSError) as failure:
-        raise ConversionRefused(f"Prepared conversion cannot be verified: {type(failure).__name__}: {failure}") from failure
+        raise ConversionRefused(f"Prepared conversion cannot be verified: {type(failure).__name__}: {failure}",
+                                state=_prepared_refusal_state(receipt_path)) from failure
     receipt["target"] = target
     return _publish_conversion(receipt, built, captured, work, expected_main=expected_main,
                                expected_spicy_docs=expected_spicy_docs, remote=remote, state=state, exact_prior=True)
@@ -819,10 +828,15 @@ def _publish_conversion(receipt: dict, built: _Built, captured: Mapping, work: P
         _write_receipt(work / RECEIPT, receipt)
         return receipt
 
-    _refuse_moved(now := state(remote), main=expected_main, spicy_docs=expected_spicy_docs)
-    if now != started:
-        raise ConversionRefused("Main or the pinned wheel moved while the family converted; nothing was published")
-    client, bucket = r2.get_r2_client(), target["bucket"]
+    try:
+        _refuse_moved(now := state(remote), main=expected_main, spicy_docs=expected_spicy_docs)
+        if now != started:
+            raise ConversionRefused("Main or the pinned wheel moved while the family converted")
+        client, bucket = r2.get_r2_client(), target["bucket"]
+    except (ConversionRefused, publication.PublicationError) as failure:
+        if exact_prior:
+            raise ConversionRefused(str(failure), state=_prepared_refusal_state(work / RECEIPT)) from failure
+        raise
     # The rollback file exists before the pointer can move: it names the captured entry and the generation intended.
     attempt: dict = {"at": _now(), "outcome": "attempted", "error": None}
     receipt |= {"published": None, "publish_attempt": attempt}
@@ -1004,6 +1018,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("publication and rollback need --expect-bucket: the bucket this run may write to")
     if args.discard_newer and not args.rollback:
         parser.error("--discard-newer belongs to --rollback")
+    entered_prepared = False
     try:
         if args.env_file:
             from dotenv import dotenv_values
@@ -1023,6 +1038,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.publish_prepared:
             if not (args.allow and args.expect_main and args.expect_spicy_docs):
                 parser.error("--publish-prepared needs --allow, --expect-main and --expect-spicy-docs")
+            entered_prepared = True
             done = publish_prepared(
                 args.publish_prepared, allowed=[name for value in args.allow for name in value.split(",") if name],
                 expected_main=args.expect_main, expected_spicy_docs=args.expect_spicy_docs,
@@ -1036,7 +1052,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 remote=args.remote, expect_bucket=args.expect_bucket)
     except (ConversionRefused, publication.PublicationError) as refusal:
         print(f"REFUSED: {refusal}", file=sys.stderr)
-        print(f"STATE: {getattr(refusal, 'state', NOTHING_PUBLISHED)}", file=sys.stderr)
+        result_state = (_prepared_refusal_state(args.publish_prepared) if args.publish_prepared and not entered_prepared
+                        else getattr(refusal, "state", NOTHING_PUBLISHED))
+        print(f"STATE: {result_state}", file=sys.stderr)
         return 1
     except (Exception, KeyboardInterrupt) as failure:
         # Anything else is not a refusal the command chose, so it does not claim to know the bucket's state.

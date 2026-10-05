@@ -266,6 +266,12 @@ with the command that finds out. A publish whose response was lost is not a
 refusal: the command rereads the stored index, and when it names this
 conversion's generation it finishes the read-back and exits 0.
 
+When prepared publication stops before saving a new attempt, `STATE:` says
+that this invocation made no new attempt and calls for read-only
+reconciliation of any previous outcome using the receipt. This also applies
+when changed code, a changed wheel, or conflicting settings prevent the
+receipt from being opened; it makes no claim about the current pointer.
+
 Settings, by name: a dry run needs only `R2_PUBLIC_URL`. Publishing and
 rolling back need `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_ENDPOINT`
 and `R2_BUCKET_NAME`; no bucket is assumed. `CLOUDFLARE_API_TOKEN` with
