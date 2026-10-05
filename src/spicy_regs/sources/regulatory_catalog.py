@@ -193,8 +193,14 @@ def _stage(con, source, dataset, work, generation, *, prior_receipts=None, bulk=
                        'locator': 'receipt.values.raw_source_record (canonical exact_json)', 'body_version': generation}
             context = ReceiptContext(generation, f'row:{ordinal}', 'regulatory-catalog-native-v1', [witness])
             return map_regulations_attempt(dataset, row, context, project=lambda raw: normalize_source_record(dataset, raw))
-        comments_bulk.write_bundle(source_path, subject, receipts, policy=policy(dataset), generation_id=generation,
-                                   source_label=source, row_attempt=attempt)
+        try:
+            comments_bulk.write_bundle(source_path, subject, receipts, policy=policy(dataset), generation_id=generation,
+                                       source_label=source, row_attempt=attempt)
+        except (etl_bulk.duckdb.Error, pa.ArrowInvalid):
+            # A separate private row destination preserves reference decoding and
+            # first-error behavior if SQL cannot read or represent the source.
+            subject, receipts = write_records(dataset, records, work / 'mapped-row',
+                                             project=lambda row: normalize_source_record(dataset, row))
     else:
         subject, receipts = write_records(dataset, records, work / 'mapped',
                                          project=lambda row: normalize_source_record(dataset, row))
@@ -458,7 +464,16 @@ def export_pair(con, record_type, output_dir, *, generation_id, snapshot=None):
             raise RuntimeError('Catalog snapshot changed before paired export; retry')
         _copy(con, f'SELECT * FROM {qualified(record_type)}', subjects)
         raw_receipts = Path(temporary) / 'receipts.parquet'
-        _copy(con, f"SELECT * FROM {receipts_table()} WHERE dataset='{dataset}'", raw_receipts)
+        # Explicit scope deletion retains an internal audit receipt. It is no
+        # longer a selected attempt, so omit only that exact retirement marker.
+        # Other observed/rejected/refused receipts remain part of the selection.
+        _copy(con, f"""SELECT * FROM {receipts_table()} r WHERE dataset='{dataset}' AND NOT (
+            outcome='observed' AND record_id IS NOT NULL AND subject_version IS NULL
+            AND ends_with(attempt_id, ':retired') AND EXISTS (
+                SELECT 1 FROM json_each(r.diagnostic_json, '$[1]') d
+                WHERE json_extract_string(d.value, '$[0]')='retired_reason'
+                  AND json_extract_string(d.value, '$[1][0]')='str'
+                  AND json_extract_string(d.value, '$[1][1]')='explicit scope replacement'))""", raw_receipts)
         shutil.copyfile(raw_receipts, receipts)
         for _ in read_with_receipts([subjects], [receipts], policy(dataset), generation_id=generation_id):
             pass

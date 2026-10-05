@@ -14,7 +14,8 @@ done through `replace_native` before any scheduled writer runs.
 any caller-provided prior and snapshot, converts the replacement, and writes the
 subject and its current receipt in the same multi-table Iceberg transaction.
 The readback checks exact identity, policy, content digest, and restored values.
-Prior source witnesses carry forward. Exact source records remain in receipts;
+Unchanged selected attempts retain every receipt field and their original identity.
+Changed accepted attempts refer to their direct selected predecessor. Exact source records remain in receipts;
 their witness digests refer to their canonical `exact_json` bytes.
 
 Processing and retry fields are reconstructed only by `processing_table` from a
@@ -25,7 +26,9 @@ receipt versions remain subject to the catalog's snapshot retention policy.
 
 Exports capture native subjects and receipts together, qualify them, and retain
 both in a generation-specific sidecar. Publication uses that exact pair, including
-its receipt lineage. The comments mirror pins the identity, schema and snapshot
+its receipt history. Explicit scope replacement retains removed-subject retirement
+receipts in the internal audit; exports omit only the explicit retirement markers.
+Other observed, rejected, and refused attempts remain in the selected export. The comments mirror pins the identity, schema and snapshot
 of both the comments table and the shared receipt table. A receipt-only append
 requires publication even when every subject is unchanged. Publication checks
 both tables after export and allows only compaction commits to move their pins.

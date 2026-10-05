@@ -1,5 +1,6 @@
 """The comments writer retains the exact catalog row attempts and subject order."""
 import hashlib
+import json
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -22,6 +23,7 @@ def test_complete_comments_bundle_equals_catalog_row_writer(tmp_path, monkeypatc
         {'comment_id': 'plain', 'comment': ' plain\u00a0text ', 'attachments_json': None, 'duplicate_comments': '007'},
         {'comment_id': 'html', 'comment': '<p>One&amp;#39;<br/>two</p>', 'attachments_json': '[]', 'duplicate_comments': '-3'},
         {'comment_id': 'nested', 'comment': 'é😀', 'attachments_json': '[{"title":"t","formats":[{"url":"u","format":"PDF","size":4}],"restrictReason":"r"}]'},
+        {'comment_id': 'escaped', 'attachments_json': json.dumps([{'title': 'a\nb\t\x1bc\\d', 'formats': [{'url': 'u\nv\\w', 'format': 'P\tDF', 'size': 4}], 'restrictReason': '\x00'}])},
         {'comment_id': 'control', 'comment': '\x1btext', 'attachments_json': 'null'},
         {'comment_id': 'refused', 'attachments_json': '[{"unknown":"loss"}]'},
         {'comment_id': '\t', 'comment': None},
@@ -45,11 +47,15 @@ def test_complete_comments_bundle_equals_catalog_row_writer(tmp_path, monkeypatc
     count = comments_bulk.write_bundle(source, *actual, policy=policy('comments'), generation_id='g',
                                        source_label='source', row_attempt=attempt)
     assert count == len(routed)
-    assert set(routed) >= {3, 4, 5, 6}
+    assert set(routed) >= {3, 4, 5, 6, 7}
     for expected, got in zip(reference, actual):
         assert pq.read_table(expected).equals(pq.read_table(got))
     validate_receipt_bundle({'comments': [actual[0]]}, [actual[1]], [policy('comments')], generation_id='g')
     etl_bulk.validate_bundle({'comments': [actual[0]]}, [actual[1]], [policy('comments')], generation_id='g')
+    from spicy_regs.transforms.regulations_receipts import ReceiptInput, read_internal
+    selected = ReceiptInput('comments', (actual[0],), actual[1], 'g')
+    accepted = [raw for raw in rows if map_regulations_attempt('comments', raw, context(raw, 0), project=project)[0] is not None]
+    assert list(read_internal(selected)) == [project(raw) for raw in accepted]
 
 
 def test_comments_unknown_source_columns_refuse_bulk(tmp_path):

@@ -96,7 +96,7 @@ def write_bundle(source: Path, subjects: Path, receipts: Path, *, policy: Datase
     normalized AS (SELECT {', '.join(columns)}, _ordinal, _raw, _count_raw FROM read),
     shaped AS (SELECT *, {normalized} AS _normalized, comments_attachments(attachments_json) AS _attachment,
                html_text(comment) AS comment_text FROM normalized),
-    subjects AS (SELECT *, CAST(_attachment.native AS {attachment_type}) AS attachments FROM shaped),
+    subjects AS (SELECT *, CAST(CAST(_attachment.native AS JSON) AS {attachment_type}) AS attachments FROM shaped),
     receipt AS (SELECT {fields}, _ordinal, _raw,
                (_attachment.reference OR {integer_bad} OR comment_id IS NULL OR NOT comments_identity(comment_id)
                 OR {etl_bulk.needs_reference_sql("_raw")} OR {etl_bulk.needs_reference_sql(subject_text)}) AS _reference,
@@ -130,7 +130,7 @@ def write_bundle(source: Path, subjects: Path, receipts: Path, *, policy: Datase
                 mask = [not flag for flag in flags]
                 kept_subjects = table.filter(pa.array(mask)).select(policy.subject_schema.names).cast(policy.subject_schema)
                 kept_receipts = table.filter(pa.array(mask)).select(RECEIPT_SCHEMA.names).cast(RECEIPT_SCHEMA)
-                added_subjects, added_receipts = {}, {}
+                added_subjects, added_receipts, refused = {}, {}, []
                 if any(flags):
                     raw_texts = table['_raw'].to_pylist()
                     from spicy_regs.etl_receipts import _unpack
@@ -141,8 +141,10 @@ def write_bundle(source: Path, subjects: Path, receipts: Path, *, policy: Datase
                             if receipt["outcome"] == "accepted":
                                 added_receipts[index] = receipt
                             else:
-                                fw.write_table(pa.Table.from_pylist([receipt], schema=RECEIPT_SCHEMA))
+                                refused.append(receipt)
                             routed += 1
+                if refused:
+                    fw.write_table(pa.Table.from_pylist(refused, schema=RECEIPT_SCHEMA))
                 sw.write_table(_with_insertions(kept_subjects, mask, added_subjects))
                 rw.write_table(_with_insertions(kept_receipts, mask, added_receipts))
             fw.close()

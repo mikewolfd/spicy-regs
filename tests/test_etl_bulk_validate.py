@@ -318,6 +318,7 @@ def test_what_sql_cannot_decide_is_not_bulk_eligible(tmp_path) -> None:
     cased = DatasetPolicy("cased", pa.schema([("id", pa.string()), ("pair", pa.struct([("a", pa.string()), ("A", pa.string())]))]), ("id",), ())
     cased_subject, cased_receipts = write_dataset(
         [({"id": "one", "pair": {"a": "lower", "A": "upper"}}, context)], tmp_path / "cased", cased)
+    assert cased_subject is not None
     with pytest.raises(etl_bulk.NotBulkEligible, match="case"):
         etl_bulk.validate_bundle({"cased": [cased_subject]}, [cased_receipts], [cased])
     # Text the row reader cannot decode: the row validator raises on it, and the bulk one hands the bundle back.
@@ -462,6 +463,7 @@ def test_nested_nonnullable_subject_requires_reference(tmp_path):
     selected = DatasetPolicy("nested", pa.schema([("id", pa.string()), ("nested", dtype)]), ("id",), ())
     subject, receipts = write_dataset([({"id": "one", "nested": {"required": "present"}},
                                         ReceiptContext("g", "a", "p", [WITNESS]))], tmp_path / "bundle", selected)
+    assert subject is not None
     validate_receipt_bundle({selected.dataset: [subject]}, [receipts], [selected])
     with pytest.raises(etl_bulk.NotBulkEligible, match="nonnullable"):
         etl_bulk.validate_bundle({selected.dataset: [subject]}, [receipts], [selected])

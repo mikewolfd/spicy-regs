@@ -97,7 +97,7 @@ def test_pair_export_preserves_generation_and_processing(con, tmp_path):
     assert 'export-1' in (tmp_path / 'generation.json').read_text()
 
 
-def test_explicit_scope_replacement_retains_removed_evidence(con):
+def test_explicit_scope_replacement_retains_removed_evidence(con, tmp_path):
     from spicy_regs.etl_receipts import resolve_receipt_witness
     source(con)
     iceberg.replace_rows(con, COMMENT, 'source')
@@ -109,6 +109,28 @@ def test_explicit_scope_replacement_retains_removed_evidence(con):
     references = [w for w in retired[0]['witnesses'] if (w['source_uri'] or '').startswith('receipt-processing:')]
     assert references and all(resolve_receipt_witness(retired[0], w) for w in references)
     native.processing_table(con, COMMENT)
+    # A similarly shaped observed attempt with a different reason remains selected.
+    from spicy_regs.etl_receipts import RECEIPT_SCHEMA, _digest, decode_exact_json, exact_json
+    import pyarrow as pa
+    lookalike = dict(retired[0])
+    diagnostics = decode_exact_json(lookalike['diagnostic_json'])
+    diagnostics['retired_reason'] = 'a different observation'
+    lookalike['diagnostic_json'] = exact_json(diagnostics)
+    lookalike['receipt_id'] = _digest({k: v for k, v in lookalike.items() if k != 'receipt_id'})
+    con.register('_other_observed', pa.Table.from_pylist([lookalike], schema=RECEIPT_SCHEMA))
+    con.execute(f'INSERT INTO {native.receipts_table()} SELECT * FROM _other_observed')
+    con.unregister('_other_observed')
+    audit_before = con.execute(f'SELECT * FROM {native.receipts_table()}').to_arrow_table()
+    selected = native.export_pair(con, COMMENT, tmp_path / 'selected', generation_id='selected-after-delete')
+    from spicy_regs.transforms.regulations_receipts import read_internal
+    import pyarrow.parquet as pq
+    exported = pq.read_table(selected.receipts).to_pylist()
+    assert not any(row['receipt_id'] == retired[0]['receipt_id'] for row in exported)
+    assert any(row['attempt_id'] == 'initialize' for row in exported)
+    assert any(row['receipt_id'] == lookalike['receipt_id'] for row in exported)
+    assert len(exported) == audit_before.num_rows - 1
+    assert [row['comment_id'] for row in read_internal(selected)] == ['c2']
+    assert con.execute(f'SELECT * FROM {native.receipts_table()}').to_arrow_table().equals(audit_before)
 
 
 def test_prepared_storage_is_not_a_clean_selected_catalog(con):

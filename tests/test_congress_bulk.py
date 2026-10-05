@@ -280,7 +280,7 @@ def test_selected_prior_runs_one_bulk_admission_before_restore(tmp_path, monkeyp
     subject, receipts = write_congress_dataset(source, tmp_path / "bundle", dataset="member_votes", generation_id=GENERATION)
     monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
     prior = SelectedPriors(tmp_path / "prior")
-    prior.selected = SimpleNamespace(select=lambda dataset: SimpleNamespace(
+    prior.selected = SimpleNamespace(select=lambda dataset: SimpleNamespace(  # ty: ignore[invalid-assignment]
         subjects=(subject,), receipts=receipts, generation_id=GENERATION))
     calls, real = [], etl_bulk.validate_bundle
     def counted(*args, **kwargs):
@@ -301,6 +301,7 @@ def test_unproven_bundle_dispatch_uses_exact_row_validator(tmp_path, monkeypatch
     selected = DatasetPolicy("float_test", pa.schema([("id", pa.string()), ("n", pa.float64())]), ("id",), ())
     subject, receipts = write_dataset([({"id": "one", "n": 1.5}, ReceiptContext(GENERATION, "a", "p", [WITNESS]))],
                                       tmp_path / "bundle", selected)
+    assert subject is not None
     calls, real = [], congress_receipts.validate_receipt_bundle
     def counted(*args, **kwargs):
         calls.append(1)
@@ -310,3 +311,27 @@ def test_unproven_bundle_dispatch_uses_exact_row_validator(tmp_path, monkeypatch
     assert calls == [1]
     with pytest.raises(etl_bulk.NotBulkEligible):
         etl_bulk.validate_bundle({selected.dataset: [subject]}, [receipts], [selected], generation_id=GENERATION)
+
+
+@pytest.mark.parametrize("damage", ["utf8", "missing", "truncated"])
+def test_bulk_source_decode_failure_uses_exact_row_error(tmp_path, damage):
+    source = _source(tmp_path, "member_votes", _member_votes(5))
+    if damage == "utf8":
+        table = pq.read_table(source)
+        values = table["vote_id"].combine_chunks()
+        data = bytearray(values.buffers()[2].to_pybytes())
+        data[0] = 255
+        broken = pa.Array.from_buffers(pa.string(), len(values), [values.buffers()[0], values.buffers()[1], pa.py_buffer(data)])
+        pq.write_table(table.set_column(table.schema.get_field_index("vote_id"), "vote_id", broken), source)
+    elif damage == "missing":
+        source.unlink()
+    else:
+        source.write_bytes(source.read_bytes()[:40])
+    errors = []
+    for bulk in (False, True):
+        destination = tmp_path / ("bulk" if bulk else "row")
+        with pytest.raises(Exception) as caught:
+            write_congress_dataset(source, destination, dataset="member_votes", generation_id=GENERATION, bulk=bulk)
+        errors.append((type(caught.value), str(caught.value)))
+        assert not destination.exists()
+    assert errors[0] == errors[1]

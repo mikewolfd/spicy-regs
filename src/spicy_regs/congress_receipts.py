@@ -219,12 +219,17 @@ def write_congress_dataset(
         # One scan for a flat dataset; the row loop below is its reference.
         if in_bulk:
             assert subjects is not None
-            congress_bulk.write_bundle(
-                source, subjects, receipts, dataset=dataset, policy=selected, generation_id=generation_id,
-                processor=PROCESSOR, digest=digest, first_receipts=[first], witnesses=witnesses,
-                row_receipt=lambda text, ordinal: attempt(ordinal, _unpack(json.loads(text))["source_fields"]),
-            )
-        else:
+            try:
+                congress_bulk.write_bundle(
+                    source, subjects, receipts, dataset=dataset, policy=selected, generation_id=generation_id,
+                    processor=PROCESSOR, digest=digest, first_receipts=[first], witnesses=witnesses,
+                    row_receipt=lambda text, ordinal: attempt(ordinal, _unpack(json.loads(text))["source_fields"]),
+                )
+            except (etl_bulk.duckdb.Error, pa.ArrowInvalid):
+                # The same staged row reader establishes the exact first source
+                # decoding error. Count/order guard failures still abort directly.
+                in_bulk = False
+        if not in_bulk:
             with pq.ParquetWriter(receipts, RECEIPT_SCHEMA, compression="zstd") as rw:
                 sw = None if subjects is None else pq.ParquetWriter(subjects, selected.subject_schema, compression="zstd")
                 try:
