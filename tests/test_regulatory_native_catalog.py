@@ -293,3 +293,50 @@ def test_export_retirement_filter_preserves_invalid_nonmarkers_for_admission(con
     con.unregister('_damaged_observation')
     with pytest.raises(ValueError):
         native.export_pair(con, COMMENT, tmp_path, generation_id='invalid-selected')
+
+
+def test_full_comments_processing_uses_batch_proof_without_unused_identity_scan(con, monkeypatch):
+    expected = source(con)
+    iceberg.replace_rows(con, COMMENT, 'source')
+    monkeypatch.setattr(native, 'subject_identity', lambda *a, **k: pytest.fail('unused full-read identity scan'))
+    monkeypatch.setattr(native, 'read_with_receipts', lambda *a, **k: pytest.fail('unproven row fallback'))
+    restored = native.processing_table(con, COMMENT)
+    [actual] = con.execute(f'SELECT * FROM {restored}').to_arrow_table().to_pylist()
+    assert all(actual[name] == value for name, value in expected.items())
+
+
+def test_comments_batch_refusal_restores_exact_row_first_error(con, monkeypatch):
+    import pyarrow as pa
+    from spicy_regs import comments_bulk
+    from spicy_regs.etl_receipts import RECEIPT_SCHEMA, decode_exact_json, exact_json, _digest
+    source(con)
+    con.execute("INSERT INTO source SELECT * REPLACE ('c2' AS comment_id, 'second' AS text_content) FROM source")
+    iceberg.replace_rows(con, COMMENT, 'source')
+    rows = con.execute(f"SELECT * FROM {native.receipts_table()} WHERE outcome='accepted' ORDER BY record_id").to_arrow_table().to_pylist()
+    # Native subject file order selects c1 first, then c2. Both payloads remain
+    # valid receipt data, but their retained source inputs fail mapper proof.
+    for row in rows:
+        values = decode_exact_json(row['processing_json'])
+        raw = values['raw_conversion_inputs']
+        if raw['comment_id']=='c1':
+            raw['text_content'] = 'different'
+        if raw['comment_id']=='c2':
+            raw['attachments_json'] = '{bad'
+        old_id = row['receipt_id']
+        row['processing_json'] = exact_json(values)
+        row['receipt_id'] = _digest({k: v for k,v in row.items() if k!='receipt_id'})
+        con.register('_damaged', pa.Table.from_pylist([row], schema=RECEIPT_SCHEMA))
+        con.execute(f'DELETE FROM {native.receipts_table()} WHERE receipt_id=?', [old_id])
+        con.execute(f'INSERT INTO {native.receipts_table()} SELECT * FROM _damaged')
+        con.unregister('_damaged')
+    monkeypatch.setattr(comments_bulk, '_BATCH', 2)
+    with pytest.raises(ValueError, match='retained processor input differs from selected native subject'):
+        native.processing_table(con, COMMENT)
+
+
+def test_empty_comments_processing_batch_preserves_declared_schema(con, monkeypatch):
+    native.ensure_native(con, COMMENT)
+    monkeypatch.setattr(native, 'read_with_receipts', lambda *a, **k: pytest.fail('empty batch fell back'))
+    restored = native.processing_table(con, COMMENT)
+    assert con.execute(f'SELECT count(*) FROM {restored}').fetchone() == (0,)
+    assert {row[0] for row in con.execute(f'DESCRIBE {restored}').fetchall()} == set(COMMENT.schema)

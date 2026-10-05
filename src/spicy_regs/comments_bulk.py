@@ -153,3 +153,67 @@ def write_bundle(source: Path, subjects: Path, receipts: Path, *, policy: Datase
     if seen != expected:
         raise RuntimeError(f'comments: read {seen} of the source file\'s {expected} rows')
     return routed
+
+
+def restore_catalog(subjects: Path, receipts: Path, destination: Path, *, generation_id: str) -> int:
+    """Restore catalog comments after complete admission and shared mapper proof.
+
+    The catalog retains normalized processor inputs plus complete original rows.
+    Batch shaping uses the same mapper as _processor_input, followed by one Arrow
+    conversion per batch. Any unproven value returns the whole pair to that row
+    reader so it decides the exact first error. No destination appears until all
+    joins, input values, and source-order checks pass.
+    """
+    from tempfile import TemporaryDirectory
+    from spicy_regs.etl_receipts import decode_exact_json, exact_json
+    from spicy_regs.transforms.regulations_shape import RECEIPT_COLUMNS, shape_record
+    from spicy_regs.transforms.regulations_receipts import policy as selected_policy
+
+    selected = selected_policy('comments')
+    etl_bulk.validate_bundle({'comments': [subjects]}, [receipts], [selected], generation_id=generation_id)
+    schema = pa.schema([(name, TYPES[kind]) for name, kind in SOURCE_COLUMNS['comments']])
+    expected = pq.ParquetFile(subjects).metadata.num_rows
+    # Admission already checked the exact canonical identity and accepted joins.
+    # Decode its sole comment_id value to join; SQL spelling of control escapes
+    # never becomes a second identity calculation here.
+    identity = "json_extract_string(r.identity_json, '$[1][0][1][1][1]')"
+    query = f"""SELECT n.* EXCLUDE(file_row_number), n.file_row_number AS _ordinal,
+                       r.processing_json AS _processing
+        FROM read_parquet({_text(subjects)}, file_row_number=true) n
+        JOIN read_parquet({_text(receipts)}) r ON n.comment_id={identity}
+        WHERE r.dataset='comments' AND r.outcome='accepted' ORDER BY n.file_row_number"""
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    seen = 0
+    try:
+        with etl_bulk.bulk_connection() as (con, _), TemporaryDirectory(prefix='comments-restore-', dir=destination.parent) as scratch:
+            temporary = Path(scratch)/'processing.parquet'
+            with pq.ParquetWriter(temporary, schema, compression='zstd') as writer:
+                for batch in con.execute(query).to_arrow_reader(min(_BATCH, 1000)):
+                    table = pa.Table.from_batches([batch])
+                    table.validate(full=True)
+                    if table['_ordinal'].to_pylist() != list(range(seen, seen+batch.num_rows)):
+                        raise RuntimeError('comments: restored subject order or membership changed')
+                    held = [decode_exact_json(value) for value in table['_processing'].to_pylist()]
+                    if any(values.get('input_metadata') != {} for values in held):
+                        raise etl_bulk.NotBulkEligible('Comments catalog restore requires empty processor metadata')
+                    raw = [values.get('raw_conversion_inputs') for values in held]
+                    if any(not isinstance(value, Mapping) for value in raw):
+                        raise etl_bulk.NotBulkEligible('Comments exact retained processor input is required')
+                    shaped = [shape_record('comments', value) for value in raw]
+                    reproduced = pa.Table.from_pylist(shaped, schema=selected.subject_schema)
+                    actual = table.select(selected.subject_schema.names).cast(selected.subject_schema)
+                    if not reproduced.equals(actual):
+                        raise etl_bulk.NotBulkEligible('Comments processor input differs from selected native subjects')
+                    names = RECEIPT_COLUMNS['comments']
+                    if any(exact_json({name: value.get(name) for name in names}) !=
+                           exact_json({name: values.get(name) for name in names})
+                           for value, values in zip(shaped, held)):
+                        raise etl_bulk.NotBulkEligible('Comments processor input differs from selected receipt values')
+                    writer.write_table(pa.Table.from_pylist(raw, schema=schema))
+                    seen += batch.num_rows
+            if seen != expected:
+                raise RuntimeError(f'comments: restored {seen} of {expected} native subjects')
+            temporary.replace(destination)
+    except (etl_bulk.duckdb.Error, pa.ArrowException, ValueError, TypeError, OverflowError) as error:
+        raise etl_bulk.NotBulkEligible('Comments batch processing proof requires the row reader') from error
+    return seen

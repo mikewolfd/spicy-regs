@@ -326,8 +326,9 @@ def processing_table(con, record_type, *, where: str | None = None, in_transacti
             subject = work / 'subjects.parquet'
             _copy(con, f'SELECT * FROM {target}{predicate}', subject)
             ids = work / 'identities.parquet'
-            write_rows(({'record_id': subject_identity(policy(dataset), row)[0]} for row in _rows(subject)),
-                       ids, pa.schema([('record_id', pa.string())]))
+            if where:
+                write_rows(({'record_id': subject_identity(policy(dataset), row)[0]} for row in _rows(subject)),
+                           ids, pa.schema([('record_id', pa.string())]))
             raw_receipts = work / 'selected-receipts.parquet'
             # Full reads also detect orphan receipts (for example an unpaired DELETE).
             # Scoped reads join only selected identities and avoid restoring unrelated agencies.
@@ -342,8 +343,16 @@ def processing_table(con, record_type, *, where: str | None = None, in_transacti
                 for row in read_with_receipts([subject], [receipts], policy(dataset), generation_id=generation):
                     from spicy_regs.transforms.regulations_receipts import _processor_input
                     yield _processor_input(dataset, row)
-            rows = source_rows()
-            write_rows(rows, restored, pa.schema([(n, TYPES[t]) for n, t in SOURCE_COLUMNS[dataset]]))
+            from spicy_regs import comments_bulk, etl_bulk
+            used_bulk = False
+            if dataset == 'comments':
+                try:
+                    comments_bulk.restore_catalog(subject, receipts, restored, generation_id=generation)
+                    used_bulk = True
+                except etl_bulk.NotBulkEligible:
+                    pass
+            if not used_bulk:
+                write_rows(source_rows(), restored, pa.schema([(n, TYPES[t]) for n, t in SOURCE_COLUMNS[dataset]]))
             con.execute(f'CREATE TEMP TABLE "{temporary_name}" AS SELECT * FROM read_parquet(?)', [str(restored)])
     return '"' + temporary_name + '"'
 

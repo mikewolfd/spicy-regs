@@ -19,7 +19,9 @@ Changed accepted attempts refer to their direct selected predecessor. Exact sour
 their witness digests refer to their canonical `exact_json` bytes.
 
 Processing and retry fields are reconstructed only by `processing_table` from a
-qualified pair. The scheduler, repair, text enrichment, field fill, seed, and
+qualified pair. Comments use bounded batch shaping with the shared mapper and
+compare every native field and retained processing value before the restored file
+appears. Unsupported values return to the row reader for its exact first error. The scheduler, repair, text enrichment, field fill, seed, and
 backfill callers use that boundary. Refused writes roll back their subjects and retain a refused attempt receipt.
 Unselected older or duplicate source observations remain rejected receipts. Prior table and
 receipt versions remain subject to the catalog's snapshot retention policy.

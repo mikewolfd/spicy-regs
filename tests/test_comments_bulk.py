@@ -56,6 +56,12 @@ def test_complete_comments_bundle_equals_catalog_row_writer(tmp_path, monkeypatc
     selected = ReceiptInput('comments', (actual[0],), actual[1], 'g')
     accepted = [raw for raw in rows if map_regulations_attempt('comments', raw, context(raw, 0), project=project)[0] is not None]
     assert list(read_internal(selected)) == [project(raw) for raw in accepted]
+    restored = tmp_path/'restored.parquet'
+    assert comments_bulk.restore_catalog(*actual, restored, generation_id='g') == len(accepted)
+    from spicy_regs.transforms.regulations_shape import SOURCE_COLUMNS, TYPES
+    restored_schema = pa.schema([(name, TYPES[kind]) for name, kind in SOURCE_COLUMNS['comments']])
+    expected_restored = pa.Table.from_pylist([project(raw) for raw in accepted], schema=restored_schema)
+    assert pq.read_table(restored).equals(expected_restored)
 
 
 def test_comments_unknown_source_columns_refuse_bulk(tmp_path):
