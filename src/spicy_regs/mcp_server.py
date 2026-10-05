@@ -2324,7 +2324,8 @@ def _tools() -> list[Tool]:
         identity fields and the fields its receipts carry, which differ by
         table. Each key is an object giving every identity field its exact
         value: text is case-sensitive and stays quoted even when it looks
-        numeric; a whole number may be a number. An unknown table or field, a
+        numeric; a whole-number field takes a number or its plain digits as
+        text. An unknown table or field, a
         key that does not fit the identity and more than 100 keys are refused,
         saying what is valid. Values come back decoded. keys answers in request
         order; receipt is found, ambiguous (several accepted receipts, none
@@ -2335,9 +2336,9 @@ def _tools() -> list[Tool]:
         says whether it was read). receipt_meaning and state_meaning define the
         words a reply uses; fields gives each field's meaning. receipts names
         the family, generation and policy version read, and whether its rows
-        are sorted: an unsorted table's receipts are scanned, and past
-        2,000,000 the call is refused until the table's next publish. A reply
-        past the reply limit is refused with how many keys fit.
+        are sorted by record id: where they are not, the table's record ids
+        are scanned, and a table with more than 2,000,000 receipts is refused.
+        A reply past the reply limit is refused with how many keys fit.
         """
         cursor = _get_connection().cursor()
         with _statement_timeout(cursor):

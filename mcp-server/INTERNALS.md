@@ -561,7 +561,7 @@ in 2,000-row groups). Where the dataset's groups are ordered by record id, each
 key's group is read off the footer. Where they are not, the record ids of the
 dataset's rows are scanned once (sam_entities, 797,525 receipts: 399 requests,
 27 MiB, about 1.5 s on 14 threads, 2026-10-05) and a dataset past
-`SCAN_ROW_BOUND` (2,000,000) is refused until its next publish, from the footer
+`SCAN_ROW_BOUND` (2,000,000) is refused, from the footer
 alone: no row of a member too large to scan is read to refuse it. Matched
 receipts are then fetched in one statement whose filter is an OR of row
 ranges, which DuckDB 1.5.5 prunes to exactly those groups; one scan per group
@@ -570,6 +570,19 @@ An `IN` list on `record_id` prunes only by the list's overall range, so it is
 never the filter that selects groups. Rows inside a group are not ordered by a
 footer and need not be: the cost of a sorted member is (groups holding a key)
 times (rows per group), so a writer that sorts must keep row groups small.
+
+No published member is ordered today, and admission does not order them.
+Sorting each member at admission was built and measured on 2026-10-05, then
+withdrawn: the scorecards member (3.3 million receipts, 1.09 GB) took 38 s
+and 9.2 GB of spill, 8.4 times its compressed size, on every publish, came
+out 41% larger because digest order compresses worse, and four readers that
+replay builder order had to sort it back. Receipts run 1.7 to 4.5 times their
+tables' bytes, so the larger families would not fit a runner. The ordered path
+stays for a member a writer happens to order. The planned way past the bound
+is a small index beside an untouched member, `(dataset, record_id, row
+number)` in record-id order: built in 2.1 s for sam-entities and 1.5 s for
+scorecards the same day, about 40 bytes a row. It needs a place in the
+publication index, whose `etlReceipts` entry is held to exactly seven keys.
 
 **Policy versions.** Admission refuses a receipt whose `policy_version` is not
 its dataset's policy's, and a carried receipt keeps its version, so a

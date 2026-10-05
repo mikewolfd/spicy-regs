@@ -209,7 +209,6 @@ def _within(bounds: tuple[str | None, str | None], value: str) -> bool:
 
 def _sorted(groups: Sequence[_Group], candidates: Sequence[int], dataset: str) -> bool:
     """Whether footer statistics show the dataset's receipts ordered by record id across its row groups.
-
     Its groups must be consecutive, hold only this dataset except the first and last (where a neighbour's rows
     may share the group), and state record ranges that do not overlap in file order. Rows inside one group are
     not ordered by a footer and need not be: a lookup reads a whole group.
@@ -511,14 +510,9 @@ def read_fields(cursor: Any, *, table: str, keys: Sequence[Any], fields: Sequenc
     if unknown := [name for name in fields if name not in where]:
         raise ValueError(f"{table} receipts do not carry {', '.join(map(repr, unknown))}. They carry: "
                          f"{', '.join(where)}. describe_table gives each one's meaning with detail=true.")
-    try:
-        from spicy_regs.etl_receipts import _unpack, subject_identity
-        from spicy_regs.subject_catalog import policies
-    except ModuleNotFoundError as error:
-        # The Cloudflare image installs the server's runtime packages only (deploy/cloudflare/Dockerfile).
-        raise ValueError(f"{TOOL} cannot run on this server: it computes record ids and decodes receipts with the "
-                         f"receipt writer's own code, which needs {error.name}, and this server does not install "
-                         "it. query_sql on etl_receipts still reads the receipts.") from error
+    from spicy_regs.etl_receipts import _unpack, subject_identity
+    from spicy_regs.subject_catalog import policies
+
     policy = policies()[table]
     typed = _typed_keys(policy, keys)
     groups = _footer(cursor, member)
@@ -528,9 +522,9 @@ def read_fields(cursor: Any, *, table: str, keys: Sequence[Any], fields: Sequenc
     # Decided from the footer alone, before any row is read: the member this refuses is the largest there is.
     if not ordered and receipts > SCAN_ROW_BOUND:
         raise ValueError(
-            f"{TOOL} is not available for {table} until its next publish: this generation's receipts are not "
-            f"sorted by record id, and a lookup would scan {receipts:,} of them, over the {SCAN_ROW_BOUND:,}-receipt "
-            "bound.")
+            f"{TOOL} is not available for {table}: its receipts are not sorted by record id, and a lookup would "
+            f"scan {receipts:,} of them, over the {SCAN_ROW_BOUND:,}-receipt bound. describe_table's notes say "
+            "which of its receipt values a row's own columns give.")
     stated = _stated_identities(cursor, member, groups, candidates, table)
     _refuse_other_identity(policy, stated)
     record_ids = [subject_identity(policy, key)[0] for key in typed]
