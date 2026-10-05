@@ -264,5 +264,32 @@
     "sha256": "a9c619a974f7b5e63f88743997235a203acc51cc43258f88a63e09c00834c38c",
     "boundary": "Earlier qualified private candidate preserved; released 0.56.0 baseline was adopted before external consumer push"
   },
-  "boundary": "Named retained-source rendition and installed consumer package; public editions need separate publication and readback; automatic refresh stays disabled"
+  "boundary": "Named retained-source rendition and installed consumer package; public editions need separate publication and readback; automatic refresh stays disabled",
+  "final_consumer_merge": {
+    "status": "passed",
+    "tested_consumer_commit": "026ed99370f65a6fdd6727a2e831d4371e1d08c8",
+    "upstream_commit": "e23267f4",
+    "retained_adoption_commit": "6b187143",
+    "qualified_package_and_source_scope_unchanged": true,
+    "consumer_pytest": {
+      "command": "uv run --frozen pytest --ignore=site",
+      "exit_code": 0,
+      "log_sha256": "a490e8db71fb3489a23d965c5137c50aefca0bf4e984de98b001d67dcb2e91fd"
+    },
+    "consumer_ruff": {
+      "command": "uv run --frozen ruff check .",
+      "exit_code": 0,
+      "stdout_sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+    },
+    "consumer_ty": {
+      "command": "uv run --frozen ty check",
+      "exit_code": 0,
+      "stdout_sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+    },
+    "dictionary_check": {
+      "command": "uv run --frozen spicy-regs-dict check",
+      "exit_code": 0
+    },
+    "boundary": "Final merge preserves unrelated official-data work and the tested scorecard package; hosted publication remains separately verified"
+  }
 }
