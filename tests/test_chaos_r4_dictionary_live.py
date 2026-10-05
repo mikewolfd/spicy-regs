@@ -113,7 +113,38 @@ def test_the_always_claims_are_found():
 @pytest.mark.parametrize(("table", "column", "value"), _always_claims())
 def test_a_column_described_as_always_empty_is_empty(urls, con, table, column, value):
     """Regression guard: the published column holds what its prose says it always holds."""
-    quoted = '"' + column.replace('"', '""') + '"'
-    condition = f"{quoted} IS NOT NULL" if value == "NULL" else f"{quoted} IS DISTINCT FROM '[]'"
-    (found,) = con.execute(f"SELECT count(*) FROM {_scan(urls, table)} WHERE {condition}").fetchone()
-    assert found == 0, f"{table}.{column}: {found} rows contradict 'always {value}'"
+    scan = _scan(urls, table)
+    columns = {row[0]: row[1] for row in con.execute(f"DESCRIBE SELECT * FROM {scan}").fetchall()}
+    condition, observed = _empty_claim_condition(table, column, value, columns)
+    (found,) = con.execute(f"SELECT count(*) FROM {scan} WHERE {condition}").fetchone()
+    assert found == 0, (
+        f"{table}.{column} (published {observed}: {columns[observed]}): "
+        f"{found} rows contradict 'always {value}'"
+    )
+
+
+def _empty_claim_condition(table, column, value, columns):
+    """Bind the claim to its declared representation, preserving NULL versus empty.
+
+    Proceedings' historical builder writes a VARCHAR JSON literal; its explicit
+    native field map writes a VARCHAR[] list. Only this named legacy spelling
+    is admitted, and a publication containing both spellings refuses.
+    """
+    observed = column
+    if (table, column) == ("proceedings", "authority_refs"):
+        declared = {"authority_refs": "VARCHAR[]", "authority_refs_json": "VARCHAR"}
+        present = set(declared) & columns.keys()
+        if len(present) != 1:
+            raise ValueError(f"{table}.{column}: expected exactly one declared representation, found {sorted(present)}")
+        observed = present.pop()
+        if columns[observed] != declared[observed]:
+            raise ValueError(f"{table}.{column}: {observed} has undeclared type {columns[observed]}")
+    elif observed not in columns:
+        raise ValueError(f"{table}.{column}: documented column is absent")
+    quoted = '"' + observed.replace('"', '""') + '"'
+    if value == "NULL":
+        return f"{quoted} IS NOT NULL", observed
+    if value != "`[]`" or columns[observed] not in {"VARCHAR", "VARCHAR[]"}:
+        raise ValueError(f"{table}.{column}: unsupported empty claim {value!r} for {columns[observed]}")
+    empty = "[]::VARCHAR[]" if columns[observed] == "VARCHAR[]" else "'[]'"
+    return f"{quoted} IS DISTINCT FROM {empty}", observed
