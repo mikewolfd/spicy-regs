@@ -17,7 +17,7 @@ Processing fields, source witnesses, conversion inputs and diagnostics reference
 
 | Column | Type | Description |
 | --- | --- | --- |
-| `name` | `VARCHAR` | Proceeding (docket) number, e.g. `17-108` or `23-320`. Primary key / dedup key, and the join key to `fcc_filings.proceeding_names_json`. |
+| `name` | `VARCHAR` | Proceeding (docket) number, e.g. `17-108` or `23-320`. Primary key / dedup key, and the join key to the `name` of each entry in `fcc_filings.proceedings`. |
 | `id_proceeding` | `VARCHAR` | ECFS numeric identifier, reused across some docket names in retained data (301759 appears with both 17-108 and 87-432). Native filing-to-proceeding joins require name AND id_proceeding; the numeric ID alone is not globally unique. The table's primary key remains name. |
 | `description` | `VARCHAR` | Proceeding title/subject (ECFS `description_display`, falling back to `description`), e.g. `Restoring Internet Freedom`. There is no program or topic field, and titles often leave the program out: Universal Service dockets include 13-184 (`Modernizing the E-rate Program for Schools and Libraries.`) and 02-60 (`In the Matter of Rural Health Care Support Mechanism`), neither of which says universal service, and high-cost programs such as the Rural Digital Opportunity Fund (19-126) and the 5G Fund (20-32) use their own names. Search titles together with bureau_code (WC, or CC for older dockets) and known docket numbers, and find related dockets by the proceedings filings name alongside an anchor docket in fcc_filings.proceeding_names_json (for Universal Service, the umbrella docket 96-45 and 10-90). A title search gives a floor, not a complete list. |
 | `bureau_code` | `VARCHAR` | Code of the FCC bureau that owns the proceeding (e.g. `WC`). |
