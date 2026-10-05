@@ -195,8 +195,9 @@ def write_congress_dataset(
                     (mapped.subject or {}) | processing,
                     context(ordinal, subject=mapped.subject, processing=processing),
                 )
-            except (ValueError, TypeError, pa.ArrowException) as error:
-                # Missing identity and bad native values both remain attempts.
+            except (ValueError, TypeError, OverflowError, pa.ArrowException) as error:
+                # Missing identity and bad native values both remain attempts. An integer past
+                # int64 raises OverflowError from Arrow, which is none of the other three.
                 # Arbitrary exception text can contain source content or credentials.
                 return None, failure_receipt(
                     selected,
