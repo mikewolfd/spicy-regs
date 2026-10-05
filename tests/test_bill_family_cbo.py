@@ -259,6 +259,60 @@ def test_a_real_stage_move_emits_one_event_from_the_running_rules_prior_stage(tm
     assert [json.loads(event["event_data_json"])["to"] for event in events] == [now]
 
 
+#: Two bills' rows as bill family e264e62b published them under the round-5 rule (``fixtures/bill_family_held``).
+HELD = Path(__file__).parent / "fixtures" / "bill_family_held" / "e264e62b-rows.json"
+
+
+def test_held_rows_take_the_running_rules_stage_and_signing_date_without_a_read(tmp_path, monkeypatch):
+    """Round 6 (M3): a held row is re-read from its stored actions every run, not when its Congress is read again.
+
+    The run reads 119 H.J.Res. only, so neither bill's status is read. S. 240 was published `conference` from the
+    "Resolving differences" category, no conference matcher since round 6; the Senate's agreement to the House
+    amendment above it clears it. H.R. 3377 became Private Law 119-1, which round 6 dates from its coded action.
+    """
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "119")
+    monkeypatch.setenv("BILL_FAMILY_BILL_TYPES", "hjres")
+    held = json.loads(HELD.read_text())
+    prior = tmp_path / "prior"
+    prior.mkdir()
+    for table in ("congress_bills", "bill_actions"):
+        pq.write_table(pa.Table.from_pylist(held[table]), prior / f"{table}.parquet")
+    paths = run(tmp_path / "next", prior=prior, feed=None, bulk=StubBulkAcquirer())
+    bills = {row["bill_id"]: row for row in pq.read_table(paths["congress_bills"]).to_pylist()}
+    stage = ("stage", "stage_rule", "stage_matcher", "stage_action_index", "stage_action_date")
+    assert tuple(bills["119-s-240"][c] for c in stage) == (
+        "cleared", "cleared", "agreed to the other chamber's amendment", "1", "2026-09-24")
+    assert bills["119-s-240"]["stage_source_text"].startswith("Senate agreed to the House amendment to S. 240")
+    signing = ("signed_date", "signed_date_rule", "signed_date_action_index", "signed_date_action_code")
+    assert tuple(bills["119-hr-3377"][c] for c in signing) == (
+        "2026-03-26", "private_law_and_became_law_action", "0", "E40000")
+    assert bills["119-hr-3377"]["public_law_number"] is None, "a private law states no public law number"
+    actions = {(row["bill_id"], row["action_index"]): (row["stage"], row["stage_rule"], row["stage_matcher"])
+               for row in pq.read_table(paths["bill_actions"]).to_pylist()}
+    assert actions[("119-s-240", "2")] == ("cleared", "cleared", "agreed to the other chamber's amendment")
+    assert actions[("119-hr-3377", "8")] == ("cleared", "cleared", "passed senate without amendment")
+    published = {(row["bill_id"], row["action_index"]): (row["stage"], row["stage_rule"], row["stage_matcher"])
+                 for row in held["bill_actions"]}
+    assert {key for key in published if actions[key] != published[key]} == {
+        ("119-s-240", "1"), ("119-s-240", "2"), ("119-hr-3377", "7"), ("119-hr-3377", "8")}
+
+
+def test_restaging_moves_each_held_row_once_and_leaves_a_bill_no_rule_read(tmp_path):
+    """A second pass moves nothing and rewrites nothing; 104 H.R. 517 (Public Law 104-11), a detail-route row with no
+    stored action, keeps its NULL stage and signing rule rather than gaining a rule that never read it."""
+    held = json.loads(HELD.read_text())
+    bills, actions = tmp_path / "congress_bills.parquet", tmp_path / "bill_actions.parquet"
+    pq.write_table(pa.Table.from_pylist(held["congress_bills"]), bills)
+    pq.write_table(pa.Table.from_pylist(held["bill_actions"]), actions)
+    assert build.restage_held_rows(bills, actions) == (2, 4)
+    written = (bills.stat().st_mtime_ns, actions.stat().st_mtime_ns)
+    assert build.restage_held_rows(bills, actions) == (0, 0)
+    assert (bills.stat().st_mtime_ns, actions.stat().st_mtime_ns) == written, "nothing moved, so nothing is rewritten"
+    detail = next(row for row in pq.read_table(bills).to_pylist() if row["bill_id"] == "104-hr-517")
+    assert detail == next(row for row in held["congress_bills"] if row["bill_id"] == "104-hr-517")
+    assert pq.read_table(bills).column_names == list(held["congress_bills"][0]), "columns keep their order"
+
+
 def test_rederived_stages_fold_published_actions_in_publisher_order(tmp_path):
     rows = [
         {"bill_id": "119-hr-1", "action_index": "1", "action_text": "Referred to the House Committee on Rules.",
