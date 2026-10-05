@@ -179,7 +179,7 @@ def main():
             child('qualify_congress_bulk.py', [entry['localInput'], str(directory), '--dataset', dataset,
                 '--sha256', entry['sha256'], '--generation', labels[dataset]])
         subjects[dataset] = directory / 'bundle' / (dataset + '.parquet')
-        receipts[dataset] = directory / 'bundle' / 'etl_receipts.parquet'
+        receipts[dataset] = directory / 'carried-receipts.parquet'
     with phase(log, 'roll-call-family-sibling-write-and-admit'):
         source = args.output / 'roll-call-original.parquet'
         copy_exact(Path(inputs['roll_call_votes']['localInput']), source)

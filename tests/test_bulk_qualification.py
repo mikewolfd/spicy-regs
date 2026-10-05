@@ -36,3 +36,28 @@ def test_full_qualifier_rejects_source_changed_after_pin(tmp_path, monkeypatch):
     phases = [json.loads(line) for line in (output / 'phases.jsonl').read_text().splitlines()]
     assert phases[-1]['phase'] == 'final-input-pin' and phases[-1]['status'] == 'failed'
     assert not (output / 'LIMITATIONS.json').exists()
+
+
+def test_history_qualification_uses_separately_produced_current_and_prior(tmp_path, monkeypatch):
+    from scripts import qualify_congress_bulk as runner
+
+    source = tmp_path / 'source.parquet'
+    schema = pa.schema([(name, pa.string()) for name in INPUT_COLUMNS['member_votes']])
+    pq.write_table(pa.Table.from_pylist([{'vote_id': '101-house-1-1', 'member_key': 'M', 'congress': '101',
+                                        'chamber': 'house'}], schema=schema), source)
+    digest = hashlib.sha256(source.read_bytes()).hexdigest()
+    output = tmp_path / 'qualification'
+    monkeypatch.setattr('sys.argv', ['qualifier', str(source), str(output), '--dataset', 'member_votes',
+                                   '--sha256', digest, '--generation', 'fresh'])
+    runner.main()
+    current = pq.read_table(output / 'bundle' / 'etl_receipts.parquet')
+    prior = pq.read_table(output / 'selected-prior' / 'etl_receipts.parquet')
+    carried = pq.read_table(output / 'carried-receipts.parquet')
+    assert set(current['generation_id'].to_pylist()) == {'fresh'}
+    assert set(prior['generation_id'].to_pylist()) == {'fresh-selected-prior'}
+    assert not current.equals(prior)
+    assert carried.equals(prior)
+    phases = [json.loads(line) for line in (output / 'phases.jsonl').read_text().splitlines()]
+    history = next(row for row in phases if row['phase'] == 'unchanged-history-full')
+    assert history['currentReceiptSha256'] != history['selectedPriorReceiptSha256']
+    assert all(row['status'] == 'passed' for row in phases)

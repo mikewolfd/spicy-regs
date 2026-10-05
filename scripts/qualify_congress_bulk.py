@@ -179,9 +179,19 @@ def main():
             counts.get(outcome,0) for outcome in ['accepted','rejected','refused','error']) != source_count:
             raise ValueError('Independent source/subject/receipt populations differ')
         record.update(sourceRows=source_count, subjectRows=subject_count, receiptOutcomes=counts)
+    prior_generation = args.generation + '-selected-prior'
+    with measured(log, 'separate-prior-source-writer-and-admission') as record:
+        prior_subjects, prior_receipts = write_congress_dataset(args.source, args.output/'selected-prior',
+            dataset=args.dataset, generation_id=prior_generation)
+        assert prior_subjects is not None
+        record.update(generation=prior_generation, receiptSha256=_digest(prior_receipts),
+                      receiptBytes=prior_receipts.stat().st_size, subjectRows=compare_files(subjects, prior_subjects))
     with measured(log, 'unchanged-history-full') as record:
-        carried = carry_receipt_history(receipts, [receipts], args.output/'carried-receipts.parquet')
-        record['rows'] = compare_files(receipts, carried)
+        carried = carry_receipt_history(receipts, [prior_receipts], args.output/'carried-receipts.parquet')
+        record.update(rows=compare_files(prior_receipts, carried), currentGeneration=args.generation,
+                      selectedPriorGeneration=prior_generation, currentReceiptSha256=_digest(receipts),
+                      selectedPriorReceiptSha256=_digest(prior_receipts), carriedReceiptSha256=_digest(carried),
+                      historyQueryThreads=4, historyQueryMemory='1GB', historyQuerySpill='32GB')
         etl_bulk.validate_bundle({args.dataset:[subjects]}, [carried], [policy(args.dataset)], generation_id=args.generation)
     with measured(log, 'final-input-pin') as record:
         with args.source.open('rb') as stream:
