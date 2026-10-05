@@ -46,6 +46,45 @@ def test_every_source_owner_field_is_explicit(dataset):
     assert spec["processing_only"] == (len(schema) == 0)
 
 
+#: Returned to the subject by owner decision, 2026-10-05: what a reader needs beside a row to judge it. Each is typed
+#: as the family already types that legacy spelling: a true/false flag as BOOLEAN, a token as its literal string.
+RETURNED_COLUMNS = {
+    "laws": {"uslm_outcome": pa.string(), "uslm_reason": pa.string(), "law_text_outcome": pa.string()},
+    "document_citations": {"target_resolved": pa.bool_(), "target_rule": pa.string()},
+    "section_diff_items": {"text_diff_truncated": pa.bool_()},
+}
+
+
+@pytest.mark.parametrize("dataset", RETURNED_COLUMNS)
+def test_columns_a_reader_judges_a_row_by_are_typed_subject_columns(dataset):
+    schema = subject_schema(dataset)
+    assert {name: schema.field(name).type for name in RETURNED_COLUMNS[dataset]} == RETURNED_COLUMNS[dataset]
+
+
+def test_returned_columns_keep_the_stated_value_keep_null_and_refuse_an_unknown_flag():
+    law = row("laws", congress="119", law_type="private", number="1")
+    partial = required_subject("laws", law | {"uslm_outcome": "captured_partial", "law_text_outcome": "parsed",
+                                              "uslm_reason": "statutes_citation_not_stated"})
+    assert (partial["uslm_outcome"], partial["uslm_reason"], partial["law_text_outcome"]) == (
+        "captured_partial", "statutes_citation_not_stated", "parsed")
+    captured = required_subject("laws", law | {"uslm_outcome": "captured"})
+    assert captured["uslm_reason"] is None and captured["law_text_outcome"] is None
+    citation = row("document_citations", document_key="x", document_kind="report", cite_kind="bill_number",
+                   target_key="hr-1", span_start="0", text_sha256="a" * 64)
+    unsettled = required_subject("document_citations", citation | {"target_resolved": "false",
+                                                                   "target_rule": "bill_number:unstated"})
+    assert unsettled["target_resolved"] is False and unsettled["target_rule"] == "bill_number:unstated"
+    assert required_subject("document_citations", citation | {"target_resolved": "true"})["target_resolved"] is True
+    item = pair("section_diff_items", seq="0")
+    assert required_subject("section_diff_items", item | {"text_diff_truncated": "true"})["text_diff_truncated"] is True
+    # No word diff was made for the correspondence: not stated, which is neither cut nor whole.
+    assert required_subject("section_diff_items", item)["text_diff_truncated"] is None
+    for dataset, source in (("section_diff_items", item | {"text_diff_truncated": "yes"}),
+                            ("document_citations", citation | {"target_resolved": "True"})):
+        with pytest.raises(LegislativeShapeError, match="expected true or false"):
+            required_subject(dataset, source)
+
+
 def test_printing_keys_resolve_across_versions_sections_and_diff_sides():
     version = required_subject("bill_versions", printing("bill_versions"))
     section = required_subject("bill_sections", printing("bill_sections", seq="0", body="A", body_sha256="a" * 64))
@@ -65,7 +104,7 @@ def test_citation_occurrences_stay_distinct_by_body_and_offset():
     repeat = required_subject("document_citations", original | {"span_start": "20"})
     assert first["body_version_id"] != changed["body_version_id"]
     assert first["span_start"] != repeat["span_start"]
-    assert "target_resolved" not in first and "rule_version" not in first
+    assert first["target_resolved"] is False and "rule_version" not in first
 
 
 def test_native_lists_keep_order_repeats_nulls_and_empty():

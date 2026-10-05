@@ -47,7 +47,9 @@ def test_native_citation_tool_preserves_unsettled_key_and_private_processing(tmp
                                           text_sha256=digest, pages_read="1", rule_set_version="test",
                                           citation_rows="1")])
     select(tmp_path, "laws", [row("laws", congress="119", law_type="public", number="1", law_id="119-public-1")])
-    assert "target_resolved" not in pq.read_schema(subjects).names
+    # Whether the key is settled is published with the row; the rule's version stays in the receipt.
+    assert pq.read_table(subjects)["target_resolved"].to_pylist() == [settled]
+    assert "rule_version" not in pq.read_schema(subjects).names
     with connection(tmp_path, monkeypatch)[0] as con:
         server = mcp_server.build_server()
         result = _tool_data(server, "resolve_document_citations", {
@@ -56,11 +58,60 @@ def test_native_citation_tool_preserves_unsettled_key_and_private_processing(tmp
         assert result["occurrences"][0]["target_status"] == ("found" if settled else "not_checked")
         assert result["occurrences"][0]["reason"] == (None if settled else "unsettled_key")
         assert result["coverage"]["distinct_target_keys_read"] == int(settled)
-        assert "target_resolved" not in {r[0] for r in con.execute("DESCRIBE document_citations").fetchall()}
+        described = {r[0]: r[1] for r in con.execute("DESCRIBE document_citations").fetchall()}
+        assert described["target_resolved"] == "BOOLEAN" and "rule_version" not in described
+        assert result["occurrences"][0]["target_resolved"] == str(settled).lower()
         with pytest.raises(ToolError, match="Internal"):
             _tool_data(server, "query_sql", {"sql": "SELECT * FROM _spicy_citation_processing_document_citations"})
         with pytest.raises(ToolError, match="Internal"):
             _tool_data(server, "query_sql", {"sql": "SELECT * FROM _spicy_citation_inputs"})
+
+
+def test_returned_citation_columns_are_public_and_the_tool_still_states_them_as_written(tmp_path, monkeypatch):
+    """Owner decision, 2026-10-05: target_resolved and target_rule are subject columns again.
+
+    Public SQL reads them typed from the subject. The tool reads the same row's whole original record, which the
+    receipt still holds and the subject must agree with, so its reply keeps the writer's spelling and states each once.
+    """
+    digest = "sha256:" + "c" * 64
+    written = [occurrence(digest, target_resolved="true"),
+               occurrence(digest, span_start="20", span_end="32", target_rule="public_law:unstated")]
+    subjects, _ = select(tmp_path, "document_citations", written)
+    select(tmp_path, "budget_volumes", [row("budget_volumes", package_id="BUDGET-2027", text_sha256=digest,
+                                          pages_read="1", rule_set_version="test", citation_rows="2")])
+    select(tmp_path, "laws", [row("laws", congress="119", law_type="public", number="1", law_id="119-public-1")])
+    assert pq.read_schema(subjects).equals(policy("document_citations").subject_schema)
+    with connection(tmp_path, monkeypatch)[0]:
+        server = mcp_server.build_server()
+        public = _tool_data(server, "query_sql", {
+            "sql": "SELECT span_start, target_resolved, typeof(target_resolved), target_rule, typeof(target_rule) "
+                   "FROM document_citations ORDER BY span_start"})
+        assert public["rows"] == [[0, True, "BOOLEAN", "public_law", "VARCHAR"],
+                                  [20, False, "BOOLEAN", "public_law:unstated", "VARCHAR"]]
+        reply = _tool_data(server, "resolve_document_citations", {
+            "document_kind": "budget_volume", "document_key": "BUDGET-2027"})
+        settled, unsettled = reply["occurrences"]
+        assert (settled["target_resolved"], settled["target_status"]) == ("true", "found")
+        assert (unsettled["target_resolved"], unsettled["reason"]) == ("false", "unsettled_key")
+        # A rule that only restates the kind is said once for the reply; one that says more stays on its occurrence.
+        assert reply["occurrence_fields"]["same_as"]["target_rule"] == "cite_kind"
+        assert "target_rule" not in settled and unsettled["target_rule"] == "public_law:unstated"
+
+
+def test_a_published_flag_its_receipt_contradicts_is_refused_before_the_tool_can_read_it(tmp_path, monkeypatch):
+    """The subject and the receipt both hold target_resolved; the tool serves neither where they disagree."""
+    source = occurrence("sha256:" + "c" * 64)
+    context = ReceiptContext("citation-generation", "citation-attempt", "citation-test", [
+        {"source_id": "document_citations", "sha256": "a" * 64}])
+    contradicted = mapped_record("document_citations", source) | {"target_resolved": True}
+    subject, receipts = write_dataset([(contradicted, context)], tmp_path / "document_citations",
+                                      policy("document_citations"))
+    assert subject is not None
+    remember_selection(tmp_path, [SelectedDataset("document_citations", (subject,), receipts, context.generation_id)])
+    monkeypatch.setattr(mcp_server, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(mcp_server, "TABLES", ())
+    with pytest.raises(ValueError, match="differs from its selected native subject"):
+        mcp_server._build_connection()
 
 
 def test_held_text_zero_result_comes_from_receipt_only_read(tmp_path, monkeypatch):

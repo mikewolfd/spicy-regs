@@ -12845,6 +12845,11 @@
         "description": "The engine's word-level diff as a Native list, capped at the published byte limit. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
       },
       {
+        "column_name": "text_diff_truncated",
+        "column_type": "BOOLEAN",
+        "description": "True when the word diff did not fit the cap and entries were dropped from the end."
+      },
+      {
         "column_name": "financial_from_amounts",
         "column_type": "DECIMAL(38,2)[]",
         "description": "Every dollar figure the earlier body states, as a Native list. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
@@ -14565,9 +14570,24 @@
         "description": "The USLM meta's dc:title, where the PLAW was captured."
       },
       {
+        "column_name": "uslm_outcome",
+        "column_type": "VARCHAR",
+        "description": "captured or captured_partial retain validated native metadata; captured_refused retains a refused capture without unvalidated metadata; request_failed records an attempted read without an accepted body; unavailable records supported source absence; not_requested means no attempt."
+      },
+      {
         "column_name": "uslm_citable_as",
         "column_type": "VARCHAR[]",
         "description": "Every literal native USLM meta citableAs value, source order retained. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+      },
+      {
+        "column_name": "uslm_reason",
+        "column_type": "VARCHAR",
+        "description": "Bounded outcome reason token; NULL on complete capture or when no read was attempted."
+      },
+      {
+        "column_name": "law_text_outcome",
+        "column_type": "VARCHAR",
+        "description": "not_requested, parsed or refused: section reading is separate from validated USLM metadata."
       },
       {
         "column_name": "law_section_count",
@@ -14602,7 +14622,7 @@
     "table": "law_sections",
     "label": "Published law sections",
     "summary": "One row per native section occurrence in a published law's main body. These are the law's own words, including amendment instructions, not a consolidated statement of current law. Section numbers and publisher IDs can repeat or be absent; (law_id, seq) identifies each occurrence and native_path locates it in the source XML. is_quoted marks sections inside quotedContent; parent_seq alone does not imply a quotation. Body excludes its own number and heading, print furniture, and nested sections' text; query the child rows as well. laws.law_body_remainder retains text outside all numbered sections, including appropriation blocks. Hierarchy retains the source context; source irregularities and extraction outcomes remain in the law_sections ETL receipts. Boolean and numeric observations use native types.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='law_sections'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
-    "coverage": "Derived: source-native sections from identity-validated GovInfo public and private law XML acquired by the laws rollup. Join law_id to laws.law_id, then laws.bill_id to congress_bills.bill_id. A missing section row does not establish that the law has no text: check law_text_outcome and law_section_count in the laws ETL receipts. Coverage follows successfully read XML, not all enacted laws. PDF-only sources are outside this reader.",
+    "coverage": "Derived: source-native sections from identity-validated GovInfo public and private law XML acquired by the laws rollup. Join law_id to laws.law_id, then laws.bill_id to congress_bills.bill_id. A missing section row does not establish that the law has no text: check law_text_outcome and law_section_count in laws. Coverage follows successfully read XML, not all enacted laws. PDF-only sources are outside this reader.",
     "kind": "derived",
     "measured_on": "2026-10-02",
     "data_quality": null,
@@ -17034,6 +17054,16 @@
         "column_name": "matched_text",
         "column_type": "VARCHAR",
         "description": "The exact characters the rule matched, so a false positive is readable from the row without the document in hand."
+      },
+      {
+        "column_name": "target_resolved",
+        "column_type": "BOOLEAN",
+        "description": "Whether `target_key` is the hosted target's own spelling.  `false` means the rule found the cite but nothing settled the key: a bill with no stated Congress, or a committee name no supplied roster reaches.  A shape check, not an existence check: a resolved key can name nothing the target table holds; join the target table to learn whether it is held."
+      },
+      {
+        "column_name": "target_rule",
+        "column_type": "VARCHAR",
+        "description": "How the key was reached. Bill routes distinguish inline_congress, congress_subheading, document_fallback, unstated and document_fallback_refused after the bill_number: prefix. A document fallback is context supplied by the caller, not proof of historical applicability. Other kinds use the rule name except `committee_name`, where it is the resolution route: `exact` and `roster_prefix` are lookups in the roster vocabulary, while `name_prefix` and `sibling_prefix` are inferences from the printed text of this one document.  A consumer wanting only roster lookups filters on this column rather than on `target_resolved`."
       },
       {
         "column_name": "stated_by_index",

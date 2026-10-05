@@ -102,6 +102,8 @@ def test_mixed_family_restores_both_owners_and_receipt_only_archive(tmp_path, mo
     assert "bill_family_archives.parquet" in first.receipt_only_tables
     assert "observed_at" not in pq.read_schema(first_dir / "members.parquet").names
     assert pq.read_table(first_dir / "members.parquet")["fec_ids"].to_pylist() == [["A", "A"]]
+    # A law's read outcome is published with the law, and restored below from the same row's receipt.
+    assert pq.read_table(first_dir / "laws.parquet")["uslm_outcome"].to_pylist() == ["request_failed"]
     select_bundle(monkeypatch, first_dir, first)
     second_dir = tmp_path / "second"
     second_dir.mkdir()

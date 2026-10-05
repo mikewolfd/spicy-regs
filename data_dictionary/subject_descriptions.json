@@ -758,6 +758,8 @@
       "span_start": "Character offset of the match in the document's normalized text, counted from zero.  Part of the identity: one document naming one bill forty times is forty rows, and the offset is what tells them apart.",
       "span_end": "Character offset just past the match, so `text[span_start:span_end]` is `matched_text`.",
       "matched_text": "The exact characters the rule matched, so a false positive is readable from the row without the document in hand.",
+      "target_resolved": "Whether `target_key` is the hosted target's own spelling.  `false` means the rule found the cite but nothing settled the key: a bill with no stated Congress, or a committee name no supplied roster reaches.  A shape check, not an existence check: a resolved key can name nothing the target table holds; join the target table to learn whether it is held.",
+      "target_rule": "How the key was reached. Bill routes distinguish inline_congress, congress_subheading, document_fallback, unstated and document_fallback_refused after the bill_number: prefix. A document fallback is context supplied by the caller, not proof of historical applicability. Other kinds use the rule name except `committee_name`, where it is the resolution route: `exact` and `roster_prefix` are lookups in the roster vocabulary, while `name_prefix` and `sibling_prefix` are inferences from the printed text of this one document.  A consumer wanting only roster lookups filters on this column rather than on `target_resolved`.",
       "stated_by_index": "Whether a keyed index record for this document already states this target key -- the package MODS's own `<bill>`, `<law>` and `<USCode>` section elements and its authoring committee.  NULL where no index record was supplied.  This is the owner's do-not-recreate rule, carried per row: where it is `true` the row's value is the evidence span, not the key, and `WHERE stated_by_index IS NOT TRUE` selects the kinds that are genuinely new.",
       "body_version_id": "Digest of the normalized text the offsets index into, and part of the identity.  A span means nothing without it -- a re-extraction that moved one character moves every offset after it -- and keying on it is what stops two extractions of the same document from colliding on one identity and silently merging.  The table is append-only per digest: a superseded extraction's rows are not retired, and a consumer filters to the digest `house_activity_reports.text_sha256` states for that document."
     }
@@ -2815,7 +2817,10 @@
       "statutes_at_large_page": "The page part of that citation.",
       "approved_date": "The USLM meta's approvedDate, where the PLAW was captured.",
       "uslm_title": "The USLM meta's dc:title, where the PLAW was captured.",
+      "uslm_outcome": "captured or captured_partial retain validated native metadata; captured_refused retains a refused capture without unvalidated metadata; request_failed records an attempted read without an accepted body; unavailable records supported source absence; not_requested means no attempt.",
       "uslm_citable_as": "Every literal native USLM meta citableAs value, source order retained. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
+      "uslm_reason": "Bounded outcome reason token; NULL on complete capture or when no read was attempted.",
+      "law_text_outcome": "not_requested, parsed or refused: section reading is separate from validated USLM metadata.",
       "law_section_count": "Native section occurrences emitted by a successful read, including quoted nested sections; NULL unless parsed.",
       "law_body_remainder": "Main-body text outside every native section subtree, including hierarchy headings and enacting formula; block-spaced like section body. Empty string means parsed with no remainder; NULL means not parsed. Print furniture (page numbers, running heads and, from law_text_reader_version law-sections-uslm-v2, the margin notes: the approval date, the bill number, the short-title note) is excluded with an issue in law_text_issues_json.",
       "law_text_url": "Actual resolved XML acquisition URL for an attempted law-text read, distinct from the bill API url. Supplied from capture evidence, never inferred; NULL when unattempted or the caller retained no URL. A refused read does not validate the target's law identity.",
@@ -3399,6 +3404,7 @@
       "from_text_chars": "Character length of the earlier body text.",
       "to_text_chars": "Character length of the later body text.",
       "text_diff": "The engine's word-level diff as a Native list, capped at the published byte limit. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
+      "text_diff_truncated": "True when the word diff did not fit the cap and entries were dropped from the end.",
       "financial_from_amounts": "Every dollar figure the earlier body states, as a Native list. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "financial_to_amounts": "Every dollar figure the later body states, as a Native list. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "financial_amounts_changed": "True when the two multisets of figures differ; needs no account model to be true.",
