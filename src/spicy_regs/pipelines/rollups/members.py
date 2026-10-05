@@ -24,6 +24,22 @@ class MembersRollup(RollupPipeline):
     def build(self, output_dir: Path) -> tuple[Path, ...]:
         return self.build_receipts(output_dir, build_members, evidence=self.source_evidence)
 
+    def rebuild_complete_rosters(self, output_dir: Path) -> tuple[Path, ...]:
+        """Explicit first native build from both reviewed complete source files.
+
+        The ordinary scheduled build still requires receipt-backed priors.
+        This preparation method reads no old processing table. The common
+        runner retains the captured prior artifact as lineage and publishes
+        only after the complete source and native candidate are verified.
+        """
+        def complete_rosters(directory, **_):
+            return build_members(
+                directory, evidence=self.source_evidence,
+                download_prior=lambda key, target: False,
+            )
+
+        return self.build_receipts(output_dir, complete_rosters)
+
 
 app = make_rollup_app(MembersRollup)
 
