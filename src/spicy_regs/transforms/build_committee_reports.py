@@ -12,6 +12,7 @@ package.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 from collections import Counter
 from collections.abc import Callable, Collection, Iterator
@@ -54,7 +55,13 @@ from spicy_docs.transport.credentials import CredentialRefusedError, scrub_crede
 
 from spicy_regs.sources import r2
 from spicy_regs.sources.congress_bills import API_KEY_ENV_VARS, _resolve_api_key, listing_reader
-from spicy_regs.transforms.table_merge import merge_contract_table, merge_table, published_table
+from spicy_regs.transforms.table_merge import (
+    merge_contract_table,
+    merge_table,
+    published_table,
+    set_column,
+    write_in_place,
+)
 from spicy_regs.transforms.committee_report_reads import (
     READ_COLUMNS,
     READS_TABLE,
@@ -428,6 +435,29 @@ def _refuse_unsafe_reread(reread: Collection[str], checkpointed: set[str], reads
         raise ValueError(f"reread needs every prior row checkpointed; run discovery first: {unchecked}")
 
 
+def _link_committee_codes(links: Path, transcripts: Path) -> int:
+    """Give each link its hearing's first committee code as ``hearing_transcripts`` states it; how many moved.
+
+    spicy-docs' link rule publishes the MODS ``authorityId`` as the record spells it (CHRG-119hhrg61487 states
+    ``HSAS00``), while its transcript shaper lower-cases each code the way ``committees.system_code`` keys it, root
+    first and then each granule. Taking the shaper's first code keeps one statement of a hearing's committee and
+    no second copy of its fold, on every merged row, so a held link needs no re-read. A link whose hearing row
+    predates ``committee_system_codes_json`` (NULL) keeps its own code. O(links + hearings).
+    """
+    import pyarrow.parquet as pq
+
+    stated = pq.read_table(transcripts, columns=["package_id", "committee_system_codes_json"]).to_pylist()
+    first = {row["package_id"]: next(iter(json.loads(row["committee_system_codes_json"])), None)
+             for row in stated if row["committee_system_codes_json"] is not None}
+    table = pq.read_table(links)
+    held = table["committee_system_code"].to_pylist()
+    codes = [first.get(package_id, code) for package_id, code in zip(table["package_id"].to_pylist(), held)]
+    moved = sum(new != old for new, old in zip(codes, held))
+    if moved:
+        write_in_place(set_column(table, "committee_system_code", codes), links)
+    return moved
+
+
 def build_committee_reports(
     output_dir: Path,
     *,
@@ -611,13 +641,15 @@ def build_committee_reports(
     # is ``-pt1``; the ``parts=`` rule version re-reads it to replace it.
     replaced = {"committee_reports": evaluated_reports, "report_sections": evaluated_reports,
                 "hearing_bill_links": evaluated_hearings, "hearing_transcripts": evaluated_hearings}
-    paths = tuple(merge_contract_table(output_dir, name, rows, download_prior=download_prior,
-                                     replace_parents=("package_id", replaced[name]) if name in replaced else None,
-                                     backfill_prior=PART_BACKFILL if name in ("committee_reports", "report_sections") else None,
-                                     prior_present=(prior_files[name] is not None) if name in prior_files else None)
-                  for name, rows in (("committee_reports", report_rows), ("report_sections", section_rows),
-                                     ("hearing_transcripts", hearing_rows), ("hearing_bill_links", link_rows)))
-    return (*paths, merge_table(output_dir, name=READS_TABLE, columns=READ_COLUMNS,
-                               identity=("package_id",), version_column="observed_at", rows=reads.values(),
-                               remote_key=f"{READS_TABLE}.parquet", download_prior=download_prior,
-                               prior_present=checkpoint is not None))
+    paths = {name: merge_contract_table(output_dir, name, rows, download_prior=download_prior,
+                                        replace_parents=("package_id", replaced[name]) if name in replaced else None,
+                                        backfill_prior=PART_BACKFILL if name in ("committee_reports", "report_sections") else None,
+                                        prior_present=(prior_files[name] is not None) if name in prior_files else None)
+             for name, rows in (("committee_reports", report_rows), ("report_sections", section_rows),
+                                ("hearing_transcripts", hearing_rows), ("hearing_bill_links", link_rows))}
+    relinked = _link_committee_codes(paths["hearing_bill_links"], paths["hearing_transcripts"])
+    logger.info("Committee reports: {:,} hearing links take their hearing's committee code", relinked)
+    return (*paths.values(), merge_table(output_dir, name=READS_TABLE, columns=READ_COLUMNS,
+                                         identity=("package_id",), version_column="observed_at", rows=reads.values(),
+                                         remote_key=f"{READS_TABLE}.parquet", download_prior=download_prior,
+                                         prior_present=checkpoint is not None))

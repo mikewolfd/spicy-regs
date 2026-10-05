@@ -382,6 +382,23 @@ def test_fecs_placeholders_are_not_a_stated_sponsor(tmp_path: Path, placeholder:
     assert [(r["connected_organization_name"], r["sponsor_name_match"]) for r in rows] == [(None, "not_stated")]
 
 
+def test_spicy_docs_reads_the_placeholders_spelled_together(tmp_path: Path) -> None:
+    """C00363200 (TITANS FUND, THE) filed N/A-NONE for 2000-2004 and None for 2006-2008 (live history, 2026-10-04).
+
+    spicy-docs' one predicate (``is_placeholder_name``) reads N/A-NONE as a placeholder; the build's own list did not,
+    and showed it as the stated sponsor.
+    """
+    rows = _run(
+        tmp_path,
+        [_comment("C-1", "The Titans Fund")],
+        [_committee("C00363200", "TITANS FUND, THE", organization_type_full=None)],
+        [_history("C00363200", cycle, name) for cycle, name in
+         (("2000", "N/A-NONE"), ("2002", "N/A-NONE"), ("2004", "N/A-NONE"), ("2006", "None"), ("2008", "None"))],
+    )
+    assert [(r["committee_id"], r["connected_organization_name"], r["sponsor_name_match"]) for r in rows] == [
+        ("C00363200", None, "not_stated")]
+
+
 def test_a_committee_without_history_states_no_sponsor(tmp_path: Path) -> None:
     rows = _run(tmp_path, [_comment("C-1", "Delta Air Lines")], [_DELTA])
     assert [(r["connected_organization_name"], r["sponsor_name_match"]) for r in rows] == [(None, "not_stated")]

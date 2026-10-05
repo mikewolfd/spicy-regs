@@ -1,0 +1,1085 @@
+<mods xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:exslt="http://exslt.org/common" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.loc.gov/mods/v3" version="3.3" xsi:schemaLocation="http://www.loc.gov/mods/v3 http://www.loc.gov/standards/mods/v3/mods-3-3.xsd" ID="P0b002ee1e63824bd">
+    <name type="corporate">
+         <namePart>United States Government Publishing Office</namePart>
+         <role>
+              <roleTerm authority="marcrelator" type="text">publisher</roleTerm>
+              <roleTerm authority="marcrelator" type="code">pbl</roleTerm>
+        </role>
+         <role>
+              <roleTerm authority="marcrelator" type="text">distributor</roleTerm>
+              <roleTerm authority="marcrelator" type="code">dst</roleTerm>
+        </role>
+    </name>
+    <name type="corporate">
+         <namePart>United States</namePart>
+         <namePart>Congress</namePart>
+         <namePart>House of Representatives</namePart>
+         <role>
+              <roleTerm authority="marcrelator" type="text">author</roleTerm>
+              <roleTerm authority="marcrelator" type="code">aut</roleTerm>
+        </role>
+         <description>Government Organization</description>
+    </name>
+    <typeOfResource>text</typeOfResource>
+    <genre authority="marcgt">government publication</genre>
+    <language>
+         <languageTerm type="code" authority="iso639-2b">eng</languageTerm>
+    </language>
+    <extension>
+         <collectionCode>CHRG</collectionCode>
+         <category>Congressional Committee Materials</category>
+         <waisDatabaseName>119_house_hearings</waisDatabaseName>
+         <branch>legislative</branch>
+         <dateIngested>2026-08-04</dateIngested>
+    </extension>
+    <titleInfo>
+         <title>[H.A.S.C. No. 119-11] U.S. MILITARY POSTURE AND NATIONAL SECURITY CHALLENGES IN THE INDO-PACIFIC REGION</title>
+    </titleInfo>
+    <titleInfo type="alternative"></titleInfo>
+    <location>
+         <url displayLabel="Content Detail" access="object in context">https://www.govinfo.gov/app/details/CHRG-119hhrg61487</url>
+         <url displayLabel="HTML rendition" access="raw object">https://www.govinfo.gov/content/pkg/CHRG-119hhrg61487/html/CHRG-119hhrg61487.htm</url>
+         <url displayLabel="PDF rendition" access="raw object">https://www.govinfo.gov/content/pkg/CHRG-119hhrg61487/pdf/CHRG-119hhrg61487.pdf</url>
+    </location>
+    <originInfo>
+         <publisher>U.S. Government Publishing Office</publisher>
+         <dateIssued encoding="w3cdtf">2025-04-09</dateIssued>
+         <issuance>monographic</issuance>
+    </originInfo>
+    <physicalDescription>
+         <note type="source content type">deposited</note>
+         <digitalOrigin>born digital</digitalOrigin>
+         <extent>162 digital object pages</extent>
+    </physicalDescription>
+    <classification authority="sudocs">Y 4.2025-2026/11</classification>
+    <identifier type="uri">https://www.govinfo.gov/app/details/CHRG-119hhrg61487</identifier>
+    <identifier type="local">P0b002ee1e63824bd</identifier>
+    <identifier type="ILS system id">001477489</identifier>
+    <identifier type="former package identifier">f:61487.txt</identifier>
+    <recordInfo>
+         <recordContentSource authority="marcorg">DGPO</recordContentSource>
+         <recordCreationDate encoding="w3cdtf">2026-08-04</recordCreationDate>
+         <recordChangeDate encoding="w3cdtf">2026-08-04</recordChangeDate>
+         <recordIdentifier source="DGPO">CHRG-119hhrg61487</recordIdentifier>
+         <recordOrigin>machine generated</recordOrigin>
+         <languageOfCataloging>
+              <languageTerm type="code" authority="iso639-2b">eng</languageTerm>
+        </languageOfCataloging>
+    </recordInfo>
+    <accessCondition type="GPO scope determination">fdlp</accessCondition>
+    <extension>
+         <docClass>HHRG</docClass>
+         <accessId>CHRG-119hhrg61487</accessId>
+         <type>G</type>
+         <chamber>HOUSE</chamber>
+         <congress years="2025-2026">119</congress>
+         <session>1</session>
+         <heldDate>2025-04-09</heldDate>
+         <preferredCitation>H.A.S.C. No. 119-11</preferredCitation>
+    </extension>
+    <extension>
+         <searchTitle>[H.A.S.C. No. 119-11] U.S. MILITARY POSTURE AND NATIONAL SECURITY CHALLENGES IN THE INDO-PACIFIC REGION</searchTitle>
+         <granuleClass>OTHERPART</granuleClass>
+         <accessId>CHRG-119hhrg61487</accessId>
+         <graphicsInPDF>true</graphicsInPDF>
+         <witness>Noh, John, Performing the Duties of the Assistant Secretary of Defense For Indo-Pacific Security Affairs</witness>
+         <witness>Paparo, ADM Samuel, Commander, USN, Commander, U.S. Indo-Pacific Command</witness>
+         <witness>Brunson, GEN Xavier T., USA, Commander, United Nations Command, Combined Forces Command, U.S. Forces Korea</witness>
+         <isAppropriation>false</isAppropriation>
+         <jacketId>61-487</jacketId>
+         <congHASC congress="119" number="11"></congHASC>
+         <congCommittee chamber="H" congress="119" authorityId="HSAS00" type="S">
+                
+              <name type="authority-standard">Committee on Armed Services</name>
+            
+              <name type="authority-short">Armed Services</name>
+            
+        </congCommittee>
+         <congMember bioGuideId="B001298" chamber="H" congress="119" party="R" role="COMMMEMBER" state="NE">
+                                    
+              <name type="parsed">DON BACON of Nebraska</name>
+                                    
+              <name type="authority-fnf">Don Bacon</name>
+                                    
+              <name type="authority-lnf">Bacon, Don</name>
+                                
+        </congMember>
+         <congMember bioGuideId="B001301" chamber="H" congress="119" party="R" role="COMMMEMBER" state="MI">
+                                    
+              <name type="parsed">JACK BERGMAN of Michigan</name>
+                                    
+              <name type="authority-fnf">Jack Bergman</name>
+                                    
+              <name type="authority-lnf">Bergman, Jack</name>
+                                
+        </congMember>
+         <congMember bioGuideId="B001324" chamber="H" congress="119" party="D" role="COMMMEMBER" state="MO">
+                                    
+              <name type="parsed">WESLEY BELL of Missouri</name>
+                                    
+              <name type="authority-fnf">Wesley Bell</name>
+                                    
+              <name type="authority-lnf">Bell, Wesley</name>
+                                
+        </congMember>
+         <congMember bioGuideId="C001069" chamber="H" congress="119" party="D" role="COMMMEMBER" state="CT">
+                                    
+              <name type="parsed">JOE COURTNEY of Connecticut</name>
+                                    
+              <name type="authority-fnf">Joe Courtney</name>
+                                    
+              <name type="authority-lnf">Courtney, Joe</name>
+                                
+        </congMember>
+         <congMember bioGuideId="C001112" chamber="H" congress="119" party="D" role="COMMMEMBER" state="CA">
+                                    
+              <name type="parsed">SALUD O. CARBAJAL of California</name>
+                                    
+              <name type="authority-fnf">Salud O. Carbajal</name>
+                                    
+              <name type="authority-lnf">Carbajal, Salud O.</name>
+                                    
+              <name type="authority-other">Salud Carbajal</name>
+                                
+        </congMember>
+         <congMember bioGuideId="C001121" chamber="H" congress="119" party="D" role="COMMMEMBER" state="CO">
+                                    
+              <name type="parsed">JASON CROW of Colorado</name>
+                                    
+              <name type="authority-fnf">Jason Crow</name>
+                                    
+              <name type="authority-lnf">Crow, Jason</name>
+                                
+        </congMember>
+         <congMember bioGuideId="C001137" chamber="H" congress="119" party="R" role="COMMMEMBER" state="CO">
+                                    
+              <name type="parsed">JEFF CRANK of Colorado</name>
+                                    
+              <name type="authority-fnf">Jeff Crank</name>
+                                    
+              <name type="authority-lnf">Crank, Jeff</name>
+                                
+        </congMember>
+         <congMember bioGuideId="D000230" chamber="H" congress="119" party="D" role="COMMMEMBER" state="NC">
+                                    
+              <name type="parsed">DONALD G. DAVIS of North Carolina</name>
+                                    
+              <name type="authority-fnf">Donald G. Davis</name>
+                                    
+              <name type="authority-lnf">Davis, Donald G.</name>
+                                    
+              <name type="authority-other">Donald Davis</name>
+                                
+        </congMember>
+         <congMember bioGuideId="D000616" chamber="H" congress="119" party="R" role="COMMMEMBER" state="TN">
+                                    
+              <name type="parsed">SCOTT DesJARLAIS of Tennessee</name>
+                                    
+              <name type="authority-fnf">Scott DesJarlais</name>
+                                    
+              <name type="authority-lnf">DesJarlais, Scott</name>
+                                
+        </congMember>
+         <congMember bioGuideId="E000301" chamber="H" congress="119" party="D" role="COMMMEMBER" state="MD">
+                                    
+              <name type="parsed">SARAH ELFRETH of Maryland</name>
+                                    
+              <name type="authority-fnf">Sarah Elfreth</name>
+                                    
+              <name type="authority-lnf">Elfreth, Sarah</name>
+                                
+        </congMember>
+         <congMember bioGuideId="F000246" chamber="H" congress="119" party="R" role="COMMMEMBER" state="TX">
+                                    
+              <name type="parsed">PAT FALLON of Texas</name>
+                                    
+              <name type="authority-fnf">Pat Fallon</name>
+                                    
+              <name type="authority-lnf">Fallon, Pat</name>
+                                
+        </congMember>
+         <congMember bioGuideId="F000475" chamber="H" congress="119" party="R" role="COMMMEMBER" state="MN">
+                                    
+              <name type="parsed">BRAD FINSTAD of Minnesota</name>
+                                    
+              <name type="authority-fnf">Brad Finstad</name>
+                                    
+              <name type="authority-lnf">Finstad, Brad</name>
+                                
+        </congMember>
+         <congMember bioGuideId="G000546" chamber="H" congress="119" party="R" role="COMMMEMBER" state="MO">
+                                    
+              <name type="parsed">SAM GRAVES of Missouri</name>
+                                    
+              <name type="authority-fnf">Sam Graves</name>
+                                    
+              <name type="authority-lnf">Graves, Sam</name>
+                                
+        </congMember>
+         <congMember bioGuideId="G000559" chamber="H" congress="119" party="D" role="COMMMEMBER" state="CA">
+                                    
+              <name type="parsed">JOHN GARAMENDI of California</name>
+                                    
+              <name type="authority-fnf">John Garamendi</name>
+                                    
+              <name type="authority-lnf">Garamendi, John</name>
+                                
+        </congMember>
+         <congMember bioGuideId="G000589" chamber="H" congress="119" party="R" role="COMMMEMBER" state="TX">
+                                    
+              <name type="parsed">LANCE GOODEN of Texas</name>
+                                    
+              <name type="authority-fnf">Lance Gooden</name>
+                                    
+              <name type="authority-lnf">Gooden, Lance</name>
+                                
+        </congMember>
+         <congMember bioGuideId="G000592" chamber="H" congress="119" party="D" role="COMMMEMBER" state="ME">
+                                    
+              <name type="parsed">JARED F. GOLDEN of Maine</name>
+                                    
+              <name type="authority-fnf">Jared F. Golden</name>
+                                    
+              <name type="authority-lnf">Golden, Jared F.</name>
+                                    
+              <name type="authority-other">Jared Golden</name>
+                                
+        </congMember>
+         <congMember bioGuideId="G000593" chamber="H" congress="119" party="R" role="COMMMEMBER" state="FL">
+                                    
+              <name type="parsed">CARLOS A. GIMENEZ of Florida</name>
+                                    
+              <name type="authority-fnf">Carlos A. Gimenez</name>
+                                    
+              <name type="authority-lnf">Gimenez, Carlos A.</name>
+                                    
+              <name type="authority-other">Carlos Gimenez</name>
+                                
+        </congMember>
+         <congMember bioGuideId="G000604" chamber="H" congress="119" party="D" role="COMMMEMBER" state="NH">
+                                    
+              <name type="parsed">MAGGIE GOODLANDER of New Hampshire</name>
+                                    
+              <name type="authority-fnf">Maggie Goodlander</name>
+                                    
+              <name type="authority-lnf">Goodlander, Maggie</name>
+                                
+        </congMember>
+         <congMember bioGuideId="H001077" chamber="H" congress="119" party="R" role="COMMMEMBER" state="LA">
+                                    
+              <name type="parsed">CLAY HIGGINS of Louisiana</name>
+                                    
+              <name type="authority-fnf">Clay Higgins</name>
+                                    
+              <name type="authority-lnf">Higgins, Clay</name>
+                                
+        </congMember>
+         <congMember bioGuideId="H001085" chamber="H" congress="119" party="D" role="COMMMEMBER" state="PA">
+                                    
+              <name type="parsed">CHRISSY HOULAHAN of Pennsylvania</name>
+                                    
+              <name type="authority-fnf">Chrissy Houlahan</name>
+                                    
+              <name type="authority-lnf">Houlahan, Chrissy</name>
+                                
+        </congMember>
+         <congMember bioGuideId="H001098" chamber="H" congress="119" party="R" role="COMMMEMBER" state="AZ">
+                                    
+              <name type="parsed">ABRAHAM J. HAMADEH of Arizona</name>
+                                    
+              <name type="authority-fnf">Abraham J. Hamadeh</name>
+                                    
+              <name type="authority-lnf">Hamadeh, Abraham J.</name>
+                                    
+              <name type="authority-other">Abraham Hamadeh</name>
+                                
+        </congMember>
+         <congMember bioGuideId="H001101" chamber="H" congress="119" party="R" role="COMMMEMBER" state="NC">
+                                    
+              <name type="parsed">PAT HARRIGAN of North Carolina</name>
+                                    
+              <name type="authority-fnf">Pat Harrigan</name>
+                                    
+              <name type="authority-lnf">Harrigan, Pat</name>
+                                
+        </congMember>
+         <congMember bioGuideId="J000304" chamber="H" congress="119" party="R" role="COMMMEMBER" state="TX">
+                                    
+              <name type="parsed">RONNY JACKSON of Texas</name>
+                                    
+              <name type="authority-fnf">Ronny Jackson</name>
+                                    
+              <name type="authority-lnf">Jackson, Ronny</name>
+                                
+        </congMember>
+         <congMember bioGuideId="J000305" chamber="H" congress="119" party="D" role="COMMMEMBER" state="CA">
+                                    
+              <name type="parsed">SARA JACOBS of California</name>
+                                    
+              <name type="authority-fnf">Sara Jacobs</name>
+                                    
+              <name type="authority-lnf">Jacobs, Sara</name>
+                                
+        </congMember>
+         <congMember bioGuideId="K000375" chamber="H" congress="119" party="D" role="COMMMEMBER" state="MA">
+                                    
+              <name type="parsed">WILLIAM R. KEATING of Massachusetts</name>
+                                    
+              <name type="authority-fnf">William R. Keating</name>
+                                    
+              <name type="authority-lnf">Keating, William R.</name>
+                                    
+              <name type="authority-other">William Keating</name>
+                                
+        </congMember>
+         <congMember bioGuideId="K000388" chamber="H" congress="119" party="R" role="COMMMEMBER" state="MS">
+                                    
+              <name type="parsed">TRENT KELLY of Mississippi</name>
+                                    
+              <name type="authority-fnf">Trent Kelly</name>
+                                    
+              <name type="authority-lnf">Kelly, Trent</name>
+                                
+        </congMember>
+         <congMember bioGuideId="K000389" chamber="H" congress="119" party="D" role="COMMMEMBER" state="CA">
+                                    
+              <name type="parsed">RO KHANNA of California</name>
+                                    
+              <name type="authority-fnf">Ro Khanna</name>
+                                    
+              <name type="authority-lnf">Khanna, Ro</name>
+                                
+        </congMember>
+         <congMember bioGuideId="K000399" chamber="H" congress="119" party="R" role="COMMMEMBER" state="VA">
+                                    
+              <name type="parsed">JENNIFER A. KIGGANS of Virginia</name>
+                                    
+              <name type="authority-fnf">Jennifer A. Kiggans</name>
+                                    
+              <name type="authority-lnf">Kiggans, Jennifer A.</name>
+                                    
+              <name type="authority-other">Jennifer Kiggans</name>
+                                
+        </congMember>
+         <congMember bioGuideId="L000603" chamber="H" congress="119" party="R" role="COMMMEMBER" state="TX">
+                                    
+              <name type="parsed">MORGAN LUTTRELL of Texas</name>
+                                    
+              <name type="authority-fnf">Morgan Luttrell</name>
+                                    
+              <name type="authority-lnf">Luttrell, Morgan</name>
+                                
+        </congMember>
+         <congMember bioGuideId="M000194" chamber="H" congress="119" party="R" role="COMMMEMBER" state="SC">
+                                    
+              <name type="parsed">NANCY MACE of South Carolina</name>
+                                    
+              <name type="authority-fnf">Nancy Mace</name>
+                                    
+              <name type="authority-lnf">Mace, Nancy</name>
+                                
+        </congMember>
+         <congMember bioGuideId="M001196" chamber="H" congress="119" party="D" role="COMMMEMBER" state="MA">
+                                    
+              <name type="parsed">SETH MOULTON of Massachusetts</name>
+                                    
+              <name type="authority-fnf">Seth Moulton</name>
+                                    
+              <name type="authority-lnf">Moulton, Seth</name>
+                                
+        </congMember>
+         <congMember bioGuideId="M001216" chamber="H" congress="119" party="R" role="COMMMEMBER" state="FL">
+                                    
+              <name type="parsed">CORY MILLS of Florida</name>
+                                    
+              <name type="authority-fnf">Cory Mills</name>
+                                    
+              <name type="authority-lnf">Mills, Cory</name>
+                                
+        </congMember>
+         <congMember bioGuideId="M001218" chamber="H" congress="119" party="R" role="COMMMEMBER" state="GA">
+                                    
+              <name type="parsed">RICHARD McCORMICK of Georgia</name>
+                                    
+              <name type="authority-fnf">Richard McCormick</name>
+                                    
+              <name type="authority-lnf">McCormick, Richard</name>
+                                
+        </congMember>
+         <congMember bioGuideId="M001233" chamber="H" congress="119" party="R" role="COMMMEMBER" state="IN">
+                                    
+              <name type="parsed">MARK B. MESSMER of Indiana</name>
+                                    
+              <name type="authority-fnf">Mark B. Messmer</name>
+                                    
+              <name type="authority-lnf">Messmer, Mark B.</name>
+                                    
+              <name type="authority-other">Mark Messmer</name>
+                                
+        </congMember>
+         <congMember bioGuideId="M001239" chamber="H" congress="119" party="R" role="COMMMEMBER" state="VA">
+                                    
+              <name type="parsed">JOHN J. McGUIRE III of Virginia</name>
+                                    
+              <name type="authority-fnf">John J. McGuire III</name>
+                                    
+              <name type="authority-lnf">McGuire, John J.</name>
+                                    
+              <name type="authority-other">John McGuire</name>
+                                    
+              <name type="authority-other">John J. McGuire</name>
+                                
+        </congMember>
+         <congMember bioGuideId="N000188" chamber="H" congress="119" party="D" role="COMMMEMBER" state="NJ">
+                                    
+              <name type="parsed">DONALD NORCROSS of New Jersey</name>
+                                    
+              <name type="authority-fnf">Donald Norcross</name>
+                                    
+              <name type="authority-lnf">Norcross, Donald</name>
+                                
+        </congMember>
+         <congMember bioGuideId="R000575" chamber="H" congress="119" party="R" role="COMMMEMBER" state="AL">
+                                    
+              <name type="parsed">MIKE ROGERS of Alabama</name>
+                                    
+              <name type="authority-fnf">Mike Rogers</name>
+                                    
+              <name type="authority-lnf">Rogers, Mike D.</name>
+                                
+        </congMember>
+         <congMember bioGuideId="R000579" chamber="H" congress="119" party="D" role="COMMMEMBER" state="NY">
+                                    
+              <name type="parsed">PATRICK RYAN of New York</name>
+                                    
+              <name type="authority-fnf">Patrick Ryan</name>
+                                    
+              <name type="authority-lnf">Ryan, Patrick</name>
+                                
+        </congMember>
+         <congMember bioGuideId="S000510" chamber="H" congress="119" party="D" role="COMMMEMBER" state="WA">
+                                    
+              <name type="parsed">ADAM SMITH of Washington</name>
+                                    
+              <name type="authority-fnf">Adam Smith</name>
+                                    
+              <name type="authority-lnf">Smith, Adam</name>
+                                
+        </congMember>
+         <congMember bioGuideId="S001159" chamber="H" congress="119" party="D" role="COMMMEMBER" state="WA">
+                                    
+              <name type="parsed">MARILYN STRICKLAND of Washington</name>
+                                    
+              <name type="authority-fnf">Marilyn Strickland</name>
+                                    
+              <name type="authority-lnf">Strickland, Marilyn</name>
+                                
+        </congMember>
+         <congMember bioGuideId="S001189" chamber="H" congress="119" party="R" role="COMMMEMBER" state="GA">
+                                    
+              <name type="parsed">AUSTIN SCOTT of Georgia</name>
+                                    
+              <name type="authority-fnf">Austin Scott</name>
+                                    
+              <name type="authority-lnf">Scott, Austin</name>
+                                
+        </congMember>
+         <congMember bioGuideId="S001196" chamber="H" congress="119" party="R" role="COMMMEMBER" state="NY">
+                                    
+              <name type="parsed">ELISE M. STEFANIK of New York</name>
+                                    
+              <name type="authority-fnf">Elise M. Stefanik</name>
+                                    
+              <name type="authority-lnf">Stefanik, Elise M.</name>
+                                    
+              <name type="authority-other">Elise Stefanik</name>
+                                
+        </congMember>
+         <congMember bioGuideId="S001207" chamber="H" congress="119" party="D" role="COMMMEMBER" state="NJ">
+                                    
+              <name type="parsed">MIKIE SHERRILL of New Jersey</name>
+                                    
+              <name type="authority-fnf">Mikie Sherrill</name>
+                                    
+              <name type="authority-lnf">Sherrill, Mikie</name>
+                                
+        </congMember>
+         <congMember bioGuideId="S001225" chamber="H" congress="119" party="D" role="COMMMEMBER" state="IL">
+                                    
+              <name type="parsed">ERIC SORENSEN of Illinois</name>
+                                    
+              <name type="authority-fnf">Eric Sorensen</name>
+                                    
+              <name type="authority-lnf">Sorensen, Eric</name>
+                                
+        </congMember>
+         <congMember bioGuideId="S001228" chamber="H" congress="119" party="R" role="COMMMEMBER" state="KS">
+                                    
+              <name type="parsed">DEREK SCHMIDT of Kansas</name>
+                                    
+              <name type="authority-fnf">Derek Schmidt</name>
+                                    
+              <name type="authority-lnf">Schmidt, Derek</name>
+                                
+        </congMember>
+         <congMember bioGuideId="T000463" chamber="H" congress="119" party="R" role="COMMMEMBER" state="OH">
+                                    
+              <name type="parsed">MICHAEL R. TURNER of Ohio</name>
+                                    
+              <name type="authority-fnf">Michael R. Turner</name>
+                                    
+              <name type="authority-lnf">Turner, Michael R.</name>
+                                    
+              <name type="authority-other">Michael Turner</name>
+                                
+        </congMember>
+         <congMember bioGuideId="T000487" chamber="H" congress="119" party="D" role="COMMMEMBER" state="HI">
+                                    
+              <name type="parsed">JILL N. TOKUDA of Hawaii</name>
+                                    
+              <name type="authority-fnf">Jill N. Tokuda</name>
+                                    
+              <name type="authority-lnf">Tokuda, Jill N.</name>
+                                    
+              <name type="authority-other">Jill Tokuda</name>
+                                
+        </congMember>
+         <congMember bioGuideId="T000491" chamber="H" congress="119" party="D" role="COMMMEMBER" state="CA">
+                                    
+              <name type="parsed">DEREK TRAN of California</name>
+                                    
+              <name type="authority-fnf">Derek Tran</name>
+                                    
+              <name type="authority-lnf">Tran, Derek</name>
+                                
+        </congMember>
+         <congMember bioGuideId="V000136" chamber="H" congress="119" party="D" role="COMMMEMBER" state="NM">
+                                    
+              <name type="parsed">GABE VASQUEZ of New Mexico</name>
+                                    
+              <name type="authority-fnf">Gabe Vasquez</name>
+                                    
+              <name type="authority-lnf">Vasquez, Gabe</name>
+                                
+        </congMember>
+         <congMember bioGuideId="V000138" chamber="H" congress="119" party="D" role="COMMMEMBER" state="VA">
+                                    
+              <name type="parsed">EUGENE SIMON VINDMAN of Virginia</name>
+                                    
+              <name type="authority-fnf">Eugene Simon Vindman</name>
+                                    
+              <name type="authority-lnf">Vindman, Eugene Simon</name>
+                                    
+              <name type="authority-other">Eugene Vindman</name>
+                                
+        </congMember>
+         <congMember bioGuideId="W000795" chamber="H" congress="119" party="R" role="COMMMEMBER" state="SC">
+                                    
+              <name type="parsed">JOE WILSON of South Carolina</name>
+                                    
+              <name type="authority-fnf">Joe Wilson</name>
+                                    
+              <name type="authority-lnf">Wilson, Joe</name>
+                                
+        </congMember>
+         <congMember bioGuideId="W000804" chamber="H" congress="119" party="R" role="COMMMEMBER" state="VA">
+                                    
+              <name type="parsed">ROBERT J. WITTMAN of Virginia</name>
+                                    
+              <name type="authority-fnf">Robert J. Wittman</name>
+                                    
+              <name type="authority-lnf">Wittman, Robert J.</name>
+                                    
+              <name type="authority-other">Robert Wittman</name>
+                                
+        </congMember>
+         <congMember bioGuideId="W000830" chamber="H" congress="119" party="D" role="COMMMEMBER" state="CA">
+                                    
+              <name type="parsed">GEORGE WHITESIDES of California</name>
+                                    
+              <name type="authority-fnf">George Whitesides</name>
+                                    
+              <name type="authority-lnf">Whitesides, George</name>
+                                
+        </congMember>
+         <USCode title="10">
+                                    
+              <section number="333"></section>
+                                
+        </USCode>
+         <isNomination>false</isNomination>
+         <isErrata>false</isErrata>
+    </extension>
+    <name type="corporate">
+         <namePart>United States</namePart>
+         <namePart>Congress</namePart>
+         <namePart>House of Representatives</namePart>
+         <namePart>Committee on Armed Services</namePart>
+         <role>
+              <roleTerm authority="marcrelator" type="text">associated name</roleTerm>
+              <roleTerm authority="marcrelator" type="code">asn</roleTerm>
+        </role>
+         <description>Government Organization</description>
+    </name>
+    <name type="personal">
+         <namePart>Don Bacon</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Jack Bergman</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Wesley Bell</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Joe Courtney</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Salud O. Carbajal</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Jason Crow</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Jeff Crank</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Donald G. Davis</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Scott DesJarlais</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Sarah Elfreth</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Pat Fallon</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Brad Finstad</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Sam Graves</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>John Garamendi</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Lance Gooden</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Jared F. Golden</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Carlos A. Gimenez</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Maggie Goodlander</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Clay Higgins</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Chrissy Houlahan</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Abraham J. Hamadeh</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Pat Harrigan</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Ronny Jackson</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Sara Jacobs</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>William R. Keating</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Trent Kelly</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Ro Khanna</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Jennifer A. Kiggans</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Morgan Luttrell</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Nancy Mace</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Seth Moulton</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Cory Mills</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Richard McCormick</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Mark B. Messmer</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>John J. McGuire III</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Donald Norcross</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Mike Rogers</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Patrick Ryan</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Adam Smith</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Marilyn Strickland</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Austin Scott</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Elise M. Stefanik</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Mikie Sherrill</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Eric Sorensen</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Derek Schmidt</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Michael R. Turner</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Jill N. Tokuda</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Derek Tran</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Gabe Vasquez</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Eugene Simon Vindman</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Joe Wilson</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Robert J. Wittman</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>George Whitesides</namePart>
+         <affiliation>United States House of Representatives</affiliation>
+         <role>
+              <roleTerm type="text">committee member</roleTerm>
+        </role>
+         <description>United States Congressional Member</description>
+    </name>
+    <name type="personal">
+         <namePart>Noh, John, Performing the Duties of the Assistant Secretary of Defense For Indo-Pacific Security Affairs</namePart>
+         <role>
+              <roleTerm authority="marcrelator" type="text">witness</roleTerm>
+              <roleTerm authority="marcrelator" type="code">wit</roleTerm>
+        </role>
+         <description>Hearing Witness</description>
+    </name>
+    <name type="personal">
+         <namePart>Paparo, ADM Samuel, Commander, USN, Commander, U.S. Indo-Pacific Command</namePart>
+         <role>
+              <roleTerm authority="marcrelator" type="text">witness</roleTerm>
+              <roleTerm authority="marcrelator" type="code">wit</roleTerm>
+        </role>
+         <description>Hearing Witness</description>
+    </name>
+    <name type="personal">
+         <namePart>Brunson, GEN Xavier T., USA, Commander, United Nations Command, Combined Forces Command, U.S. Forces Korea</namePart>
+         <role>
+              <roleTerm authority="marcrelator" type="text">witness</roleTerm>
+              <roleTerm authority="marcrelator" type="code">wit</roleTerm>
+        </role>
+         <description>Hearing Witness</description>
+    </name>
+    <relatedItem type="isReferencedBy">
+         <identifier type="Jacket citation"></identifier>
+    </relatedItem>
+    <relatedItem type="isReferencedBy">
+         <identifier type="HASC citation">H.A.S.C No. 119-11</identifier>
+    </relatedItem>
+    <relatedItem type="isReferencedBy">
+         <titleInfo>
+              <title>United States Code</title>
+              <partNumber>Title 10 Section 333</partNumber>
+        </titleInfo>
+         <identifier type="USC citation">10 U.S.C. 333</identifier>
+    </relatedItem>
+</mods>

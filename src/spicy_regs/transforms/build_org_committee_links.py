@@ -33,10 +33,11 @@ named like one is a person, a namesake or a slogan.
 
 **The sponsor FEC states.** ``connected_organization_name`` is the committee's
 connected organization as it last stated one in ``fec_committee_history``,
-verbatim; FEC's placeholders (:mod:`~spicy_regs.transforms.fec_placeholders`)
-state none. ``sponsor_name_match`` compares it with the organization string,
-both read by the same normalization, and is evidence beside the grade, never
-part of it.
+verbatim; FEC's placeholders (``NONE``, ``N/A``, ``BLANK``, ...) state none, as
+spicy-docs' one predicate reads them (``is_placeholder_name``, which the build
+registers as a DuckDB function of the same name). ``sponsor_name_match``
+compares it with the organization string, both read by the same
+normalization, and is evidence beside the grade, never part of it.
 
 **Junk guards.** A core must be ≥ :data:`MIN_CORE_LENGTH` chars and ≥
 :data:`MIN_CORE_TOKENS` tokens (which also blocks bare acronyms like ``NRDC``),
@@ -69,7 +70,6 @@ from loguru import logger
 
 from spicy_regs.duckdb_settings import load_public_http
 from spicy_regs.public_url import comments_source
-from spicy_regs.transforms.fec_placeholders import not_stated_sql
 
 OUTPUT = "org_committee_links.parquet"
 
@@ -417,7 +417,8 @@ def build_query(comments_source: str, committees_file: str, history_file: str, o
             FROM (
                 SELECT f.*, {_normalize("f.connected_organization_name")} AS sponsor_norm
                 FROM read_parquet('{history_file}') f
-                WHERE NOT {not_stated_sql("f.connected_organization_name")}
+                WHERE f.connected_organization_name IS NOT NULL
+                  AND NOT is_placeholder_name(f.connected_organization_name)
                 QUALIFY ROW_NUMBER() OVER (
                     PARTITION BY f.committee_id ORDER BY TRY_CAST(f.cycle AS INTEGER) DESC NULLS LAST
                 ) = 1
@@ -470,6 +471,7 @@ def build_query(comments_source: str, committees_file: str, history_file: str, o
 def build_org_committee_links(output_dir: Path) -> Path:
     """Build ``org_committee_links.parquet`` (commenter org → FEC committee)."""
     import duckdb
+    from spicy_docs.schemas.fec_committee_history import is_placeholder_name  # imported on use: spicy-docs is optional
 
     committees_file, history_file = output_dir / "fec_committees.parquet", output_dir / "fec_committee_history.parquet"
     for required in (committees_file, history_file):
@@ -483,6 +485,8 @@ def build_org_committee_links(output_dir: Path) -> Path:
     spill_dir.mkdir(exist_ok=True)
 
     con = duckdb.connect()
+    # The query reads FEC's placeholders by spicy-docs' predicate under its own name; a NULL is no statement either.
+    con.create_function("is_placeholder_name", is_placeholder_name, ["VARCHAR"], "BOOLEAN")
     con.execute("SET memory_limit='4GB'")
     con.execute("SET preserve_insertion_order=false")
     con.execute("SET threads=2")
