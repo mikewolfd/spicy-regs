@@ -58,7 +58,7 @@ def test_inconsistent_native_evidence_refuses_before_internal_read(tmp_path, cor
             rows.append(deepcopy(rows[0]))
         pq.write_table(pa.Table.from_pylist(rows, schema=RECEIPT_SCHEMA), path)
     elif corruption == "generation":
-        kwargs["generation_id"] = "wrong-build"
+        kwargs["generation_id"] = ""
     else:
         (directory / "etl_receipts.parquet").unlink()
     with pytest.raises((ValueError, FileNotFoundError)):

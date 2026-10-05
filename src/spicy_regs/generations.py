@@ -132,7 +132,27 @@ def verify_generation_source(source, table_info: Callable[[str], dict], *, expec
     receipt_members = [member for member in members if member.object_key == "etl_receipts.parquet"]
     if bool(receipt_spec) != bool(receipt_members) or len(receipt_members) > 1:
         raise ValueError("Generation receipt membership differs from its declaration")
-    table_members_only = [member for member in members if member.object_key != "etl_receipts.parquet"]
+    from spicy_regs.receipt_key_index import KEY as RECEIPT_INDEX_KEY, validate_descriptor, verify_key_index
+    index_members = [member for member in members if member.object_key == RECEIPT_INDEX_KEY]
+    index_spec = receipt_spec.get("keyIndex") if receipt_spec else None
+    declared_index = receipt_spec is not None and "keyIndex" in receipt_spec
+    if declared_index != bool(index_members) or len(index_members) > 1:
+        raise ValueError("Generation receipt key index membership differs from its declaration")
+    if declared_index:
+        if not isinstance(index_spec, dict):
+            raise ValueError("Invalid generation receipt key index declaration")
+        receipt_member = receipt_members[0]
+        receipt_pin = {"sha256": receipt_member.sha256, "byteSize": receipt_member.byte_size,
+                       "rows": receipt_member.record_count}
+        validate_descriptor(index_spec, receipt_pin)
+        member = index_members[0]
+        if (member.sha256, member.byte_size, member.record_count) != (
+                index_spec["sha256"], index_spec["byteSize"], index_spec["rows"]):
+            raise ValueError("Generation receipt key index differs from its declared member")
+        verify_key_index(lambda: source.open("etl_receipts.parquet"), lambda: source.open(RECEIPT_INDEX_KEY),
+                         index_spec, receipt_pin)
+    table_members_only = [member for member in members
+                          if member.object_key not in {"etl_receipts.parquet", RECEIPT_INDEX_KEY}]
     if tables or table_members_only:
         table_entries(tables, table_members_only)
     elif not receipt_spec:
@@ -377,7 +397,7 @@ def _verify_receipts(source, tables, members, receipt_spec, table_info):
     from spicy_regs.etl_receipts import DatasetPolicy, RECEIPT_KEY, validate_receipt_bundle
     from spicy_regs.sources.publication import member_table
 
-    if (set(receipt_spec) != {"key", "generationId", "policies", "columns", "rows"}
+    if (not {"key", "generationId", "policies", "columns", "rows"} <= set(receipt_spec) <= {"key", "generationId", "policies", "columns", "rows", "keyIndex"}
             or receipt_spec["key"] != RECEIPT_KEY or not isinstance(receipt_spec["generationId"], str)
             or not receipt_spec["generationId"]):
         raise ValueError("Invalid generation receipt declaration")

@@ -6,7 +6,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
-from spicy_regs.etl_receipts import ReceiptContext, validate_receipt_bundle
+from spicy_regs.etl_receipts import RECEIPT_SCHEMA, ReceiptContext, validate_receipt_bundle
 from spicy_regs.transforms.regulations_receipts import (
     ReceiptInput,
     build_local_generation,
@@ -82,7 +82,7 @@ def test_malformed_input_has_diagnosable_receipt_without_fabricated_subject(tmp_
 def test_wrong_generation_missing_and_wrong_subject_receipts_refuse(tmp_path):
     selected = write(tmp_path, "documents", [{"document_id": "D", "text_extraction_status": "ok"}])
     with pytest.raises(ValueError):
-        list(read_internal(ReceiptInput("documents", selected.subjects, selected.receipts, "wrong")))
+        list(read_internal(ReceiptInput("documents", selected.subjects, selected.receipts, "")))
     pq.write_table(
         pa.Table.from_pylist([{"document_id": "changed"}], schema=subject_schema("documents")), selected.subjects[0]
     )
@@ -163,7 +163,10 @@ def test_pdf_requires_receipt_validation_before_fetch(tmp_path):
     from spicy_regs.enrich_pdf import enrich_receipted_dataset
 
     selected = write(tmp_path, "documents", [{"document_id": "D", "attachments_json": "[]"}])
-    wrong = ReceiptInput("documents", selected.subjects, selected.receipts, "wrong")
+    rows = pq.read_table(selected.receipts).to_pylist()
+    rows[0]["processor"] = "changed without matching digest"
+    pq.write_table(pa.Table.from_pylist(rows, schema=RECEIPT_SCHEMA), selected.receipts)
+    wrong = selected
     with pytest.raises(ValueError):
         enrich_receipted_dataset(
             wrong, tmp_path / "out", generation_id="next", fetch=lambda _: pytest.fail("fetch before validation")
@@ -615,7 +618,7 @@ def test_retry_checkpoint_receipts_preserve_empty_retirement_and_wrong_generatio
     restored = UnresolvedKeys.from_receipts(receipt, generation_id="g1", output_dir=tmp_path)
     assert restored.rows == {"source-key": row}
     with pytest.raises(ValueError):
-        read_checkpoint("failed_keys", receipt, generation_id="wrong")
+        read_checkpoint("failed_keys", receipt, generation_id="")
     restored.rows.clear()
     cleared = restored.save_receipts(tmp_path / "cleared", context("g2"))
     assert read_checkpoint("failed_keys", cleared, generation_id="g2") == []

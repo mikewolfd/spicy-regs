@@ -220,7 +220,7 @@ def parse_index(raw: bytes) -> dict:
                 raise ValueError("empty family")
             if "etlReceipts" in entry:
                 receipt = entry["etlReceipts"]
-                if (set(receipt) != {"key", "sha256", "byteSize", "rows", "columns", "generationId", "datasets"}
+                if (not {"key", "sha256", "byteSize", "rows", "columns", "generationId", "datasets"} <= set(receipt) <= {"key", "sha256", "byteSize", "rows", "columns", "generationId", "datasets", "keyIndex"}
                         or receipt["key"] != "etl_receipts.parquet"
                         or not _DIGEST.fullmatch(receipt["sha256"]) or not _counts(receipt)
                         or not isinstance(receipt["generationId"], str) or not receipt["generationId"]
@@ -232,6 +232,9 @@ def parse_index(raw: bytes) -> dict:
                         or any(not isinstance(name, str) or not _NAME.fullmatch(name) for name in receipt["datasets"])
                         or len(set(receipt["datasets"])) != len(receipt["datasets"])):
                     raise ValueError("invalid ETL receipt member")
+                if "keyIndex" in receipt:
+                    from spicy_regs.receipt_key_index import validate_descriptor
+                    validate_descriptor(receipt["keyIndex"], receipt)
             datasets = {key.removesuffix(".parquet") for key in entry["tables"]}
             datasets.update(entry.get("etlReceipts", {}).get("datasets", []))
             if datasets & dataset_owners:
@@ -1037,7 +1040,7 @@ def _publish_verified_generation(
     members = list(iter_member_descriptors(artifact, source))
     try:
         tables = (table_entries(artifact.root["spec"]["tables"],
-                                [m for m in members if m.object_key != "etl_receipts.parquet"])
+                                [m for m in members if m.object_key not in {"etl_receipts.parquet", "etl_receipts.keys.parquet"}])
                   if artifact.root["spec"]["tables"] else {})
     except ValueError as exc:
         raise PublicationError(str(exc)) from exc
@@ -1073,7 +1076,8 @@ def _publish_verified_generation(
                                 "byteSize": receipt.byte_size, "rows": receipt.record_count,
                                 "columns": declared_receipt["columns"],
                                 "generationId": declared_receipt["generationId"],
-                                "datasets": [p["dataset"] for p in declared_receipt["policies"]]}
+                                "datasets": [p["dataset"] for p in declared_receipt["policies"]],
+                                **({"keyIndex": declared_receipt["keyIndex"]} if "keyIndex" in declared_receipt else {})}
     if old_family and "etlReceipts" in old_family and "etlReceipts" not in entry:
         raise PublicationError("Cannot publish a generation that drops required ETL receipts")
     if old_family and (set(old_family.get("etlReceipts", {}).get("datasets", []))
@@ -1251,3 +1255,11 @@ def receipt_members(index: Mapping, *, dataset: str | None = None) -> tuple[Memb
     return tuple(Member(f"{entry['prefix']}/{receipt['key']}", receipt["sha256"],
                         receipt["byteSize"], receipt["rows"])
                  for entry in entries if (receipt := entry.get("etlReceipts")))
+
+
+def receipt_key_members(index: Mapping, *, dataset: str | None = None) -> tuple[Member, ...]:
+    """The declared key indexes beside the exact selected receipt members."""
+    selected = {member.path for member in receipt_members(index, dataset=dataset)}
+    return tuple(Member(f"{entry['prefix']}/{key['key']}", key['sha256'], key['byteSize'], key['rows'])
+                 for entry in index['families'].values() if (receipt := entry.get('etlReceipts'))
+                 and f"{entry['prefix']}/{receipt['key']}" in selected and (key := receipt.get('keyIndex')))
