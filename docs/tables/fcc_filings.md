@@ -15,7 +15,7 @@ One row per FCC ECFS filing — the FCC's comment equivalent: comments, reply co
 
 | Column | Type | Description |
 | --- | --- | --- |
-| `id_submission` | `VARCHAR` | ECFS submission id (e.g. `26109947027`). Primary key / dedup key. The filing's page on fcc.gov (`https://www.fcc.gov/ecfs/filing/<id_submission>`, the former `filing_url` column) is kept in the filing's receipt, not in this table: `SELECT regexp_extract(processing_json, '\["filing_url",\["str","([^"]*)"', 1) FROM etl_receipts WHERE dataset = 'fcc_filings' AND outcome = 'accepted' AND contains(identity_json, '"<id_submission>"')`. |
+| `id_submission` | `VARCHAR` | ECFS submission id (e.g. `26109947027`). Primary key / dedup key. The filing's page on fcc.gov (`https://www.fcc.gov/ecfs/filing/<id_submission>`, the former `filing_url` column) is kept in the filing's receipt, not in this table: ask `read_receipt_fields` for the field `filing_url`. |
 | `proceedings` | `STRUCT("name" VARCHAR, id_proceeding VARCHAR, bureau_code VARCHAR, bureau_name VARCHAR, created_date VARCHAR, date_closed VARCHAR, description VARCHAR, description_display VARCHAR, sunshine_start_date VARCHAR, sunshine_end_date VARCHAR, filing_status VARCHAR)[]` | Source-listed FCC proceedings with their names and identifiers; repeated occurrences remain distinct. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `submission_type` | `VARCHAR` | ECFS submission type description, e.g. `COMMENT`, `REPLY TO COMMENTS`, `NOTICE OF EXPARTE`. |
 | `express_comment` | `BOOLEAN` | `1` if the filing is an express comment (text-only, entered in the web form), `0` for standard filings with uploaded documents. |

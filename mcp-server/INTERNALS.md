@@ -526,6 +526,70 @@ selection passed as an answer, after unknown kinds in round 4.
 `coverage.partial` is true when the page was capped or offset, an occurrence
 was not looked up (`coverage.reason_counts`), or the document was not read.
 
+## Receipt field lookup (`read_receipt_fields`, `receipt_lookup`)
+
+The native layout keeps a table's reader-facing columns in the subject table
+and the rest in the family's shared receipt member. The tool reads a receipt
+value by table, row key and field (owner decision 2026-10-05), replacing a
+per-column pattern match over `processing_json`.
+
+**What is on offer is worked out per call.** A table's fields are its installed
+policy's receipt fields (`etl_policies/<table>.json`) plus, while the policy
+still declares the mapping, the fields the family's registry says that mapping
+holds (`receipt_fields.json`, built by `receipt_field_declarations` and checked
+by `spicy-regs-dict check`). A policy that stops keeping a whole-row mapping
+takes its fields off offer with no rebuild, and a receipt written without a
+mapping the server still expects refuses those fields rather than reading
+them as NULL. Nothing in the tool's text promises a row's whole original
+record. Courts keep conversion inputs under keys no registry declares, and
+`build_fec_committees` keeps its whole row by an exception in its writer: only
+the declared fields of each are offered.
+
+**Record ids are the writer's.** A key is typed by the installed identity
+schema and digested by `etl_receipts.subject_identity`; text is never trimmed,
+folded or read as a number, and a key that does not fit the identity is
+refused, never answered as a miss. `etl_receipts` imports pyarrow, which the
+Cloudflare image does not install: `describe_table`'s `receipt_fields` needs
+none, and a lookup on a server without it is refused saying so.
+
+**One member, read by row range.** Only the receipt member of the family that
+publishes the table is read. Its footer (`parquet_metadata`, cached per pinned
+member) gives each row group's bounds on `dataset`, `record_id` and
+`policy_version`; footers were 2.5 to 4.5 bytes per receipt on 2026-10-05
+(sam-entities 1.98 MB for 797,525 receipts, scorecards 14.9 MB for 3,301,267,
+in 2,000-row groups). Where the dataset's groups are ordered by record id, each
+key's group is read off the footer. Where they are not, the record ids of the
+dataset's rows are scanned once (sam_entities, 797,525 receipts: 399 requests,
+27 MiB, about 1.5 s on 14 threads, 2026-10-05) and a dataset past
+`SCAN_ROW_BOUND` (2,000,000) is refused until its next publish, from the footer
+alone: no row of a member too large to scan is read to refuse it. Matched
+receipts are then fetched in one statement whose filter is an OR of row
+ranges, which DuckDB 1.5.5 prunes to exactly those groups; one scan per group
+cost a HEAD and a footer read each at bind (11 s for 73 groups against 1.7 s).
+An `IN` list on `record_id` prunes only by the list's overall range, so it is
+never the filter that selects groups. Rows inside a group are not ordered by a
+footer and need not be: the cost of a sorted member is (groups holding a key)
+times (rows per group), so a writer that sorts must keep row groups small.
+
+**Policy versions.** Admission refuses a receipt whose `policy_version` is not
+its dataset's policy's, and a carried receipt keeps its version, so a
+published member states one version per dataset. The tool still reads every
+version the footer shows and compares one accepted receipt's stated identity
+per version with the installed policy: a different version with the same
+identity is read and named; a different identity is refused, since every
+computed id would miss and read as "no receipt".
+
+**States.** `stated`, `stated_empty`, `unread` and `not_stated` are the
+field-state views' own words (`relationship_views.core.DETAIL_STATES`), and
+`tests/test_mcp_receipt_lookup.py` holds the tool to the views' answer for
+every row and detail field. `unread` and `not_stated` are given only under a
+read marker a builder already acts on (`receipt_field_declarations.read_markers`:
+`detail_read`, the Federal Register's `regulations_dot_gov_info_json`, a roll
+call's per-chamber read columns); every other NULL is `null_unmarked`. The
+committee-report and citation read records live in another dataset's receipts
+and are not wired, so `hearing_transcripts` and `house_activity_reports`
+answer `null_unmarked`.
+
 ## Ledger qualification (`_qualification`)
 
 `describe_table` reports the output ledger's audit for its table beside the
