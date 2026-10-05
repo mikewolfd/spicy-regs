@@ -1,8 +1,8 @@
 {
   "format_version": "scorecard-publisher-api-current/1",
   "input_pins": {
-    "adapter_inventory.json": "fd7ecf934f0d30abfc9045534cc762cc63e20d766610264536fe413cc75e0ace",
-    "publisher_api_inventory.json": "24cb134d5e23124c44d7dbbb00ec75b0155995c80a2965b1a656f8c7b8eff887",
+    "adapter_inventory.json": "db63275cd20d42ae545cca6e454f9add4d264c32a69f683c1bc63ce87c930336",
+    "publisher_api_inventory.json": "0de8402dc8e649f2af58ca61f2420be4da0353df6b13bb0977f6550c4149879d",
     "integration_qualifications.json": "e2697cfdae26f7f55186522154ad85005c02210076d40ea90dace09308394216",
     "publisher_survey_20261005.json": "7e7431dc37bf8564d16df4f044498e1176f7e654cc0cd694b8bdb8a07944c9c1",
     "publisher_implementation_20261005.json": "02c472173923a4a2f3438155e36b76b83a6dd1d9210504ffec2a76abedbdb2f5",
@@ -5320,6 +5320,21 @@
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "carpenters_ncsrcc",
+        "discovery_status": "html_pdf_only_observed",
+        "endpoint_observation_count": 0
+      },
+      "dated_discovery_routes": [],
+      "qualified_api_endpoints": [],
+      "recovery_review": null
+    },
+    {
+      "publisher_id": "american_security_council_foundation",
+      "publisher_name": "American Security Council Foundation",
+      "integration_state": "implemented_unqualified",
+      "work_status": "active",
+      "dated_discovery": {
+        "source_file": "publisher_api_inventory.json",
+        "publisher_id": "american_security_council_foundation",
         "discovery_status": "html_pdf_only_observed",
         "endpoint_observation_count": 0
       },

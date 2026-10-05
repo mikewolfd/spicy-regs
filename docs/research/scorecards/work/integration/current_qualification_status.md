@@ -6,6 +6,12 @@ scopes. They distinguish source qualification from installed-package adoption
 and public publication. The [reproduction guide](README.md) documents the shared
 wheel, replay, scoped replacement and publication process.
 
+Current local preparation adds separately attributed ASCF House/Senate originals and a named UTU retrospective-assessment series to the discovery census. See the pinned [ASCF supplement](publisher_inventory_extension_ascf_20261005.json) and [UTU supplement](publisher_inventory_extension_utu_20261005.json). Their source readers passed independent review, but the installed consumer remains on 0.59. The exact 0.60 installed-wheel replay, qualification ledger admission and dependency/vendor adoption remain pending. Runtime activation, historical backfill and public publication remain separate; rights stay unreviewed and source bodies stay private under `hash_only`.
+
+ASCF is American Security Council Foundation, with literal alias ASCF. The original American Security Council candidate stays unverified. ASCF's named 2010 selectors and dated actions are capture context; printed edition year, Congress and session remain unknown. UTU's October 26, 2012 article reports one lifetime UTU Senate assessment; its separately captured newsletter corroborates the source and value. It does not establish an annual 2012 rating, a second rating, or source-time Senate membership. The historical UTU Washington Report and SMART sources remain separate.
+
+NCSC's bounded year-2000 recovery still lacks the six member charts. The one precise catalogue lead is Baylor's Mike Morrison papers, Series III/Publications, Sub-series A/General Publications, page 10, Box 35/File 180: `Seniority: National Council of Senior Citizens`, Date `2000`. The original issue, issue dates, chart contents and access/redistribution rights remain unverified. Private result `ncsc-2000-recovery-v2/result.json` has SHA256 `563a1b84f61334dde4e28cb5bffa098176a6534d27e3e4e86df4eeb1090d4ac4`; the retained catalogue PDF has SHA256 `b1218b6940a5588e3dc8f8b895de87b526855483d568d9c0055f3e8a8df7961f`. The frozen publisher reports and dated inventories remain evidence at their recorded scope; no pre-2000 work is advanced.
+
 The detail below records the earlier October 3 qualification and publication
 milestone. Its receipts remain evidence for those exact source observations.
 

@@ -4544,6 +4544,82 @@
       "request_outcome": "response_received",
       "review_status": "original_source_verified",
       "scope_boundary": "Research metadata for an archived original; source-defined snapshot completeness is established separately by the named integration qualification"
+    },
+    {
+      "requested_url": "https://web.archive.org/web/20120125114210id_/http://www.ascfusa.org/files/fckfiles/House_Votes_ASCF.pdf",
+      "resolved_url": "https://web.archive.org/web/20120125114210id_/http://www.ascfusa.org/files/fckfiles/House_Votes_ASCF.pdf",
+      "http_status": 200,
+      "content_type": "application/pdf",
+      "observed_at": "2026-10-05T21:21:22.629717+00:00",
+      "sha256": "700b016dccc35695044b9d0a639d799146c6fb3709b1ba7996741374a4560b72",
+      "byte_size": 1183451,
+      "method": "GET",
+      "capture_id": "extension-ascf-house-named-2010",
+      "evidence_policy": "hash_only",
+      "parser_version": "reviewed-source-inventory-extension/1",
+      "body_retained_publicly": false,
+      "capture_complete": true,
+      "source_snapshot_complete": false,
+      "request_outcome": "response_received",
+      "review_status": "original_source_verified",
+      "scope_boundary": "Research capture metadata only; complete named-source qualification is separately pinned"
+    },
+    {
+      "requested_url": "https://web.archive.org/web/20120125110853id_/http://www.ascfusa.org/files/fckfiles/Senate_Votes_ASCF.pdf",
+      "resolved_url": "https://web.archive.org/web/20120125110853id_/http://www.ascfusa.org/files/fckfiles/Senate_Votes_ASCF.pdf",
+      "http_status": 200,
+      "content_type": "application/pdf",
+      "observed_at": "2026-10-05T19:33:51.236872+00:00",
+      "sha256": "53f85a3838e06d5a1fe2d1d46da53d9eb3db63070b4bdb5eb6cee5b273228eba",
+      "byte_size": 5439817,
+      "method": "GET",
+      "capture_id": "extension-ascf-senate-named-2010",
+      "evidence_policy": "hash_only",
+      "parser_version": "reviewed-source-inventory-extension/1",
+      "body_retained_publicly": false,
+      "capture_complete": true,
+      "source_snapshot_complete": false,
+      "request_outcome": "response_received",
+      "review_status": "original_source_verified",
+      "scope_boundary": "Research capture metadata only; complete named-source qualification is separately pinned"
+    },
+    {
+      "requested_url": "https://www.smart-union.org/why-obama-biden-deserve-your-vote-nov-6/",
+      "resolved_url": "https://www.smart-union.org/why-obama-biden-deserve-your-vote-nov-6/",
+      "http_status": 200,
+      "content_type": "text/html; charset=UTF-8",
+      "observed_at": "2026-10-05T19:26:35.820184+00:00",
+      "sha256": "fc134e9a91f1f9a8c8869a8eb4411574686eec69ca190b93bb5391d4919c0ebd",
+      "byte_size": 233445,
+      "method": "GET",
+      "capture_id": "extension-utu-post-18264-retrospective",
+      "evidence_policy": "hash_only",
+      "parser_version": "reviewed-source-inventory-extension/1",
+      "body_retained_publicly": false,
+      "capture_complete": true,
+      "source_snapshot_complete": false,
+      "request_outcome": "response_received",
+      "review_status": "original_source_verified",
+      "scope_boundary": "Research capture metadata only; complete named-source qualification is separately pinned"
+    },
+    {
+      "requested_url": "https://www.smart-union.org/wp-content/uploads/2022/02/October-2012-SMART-Transportation-Newsletter.pdf",
+      "resolved_url": "https://www.smart-union.org/wp-content/uploads/2022/02/October-2012-SMART-Transportation-Newsletter.pdf",
+      "http_status": 200,
+      "content_type": "application/pdf",
+      "observed_at": "2026-10-05T19:28:09.952242+00:00",
+      "sha256": "6ebb47439bb6030b2d3d65b659d57988f6a2134cf3aea67043cb5ea864260ef2",
+      "byte_size": 3174562,
+      "method": "GET",
+      "capture_id": "extension-utu-october-2012-corroboration",
+      "evidence_policy": "hash_only",
+      "parser_version": "reviewed-source-inventory-extension/1",
+      "body_retained_publicly": false,
+      "capture_complete": true,
+      "source_snapshot_complete": false,
+      "request_outcome": "response_received",
+      "review_status": "original_source_verified",
+      "scope_boundary": "Research capture metadata only; complete named-source qualification is separately pinned"
     }
   ],
   "later_inventory_extensions": [
@@ -4553,6 +4629,20 @@
       "receipt": "work/integration/publisher_inventory_extension_smart_20261005.json",
       "receipt_sha256": "cbcc0d04430a9ad690c388e6ab718a46c243a7df6ec05c3c53508cf38295aa66",
       "boundary": "The dated pass is preserved; later candidates and evidence are in this pinned supplement"
+    },
+    {
+      "publisher_id": "american_security_council_foundation",
+      "observed_at": "2026-10-05T23:22:47+00:00",
+      "receipt": "work/integration/publisher_inventory_extension_ascf_20261005.json",
+      "receipt_sha256": "46774878d9be766916648ab889335b98541d0a274427bdac98b34ed609a00bf9",
+      "boundary": "Dated records remain unchanged; named-source observations and installed-package limits are in this supplement"
+    },
+    {
+      "publisher_id": "united_transportation",
+      "observed_at": "2026-10-05T23:22:47+00:00",
+      "receipt": "work/integration/publisher_inventory_extension_utu_20261005.json",
+      "receipt_sha256": "35bf4e6a0836ec31737eaafdf25882ff28ed297142e00decc6d7cdb6b211b259",
+      "boundary": "Dated records remain unchanged; named-source observations and installed-package limits are in this supplement"
     }
   ]
 }

@@ -4384,7 +4384,7 @@
       "last_verified_at": null,
       "discovery_status": "discovered",
       "rights_status": "unreviewed",
-      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-15; physical PDF page 23",
+      "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-15; physical PDF page 23 Later bounded year-2000 recovery retained a Baylor catalogue lead: Guide to the Papers of Mike Morrison, Series III/Publications, Sub-series A/General Publications, printed/physical page 10, Box 35/File 180, Seniority: National Council of Senior Citizens, Date 2000. This establishes a publication holding only; the original issue, exact issue dates and six missing chart contents remain unverified. Result ncsc-2000-recovery-v2/result.json SHA256 563a1b84f61334dde4e28cb5bffa098176a6534d27e3e4e86df4eeb1090d4ac4; catalogue body SHA256 b1218b6940a5588e3dc8f8b895de87b526855483d568d9c0055f3e8a8df7961f. No pre-2000 recovery work is advanced.",
       "verification_capture_ids": [],
       "scope_status": "candidate_needs_original_publisher_verification",
       "latest_recovery": {
@@ -5433,6 +5433,89 @@
         "a6f27615-023d-48b7-b151-9803fec008eb"
       ],
       "scope_status": "named_original_rendition_qualified"
+    },
+    {
+      "source_id": "american_security_council_foundation:voter_index",
+      "publisher_id": "american_security_council_foundation",
+      "publisher_name": "American Security Council Foundation",
+      "publisher_aliases": [
+        "ASCF"
+      ],
+      "homepage_url": "http://www.ascfusa.org/",
+      "scorecard_name": "HOUSE VOTES and SENATE VOTES",
+      "scorecard_index_url": "https://web.archive.org/web/20120125114210id_/http://www.ascfusa.org/files/fckfiles/House_Votes_ASCF.pdf",
+      "archive_url": "https://web.archive.org/web/20120125114210id_/http://www.ascfusa.org/files/fckfiles/House_Votes_ASCF.pdf",
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "both",
+      "source_format": [
+        "pdf"
+      ],
+      "machine_readable": "partial",
+      "discovered_via": [
+        {
+          "kind": "manual_original_publisher_recovery",
+          "url": "https://web.archive.org/web/20120125114210id_/http://www.ascfusa.org/files/fckfiles/House_Votes_ASCF.pdf",
+          "capture_id": "extension-ascf-house-named-2010"
+        },
+        {
+          "kind": "manual_original_publisher_recovery",
+          "url": "https://web.archive.org/web/20120125110853id_/http://www.ascfusa.org/files/fckfiles/Senate_Votes_ASCF.pdf",
+          "capture_id": "extension-ascf-senate-named-2010"
+        }
+      ],
+      "discovered_at": "2026-10-05T19:33:51.236872+00:00",
+      "last_verified_at": "2026-10-05T23:22:47+00:00",
+      "discovery_status": "verified",
+      "rights_status": "unreviewed",
+      "notes": "Only the two named ASCF House/Senate archived originals and their independently reviewed retained inputs. American Security Council Foundation is separately attributed, with literal alias ASCF; the historical American Security Council candidate remains unverified and continuity is not inferred. The named 2010 selectors and dated 2010 actions do not establish a printed edition year, Congress or session; the stale 110th Congress legend remains source context. No historical backfill, live activation or public publication is established.",
+      "verification_capture_ids": [
+        "extension-ascf-house-named-2010",
+        "extension-ascf-senate-named-2010"
+      ],
+      "scope_status": "named_original_renditions_verified"
+    },
+    {
+      "source_id": "united_transportation:named-retrospective-assessments",
+      "publisher_id": "united_transportation",
+      "publisher_name": "United Transportation Union",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "Why Obama-Biden deserve your vote Nov. 6",
+      "scorecard_index_url": "https://www.smart-union.org/why-obama-biden-deserve-your-vote-nov-6/",
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "senate",
+      "source_format": [
+        "html",
+        "pdf"
+      ],
+      "machine_readable": "partial",
+      "discovered_via": [
+        {
+          "kind": "manual_original_publisher_recovery",
+          "url": "https://www.smart-union.org/why-obama-biden-deserve-your-vote-nov-6/",
+          "capture_id": "extension-utu-post-18264-retrospective"
+        },
+        {
+          "kind": "manual_original_publisher_recovery",
+          "url": "https://www.smart-union.org/wp-content/uploads/2022/02/October-2012-SMART-Transportation-Newsletter.pdf",
+          "capture_id": "extension-utu-october-2012-corroboration"
+        }
+      ],
+      "discovered_at": "2026-10-05T19:26:35.820184+00:00",
+      "last_verified_at": "2026-10-05T23:22:47+00:00",
+      "discovery_status": "verified",
+      "rights_status": "unreviewed",
+      "notes": "Only the named UTU original article published October 26, 2012 and its one explicit lifetime UTU Senate assessment; the October 2012 newsletter separately corroborates attribution and value and is not a second rating. Publication date is not evaluation year or source-time Senate membership. The historical UTU Washington Report candidate and modern SMART Transportation Division sources remain separate. Lifetime bounds, Congress, session, denominator and scored items remain unknown; no annual roster, historical backfill, live activation or publication is established.",
+      "verification_capture_ids": [
+        "extension-utu-post-18264-retrospective",
+        "extension-utu-october-2012-corroboration"
+      ],
+      "scope_status": "named_original_renditions_verified"
     }
   ],
   "later_inventory_extensions": [
@@ -5449,6 +5532,20 @@
       "receipt": "publisher_inventory_extension_carpenters_ncsrcc_20261005.json",
       "receipt_sha256": "13469ee592c4b6155ed0c182c0ae6443ef14c53fc16813bf19ecd2ec274ccf2d",
       "boundary": "The dated pass is preserved; this later separately attributed publisher and its evidence are in the pinned supplement"
+    },
+    {
+      "publisher_id": "american_security_council_foundation",
+      "observed_at": "2026-10-05T23:22:47+00:00",
+      "receipt": "work/integration/publisher_inventory_extension_ascf_20261005.json",
+      "receipt_sha256": "46774878d9be766916648ab889335b98541d0a274427bdac98b34ed609a00bf9",
+      "boundary": "Dated records remain unchanged; named-source observations and installed-package limits are in this supplement"
+    },
+    {
+      "publisher_id": "united_transportation",
+      "observed_at": "2026-10-05T23:22:47+00:00",
+      "receipt": "work/integration/publisher_inventory_extension_utu_20261005.json",
+      "receipt_sha256": "35bf4e6a0836ec31737eaafdf25882ff28ed297142e00decc6d7cdb6b211b259",
+      "boundary": "Dated records remain unchanged; named-source observations and installed-package limits are in this supplement"
     }
   ],
   "initial_surveyed_at": "2026-10-03T17:48:51.414495+00:00"
