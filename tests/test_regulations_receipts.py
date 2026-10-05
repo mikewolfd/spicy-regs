@@ -700,7 +700,8 @@ def test_resealed_inconsistent_processor_input_refuses_before_processing(tmp_pat
         next(iter(read_internal(selected)))
 
 
-def test_scheduled_rulemaking_uses_selected_native_agenda_and_preserves_prior_identity(tmp_path, monkeypatch):
+@pytest.mark.parametrize('loose_prior', [False, True])
+def test_scheduled_rulemaking_uses_selected_native_agenda_and_preserves_prior_identity(tmp_path, monkeypatch, loose_prior):
     import shutil
     from spicy_regs.pipelines.rulemaking_dataset import RulemakingDatasetPipeline
     from spicy_regs.selected_generations import SelectedDataset, remember_selection
@@ -724,8 +725,17 @@ def test_scheduled_rulemaking_uses_selected_native_agenda_and_preserves_prior_id
     work.mkdir()
     remember_selection(work, [SelectedDataset(s.dataset, s.subjects, s.receipts, s.generation_id) for s in inputs])
     monkeypatch.setattr(r2, 'download', lambda *_: False)
+    if loose_prior:
+        from spicy_regs.transforms.build_proceedings import COLUMNS
+        pq.write_table(pa.Table.from_pylist([{'proceeding_id': 'unadmitted-prior-id',
+                                             'docket_ids_json': '["EPA-2026-0001"]'}], schema=pa.schema([(name, pa.string()) for name in COLUMNS])),
+                       work / 'proceedings.parquet')
+        for name in ('_proceedings_prior.parquet', '_proceedings_native_prior.parquet', '_proceedings_receipts.parquet'):
+            (work / name).write_bytes(b'unadmitted scratch')
     RulemakingDatasetPipeline(output_dir=work, run_id='rulemaking-first', asserted_at='2026-10-05T00:00:00Z').run()
     native = pq.read_table(work / 'proceedings.parquet').to_pylist()
+    assert native[0]['proceeding_id'] != 'unadmitted-prior-id'
+    assert not (work / '_proceedings_receipts.parquet').exists()
     assert 'authority_refs' in native[0] and 'authority_refs_json' not in native[0]
     manifest = json.loads((work / 'rulemaking-dataset-manifest.json').read_text())
     assert manifest['inputs']['native_inputs']['unified_agenda']['generationId'] == 'g1'

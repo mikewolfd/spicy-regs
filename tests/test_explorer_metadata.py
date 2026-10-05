@@ -224,6 +224,8 @@ def test_committed_native_join_is_omitted_when_selected_legacy_schema_lacks_its_
     options['join_record']['joins'][0]['parent_columns'] = ['native_id', 'edition']
     result = build_bundle(index(), **options)
     assert result['joins'] == []
+    assert 'selected schemas lack declared join fields' in result['tables']['parent']['joinAudit']['reason']
+    assert 'outside' not in result['tables']['parent']['joinAudit']['reason']
     assert result['omittedJoins'][0]['missing_columns']['parent'] == ['native_id']
     assert result['tables']['parent']['publicationSchema'] == [['id', 'VARCHAR'], ['edition', 'VARCHAR']]
 
@@ -247,3 +249,25 @@ def test_historical_http_publisher_links_are_preserved_without_guessing_an_https
     monkeypatch.setattr(script, 'get_public', lambda *_: raw)
     data = {'families': {'scorecards': {'tables': {'scorecard_publishers.parquet': {}}}}}
     assert script.scorecard_sources(data, 'https://data.example.org')[0]['url'] == 'http://example.org/archive/2000'
+
+
+def test_unavailable_composite_identity_is_reported_whole_without_advertising_a_partial_key():
+    options = args()
+    options['descriptions']['parent']['identity_columns'] = ['id', 'native_edition']
+    result = build_bundle(index(), **options)
+    parent = result['tables']['parent']
+    assert 'identity_columns' not in parent
+    assert parent['unavailableIdentity']['columns'] == ['id', 'native_edition']
+    assert parent['unavailableIdentity']['missing_columns'] == ['native_edition']
+    options['descriptions']['parent']['identity_columns'] = ['id', 'edition']
+    assert build_bundle(index(), **options)['tables']['parent']['identity_columns'] == ['id', 'edition']
+
+
+def test_metadata_cli_refuses_http_data_base_before_reading_inputs(monkeypatch):
+    import sys
+    script = publisher_script()
+    monkeypatch.setattr(sys, 'argv', ['publish-explorer', '--base-url', 'http://data.example.org'])
+    monkeypatch.setattr(script, 'get_public', lambda *_: pytest.fail('invalid base reached network'))
+    with pytest.raises(SystemExit) as error:
+        script.main()
+    assert error.value.code == 2

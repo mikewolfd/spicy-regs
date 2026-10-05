@@ -220,6 +220,7 @@ def build_proceedings(
     run_id: str | None = None,
     asserted_at: str | None = None,
     fr_index: FederalRegisterIndex | None = None,
+    allow_output_prior: bool = True,
 ) -> Path:
     """Build proceedings from dockets and Federal Register action artifacts.
 
@@ -258,7 +259,7 @@ def build_proceedings(
     json_stats = JsonReadStats()
     fr_index = fr_index or FederalRegisterIndex(paths["federal_register"])
     prior_file = output_dir / "_proceedings_prior.parquet"
-    if not prior_file.exists() and (output_dir / OUTPUT).exists():
+    if allow_output_prior and not prior_file.exists() and (output_dir / OUTPUT).exists():
         prior_file = output_dir / OUTPUT
     prior_proceedings = read_parquet_rows(prior_file)
     fr_action, fr_stages, fr_untyped = _fr_action_evidence(paths["federal_register"], fr_index, json_stats)

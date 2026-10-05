@@ -92,7 +92,8 @@ class RulemakingDatasetPipeline(MaterializedDatasetPipeline):
                 output_dir / "_proceedings_prior.parquet",
             )
         else:
-            (output_dir / "_proceedings_prior.parquet").unlink(missing_ok=True)
+            for name in ("_proceedings_prior.parquet", "_proceedings_native_prior.parquet", "_proceedings_receipts.parquet"):
+                (output_dir / name).unlink(missing_ok=True)
         return manifest
 
     def _input_snapshot(self, output_dir: Path, previous_manifest: dict | None) -> dict:
@@ -233,7 +234,8 @@ class RulemakingDatasetPipeline(MaterializedDatasetPipeline):
 
         def proceedings(output_dir: Path, context: RunContext) -> None:
             build_proceedings(
-                output_dir, run_id=context.run_id, asserted_at=context.asserted_at, fr_index=fr_index(output_dir)
+                output_dir, run_id=context.run_id, asserted_at=context.asserted_at, fr_index=fr_index(output_dir),
+                allow_output_prior=False,
             )
 
         def regulatory_agenda(output_dir: Path, context: RunContext) -> None:
