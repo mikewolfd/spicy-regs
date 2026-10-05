@@ -690,8 +690,11 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
                         "signatures": signatures,
                         "selected_tables": list(local.files),
                         "receipt_members": {name: str(path) for name, path in local.receipts.items()},
+                        "receipt_indexes": {name: str(path) for name, path in local.receipt_indexes.items()},
                         "native": {name: {"subjects": [str(p) for p in value.subjects],
-                                           "receipts": str(value.receipts), "generation_id": value.generation_id}
+                                           "receipts": str(value.receipts), "generation_id": value.generation_id,
+                                           "key_index": str(value.key_index) if value.key_index else None,
+                                           "key_index_descriptor": value.key_index_descriptor}
                                    for name, value in local.native.items()},
                     }
                 )
@@ -782,6 +785,30 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
         except (duckdb.Error, RuntimeError) as exc:
             con.close()
             raise RuntimeError("Published ETL receipt member unavailable") from exc
+    from spicy_regs.receipt_key_index import check_reader
+    for entry in publication_index["families"].values():
+        specification = entry.get("etlReceipts", {})
+        key = specification.get("keyIndex")
+        receipt_path = f"{entry['prefix']}/{specification.get('key', '')}"
+        if key is None or (local_receipts is not None and receipt_path not in local_receipts):
+            continue
+        member_path = f"{entry['prefix']}/{key['key']}"
+        location = str(local.receipt_indexes[member_path]) if local is not None else f"{R2_BASE_URL}/{member_path}"
+        try:
+            check_reader(con, location, key, specification)
+        except ValueError:
+            con.close()
+            raise
+        allowed_paths.append(location)
+    if local is not None:
+        for value in local.native.values():
+            if value.key_index is not None:
+                import pyarrow.parquet as pq
+                from spicy_regs.selected_generations import _pin
+                check_reader(con, str(value.key_index), value.key_index_descriptor,
+                             {"sha256": _pin(value.receipts), "byteSize": value.receipts.stat().st_size,
+                              "rows": pq.ParquetFile(value.receipts).metadata.num_rows})
+                allowed_paths.append(str(value.key_index))
     _install_relationship_views(con)
     _apply_security_settings(con, allowed_paths)
     return con
@@ -894,7 +921,9 @@ def _install_relationship_views(con: duckdb.DuckDBPyConnection) -> None:
     processing |= {name for name in native if declared.get(name, {}).get("receipt_only")}
     local_directory = local_selection["directory"] if local_selection else DATA_DIR
     adapter = ReceiptAdapter(con, index, R2_BASE_URL, local_directory=local_directory,
-                             local_receipts=local_selection.get("receipt_members") if local_selection else None, local_native=native)
+                             local_receipts=({**local_selection.get("receipt_members", {}),
+                                              **local_selection.get("receipt_indexes", {})} if local_selection else None),
+                             local_native=native)
     # A mixed old/native dependency set is a refusal, never a pass-through.
     adapted = [spec for spec in FEC_VIEWS
                if set(spec.required) <= set(status["tables"]) | processing

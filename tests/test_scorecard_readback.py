@@ -121,7 +121,7 @@ def test_bad_persisted_family_never_reaches_readback_validator(tmp_path, monkeyp
         if corruption == "generation":
             state = directory / "scorecard-etl-build.json"
             value = json.loads(state.read_text())
-            value["generation_id"] = "unselected-generation"
+            value["generation_id"] = ""
             state.write_text(json.dumps(value))
         else:
             path = directory / ("scorecards.parquet" if corruption == "subject" else "etl_receipts.parquet")

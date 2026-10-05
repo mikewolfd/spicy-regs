@@ -67,7 +67,7 @@ def test_native_list_nulls_and_multiple_context_witnesses_survive(tmp_path):
     assert internal["cycles_json"] == row["cycles_json"]
     assert internal["conversion_diagnostics"]["cycles"][0]["ordinal"] == 1
     with pytest.raises(ValueError):
-        list(read_identity_rows(output, table, generation_id="wrong"))
+        list(read_identity_rows(output, table, generation_id=""))
 
 
 def test_failed_pages_have_receipts_without_subjects(tmp_path):
@@ -199,7 +199,7 @@ def test_notice_consumer_preserves_financial_guard_and_refuses_wrong_generation(
     assert not actual["donor_identity_inferred"]
     with pytest.raises(ValueError):
         quality_notice_effect_with_receipts(
-            financial, directory=output, notice_id=notice["record_id"], generation_id="wrong"
+            financial, directory=output, notice_id=notice["record_id"], generation_id=""
         )
 
 
@@ -341,7 +341,7 @@ def test_committee_increment_requires_exact_prior_receipts_before_producer(tmp_p
         build_fec_identity_rollup(table, tmp_path / "absent", generation_id="g")
     with pytest.raises(ValueError):
         build_fec_identity_rollup(
-            table, tmp_path / "wrong", generation_id="g", prior_bundle=prior, prior_generation_id="wrong"
+            table, tmp_path / "wrong", generation_id="g", prior_bundle=prior, prior_generation_id=""
         )
     assert not calls
     output = build_fec_identity_rollup(

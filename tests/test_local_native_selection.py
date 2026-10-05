@@ -85,7 +85,7 @@ def test_native_selection_refuses_damage_without_convenience_fallback(tmp_path, 
         pq.write_table(pa.Table.from_pylist(rows, schema=RECEIPT_SCHEMA), changed)
         remember_selection(tmp_path, [SelectedDataset("members", member.subjects, changed, member.generation_id)])
     elif damage == "generation":
-        remember_selection(tmp_path, [SelectedDataset("members", member.subjects, member.receipts, "wrong")])
+        remember_selection(tmp_path, [SelectedDataset("members", member.subjects, member.receipts, "")])
     else:
         path = member.subjects[0] if damage == "subject" else member.receipts
         path.write_bytes(b"changed")

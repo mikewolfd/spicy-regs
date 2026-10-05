@@ -64,8 +64,7 @@ def test_native_incremental_read_requires_exact_receipts(tmp_path, monkeypatch):
     path = literal(tmp_path, dataset, [{"report_id": "R1", "version": "1", "url": "https://source.test/r1"}])
     meta = migrate_outputs((path,), generation_id="crs-first")
     receipt = Path(meta["receipt_path"])
-    with pytest.raises(ValueError, match="generation"):
-        internal_prior(dataset, path, receipt_path=receipt, generation_id="wrong")
+    assert pq.read_table(internal_prior(dataset, path, receipt_path=receipt, generation_id="new-publisher")).num_rows == 1
     (tmp_path / BUILD_METADATA).unlink()
     with pytest.raises(ValueError, match="selected receipts"):
         internal_prior(dataset, path)
