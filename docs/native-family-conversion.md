@@ -215,6 +215,49 @@ $UV run --frozen python scripts/convert_family_to_native.py --rollback $RUN/cour
 One family per invocation, in the order above. `--remote` names the git
 remote whose `main` is checked (default `origin`).
 
+### Prepare, qualify, and publish the same build
+
+A successful official dry run now seals its `conversion.json`. Run it from
+the clean merged main and pinned environment that will publish the result:
+
+```sh
+R2_PUBLIC_URL=https://data.spicygov.ai $UV run --frozen python scripts/convert_family_to_native.py bill-family \
+  --allow bill-family --work "$RUN/bill-family" --expect-main "$MAIN" --expect-spicy-docs "$WHEEL" --remote fork
+```
+
+Before publishing, the release package must record that receipt's
+`prepared.generationPin`, the full physical-key qualification, the exact
+deployed reader image tested against this generation, and the coverage
+preview's exact subject, receipt and supporting-table pins. Keep each proof
+file and its SHA-256 beside the run package. Reports for another generation
+do not qualify this one. These source and consumer checks remain separate
+from the converter's receipt admission and restoration checks.
+
+Publish those same bytes once the package is qualified:
+
+```sh
+R2_PUBLIC_URL=https://data.spicygov.ai $UV run --frozen python scripts/convert_family_to_native.py \
+  --publish-prepared "$RUN/bill-family/conversion.json" --allow bill-family \
+  --expect-main "$MAIN" --expect-spicy-docs "$WHEEL" --remote fork \
+  --env-file <file with the R2 settings> --expect-bucket "$BUCKET"
+```
+
+Prepared publication reruns byte checks, native admission and exact input
+restoration; it never runs the source writer. It refuses an altered or
+incomplete receipt, changed source/runtime, missing or altered members,
+different restoration results, or a changed captured family entry.
+Timestamp-only changes to that entry also refuse, including during a
+conditional pointer retry. Unrelated family updates remain intact.
+
+Only a completed official dry run is eligible. Partial writer outputs,
+old unsealed receipts, rehearsal reports, and already attempted or published
+receipts are refused. A failed or interrupted publication retains its
+rollback record. Reconcile the stored pointer read-only and inspect the
+rollback record before any further write; the recovery procedure below
+explains the available rollback. Do not remove the attempt journal or reseal
+it to force another prepared publication. No report's success flag bypasses
+verification.
+
 Every exit that is not a success prints two lines. `REFUSED:` (exit 1) or
 `FAILED:` (exit 2, or 130 when interrupted) says why. `STATE:` says what the
 bucket holds: nothing was published; or the family is published, with the

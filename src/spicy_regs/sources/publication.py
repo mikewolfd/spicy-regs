@@ -989,7 +989,7 @@ def _publish_evidence(client, bucket: str, path: Path, artifact) -> None:
 
 def publish_generation(directory: Path, *, client, bucket: str, prior_index: Mapping,
                        evidence_directories: tuple[Path, ...] = (), added_tables: frozenset[str] = frozenset(),
-                       receipt_only_tables: frozenset[str] = frozenset()) -> dict:
+                       receipt_only_tables: frozenset[str] = frozenset(), exact_prior: bool = False) -> dict:
     """Verify/upload/verify, then compare-and-swap the publication pointer.
 
     Validation and conditional-write refusals preserve the current pointer.
@@ -1004,6 +1004,7 @@ def publish_generation(directory: Path, *, client, bucket: str, prior_index: Map
     onto it, which equals a first attempt made a moment later; a change to this
     family or its tables refuses as stale and never overwrites the other writer.
     Input provenance and semantic quality are separate checks.
+    ``exact_prior`` also holds the captured publication timestamp unchanged on every pointer retry.
     """
     from rulespec_artifacts import LocalMemberSource
     from spicy_regs.generations import verify_generation
@@ -1012,6 +1013,7 @@ def publish_generation(directory: Path, *, client, bucket: str, prior_index: Map
     return _publish_verified_generation(
         artifact, LocalMemberSource(directory), client=client, bucket=bucket, prior_index=prior_index,
         evidence_directories=evidence_directories, added_tables=added_tables, receipt_only_tables=receipt_only_tables,
+        exact_prior=exact_prior,
         upload_member=lambda prefix, key: _put_immutable(client, bucket, prefix + "/" + key, directory / key),
     )
 
@@ -1019,7 +1021,7 @@ def publish_generation(directory: Path, *, client, bucket: str, prior_index: Map
 def _publish_verified_generation(
     artifact, source, *, upload_member, client, bucket: str, prior_index: Mapping,
     evidence_directories: tuple[Path, ...] = (), added_tables: frozenset[str] = frozenset(),
-    receipt_only_tables: frozenset[str] = frozenset(),
+    receipt_only_tables: frozenset[str] = frozenset(), exact_prior: bool = False,
 ) -> dict:
     """Shared publication gates; both callers fully verify their source first."""
     from botocore.exceptions import BotoCoreError, ClientError
@@ -1035,7 +1037,7 @@ def _publish_verified_generation(
     if not _NAME.fullmatch(family):
         raise PublicationError("Invalid family name")
     index, etag, bootstrap = _stored_index(client, bucket)
-    _assert_family_unchanged(index, prior_index, family)
+    _assert_family_unchanged(index, prior_index, family, exact=exact_prior)
     prefix = f"generations/{family}/{artifact.pin.artifact_digest.removeprefix('sha256:')}"
     members = list(iter_member_descriptors(artifact, source))
     try:
@@ -1146,7 +1148,7 @@ def _publish_verified_generation(
             return updated
         logger.info("publication: pointer moved concurrently; merging {} onto the reread index", family)
         index, etag, _ = _stored_index(client, bucket)
-        _assert_family_unchanged(index, prior_index, family)
+        _assert_family_unchanged(index, prior_index, family, exact=exact_prior)
     raise PublicationError("Publication changed concurrently; retry from a fresh snapshot")
 
 
@@ -1217,9 +1219,11 @@ def _generation_entry(entry: Mapping | None) -> dict | None:
     return None if entry is None else {key: value for key, value in entry.items() if key != "publishedAt"}
 
 
-def _assert_family_unchanged(index: Mapping, prior_index: Mapping, family: str) -> None:
-    """Refuse when the family now names another generation than the build read; a new ``publishedAt`` is no change."""
-    if _generation_entry(index["families"].get(family)) != _generation_entry(prior_index["families"].get(family)):
+def _assert_family_unchanged(index: Mapping, prior_index: Mapping, family: str, *, exact: bool = False) -> None:
+    """Hold the captured generation, or the complete captured entry when ``exact`` includes ``publishedAt``."""
+    before, current = prior_index["families"].get(family), index["families"].get(family)
+    unchanged = current == before if exact else _generation_entry(current) == _generation_entry(before)
+    if not unchanged:
         raise PublicationError("Family changed since the build read its inputs; rebuild before publishing")
 
 

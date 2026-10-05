@@ -244,8 +244,6 @@ def _convert_rollup(cls, old: Mapping, retained: Mapping[str, Path], base: str, 
                     handed_on: Sequence[Mapping]) -> _Built:
     """Run the family's rollup with its builder replaced by "return the retained tables"; everything after is its own."""
     from spicy_regs.pipelines.rollups.base import RollupPipeline
-    from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
-
     if set(cls.source_outputs) != set(old["tables"]):
         raise ConversionRefused(
             f"{cls.name}: its rollup writes {sorted(cls.source_outputs)} and the published family holds "
@@ -276,6 +274,14 @@ def _convert_rollup(cls, old: Mapping, retained: Mapping[str, Path], base: str, 
     pipeline.run()
     (generation,) = (work / "build" / "generations").iterdir()
 
+    return _rollup_built(cls, generation, retained, base, work,
+                         (pipeline.source_evidence.artifact_dir,) if pipeline.source_evidence else ())
+
+
+def _rollup_built(cls, generation: Path, retained: Mapping[str, Path], base: str, work: Path,
+                  evidence: tuple[Path, ...], selection_root: Path | None = None) -> _Built:
+    from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
+
     def read_published(dataset: str, index: Mapping) -> int:
         restored = SelectedPriors(work / "read-back" / uuid4().hex, index=index, public_url=base).get(dataset)
         original = retained[dataset + ".parquet"]
@@ -286,9 +292,9 @@ def _convert_rollup(cls, old: Mapping, retained: Mapping[str, Path], base: str, 
     return _Built(
         generation,
         {policy.dataset: policy.policy_version for policy in cls.receipt_policies},
-        lambda dataset: SelectedPriors(work / "restored" / uuid4().hex, root=work / "build", public_url="").get(dataset),
+        lambda dataset: SelectedPriors(work / "restored" / uuid4().hex, root=selection_root or work / "build", public_url="").get(dataset),
         read_published,
-        (pipeline.source_evidence.artifact_dir,) if pipeline.source_evidence else (),
+        evidence,
         frozenset(cls.added_tables),
         frozenset(cls.receipt_only_tables),
     )
@@ -298,11 +304,8 @@ def _convert_court(family: str, old: Mapping, captured: Mapping, retained: Mappi
                    work: Path, handed_on: Sequence[Mapping], retain_evidence: bool) -> _Built:
     """Court tables: the shared court writer over each retained table, then the court generation admission."""
     from spicy_regs.court_receipts import (
-        POLICIES, build_court_generation, finish_court_output, read_court_rows,
-        restore_processing_input,
+        build_court_generation, finish_court_output,
     )
-    from spicy_regs.court_subjects import SUBJECT_SCHEMAS
-
     evidence = None
     if retain_evidence:
         # As a scheduled run does: this generation names the one it replaces and one evidence artifact of its own.
@@ -333,13 +336,23 @@ def _convert_court(family: str, old: Mapping, captured: Mapping, retained: Mappi
     if evidence:
         evidence.finish()
 
+    return _court_built(generation, subjects, retained, base, work, generation_id,
+                        (evidence.artifact_dir,) if evidence else ())
+
+
+def _court_built(generation: Path, subjects: Mapping[str, Path], retained: Mapping[str, Path], base: str,
+                 work: Path, generation_id: str, evidence: tuple[Path, ...]) -> _Built:
+    from spicy_regs.court_receipts import POLICIES, read_court_rows, restore_processing_input
+    from spicy_regs.court_subjects import SUBJECT_SCHEMAS
+
     def restore(dataset: str) -> Path:
         target = work / "restored" / f"{dataset}.parquet"
         target.parent.mkdir(parents=True, exist_ok=True)
         # The court restore writes whatever schema it is handed, so this file takes the retained table's columns
         # and types; its file metadata is dropped so that metadata the published table had shows as lost.
         return restore_processing_input(subjects[dataset], target, dataset=dataset,
-                                        schema=pq.read_schema(retained[dataset + ".parquet"]).remove_metadata())
+                                        schema=pq.read_schema(retained[dataset + ".parquet"]).remove_metadata(),
+                                        receipt_path=generation / "etl_receipts.parquet", generation_id=generation_id)
 
     def read_published(dataset: str, index: Mapping) -> int:
         target = work / "read-back" / uuid4().hex / f"{dataset}.parquet"
@@ -358,7 +371,7 @@ def _convert_court(family: str, old: Mapping, captured: Mapping, retained: Mappi
         return sum(1 for _ in read_court_rows(target, dataset=dataset, receipt_path=receipts, generation_id=selected))
 
     return _Built(generation, {name: POLICIES[name].policy_version for name in subjects}, restore, read_published,
-                  (evidence.artifact_dir,) if evidence else (), declared=SUBJECT_SCHEMAS.__getitem__)
+                  evidence, declared=SUBJECT_SCHEMAS.__getitem__)
 
 
 def _differences(restored: Path, retained: Path) -> dict:
@@ -474,12 +487,168 @@ def _write_receipt(path: Path, receipt: Mapping) -> None:
         temporary.unlink(missing_ok=True)
 
 
+def _file_digest(path: Path) -> str:
+    with path.open("rb") as stream:
+        return "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest()
+
+
+def _prepared_digest(receipt: Mapping) -> str:
+    value = dict(receipt)
+    value["prepared"] = {key: item for key, item in value["prepared"].items() if key != "receiptDigest"}
+    encoded = json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
+    return "sha256:" + hashlib.sha256(encoded).hexdigest()
+
+
+def _seal_prepared(receipt: dict, built: _Built, work: Path) -> None:
+    artifact = json.loads((built.generation / "artifact.json").read_bytes())
+    receipt["prepared"] = {
+        "format": "spicy-regs-native-conversion-prepared", "version": 1,
+        "generationPin": {key: artifact[key] for key in ("logicalId", "artifactDigest")},
+        "capturedIndexSha256": _file_digest(work / "captured-publication.v2.json"),
+        "evidenceDirectories": [path.resolve().relative_to(work.resolve()).as_posix() for path in built.evidence],
+    }
+    receipt["prepared"]["receiptDigest"] = _prepared_digest(receipt)
+
+
+def _prepared_path(work: Path, value: str) -> Path:
+    path = Path(value)
+    if not path.is_absolute():
+        path = work / path
+    if path.is_symlink() or not path.resolve().is_relative_to(work.resolve()) or not path.exists():
+        raise ConversionRefused("Prepared input is missing or outside its original work directory")
+    return path
+
+
+def _retained_inputs(captured: Mapping, old: Mapping, work: Path) -> dict[str, Path]:
+    """Recheck retained bytes against publisher pins; no cached proof substitutes for these checks."""
+    from spicy_regs.generations import _table_info
+
+    retained = {}
+    for key, descriptor in old["tables"].items():
+        path = _prepared_path(work, "retained/" + (key.removesuffix(".parquet") if "members" in descriptor else key))
+        members = publication.table_members(captured, key)
+        expected = {member.key.removeprefix(key.removesuffix(".parquet") + "/") if path.is_dir() else member.key
+                    for member in members}
+        if set(_table_files(path)) != expected:
+            raise ConversionRefused(f"{key}: retained member layout changed")
+        for member in members:
+            target = _prepared_path(work, "retained/" + member.key)
+            if target.stat().st_size != member.byte_size or _file_digest(target) != member.sha256:
+                raise ConversionRefused(f"{key}: retained member bytes changed")
+            observed = _table_info(target)
+            if observed["columns"] != descriptor["columns"] or observed["rows"] != member.rows:
+                raise ConversionRefused(f"{key}: retained member schema or rows changed")
+        retained[key] = path
+    return retained
+
+
+def publish_prepared(receipt_path: Path, *, allowed: Sequence[str], expected_main: str, expected_spicy_docs: str,
+                     expect_bucket: str, remote: str = "origin", state: Callable[[str], dict] | None = None) -> dict:
+    """Publish one completed official dry run after rechecking its bytes and restoring its exact inputs again.
+
+    The source writer never runs here. Separate field, server and coverage qualifications in the release package
+    must name this receipt's exact artifact; their reports do not replace native admission or restoration.
+    """
+    state = state or source_state
+    now = state(remote)
+    _refuse_moved(now, main=expected_main, spicy_docs=expected_spicy_docs)
+    work = receipt_path.parent
+    if receipt_path.name != RECEIPT or receipt_path.is_symlink() or not receipt_path.is_file():
+        raise ConversionRefused("--publish-prepared needs an existing official conversion.json")
+    try:
+        receipt = json.loads(receipt_path.read_bytes())
+        sealed = receipt.get("prepared", {})
+        if (sealed.get("format") != "spicy-regs-native-conversion-prepared" or sealed.get("version") != 1
+                or sealed.get("receiptDigest") != _prepared_digest(receipt)
+                or "published" not in receipt or receipt["published"] is not None
+                or any(key in receipt for key in ("refused", "publish_attempt", "rollback_attempt", "rolled_back"))):
+            raise ConversionRefused("Prepared receipt is incomplete, altered, refused, or already attempted")
+        family, base = receipt["family"], receipt["public_url"]
+        if family not in allowed:
+            raise ConversionRefused(f"{family} is not in this run's allow-list")
+        if now != receipt["source"]:
+            raise ConversionRefused("Prepared source or runtime differs from current clean main")
+        if base != (os.getenv("R2_PUBLIC_URL") or "").rstrip("/"):
+            raise ConversionRefused("Prepared public URL differs from R2_PUBLIC_URL")
+        capture_path = _prepared_path(work, "captured-publication.v2.json")
+        if _file_digest(capture_path) != sealed["capturedIndexSha256"]:
+            raise ConversionRefused("Prepared publication snapshot changed")
+        captured = publication.parse_index(capture_path.read_bytes())
+        old = captured["families"][family]
+        if old != receipt["captured"]["entry"] or "etlReceipts" in old:
+            raise ConversionRefused("Prepared captured family differs or is already native")
+        target = _target(expect_bucket, "Publishing a prepared conversion")
+        if publication.stored_family(r2.get_r2_client(), target["bucket"], family) != old:
+            raise ConversionRefused("Prepared family's complete captured entry changed; nothing was uploaded")
+        retained = _retained_inputs(captured, old, work)
+        from spicy_regs.generations import implementation_id, verify_generation
+
+        generation = _prepared_path(work, receipt["generation"]["directory"])
+        artifact = verify_generation(generation)
+        spec = artifact.root["spec"]
+        if (artifact.pin.as_dict() != sealed["generationPin"]
+                or artifact.pin.artifact_digest != receipt["generation"]["artifactDigest"]
+                or spec["family"] != family or spec["publicationStatus"] != "complete-family"
+                or spec["readSnapshot"] != captured
+                or spec["etlReceipts"]["generationId"] != receipt["generation"]["receiptGenerationId"]
+                or artifact.root["producer"]["implementationId"] != implementation_id()
+                or any(version(name) != value for name, value in spec["packages"].items())):
+            raise ConversionRefused("Prepared generation, captured inputs, or implementation differs")
+        evidence = tuple(_prepared_path(work, value) for value in sealed["evidenceDirectories"])
+        from spicy_regs.source_evidence import INPUT_ROLE, PRIOR_ROLE, verify_evidence
+
+        admitted = [verify_evidence(path) for path in evidence]
+        if ([{"role": INPUT_ROLE, **item.pin.as_dict()} for item in admitted]
+                != [item for item in artifact.root["inputs"] if item["role"] == INPUT_ROLE]
+                or any(item.root["spec"]["family"] != family or item.root["inputs"] != [
+                    value for value in artifact.root["inputs"] if value["role"] == PRIOR_ROLE] for item in admitted)):
+            raise ConversionRefused("Prepared source evidence differs from the generation")
+        from spicy_regs.court_receipts import POLICIES as court_policies
+        from spicy_regs.pipelines.rollups.base import RollupPipeline
+
+        if all(key.removesuffix(".parquet") in court_policies for key in old["tables"]):
+            subjects = {key.removesuffix(".parquet"): generation / key for key in old["tables"]}
+            built = _court_built(generation, subjects, retained, base, work, spec["etlReceipts"]["generationId"], evidence)
+        elif (cls := _rollup_class(family)) is not None:
+            if set(cls.source_outputs) != set(old["tables"]) or any(
+                ("members" in table) != (key in cls.partitioned) or "members" in table
+                and tuple(table["partitionColumns"]) != tuple(cls.partitioned[key]) for key, table in old["tables"].items()
+            ):
+                raise ConversionRefused("Prepared family membership or partition declaration differs")
+            from spicy_regs.selected_generations import SelectedDataset, remember_selection
+
+            selection_root = work / "prepared-selection" / uuid4().hex
+            selections = []
+            for policy in cls.receipt_policies:
+                path = generation / (policy.dataset if "partitionColumns" in spec["tables"].get(policy.dataset + ".parquet", {})
+                                     else policy.dataset + ".parquet")
+                subjects = () if policy.receipt_only else tuple(_table_files(path).values())
+                selections.append(SelectedDataset(policy.dataset, subjects, generation / "etl_receipts.parquet",
+                                                  spec["etlReceipts"]["generationId"]))
+            remember_selection(selection_root, selections)
+            built = _rollup_built(cls, generation, retained, base, work, evidence, selection_root)
+        else:
+            raise ConversionRefused("Prepared family has no maintained converter reader")
+        _, replaced = publication.load_family_root(base, old)
+        scheduled = _rollup_class(family, RollupPipeline)
+        retains = bool(replaced["inputs"]) or bool(scheduled and scheduled.retain_source_evidence)
+        proof, problems = _qualify_conversion(family, built, old, retained, replaced, retains, _handed_on(base, replaced))
+        if problems or any(receipt.get(key) != value for key, value in proof.items()):
+            raise ConversionRefused(f"Prepared restoration proof differs: {problems}")
+    except (KeyError, TypeError, ValueError, OSError) as failure:
+        raise ConversionRefused(f"Prepared conversion cannot be verified: {type(failure).__name__}: {failure}") from failure
+    receipt["target"] = target
+    return _publish_conversion(receipt, built, captured, work, expected_main=expected_main,
+                               expected_spicy_docs=expected_spicy_docs, remote=remote, state=state, exact_prior=True)
+
+
 def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: str, expected_spicy_docs: str,
             publish: bool = False, remote: str = "origin", state: Callable[[str], dict] | None = None,
             expect_bucket: str | None = None) -> dict:
     """Convert ``family`` in ``work``; with ``publish``, move its pointer and read the result back anonymously."""
     if family not in allowed:
         raise ConversionRefused(f"{family} is not in this run's allow-list ({', '.join(sorted(allowed)) or 'empty'})")
+    work = work.resolve()
     state = state or source_state
     started = state(remote)
     _refuse_moved(started, main=expected_main, spicy_docs=expected_spicy_docs)
@@ -545,6 +714,28 @@ def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: s
             raise ConversionRefused(f"{family}: {refusal}") from refusal
         receipt["convert_seconds"] = round(time.monotonic() - elapsed, 1)
 
+    proof, problems = _qualify_conversion(family, built, old, retained, replaced, retains, handed_on)
+    receipt.update(proof)
+
+    def save() -> dict:
+        _write_receipt(work / RECEIPT, receipt)
+        return receipt
+
+    if problems:
+        receipt["refused"] = problems
+        save()
+        raise ConversionRefused(f"{family}: " + "; ".join(problems))
+    if not publish or target is None:
+        receipt["published"] = None
+        _seal_prepared(receipt, built, work)
+        return save()
+
+    return _publish_conversion(receipt, built, captured, work, expected_main=expected_main,
+                               expected_spicy_docs=expected_spicy_docs, remote=remote, state=state)
+
+
+def _qualify_conversion(family: str, built: _Built, old: Mapping, retained: Mapping[str, Path],
+                        replaced: Mapping, retains: bool, handed_on: Sequence[Mapping]) -> tuple[dict, list[str]]:
     artifact = json.loads((built.generation / "artifact.json").read_bytes())
     outcomes = Counter(outcome for batch in pq.ParquetFile(built.generation / "etl_receipts.parquet").iter_batches(
         columns=["outcome"]) for outcome in batch.column(0).to_pylist())
@@ -607,26 +798,26 @@ def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: s
                      if row.get("event") in INHERITED_EVENTS]
         if journaled != list(handed_on):
             problems.append(f"{len(handed_on)} journal events the next run reads back were not all handed on")
-    receipt |= {
+    return {
         "policy_versions": dict(built.policies),
         "receipt_outcomes": dict(outcomes),
         "tables": tables,
         "lineage": lineage,
         "generation": {"directory": str(built.generation), "artifactDigest": artifact["artifactDigest"],
                        "receiptGenerationId": artifact["spec"]["etlReceipts"]["generationId"]},
-    }
+    }, problems
+
+
+def _publish_conversion(receipt: dict, built: _Built, captured: Mapping, work: Path, *,
+                        expected_main: str, expected_spicy_docs: str, remote: str, state: Callable[[str], dict],
+                        exact_prior: bool = False) -> dict:
+    family, base, target, started = (receipt[name] for name in ("family", "public_url", "target", "source"))
+    old, tables = receipt["captured"]["entry"], receipt["tables"]
+    artifact = json.loads((built.generation / "artifact.json").read_bytes())
 
     def save() -> dict:
         _write_receipt(work / RECEIPT, receipt)
         return receipt
-
-    if problems:
-        receipt["refused"] = problems
-        save()
-        raise ConversionRefused(f"{family}: " + "; ".join(problems))
-    if not publish or target is None:
-        receipt["published"] = None
-        return save()
 
     _refuse_moved(now := state(remote), main=expected_main, spicy_docs=expected_spicy_docs)
     if now != started:
@@ -639,7 +830,7 @@ def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: s
     try:
         index = publication.publish_generation(
             built.generation, client=client, bucket=bucket, prior_index=captured, evidence_directories=built.evidence,
-            added_tables=built.added_tables, receipt_only_tables=built.receipt_only_tables)
+            added_tables=built.added_tables, receipt_only_tables=built.receipt_only_tables, exact_prior=exact_prior)
         entry = index["families"][family]
     except Exception as failure:
         # The publish call did not return. A conditional write whose response was lost has still moved the pointer,
@@ -653,6 +844,12 @@ def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: s
             raise ConversionRefused(
                 f"{family}: {reason}; stored index could not be read ({attempt['verification_error']})",
                 state=_uncertain_state("publish", work / RECEIPT, bucket)) from unreadable
+        if exact_prior and entry != old and _same_generation(entry, old):
+            attempt |= {"outcome": "captured entry changed", "error": reason, "entry": entry}
+            save()
+            raise ConversionRefused(
+                f"{family}: {reason}", state=f"{family}'s captured entry changed; this conversion's generation "
+                "was not published by this attempt. No automatic rollback was performed") from failure
         if _same_generation(entry, old):
             attempt |= {"outcome": "not moved", "error": reason}
             save()
@@ -790,17 +987,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--expect-spicy-docs", help="The SpicyDocs version main pinned when this run was started")
     parser.add_argument("--remote", default="origin", help="The git remote whose main is checked (default: origin)")
     parser.add_argument("--publish", action="store_true", help="Move the family's pointer; without it nothing is uploaded")
+    parser.add_argument("--publish-prepared", type=Path, metavar="CONVERSION_JSON",
+                        help="Recheck and publish one completed official dry run without rerunning its writer")
     parser.add_argument("--expect-bucket", help="The bucket --publish or --rollback may write to; any other is refused")
     parser.add_argument("--rollback", type=Path, metavar="RECEIPT", help="Restore the entry a conversion receipt captured")
     parser.add_argument("--discard-newer", action="store_true",
                         help="With --rollback: also discard a generation published after the conversion")
     parser.add_argument("--env-file", type=Path, help="Read R2_* settings from this file; nothing is loaded implicitly")
     args = parser.parse_args(argv)
-    if args.rollback and (args.family or args.allow or args.work or args.expect_main or args.expect_spicy_docs
+    if args.rollback and (args.family or args.allow or args.work or args.expect_main or args.expect_spicy_docs or args.publish_prepared
                           or args.publish or args.remote != "origin"):
         parser.error("--rollback takes only --expect-bucket, --env-file and --discard-newer")
-    if (args.publish or args.rollback) and not args.expect_bucket:
-        parser.error("--publish and --rollback need --expect-bucket: the bucket this run may write to")
+    if args.publish_prepared and (args.family or args.work or args.publish):
+        parser.error("--publish-prepared cannot rebuild a family; omit FAMILY, --work and --publish")
+    if (args.publish or args.publish_prepared or args.rollback) and not args.expect_bucket:
+        parser.error("publication and rollback need --expect-bucket: the bucket this run may write to")
     if args.discard_newer and not args.rollback:
         parser.error("--discard-newer belongs to --rollback")
     try:
@@ -819,19 +1020,27 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"{done['family']}: found {done['rolled_back']['found']}; the pointer names "
                   f"{done['rolled_back']['entry']['artifactDigest']}")
             return 0
-        if not (args.family and args.work and args.expect_main and args.expect_spicy_docs):
+        if args.publish_prepared:
+            if not (args.allow and args.expect_main and args.expect_spicy_docs):
+                parser.error("--publish-prepared needs --allow, --expect-main and --expect-spicy-docs")
+            done = publish_prepared(
+                args.publish_prepared, allowed=[name for value in args.allow for name in value.split(",") if name],
+                expected_main=args.expect_main, expected_spicy_docs=args.expect_spicy_docs,
+                remote=args.remote, expect_bucket=args.expect_bucket)
+        elif not (args.family and args.work and args.expect_main and args.expect_spicy_docs):
             parser.error("a conversion needs FAMILY, --allow, --work, --expect-main and --expect-spicy-docs")
-        done = convert(
-            args.family, allowed=[name for value in args.allow for name in value.split(",") if name], work=args.work,
-            expected_main=args.expect_main, expected_spicy_docs=args.expect_spicy_docs, publish=args.publish,
-            remote=args.remote, expect_bucket=args.expect_bucket)
+        else:
+            done = convert(
+                args.family, allowed=[name for value in args.allow for name in value.split(",") if name], work=args.work,
+                expected_main=args.expect_main, expected_spicy_docs=args.expect_spicy_docs, publish=args.publish,
+                remote=args.remote, expect_bucket=args.expect_bucket)
     except (ConversionRefused, publication.PublicationError) as refusal:
         print(f"REFUSED: {refusal}", file=sys.stderr)
         print(f"STATE: {getattr(refusal, 'state', NOTHING_PUBLISHED)}", file=sys.stderr)
         return 1
     except (Exception, KeyboardInterrupt) as failure:
         # Anything else is not a refusal the command chose, so it does not claim to know the bucket's state.
-        operation_receipt = args.rollback or (args.work / RECEIPT if args.work else None)
+        operation_receipt = args.rollback or args.publish_prepared or (args.work / RECEIPT if args.work else None)
         attempted = operation_receipt and operation_receipt.exists() and json.loads(
             operation_receipt.read_text(encoding="utf-8")).get("rollback_attempt" if args.rollback else "publish_attempt")
         print(f"FAILED: {type(failure).__name__}: {failure}", file=sys.stderr)
@@ -841,7 +1050,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     for name, table in done["tables"].items():
         print(f"{name}: {table['retained_rows']:,} retained rows restore exactly")
     print(f"{done['family']}: receipts {done['receipt_outcomes']}, generation {done['generation']['artifactDigest']}")
-    print(f"published and read back; receipt {args.work / RECEIPT}" if done["published"]
+    print(f"published and read back; receipt {args.publish_prepared or args.work / RECEIPT}" if done["published"]
           else f"not published (no --publish); receipt {args.work / RECEIPT}")
     return 0
 
