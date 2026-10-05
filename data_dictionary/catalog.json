@@ -2764,7 +2764,6 @@
           "organization_core",
           "name_source",
           "agency_codes_json",
-          "connected_organization_name",
           "conversion_inputs",
           "conversion_diagnostics",
           "source_input"
@@ -5929,6 +5928,7 @@
         "docket_count",
         "first_comment_date",
         "last_comment_date",
+        "connected_organization_name",
         "sponsor_name_match",
         "agency_codes",
         "association_kind"

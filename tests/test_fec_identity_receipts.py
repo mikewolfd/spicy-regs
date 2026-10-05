@@ -276,11 +276,12 @@ def test_organization_links_state_their_match_grade_and_sponsor_comparison_in_th
     receipts = pq.read_table(output / "etl_receipts.parquet").to_pylist()
     assert [receipt["outcome"] for receipt in receipts] == ["accepted"] * 3
     held = [_unpack(json.loads(receipt["processing_json"])) for receipt in receipts]
-    assert all(not set(returned) & set(fields) for fields in held)
-    assert {fields["connected_organization_name"] for fields in held} == {
-        "INTERNATIONAL BROTHERHOOD OF TEAMSTERS - DRIVE",
-        "NATIONAL ASSOCIATION OF REALTORS",
-        None,
+    assert all(not {*returned, "connected_organization_name"} & set(fields) for fields in held)
+    # FEC's stated sponsor is published beside the comparison that reads it (owner decision 2, 2026-10-03).
+    assert {row["organization"]: row["connected_organization_name"] for row in stored.to_pylist()} == {
+        "American Physical Therapy Association": "INTERNATIONAL BROTHERHOOD OF TEAMSTERS - DRIVE",
+        "National Association of Realtors": "NATIONAL ASSOCIATION OF REALTORS",
+        "Pipeline Safety Trust": None,
     }
 
     # The pair restores every column of the builder's file its receipts witness, the returned ones included.

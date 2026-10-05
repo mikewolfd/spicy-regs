@@ -10347,6 +10347,11 @@
         "description": "Latest `posted_date` across this organization's comments in every agency and year (ISO 8601 string)."
       },
       {
+        "column_name": "connected_organization_name",
+        "column_type": "VARCHAR",
+        "description": "The committee's connected organization (its sponsor) as FEC states it, verbatim from `fec_committee_history.connected_organization_name` in the latest filing year that names one. NULL when no year names one: FEC's placeholders (`NONE`, `N/A`, `NA`, `BLANK`, `0`, punctuation alone), which that table keeps verbatim, are read as naming none. Filers sometimes write the PAC's own name, a former name or a parent company here."
+      },
+      {
         "column_name": "sponsor_name_match",
         "column_type": "VARCHAR",
         "description": "Whether `connected_organization_name` names the commenting organization: `agrees` when it reduces to `organization_core` under the same normalization (read also with PAC words such as `POLITICAL ACTION COMMITTEE` removed, spaces ignored); `differs` otherwise, most often the same organization spelled another way (`ASSN`, inverted words, a typo), a former name or a parent company, sometimes a different sponsor; `not_stated` when FEC names no sponsor. A name comparison, not an identity."
@@ -20279,7 +20284,6 @@
           "organization_core",
           "name_source",
           "agency_codes_json",
-          "connected_organization_name",
           "conversion_inputs",
           "conversion_diagnostics",
           "source_input"

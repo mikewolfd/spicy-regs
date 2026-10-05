@@ -2189,6 +2189,7 @@
       "docket_count": "BIGINT",
       "first_comment_date": "TIMESTAMP WITH TIME ZONE",
       "last_comment_date": "TIMESTAMP WITH TIME ZONE",
+      "connected_organization_name": "VARCHAR",
       "sponsor_name_match": "VARCHAR",
       "agency_codes": "VARCHAR[]",
       "association_kind": "VARCHAR"
@@ -2202,7 +2203,6 @@
       "organization_core",
       "name_source",
       "agency_codes_json",
-      "connected_organization_name",
       "conversion_inputs",
       "conversion_diagnostics",
       "source_input"
