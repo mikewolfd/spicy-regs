@@ -37,7 +37,8 @@ def append(path: Path, record: dict):
 @contextmanager
 def phase(log: Path, name: str):
     started = time.monotonic()
-    record: dict[str, Any] = {'phase': name, 'status': 'running', 'scope': 'local-simulation'}
+    record: dict[str, Any] = {'phase': name, 'status': 'running', 'scope': 'local-simulation',
+                            'startedMonotonicNs': time.monotonic_ns()}
     append(log, record)
     try:
         yield record
@@ -46,7 +47,8 @@ def phase(log: Path, name: str):
         record.update(status='failed', errorType=type(error).__name__, error=str(error))
         raise
     finally:
-        record.update(seconds=time.monotonic()-started, peakRssBytes=resource.getrusage(
+        record.update(seconds=time.monotonic()-started, finishedMonotonicNs=time.monotonic_ns(),
+            peakRssBytes=resource.getrusage(
             resource.RUSAGE_SELF).ru_maxrss*(1 if sys.platform == 'darwin' else 1024))
         append(log, record)
         print(json.dumps(record, sort_keys=True), flush=True)
@@ -124,7 +126,7 @@ def bind_key_index_for_qualification(directory: Path, index: Path, descriptor: d
 
 
 @contextmanager
-def serve(objects: dict[str, Path], request_log: Path):
+def serve(objects: dict[str, Path], request_log: Path, marker: dict[str, str]):
     """Serve only immutable, explicitly mapped objects; retain real body/range bytes."""
     log_lock = threading.Lock()
 
@@ -139,6 +141,8 @@ def serve(objects: dict[str, Path], request_log: Path):
             self.transfer(True)
 
         def transfer(self, body: bool):
+            began = time.monotonic_ns()
+            probe = marker['probe']
             path = objects.get(self.path)
             if path is None:
                 self.send_error(404)
@@ -194,7 +198,8 @@ def serve(objects: dict[str, Path], request_log: Path):
                 with log_lock:
                     append(request_log, {'method': self.command, 'object': self.path,
                         'range': requested, 'start': start, 'end': end, 'status': status,
-                        'bodyBytes': sent, 'error': failure})
+                        'bodyBytes': sent, 'error': failure, 'probe': probe,
+                        'startedMonotonicNs': began, 'finishedMonotonicNs': time.monotonic_ns()})
 
     server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
     worker = threading.Thread(target=server.serve_forever, daemon=True)
@@ -292,7 +297,8 @@ def main():
         record['members'] = members
         (args.output/'objects.json').write_text(json.dumps(members, indent=2)+'\n')
     with phase(log, 'local-http-startup-cold-admission-and-warm-locked-serving') as record:
-        with serve(objects, args.output/'http-requests.jsonl') as base:
+        marker = {'probe': 'cold-admission'}
+        with serve(objects, args.output/'http-requests.jsonl', marker) as base:
             locations = {member['source']: base+member['route'] for member in members}
             receipt_url, index_url = locations[str(args.receipts)], locations[str(args.output/KEY)]
             before = time.monotonic()
@@ -300,13 +306,17 @@ def main():
                 check_reader(con.cursor(), index_url, descriptor, receipt)
                 record['coldAdmissionSeconds'] = time.monotonic()-before
                 record['lookups'] = []
-                for probe, oracle in zip(probes, expected, strict=True):
+                names = ['one-key', 'up-to-ten-keys', 'up-to-hundred-keys', 'repeat-and-absent']
+                for name, probe, oracle in zip(names, probes, expected, strict=True):
+                    marker['probe'] = name
+                    began = time.monotonic_ns()
                     before = time.monotonic()
                     found = lookup_receipts(con.cursor(), receipt_url, index_url, descriptor, receipt,
                         dataset=args.dataset, record_ids=probe)
                     if found != oracle:
                         raise ValueError('HTTP returned rows differ from exact local producer receipts')
                     record['lookups'].append({'requested': len(probe), 'seconds': time.monotonic()-before,
+                        'probe': name, 'startedMonotonicNs': began, 'finishedMonotonicNs': time.monotonic_ns(),
                         'returnedPerKey': [len(rows) for rows in found],
                         'replyJsonBytes': len(json.dumps(found).encode())})
     with phase(log, 'final-original-and-served-byte-pins'):

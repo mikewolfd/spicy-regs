@@ -44,6 +44,11 @@ def test_actual_producer_local_upload_and_locked_http(tmp_path):
     assert any(request['status'] == 206 and request['bodyBytes'] > 0 for request in requests)
     assert any(request['range'] is None and request['bodyBytes'] > 0 for request in requests)
     assert all(request['error'] is None for request in requests)
+    assert {request['probe'] for request in requests} <= {'cold-admission', 'one-key',
+        'up-to-ten-keys', 'up-to-hundred-keys', 'repeat-and-absent'}
+    assert any(request['probe'] == 'cold-admission' for request in requests)
+    assert any(request['probe'] == 'one-key' for request in requests)
+    assert all(request['startedMonotonicNs'] <= request['finishedMonotonicNs'] for request in requests)
     # Exact byte equality is retained after upload and serving for each named member.
     for member in json.loads((output/'objects.json').read_text()):
         assert Path(member['source']).read_bytes() == (output/'objects'/member['route'].lstrip('/')).read_bytes()
