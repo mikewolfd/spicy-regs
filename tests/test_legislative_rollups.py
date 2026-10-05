@@ -40,3 +40,25 @@ def test_laws_rollup_runs_native_generation_with_verified_local_prior(tmp_path, 
     LawsRollup(output_dir=first).run()
     assert 1 in [s.number for s in calls[0].selections]
     assert 1 not in [s.number for s in calls[1].selections]
+
+
+def test_a_read_checkpoint_is_a_declared_output_held_in_receipts():
+    """The lifecycle derives policies and receipt-only tables from ``outputs`` alone, so a checkpoint must be listed.
+
+    Both rollups declared theirs only in class attributes the lifecycle recomputes; their builders' checkpoint then
+    failed as an undeclared output, and the published family's checkpoint table had no place to go (2026-10-05).
+    """
+    from spicy_regs.pipelines.rollups.committee_reports import CommitteeReportsRollup
+    from spicy_regs.pipelines.rollups.native_legal_references import NativeLegalReferencesRollup
+    from spicy_regs.transforms.committee_report_reads import READS_TABLE
+    from spicy_regs.transforms.native_legal_references import OUTPUTS
+
+    assert set(NativeLegalReferencesRollup.source_outputs) == set(OUTPUTS)
+    assert NativeLegalReferencesRollup.outputs == ("native_legal_references.parquet",)
+    assert NativeLegalReferencesRollup.receipt_only_tables == ("native_legal_reference_reads.parquet",)
+    assert f"{READS_TABLE}.parquet" in CommitteeReportsRollup.source_outputs
+    assert f"{READS_TABLE}.parquet" not in CommitteeReportsRollup.outputs
+    assert CommitteeReportsRollup.receipt_only_tables == (f"{READS_TABLE}.parquet",)
+    for rollup in (CommitteeReportsRollup, NativeLegalReferencesRollup):
+        assert {policy.dataset + ".parquet" for policy in rollup.receipt_policies if policy.dataset.endswith("_reads")} \
+            == set(rollup.receipt_only_tables)
