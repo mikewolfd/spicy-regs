@@ -227,10 +227,10 @@ def _stated_identities(cursor: Any, member: Member, groups: Sequence[_Group], ca
                        dataset: str) -> dict[str, tuple[str, list]]:
     """One accepted receipt's record id and decoded identity for every policy_version the dataset's receipts state.
 
-    Admission refuses a receipt whose policy_version is not its dataset's policy's (``etl_receipts._load_receipts``),
-    and a carried receipt keeps its version (``rebind_receipt``), so a published member states one version per
-    dataset; every version present is read all the same. A group whose footer states one version holds no other;
-    a group stating a range (two datasets sharing it) is read for the versions this dataset's rows hold.
+    Admission accepts the current policy and registered earlier policies (``etl_receipts.receipt_policies``),
+    and a carried receipt keeps its version (``rebind_receipt``). A dataset can therefore state several versions;
+    every version present is read. A group whose footer states one version holds no other; a group stating a
+    range is read for the versions this dataset's rows hold.
     """
     from spicy_regs.etl_receipts import _unpack
 
