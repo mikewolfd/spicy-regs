@@ -20,6 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from spicy_regs.explorer_metadata import KEY, build_bundle, canonical_bytes, public_url, same_metadata  # noqa: E402
+from spicy_regs.explorer_publications import other_tables  # noqa: E402
 from spicy_regs.public_url import resolve_r2_base_url  # noqa: E402
 from spicy_regs.sources.publication import INDEX_LIMIT, INDEX_V2_KEY, parse_index, table_members  # noqa: E402
 
@@ -38,6 +39,17 @@ def get_public(url: str, limit: int) -> bytes:
                 raise ValueError(f"Public metadata input exceeds {limit} bytes")
             chunks.append(chunk)
     return b"".join(chunks)
+
+
+def get_optional_public(url: str, limit: int) -> bytes | None:
+    """Only an absent object permits omitting a separate publication or cache."""
+    import httpx
+    try:
+        return get_public(url, limit)
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 404:
+            return None
+        raise
 
 
 def scorecard_sources(index: dict, base_url: str) -> list[dict]:
@@ -62,7 +74,7 @@ def scorecard_sources(index: dict, base_url: str) -> list[dict]:
             raise ValueError("Unexpectedly large scorecard publisher table")
         for row in table.to_pylist():
             url = row.get("scorecard_index_url") or row.get("homepage_url")
-            if not row.get("publisher_id") or not row.get("name") or not url or not public_url(url):
+            if not row.get("publisher_id") or not row.get("name") or not url or not public_url(url, allow_http=True):
                 raise ValueError("Scorecard publisher lacks a name, identifier or valid public URL")
             entry = {"id": "scorecard-" + row["publisher_id"], "name": row["name"], "url": url,
                      "kind": "publisher", "note": "Ratings express this publisher’s position; each scorecard names its publisher."}
@@ -89,13 +101,25 @@ def read_object(client, bucket: str, key: str, limit: int, *, optional: bool = F
     return raw
 
 
+def previous_metadata(raw: bytes | None) -> dict | None:
+    """An invalid cache is a miss; storage read failures still reach the caller."""
+    try:
+        value = json.loads(raw) if raw else None
+    except (ValueError, UnicodeDecodeError):
+        return None
+    if isinstance(value, dict) and value.get("format") == "spicy-regs-explorer-metadata" and value.get("version") == 1:
+        return value
+    return None
+
+
 def publish_bundle(client, bucket: str, bundle: dict) -> str:
     """Write one complete JSON object after validation; failures stay visible."""
     encoded = canonical_bytes(bundle)
     if len(encoded) > METADATA_LIMIT:
         raise ValueError("Explorer metadata exceeds its reader limit")
     before = read_object(client, bucket, KEY, METADATA_LIMIT, optional=True)
-    if before and same_metadata(json.loads(before), bundle):
+    previous = previous_metadata(before)
+    if previous is not None and same_metadata(previous, bundle):
         return "unchanged"
     client.put_object(Bucket=bucket, Key=KEY, Body=encoded,
                       ContentType="application/json; charset=utf-8",
@@ -127,8 +151,26 @@ def main() -> None:
         raw = args.index.read_bytes() if args.index else get_public(args.base_url.rstrip("/") + "/" + INDEX_V2_KEY, INDEX_LIMIT)
     assert raw is not None
     index = parse_index(raw)
+    # Reuse schemas only for the exact previously validated file identity.
+    # Publishing reads separate control files from R2, just like the main index.
+    if client:
+        assert bucket is not None
+        previous_raw = read_object(client, bucket, KEY, METADATA_LIMIT, optional=True)
+    else:
+        previous_raw = get_optional_public(args.base_url.rstrip("/") + "/" + KEY, METADATA_LIMIT)
+    previous = previous_metadata(previous_raw)
+    def read_publication(url, *, allow_missing=False, headers=None):
+        if client:
+            assert bucket is not None
+            prefix = args.base_url.rstrip("/") + "/"
+            if not url.startswith(prefix):
+                raise ValueError("Separate publication escaped the configured data host")
+            return read_object(client, bucket, url.removeprefix(prefix), INDEX_LIMIT, optional=allow_missing)
+        return get_optional_public(url, INDEX_LIMIT) if allow_missing else get_public(url, INDEX_LIMIT)
+    extra_tables = other_tables(index, args.base_url, read=read_publication, previous=previous)
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
-    bundle = build_bundle(index, scorecard_publishers=scorecard_sources(index, args.base_url), source_revision=revision)
+    bundle = build_bundle(index, scorecard_publishers=scorecard_sources(index, args.base_url), source_revision=revision,
+                          extra_tables=extra_tables)
     encoded = canonical_bytes(bundle)
     if len(encoded) > METADATA_LIMIT:
         raise ValueError("Explorer metadata exceeds its reader limit")

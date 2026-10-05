@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from spicy_regs.explorer_metadata import build_bundle, same_metadata
+from spicy_regs.explorer_metadata import build_bundle, public_url, same_metadata
 
 
 def publisher_script():
@@ -56,6 +56,25 @@ def test_new_table_remains_discoverable_but_never_borrowed_description_or_join()
     assert result["tables"]["parent"]["sourceStatus"] == "unknown"
 
 
+def test_still_published_processing_tables_use_the_canonical_dictionary(monkeypatch):
+    from spicy_regs import data_dictionary, explorer_metadata
+    options = args()
+    known = options.pop("descriptions")
+    monkeypatch.setattr(explorer_metadata, "read_json", lambda _: deepcopy(known))
+    def load_descriptions():
+        return {"brand_new": {"label": "Saved collection log", "summary": "Records the requests made.",
+                              "coverage": "Only saved requests.", "columns": {"id": "Request ID."}},
+                "unpublished": {"label": "Not published"}}
+    monkeypatch.setattr(data_dictionary, "load_curated_descriptions", load_descriptions)
+    result = build_bundle(index(), **options)
+    table = result["tables"]["brand_new"]
+    assert table["metadataStatus"] == "documented"
+    assert table["label"] == "Saved collection log"
+    assert table["columns"] == [{"column_name": "id", "column_type": "VARCHAR", "description": "Request ID."}]
+    assert "unpublished" not in result["tables"]
+    assert len(result["joins"]) == 1
+
+
 @pytest.mark.parametrize("change", [
     {"child_columns": ["missing"]}, {"child_columns": ["parent_id"]},
     {"child_columns": []}, {"child_columns": ["parent_id", "parent_id"]},
@@ -68,11 +87,57 @@ def test_rejects_invalid_keys_and_cardinality(change):
         build_bundle(index(), **options)
 
 
-def test_schema_changes_are_pinned_and_invalidated_before_publication():
-    changed = index()
+def test_schema_changes_publish_descriptions_but_disable_old_connections():
+    changed, options = index(), args()
+    options["descriptions"]["parent"]["columns"] = [
+        {"column_name": "id", "column_type": "VARCHAR"},
+        {"column_name": "edition", "column_type": "VARCHAR"},
+    ]
     changed["families"]["example"]["tables"]["parent.parquet"]["columns"] = [["new_id", "VARCHAR"]]
+    result = build_bundle(changed, **options)
+    assert result["tables"]["parent"]["publicationSchema"] == [["new_id", "VARCHAR"]]
+    assert result["joins"] == []
+    assert result["omittedJoins"] == [{"child": "child", "parent": "parent",
+                                       "reason": "Fields no longer published: parent.id, parent.edition."}]
+    assert result["tables"]["child"]["joinAudit"]["status"] == "missing"
+    assert result["tables"]["child"]["unavailableJoins"] == result["omittedJoins"]
+
+
+def test_curated_fallback_preserves_removed_key_validation_without_publishing_it(monkeypatch):
+    from spicy_regs import data_dictionary, explorer_metadata
+    changed, options = index(), args()
+    known = options.pop("descriptions")
+    del known["parent"]
+    monkeypatch.setattr(explorer_metadata, "read_json", lambda _: deepcopy(known))
+    monkeypatch.setattr(data_dictionary, "load_curated_descriptions", lambda: {
+        "parent": {"label": "Parent", "columns": {"id": "Recorded ID.", "edition": "Edition."}}})
+    changed["families"]["example"]["tables"]["parent.parquet"]["columns"] = [["new_id", "VARCHAR"]]
+    result = build_bundle(changed, **options)
+    assert result["joins"] == []
+    assert result["tables"]["parent"]["publicationSchema"] == [["new_id", "VARCHAR"]]
+    assert result["tables"]["parent"]["columns"] == [
+        {"column_name": "new_id", "column_type": "VARCHAR", "description": ""}]
+    assert "parent.id, parent.edition" in result["omittedJoins"][0]["reason"]
+    options["join_record"]["joins"][0]["parent_columns"][0] = "never_documented"
     with pytest.raises(ValueError, match="missing columns"):
-        build_bundle(changed, **args())
+        build_bundle(changed, **options)
+
+
+def test_new_current_key_can_be_declared_without_borrowing_old_fields():
+    changed, options = index(), args()
+    changed["families"]["example"]["tables"]["parent.parquet"]["columns"][0][0] = "new_id"
+    options["join_record"]["joins"][0]["parent_columns"][0] = "new_id"
+    result = build_bundle(changed, **options)
+    assert result["joins"] == options["join_record"]["joins"]
+    assert result["omittedJoins"] == []
+
+
+def test_unmeasured_declaration_preserves_its_kind_and_uncertainty():
+    options = args()
+    options["join_record"]["joins"][0].update(kind="unmeasured", reason="No measured baseline yet.")
+    result = build_bundle(index(), **options)
+    assert result["joins"][0]["kind"] == "unmeasured"
+    assert result["joins"][0]["reason"] == "No measured baseline yet."
 
 
 def test_missing_live_parent_is_explicitly_omitted_but_input_is_preserved():
@@ -143,14 +208,20 @@ def test_source_registry_distinguishes_deterministic_attributes_and_model_output
     assert registry["tables"]["member_vote_terms"]["inputs"] == ["member_votes", "member_terms"]
 
 
-def test_scorecard_reader_uses_immutable_member_path_and_checks_digest(monkeypatch):
+@pytest.mark.parametrize("url", [
+    "https://example.org/scorecard",
+    "http://www.citizen.org/vchart00/map.htm",
+    "http://www.drugpolicyaction.org/voter-guide/",
+    "http://globalsolutions.org/capitol-hill/reportcard/2010",
+])
+def test_scorecard_reader_uses_immutable_member_path_and_checks_digest(monkeypatch, url):
     import hashlib
     import io
     import pyarrow as pa
     import pyarrow.parquet as pq
     from spicy_regs.sources.publication import Member
     script = publisher_script()
-    rows = [{"publisher_id": "new", "name": "New Publisher", "scorecard_index_url": "https://example.org/scorecard",
+    rows = [{"publisher_id": "new", "name": "New Publisher", "scorecard_index_url": url,
              "homepage_url": "https://example.org/"}]
     buffer = io.BytesIO()
     pq.write_table(pa.Table.from_pylist(rows), buffer)
@@ -161,11 +232,35 @@ def test_scorecard_reader_uses_immutable_member_path_and_checks_digest(monkeypat
     seen = []
     monkeypatch.setattr(script, "get_public", lambda url, limit: seen.append(url) or raw)
     data = {"families": {"scorecards": {"tables": {"scorecard_publishers.parquet": {}}}}}
-    assert script.scorecard_sources(data, "https://data.example.org")[0]["name"] == "New Publisher"
+    publishers = script.scorecard_sources(data, "https://data.example.org")
+    assert publishers[0]["name"] == "New Publisher"
+    assert publishers[0]["url"] == url
+    options, live = args(), index()
+    live["families"]["scorecards"] = live["families"].pop("example")
+    options["scorecard_publishers"] = publishers
+    assert build_bundle(live, **options)["tables"]["parent"]["sources"][0]["url"] == url
     assert seen == ["https://data.example.org/" + member.path]
     monkeypatch.setattr(script, "get_public", lambda *_: b"wrong bytes")
     with pytest.raises(ValueError, match="differ"):
         script.scorecard_sources(data, "https://data.example.org")
+
+
+def test_historical_http_links_are_only_allowed_for_attribution():
+    assert public_url("https://example.org/")
+    assert not public_url("http://example.org/")
+    assert public_url("http://example.org/", allow_http=True)
+    for url in ["javascript:alert(1)", "file:///tmp/source", "//example.org/",
+                "http://user:password@example.org/", "https://user@example.org/", "http://"]:
+        assert not public_url(url, allow_http=True)
+
+
+def test_metadata_data_base_still_requires_https(monkeypatch):
+    script = publisher_script()
+    monkeypatch.setattr("sys.argv", ["publish_explorer_metadata.py", "--base-url", "http://data.example.org"])
+    monkeypatch.setattr(script, "get_public", lambda *_: pytest.fail("Insecure data base must not be read"))
+    with pytest.raises(SystemExit) as error:
+        script.main()
+    assert error.value.code == 2
 
 
 def test_failed_write_preserves_previous_object_and_only_targets_metadata():
@@ -206,3 +301,23 @@ def test_failed_readback_never_reports_success(monkeypatch):
     with pytest.raises(ValueError, match="readback differs"):
         script.publish_bundle(Store(), "test", build_bundle(index(), **args()))
     assert writes == [script.KEY]
+
+
+@pytest.mark.parametrize("previous", [b'invalid JSON', b'[]', b'null', b'{}', b'\xff'])
+def test_invalid_prior_metadata_is_replaced_after_validated_build(previous):
+    import io
+    script = publisher_script()
+    class Store:
+        data = previous
+        writes = 0
+        def get_object(self, **kwargs):
+            return {"Body": io.BytesIO(self.data)}
+        def put_object(self, **kwargs):
+            assert kwargs["Key"] == script.KEY
+            self.data = kwargs["Body"]
+            self.writes += 1
+    client = Store()
+    bundle = build_bundle(index(), **args())
+    assert script.publish_bundle(client, "test", bundle) == "published"
+    assert client.writes == 1
+    assert client.data == script.canonical_bytes(bundle)

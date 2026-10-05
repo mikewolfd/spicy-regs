@@ -1013,6 +1013,14 @@ def discover_schemas(source: str, base: str | None = None) -> dict[str, list[tup
 COLUMNS_FROM_SPICY_DOCS = "spicy_docs"
 
 
+def load_curated_descriptions(path: Path = DEFAULT_DESCRIPTIONS) -> dict:
+    """Read the saved dictionary entries before resolving columns or filtering tables."""
+    import yaml
+
+    with path.open(encoding="utf-8") as fh:
+        return (yaml.safe_load(fh) or {}).get("tables", {})
+
+
 def load_descriptions(path: Path = DEFAULT_DESCRIPTIONS) -> dict:
     """The curated descriptions, with every ``columns_from`` marker resolved.
 
@@ -1027,11 +1035,7 @@ def load_descriptions(path: Path = DEFAULT_DESCRIPTIONS) -> dict:
     and ``catalog`` all see the same entry, and none of them has to know the
     marker exists.
     """
-    import yaml
-
-    with path.open(encoding="utf-8") as fh:
-        data = yaml.safe_load(fh) or {}
-    tables = data.get("tables", {})
+    tables = load_curated_descriptions(path)
     for name, entry in tables.items():
         if not entry or entry.get("columns_from") != COLUMNS_FROM_SPICY_DOCS:
             continue

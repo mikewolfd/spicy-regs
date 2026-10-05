@@ -297,7 +297,7 @@ def load_index(base_url: str) -> dict:
     return empty_index()
 
 
-def load_rulemaking_snapshot(base_url: str) -> dict | None:
+def load_rulemaking_snapshot(base_url: str, *, read=None) -> dict | None:
     """Read the rulemaking pointer and the manifest it names, once; ``None`` while no snapshot is published.
 
     Returns the snapshot id, its manifest key and, by table key, the record of
@@ -308,8 +308,9 @@ def load_rulemaking_snapshot(base_url: str) -> dict | None:
     because readers inline these keys into URLs and SQL. An artifact that does
     not say it is public is left out.
     """
+    read = _bounded_get if read is None else read
     base = base_url.rstrip("/")
-    raw = _bounded_get(f"{base}/{SNAPSHOT_POINTER}", allow_missing=True, headers={"Cache-Control": "no-cache"})
+    raw = read(f"{base}/{SNAPSHOT_POINTER}", allow_missing=True, headers={"Cache-Control": "no-cache"})
     if raw is None:
         return None
     root = SNAPSHOT_POINTER.removesuffix("latest.json")
@@ -322,7 +323,7 @@ def load_rulemaking_snapshot(base_url: str) -> dict | None:
             raise ValueError("pointer is not a readable rulemaking pointer")
         if not SNAPSHOT_ID.fullmatch(snapshot_id) or pointer["manifest_key"] != f"{prefix}/manifest.json":
             raise ValueError("pointer names no manifest of its own snapshot")
-        raw = _bounded_get(f"{base}/{prefix}/manifest.json", allow_missing=False)
+        raw = read(f"{base}/{prefix}/manifest.json", allow_missing=False)
         assert raw is not None
         manifest = json.loads(raw, object_pairs_hook=_pairs)
         if (manifest["format_version"], manifest["dataset"], manifest["snapshot_id"]) != (
@@ -344,14 +345,15 @@ def load_rulemaking_snapshot(base_url: str) -> dict | None:
 COMMENTS_EXPORT_TABLES = ("comments", "comments_index")
 
 
-def load_comments_publication(base_url: str) -> dict | None:
+def load_comments_publication(base_url: str, *, read=None) -> dict | None:
     """Read the catalog export receipt; fixed member URLs still require version checks.
 
     This receipt is written only after both public comment files and all agency
     partitions have passed readback. It identifies one catalog snapshot, not an
     immutable generation URL. Readers must check member ETags around their read.
     """
-    raw = _bounded_get(f"{base_url.rstrip('/')}/comments-publication.json", allow_missing=True,
+    read = _bounded_get if read is None else read
+    raw = read(f"{base_url.rstrip('/')}/comments-publication.json", allow_missing=True,
                        headers={"Cache-Control": "no-cache"})
     if raw is None:
         return None

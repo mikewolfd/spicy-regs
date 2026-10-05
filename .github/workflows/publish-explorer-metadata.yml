@@ -8,8 +8,11 @@ on:
       - 'src/spicy_regs/table_joins.py'
       - 'src/spicy_regs/join_audit.json'
       - 'src/spicy_regs/explorer_*'
+      - 'src/spicy_regs/data_dictionary.py'
+      - 'data_dictionary/descriptions.yaml'
       - 'scripts/publish_explorer_metadata.py'
       - 'tests/test_explorer_metadata.py'
+      - 'tests/test_explorer_publications.py'
       - '.github/workflows/publish-explorer-metadata.yml'
   workflow_dispatch:
   # Also catches workstation publications and new publishing workflows. GitHub
@@ -131,7 +134,7 @@ jobs:
       - name: Validate metadata behavior
         env:
           PYTHONPATH: src
-        run: uv run --frozen --no-group source-readers pytest --noconftest tests/test_explorer_metadata.py -q
+        run: uv run --frozen --no-group source-readers pytest --noconftest tests/test_explorer_metadata.py tests/test_explorer_publications.py -q
       - name: Publish only the explorer metadata bundle
         env:
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}

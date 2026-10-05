@@ -16,6 +16,8 @@ from pathlib import Path
 import re
 from urllib.parse import urlsplit
 
+from spicy_regs.table_joins import KINDS
+
 KEY = "explorer-metadata.v1.json"
 FORMAT = "spicy-regs-explorer-metadata"
 ROOT = Path(__file__).parent
@@ -26,10 +28,11 @@ def read_json(name: str) -> dict:
     return json.loads((ROOT / name).read_text())
 
 
-def public_url(value: str) -> bool:
-    """Only web links, with no embedded credentials, can be published in the UI."""
+def public_url(value: str, *, allow_http: bool = False) -> bool:
+    """Require HTTPS for data access; allow saved HTTP publisher links explicitly."""
     parsed = urlsplit(value)
-    return parsed.scheme == "https" and bool(parsed.hostname) and not parsed.username and not parsed.password
+    schemes = {"http", "https"} if allow_http else {"https"}
+    return parsed.scheme in schemes and bool(parsed.hostname) and not parsed.username and not parsed.password
 
 
 def published_tables(index: dict) -> dict:
@@ -66,29 +69,61 @@ def validate_join(join: dict, schemas: dict[str, list]) -> tuple:
         raise ValueError("Join composite keys must have the same number of columns")
     if join.get("expected_cardinality", "unspecified") not in ("unspecified", "one", "many"):
         raise ValueError("Join cardinality must be one, many, or unspecified")
-    if join.get("kind") not in ("complete", "scope", "design", "empty"):
+    if join.get("kind") not in KINDS:
         raise ValueError("Unknown join resolution kind")
     return (join["child"], tuple(join["child_columns"]), join["parent"], tuple(join["parent_columns"]))
+
+
+def publication_descriptions(live: dict) -> dict:
+    """Include dictionary prose for processing tables that are still published."""
+    descriptions = read_json("table_metadata.json")
+    missing = set(live) - set(descriptions)
+    if missing:
+        from .data_dictionary import load_curated_descriptions
+        curated = load_curated_descriptions()
+        for name in sorted(missing & set(curated)):
+            entry = curated[name]
+            descriptions[name] = {key: entry[key] for key in ("label", "summary", "coverage", "kind", "data_quality")
+                                  if key in entry}
+            descriptions[name]["columns"] = [
+                {"column_name": column, "column_type": typ,
+                 "description": entry.get("columns", {}).get(column, "")}
+                # Old curated field names validate declarations but do not
+                # become fields in the current output schema below.
+                for column, typ in {**dict.fromkeys(entry.get("columns", {}), ""),
+                                    **dict(live[name]["schema"])}.items()
+            ]
+    return descriptions
 
 
 def build_bundle(index: dict, *, descriptions: dict | None = None, registry: dict | None = None,
                  join_record: dict | None = None, audit: dict | None = None,
                  scorecard_publishers: list[dict] | None = None, source_revision: str = "unknown",
-                 generated_at: str | None = None) -> dict:
+                 generated_at: str | None = None, extra_tables: dict | None = None) -> dict:
     """Pure construction and validation; reads committed dictionaries by default."""
-    descriptions = read_json("table_metadata.json") if descriptions is None else descriptions
+    live = published_tables(index)
+    extra_tables = {name: entry for name, entry in (extra_tables or {}).items() if name not in live}
+    for name, entry in extra_tables.items():
+        # Use the same exact schema validation as the main publication index.
+        extra = published_tables({"format": "spicy-regs-publication", "version": 2,
+                                  "families": {entry["family"]: {"tables": {
+                                      name + ".parquet": {"columns": entry["publicationSchema"]}}}}})
+        identity = "sha256:" + hashlib.sha256(canonical_bytes(entry["descriptor"])).hexdigest()
+        if identity != entry["publicationIdentity"] or entry["descriptor"]["family"] != entry["family"]:
+            raise ValueError(f"Separate publication identity does not match its descriptor: {name}")
+        live.update(extra)
+    descriptions = publication_descriptions(live) if descriptions is None else descriptions
     registry = read_json("explorer_sources.json") if registry is None else registry
     join_record = read_json("table_joins.json") if join_record is None else join_record
     if audit is None:
         audit = read_json("join_audit.json") if (ROOT / "join_audit.json").exists() else {}
     known = descriptions
-    live = published_tables(index)
     sources = registry["sources"]
     for source in sources.values():
         if not source.get("name") or not public_url(source.get("url", "")):
             raise ValueError(f"Invalid source attribution: {source}")
     for source in scorecard_publishers or []:
-        if not source.get("name") or not public_url(source.get("url", "")):
+        if not source.get("name") or not public_url(source.get("url", ""), allow_http=True):
             raise ValueError("Invalid published scorecard publisher")
 
     tables = {}
@@ -116,6 +151,8 @@ def build_bundle(index: dict, *, descriptions: dict | None = None, registry: dic
                  "modelGenerated": origin.get("modelGenerated", False),
                  "sourceStatus": "documented" if source_entries else "unknown",
                  "metadataStatus": "documented" if name in known else "unknown"}
+        if name in extra_tables:
+            table["publicationIdentity"] = extra_tables[name]["publicationIdentity"]
         if origin.get("evidence"):
             table["sourceEvidence"] = origin["evidence"]
         if name in audit:
@@ -126,7 +163,13 @@ def build_bundle(index: dict, *, descriptions: dict | None = None, registry: dic
 
     schemas = {name: [[c["column_name"], c["column_type"]] for c in desc.get("columns", [])]
                for name, desc in known.items()}
-    schemas.update({name: entry["schema"] for name, entry in live.items()})
+    # Validate declarations against recorded or current fields. A publication
+    # can remove a previously documented key without making the declaration
+    # malformed; that connection is unavailable in this release.
+    for name, entry in live.items():
+        fields = dict(schemas.get(name, []))
+        fields.update(entry["schema"])
+        schemas[name] = [[column, typ] for column, typ in fields.items()]
     joins, omitted, seen = [], [], set()
     for join in join_record["joins"]:
         identity = validate_join(join, schemas)
@@ -135,7 +178,14 @@ def build_bundle(index: dict, *, descriptions: dict | None = None, registry: dic
         seen.add(identity)
         if join["child"] not in live or join["parent"] not in live:
             omitted.append({"child": join["child"], "parent": join["parent"],
-                            "reason": "One or both tables are outside publication.v2.json."})
+                            "reason": "One or both tables are outside the current public catalogs."})
+            continue
+        missing_keys = [f"{join[side]}.{column}" for side in ("child", "parent")
+                        for column in join[f"{side}_columns"]
+                        if column not in {c[0] for c in live[join[side]]["schema"]}]
+        if missing_keys:
+            omitted.append({"child": join["child"], "parent": join["parent"],
+                            "reason": f"Fields no longer published: {', '.join(missing_keys)}."})
             continue
         joins.append(deepcopy(join))
     # Availability belongs to this index, while the audit's evidence belongs to
@@ -149,11 +199,11 @@ def build_bundle(index: dict, *, descriptions: dict | None = None, registry: dic
         if available:
             table["joinAudit"] = {**reviewed, "status": "connected", "availableJoins": available,
                                   "reviewedReason": reviewed.get("reason"),
-                                  "reason": f"{available} declared relationships have both endpoints in the current public index."}
+                                  "reason": f"{available} declared relationships are available in the current explorer catalog."}
         elif unavailable:
             table["joinAudit"] = {**reviewed, "status": "missing", "availableJoins": 0,
                                   "reviewedReason": reviewed.get("reason"),
-                                  "reason": "Declared relationships point to tables outside the current public index; navigation is unavailable."}
+                                  "reason": "Declared relationships are unavailable in the current publication. See each connection’s reason."}
         elif reviewed.get("status") == "connected":
             table["joinAudit"] = {**reviewed, "status": "missing", "availableJoins": 0,
                                   "reviewedReason": reviewed.get("reason"),
@@ -165,7 +215,7 @@ def build_bundle(index: dict, *, descriptions: dict | None = None, registry: dic
             "sourceRevision": source_revision,
             "publication": {"sha256": "sha256:" + hashlib.sha256(canonical_bytes(index)).hexdigest(),
                             "families": {f: e["artifactDigest"] for f, e in index["families"].items()}},
-            "tables": tables, "joins": joins, "omittedJoins": omitted}
+            "extra_tables": extra_tables, "tables": tables, "joins": joins, "omittedJoins": omitted}
 
 
 def canonical_bytes(value: dict) -> bytes:
