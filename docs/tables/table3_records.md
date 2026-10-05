@@ -6,8 +6,6 @@
 
 One row per classification record of one public law in OLRC's Table III: which U.S. Code place each section of the law went to, as Table III's bulk file states it.
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='table3_records'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** Window, complete for the Congresses read: every public law Table III holds for each Congress the laws table holds, plus the scoped ones, derived from OLRC's Table III bulk file on each run, so a Congress keeps its rows current after it leaves the laws scope while Table III catches up. The file holds the whole table back to 1789; other Congresses, private laws and pre-1957 session-law chapters are not derived. *(measured 2026-09-26)*
 
 **Data quality.** Table III holds an act only once OLRC has classified it, and lags enactment: on 2026-09-26 it was current through 119-73, a law of 2026-01-23, while the law route reached 119-111. `release_point` says how current the file was. Its file at release point 119-73 also has no record of 119-70, a second-session law `law_code_sections` classifies (OLRC's gap, not a reading error).

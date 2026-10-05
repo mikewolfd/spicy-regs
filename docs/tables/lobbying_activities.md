@@ -6,8 +6,6 @@
 
 One row per lobbying activity an LDA filing reports: the issue area, the registrant's description of what was lobbied, foreign-entity interests, and the government entities contacted for that activity. Keyed `(filing_uuid, activity_index)`, the position in the filing's own list, which is stable because LDA never edits a filing (an amendment is a new filing). Joins to `lobbying_filings` on `filing_uuid`.
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='lobbying_activities'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** True range, the same filings as `lobbying_filings`: one row per lobbying activity a filing reports. A filing that lists no activity has no rows here. *(measured 2026-09-28)*
 
 - **Parquet file:** `lobbying_activities.parquet`

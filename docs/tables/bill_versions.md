@@ -6,8 +6,6 @@
 
 One row per printing of a bill, per source that supplied it. The full text is deliberately not a column here: `bill_sections.body` carries it at the grain people query, and the body is re-fetchable by package id and digest.
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='bill_versions'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** Sampled: bills the bill family has read from GovInfo BILLSTATUS, Congress by Congress from the 108th on; group by the Congress in bill_id to see which Congresses are filled. source is govinfo for a printing whose body was acquired; other rows are printings the publisher lists without an acquired body. *(measured 2026-09-28)*
 
 **Data quality.** A numbered reprint is its own printing since spicy-docs 0.37.0: the publisher types it exactly like the printing it follows, so its `version_code` is its own package suffix (`eas2`, `rfs2`) rather than the stage's slug. Public/private laws are distinct publisher listings, not enrolled BILLS printings. Unsupported law bodies remain unacquired: their offered URLs, labels and dates are retained, with no acquired body or section claims.

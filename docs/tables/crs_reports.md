@@ -6,8 +6,6 @@
 
 One row per Congressional Research Service (CRS) report, ingested from the Congress.gov v3 REST API (`/crsreport` list endpoint) by `build_crs_reports`. The nonpartisan policy-analysis layer over the same subjects agencies regulate — complementary to `congress_bills` (the legislative record) and `federal_register` (the rule-publication record). Scope is deliberately list-level only (no per-report detail fetches), so every column comes from the list payload. Incremental by `update_date`, deduped on `report_id`; each query is pooled over whole walks, varying the page size, until one walk is clean or the pool holds exactly the declared count, because the list shifts while it is read.
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='crs_reports'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** True range: reports whose current version is dated from 1993-10-22 on (`published_date` is the current version's date, not first issue). *(measured 2026-09-23)*
 
 - **Parquet file:** `crs_reports.parquet`

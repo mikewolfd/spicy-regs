@@ -6,8 +6,6 @@
 
 One row per Regulations.gov docket, keyed by `docket_id`, with the attributes the thin `dockets` table does not carry: keywords, short title, program, organization, subtypes, status, effective date and the agency's display properties. `effective_date` is TIMESTAMPTZ and `keywords` a string list (decision 67). Projected from each record's API attributes by SpicyDocs' contract.
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='docket_attributes'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** True range. Every docket record in the Mirrulations mirror, read whole by `run-attributes-sweep` and kept current by the daily regulations ETL. DocSpec's API capture of 2026-09-02 is the input baseline (receipt `regulations-attributes-20260926/`); the published count is the live pin. *(measured 2026-09-27)*
 
 - **Parquet file:** `docket_attributes.parquet`

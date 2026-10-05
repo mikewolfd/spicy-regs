@@ -6,8 +6,6 @@
 
 One committee or subcommittee activity a bill's BILLSTATUS document lists: the committee, the activity's name and timestamp as written, and an occurrence number for exact repeats. Not a complete record of what committees did: a report can appear in `bill_actions` only (119-s-545 lists Markup By and no Reported By). A re-read merges on the key and keeps the newer document's row, so an activity the publisher later drops is not removed.
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='bill_committee_activities'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** Sampled, and filling: what each committee and subcommittee a BILLSTATUS document lists did and when, for the bills the bill family has read under spicy-docs 0.54.0. A bill read before that has no rows here until its Congress is read again, so an absent bill is unread, not inactive. The scheduled run reads the sitting Congress; earlier Congresses fill only by a bill-family dispatch scoped to them. *(measured 2026-10-03)*
 
 **Data quality.** Measured with the spicy-docs reader over the 119th's 19,531 BILLSTATUS documents (round 4, 2026-10-03): 32,102 rows on 18,998 bills, no reader refusal; 1,468 Reported By rows, 820 exact repeats (occurrence 2 and above) and 49 undated items, whose `activity_date` is empty.

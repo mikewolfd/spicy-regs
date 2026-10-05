@@ -6,8 +6,6 @@
 
 One row per enacted law the Congress.gov law list route states, with the Statutes at Large citation from the law's own PLAW USLM file where captured. Keyed on the law's Congress, type and number, not on the bill; `bill_id` is the foreign key to `congress_bills`, whose `statutes_at_large_cite` the host fills from this table at that table's merge.
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='laws'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** Sampled. Every law the Congress.gov law route lists for the scoped Congresses (the current one by default), walked whole each run; the PLAW USLM citation is added per law, newest first, under a per-run cap. A steady-state run is meant to ask only about laws whose list row moved or whose PLAW the bulk folder had not yet served. *(measured 2026-09-28)*
 
 **Data quality.** `statutes_at_large_cite` is set when `uslm_outcome` is `captured`; read every NULL through `uslm_outcome` and `uslm_reason`. `unavailable` (reason `source_unavailable`) is the publisher's own lag, a `404` from the exact PLAW locator: on 2026-09-19 the route listed 108 laws and the PLAW bulk folder held 104, the four newest (119-103, 119-104, 119-109, 119-110) absent; each is retried every run until the folder serves it.

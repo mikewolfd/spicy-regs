@@ -6,8 +6,6 @@
 
 One source-documentation page observation with build-extracted body text, content status and retained links. Complete original page context remains available through exact context evidence. Source documentation explains forms and access routes without becoming financial transactions or legal events. Resolve collection_id to fec_collections in the captured source generation and source_context_pointer into its retained context. Context witnesses use their own digest and native coordinates; they do not require a fictional source_record_id.
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_research_source_pages'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** Sampled. Supported observations from retained form pages and other useful structured source documentation. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
 
 - **Parquet file:** `fec_research_source_pages.parquet`

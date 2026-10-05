@@ -969,6 +969,8 @@ def load_descriptions(path: Path = DEFAULT_DESCRIPTIONS) -> dict:
         entry["columns"] = contract_column_prose(name)
     # Subject prose is generated from explicit family field maps. Source-only
     # processing datasets remain discoverable through receipt declarations.
+    # Nothing about receipts is added to a summary here (owner decision, 2026-10-05): one page explains them,
+    # and what a table says about its own receipt is written in its own notes.
     subject_prose = REPO_ROOT / "data_dictionary" / "subject_descriptions.json"
     overrides = json.loads(subject_prose.read_text()) if subject_prose.exists() else {}
     for name, policy in subject_policies().items():
@@ -979,13 +981,6 @@ def load_descriptions(path: Path = DEFAULT_DESCRIPTIONS) -> dict:
         if name in overrides:
             entry["columns"] = overrides[name]["columns"]
         entry["identity_columns"] = list(policy.identity_fields)
-        entry["summary"] = (
-            entry.get("summary", "") + "\n\n"
-            f"Processing fields, source witnesses, conversion inputs and diagnostics referenced here "
-            f"are stored separately in etl_receipts with dataset={name!r}. "
-            "Join through the declared subject identity and exact subject_version within the selected generation; "
-            "receipt processing outcomes are distinct from publisher business statuses."
-        )
     return tables
 
 

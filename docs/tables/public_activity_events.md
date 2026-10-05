@@ -6,8 +6,6 @@
 
 One row per change detected between two runs of the bill family. Two instants per row: `occurred_at` is the publisher's, `detected_at` is the run's. All columns are stored as VARCHAR.
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='public_activity_events'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** Sampled: bills the bill family has read from GovInfo BILLSTATUS, Congress by Congress from the 108th on; group by the Congress in bill_id to see which Congresses are filled. Each event compares a bill between two runs of the bill family, not the historical sequence of its actions. *(measured 2026-09-29)*
 
 **Data quality.** A `stage_changed` event compares a bill's actions, not its published stage: the prior stage is re-derived from the bill's published actions under the running stage rule, so a rule change is not an event. spicy-docs 0.51.0 moves 154,374 of the 172,991 stages with actions (its replay, reproduced on the live generation of 2026-09-29), none of which emits one. An event's `from` is therefore the stage the running rule reads from the prior actions, which can differ from the stage the prior row published.

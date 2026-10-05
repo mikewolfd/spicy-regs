@@ -6,8 +6,6 @@
 
 One row per FCC ECFS filing — the FCC's comment equivalent: comments, reply comments, ex-parte notices, letters, and other submissions — ingested from the FCC ECFS public API (`/filings`) by `build_fcc_filings`. Requires an api.data.gov key (`DATA_GOV_API_KEY`). Incremental by `date_received`, deduped on `id_submission`; each window is pooled over whole walks until one is clean or the pool holds exactly the count ECFS aggregates for it. Because ECFS holds tens of millions of filings, a first run with no prior table is bounded to the trailing 30 days; deeper history is backfilled in slices via `FCC_SINCE` and/or scoped to specific proceedings via `FCC_PROCEEDINGS`.
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fcc_filings'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** Window, not the ECFS archive: filings ECFS received on or after 2026-08-24, when this table started, extended by a daily run. Earlier filings are held only for proceedings backfilled on purpose, so a proceeding's count here is not its ECFS total. Attachment text is extracted for a few selected PDFs only. Each daily run re-reads the trailing seven days by `date_received` and nothing older, so a filing ECFS disseminates more than a week after receiving it is missed, and `proceedings` is the assignment as last read: ECFS later moves filings out of `INBOX-…` placeholders into dockets, and a held filing keeps the placeholder. The newest day is partial, ending at the last run. *(measured 2026-09-28)*
 
 - **Parquet file:** `fcc_filings.parquet`

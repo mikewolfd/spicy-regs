@@ -6,8 +6,6 @@
 
 One row per Regulations.gov comment, keyed by `comment_id`, with the attributes the thin `comments` table does not carry: the submitter's stated address, city, state, postal code, country and representative (decision 66), the submitting government body and its level, tracking number, object handle, page count, postmark date, withdrawal flag and reason, access restriction, legacy id, the comment's own content-file renditions and the agency's display properties. Typed where the value is (decision 67): `withdrawn` BOOLEAN, `page_count` INTEGER, `postmark_date` TIMESTAMPTZ. A comment's stated email, phone and fax are left out on purpose (owner, 2026-09-28): on comments they are private individuals' contact details, and most stated fax values are phone numbers. The exclusion is by attribute: a contact-shaped value typed into a published field is published as stated. Projected from each record's API attributes by SpicyDocs' contract.
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='comment_attributes'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** True range. Every comment object the ETL manifest lists, read whole by the comment re-read (`fill-comment-fields read`, owner decision 2026-09-28) and kept current by the daily regulations ETL's comment passes. Fields absent from a source object remain NULL. *(measured 2026-09-30)*
 
 - **Parquet file:** `comment_attributes.parquet`

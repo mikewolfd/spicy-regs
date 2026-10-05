@@ -6,8 +6,6 @@
 
 One resolution disposition per publisher member.
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='scorecard_member_links'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** Derived exact identity links over pinned scorecard and congressional tables. Historical context constrains member matches; unresolved and ambiguous identities remain visible. No fuzzy matching or score conversion is applied. *(measured 2026-10-03)*
 
 - **Parquet file:** `scorecard_member_links.parquet`

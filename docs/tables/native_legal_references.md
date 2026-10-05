@@ -6,8 +6,6 @@
 
 Selected eCFR AUTH/SOURCE notes and U.S. Code href/source-credit observations, retaining source XML paths and digests. spicy-docs shapes each row and reads the targets it names; this repository pins the inputs and looks each typed target up in the target tables its manifest selects. Complete reads replace the selected source/edition scope, including successful empty corrections. Candidate target matches concern held classification rows, not independently acquired legal text. Unparsed prose and unsupported forms remain visible; no universal extraction or historical completeness is implied.
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='native_legal_references'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** Sampled. Observations from the complete retained eCFR Title 1, requested as of 2026-08-10, and USC Title 1 release 119-103. Selected public target tables resolve some occurrences; missing, unsupported and unqueried targets remain explicit. Rows read before spicy-docs 0.52.0 name native-legal-reference/002, the reading this repository ran; the next build names /003, which re-spells target_candidates that held a non-ASCII character and re-versions the text candidates citation rules 004 read, and moves no other value. Receipt: native-legal-full-2026-09-27/resolved-verification.json. *(measured 2026-09-27)*
 
 - **Parquet file:** `native_legal_references.parquet`

@@ -6,8 +6,6 @@
 
 One publisher-reported member result for an item, with optional source-stated metric participation. Metric-free grids require no fabricated measurement. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy.
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='scorecard_member_item_results'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** Sampled publisher editions selected by the scorecard source registry. Complete edition reads replace that edition; failed or incomplete reads preserve prior observations. Coverage varies by publisher and historical source format. *(measured 2026-10-03)*
 
 - **Parquet file:** `scorecard_member_item_results.parquet`

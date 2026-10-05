@@ -6,8 +6,6 @@
 
 One source-stated relationship between a component metric and its parent metric. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy.
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='scorecard_metric_components'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** Sampled publisher editions selected by the scorecard source registry, with rows only where an edition states how its metrics combine; most editions state no component-to-parent relationship. Complete edition reads replace that edition; failed or incomplete reads preserve prior observations. *(measured 2026-10-04)*
 
 - **Parquet file:** `scorecard_metric_components.parquet`

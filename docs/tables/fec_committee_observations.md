@@ -6,8 +6,6 @@
 
 One committee result occurrence in a retained API response. Makes captured committee profiles inspectable without replacing the broader fec_committees reference table. Repeated captures, literal arrays and response limitations remain explicit. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. Every row comes from `fec-retained-committee-api`; the source namespace is kept in the receipt.
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_committee_observations'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** Sampled. Supported observations from retained committee API result pages. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
 
 - **Parquet file:** `fec_committee_observations.parquet`

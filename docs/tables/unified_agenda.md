@@ -6,8 +6,6 @@
 
 One row per Regulation Identifier Number (RIN) per agenda edition, ingested from the OIRA/OMB Unified Agenda published at reginfo.gov by `build_unified_agenda`. A Tier-1 rulemaking-lifecycle source: the upstream, forward-looking catalog of rulemakings agencies *plan* to pursue, keyed by the same `rin` that appears in `federal_register` (`regulation_id_numbers`). Primary / dedup key is (`rin`, `agenda_edition`).
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='unified_agenda'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** True range: every semiannual Unified Agenda edition reginfo.gov serves as readable XML, from 199510 through the latest; agenda_edition names each. No edition is held for 2004 or for spring 2012. A rule has one row per edition that lists it, so count distinct rin, not rows, for a number of rules. *(measured 2026-09-28)*
 
 - **Parquet file:** `unified_agenda.parquet`

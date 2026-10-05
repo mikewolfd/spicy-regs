@@ -6,8 +6,6 @@
 
 One source recommendation or recommendation-status observation. Follow source recommendation text, status, responsible party and reported cost amounts. recommendation_key groups a supported native recommendation; record_id preserves each observed state without choosing a current one. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates.
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_oversight_recommendations'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** Sampled. Supported observations from retained oversight HTML recommendation tables. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
 
 - **Parquet file:** `fec_oversight_recommendations.parquet`

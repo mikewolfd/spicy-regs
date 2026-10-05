@@ -6,8 +6,6 @@
 
 One row per heading or unheaded text block in one part of a committee report, keyed `(package_id, part_id, seq)`. `heading` preserves the source title; agency identity fields remain unresolved. `pattern` records which header pattern fired, which is this table's provenance column.
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='report_sections'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** Sampled. Heading/text blocks of the reports in committee_reports. heading retains the source title while agency_label and agency_key remain unresolved NULLs. HTML bodies carry no page boundaries, so none are inferred. *(measured 2026-09-28)*
 
 **Data quality.** part_id names the committee_reports row a block was parsed from, so (package_id, part_id) is its parent, and seq counts from zero within that part. By decision 29 (`docs/research/fork-delivery-decisions-2026-09-22.md`) part_id is the package id for a report published in one part and the part's granule id for a report published as parts, CRPT-119hrpt494's unsuffixed Part 1 aside; a package whose one part is spelled -pt1 (CRPT-119hrpt811; spicy-docs `docs/tables.md` names the others it measured) carries that spelling, so the parent's row count tells a lone part from Part 1 of several. A block published before part_id existed carries its package id there until its report is read again, which replaces every block of the package.

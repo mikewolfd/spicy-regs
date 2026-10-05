@@ -6,8 +6,6 @@
 
 One row per nomination or part, as the Congress.gov nomination list route states it, keyed `(congress, citation)`; the citation carries the part number.
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='nominations'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** Sampled. Distinct 119th-Congress nomination-list identities from retained list pages. The pages repeat some identical records, so a pagination total does not prove a stable or complete population. Latest-action fields only: not nominee details, action histories, person entities or inferred confirmation outcomes. Receipts: fork-execution-2026-09-21/legislative-publication-summary.json, legislative-seeds/sealed-candidates.json and legislative-mcp-audit/. *(measured 2026-09-21)*
 
 **Data quality.** The shared Congress index reader pools complete walks with varied page sizes, keyed by `(congress, citation)`, keeping each identity's newest `updateDate`. A clean walk or a pool matching the declared total settles the query. A population change restarts pooling; incomplete or inconsistent walks exhaust the source reader's bounded attempts and fail before output is replaced. The list carries the latest action only, not the action history. `is_civilian` is read again from every row's stored `nomination_type_json` each run, so a nomination the list no longer names follows the rule as well (PN1189 and PN1266, both military).

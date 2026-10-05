@@ -6,8 +6,6 @@
 
 Text from literally offered PDF URLs, tied to the selected opinion generation, native body fingerprint, capture evidence and extractor version. A native digest mismatch records a refusal without supplying text. Join opinion_id to court_opinions and cluster_id to court_opinion_clusters; this table does not infer case-name identity.
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='court_opinion_pdf_extractions'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** Sampled. Selected publisher PDFs acquired in one cohort. Each exact body matches its held CourtListener SHA-1 and has its own SHA-256 and extraction outcome. This is derived PDF text, separate from CourtListener native text fields and from the complete opinion index. Receipt: spicy-regs-court-cohort-20260927/bodies-receipt.json. *(measured 2026-09-27)*
 
 - **Parquet file:** `court_opinion_pdf_extractions.parquet`

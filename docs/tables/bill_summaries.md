@@ -6,8 +6,6 @@
 
 One row per plain-language summary of one printing of a bill. `frame` is stored because without it the summary is not reproducible from the row.
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='bill_summaries'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** Empty by owner decision 34: written only by a language model during bill-family runs, which no scheduled run enables, so no row is produced. *(measured 2026-10-03)*
 
 - **Parquet file:** `bill_summaries.parquet`

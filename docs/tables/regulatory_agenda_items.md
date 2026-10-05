@@ -6,8 +6,6 @@
 
 One row per Regulation Identifier Number: the durable Regulatory Agenda item a RIN identifies, with how many proceedings evidence links it to and whether its scope is resolved. Keyed `agenda_item_id` (`urn:rkaf:us:rin:<rin>`), one per `rin`; joined by `agenda_item_proceedings` on `agenda_item_id`, and to `unified_agenda` on `rin`. Built by `build_regulatory_agenda`.
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='regulatory_agenda_items'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** Derived, and bounded by its inputs: every RIN that `unified_agenda`, `dockets`, `documents` or `federal_register` states. *(measured 2026-09-28)*
 
 - **Parquet file:** `regulatory_agenda_items.parquet`, in the snapshot that `materialized/rulemaking/latest.json` names

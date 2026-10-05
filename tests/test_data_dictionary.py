@@ -38,12 +38,17 @@ def test_native_field_prose_preserves_current_table_meaning(tmp_path):
     path.write_text(yaml.safe_dump(document))
 
     described = dd.load_descriptions(path)["law_sections"]
-    assert described["summary"].startswith(entry["summary"] + "\n\n")
+    # The summary is the written one: nothing about receipts is appended to it (owner decision, 2026-10-05).
+    assert described["summary"] == entry["summary"]
     assert described["coverage"] == entry["coverage"]
     assert described["subject"] == "congress"
-    assert "etl_receipts" in described["summary"]
     assert described["identity_columns"] == ["law_id", "seq"]
     assert set(described["columns"]) == set(dd.subject_policies()["law_sections"].subject_schema.names)
+
+
+def test_no_summary_carries_the_paragraph_once_appended_to_every_policy_table():
+    for table, entry in dd.load_descriptions().items():
+        assert "stored separately in etl_receipts" not in entry["summary"], table
 
 
 def test_all_tables_have_a_schema():

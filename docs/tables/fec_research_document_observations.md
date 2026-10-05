@@ -6,8 +6,6 @@
 
 One source document/case-reference metadata occurrence in retained context. Preserves publisher, authority, native document reference, dates and URL without inferring an FEC matter join. Bodies remain explicitly deferred or reference-only as supported by the retained evidence. Resolve collection_id to fec_collections in the captured source generation and source_context_pointer into its retained context. Context witnesses use their own digest and native coordinates; they do not require a fictional source_record_id.
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_research_document_observations'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** Sampled. Supported observations from retained court-case/report references and third-party DocumentCloud metadata. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
 
 - **Parquet file:** `fec_research_document_observations.parquet`

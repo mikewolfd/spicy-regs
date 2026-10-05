@@ -6,8 +6,6 @@
 
 One row per FEC committee per two-year cycle, as that cycle's bulk committee master states it: name, treasurer, address, designation, type, party, filing frequency, interest-group category, connected organization and linked candidate. Read by the `fec-committee-history` rollup through SpicyDocs' committee-master reader, which verifies each file by digest and checks the publisher's header. Codes stay literal. `fec_committees` is the current registry from the API; this is the history, keyed on (`committee_id`, `cycle`).
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_committee_history'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** True range. Every cycle from 1980 through the current one: each run reads every cycle's bulk committee master whole and publishes every row. The current cycle's file is republished daily, so its rows change. *(measured 2026-09-27)*
 
 - **Parquet file:** `fec_committee_history.parquet`

@@ -6,8 +6,6 @@
 
 One source entity/period/summary-layout/version observation. Keeps monetary measures in a typed list with native names, raw spelling, status and unit. Reported totals are separate from itemized observations; overlapping cycle, year-to-date, quarterly and semiannual measures are not automatically additive. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates.
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_reported_financial_summaries'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** Sampled. Supported observations from retained candidate, committee, presidential and bundling summary layouts. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
 
 **Data quality.** Two layouts repeat one figure. candidate-web-summary/1 holds a candidate's row from FEC's weball file and, for a current House or Senate campaign, an identical row from webl, a subset of weball; committee-summary-csv/1 repeats a committee's row once per linked candidate. Keep one row per layout, entity, cycle and period before summing (cycle 2026, measured 2026-10-03, with 2,949 identical candidate pairs and 70 committees repeated, every repeat identical).

@@ -6,8 +6,6 @@
 
 One cosponsor occurrence in one retained BILLSTATUS observation, keyed by the bill, the input digest and the list ordinal. A member listed twice keeps two rows; a successfully read absent or empty list replaces the bill's prior rows.
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='bill_cosponsors'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** Sampled: cosponsors from the BILLSTATUS archives replayed for the held bill edition; some Congresses are not yet replayed, and a bill outside a replay has no rows here. Every native field reconciles, including positive withdrawal dates. *(measured 2026-09-28)*
 
 - **Parquet file:** `bill_cosponsors.parquet`

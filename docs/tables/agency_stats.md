@@ -6,8 +6,6 @@
 
 A per-agency dimension table — one row per agency with docket, document, and comment counts. Powers agency directory and profile pages. Built by `build_agency_rollups`, sorted by comment then document count descending.
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='agency_stats'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** Derived. Totals over `dockets`, `documents` and `comments`; it covers exactly what those cover. *(measured 2026-09-06)*
 
 - **Parquet file:** `agency_stats.parquet`

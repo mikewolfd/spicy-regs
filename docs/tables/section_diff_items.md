@@ -6,8 +6,6 @@
 
 One row per settled correspondence in one version-pair comparison. `text_diff` is byte-capped, and `text_diff_truncated` says when the cap was reached.
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='section_diff_items'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** Sampled: the settled correspondences within each comparison in section_diffs, so it covers exactly what that table covers. *(measured 2026-09-28)*
 
 - **Parquet file:** `section_diff_items.parquet`

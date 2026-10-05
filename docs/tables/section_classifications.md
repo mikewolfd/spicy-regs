@@ -6,8 +6,6 @@
 
 One row per label a model assigned to one section of one printing. `vocabulary_hash` is a digest over the sealed label list, so a vocabulary change is visible in the data rather than silently reinterpreting old rows.
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='section_classifications'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** Empty by owner decision 34: written only by a language model during bill-family runs, which no scheduled run enables, so no row is produced. *(measured 2026-10-03)*
 
 - **Parquet file:** `section_classifications.parquet`

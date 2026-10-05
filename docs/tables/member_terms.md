@@ -6,8 +6,6 @@
 
 One row per term a legislator served, in the crosswalk's own order.
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='member_terms'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** Sampled. The fork selection retains every term from the same complete September 22, 2026 UTC captures as `members`. All mapped values, parent joins and per-member term counts agree with the originals; earlier retained term identities survive. Source order defines term_index. The single party value per term does not reproduce the finer party_affiliations histories, which the crosswalk records only for terms with a mid-term party change; a member with no affiliation interval never switched. Receipts: fork-execution-2026-09-21/members-qualification/. *(measured 2026-09-22)*
 
 - **Parquet file:** `member_terms.parquet`

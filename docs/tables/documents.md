@@ -6,8 +6,6 @@
 
 One row per document posted to a docket — proposed rules, final rules, notices, supporting analyses, and public-submission stubs. Joins to `dockets` on `docket_id`. Two payload fields are not carried: `comment` (the inline submission body) and `restrictReasonType` (why a document is withheld). Read those from the acquisition source, the raw Mirrulations payload or spicy-docs' source-native release, not from this table.
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='documents'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** Sampled repair with retained prior rows. On 2026-09-21 the fork merged every selected retained document release into the prior table, resolving each document to its most recent source record and keeping newer and unrelated rows; the daily regulations ETL adds to it. It is not a fresh regulations.gov census. The repair covered metadata and references; body-text, extraction-status and PDF-extraction-evidence values remain NULL. It does not include a full comments corpus. Receipts: fork-execution-2026-09-21/publication-documents.json and fork-base-repair-2026-09-21/repair-audit.json. *(measured 2026-09-28)*
 
 **Data quality.** The 2026-09-21 fork date check across all 2,001,531 rows found 52,699 posted_date

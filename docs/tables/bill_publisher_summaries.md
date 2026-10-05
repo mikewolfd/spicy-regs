@@ -6,8 +6,6 @@
 
 One row per CRS summary the publisher states on a bill, at the version and action it describes. `summary_html` is kept exactly as the publisher escaped it.
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='bill_publisher_summaries'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** Sampled: bills the bill family has read from GovInfo BILLSTATUS, Congress by Congress from the 108th on; group by the Congress in bill_id to see which Congresses are filled. A bill has rows only for the summaries the publisher has written. *(measured 2026-09-28)*
 
 - **Parquet file:** `bill_publisher_summaries.parquet`

@@ -6,8 +6,6 @@
 
 One row per observed Federal Election Commission committee. The current reader acquires from the unfiltered OpenFEC `/v1/committees/` endpoint through SpicyDocs; the delivered seed's selected scope is stated above. SpicyRegs preserves the registry's fields, merges complete fresh traversals with prior observations by committee_id, and lets a fresh whole row replace its prior row. Raw page captures and acquisition manifests remain in FEC_CAPTURE_DIR. This identity/reference table can join other records carrying an FEC committee identifier. The company, union or association behind a PAC (FEC's connected organization) is not a column here: join `fec_committee_history` on committee_id and read `connected_organization_name`, one value per two-year cycle as that cycle's committee master states it (take the latest cycle for the current sponsor). first_file_date and last_file_date are dates, cycles and candidate_ids are native lists, and the other columns are text.
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_committees'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** Not a range. The OpenFEC committee registry: the whole registry is walked every Sunday (decision 53) and committees that filed in the last week are read daily; rows only an earlier walk saw are kept. first_file_date and last_file_date describe filing activity, not acquisition. *(measured 2026-09-28)*
 
 - **Parquet file:** `fec_committees.parquet`

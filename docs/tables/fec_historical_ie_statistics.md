@@ -6,8 +6,6 @@
 
 One native statistical worksheet row with its stated row grain. Preserves detail rows, headings/subtotals, methodology, formula text, periods and exact cell evidence. Select row_grain and compatible population before arithmetic; historical statistics do not qualify a current transaction total. Resolve collection_id to fec_collections in the captured source generation and source_context_pointer into its retained context. Context witnesses use their own digest and native coordinates; they do not require a fictional source_record_id.
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_historical_ie_statistics'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** Sampled. Supported observations from retained historical independent-expenditure statistical workbooks. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
 
 - **Parquet file:** `fec_historical_ie_statistics.parquet`

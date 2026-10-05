@@ -6,8 +6,6 @@
 
 One source Form 1 or Form 2 registration observation. Makes filed committee/candidate attributes and source dates inspectable without replacing candidate/committee history. Names and native IDs remain distinct; affiliation and identifier status do not imply resolved relationships. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates.
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_registration_statements'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** Sampled. Supported observations from retained registration statement source layouts. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
 
 - **Parquet file:** `fec_registration_statements.parquet`

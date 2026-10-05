@@ -6,8 +6,6 @@
 
 The rule-identity spine: one row per observed edge between a Regulations.gov docket, a CFR part and a RIN, with the `source` class of evidence that states it (docs/ontology.md, "The rule_targets carrier"). A missing or ambiguous reference leaves its target NULL rather than inventing one, and a `docket_document_cites_action_notice` row is a citation, with both targets NULL. Keyed (`docket_id`, `cfr_ref`, `rin`, `source`), NULLs included; joins `dockets` on `docket_id` and `unified_agenda` on `rin`. Built by `build_rule_targets`.
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='rule_targets'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** Derived, and bounded by its inputs: `dockets`, `documents`, `federal_register` and `fr_docket_links` as the live snapshot's manifest pins them. *(measured 2026-09-28)*
 
 - **Parquet file:** `rule_targets.parquet`, in the snapshot that `materialized/rulemaking/latest.json` names

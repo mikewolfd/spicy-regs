@@ -6,8 +6,6 @@
 
 One native audit finding occurrence associated with a retained matter observation. Compare source categories and wording while preserving native category IDs, source disposition and supporting documents. A finding amount is not an aggregate enforcement total. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. Every row has the amount status `source_missing`; the amount status is kept in the receipt.
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_audit_findings'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** Sampled. Supported observations from retained audit case metadata and finding/category structures. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
 
 - **Parquet file:** `fec_audit_findings.parquet`

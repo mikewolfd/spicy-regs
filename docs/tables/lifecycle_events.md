@@ -6,8 +6,6 @@
 
 One row per staged document of a docketed proceeding: the events each `rulemaking_lifecycles` row is paired from. A Regulations.gov document whose own `fr_doc_num` resolves to one Register document is that document, dated by the Register (decision 60); a document that states no number keeps Regulations.gov's type and its upload day. A stage comes only from a document's own Rule or Proposed Rule type (decision 58), so a Register document typed Notice is never an event: a petition withdrawal or receipt the Register types Notice (EPA's withdrawals 2010-8292, 2010-13540, 2011-8549 and 2011-16199; the receipts 2021-08335 and 2023-14192) neither closes nor opens a lifecycle. A posting Regulations.gov flags withdrawn is never an event (see `proceedings`). An Agenda entry completed as withdrawn adds its dated withdrawal. Keyed (`proceeding_id`, `document_id`); `dated_by` says which kind of id `document_id` is. Joins `rulemaking_lifecycles` on `proceeding_id`. Built by `build_lifecycles`; `event_date` is DATE.
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='lifecycle_events'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** Derived, and bounded by its inputs: the stage events of every docketed proceeding, one per document, less those undated or dated after the run's day. *(measured 2026-09-28)*
 
 - **Parquet file:** `lifecycle_events.parquet`, in the snapshot that `materialized/rulemaking/latest.json` names

@@ -6,8 +6,6 @@
 
 One row per rulemaking proceeding: the dockets that are one action, the Register documents that joined it, their stage events, RINs and CFR targets. A RIN names a Unified Agenda item, never a proceeding: it is carried as evidence and never groups dockets. A posting Regulations.gov flags withdrawn (`documents.withdrawn = 'true'`) is no evidence: agencies withdraw a posting filed to the wrong docket, duplicated, moved or replaced, so it gives no stage event, title, agency or RIN, and makes no docket a rulemaking. A docket-less proceeding is one Register document. Keyed `proceeding_id`, which continues across generations when its dockets or Register documents overlap a prior one. Joined by `agenda_item_proceedings`, `comment_periods` and `rulemaking_lifecycles` on `proceeding_id`. Built by `build_proceedings`.
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='proceedings'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** Derived, and bounded by its inputs (`dockets`, `documents`, `federal_register`, `fr_docket_links` and `rule_targets`) and the prior snapshot it continues ids from. A proceeding is docketed, or docket-less when it is a single Register document. *(measured 2026-09-28)*
 
 - **Parquet file:** `proceedings.parquet`, in the snapshot that `materialized/rulemaking/latest.json` names

@@ -6,8 +6,6 @@
 
 One row per native section occurrence in a published law's main body. These are the law's own words, including amendment instructions, not a consolidated statement of current law. Section numbers and publisher IDs can repeat or be absent; (law_id, seq) identifies each occurrence and native_path locates it in the source XML. is_quoted marks sections inside quotedContent; parent_seq alone does not imply a quotation. Body excludes its own number and heading, print furniture, and nested sections' text; query the child rows as well. laws.law_body_remainder retains text outside all numbered sections, including appropriation blocks. Hierarchy retains the source context; source irregularities and extraction outcomes remain in the law_sections ETL receipts. Boolean and numeric observations use native types.
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='law_sections'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** Derived: source-native sections from identity-validated GovInfo public and private law XML acquired by the laws rollup. Join law_id to laws.law_id, then laws.bill_id to congress_bills.bill_id. A missing section row does not establish that the law has no text: check law_text_outcome and law_section_count in laws. Coverage follows successfully read XML, not all enacted laws. PDF-only sources are outside this reader. *(measured 2026-10-02)*
 
 - **Parquet file:** `law_sections.parquet`

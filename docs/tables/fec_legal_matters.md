@@ -6,8 +6,6 @@
 
 One source observation of a namespaced legal matter. Use matter_id for authority/type/native-case identity and record_id for each observation. The same matter_id can occur in several captures; join each child table's matter_record_id to this table's record_id for the exact observation. Joining several child tables multiplies their rows; aggregate each child separately before combining summaries. Native amounts describe legal states or payments, not a summed case-wide liability. Child collection states and query completeness remain explicit. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates.
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_legal_matters'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** Sampled. Supported observations from retained advisory opinion, enforcement, administrative fine, dispute-resolution, rulemaking and audit metadata. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
 
 - **Parquet file:** `fec_legal_matters.parquet`

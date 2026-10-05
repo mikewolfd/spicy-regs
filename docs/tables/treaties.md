@@ -6,8 +6,6 @@
 
 One row per treaty document, as the Congress.gov treaty list and detail routes state it, keyed `(congress_received, number, suffix)`. `package_id` is the GovInfo CDOC id by the `CDOC-{congress}tdoc{number}` rule on an unpartitioned treaty. That package's MODS (`https://www.govinfo.gov/metadata/pkg/{package_id}/mods.xml`) states the committee the treaty was referred to, which this table does not carry (CDOC-119tdoc1 and -tdoc2: Foreign Relations); the id is derived by rule, so GovInfo may not have published it yet.
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='treaties'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** Sampled. The 119th Congress's treaty documents from the retained list and their details. Not treaty bodies, action histories, older Congresses, suffixed parts or interpreted legal/in-force effects. Receipts: fork-execution-2026-09-21/legislative-publication-summary.json, legislative-seeds/sealed-candidates.json and legislative-mcp-audit/. *(measured 2026-09-21)*
 
 **Data quality.** On 2026-09-21 the list's stated total agreed with the capture. A row whose `detail_read` is `false` is list-only. A partitioned treaty (a non-empty `suffix`) is always list-only: the publisher's suffixed detail address has no route in spicy-docs' `LIST_ROUTES`, so its detail is never asked for and its `package_id` is NULL by the contract's own rule.

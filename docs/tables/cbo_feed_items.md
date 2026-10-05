@@ -6,8 +6,6 @@
 
 One row per CBO publication as its feed lists it: the Congress, the date as `cbo_cost_estimates.pub_date` spells it, the title, link and description, and the `Bill_Number` exactly as stated (empty where CBO names no bill). Joined to `cbo_cost_estimates` on `publication_id`, the items with no estimate row are the ones naming no bill: CBO's weekly estimates of the bills the House takes up under suspension of the rules, a committee's reconciliation recommendations, and estimates filed under no number.
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='cbo_feed_items'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** Sampled: every item of CBO's keyless per-Congress cost-estimate feed for each Congress a bill-family run has read the feed of, from the 108th on, whether or not the item names a bill. A run reads each scoped Congress's feed whole and its items replace that Congress's prior items; a feed it could not read keeps them. The scheduled run reads the sitting Congress's feed; earlier Congresses fill only by a bill-family dispatch scoped to them. *(measured 2026-10-03)*
 
 **Data quality.** An item that names no bill is the publisher's statement, not an extraction miss; its bills are listed only in CBO's own document, which is not requested. Measured with the spicy-docs reader over the 108th-119th feeds on 2026-10-03: 15,156 items, every one a row; 361 have no estimate row (352 name no bill, 9 are refused), 53 of them in the 119th, 48 of those suspension notices.

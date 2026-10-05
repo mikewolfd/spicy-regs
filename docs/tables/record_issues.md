@@ -6,8 +6,6 @@
 
 One row per daily Congressional Record issue, keyed `(volume, issue)`, the publisher's own identity. The detail's section names give `chambers`, the legislative-day calendar (which chambers sat), and the stem of the whole-issue link for part 1 gives the GovInfo CREC `package_id` (`entire_issue_url_stem/2`). The volume is the year minus 1854 (volume 172 is 2026).
 
-Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='record_issues'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
-
 **Coverage.** Sampled, and accumulating. Each run walks the whole `daily-congressional-record/{volume}` list for each session volume of the Congresses in scope and reads the detail of every issue the table does not yet hold, newest `updateDate` first, up to 1,000 a run, so at the 119th's size one run completes it. *(measured 2026-09-29)*
 
 **Data quality.** A row whose `detail_read` is `false` is list-only: its detail has not been read yet, so `chambers`, `package_id` and every other detail-only column are NULL with it. A read detail with no chamber section (a Daily Digest only) states an empty `chambers`, distinct from NULL. The rule before 2026-09-29 read the first whole-issue link listed, and an issue printed in several books lists a later book's `-bk{N}` link first on 7 of 368 held rows, which GovInfo holds no package under; a one-time rebuild re-reads every held row's own `entire_issue` under the new rule.
