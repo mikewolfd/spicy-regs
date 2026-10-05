@@ -1091,6 +1091,27 @@
         "outcome": "unverified_after_bounded_search",
         "capture_ids": [],
         "notes": "Bounded publisher-name/domain scorecard search and directory comparison did not establish a captured original edition. No inference of retirement or nonexistence."
+      },
+      "latest_recovery": {
+        "source_file": "work/integration/publisher_recovery_20261005.json",
+        "source_sha256": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+        "observed_on": "2026-10-05",
+        "finding": "The complete 2016 published HTML roster, separate chamber workbooks, methodology and announcement are recovered. The original describes an eight-year retrospective; later editions remain unknown. Component points, total and grade are source-defined; workbook differences remain separate.",
+        "next_action": "Qualify an explicit 2016 archived HTML reader against the retained third table and methodology, preserving all literal fields, occurrence order and source discrepancies; keep the workbooks as separately named renditions.",
+        "reported_research_result": {
+          "task_result": "original-recovered",
+          "recovery_status": "original-recovered"
+        },
+        "result": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/flyersrights/result.json",
+          "sha256": "c4c7a6294eb8d4b254a7aa873dab59ab62a7fd8bcb623bfc9b8f20c3b547539f",
+          "byte_size": 34765
+        },
+        "report": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/flyersrights/report.md",
+          "sha256": "1daf7041a39be2a2f847ac2be5b352374d9f1c3b1de9447c55cd62943d58d5a6",
+          "byte_size": 11216
+        }
       }
     },
     {
@@ -2567,7 +2588,27 @@
       "rights_status": "unreviewed",
       "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-1; physical PDF page 9",
       "verification_capture_ids": [],
-      "scope_status": "candidate_needs_original_publisher_verification"
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_recovery": {
+        "source_file": "work/integration/publisher_recovery_20261005.json",
+        "source_sha256": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+        "observed_on": "2026-10-05",
+        "finding": "No original ACWA scorecard is recovered. The annual congressional section belongs within The Advance; Cornell and NYU supply exact serial holdings. ACTWU 1992 and later organizational records remain separately attributed.",
+        "next_action": "Add The Advance and the exact Cornell 1678045 / NYU WAG.345 holdings to availability metadata; the missing original is one complete dated congressional section with its masthead and continuation pages.",
+        "reported_research_result": {
+          "recovery_status": "access-required"
+        },
+        "result": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/amalgamated_clothing_workers/result.json",
+          "sha256": "5ab4f4d47d073a72e78a898eb290302a33e3973e2c914f9ac47ad7aa417a18e4",
+          "byte_size": 37763
+        },
+        "report": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/amalgamated_clothing_workers/report.md",
+          "sha256": "9379557a64a804d64d43ee91cd14e0196c47c54480b395cf76b724fc4c68be76",
+          "byte_size": 8087
+        }
+      }
     },
     {
       "source_id": "american_bakers:historical_federal",
@@ -2627,7 +2668,27 @@
       "rights_status": "unreviewed",
       "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-2; physical PDF page 10",
       "verification_capture_ids": [],
-      "scope_status": "candidate_needs_original_publisher_verification"
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_recovery": {
+        "source_file": "work/integration/publisher_recovery_20261005.json",
+        "source_sha256": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+        "observed_on": "2026-10-05",
+        "finding": "No original rating edition or original rating row is recovered. The revised CRS directory attests an annual series, and Fullerton identifies Murphy-related material. Buchanan’s current namesake and secondary newspaper claims do not establish original ratings.",
+        "next_action": "Retain the corrected CRS title/date and inspect Fullerton records 10737 and 4058 for a dated rating imprint; ASU FM MSS 1, box 88, folder 10 is the next exact holding lead.",
+        "reported_research_result": {
+          "recovery_status": "original-unrecovered"
+        },
+        "result": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/american_cause/result.json",
+          "sha256": "2c9b35ca992387472e45d9bda5df02d0ce783ceb4b179d13642a73b32967a4d9",
+          "byte_size": 65722
+        },
+        "report": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/american_cause/report.md",
+          "sha256": "43876da936509905f630f11961e1efe8c12e308b70f11d87a367e0a5758fcf30",
+          "byte_size": 10466
+        }
+      }
     },
     {
       "source_id": "farm_bureau:historical_federal",
@@ -2747,7 +2808,27 @@
       "rights_status": "unreviewed",
       "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-4; physical PDF page 12",
       "verification_capture_ids": [],
-      "scope_status": "candidate_needs_original_publisher_verification"
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_recovery": {
+        "source_file": "work/integration/publisher_recovery_20261005.json",
+        "source_sha256": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+        "observed_on": "2026-10-05",
+        "finding": "The November 1974 NYC/AIA Oculus scan contains a contemporary chapter reprint of National AIA’s selected-vote analysis. Its regional House grid and Senate narrative do not establish the national pamphlet or any post-2000 rating edition.",
+        "next_action": "Catalog the attributable partial 1974 rendition and publisher-linked USModernist custody chain; seek a specific Government Affairs/Congressional Liaison inventory for later originals before proposing a national reader.",
+        "reported_research_result": {
+          "recovery_status": "partial-original-recovered"
+        },
+        "result": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/aia/result.json",
+          "sha256": "6502169ed0aa8f12188844f789e3bbaba139c4fcca8114736c31c1abd278c370",
+          "byte_size": 61940
+        },
+        "report": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/aia/report.md",
+          "sha256": "314479ca0a2323713d0960b40680736f595ca7cd48fd4a25579ceeafd1136c83",
+          "byte_size": 9473
+        }
+      }
     },
     {
       "source_id": "american_parents:historical_federal",
@@ -2777,7 +2858,27 @@
       "rights_status": "unreviewed",
       "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-4; physical PDF page 12",
       "verification_capture_ids": [],
-      "scope_status": "candidate_needs_original_publisher_verification"
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_recovery": {
+        "source_file": "work/integration/publisher_recovery_20261005.json",
+        "source_sha256": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+        "observed_on": "2026-10-05",
+        "finding": "The March 20, 1963 original newsletter is recovered without a rating section. The annual voting section belongs within the Washington Report. Minnesota sw0055 supplies an exact 1958–1981 newsletter holding with no digital instance.",
+        "next_action": "Retain the exact Minnesota sw0055, Series 6.2, box 90, object 771716 holding; the decisive missing input is the latest surviving annual voting section, with complete original issue context.",
+        "reported_research_result": {
+          "recovery_status": "original-unrecovered"
+        },
+        "result": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/american_parents/result.json",
+          "sha256": "8c4796b305440d70358b0bab4c2be61ef2d9f8b08e57dca0d2586bd6ab9b11c9",
+          "byte_size": 41010
+        },
+        "report": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/american_parents/report.md",
+          "sha256": "cf7b5d2b6b23c929e87066e3a58247fdfdbed0aefce48c64dc3d115c6544fad0",
+          "byte_size": 11533
+        }
+      }
     },
     {
       "source_id": "american_security_council:historical_federal",
@@ -2807,7 +2908,27 @@
       "rights_status": "unreviewed",
       "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-4; physical PDF page 12",
       "verification_capture_ids": [],
-      "scope_status": "candidate_needs_original_publisher_verification"
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_recovery": {
+        "source_file": "work/integration/publisher_recovery_20261005.json",
+        "source_sha256": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+        "observed_on": "2026-10-05",
+        "finding": "Nine ASCF original chamber PDFs are recovered for 2003–2010, newest recovered being 2010 Senate. The catalog offers the 113th Congress edition, whose body is missing. File recovery and representative rows do not establish complete tables; ASC and ASCF source names remain distinct.",
+        "next_action": "Reconcile every source-defined member and cell in the retained 2010 Senate PDF before qualifying an explicit reader; retain the exact 2010 House and 112th/113th Congress retrieval leads separately.",
+        "reported_research_result": {
+          "task_result": "original-recovered-partial"
+        },
+        "result": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/american_security_council/result.json",
+          "sha256": "28d2e6192f543a1ce80860a1df6497f2dd296b80664109cc9a7bab5c85878a54",
+          "byte_size": 37238
+        },
+        "report": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/american_security_council/report.md",
+          "sha256": "b324e123581159bf1bd2c77bed5d93ac626db442b058145cd9917537ad2d3888",
+          "byte_size": 14068
+        }
+      }
     },
     {
       "source_id": "americans_constitutional_action:historical_federal",
@@ -2837,7 +2958,27 @@
       "rights_status": "unreviewed",
       "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-4; physical PDF page 12",
       "verification_capture_ids": [],
-      "scope_status": "candidate_needs_original_publisher_verification"
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_recovery": {
+        "source_file": "work/integration/publisher_recovery_20261005.json",
+        "source_sha256": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+        "observed_on": "2026-10-05",
+        "finding": "No complete ACA or ACARI index is recovered. Brown supplies historical digest leaves and archive retrieval routes; library records establish serial continuation to ACARI and specific 1981–1983 holdings. The 1984 reference remains a secondary lead.",
+        "next_action": "Catalog the verified serial relationship and Brown page locators; Penn State OCLC 8701189, especially the 1983 holding, is the concrete full-original target. Keep later coverage unknown.",
+        "reported_research_result": {
+          "task_result": "original-unrecovered"
+        },
+        "result": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/americans_constitutional_action/result.json",
+          "sha256": "e973c91cd571060dba1675c347c2e7e4d10da676ebb78864f3ebe622e329f10d",
+          "byte_size": 35129
+        },
+        "report": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/americans_constitutional_action/report.md",
+          "sha256": "8b0e4c2015f0cd11b2399ee8269dd44f47da909df3675252a93c65fdb24187d1",
+          "byte_size": 9192
+        }
+      }
     },
     {
       "source_id": "agc:historical_federal",
@@ -2897,7 +3038,28 @@
       "rights_status": "unreviewed",
       "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-5; physical PDF page 13",
       "verification_capture_ids": [],
-      "scope_status": "candidate_needs_original_publisher_verification"
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_recovery": {
+        "source_file": "work/integration/publisher_recovery_20261005.json",
+        "source_sha256": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+        "observed_on": "2026-10-05",
+        "finding": "No original rating edition is recovered. CAP Report. is the publication title; No established title. describes its special section. SDSU DA 1: B58-F25 is a 1980 folder lead; the UNT civic packet is ancillary original material.",
+        "next_action": "Correct the publication/section distinction and retain SDSU DA 1: B58-F25 as the exact missing-source target; its complete contents must establish the actual imprint, rating period and table scope.",
+        "reported_research_result": {
+          "task_result": "original-unrecovered",
+          "recovery_status": "original-unrecovered"
+        },
+        "result": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/atlantic_richfield/result.json",
+          "sha256": "71a2abe3ff14c42b7f0ea024e9fe3d3ea607628453e416718b9fb35abe5158f8",
+          "byte_size": 57044
+        },
+        "report": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/atlantic_richfield/report.md",
+          "sha256": "f498c74bb196c71e08f8643c13250b49ab8149a2c4cc49b3f034928d7da733f7",
+          "byte_size": 11468
+        }
+      }
     },
     {
       "source_id": "bread_world:historical_federal",
@@ -2957,7 +3119,27 @@
       "rights_status": "unreviewed",
       "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-6; physical PDF page 14",
       "verification_capture_ids": [],
-      "scope_status": "candidate_needs_original_publisher_verification"
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_recovery": {
+        "source_file": "work/integration/publisher_recovery_20261005.json",
+        "source_sha256": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+        "observed_on": "2026-10-05",
+        "finding": "Migrated TCU/RCPL original 107th Congress grids are recovered. The 2001 Senate grid has its legend and same-edition captions; House scopes retain missing captions and a malformed 2002 row. Newest listed full scope is 2004, newest recovered grid is 2002, and a 2006 article is partial ratings only.",
+        "next_action": "Review source-time TCU/RCPL attribution and qualify the pinned first-session 107th Senate scope, preserving R/W, special marks and cumulative fields; keep the incomplete House scopes and named 108th Congress files separate.",
+        "reported_research_result": {
+          "research_status": "original_recovered_partial"
+        },
+        "result": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/railway_clerks/result.json",
+          "sha256": "273aacbff3b19e2d3ae41630aecbffd048cf5ab05e333494abde8c1dec2dce0e",
+          "byte_size": 42541
+        },
+        "report": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/railway_clerks/report.md",
+          "sha256": "d767eb9cec1127183e8eb81078140eca8142d376c7fa969ab4701124bc5abfd0",
+          "byte_size": 11292
+        }
+      }
     },
     {
       "source_id": "bipac:historical_federal",
@@ -2987,7 +3169,27 @@
       "rights_status": "unreviewed",
       "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-6; physical PDF page 14",
       "verification_capture_ids": [],
-      "scope_status": "candidate_needs_original_publisher_verification"
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_recovery": {
+        "source_file": "work/integration/publisher_recovery_20261005.json",
+        "source_sha256": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+        "observed_on": "2026-10-05",
+        "finding": "Two original tenant profiles explicitly label BIPAC 2012 ratings, and publisher-issued releases contain later partial statements with unstated rating periods. The adjacent ConocoPhillips assessments and Vote Smart grids are separate authorities; no complete BIPAC edition is recovered.",
+        "next_action": "Qualify the two pinned historical profile inputs as a bounded original scope, retaining tenant/member identifiers and literal adjacent rating labels; pursue the retained vr_grid.asp keys for fuller source recovery.",
+        "reported_research_result": {
+          "recovery_status": "partial-original-recovered"
+        },
+        "result": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/bipac/result.json",
+          "sha256": "0dbb0dcc72cf484bc23c89ccf1242ed238cc67e957c4879468884df041eed271",
+          "byte_size": 15748
+        },
+        "report": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/bipac/report.md",
+          "sha256": "3782c2fd03045585bfa809c421ed18d2c0627e19b7a9156ccc6dc82f44091a64",
+          "byte_size": 13158
+        }
+      }
     },
     {
       "source_id": "ccrkba:historical_federal",
@@ -3017,7 +3219,28 @@
       "rights_status": "unreviewed",
       "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-7; physical PDF page 15",
       "verification_capture_ids": [],
-      "scope_status": "candidate_needs_original_publisher_verification"
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_recovery": {
+        "source_file": "work/integration/publisher_recovery_20261005.json",
+        "source_sha256": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+        "observed_on": "2026-10-05",
+        "finding": "Original Point Blank issues for October 2015, 2014 and 2002 are recovered without a CCRKBA rating section. The CRS directory identifies congressional ratings as an irregular newsletter section. Externally attributed ratings remain external.",
+        "next_action": "Retain the newsletter indexes and exact special-section title; target a dated rating-bearing Point Blank issue or supplement using the recovered annual links, with a complete section and continuation witness.",
+        "reported_research_result": {
+          "task_result": "original-unrecovered",
+          "recovery_status": "original-unrecovered"
+        },
+        "result": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/ccrkba/result.json",
+          "sha256": "7b7042ee9e2710e355a4692316a0f87206990f1c88c9c0ce348e99a31087bb7b",
+          "byte_size": 19266
+        },
+        "report": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/ccrkba/report.md",
+          "sha256": "81b8c2539800bd85e1b5251347d74cadb1cf9d1a76eb92297bbc28fdbc2a6845",
+          "byte_size": 9508
+        }
+      }
     },
     {
       "source_id": "coalition_foreign_military:historical_federal",
@@ -3047,7 +3270,27 @@
       "rights_status": "unreviewed",
       "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-7; physical PDF page 15",
       "verification_capture_ids": [],
-      "scope_status": "candidate_needs_original_publisher_verification"
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_recovery": {
+        "source_file": "work/integration/publisher_recovery_20261005.json",
+        "source_sha256": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+        "observed_on": "2026-10-05",
+        "finding": "The exact 1986 Voting record is identified at Texas/HathiTrust with eight restricted scans, but its rating pages are unrecovered. A Summer 1985 original newsletter offers the 1984 edition. The Coalition name/date discrepancy and post-2000 coverage remain unresolved.",
+        "next_action": "Retain OCLC 30480358 and Texas item txu.059172131947036 as the full-original target; Swarthmore DG 138, Acc. 90A-113: 15 supplies preliminary/final and errata fallback holdings.",
+        "reported_research_result": {
+          "recovery_status": "original-unrecovered"
+        },
+        "result": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/coalition_foreign_military/result.json",
+          "sha256": "4b9c3fe95c54ef6eb3173b046e97ee52ff6ecf628bc3b50fa6d2c72eb21e74d2",
+          "byte_size": 41192
+        },
+        "report": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/coalition_foreign_military/report.md",
+          "sha256": "9f27d8e1a18abf79410e713d10e349a896a389381db0c604a311b46135f2ac77",
+          "byte_size": 10272
+        }
+      }
     },
     {
       "source_id": "committee_education_funding:historical_federal",
@@ -3077,7 +3320,28 @@
       "rights_status": "unreviewed",
       "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-7; physical PDF page 15",
       "verification_capture_ids": [],
-      "scope_status": "candidate_needs_original_publisher_verification"
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_recovery": {
+        "source_file": "work/integration/publisher_recovery_20261005.json",
+        "source_sha256": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+        "observed_on": "2026-10-05",
+        "finding": "No original rating edition is recovered. The exact historical voting-record title and two separate 1992 Daschle folders are verified. Current budget books, legislative updates and external vote-database links do not establish a scorecard.",
+        "next_action": "Retain the two distinct SDSU 1992 folder occurrences DA 2: B112-F051 and B114-F009; obtain a dated original imprint and voting pages before choosing a reader.",
+        "reported_research_result": {
+          "task_result": "original-unrecovered",
+          "recovery_status": "original-unrecovered"
+        },
+        "result": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/committee_education_funding/result.json",
+          "sha256": "6236921feb1320fe67c8eb7f27f59f67821008fac2e57494d31cc4f604b35d08",
+          "byte_size": 32734
+        },
+        "report": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/committee_education_funding/report.md",
+          "sha256": "571f6cfbd032f1f5c4dd6cbd491adec2ec4d0ab1f32721f4e0ae46bf79639b18",
+          "byte_size": 8049
+        }
+      }
     },
     {
       "source_id": "free_congress_survival:historical_federal",
@@ -3107,7 +3371,27 @@
       "rights_status": "unreviewed",
       "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-7; physical PDF page 15",
       "verification_capture_ids": [],
-      "scope_status": "candidate_needs_original_publisher_verification"
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_recovery": {
+        "source_file": "work/integration/publisher_recovery_20261005.json",
+        "source_sha256": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+        "observed_on": "2026-10-05",
+        "finding": "No original CSFC edition is recovered. Exact Conservative Register holdings and a third-party campaign advertisement narrow retrieval. Foundation judicial-nomination pages, PAC holdings and later American Opportunity names remain distinct from committee rating authority.",
+        "next_action": "Target MNHS Boschwitz Box 47, location 143.D.14.1B, or SDSU DA 1: B58-F03; establish an original title/imprint and complete rating pages before reader work.",
+        "reported_research_result": {
+          "recovery_status": "original-unrecovered"
+        },
+        "result": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/free_congress_survival/result.json",
+          "sha256": "ef954f436efe5729746285054dd96542e78953fd66082023d108f65dfe96ebe1",
+          "byte_size": 54642
+        },
+        "report": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/free_congress_survival/report.md",
+          "sha256": "bc750188a2d5b984906541a744e6f96cd384436ec40a6f807aea79dc00f2504d",
+          "byte_size": 9306
+        }
+      }
     },
     {
       "source_id": "common_cause:historical_federal",
@@ -3257,7 +3541,27 @@
       "rights_status": "unreviewed",
       "notes": "CRS describes a selected list of twelve lawmakers rather than an overall rating; preserve selection scope if source is later recovered. Locator: Printed CRS-9; physical PDF page 17",
       "verification_capture_ids": [],
-      "scope_status": "candidate_needs_original_publisher_verification"
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_recovery": {
+        "source_file": "work/integration/publisher_recovery_20261005.json",
+        "source_sha256": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+        "observed_on": "2026-10-05",
+        "finding": "A partial original Fall 1992 Dirty Dozen article includes a numerical rating; the 1974 poster is a selected cohort without percentages. Magazine availability and foundation/PAC relationships do not establish continuous scorecards or post-2000 editions.",
+        "next_action": "Catalog the partial 1992 original and retain the selected-cohort limit; Pittsburgh AIS.1996.13, Series XI, box 58 is the most precise lead for later editions.",
+        "reported_research_result": {
+          "recovery_status": "original-partial"
+        },
+        "result": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/environmental_action/result.json",
+          "sha256": "7074174aff6ff6765c861ed92597151fb4c801e238d420071594b8f32b225570",
+          "byte_size": 48438
+        },
+        "report": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/environmental_action/report.md",
+          "sha256": "c4478200b4eb9353dbd3dba095185b8e8376d268bc5ed351f5cb9ffedf38ca95",
+          "byte_size": 11061
+        }
+      }
     },
     {
       "source_id": "food_beverage_trades:historical_federal",
@@ -3287,7 +3591,27 @@
       "rights_status": "unreviewed",
       "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-9; physical PDF page 17",
       "verification_capture_ids": [],
-      "scope_status": "candidate_needs_original_publisher_verification"
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_recovery": {
+        "source_file": "work/integration/publisher_recovery_20261005.json",
+        "source_sha256": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+        "observed_on": "2026-10-05",
+        "finding": "Cornell identifies the exact 1977 Congressional Voting Record, AUF 6046, Box 470, Folder 1, Item 1. Its original pages are missing. FAST web originals and organizational cessation evidence do not prove the historical scorecard’s final edition or identical publisher attribution.",
+        "next_action": "Replace the press-release retrieval lead with Cornell object 1738288; the missing source is the complete held voting record with imprint, tables, key and continuation pages.",
+        "reported_research_result": {
+          "recovery_status": "access-required"
+        },
+        "result": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/food_beverage_trades/result.json",
+          "sha256": "c7db17ab77744c72b5be689ae62756a666e027fc6b89aaf4fb5f23316630bbd9",
+          "byte_size": 30882
+        },
+        "report": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/food_beverage_trades/report.md",
+          "sha256": "8b1ccc0a73f88fd8673239c40857d5046ec0b23f297e9c09533bc035642b4a9f",
+          "byte_size": 10828
+        }
+      }
     },
     {
       "source_id": "fcnl:historical_federal",
@@ -3347,7 +3671,27 @@
       "rights_status": "unreviewed",
       "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-10; physical PDF page 18",
       "verification_capture_ids": [],
-      "scope_status": "candidate_needs_original_publisher_verification"
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_recovery": {
+        "source_file": "work/integration/publisher_recovery_20261005.json",
+        "source_sha256": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+        "observed_on": "2026-10-05",
+        "finding": "The complete 1961 printed voting section is recovered as a Human Events publication compiling ACA material. Later articles credit ACU, CSP, Heritage Action or National Journal, alongside separate editorial ranks. The article discovery API does not establish an independent annual Human Events scoring series.",
+        "next_action": "Catalog the 1961 publication with ACA as rating origin and retain later source-specific attributions; resolve the separately named 1975/1976 Conservatives and Liberals Rate Congress holdings before complete-edition reader work.",
+        "reported_research_result": {
+          "status": "research_finalized_original_historical_section_recovered_partial_recent_data"
+        },
+        "result": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/human_events/result.json",
+          "sha256": "7fdf319863fb0a3e82702523d1959074fa60d281bfd4ccfd214b7b4125385633",
+          "byte_size": 40544
+        },
+        "report": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/human_events/report.md",
+          "sha256": "3a12d629407f82e7b69ce0211ffbb9338e97bdc62f851eb10970018d0d3c3657",
+          "byte_size": 10008
+        }
+      }
     },
     {
       "source_id": "ipaa:historical_federal",
@@ -3467,7 +3811,27 @@
       "rights_status": "unreviewed",
       "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-11; physical PDF page 19",
       "verification_capture_ids": [],
-      "scope_status": "candidate_needs_original_publisher_verification"
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_recovery": {
+        "source_file": "work/integration/publisher_recovery_20261005.json",
+        "source_sha256": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+        "observed_on": "2026-10-05",
+        "finding": "An original activity report establishes HUNGER No. 12, October 1977, and its separately distributed voting-record enclosure. The essay reprint and other policy publications do not contain the missing voting tables. Later editions remain unknown.",
+        "next_action": "Target Yale RG 267, Series II, Box 6, Folder 4 for the complete October 1977 issue and detached voting-record enclosure; preserve taskforce/IMPACT roles and edition uncertainty.",
+        "reported_research_result": {
+          "task_result": "original-unrecovered"
+        },
+        "result": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/interreligious_food/result.json",
+          "sha256": "b3cf3274dda404db1b46a1d44cf39ef51d6391948f8b21a0a9c6b7972973c566",
+          "byte_size": 20045
+        },
+        "report": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/interreligious_food/report.md",
+          "sha256": "cae63a8d21fa033b27598056b9d3a58eff1628b7740ab39312ad2e3cb41964a4",
+          "byte_size": 14113
+        }
+      }
     },
     {
       "source_id": "john_birch_historical:historical_federal",
@@ -3497,7 +3861,27 @@
       "rights_status": "unreviewed",
       "notes": "CRS attributes Conservative Index in Review of the News to John Birch Society. Do not automatically merge this historical publication into a current distributor alias without continuity evidence. Locator: Printed CRS-11; physical PDF page 19",
       "verification_capture_ids": [],
-      "scope_status": "candidate_needs_original_publisher_verification"
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_recovery": {
+        "source_file": "work/integration/publisher_recovery_20261005.json",
+        "source_sha256": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+        "observed_on": "2026-10-05",
+        "finding": "Original 2005–2006 Conservative Index installments identify American Opinion Publishing as a JBS subsidiary. Recovered 2008 and 2026 Freedom Index originals and current retrospective Scorecards belong to the existing New American family with distinct edition semantics. Failed PDF pilots remain unqualified.",
+        "next_action": "Use the retained July 2006 original for a historical fixture in the existing new_american family; preserve legal publishing corporation, source-time imprint and every literal vote row, and reject shifted/model-altered cells before admission.",
+        "reported_research_result": {
+          "assessment": "original_historical_editions_recovered_with_source_time_ownership; existing_new_american_series_reuse"
+        },
+        "result": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/john_birch_historical/result.json",
+          "sha256": "ea9407fc9d1d00fe0b6c8df0a91d89decca104ec8a579ae72821ab66ee70ebaf",
+          "byte_size": 38812
+        },
+        "report": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/john_birch_historical/report.md",
+          "sha256": "8de16e3863927286506033190ac4bad24e2f43b6a0b8525d552aaf41dd5a60ad",
+          "byte_size": 18712
+        }
+      }
     },
     {
       "source_id": "joint_center:historical_federal",
@@ -3527,7 +3911,27 @@
       "rights_status": "unreviewed",
       "notes": "CRS describes selected districts by demographic composition; never assume a national roster. Locator: Printed CRS-11; physical PDF page 19",
       "verification_capture_ids": [],
-      "scope_status": "candidate_needs_original_publisher_verification"
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_recovery": {
+        "source_file": "work/integration/publisher_recovery_20261005.json",
+        "source_sha256": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+        "observed_on": "2026-10-05",
+        "finding": "Original 1974 and 1978 selected-district House voting studies are recovered, with no post-2000 voting study established. Separate 119th Congress staff-diversity CSV inputs are recovered; they assess staffing and do not inherit the voting-series identity.",
+        "next_action": "Catalog the two historical studies with restricted cohort and publication/vote dates; inspect retained annual-index leads for later voting studies. Any staffing-table integration needs a separate scope and quality decision.",
+        "reported_research_result": {
+          "recovery_status": "original-recovered"
+        },
+        "result": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/joint_center/result.json",
+          "sha256": "b81c9f5b616b80f0877fb2c57e26f67edcefcfb4c10bb41a57c1b060957d9423",
+          "byte_size": 108540
+        },
+        "report": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/joint_center/report.md",
+          "sha256": "d1039a999fff153122151fc2414bc42197976e491d5318866d4cae891eabf8ae",
+          "byte_size": 10161
+        }
+      }
     },
     {
       "source_id": "league_women_voters:historical_federal",
@@ -3557,7 +3961,27 @@
       "rights_status": "unreviewed",
       "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-12; physical PDF page 20",
       "verification_capture_ids": [],
-      "scope_status": "candidate_needs_original_publisher_verification"
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_recovery": {
+        "source_file": "work/integration/publisher_recovery_20261005.json",
+        "source_sha256": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+        "observed_on": "2026-10-05",
+        "finding": "A March 1974 affiliate newsletter reproduces a small LWVUS rating excerpt; the national original is missing. Five named Vote Smart 2007 records provide later third-party leads. Current map-assessment scorecards and VOTE411 do not fill congressional rating coverage.",
+        "next_action": "Follow Vote Smart group 1833 and its five 2007 IDs to an original source-description or archived national publication; preserve the affiliate excerpt and physical Political Accountability Rating holdings separately.",
+        "reported_research_result": {
+          "recovery_status": "original-unrecovered"
+        },
+        "result": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/league_women_voters/result.json",
+          "sha256": "f8951e790975f18133698b9ce31f51ac2e3dde5a230bb76f2f1b3ad262764980",
+          "byte_size": 80547
+        },
+        "report": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/league_women_voters/report.md",
+          "sha256": "7e832606f2a70e1d644f21ada8f038ca38e6835669045026dbdc0b60ca6ca7de",
+          "byte_size": 11096
+        }
+      }
     },
     {
       "source_id": "liberty_lobby:historical_federal",
@@ -3596,6 +4020,26 @@
           "liberty-lobby-publisher-closure-2001-archived-20261005"
         ],
         "notes": "Archived original publisher notice states that Spotlight and Liberty Lobby are no longer in business; Updated 07/27/01 is the notice update date, not a separately established closure date. The last Liberty Ledger edition and post-2000 rating coverage remain unknown."
+      },
+      "latest_recovery": {
+        "source_file": "work/integration/publisher_recovery_20261005.json",
+        "source_sha256": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+        "observed_on": "2026-10-05",
+        "finding": "A photographed original 1985 Liberty Ledger masthead verifies publisher, session and February 1986 printing, but no interior rating cells. Original 2001 newspaper/history material does not supply a dated Ledger edition. The July 27, 2001 notice update is not an exact closure or last-scorecard date.",
+        "next_action": "Catalog the verified masthead and target complete interior surfaces of Bolerium item 307155 or SDSU DA 1: B58-F06; keep post-2000 editions and exact series endpoint unresolved.",
+        "reported_research_result": {
+          "recovery_status": "partial_original_recovered"
+        },
+        "result": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/liberty_lobby/result.json",
+          "sha256": "bc30fa65b40a8a7d5dac755f0dfe4d8f99330d9d493f17dafaac350aff35ddc0",
+          "byte_size": 60835
+        },
+        "report": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/liberty_lobby/report.md",
+          "sha256": "ae4aedcc53a6bb1ec555ae3a91d67de93b48c6d72137178894afc0831166163d",
+          "byte_size": 12070
+        }
       }
     },
     {
@@ -3631,6 +4075,27 @@
         "outcome": "scope_filter_required",
         "capture_ids": [],
         "notes": "March for Life Action is a separately imprinted sister publisher. Nine retained 2020 Senate election comparison PDFs include incumbent/challenger positions, alignment marks and annotations; they are candidate comparisons, not complete congressional performance editions. Retain the literal 2020 Elections / GEORGIA RUNOFF period. Presidential material and state policy do not become federal member performance. Runoff original PDF SHA-256 dfff41dbb0c229fcdfa886a90837e2ab3745f03c6694bf383903dedddf34bf28; p1. Reviewed task evidence: work/integration/publisher_implementation_20261005.json; held-grid review SHA-256 08b0816a4ad6fd64b5d7ca732fee59859a8735273bf5a96569c7f2caddb124cd."
+      },
+      "latest_recovery": {
+        "source_file": "work/integration/publisher_recovery_20261005.json",
+        "source_sha256": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+        "observed_on": "2026-10-05",
+        "finding": "January 2025 Action letters announce future scoring, and all nine original 2020 candidate comparisons were already retained. These are distinct from a completed congressional rating edition and from the historical Journal voting-record section; Action sister-organization attribution remains explicit.",
+        "next_action": "Catalog the 2025 prospective declarations and retained metric-free candidate comparisons separately; recover an original Journal voting-record section or completed Action member grid before treating either as the historical rating series.",
+        "reported_research_result": {
+          "task_result": "source-recovered-but-unsupported-shape",
+          "recovery_status": "partial-originals-recovered; assigned historical series unresolved"
+        },
+        "result": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/march_for_life/result.json",
+          "sha256": "ccffc5ac02a8713d425dc3c4ae539d5e697a9ac48870f90e32eddeb0efb21b6b",
+          "byte_size": 40462
+        },
+        "report": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/march_for_life/report.md",
+          "sha256": "88c1eb0adc1dbe53b3ee1ee41f481e8c10458af79f2b2d91b3dd92b0f5ddec97",
+          "byte_size": 13575
+        }
       }
     },
     {
@@ -3661,7 +4126,27 @@
       "rights_status": "unreviewed",
       "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-14; physical PDF page 22",
       "verification_capture_ids": [],
-      "scope_status": "candidate_needs_original_publisher_verification"
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_recovery": {
+        "source_file": "work/integration/publisher_recovery_20261005.json",
+        "source_sha256": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+        "observed_on": "2026-10-05",
+        "finding": "The original 1980 Golden Age Index is recovered for both chambers with a publisher masthead and surrounding original letter. Its full member-cell reconciliation remains unperformed; no post-2000 original or successor is established.",
+        "next_action": "Catalog the exact Reagan source window, physical pages 41–42, and retain the 2000-onward missing-source item; resolve newest original issues through ISSN 0730-577X holdings.",
+        "reported_research_result": {
+          "recovery_status": "original-recovered"
+        },
+        "result": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/national_alliance_seniors/result.json",
+          "sha256": "e1a9ecdaf9b06b06ad2be589482a38d029ea6005427803f62a0dc8664fc2e5f8",
+          "byte_size": 39769
+        },
+        "report": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/national_alliance_seniors/report.md",
+          "sha256": "8dc7e6764c666cfd9a64527db53cc9f45548e0f9f4989bd06fdc2cb611b4ab3b",
+          "byte_size": 7298
+        }
+      }
     },
     {
       "source_id": "national_associated_businessmen:historical_federal",
@@ -3691,7 +4176,27 @@
       "rights_status": "unreviewed",
       "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-14; physical PDF page 22",
       "verification_capture_ids": [],
-      "scope_status": "candidate_needs_original_publisher_verification"
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_recovery": {
+        "source_file": "work/integration/publisher_recovery_20261005.json",
+        "source_sha256": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+        "observed_on": "2026-10-05",
+        "finding": "Original 1963–1968 covers and the October 1968 publisher release are recovered; the member-table interiors were deliberately omitted from the archival scan. Congressional Quarterly calculations and later Watchdogs awards are separate evidence, with no proven scoring-series succession.",
+        "next_action": "Catalog cover-only recovery accurately; target the unscanned 1968 brochure in Nixon WHSF Box 17, Folder 14 and the 1969–1970 UNR Box 12, Folder 17 original.",
+        "reported_research_result": {
+          "recovery_status": "partial-original-recovered"
+        },
+        "result": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/national_associated_businessmen/result.json",
+          "sha256": "dd60ab2aa2b987ef1163d4054328d85a9c6fdb588bfc4f6b6fe14b2370dd0f04",
+          "byte_size": 47284
+        },
+        "report": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/national_associated_businessmen/report.md",
+          "sha256": "9f9568fff50cccaa44cff0922623b344aeb9f2ad1a7d1a87260f6dd4b91d4c49",
+          "byte_size": 11017
+        }
+      }
     },
     {
       "source_id": "life_underwriters:historical_federal",
@@ -3721,7 +4226,27 @@
       "rights_status": "unreviewed",
       "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-14; physical PDF page 22",
       "verification_capture_ids": [],
-      "scope_status": "candidate_needs_original_publisher_verification"
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_recovery": {
+        "source_file": "work/integration/publisher_recovery_20261005.json",
+        "source_sha256": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+        "observed_on": "2026-10-05",
+        "finding": "The original February 15, 2005 NAIFA Frontline selected Senate vote report is recovered in matching HTML/PDF with all 100 source labels. No aggregate score is supplied. This does not recover or establish continuity of the historical Voting Report.",
+        "next_action": "Qualify a separately named 2005 Frontline selected-action input, preserving source vote groups and null scores; keep the historical_federal title unresolved and retain SDSU DA 1: B14-F09 as its original-source target.",
+        "reported_research_result": {
+          "recovery_status": "original-unrecovered"
+        },
+        "result": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/life_underwriters/result.json",
+          "sha256": "83accd646390a58f49dbb0f6345ee07e206e8f568f48760ded0735de7e36c7e2",
+          "byte_size": 65629
+        },
+        "report": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/life_underwriters/report.md",
+          "sha256": "9ffcca64da6075dd31e4354d838e5a6b7e8cd1cd4babbea7e6f050d0bbab92c3",
+          "byte_size": 10660
+        }
+      }
     },
     {
       "source_id": "nam:historical_federal",
@@ -3811,7 +4336,27 @@
       "rights_status": "unreviewed",
       "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-15; physical PDF page 23",
       "verification_capture_ids": [],
-      "scope_status": "candidate_needs_original_publisher_verification"
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_recovery": {
+        "source_file": "work/integration/publisher_recovery_20261005.json",
+        "source_sha256": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+        "observed_on": "2026-10-05",
+        "finding": "No original rating edition is recovered. NAVA/ICIA/InfoComm/AVIXA name history and publication catalogs are verified, plus an exact 1977 ALA folder. A similar education-voting title under another publisher does not establish co-publication.",
+        "next_action": "Retain ALA record series 2/4/6, Box 55, NAVA 1977 as a candidate original-source holding; establish imprint and table scope before attributing any shared publication.",
+        "reported_research_result": {
+          "recovery_status": "original-unrecovered"
+        },
+        "result": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/national_audiovisual/result.json",
+          "sha256": "843ff8feefcaabca1b7c1f22083b1030411b4279fa4fbb533f9c715a0a239643",
+          "byte_size": 97284
+        },
+        "report": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/national_audiovisual/report.md",
+          "sha256": "70ad7910b437736849550250e82be2015e7c3f52a6298f90468df7dde4f14f06",
+          "byte_size": 9174
+        }
+      }
     },
     {
       "source_id": "national_council_seniors:historical_federal",
@@ -3841,7 +4386,27 @@
       "rights_status": "unreviewed",
       "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-15; physical PDF page 23",
       "verification_capture_ids": [],
-      "scope_status": "candidate_needs_original_publisher_verification"
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_recovery": {
+        "source_file": "work/integration/publisher_recovery_20261005.json",
+        "source_sha256": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+        "observed_on": "2026-10-05",
+        "finding": "The original 2000 text and methodology cover votes only through July 27, with all six rating-chart GIFs missing. A separate 1997 original filing exhibit contains both chamber charts and needs complete cell qualification. ARA remains separately attributed.",
+        "next_action": "Keep 2000 partial and retain the six exact missing GIF names; use the retained 1997 FEC exhibit as a separate bounded reader candidate only after complete page/member/cell reconciliation.",
+        "reported_research_result": {
+          "recovery_status": "original_1997_scan_recovered_and_original_2000_text_recovered_without_rating_charts"
+        },
+        "result": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/national_council_seniors/result.json",
+          "sha256": "0b3720d4b3235e7e5a28c7d322df4d662ab88cf16e2333e3450e986614e9b1d8",
+          "byte_size": 57430
+        },
+        "report": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/national_council_seniors/report.md",
+          "sha256": "0223660bf991cfccd2369207e803bba20ed10cbfdca5a1d690ba6de1c6414b10",
+          "byte_size": 8473
+        }
+      }
     },
     {
       "source_id": "national_farmers_organization:historical_federal",
@@ -3871,7 +4436,27 @@
       "rights_status": "unreviewed",
       "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-15; physical PDF page 23",
       "verification_capture_ids": [],
-      "scope_status": "candidate_needs_original_publisher_verification"
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_recovery": {
+        "source_file": "work/integration/publisher_recovery_20261005.json",
+        "source_sha256": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+        "observed_on": "2026-10-05",
+        "finding": "Original magazines, a dFlip catalog and historical Reporter navigation are recovered without a federal rating edition. Vote Smart historical leads and Iowa State’s 1982 folder remain catalog evidence. NFO is distinct from National Farmers Union.",
+        "next_action": "Follow the retained 2000 Reporter issue-index redirect at timestamp 20010209014559 and inspect original issue labels before selecting pages; retain Iowa State MS481, box 3, folder 45 as a historical fallback.",
+        "reported_research_result": {
+          "task_result": "original-unrecovered"
+        },
+        "result": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/national_farmers_organization/result.json",
+          "sha256": "3b4049c0f850199ab9bc3d440b948e0c27b79609ca66d2fb31300e4a5619132a",
+          "byte_size": 24520
+        },
+        "report": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/national_farmers_organization/report.md",
+          "sha256": "ba2f2bc4041c6878ff9270e26e4d60980fd149f54bce79e5b6936079925e46fa",
+          "byte_size": 9459
+        }
+      }
     },
     {
       "source_id": "now:historical_federal",
@@ -3901,7 +4486,27 @@
       "rights_status": "unreviewed",
       "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-16; physical PDF page 24",
       "verification_capture_ids": [],
-      "scope_status": "candidate_needs_original_publisher_verification"
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_recovery": {
+        "source_file": "work/integration/publisher_recovery_20261005.json",
+        "source_sha256": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+        "observed_on": "2026-10-05",
+        "finding": "Both original 2008 combined-session action grids are recovered with complete state, item and row-width witnesses; no aggregate score is published. The 2006 rendition has missing House narratives and malformed URLs; the independent review corrects the report’s primary-link-conflict characterization.",
+        "next_action": "Qualify an explicit NOW 110th Congress archived HTML reader against the retained summary and chamber grids, preserving native occurrence IDs and marks with null aggregate ratings; retain every 2006 link occurrence and its role separately.",
+        "reported_research_result": {
+          "recovery_status": "original-recovered"
+        },
+        "result": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/now/result.json",
+          "sha256": "7d7d643f40f7ac7b81876b8b78ccdf13c0ddd81c7ba3132453b94304b556cafb",
+          "byte_size": 101104
+        },
+        "report": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/now/report.md",
+          "sha256": "bded0788b70e67a7e0ae2a6c60e09b69af00f0b33d30b80246de50dfad268d43",
+          "byte_size": 10981
+        }
+      }
     },
     {
       "source_id": "national_womens_caucus:historical_federal",
@@ -3936,6 +4541,26 @@
         "outcome": "scope_filter_required",
         "capture_ids": [],
         "notes": "2026 native endorsements contain 108 federal-race and 15 state-office candidate occurrences plus two blank slots. Endorsement screening is distinct from incumbent performance and the historical Voting Chart. Seven reviewed endorsement years stay catalog/private-only; no candidates become congressional members, grades or actions. Original 2026 HTML SHA-256 496065e3831a952ec565f42ae3cdf60bdd0269795d4bb84962621afc0b561801; #tab-senate/#tab-u-s-house and state-office tabs. Reviewed task evidence: work/integration/publisher_implementation_20261005.json; held-grid review SHA-256 08b0816a4ad6fd64b5d7ca732fee59859a8735273bf5a96569c7f2caddb124cd."
+      },
+      "latest_recovery": {
+        "source_file": "work/integration/publisher_recovery_20261005.json",
+        "source_sha256": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+        "observed_on": "2026-10-05",
+        "finding": "Current endorsements remain a distinct original candidate shape. No original voting chart is recovered. Harvard MC 522 is the correct NWPC collection; the earlier sch00300 lead belongs to NOW. A Smithsonian newsletter catalog/image mismatch and Vote Smart 1989–1990 rendition remain unresolved original-source leads.",
+        "next_action": "Locate the exact voting-record item within Harvard MC 522’s open Publications series, beginning with catalog groups 362.2–362.9 and 362.10–363.7; retain endorsements separately.",
+        "reported_research_result": {
+          "recovery_status": "original-unrecovered"
+        },
+        "result": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/national_womens_caucus/result.json",
+          "sha256": "c423883ca39d42f50ebd1b46dba81d9936ad4df04ca6fc355627909a18b5f796",
+          "byte_size": 122590
+        },
+        "report": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/national_womens_caucus/report.md",
+          "sha256": "a7f714bdff73cb9493a773a12ba85b122f6a28183ec8fe6e680fa60e05c32a8d",
+          "byte_size": 10662
+        }
       }
     },
     {
@@ -3966,7 +4591,27 @@
       "rights_status": "unreviewed",
       "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-17; physical PDF page 25",
       "verification_capture_ids": [],
-      "scope_status": "candidate_needs_original_publisher_verification"
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_recovery": {
+        "source_file": "work/integration/publisher_recovery_20261005.json",
+        "source_sha256": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+        "observed_on": "2026-10-05",
+        "finding": "The current membership service remains access-required. A public eVoter demo shows a partial vote list, not publisher ratings. Exact Voting Records archive indexes supply an uninspected April 7, 2016 replay lead; archive dates are not edition dates.",
+        "next_action": "Retain and later inspect exact replay timestamp 20160407131741 for /explore.cfm/voteschedule; determine whether it contains grids, downloads or instructions, and distinguish ordinary votes, personalized agreement and publisher scoring.",
+        "reported_research_result": {
+          "recovery_status": "access-required"
+        },
+        "result": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/write_congressman/result.json",
+          "sha256": "1a2b3855d9121b050e1f0557904164d71c3cbf2e2a754c7c3029ba6342cd1249",
+          "byte_size": 65583
+        },
+        "report": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/write_congressman/report.md",
+          "sha256": "150c5dd8cf21fedc72bb25f75135d18c89b17fdee014eeb1ed4047c8b9b72956",
+          "byte_size": 11759
+        }
+      }
     },
     {
       "source_id": "public_citizen:historical_federal",
@@ -4026,7 +4671,29 @@
       "rights_status": "unreviewed",
       "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-18; physical PDF page 26",
       "verification_capture_ids": [],
-      "scope_status": "candidate_needs_original_publisher_verification"
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_recovery": {
+        "source_file": "work/integration/publisher_recovery_20261005.json",
+        "source_sha256": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+        "observed_on": "2026-10-05",
+        "finding": "The historical voting record belongs within RCIU Leadership Letter. Wisconsin provides donor-backed national union holdings, but no original rating section is recovered. UFCW’s 2011 scorecard announcement and later scoring letter do not become Retail Clerks editions.",
+        "next_action": "Target Wisconsin Mss 1138, Part 7, accession M93-009, Box 2, Folders 12 and 14, then 17, for the exact election-year serial section and complete original context.",
+        "reported_research_result": {
+          "task_result": "original-unrecovered",
+          "recovery_status": "original-unrecovered",
+          "research_status": "bounded_deep_dive_complete"
+        },
+        "result": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/retail_clerks/result.json",
+          "sha256": "107a05c158880d1fa53f28f0d41a9629e5b69fe13f4325e4446e8327c7608508",
+          "byte_size": 16685
+        },
+        "report": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/retail_clerks/report.md",
+          "sha256": "096178730c341146b1556226bf8cf17e021cb2788f9a716386a3023667968ab7",
+          "byte_size": 10749
+        }
+      }
     },
     {
       "source_id": "ripon_society:historical_federal",
@@ -4056,7 +4723,27 @@
       "rights_status": "unreviewed",
       "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-18; physical PDF page 26",
       "verification_capture_ids": [],
-      "scope_status": "candidate_needs_original_publisher_verification"
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_recovery": {
+        "source_file": "work/integration/publisher_recovery_20261005.json",
+        "source_sha256": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+        "observed_on": "2026-10-05",
+        "finding": "Original 1975–1976 and 1978 rating sources are recovered; publisher advertisements verify offered 1982/1983 editions whose bodies are missing. The 1979 correction stays linked to its edition. Three 2021 proxy-voting CSVs are offered but uninspected participation data.",
+        "next_action": "Target the separate 1983 Ripon Ratings using the retained publisher advertisement; preserve older originals and their correction. Inspect proxy CSVs only under a separate participation-data scope.",
+        "reported_research_result": {
+          "task_result": "partial-original-recovered"
+        },
+        "result": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/ripon_society/result.json",
+          "sha256": "6b1a99b16aba53fd79e9998b2e62ee30dcd86ecad4833e1b7335fd4437bf5b7c",
+          "byte_size": 25266
+        },
+        "report": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/ripon_society/report.md",
+          "sha256": "f2554aa09a73c472799efa7cabf658438ddc7c8f406309bab65045c068bb9df2",
+          "byte_size": 12727
+        }
+      }
     },
     {
       "source_id": "sane_historical:historical_federal",
@@ -4086,7 +4773,28 @@
       "rights_status": "unreviewed",
       "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-18; physical PDF page 26",
       "verification_capture_ids": [],
-      "scope_status": "candidate_needs_original_publisher_verification"
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_recovery": {
+        "source_file": "work/integration/publisher_recovery_20261005.json",
+        "source_sha256": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+        "observed_on": "2026-10-05",
+        "finding": "An original regional Charlotte/North Carolina SANE letter contains a federal performance assessment, with scale and period unknown. No national SANE scorecard is recovered. National-office voting-record folders run through 1987; later Peace Action evidence remains separate.",
+        "next_action": "Target Swarthmore DG 058, Series G, Box 30, with Box 179 and SDSU DA 1: B58-F19 as fallbacks; keep the regional letter’s attribution and unknown numerical semantics explicit.",
+        "reported_research_result": {
+          "recovery_status": "national_scorecard_unrecovered; regional_original_assessment_recovered",
+          "research_status": "bounded_deep_dive_complete"
+        },
+        "result": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/sane_historical/result.json",
+          "sha256": "f6f7200ff16d6c2aa0fa16f0da2eddb177ee8ba04199806c77a8006198868dbf",
+          "byte_size": 24722
+        },
+        "report": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/sane_historical/report.md",
+          "sha256": "281ca4a37f9f06a6b481090f75e207e045187012e087a084099d33f3a5289d0f",
+          "byte_size": 11363
+        }
+      }
     },
     {
       "source_id": "taxation_representation:historical_federal",
@@ -4116,7 +4824,27 @@
       "rights_status": "unreviewed",
       "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-19; physical PDF page 27",
       "verification_capture_ids": [],
-      "scope_status": "candidate_needs_original_publisher_verification"
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_recovery": {
+        "source_file": "work/integration/publisher_recovery_20261005.json",
+        "source_sha256": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+        "observed_on": "2026-10-05",
+        "finding": "No complete original scorecard or member table is recovered. Tax Notes metadata identifies the January 15, 1978 TWR newsletter, Doc 78-222, and separate House/committee studies; subscription previews and bibliographies do not recover their tables. Post-2000 coverage remains unknown.",
+        "next_action": "Retain Tax Notes RID 1xjg0 / Doc 78-222 and the 1978 pamphlet title as exact original-source targets; UConn Alternative Press File holdings provide a physical fallback. Keep committee and floor scopes separate.",
+        "reported_research_result": {
+          "task_result": "original-unrecovered"
+        },
+        "result": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/taxation_representation/result.json",
+          "sha256": "504078d22c6db4713ba9e4d647c424cbc743e10185756de99d61c27917e0055d",
+          "byte_size": 75588
+        },
+        "report": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/taxation_representation/report.md",
+          "sha256": "5855e29304f3edc45987600ea68ac8405aa1a4b346b19cd1eb4cc780fd5a98c4",
+          "byte_size": 8618
+        }
+      }
     },
     {
       "source_id": "us_student_association:historical_federal",
@@ -4146,7 +4874,27 @@
       "rights_status": "unreviewed",
       "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-19; physical PDF page 27",
       "verification_capture_ids": [],
-      "scope_status": "candidate_needs_original_publisher_verification"
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_recovery": {
+        "source_file": "work/integration/publisher_recovery_20261005.json",
+        "source_sha256": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+        "observed_on": "2026-10-05",
+        "finding": "ERIC identifies the exact jointly attributed 24-page Target Report No. 4, April 1978, available on retained microfiche rather than the failed PDF route. Wisconsin supplies later report-card holdings including 1998 and 1999–2000 guides. No original rating table is recovered.",
+        "next_action": "Catalog ED155961 and exact accession/container locators; inspect Wisconsin 1999–2000 guides and later factsheets for actual assessments, then obtain the named 1998/1982 originals or 1978 microfiche.",
+        "reported_research_result": {
+          "recovery_status": "access-required"
+        },
+        "result": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/us_student_association/result.json",
+          "sha256": "6dc1c808143f5a74d64762a3ff9977766caec1d19cceaa380ad15e273708ea9b",
+          "byte_size": 110394
+        },
+        "report": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/us_student_association/report.md",
+          "sha256": "424469b53ecc2a171bf091704972317a50de9866d4e7e262f80637957cac9c60",
+          "byte_size": 11107
+        }
+      }
     },
     {
       "source_id": "uaw:historical_federal",
@@ -4211,6 +4959,26 @@
         "outcome": "identity_review",
         "capture_ids": [],
         "notes": "Related 2024 Congressional Scorecard is imprinted North Central States Regional Council of Carpenters, not the assigned national publisher. The complete federal issue-mark grid fits the existing metric-free model; distinct regional attribution and canonical qualification remain. The national House/Senate Votes original remains unrecovered. Original PDF SHA-256 306d2222ac22bed1d6923097f84a60fbaaa607215721bfcea5f1b52cff100eb7; physical p2 imprint and p12 / printed22–23 grid. Reviewed task evidence: work/integration/publisher_implementation_20261005.json; held-grid review SHA-256 08b0816a4ad6fd64b5d7ca732fee59859a8735273bf5a96569c7f2caddb124cd."
+      },
+      "latest_recovery": {
+        "source_file": "work/integration/publisher_recovery_20261005.json",
+        "source_sha256": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+        "observed_on": "2026-10-05",
+        "finding": "National magazine originals and retrieval routes are recovered without the national House/Senate Votes section. The complete 2024 regional metric-free grid belongs to North Central States Regional Council of Carpenters under its own identity. Magazine and election percentages do not establish national ratings.",
+        "next_action": "Keep the national source unverified and target UMD Publications object 333136 for the actual magazine voting section; preserve the regional source separately with no national alias.",
+        "reported_research_result": {
+          "recovery_status": "national_original_unrecovered; original_national_non_rating_material_and_archive_routes_recovered"
+        },
+        "result": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/carpenters/result.json",
+          "sha256": "40c7f1bed84782f783d7505b148ff63ae3a0c9f49327b8abb93733378fbfc1c1",
+          "byte_size": 61480
+        },
+        "report": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/carpenters/report.md",
+          "sha256": "e78ee3d6f5051e8b0cbdc8ae02354a38279b0cc6f494429752d73a010c6b2a6c",
+          "byte_size": 11366
+        }
       }
     },
     {
@@ -4241,7 +5009,27 @@
       "rights_status": "unreviewed",
       "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-20; physical PDF page 28",
       "verification_capture_ids": [],
-      "scope_status": "candidate_needs_original_publisher_verification"
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_recovery": {
+        "source_file": "work/integration/publisher_recovery_20261005.json",
+        "source_sha256": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+        "observed_on": "2026-10-05",
+        "finding": "No original UCC voting chart is recovered. A historical account names UCC Network, formerly Washington Report, and native archive search yields a specific Regional Offices finding aid. The Baylor 1995 voting record remains a precise physical holding.",
+        "next_action": "Inspect the publisher-indexed finding aid 2013.16, Regional Offices, document 00000021, for UCC Network holdings dates and containers before targeting a latest original chart.",
+        "reported_research_result": {
+          "recovery_status": "original-unrecovered"
+        },
+        "result": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/united_church_christ/result.json",
+          "sha256": "31f75f5b3b0b2498ce119a9818759ca5dcca7b4e2319108ab1c965eb61910a91",
+          "byte_size": 62530
+        },
+        "report": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/united_church_christ/report.md",
+          "sha256": "da586c107fa8285f3ca513f496d6222326b84ed18a1936b7f13b9e69bfaaa209",
+          "byte_size": 12008
+        }
+      }
     },
     {
       "source_id": "united_mine_workers:historical_federal",
@@ -4271,7 +5059,28 @@
       "rights_status": "unreviewed",
       "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-20; physical PDF page 28",
       "verification_capture_ids": [],
-      "scope_status": "candidate_needs_original_publisher_verification"
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_recovery": {
+        "source_file": "work/integration/publisher_recovery_20261005.json",
+        "source_sha256": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+        "observed_on": "2026-10-05",
+        "finding": "Original journals and public discovery APIs are recovered without a federal rating edition. Endorsements and a state-legislative claim remain outside federal ratings. IUP identifies the exact undated UMWA Congressional Voting Record folder.",
+        "next_action": "Target IUP Manuscript Group 66, Series X COMPAC, Box 130, Folder 22 for a complete original federal record; do not assign neighboring folder dates to the undated item.",
+        "reported_research_result": {
+          "task_result": "original-unrecovered",
+          "recovery_status": "original-unrecovered"
+        },
+        "result": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/united_mine_workers/result.json",
+          "sha256": "4778a7ef614f8aaa21073d58f21cac180a5088898b87c8455bea453c7c9c50ee",
+          "byte_size": 29404
+        },
+        "report": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/united_mine_workers/report.md",
+          "sha256": "77623f87888cea70ce78e181cb36af35757732b4e7e1e5213fcff04d92b1f2a3",
+          "byte_size": 10406
+        }
+      }
     },
     {
       "source_id": "united_transportation:historical_federal",
@@ -4306,6 +5115,26 @@
         "outcome": "unverified_lead",
         "capture_ids": [],
         "notes": "No complete UTU voting grid recovered; the linked 2011 original remains unresolved after an archived 404. The October 2012 original is candidate endorsements, with star meaning incumbent. The October 2008 publisher sentence reports Obama has a 100 percent UTU voting record; preserve this isolated rating claim as a positive lead, with evaluation period and all-member population unknown. SMART successor authorship remains distinct. Original 2008 PDF SHA-256 d97d13f08e1557064469864354b28c946905cfd852d99d37d1b80485620634c2, p4; original 2012 PDF SHA-256 3ceb913a9198b0d0286ac22e9d1aebe343715a64b1563b2d0e9d08cc6eaa01d7, p1 / printed6–7. Reviewed task evidence: work/integration/publisher_implementation_20261005.json; held-grid review SHA-256 08b0816a4ad6fd64b5d7ca732fee59859a8735273bf5a96569c7f2caddb124cd."
+      },
+      "latest_recovery": {
+        "source_file": "work/integration/publisher_recovery_20261005.json",
+        "source_sha256": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+        "observed_on": "2026-10-05",
+        "finding": "Original October 2012 UTU newsletter/HTML renditions contain a partial retrospective lifetime Senate assessment. The 2008 statement has unresolved federal-only scope. No complete UTU grid is recovered; SMART 2013–2014 scorecards retain separate successor attribution.",
+        "next_action": "Review the retained 2012 partial original under an explicitly bounded retrospective scope, preserving both occurrences and null denominator/period details; retain newsletter voting-record references for fuller recovery.",
+        "reported_research_result": {
+          "recovery_status": "partial_original_ratings_recovered"
+        },
+        "result": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/united_transportation/result.json",
+          "sha256": "b7ef0cabf9b63e29e25489f4c0739b6054125d83dc7d1c80428830c8b20ee1b3",
+          "byte_size": 52317
+        },
+        "report": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/united_transportation/report.md",
+          "sha256": "6ead755a19c688ccfdb5686dd6770354188fddf294dc2f5985429eb73d7b3688",
+          "byte_size": 12272
+        }
       }
     },
     {
@@ -4336,7 +5165,28 @@
       "rights_status": "unreviewed",
       "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-21; physical PDF page 29",
       "verification_capture_ids": [],
-      "scope_status": "candidate_needs_original_publisher_verification"
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_recovery": {
+        "source_file": "work/integration/publisher_recovery_20261005.json",
+        "source_sha256": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+        "observed_on": "2026-10-05",
+        "finding": "The 2004 newsletter holding is verified at GMU, but original rating pages are missing. Two distinct Vote Smart IDs share the literal 1995 label; third-party scale and current office labels cannot establish original scores or historical membership. Sparse holdings and an undated masthead do not establish continuity or retirement.",
+        "next_action": "Target GMU C0181, Box 23, Folder 12 for the 2004 originals; then Library of Virginia Box 5, Folder 24 for 1995, retaining Vote Smart IDs 84 and 43 as distinct comparison leads.",
+        "reported_research_result": {
+          "task_result": "original-unrecovered",
+          "recovery_status": "original-unrecovered"
+        },
+        "result": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/woman_activist/result.json",
+          "sha256": "16cf266a62d223a4f6b491bc591b78f43766996862dbe3141d6c8cbfb1e3be98",
+          "byte_size": 72933
+        },
+        "report": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/woman_activist/report.md",
+          "sha256": "905772633a65ae373713eea5d390a1ad85509cf7519ea0850249c646887ac3e3",
+          "byte_size": 11309
+        }
+      }
     },
     {
       "source_id": "womens_lobby:historical_federal",
@@ -4366,7 +5216,27 @@
       "rights_status": "unreviewed",
       "notes": "Directory reports voting-record publications, not necessarily numerical scores. Report date is not evidence of a particular scorecard edition or current availability. Locator: Printed CRS-21; physical PDF page 29",
       "verification_capture_ids": [],
-      "scope_status": "candidate_needs_original_publisher_verification"
+      "scope_status": "candidate_needs_original_publisher_verification",
+      "latest_recovery": {
+        "source_file": "work/integration/publisher_recovery_20261005.json",
+        "source_sha256": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+        "observed_on": "2026-10-05",
+        "finding": "An ancillary original brochure and exact biennial Voting Chart title are recovered, without rating rows. Penn and Auburn supply concrete holdings. SMU’s November 1974 Quarterly is Box 64, Folder 15; collection ranges and secondary rankings do not establish editions.",
+        "next_action": "Retain the Folder 15 correction and target Penn Ms. Coll. 588, Box 30, Folder 519 Quarterly issues and inserts, then Box 26, Folder 401 Alerts, for the actual original Voting Chart.",
+        "reported_research_result": {
+          "recovery_status": "original-unrecovered"
+        },
+        "result": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/womens_lobby/result.json",
+          "sha256": "e7ccaa223c0a497f057dd1ad0290984160fef6da4da0eea97f71aacfb2cc5fbd",
+          "byte_size": 56723
+        },
+        "report": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/womens_lobby/report.md",
+          "sha256": "42333340e85e94b74ef6445386b81a0400aee3c34eb0caea6d774532bdf3e99c",
+          "byte_size": 10652
+        }
+      }
     },
     {
       "source_id": "american_energy_alliance:federal",

@@ -1,7 +1,7 @@
 {
   "surveyed_at": "2026-10-05",
   "input_sha256": {
-    "scorecard_source_catalog.json": "9d29743a1a5d5985acbcc6746f7f103aee03d8652c15cc6010f1cfd509e93227",
+    "scorecard_source_catalog.json": "e045ebdae95e3155b077620648a42967d62e08f7ce7a3a8b10b1e6609daceb49",
     "shape_profiles.json": "6339c8189e69b1a9dcb0021c9c70e511e34338e14b66cc85b45102dca25c3ea9",
     "capture_receipts.json": "3698e62f2d8460764a44b3657208224e335e788f7522ce0af68fa049c8096916",
     "schema_breakers.json": "1e0a8cd8e55cc25ae8a2c1465f5fa857b1d416713b24e0f8561021ee58298b06",
@@ -12,7 +12,8 @@
     "work/samples/row_examples.json": "4a6bdaaa392dca0f0444463098591bb5d75245a054eba885c6ec9f69e6268798",
     "work/samples/measurements.json": "4e75d8efcd3f8a24f6ada13a35ef968cd83ed7076d1407ed7e739cf90af94819",
     "work/gate/qualification.json": "3af99eef3ea732dfcded898da0f8420eef1254ff04aabe789b0c42a74426e5c0",
-    "work/gate/freeze_receipt.json": "86d333cf4af455310413bd4f571e2091ffe5fa9e3b7a300ac2c50c32e779bab2"
+    "work/gate/freeze_receipt.json": "86d333cf4af455310413bd4f571e2091ffe5fa9e3b7a300ac2c50c32e779bab2",
+    "work/integration/publisher_recovery_20261005.json": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3"
   },
   "catalog_series_candidates": 126,
   "distinct_publisher_candidates": 126,

@@ -16,7 +16,10 @@ SPEC.loader.exec_module(survey)
 
 @pytest.fixture
 def data():
-    return {name: json.loads((survey.DEFAULT_DIRECTORY / name).read_text()) for name in survey.INPUTS}
+    names = survey.INPUTS + (
+        (survey.RECOVERY_FILE,) if (survey.DEFAULT_DIRECTORY / survey.RECOVERY_FILE).exists() else ()
+    )
+    return {name: json.loads((survey.DEFAULT_DIRECTORY / name).read_text()) for name in names}
 
 
 def test_research_inputs_and_reports_are_consistent():

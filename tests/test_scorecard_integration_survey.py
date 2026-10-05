@@ -111,6 +111,107 @@ def test_older_inventory_without_survey_still_generates(directory):
     assert report["publishers"][0]["survey_finding"] is None
 
 
+def recovery_document(directory, api=False):
+    filename = "publisher_recovery_api_20261005.json" if api else "publisher_recovery_20261005.json"
+    document = {
+        "format_version": "scorecard-publisher-recovery-api/1" if api else "scorecard-publisher-recovery-aggregate/1",
+        "observed_on": "2026-10-05",
+        "expected_publishers": ["example"],
+        "summary": {
+            "reviewed_publishers" if api else "assigned_publishers": 1,
+            "newly_qualified_editions": 0,
+            "newly_published_editions": 0,
+        },
+        "publishers": [
+            {
+                "publisher_id": "example",
+                "finding": "Original table recovered; partial export stays separate",
+                "next_action": "Implement and qualify the retained original table",
+                "reported_research_result": {"task_result": "original-recovered"},
+                "endpoints": [{"url": "https://publisher.example/api", "category": "unverified_route"}],
+            }
+        ],
+    }
+    path = directory / filename
+    path.write_text(json.dumps(document))
+    return path
+
+
+def test_recovery_rollup_updates_all_current_views_without_qualifying(directory):
+    path = recovery_document(directory)
+    recovery_document(directory, api=True)
+    report, markdown = integrations.generate(directory)
+    row = report["publishers"][0]
+    assert row["state"] == "unverified"
+    assert row["reader"] is None and row["qualified_editions"] == []
+    assert row["verified_api_endpoints"] == []
+    assert row["next_action"] == "Implement and qualify the retained original table"
+    assert row["recovery_finding"]["reported_research_result"] == {"task_result": "original-recovered"}
+    assert row["recovery_api_finding"]["finding"] == "Original table recovered; partial export stays separate"
+    assert report["input_pins"][path.name] == sha256(path.read_bytes()).hexdigest()
+    assert "publisher_recovery_20261005.md" in markdown
+    assert "publisher_api_current.md" in markdown
+
+
+def test_current_api_distinguishes_dated_discovery_from_source_qualification(directory):
+    path = directory / "publisher_api_inventory.json"
+    data = json.loads(path.read_bytes())
+    data["publishers"][0]["endpoints"] = [
+        {
+            "method": "GET",
+            "url_template": "https://publisher.example/api",
+            "purpose": "Discovered route",
+            "discovery_status": "verified_api",
+        }
+    ]
+    path.write_text(json.dumps(data))
+    progress, _ = integrations.generate(directory)
+    current, _ = integrations.current_api_inventory(directory, progress)
+    row = current["publishers"][0]
+    assert row["qualified_api_endpoints"] == []
+    assert row["dated_discovery_routes"][0]["evidence_stage"] == "dated_discovery"
+    assert row["dated_discovery_routes"][0]["source_file"] == path.name
+
+
+@pytest.mark.parametrize("stage", ["reader", "qualified", "published"])
+def test_recovery_preserves_reader_and_edition_authority(directory, monkeypatch, stage):
+    recovery_document(directory)
+    path = directory / "integration_qualifications.json"
+    data = json.loads(path.read_bytes())
+    data["readers"]["example"] = "example_reader"
+    if stage != "reader":
+        data["editions"] = [
+            dict(publisher_id="example", scorecard_id="example:2025", state=stage, receipt="qualified.json")
+        ]
+    path.write_text(json.dumps(data))
+    monkeypatch.setattr(integrations, "read_receipt", lambda *_: {})
+    report, _ = integrations.generate(directory)
+    row = report["publishers"][0]
+    assert row["state"] == ("reader_implemented" if stage == "reader" else f"{stage}_scope")
+    assert row["next_action"] != "Implement and qualify the retained original table"
+
+
+@pytest.mark.parametrize("api", [False, True])
+@pytest.mark.parametrize("change", ["duplicate", "missing", "unknown", "qualified", "empty_next_action"])
+def test_incomplete_or_promoting_recovery_rollup_is_refused(directory, api, change):
+    path = recovery_document(directory, api)
+    data = json.loads(path.read_bytes())
+    if change == "duplicate":
+        data["publishers"].append(deepcopy(data["publishers"][0]))
+    elif change == "missing":
+        data["expected_publishers"].append("missing")
+    elif change == "unknown":
+        data["publishers"][0]["publisher_id"] = "unknown"
+        data["expected_publishers"] = ["unknown"]
+    elif change == "qualified":
+        data["summary"]["newly_qualified_editions"] = 1
+    else:
+        data["publishers"][0]["next_action"] = ""
+    path.write_text(json.dumps(data))
+    with pytest.raises(ValueError, match="Recovery"):
+        integrations.generate(directory)
+
+
 def implementation_document(directory, result="implemented"):
     document = {
         "format_version": "scorecard-publisher-implementation-aggregate/1",
