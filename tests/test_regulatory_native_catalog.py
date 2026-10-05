@@ -180,7 +180,11 @@ def test_replaced_and_exported_witnesses_resolve_exact_retained_payloads(con, tm
         iceberg.replace_rows(con, COMMENT, 'source')
     selected = native.export_pair(con, COMMENT, tmp_path, generation_id='exported')
     receipt = next(r for r in pq.read_table(selected.receipts).to_pylist() if r['outcome'] == 'accepted')
-    assert len(receipt['witnesses']) >= 3
+    assert len(receipt['witnesses']) == 1
+    from spicy_regs.etl_receipts import decode_exact_json
+    diagnostic = decode_exact_json(receipt['diagnostic_json'])
+    assert set(diagnostic['prior_receipt']) == {'receipt_id', 'generation_id', 'processing_sha256'}
+    assert 'prior_receipts' not in diagnostic and 'retained_processing' not in diagnostic
     for witness in receipt['witnesses']:
         payload = resolve_receipt_witness(receipt, witness)
         assert sha256(payload).hexdigest() == witness['sha256'].removeprefix('sha256:')

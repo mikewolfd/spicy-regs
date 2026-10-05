@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from hashlib import sha256
+import shutil
 from pathlib import Path
 from tempfile import TemporaryDirectory, NamedTemporaryFile
 from uuid import uuid4
@@ -133,19 +134,42 @@ def _validate_source_columns(con, source, dataset):
                      else f'CAST(NULL AS {dtype}) AS "{name}"' for name, dtype in SOURCE_COLUMNS[dataset])
 
 
-def _stage(con, source, dataset, work, generation, *, prior_receipts=None):
+def normalize_source_record(dataset, row):
+    from datetime import date, datetime
+    shaped = {}
+    identity = row.get(policy(dataset).identity_fields[0])
+    if not isinstance(identity, str) or not identity.strip():
+        raise ValueError(f'{dataset}: source identity must be nonblank text')
+    for name, dtype in SOURCE_COLUMNS[dataset]:
+        value = row.get(name)
+        if isinstance(value, str) and dtype in {'INTEGER', 'BIGINT'}:
+            import re
+            if not re.fullmatch(r'[+-]?[0-9]+', value):
+                raise ValueError(f'{dataset}.{name}: invalid integer')
+            value = int(value)
+        elif isinstance(value, str) and dtype == 'BOOLEAN':
+            if value.lower() not in {'true', 'false'}:
+                raise ValueError(f'{dataset}.{name}: invalid boolean')
+            value = value.lower() == 'true'
+        elif isinstance(value, str) and dtype == 'DATE':
+            value = date.fromisoformat(value)
+        elif isinstance(value, str) and dtype.startswith('TIMESTAMP'):
+            value = datetime.fromisoformat(value.replace('Z', '+00:00'))
+        elif isinstance(value, str) and dtype == 'DOUBLE':
+            value = float(value)
+        shaped[name] = value
+    return shaped
+
+
+def _stage(con, source, dataset, work, generation, *, prior_receipts=None, bulk=True):
     from spicy_regs.etl_receipts import ReceiptContext
     source_path = work / 'source.parquet'
     _validate_source_columns(con, source, dataset)  # Refuse unclassified columns before conversion.
-    key = policy(dataset).identity_fields[0]
     source_query = f'SELECT * FROM {source}'
-    if prior_receipts is not None:
-        source_query = f'SELECT s.*, w.receipt AS _prior_receipt FROM {source} s LEFT JOIN {prior_receipts} w USING ("{key}")'
     _copy(con, source_query, source_path)
     def observations():
         from spicy_regs.etl_receipts import exact_json
         for i, row in enumerate(_rows(source_path)):
-            prior = row.pop('_prior_receipt', None)
             # The exact source record is retained in this receipt; its canonical bytes
             # remain reconstructable after temporary staging files are removed.
             witness = {'source_id': source, 'source_uri': None,
@@ -153,37 +177,36 @@ def _stage(con, source, dataset, work, generation, *, prior_receipts=None):
                        'locator': 'receipt.values.raw_source_record (canonical exact_json)',
                        'body_version': generation}
             context = ReceiptContext(generation, f'row:{i}', 'regulatory-catalog-native-v1', [witness])
-            if prior is not None:
-                from spicy_regs.etl_receipts import inherit_receipt
-                context = inherit_receipt(context, prior)
             yield row, context
     records = observations()
-    def normalized(row):
-        from datetime import date, datetime
-        shaped = {}
-        identity = row.get(key)
-        if not isinstance(identity, str) or not identity.strip():
-            raise ValueError(f'{dataset}: source identity must be nonblank text')
-        for name, dtype in SOURCE_COLUMNS[dataset]:
-            value = row.get(name)
-            if isinstance(value, str) and dtype in {'INTEGER', 'BIGINT'}:
-                import re
-                if not re.fullmatch(r'[+-]?[0-9]+', value):
-                    raise ValueError(f'{dataset}.{name}: invalid integer')
-                value = int(value)
-            elif isinstance(value, str) and dtype == 'BOOLEAN':
-                if value.lower() not in {'true', 'false'}:
-                    raise ValueError(f'{dataset}.{name}: invalid boolean')
-                value = value.lower() == 'true'
-            elif isinstance(value, str) and dtype == 'DATE':
-                value = date.fromisoformat(value)
-            elif isinstance(value, str) and dtype.startswith('TIMESTAMP'):
-                value = datetime.fromisoformat(value.replace('Z', '+00:00'))
-            elif isinstance(value, str) and dtype == 'DOUBLE':
-                value = float(value)
-            shaped[name] = value
-        return shaped
-    subject, receipts = write_records(dataset, records, work / 'mapped', project=normalized)
+    from spicy_regs import comments_bulk, etl_bulk
+    from spicy_regs.etl_receipts import carry_receipt_history, validate_receipt_bundle
+    from spicy_regs.transforms.regulations_receipts import map_regulations_attempt
+    if bulk and dataset == 'comments' and comments_bulk.eligible(pq.read_schema(source_path)):
+        mapped = work / 'mapped'
+        mapped.mkdir()
+        subject, receipts = mapped / 'subjects.parquet', mapped / 'etl_receipts.parquet'
+        def attempt(row, ordinal):
+            from spicy_regs.etl_receipts import exact_json
+            witness = {'source_id': source, 'source_uri': None,
+                       'sha256': sha256(exact_json(row).encode()).hexdigest(),
+                       'locator': 'receipt.values.raw_source_record (canonical exact_json)', 'body_version': generation}
+            context = ReceiptContext(generation, f'row:{ordinal}', 'regulatory-catalog-native-v1', [witness])
+            return map_regulations_attempt(dataset, row, context, project=lambda raw: normalize_source_record(dataset, raw))
+        comments_bulk.write_bundle(source_path, subject, receipts, policy=policy(dataset), generation_id=generation,
+                                   source_label=source, row_attempt=attempt)
+    else:
+        subject, receipts = write_records(dataset, records, work / 'mapped',
+                                         project=lambda row: normalize_source_record(dataset, row))
+    if prior_receipts is not None:
+        prior_path = work / 'prior-receipts.parquet'
+        _copy(con, f'SELECT unnest(receipt) FROM {prior_receipts}', prior_path)
+        carried = carry_receipt_history(receipts, [prior_path], work / 'carried-receipts.parquet')
+        carried.replace(receipts)
+    try:
+        etl_bulk.validate_bundle({dataset: [subject]}, [receipts], [policy(dataset)], generation_id=generation)
+    except etl_bulk.NotBulkEligible:
+        validate_receipt_bundle({dataset: [subject]}, [receipts], [policy(dataset)], generation_id=generation)
     if pq.ParquetFile(subject).metadata.num_rows != pq.ParquetFile(source_path).metadata.num_rows:
         raise CatalogConversionRefused(receipts)
     return subject, receipts
@@ -307,8 +330,7 @@ def processing_table(con, record_type, *, where: str | None = None, in_transacti
             _copy(con, f"SELECT r.* FROM {receipts_table()} r{selected_ids} "
                        f"WHERE r.dataset='{dataset}' AND r.outcome='accepted'", raw_receipts)
             receipts = work / 'receipts.parquet'
-            write_rows((rebind_receipt(row, generation_id=generation) for row in _rows(raw_receipts)),
-                       receipts, RECEIPT_SCHEMA)
+            shutil.copyfile(raw_receipts, receipts)
             restored = work / 'processing.parquet'
             def source_rows():
                 for row in read_with_receipts([subject], [receipts], policy(dataset), generation_id=generation):
@@ -437,8 +459,7 @@ def export_pair(con, record_type, output_dir, *, generation_id, snapshot=None):
         _copy(con, f'SELECT * FROM {qualified(record_type)}', subjects)
         raw_receipts = Path(temporary) / 'receipts.parquet'
         _copy(con, f"SELECT * FROM {receipts_table()} WHERE dataset='{dataset}'", raw_receipts)
-        write_rows((rebind_receipt(row, generation_id=generation_id) for row in _rows(raw_receipts)),
-                   receipts, RECEIPT_SCHEMA)
+        shutil.copyfile(raw_receipts, receipts)
         for _ in read_with_receipts([subjects], [receipts], policy(dataset), generation_id=generation_id):
             pass
     metadata = {'generation_id': generation_id, 'dataset': dataset}
