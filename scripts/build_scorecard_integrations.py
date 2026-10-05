@@ -335,6 +335,18 @@ def generate(directory: Path):
             else "Pending"
         )
         implementation = r["implementation_finding"]
+        authority = implementation.get("authority") if implementation else None
+        if (
+            implementation
+            and implementation["task_result"] == "verified-retired"
+            and isinstance(authority, str)
+            and authority.strip()
+        ):
+            # Retain the dated survey in structured evidence; display the explicit
+            # current correction rather than repeating its superseded date claim.
+            survey_note = f"Current correction: {authority.replace('|', r'\|')}"
+            if finding:
+                survey_note += f" ([Dated survey]({SURVEY_FILE.replace('.json', '.md')}))"
         implementation_note = (
             f"[{implementation['task_result']}]({IMPLEMENTATION_FILE.replace('.json', '.md')})"
             if implementation

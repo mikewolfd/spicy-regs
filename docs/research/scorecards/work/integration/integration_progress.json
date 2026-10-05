@@ -7,7 +7,7 @@
     "publisher_api_inventory.json": "097e102c3af4ebb5ad87731be5d40ea4ad283b8ec21f188b1e7460755755925d",
     "integration_qualifications.json": "a9a1f0601f10bea40354e9d2f9e01f5037ea2ad0dc4d50727aa21d47cfed5d85",
     "publisher_survey_20261005.json": "7e7431dc37bf8564d16df4f044498e1176f7e654cc0cd694b8bdb8a07944c9c1",
-    "publisher_implementation_20261005.json": "d62157fcca63c2b9cf942cef65f91a2b6bf8b7bb8e373169e7dfc4ec418e5c27"
+    "publisher_implementation_20261005.json": "02c472173923a4a2f3438155e36b76b83a6dd1d9210504ffec2a76abedbdb2f5"
   },
   "scope": "Every publisher candidate in both inventories; all available editions and renditions remain in scope",
   "states": {
@@ -6285,7 +6285,7 @@
           }
         },
         "next_missing_item": "Retain the dated publisher closure notice; recover only a named historical Liberty Ledger original or attributable issue.pl?dir=spotlight original when useful. Last rating edition remains unknown.",
-        "authority": "Original Spotlight publisher closure notice updated 07/27/01; archived source SHA-256 0c5ffda9105de0d8e855052358d1efabab67e43711decb87ca2ff88e8c363b9c",
+        "authority": "Original Spotlight publisher notice updated 07/27/01 confirms retirement; exact closure date and last scorecard edition remain unknown. Archived source SHA-256 0c5ffda9105de0d8e855052358d1efabab67e43711decb87ca2ff88e8c363b9c.",
         "source_document": {
           "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/political-archives/implementation.json",
           "sha256": "55fc1783bb270e86a770d5b1b0efe5de07d281b4543422e9ce80eeb756d6d4c3"

@@ -168,6 +168,36 @@ def test_explicit_retirement_updates_disposition_without_qualifying_a_source(dir
     assert row["discovery_support_status"] == "unverified"
 
 
+@pytest.mark.parametrize("has_reader", [False, True])
+def test_current_retirement_presentation_preserves_dated_survey_without_inventing_closure_date(directory, has_reader):
+    survey_path = directory / "publisher_survey_20261005.json"
+    survey = json.loads(survey_path.read_bytes())
+    dated_text = "Archived publisher notice records closure on July 27, 2001; last rating edition is unknown."
+    survey["publishers"][0]["assessment"]["finding"] = dated_text
+    survey_path.write_text(json.dumps(survey))
+    original_survey = survey_path.read_bytes()
+    path = implementation_document(directory, "verified-retired")
+    document = json.loads(path.read_bytes())
+    correction = "Publisher notice updated 07/27/01; exact closure date and last rating edition remain unknown."
+    document["publishers"][0]["authority"] = correction
+    path.write_text(json.dumps(document))
+    if has_reader:
+        ledger_path = directory / "integration_qualifications.json"
+        ledger = json.loads(ledger_path.read_bytes())
+        ledger["readers"]["example"] = "example_reader"
+        ledger_path.write_text(json.dumps(ledger))
+    report, markdown = integrations.generate(directory)
+    row = report["publishers"][0]
+    assert dated_text not in markdown
+    assert "Current correction" in markdown and correction in markdown
+    assert "Dated survey" in markdown
+    assert row["survey_finding"]["assessment"]["finding"] == dated_text
+    assert row["implementation_finding"]["authority"] == correction
+    assert row["state"] == ("reader_implemented" if has_reader else "retired_confirmed")
+    assert row["qualified_editions"] == []
+    assert survey_path.read_bytes() == original_survey
+
+
 @pytest.mark.parametrize(
     "result", ["original-unrecovered", "access-required", "source-recovered-but-unsupported-shape"]
 )
