@@ -88,6 +88,8 @@ def test_remote_generic_mcp_lists_queries_and_pins_processing_receipts(tmp_path,
         assert "etl_receipts" in {row["table"] for row in _listed(_tool_data(server, "list_sources", {}))}
         described = _tool_data(server, "describe_table", {"table": "etl_receipts"})
         assert described["available"]
+        # The reply is the receipts page for a reader who asks the server: it carries the guide a table's note points at.
+        assert "## What a receipt does not tell you" in described["metadata"]["guide"]
         pin = described["publication"]
         assert pin["status"] == "managed_receipts"
         assert pin["families"]["members"]["artifact_digest"] == value["families"]["members"]["artifactDigest"]

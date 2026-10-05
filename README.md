@@ -331,6 +331,9 @@ take their per-column prose from the installed spicy-docs contract, so those
 sentences live beside the code that fills each column. Declaring that marker
 and an inline `columns:` together is refused at load.
 
+One page explains ETL receipts: `docs/tables/etl_receipts.md`, whose text is
+`data_dictionary/etl_receipts.md`.
+
 > **Consumers must re-vendor.** `catalog.json` grew from 24 classes to 45 and
 > `congress_bills` from 10 columns to 48, so every copy pinned by
 > `catalog.json.sha256` is stale. `format_version` is still `3` — no field

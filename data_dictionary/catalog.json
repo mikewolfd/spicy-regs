@@ -321,78 +321,78 @@
     "label": "ETL receipts",
     "category": "processing_evidence",
     "kind": "not_a_range",
-    "summary": "Processing outcomes and exact source evidence stored separately from useful subject rows.",
-    "grain": "One receipt per selected subject version or processing attempt, within its generation.",
+    "summary": "The paperwork behind each row: what was read to make it, how the processing went, and what was kept out of the table's columns.",
+    "grain": "One receipt for each row of a table that has receipts, plus one for each record that was read and recorded without becoming a row.",
     "identity_columns": [
       "receipt_id"
     ],
     "member": "etl_receipts.parquet",
-    "selection": "Read the receipt member named by the same captured publication family as the subject; never join independent latest snapshots.",
+    "selection": "A table and its receipts are published together as one build. Read both from the same entry of the publication index; a receipts file from another build does not match the table's rows.",
     "columns": [
       {
         "column_name": "receipt_id",
         "column_type": "VARCHAR",
-        "description": "Stable identity of this processing receipt."
+        "description": "This receipt's own fingerprint: a SHA-256 digest of all its other columns, so a receipt that was changed or damaged no longer matches its id."
       },
       {
         "column_name": "dataset",
         "column_type": "VARCHAR",
-        "description": "Logical dataset whose observation or attempted processing this receipt records."
+        "description": "The table this receipt belongs to, by name (`crs_reports`). A few datasets have no table of their own and exist only as receipts."
       },
       {
         "column_name": "policy_version",
         "column_type": "VARCHAR",
-        "description": "Explicit field policy used to separate subject values and processing evidence."
+        "description": "Version of the rule that says which of the table's fields are published as columns and which are kept in the receipt."
       },
       {
         "column_name": "generation_id",
         "column_type": "VARCHAR",
-        "description": "Exact generation containing this receipt and its selected subject values."
+        "description": "The build that published this receipt. A table and its receipts are always published together as one build, and this names it."
       },
       {
         "column_name": "record_id",
         "column_type": "VARCHAR",
-        "description": "Shared-receipt identity derived from the dataset's declared subject key; null for observations without a subject."
+        "description": "A SHA-256 fingerprint of the table's name and the row's key. Empty on a receipt that states no key."
       },
       {
         "column_name": "subject_version",
         "column_type": "VARCHAR",
-        "description": "Digest of the exact native subject values, used to prevent joining a receipt to a different row version."
+        "description": "A SHA-256 fingerprint of the row's published values. It changes when any of them changes, which ties a receipt to one exact version of its row. Empty on a receipt that has no row."
       },
       {
         "column_name": "identity_json",
         "column_type": "VARCHAR",
-        "description": "Lossless typed encoding of the subject's declared natural key."
+        "description": "The row's key: each key column's name and its value, in the typed form shown under \"How to find the receipt for a row\". Empty on a receipt that states no key."
       },
       {
         "column_name": "attempt_id",
         "column_type": "VARCHAR",
-        "description": "Identity of the processing attempt, including failed or empty attempts."
+        "description": "Which processing attempt produced the receipt. A failed attempt, and one that produced no row, have one too."
       },
       {
         "column_name": "outcome",
         "column_type": "VARCHAR",
-        "description": "accepted, observed, rejected, refused or error; these processing outcomes are separate from business statuses."
+        "description": "`accepted`: the record became the row this receipt goes with. `observed`: something was read and recorded, and no row goes with it (a dataset that has no table, a read that produced no row, or a row since removed). `rejected`, `refused` or `error`: the record did not become a row, and none was made up for it; each table's pipeline chooses among the three words. All five describe our processing, never the publisher's own status for the record."
       },
       {
         "column_name": "processor",
         "column_type": "VARCHAR",
-        "description": "Processor or interpretation version that produced the receipt."
+        "description": "Name and version of the program, or reading rule, that produced the receipt."
       },
       {
         "column_name": "witnesses",
         "column_type": "STRUCT(source_id VARCHAR, source_uri VARCHAR, sha256 VARCHAR, locator VARCHAR, body_version VARCHAR)[]",
-        "description": "Ordered source witnesses with identifiers, URIs, digests, locators and body versions; repetitions are preserved."
+        "description": "What was read to produce the receipt, in order, a source read twice listed twice. For each: its identifier (`source_id`), its address (`source_uri`), a SHA-256 fingerprint of its content (`sha256`), the place within it (`locator`) and, for a stored copy, which copy (`body_version`). Every receipt names at least one source, with a fingerprint or a stored-copy version."
       },
       {
         "column_name": "processing_json",
         "column_type": "VARCHAR",
-        "description": "Shared lossless typed encoding of explicitly classified processing fields and original conversion inputs."
+        "description": "The fields this table keeps out of its columns, by name, in the typed form shown under \"How to read a value out of a receipt\". For many tables that is the whole record as the pipeline held it before conversion (`raw_record`); for others, named fields such as a source link. On a receipt for a record that did not become a row, it holds the fields that were read."
       },
       {
         "column_name": "diagnostic_json",
         "column_type": "VARCHAR",
-        "description": "Shared lossless typed encoding of processing diagnostics; separate from subject content."
+        "description": "Notes about the processing itself, in the same typed form, such as which earlier build's receipt for this row was carried forward and what that receipt held."
       }
     ],
     "datasets": [

@@ -17941,78 +17941,78 @@
     "label": "ETL receipts",
     "category": "processing_evidence",
     "kind": "not_a_range",
-    "summary": "Processing outcomes and exact source evidence stored separately from useful subject rows.",
-    "grain": "One receipt per selected subject version or processing attempt, within its generation.",
+    "summary": "The paperwork behind each row: what was read to make it, how the processing went, and what was kept out of the table's columns.",
+    "grain": "One receipt for each row of a table that has receipts, plus one for each record that was read and recorded without becoming a row.",
     "identity_columns": [
       "receipt_id"
     ],
     "member": "etl_receipts.parquet",
-    "selection": "Read the receipt member named by the same captured publication family as the subject; never join independent latest snapshots.",
+    "selection": "A table and its receipts are published together as one build. Read both from the same entry of the publication index; a receipts file from another build does not match the table's rows.",
     "columns": [
       {
         "column_name": "receipt_id",
         "column_type": "VARCHAR",
-        "description": "Stable identity of this processing receipt."
+        "description": "This receipt's own fingerprint: a SHA-256 digest of all its other columns, so a receipt that was changed or damaged no longer matches its id."
       },
       {
         "column_name": "dataset",
         "column_type": "VARCHAR",
-        "description": "Logical dataset whose observation or attempted processing this receipt records."
+        "description": "The table this receipt belongs to, by name (`crs_reports`). A few datasets have no table of their own and exist only as receipts."
       },
       {
         "column_name": "policy_version",
         "column_type": "VARCHAR",
-        "description": "Explicit field policy used to separate subject values and processing evidence."
+        "description": "Version of the rule that says which of the table's fields are published as columns and which are kept in the receipt."
       },
       {
         "column_name": "generation_id",
         "column_type": "VARCHAR",
-        "description": "Exact generation containing this receipt and its selected subject values."
+        "description": "The build that published this receipt. A table and its receipts are always published together as one build, and this names it."
       },
       {
         "column_name": "record_id",
         "column_type": "VARCHAR",
-        "description": "Shared-receipt identity derived from the dataset's declared subject key; null for observations without a subject."
+        "description": "A SHA-256 fingerprint of the table's name and the row's key. Empty on a receipt that states no key."
       },
       {
         "column_name": "subject_version",
         "column_type": "VARCHAR",
-        "description": "Digest of the exact native subject values, used to prevent joining a receipt to a different row version."
+        "description": "A SHA-256 fingerprint of the row's published values. It changes when any of them changes, which ties a receipt to one exact version of its row. Empty on a receipt that has no row."
       },
       {
         "column_name": "identity_json",
         "column_type": "VARCHAR",
-        "description": "Lossless typed encoding of the subject's declared natural key."
+        "description": "The row's key: each key column's name and its value, in the typed form shown under \"How to find the receipt for a row\". Empty on a receipt that states no key."
       },
       {
         "column_name": "attempt_id",
         "column_type": "VARCHAR",
-        "description": "Identity of the processing attempt, including failed or empty attempts."
+        "description": "Which processing attempt produced the receipt. A failed attempt, and one that produced no row, have one too."
       },
       {
         "column_name": "outcome",
         "column_type": "VARCHAR",
-        "description": "accepted, observed, rejected, refused or error; these processing outcomes are separate from business statuses."
+        "description": "`accepted`: the record became the row this receipt goes with. `observed`: something was read and recorded, and no row goes with it (a dataset that has no table, a read that produced no row, or a row since removed). `rejected`, `refused` or `error`: the record did not become a row, and none was made up for it; each table's pipeline chooses among the three words. All five describe our processing, never the publisher's own status for the record."
       },
       {
         "column_name": "processor",
         "column_type": "VARCHAR",
-        "description": "Processor or interpretation version that produced the receipt."
+        "description": "Name and version of the program, or reading rule, that produced the receipt."
       },
       {
         "column_name": "witnesses",
         "column_type": "STRUCT(source_id VARCHAR, source_uri VARCHAR, sha256 VARCHAR, locator VARCHAR, body_version VARCHAR)[]",
-        "description": "Ordered source witnesses with identifiers, URIs, digests, locators and body versions; repetitions are preserved."
+        "description": "What was read to produce the receipt, in order, a source read twice listed twice. For each: its identifier (`source_id`), its address (`source_uri`), a SHA-256 fingerprint of its content (`sha256`), the place within it (`locator`) and, for a stored copy, which copy (`body_version`). Every receipt names at least one source, with a fingerprint or a stored-copy version."
       },
       {
         "column_name": "processing_json",
         "column_type": "VARCHAR",
-        "description": "Shared lossless typed encoding of explicitly classified processing fields and original conversion inputs."
+        "description": "The fields this table keeps out of its columns, by name, in the typed form shown under \"How to read a value out of a receipt\". For many tables that is the whole record as the pipeline held it before conversion (`raw_record`); for others, named fields such as a source link. On a receipt for a record that did not become a row, it holds the fields that were read."
       },
       {
         "column_name": "diagnostic_json",
         "column_type": "VARCHAR",
-        "description": "Shared lossless typed encoding of processing diagnostics; separate from subject content."
+        "description": "Notes about the processing itself, in the same typed form, such as which earlier build's receipt for this row was carried forward and what that receipt held."
       }
     ],
     "datasets": [
@@ -20924,6 +20924,7 @@
           "raw_record"
         ]
       }
-    ]
+    ],
+    "guide": "A receipt is the paperwork behind one row. Each time our pipeline turns a\npublisher's record (an FCC filing, a GAO decision, one rating on a scorecard)\ninto a row of a table, it writes one receipt to go with it: what it read, which\nversion of our code read it, how that went, and anything it kept that did not\nbecome a column. The table holds what you query. The receipt holds how the row\ngot there. (\"ETL\" in the name is that pipeline: extract, transform, load.)\n\nReceipts are useful for three things:\n\n- **Finding something that is no longer a column.** A table in the newer layout\n  keeps the columns people query. A few things people do sometimes want, such\n  as the link to a filing's page on the publisher's site, are kept in the\n  receipt instead. Where that is so, the table's own notes say it in one\n  sentence.\n- **Checking where a row came from.** A receipt names what was read to make\n  the row.\n- **Seeing what did not become a row.** When a pipeline records a record it\n  could not convert, it does so as a receipt with no row.\n\nNot every table has receipts yet. Tables are moving to the newer layout one\ngroup at a time, and a table has receipts only after it has been published that\nway. `describe_table('etl_receipts')` lists, under `publication`, each group\nthat has them and the tables in it (`datasets`). A table that is not named\nthere has no receipts: everything it holds is in the table itself. (The other\n`datasets` list in that reply, under `metadata`, names every table that is set\nup to have receipts, whether or not it has published any.)\n\nThe word has two other uses in this dictionary, and neither is this table.\n`fec_receipts` and other campaign-finance wording mean money a committee\nreceived. A note that cites a \"receipt\" followed by a folder name points at the\nmaintainers' own evidence files, which are not public.\n\n## How to find the receipt for a row\n\nToday this takes a query; there is no one-step lookup. In a table that has\nreceipts, every row has exactly one receipt whose `outcome` is `accepted`. You\nfind it by the table's name and the row's key.\n\n1. Ask for the table's key columns. `describe_table('crs_reports')` lists them\n   as `identity_columns`; for `crs_reports` that is `report_id`.\n2. Write the row's key the way a receipt stores it in `identity_json`: each key\n   column as a name and a value, in the order `identity_columns` gives.\n3. Select the receipt with that table name and that key.\n\nFor the CRS report `R48641`:\n\n```sql\nSELECT *\nFROM etl_receipts\nWHERE dataset = 'crs_reports'\n  AND outcome = 'accepted'\n  AND identity_json = '[\"list\",[[\"list\",[[\"str\",\"report_id\"],[\"str\",\"R48641\"]]]]]'\n```\n\nA table with two key columns names both. `fec_committee_history` is keyed by\n`committee_id` and `cycle`, and its key for committee `C00097238` in 2012 is:\n\n```text\n[\"list\",[[\"list\",[[\"str\",\"committee_id\"],[\"str\",\"C00097238\"]]],[\"list\",[[\"str\",\"cycle\"],[\"int\",2012]]]]]\n```\n\nText is written `[\"str\",\"…\"]`, a whole number `[\"int\",2012]` with no quotes\naround the number, and a key column that is empty for the row `[\"null\",null]`.\nSpelling and capital letters must match the table's value exactly.\n\nTo fetch the receipts of several rows, join on the same expression and build\nthe key from the table's own column:\n\n```sql\nSELECT t.report_id, t.title, r.witnesses\nFROM crs_reports t\nJOIN etl_receipts r\n  ON r.dataset = 'crs_reports'\n AND r.outcome = 'accepted'\n AND r.identity_json = '[\"list\",[[\"list\",[[\"str\",\"report_id\"],[\"str\",\"' || t.report_id || '\"]]]]]'\nWHERE t.report_id IN ('R48641', 'IN12713')\n```\n\nThree things to know before relying on this:\n\n- The query reads through all of that table's receipts, so it is slower on the\n  largest tables.\n- A shorter form you may see, `contains(identity_json, '\"R48641\"')`, works for\n  a table with one key column. Do not use it on a table with several key\n  columns: matching one part of the key returns other rows' receipts.\n- A key value that contains a double quote or a backslash is stored with a\n  backslash in front of each, so the plain joining of text above will not match\n  it.\n\n## How to read a value out of a receipt\n\nThe three columns ending in `_json` hold text in a form of JSON where every\nvalue is written as a pair: its type, then the value. The text `R48641` is\nstored as `[\"str\",\"R48641\"]`, the number 5 as `[\"int\",5]`, a missing value as\n`[\"null\",null]`, a record as `[\"dict\",[[name, pair], …]]` and a list as\n`[\"list\",[pair, …]]`. This keeps the number 5 apart from the text \"5\", and a\nmissing value apart from an empty text. The cost is that the usual JSON\nfunctions cannot fetch a field by its name, so today the working way to read\none is a text pattern:\n\n```sql\nSELECT regexp_extract(processing_json, '\\[\"url\",\\[\"str\",\"([^\"]*)\"', 1) AS url\nFROM etl_receipts\nWHERE dataset = 'crs_reports'\n  AND outcome = 'accepted'\n  AND identity_json = '[\"list\",[[\"list\",[[\"str\",\"report_id\"],[\"str\",\"R48641\"]]]]]'\n```\n\nPut the field's name where `url` is. The pattern has limits:\n\n- It reads text values only. For a field that is absent, missing or not text it\n  returns an empty text, not NULL.\n- It returns the first field of that name anywhere in the receipt.\n- It stops at the first double quote, so a value that contains one (a title, or\n  a list kept as text) comes back cut short. For such a value use the longer\n  form, which reads it whole:\n\n```sql\nSELECT ('\"' || regexp_extract(processing_json, '\\[\"title\",\\[\"str\",\"((?:[^\"\\\\]|\\\\.)*)\"', 1) || '\"')::JSON ->> '$' AS title\nFROM etl_receipts\nWHERE dataset = 'crs_reports'\n  AND outcome = 'accepted'\n  AND identity_json = '[\"list\",[[\"list\",[[\"str\",\"report_id\"],[\"str\",\"R48641\"]]]]]'\n```\n\nTo see which fields a table's receipts hold, look at one:\n`SELECT processing_json FROM etl_receipts WHERE dataset = 'crs_reports' AND outcome = 'accepted' LIMIT 1`.\n\n## What a receipt contains\n\nOne row per receipt. The first columns say which row the receipt belongs to;\nthe rest say what was read and what happened. On the server, `etl_receipts` is\none table holding the receipts of every table that has them. In the published\nfiles, each group of tables has its own `etl_receipts.parquet` beside its\ntables, and the publication index names it.\n\nEach column is described under `columns` in this reply.\n\n## What a receipt does not tell you\n\n- **Whether the publisher's record is right, current or approved.** `outcome`\n  describes our processing only. `accepted` means the pipeline turned the record\n  into a row; it says nothing about what an agency decided. Where a publisher\n  states a status of its own, that is a column of the table.\n- **What the row said before.** The server holds one build of each table, the\n  one published now, with that build's receipts. A receipt for a row carried\n  over from an earlier build notes the earlier receipts in `diagnostic_json`;\n  the earlier builds themselves cannot be queried here.\n- **Where to open the publisher's page.** `witnesses` names what the pipeline\n  read, and that is not always a page you can visit. For some tables it is one\n  of the pipeline's own working files, named by a path on the machine that ran\n  the build. A link to the publisher, where we hold one, is a column of the\n  table or a field in `processing_json`.\n- **That nothing was missed.** A table whose receipts are all `accepted` shows\n  that no failure was recorded, not that every record the publisher holds was\n  read. What a table covers is stated in its own coverage note.\n- **Anything about a table that has no receipts yet.** That table has not moved\n  to the newer layout. Nothing is missing from it."
   }
 }

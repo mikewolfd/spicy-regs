@@ -388,6 +388,77 @@ def test_incomplete_live_check_is_not_a_pass_after_other_tables_match(monkeypatc
 
 
 # --------------------------------------------------------------------------- #
+# The receipts page: one page explains receipts, and each statement on it is held to the writer.
+# --------------------------------------------------------------------------- #
+def test_the_receipts_page_is_the_guide_around_the_declared_columns():
+    from spicy_regs.etl_receipts import RECEIPT_SCHEMA
+
+    page = (dd.DEFAULT_DOCS_TABLES_DIR / "etl_receipts.md").read_text(encoding="utf-8")
+    assert page == dd.render_receipts_page(dd.receipt_metadata()), "etl_receipts.md is stale; run the generator"
+    for heading in ("How to find the receipt for a row", "How to read a value out of a receipt",
+                    "What a receipt contains", "What a receipt does not tell you"):
+        assert f"\n## {heading}\n" in page
+    assert dd.COLUMNS_MARK not in page
+    assert all(f"| `{name}` |" in page for name in RECEIPT_SCHEMA.names)
+    served = json.loads(dd.DEFAULT_MCP_METADATA_PATH.read_text(encoding="utf-8"))["etl_receipts"]["guide"]
+    assert dd.COLUMNS_MARK not in served and "## How to find the receipt for a row" in served
+
+
+def test_the_receipts_page_states_what_the_writer_does():
+    """Each query and each warning on the page is run against receipts the real writer produced."""
+    import re
+
+    import duckdb
+    import pyarrow as pa
+
+    from spicy_regs.etl_receipts import RECEIPT_SCHEMA, ReceiptContext, split_record, subject_identity
+
+    guide = dd.RECEIPT_GUIDE.read_text(encoding="utf-8")
+    context = ReceiptContext("build-1", "attempt-1", "test/1", [
+        {"source_id": "s", "source_uri": "u", "sha256": "0" * 64, "locator": None, "body_version": None}])
+
+    def written(table: str, rows: list[dict]) -> tuple[pa.Table, list[dict]]:
+        policy = dd.subject_policies()[table]
+        blank = dict.fromkeys(policy.subject_schema.names)
+        pairs = [split_record(policy, {**blank, **row}, context) for row in rows]
+        return pa.Table.from_pylist([subject for subject, _ in pairs], schema=policy.subject_schema), [r for _, r in pairs]
+
+    link = "https://api.congress.gov/v3/crsreport/"
+    reports, report_receipts = written("crs_reports", [
+        {"report_id": "R48641", "title": "First", "raw_record": {"title": 'He said "no"', "url": link + "R48641"}},
+        {"report_id": "IN12713", "title": "Second", "raw_record": {"url": link + "IN12713", "version": 2}},
+    ])
+    _, committee_receipts = written("fec_committee_history", [
+        {"committee_id": "C00097238", "cycle": cycle, "conversion_inputs": {}, "conversion_diagnostics": {},
+         "source_input": None} for cycle in (2012, 2014)])
+    con = duckdb.connect()
+    con.register("crs_reports", reports)
+    con.register("etl_receipts", pa.Table.from_pylist(report_receipts + committee_receipts, schema=RECEIPT_SCHEMA))
+
+    queries = re.findall(r"```sql\n(.*?)```", guide, re.DOTALL)
+    find, join, read, read_whole = (con.execute(sql).fetchall() for sql in queries)
+    assert [row[1] for row in find] == ["crs_reports"] and len(join) == 2
+    assert read == [(link + "R48641",)] and read_whole == [('He said "no"',)]
+    (look,) = re.findall(r"`(SELECT processing_json [^`]+)`", guide)
+    assert len(con.execute(look).fetchall()) == 1
+
+    # The two-column key the page spells is the writer's, and the short form it warns about does return both cycles.
+    (two_column_key,) = re.findall(r"```text\n(.*?)\n```", guide, re.DOTALL)
+    policy = dd.subject_policies()["fec_committee_history"]
+    assert two_column_key == subject_identity(policy, {"committee_id": "C00097238", "cycle": 2012})[2]
+    count = "SELECT count(*) FROM etl_receipts WHERE dataset = 'fec_committee_history' AND "
+    assert con.execute(count + "identity_json = ?", [two_column_key]).fetchone() == (1,)
+    assert con.execute(count + """contains(identity_json, '"C00097238"')""").fetchone() == (2,)
+
+    # The pattern's stated limits: a quote cuts the value short, and an absent or non-text field reads as empty text.
+    pattern = """SELECT regexp_extract(processing_json, '\\["{}",\\["str","([^"]*)"', 1) FROM etl_receipts WHERE {}"""
+    first, second = "contains(identity_json, '\"R48641\"')", "contains(identity_json, '\"IN12713\"')"
+    assert con.execute(pattern.format("title", first)).fetchone() == ("He said \\",)
+    assert con.execute(pattern.format("no_such_field", first)).fetchone() == ("",)
+    assert con.execute(pattern.format("version", second)).fetchone() == ("",)
+
+
+# --------------------------------------------------------------------------- #
 # The contract-hosted tables: prose comes from spicy-docs, not from this repo.
 # --------------------------------------------------------------------------- #
 def test_every_hosted_column_has_prose():
