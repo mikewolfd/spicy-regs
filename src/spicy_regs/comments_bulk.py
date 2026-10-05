@@ -214,6 +214,6 @@ def restore_catalog(subjects: Path, receipts: Path, destination: Path, *, genera
             if seen != expected:
                 raise RuntimeError(f'comments: restored {seen} of {expected} native subjects')
             temporary.replace(destination)
-    except (etl_bulk.duckdb.Error, pa.ArrowException, ValueError, TypeError, OverflowError) as error:
+    except (etl_bulk.duckdb.Error, pa.ArrowException, ValueError, TypeError, OverflowError, RecursionError) as error:
         raise etl_bulk.NotBulkEligible('Comments batch processing proof requires the row reader') from error
     return seen

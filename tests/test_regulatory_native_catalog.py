@@ -305,7 +305,8 @@ def test_full_comments_processing_uses_batch_proof_without_unused_identity_scan(
     assert all(actual[name] == value for name, value in expected.items())
 
 
-def test_comments_batch_refusal_restores_exact_row_first_error(con, monkeypatch):
+@pytest.mark.parametrize('later_attachment', ['{bad', '['*20000+']'*20000])
+def test_comments_batch_refusal_restores_exact_row_first_error(con, monkeypatch, later_attachment):
     import pyarrow as pa
     from spicy_regs import comments_bulk
     from spicy_regs.etl_receipts import RECEIPT_SCHEMA, decode_exact_json, exact_json, _digest
@@ -321,7 +322,7 @@ def test_comments_batch_refusal_restores_exact_row_first_error(con, monkeypatch)
         if raw['comment_id']=='c1':
             raw['text_content'] = 'different'
         if raw['comment_id']=='c2':
-            raw['attachments_json'] = '{bad'
+            raw['attachments_json'] = later_attachment
         old_id = row['receipt_id']
         row['processing_json'] = exact_json(values)
         row['receipt_id'] = _digest({k: v for k,v in row.items() if k!='receipt_id'})
