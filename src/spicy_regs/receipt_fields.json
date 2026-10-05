@@ -3926,7 +3926,8 @@
      "regulation_id_numbers_json",
      "html_url",
      "pdf_url",
-     "executive_order_number"
+     "executive_order_number",
+     "link_source"
     ]
    },
    "renamed": {
@@ -4018,11 +4019,18 @@
      "recommendation_count",
      "matters_for_congress_count",
      "page_count",
-     "subject_terms_json"
+     "subject_terms_json",
+     "major_rule_agency",
+     "major_rule_rins_json",
+     "major_rule_fr_citations_json",
+     "major_rule_letter_json",
+     "product_page_json"
     ]
    },
    "renamed": {
     "agencies_json": "agencies",
+    "major_rule_fr_citations_json": "major_rule_fr_citations",
+    "major_rule_rins_json": "major_rule_rins",
     "requester_committees_json": "requester_committees",
     "requester_members_json": "requester_members",
     "subject_terms_json": "subject_terms",
@@ -4030,12 +4038,14 @@
    },
    "meanings": {
     "agencies_json": "Reserved JSON array of agencies the product covers. The RSS feed carries no structured agency tags, so this is `[]` pending a future enrichment source; NULL on repair, GovInfo (MODS names no agency) and listing rows. Where our own routes leave it NULL, it may come from the CetiAlphaFive/gao R package (GPL-3.0-or-later, commit 6f61230), which fills only empty cells.",
+    "major_rule_fr_citations_json": "JSON array of the Federal Register citation of each rule a Federal Agency Major Rule Report is on, as its letter states it, each as `{volume}-{page}` (`66-6976` for 66 Fed. Reg. 6976), in the letter's order: one for most reports, several where a report is on several rules or on a rule published as several documents. Each joins `federal_register` on `volume` and `start_page` (`split_part(c, '-', 1) = volume AND split_part(c, '-', 2) = start_page`); a few letters cite the page before the document starts or a page inside it. A correction, a delay or an earlier rule the letter cites beside its rule is left out. Not paired with `major_rule_rins_json`. NULL on a row that is not a major-rule report or whose letter has not been read, and where the letter states no citation: the rule was not published in the Federal Register, or the letter's opening cites none.",
+    "major_rule_rins_json": "JSON array of every Regulation Identifier Number the letter of a Federal Agency Major Rule Report states for the rule or rules the report is on, each as `NNNN-LLNN` (e.g. `2040-AB75`), in the letter's order. The join key to `unified_agenda.rin` and to the entries of `federal_register.regulation_id_numbers`. The list is not paired with `major_rule_fr_citations_json`: entry k of one is not the RIN of entry k of the other, and a report on two rules often states one RIN for both, so take a rule's RIN beside its citation from `federal_register`. NULL on a row that is not a major-rule report or whose letter has not been read, and where the letter states none in that form: it names a docket, an FCC number or a ZRIN instead, or GAO mistyped it.",
     "requester_committees_json": "JSON array of the requesting congressional committees, as the R package extracted them from the report (e.g. `Committee on Armed Services (Senate)`). NULL where it states none, and on reports issued after its copy.",
     "requester_members_json": "JSON array of the requesting members of Congress, as the R package extracted them from the report's text, with its OCR errors kept (e.g. `Charles H. Percy (Senate)`). NULL where it states none, and on reports issued after its copy.",
-    "source": "The route that supplied the row: `gao_rss` (the daily feed), `upstream_copy` (copied once from upstream spicy-regs' published table), `gao_repair` (an explicit single-report repair), `govinfo` (GovInfo's GAOREPORTS listing), `gao_listing` (GAO's own Month in Review and Annual Index) or `gao_r_package` (copied once from the CetiAlphaFive/gao R package by Jack T. Rametta, GPL-3.0-or-later).",
-    "subject_terms_json": "JSON array of GAO's subject index terms for the product, as the R package states them (e.g. `Cost control`, `Financial management`), finer than `topics_json`. NULL where it states none, and on reports issued after its copy.",
-    "topics_json": "JSON array of topics. A GovInfo row's is its MODS `subject/topic` terms in the record's order, GAO's own index terms, program names and places, kept as stated (a long name can arrive split in two); NULL where the MODS states none or is unread. A listing row's is GAO's own topic headings the product was listed under, as GAO spells them and in listed order. The RSS feed carries no topic tags, so a feed or upstream-copied row is `[]`; NULL on repair rows. Where our own routes leave it NULL, it may come from the CetiAlphaFive/gao R package (GPL-3.0-or-later, commit 6f61230), which fills only empty cells.",
-    "url": "The product's page on the route that supplied the row: the gao.gov product page for feed, upstream-copied, repair and listing rows, GovInfo's details page (composed from the package id) for GovInfo rows."
+    "source": "The route that supplied the row: `gao_rss` (the daily feed), `upstream_copy` (copied once from upstream spicy-regs' published table), `gao_repair` (an explicit single-report repair), `govinfo` (GovInfo's GAOREPORTS listing), `gao_listing` (GAO's own Month in Review and Annual Index), `gao_major_rule_listing` (GAO's Congressional Review Act listing, \"Reports on Major Rules\"), `gao_major_rule_index` (GAO's index of 2000-12-15 of its 1996-2000 major-rule reports, and each report's product page) or `gao_r_package` (copied once from the CetiAlphaFive/gao R package by Jack T. Rametta, GPL-3.0-or-later).",
+    "subject_terms_json": "JSON array of GAO's subject index terms for the product (e.g. `Cost control`, `Financial management`), finer than `topics_json`: the terms the report's GAO product page lists, as GAO spells them and in page order, where a page read has set it, else the R package's. GAO retags products, so the two can differ. NULL where neither states any.",
+    "topics_json": "JSON array of topics. A GovInfo row's is its MODS `subject/topic` terms in the record's order, GAO's own index terms, program names and places, kept as stated (a long name can arrive split in two); NULL where the MODS states none or is unread. A listing row's is GAO's own topic headings the product was listed under, as GAO spells them and in listed order; a `gao_major_rule_listing` or `gao_major_rule_index` row's is NULL, since those listings state no topic. The RSS feed carries no topic tags, so a feed or upstream-copied row is `[]`; NULL on repair rows. Where our own routes leave it NULL, it may come from the CetiAlphaFive/gao R package (GPL-3.0-or-later, commit 6f61230), which fills only empty cells.",
+    "url": "The product's page on the route that supplied the row: the gao.gov product page for feed, upstream-copied, repair and every listing's rows, GovInfo's details page (composed from the package id) for GovInfo rows."
    }
   },
   "hearing_bill_links": {
