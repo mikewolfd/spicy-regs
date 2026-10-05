@@ -1312,7 +1312,7 @@ def test_a_file_before_2003_takes_bioguide_ids_from_the_published_crosswalk_and_
     assert len(named) == 427 and all(member["member_key"] == "name:" + name for name, member in named.items())
     [event] = _events(evidence, "member-name-crosswalk")
     assert (event["rule_version"], event["keys"], event["rows_resolved"], event["rows_changed"]) == (
-        "house-name-crosswalk-v1", 427, 5, 5,
+        "house-name-crosswalk-v2", 427, 5, 5,
     )
     assert {(entry["member_name"], entry["bioguide_id"], entry["rule"], entry["terms"][0]["term_index"])
             for entry in event["resolved"]} == {

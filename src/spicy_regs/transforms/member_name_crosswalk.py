@@ -13,28 +13,32 @@ leave the rest unresolved with its reason, never guessed.
 2. The candidates are the members with a ``rep`` term in that state during that Congress whose
    surname is the printed one once accents, spaces and punctuation are dropped
    (``Jackson-Lee`` is the crosswalk's ``Jackson Lee``). The surname is the crosswalk's
-   ``name_last`` or a dated ``other_names`` surname in force during that term (``Lambert``,
-   ``Bono``). Only where no whole surname matches is one part of a compound surname tried
-   (``Chenoweth`` for ``Chenoweth-Hage``), and the resolution says so (``surname_part``).
+   ``name_last`` (``surname``) or a dated ``other_names`` surname in force during that term
+   (``former_surname``: ``Lambert``, ``Bono``). Only where no whole surname matches is one part
+   of a compound surname tried (``surname_part``: ``Chenoweth`` for ``Chenoweth-Hage``).
 3. The printed party must be one the crosswalk states for that term: ``term_party`` or one of the
    term's dated affiliations, so a member who changed party mid-term matches under both letters.
-4. Where several members remain, a printed first name chooses one: equal to the crosswalk's
-   ``name_first``, else equal in its first word (``Thomas M.``), else a printed initial that is its
-   first letter (``E. B.``). A nickname is not read (``Tom`` is not ``Thomas``).
-5. Exactly one member left resolves the key; none or several leave it unresolved.
+4. Where several members remain, a printed first name chooses one if it can: equal to the
+   crosswalk's ``name_first``, else equal in its first word (``Thomas M.``), else a printed
+   initial that is its first letter (``E. B.``). A nickname is not read (``Tom`` is not ``Thomas``).
+5. No member left leaves the key unresolved, with its reason.
 
-A resolved key fills a row only where the vote's day lies inside one of that member's matched
-terms, and two rows of one roll call that resolve to one member both stay NULL: the Clerk lists a
+Then each row is decided on its vote's day. One member left: the row is that member's on a day
+inside a matched term. Several left (``+seating_day``; owner decision, 2026-10-05): the row is
+the one of them a matched term seats that day, which separates a successor of the same surname,
+state and party from the member they followed (the 105th's Capps and Bono, the 107th's Shuster).
+A day that seats none of them, or two, stays NULL (``outside_term``, ``several_seated``), and so
+do two rows of one roll call that resolve to one member (``listed_twice``): the Clerk lists a
 member once, so one of them is someone else.
 
 **Measured** on the live tables of 2026-10-04 (roll-call-votes ``e053a851``, members ``a1955f7e``;
 receipt ``~/Work/corpora/fork-execution-2026-09-21/votes-person-crosswalk-2026-10-05/``). From
 2003 the Clerk prints the same labels beside its own ``name-id``, so the rule was run on those
 rows with the id hidden: see ``validation.json`` there for the rows, coverage and every
-disagreement, and ``coverage.json`` for the 101st-107th by Congress and reason. What that
-comparison cannot see is a label form or a term record that only the years before 2003 hold; the
-receipt's ``voteview.json`` compares each resolved member's positions with Voteview's record of
-that member on that roll call instead.
+disagreement, ``coverage.json`` for the 101st-107th by Congress and reason, and ``v1-to-v2.json``
+for what the seating day added. What that comparison cannot see is a label form or a term record
+that only the years before 2003 hold; the receipt's ``voteview.json`` compares each resolved
+member's positions with Voteview's record of that member on that roll call instead.
 
 Each distinct key is resolved once in Python and joined back in DuckDB; no row passes through
 Python. The fill is derived, not coalesced: a ``name:`` row's id is whatever this rule gives
@@ -64,23 +68,20 @@ from spicy_regs.transforms.table_merge import _duckdb_session, _merge_order, pub
 if TYPE_CHECKING:
     from spicy_regs.source_evidence import CaptureEvidence
 
-#: v1: surname, state and party within the Congress, a first name where several remain, the vote
-#: day inside the matched term, one row per member per roll call.
-RULE_VERSION = "house-name-crosswalk-v1"
+#: v2 (owner decision, 2026-10-05): where several members still answer to a key, a row takes the one seated on its
+#: vote's day, and a resolution names a former surname as such. v1, never published, left such a key unresolved:
+#: surname, state and party within the Congress, a first name where several remain, the vote day inside the
+#: matched term, one row per member per roll call.
+RULE_VERSION = "house-name-crosswalk-v2"
 
 #: The published tables the rule reads, all written by ``run-rollup-members`` in one generation.
 SOURCES = ("members", "member_terms", "member_party_affiliations")
 
-#: Why a key resolves to no member, and why a row of a resolved key is still left NULL: its day, or a printed date
-#: spicy-docs cannot read as one, lies in none of the matched terms, or its roll call resolves two rows to the member.
-UNREAD_LABEL, STATE_CONFLICT, NO_MEMBER, PARTY_DIFFERS, SEVERAL_MEMBERS = (
-    "unread_label",
-    "state_conflict",
-    "no_member",
-    "party_differs",
-    "several_members",
-)
-OUTSIDE_TERM, LISTED_TWICE = "outside_term", "listed_twice"
+#: Why a key answers to no member, and why a row of a key that does is still left NULL: its day (or a printed date
+#: spicy-docs cannot read as one) lies in none of the matched terms, lies in the terms of two of the key's members,
+#: or its roll call resolves two rows to the one member.
+UNREAD_LABEL, STATE_CONFLICT, NO_MEMBER, PARTY_DIFFERS = "unread_label", "state_conflict", "no_member", "party_differs"
+OUTSIDE_TERM, SEVERAL_SEATED, LISTED_TWICE = "outside_term", "several_seated", "listed_twice"
 
 #: The prefix spicy-docs' ``member_key`` gives a row whose file states neither a bioguide nor a LIS id.
 _NAME_KEY = "name:"
@@ -159,6 +160,7 @@ def _house_terms(
                 "parties": parties[bioguide, term["term_index"]] | {term["term_party"]},
                 "since": since,
                 "until": until,
+                "former": (since, until) != (date.min, date.max),
             }
             whole[_fold(surname)].append(entry)
             for piece in {_fold(piece) for piece in re.split(r"[\s-]+", surname)} - {""}:
@@ -167,11 +169,10 @@ def _house_terms(
 
 
 def _resolve(key: tuple[str, str, str, str], whole: Mapping[str, list[dict]], parts: Mapping[str, list[dict]]) -> dict:
-    """One key's resolution: the member and matched terms, or the reason and the members it stopped at."""
+    """One key's resolution: each member it answers to with their rule and matched terms, or why it answers to none."""
 
     def unresolved(reason: str, candidates: Iterable[dict] = ()) -> dict:
-        return {"bioguide_id": None, "rule": None, "reason": reason, "terms": [],
-                "candidates": sorted({term["bioguide_id"] for term in candidates})}
+        return {"reason": reason, "candidates": sorted({term["bioguide_id"] for term in candidates}), "members": {}}
 
     congress, label, party, state = key
     read = _LABEL.fullmatch(" ".join(label.split()))
@@ -195,34 +196,36 @@ def _resolve(key: tuple[str, str, str, str], whole: Mapping[str, list[dict]], pa
             and max(term["start"], term["since"], convened) < min(term["end"], term["until"], adjourned)
         ]
 
-    rule, pool = "surname", seated(whole.get(_fold(surname), ()))
+    part, pool = False, seated(whole.get(_fold(surname), ()))
     if not pool:
-        rule, pool = "surname_part", seated(parts.get(_fold(surname), ()))
+        part, pool = True, seated(parts.get(_fold(surname), ()))
     if not pool:
         return unresolved(NO_MEMBER)
     of_party = [term for term in pool if term["parties"] & _PARTIES.get(party, frozenset())]
     if not of_party:
         return unresolved(PARTY_DIFFERS, pool)
-    chosen = {term["bioguide_id"] for term in of_party}
+    chosen, steps = {term["bioguide_id"] for term in of_party}, ""
     if len(chosen) > 1 and printed_first:
         agreed = {term["bioguide_id"]: _first_name_rule(printed_first, term["first"]) for term in of_party}
         for first_rule in _FIRST_NAME_RULES:
             named = {bioguide for bioguide, how in agreed.items() if how == first_rule}
             if named:
                 if len(named) == 1:
-                    rule, chosen = f"{rule}+{first_rule}", named
+                    chosen, steps = named, f"+{first_rule}"
                 break
     if len(chosen) > 1:
-        return unresolved(SEVERAL_MEMBERS, of_party)
-    [bioguide] = chosen
-    matched = sorted(
-        {(int(term["term_index"]), term["start"], term["end"]) for term in of_party if term["bioguide_id"] == bioguide}
-    )
-    return {
-        "bioguide_id": bioguide, "rule": rule, "reason": None, "candidates": [bioguide],
-        "terms": [{"term_index": str(index), "term_start": start.isoformat(), "term_end": end.isoformat()}
-                  for index, start, end in matched],
-    }
+        steps += "+seating_day"
+    members = {}
+    for bioguide in sorted(chosen):
+        own = [term for term in of_party if term["bioguide_id"] == bioguide]
+        named_by = "surname_part" if part else "former_surname" if all(term["former"] for term in own) else "surname"
+        matched = sorted({(int(term["term_index"]), term["start"], term["end"]) for term in own})
+        members[bioguide] = {
+            "rule": named_by + steps,
+            "terms": [{"term_index": str(index), "term_start": start.isoformat(), "term_end": end.isoformat()}
+                      for index, start, end in matched],
+        }
+    return {"reason": None, "candidates": sorted(chosen), "members": members}
 
 
 def resolve_name_keys(
@@ -233,9 +236,10 @@ def resolve_name_keys(
 ) -> dict[tuple[str, str, str, str], dict]:
     """Each distinct (congress, member_name, party, state) and its resolution under :data:`RULE_VERSION`.
 
-    A resolution carries ``bioguide_id``, ``rule`` and the matched ``terms``, or NULL with its
-    ``reason`` and the ``candidates`` it stopped at. ``members``, ``terms`` and ``affiliations``
-    are the published tables' rows. O(members + terms + keys).
+    A resolution's ``members`` maps each member the key answers to onto their ``rule`` and matched
+    ``terms``; several mean the vote's day decides each row. A key that answers to none has no
+    members, a ``reason`` and the ``candidates`` it stopped at. ``members``, ``terms`` and
+    ``affiliations`` are the published tables' rows. O(members + terms + keys).
     """
     whole, parts = _house_terms(members, terms, affiliations)
     return {key: _resolve(key, whole, parts) for key in keys}
@@ -256,8 +260,8 @@ def fill_house_name_bioguide_ids(
     """Set ``bioguide_id`` on every House ``name:`` row of a merged ``member_votes`` from the published crosswalk.
 
     Held rows included: each run decides every ``name:`` row again and journals the rule version,
-    the inputs, every key left unresolved with its reason, and each resolution that changed a row
-    with its rule and matched terms (``member-name-crosswalk``). Best-effort like the Senate fill:
+    the inputs, the rows left unresolved by key and reason, and each key's member whose rows changed
+    with their rule and matched terms (``member-name-crosswalk``). Best-effort like the Senate fill:
     with any of :data:`SOURCES` unpublished or unreadable the file stays as merged. Returns how
     many ``name:`` rows carry an id.
     """
@@ -309,14 +313,15 @@ def fill_house_name_bioguide_ids(
         text = pa.string()
         con.register("days", pa.Table.from_pylist(days, schema=pa.schema([("vote_date", text), ("day", pa.date32())])))
         con.register("name_terms", pa.Table.from_pylist(
-            [dict(zip(_KEY, key), bioguide_id=resolution["bioguide_id"], term_start=date.fromisoformat(term["term_start"]),
+            [dict(zip(_KEY, key), bioguide_id=bioguide, term_start=date.fromisoformat(term["term_start"]),
                   term_end=date.fromisoformat(term["term_end"]))
-             for key, resolution in resolutions.items() for term in resolution["terms"]],
+             for key, resolution in resolutions.items()
+             for bioguide, member in resolution["members"].items() for term in member["terms"]],
             schema=pa.schema([*((column, text) for column in _KEY), ("bioguide_id", text),
                               ("term_start", pa.date32()), ("term_end", pa.date32())]),
         ))
-        # ``found`` is the key's member on a day one of the matched terms covers; ``listed`` counts the
-        # roll call's rows that found the same member, and only a member found once is filled.
+        # ``seated`` counts the key's members a matched term seats on the row's day, and ``found`` is the one when it
+        # is one. Only a member the roll call's rows found once is filled.
         con.execute(
             f"""
             CREATE TEMP TABLE name_fill AS
@@ -325,28 +330,29 @@ def fill_house_name_bioguide_ids(
                 FROM read_parquet('{out_file}') WHERE {_NAME_ROWS}
             ),
             serving AS (
-                SELECT DISTINCT {", ".join(f"t.{column}" for column in _KEY)}, d.vote_date, t.bioguide_id
+                SELECT {", ".join(f"t.{column}" for column in _KEY)}, d.vote_date,
+                       count(DISTINCT t.bioguide_id) AS seated, min(t.bioguide_id) AS member
                 FROM name_terms t JOIN days d ON d.day BETWEEN t.term_start AND t.term_end
+                GROUP BY ALL
             ),
             found AS (
-                SELECT n.*, s.bioguide_id AS found, count(*) OVER (PARTITION BY n.vote_id, s.bioguide_id) AS listed
+                SELECT n.*, coalesce(s.seated, 0) AS seated, CASE WHEN s.seated = 1 THEN s.member END AS found
                 FROM named n LEFT JOIN serving s USING ({", ".join(_KEY)}, vote_date)
             )
-            SELECT *, CASE WHEN listed = 1 THEN found END AS resolved FROM found
+            SELECT *, CASE WHEN count(*) OVER (PARTITION BY vote_id, found) = 1 THEN found END AS resolved FROM found
             """
         )
-        outcomes = {
-            tuple(row[: len(_KEY)]): row[len(_KEY):]
-            for row in con.execute(
-                f"""
-                SELECT {", ".join(_KEY)}, count(*), count(resolved),
-                       count(*) FILTER (WHERE found IS NULL),
-                       count(*) FILTER (WHERE resolved IS DISTINCT FROM held)
-                FROM name_fill GROUP BY ALL
-                """
-            ).fetchall()
-        }
-        changed = sum(outcome[3] for outcome in outcomes.values())
+        # One row per key and outcome: a member and their rows, or a reason and its rows.
+        outcomes = con.execute(
+            f"""
+            SELECT {", ".join(_KEY)}, resolved,
+                   CASE WHEN resolved IS NOT NULL THEN NULL WHEN seated = 0 THEN '{OUTSIDE_TERM}'
+                        WHEN seated > 1 THEN '{SEVERAL_SEATED}' ELSE '{LISTED_TWICE}' END AS reason,
+                   count(*), count(*) FILTER (WHERE resolved IS DISTINCT FROM held)
+            FROM name_fill GROUP BY ALL ORDER BY ALL
+            """
+        ).fetchall()
+        changed = sum(moved for *_, moved in outcomes)
         if changed:
             con.execute(
                 f"""
@@ -374,26 +380,25 @@ def fill_house_name_bioguide_ids(
             if path is not None:
                 path.unlink(missing_ok=True)
 
-    resolved_keys, unresolved = [], []
-    for key, resolution in sorted(resolutions.items()):
-        rows, filled, outside, moved = outcomes[key]
-        named = dict(zip(_KEY, key))
-        if resolution["bioguide_id"] is None:
-            unresolved.append({**named, "reason": resolution["reason"], "candidates": resolution["candidates"],
-                               "rows": rows})
+    resolved, unresolved, unchanged, filled, total = [], [], 0, 0, 0
+    for congress, label, party, state, bioguide, reason, rows, moved in outcomes:
+        key = (congress, label, party, state)
+        resolution, named = resolutions[key], dict(zip(_KEY, key))
+        total += rows
+        if bioguide is None:
+            # A key that answers to no member states why itself; otherwise the row's day or roll call does.
+            unresolved.append({**named, "reason": resolution["reason"] or reason,
+                               "candidates": resolution["candidates"], "rows": rows})
             continue
-        # A resolved key's NULL rows: a day outside the matched terms, else a member the roll call lists twice.
-        for reason, count in ((OUTSIDE_TERM, outside), (LISTED_TWICE, rows - filled - outside)):
-            if count:
-                unresolved.append({**named, "reason": reason, "candidates": resolution["candidates"], "rows": count})
+        filled += rows
         if moved:
-            resolved_keys.append({**named, "bioguide_id": resolution["bioguide_id"], "rule": resolution["rule"],
-                                  "terms": resolution["terms"], "rows": filled, "rows_changed": moved})
-    filled = sum(outcome[1] for outcome in outcomes.values())
-    total = sum(outcome[0] for outcome in outcomes.values())
+            resolved.append({**named, "bioguide_id": bioguide, **resolution["members"][bioguide], "rows": rows,
+                             "rows_changed": moved})
+        else:
+            unchanged += 1
     logger.info(
-        "{}: {:,} of {:,} name: rows carry a bioguide_id under {} ({:,} changed this run, {:,} keys unresolved)",
-        contract.name, filled, total, RULE_VERSION, changed, sum(1 for r in resolutions.values() if r["bioguide_id"] is None),
+        "{}: {:,} of {:,} name: rows carry a bioguide_id under {} ({:,} changed this run, {:,} keys answer to no member)",
+        contract.name, filled, total, RULE_VERSION, changed, sum(1 for r in resolutions.values() if not r["members"]),
     )
     if evidence is not None:
         evidence.event(
@@ -401,7 +406,6 @@ def fill_house_name_bioguide_ids(
             inputs={name: {"sha256": digest, "generation": evidence.published_input(f"{name}.parquet", sha256=digest)}
                     for name, digest in digests.items()},
             keys=len(resolutions), rows=total, rows_resolved=filled, rows_changed=changed,
-            resolved=resolved_keys, unchanged=sum(1 for r in resolutions.values() if r["bioguide_id"]) - len(resolved_keys),
-            unresolved=unresolved,
+            resolved=resolved, unchanged=unchanged, unresolved=unresolved,
         )
     return filled

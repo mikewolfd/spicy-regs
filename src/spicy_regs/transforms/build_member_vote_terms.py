@@ -20,8 +20,8 @@ its merge, the one place the crosswalk is applied: a Senate row from its LIS id 
 ``members`` (``table_merge.fill_senate_bioguide_ids``), and a House row of 1990-2002 from the
 Clerk's printed label, party and state against the members seated that Congress and the vote's
 day (``member_name_crosswalk.fill_house_name_bioguide_ids``). A NULL is a LIS id ``members`` does
-not hold, or a label no one member answers to: both are ``unresolved_member``, and no name is
-matched here, since a ``name:`` key identifies the row within its roll call, never a person.
+not hold, or a label no one member answers to on that day: both are ``unresolved_member``, and no
+name is matched here, since a ``name:`` key identifies the row within its roll call, never a person.
 Every vote row appears exactly once, matched or not, in ``member_votes``' order.
 
 One DuckDB pass, streamed to Parquet in the same row groups: the day and the member are decided
