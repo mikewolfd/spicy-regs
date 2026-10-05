@@ -238,13 +238,14 @@ def _subject_insert_sql(policy: DatasetPolicy, number: str) -> str:
 
 
 def _numbered(
-    parquet: pq.ParquetFile, start: int, number: str, wanted: frozenset[str] | None
+    parquet: pq.ParquetFile, start: int, number: str, wanted: frozenset[str] | None, read: list[int]
 ) -> pa.RecordBatchReader:
     """The file's rows as the row reader decodes them, with each row's number from ``start`` in a column ``number``.
 
     Every batch is validated first: DuckDB hashes an Arrow string without checking that it is UTF-8, where the row
     reader refuses to decode one that is not. ``wanted`` names the datasets a scoped read keeps; a batch holding none
-    of them is still decoded and validated, as ``select_receipts`` would have read it, and then left out.
+    of them is still decoded and validated, as ``select_receipts`` would have read it, and then left out. ``read``
+    counts the rows decoded and the rows SQL is to keep, so the caller can hold DuckDB to both.
     """
     schema = parquet.schema_arrow.append(pa.field(number, pa.int64()))
 
@@ -253,7 +254,13 @@ def _numbered(
         for batch in parquet.iter_batches(batch_size=_BATCH):
             batch.validate(full=True)
             last = first + batch.num_rows
-            if wanted is None or not wanted.isdisjoint(batch.column("dataset").unique().to_pylist()):
+            kept = batch.num_rows
+            if wanted is not None:
+                held = batch.column("dataset").value_counts().to_pylist()
+                kept = sum(pair["counts"] for pair in held if pair["values"] in wanted)
+            read[0] += batch.num_rows
+            read[1] += kept
+            if kept:
                 yield pa.RecordBatch.from_arrays([*batch.columns, pa.arange(first, last)], schema=schema)
             first = last
 
@@ -272,13 +279,19 @@ def _scan(
     number: str = "n",
     wanted: frozenset[str] | None = None,
 ) -> list[Span]:
-    """Run ``insert`` once over each file, numbering rows on from ``start``; each file's row numbers and its input."""
+    """Run ``insert`` once over each file, numbering rows on from ``start``; each file's row numbers and its input.
+
+    A stream that ends early loses rows without an error, so the rows decoded and the rows inserted are both counted.
+    """
     spans = []
     for path in paths:
         with _parquet(path) as parquet:
-            con.register("source", _numbered(parquet, start, number, wanted))
-            con.execute(insert)
+            read = [0, 0]
+            con.register("source", _numbered(parquet, start, number, wanted, read))
+            [(inserted,)] = con.execute(insert).fetchall()
             con.unregister("source")
+            if read != [parquet.metadata.num_rows, inserted]:
+                raise NotBulkEligible("DuckDB did not take every row the reader decoded")
             spans.append((start, start + parquet.metadata.num_rows, path))
             start += parquet.metadata.num_rows
     return spans
