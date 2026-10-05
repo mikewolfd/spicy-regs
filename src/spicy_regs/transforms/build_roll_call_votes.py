@@ -39,8 +39,9 @@ held rows included, so the base table carries the id its column promises and
 ``member_vote_terms`` reads it rather than resolving again: a Senate row through
 its LIS id (``table_merge.fill_senate_bioguide_ids``), and a ``name:`` row through
 the one member of that surname, state and party seated in that Congress, on a
-day inside that member's term, or the one of several such members seated on that
-day (``member_name_crosswalk.fill_house_name_bioguide_ids``, which states the rule
+day inside that member's term, or the one of several such members whom the day
+or the roll call's own first-named labels single out
+(``member_name_crosswalk.fill_house_name_bioguide_ids``, which states the rule
 and journals each resolution); a row no one member answers to stays NULL, and
 ``member_vote_terms`` leaves it ``unresolved_member``. A vote
 the House vacated before recording a position publishes its row with
