@@ -4,7 +4,7 @@
 
 **Bill comparison items**
 
-One row per settled correspondence in one version-pair comparison. `text_diff_json` is byte-capped, and `text_diff_truncated` says when the cap was reached. All columns are stored as VARCHAR.
+One row per settled correspondence in one version-pair comparison. `text_diff` is byte-capped, and `text_diff_truncated` says when the cap was reached.
 
 Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='section_diff_items'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
 

@@ -4,7 +4,7 @@
 
 **Legislator terms**
 
-One row per term a legislator served, in the crosswalk's own order. All columns are stored as VARCHAR.
+One row per term a legislator served, in the crosswalk's own order.
 
 Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='member_terms'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
 

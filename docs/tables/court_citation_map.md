@@ -4,7 +4,7 @@
 
 **Court opinion citation map**
 
-Which court opinion cites which, and how often, as CourtListener's citator resolved it. Both ids are opinion ids, not decision ids: join each to court_opinions.opinion_id, then court_opinions.cluster_id to court_opinion_clusters, to ask what cites a decision or which decisions are cited most. Rebuilt whole from each quarterly export. All columns are VARCHAR.
+Which court opinion cites which, and how often, as CourtListener's citator resolved it. Both ids are opinion ids, not decision ids: join each to court_opinions.opinion_id, then court_opinions.cluster_id to court_opinion_clusters, to ask what cites a decision or which decisions are cited most. Rebuilt whole from each quarterly export.
 
 Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='court_citation_map'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
 

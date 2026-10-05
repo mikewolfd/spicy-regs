@@ -21,13 +21,13 @@ Processing fields, source witnesses, conversion inputs and diagnostics reference
 | `category` | `VARCHAR` | The docket's status (labelled “Disposition”): Pending, Closed and others. |
 | `display_properties` | `STRUCT("name" VARCHAR, "label" VARCHAR, tooltip VARCHAR)[]` | The agency's labels for this docket's fields: a Native list of {label, name, tooltip}; [] when none; json_column spelling. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `effective_date` | `TIMESTAMP WITH TIME ZONE` | Mostly the docket's close date (usually labelled “Docket Close Date”), a UTC instant. |
-| `field1` | `VARCHAR` | An agency-defined field (“Related Docket's RIN”, “Related To”, …); see display_properties_json. |
-| `field2` | `VARCHAR` | An agency-defined field (usually “Docket Status”); see display_properties_json. |
+| `field1` | `VARCHAR` | An agency-defined field (“Related Docket's RIN”, “Related To”, …); see display_properties. |
+| `field2` | `VARCHAR` | An agency-defined field (usually “Docket Status”); see display_properties. |
 | `generic` | `VARCHAR` | An agency program code (“Docket Item Code”, “Location”, “Program Area”). |
 | `keywords` | `VARCHAR[]` | The docket's keywords, in the publisher's order. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `legacy_id` | `VARCHAR` | The docket's id in a predecessor system. |
 | `object_id` | `VARCHAR` | The publisher's internal object handle. |
-| `organization` | `VARCHAR` | Labelled “Pre-EDOCKET ID” or “Organization”; see display_properties_json. |
+| `organization` | `VARCHAR` | Labelled “Pre-EDOCKET ID” or “Organization”; see display_properties. |
 | `petition_nbr` | `VARCHAR` | A petition number. |
 | `program` | `VARCHAR` | The program office (usually labelled “Center”). |
 | `short_title` | `VARCHAR` | A short title (sometimes labelled “Action Office”). |

@@ -4,7 +4,7 @@
 
 **Bill summaries (model)**
 
-One row per plain-language summary of one printing of a bill. `frame` is stored because without it the summary is not reproducible from the row. All columns are stored as VARCHAR.
+One row per plain-language summary of one printing of a bill. `frame` is stored because without it the summary is not reproducible from the row.
 
 Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='bill_summaries'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
 

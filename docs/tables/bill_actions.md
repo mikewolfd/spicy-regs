@@ -4,7 +4,7 @@
 
 **Bill actions**
 
-One row per entry of the bill's own action list (`actions` in its BILLSTATUS document), in publisher order; actions recorded under the bill's amendments (`amendments/amendment/actions`) are not rows, so a roll call on an amendment can have no action here. Each row also carries the stage the action text implies, with the rule and matcher that fired, which makes `congress_bills.stage` auditable action by action. All columns are stored as VARCHAR.
+One row per entry of the bill's own action list (`actions` in its BILLSTATUS document), in publisher order; actions recorded under the bill's amendments (`amendments/amendment/actions`) are not rows, so a roll call on an amendment can have no action here. Each row also carries the stage the action text implies, with the rule and matcher that fired, which makes `congress_bills.stage` auditable action by action.
 
 Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='bill_actions'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
 

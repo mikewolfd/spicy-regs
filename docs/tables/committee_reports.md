@@ -4,7 +4,7 @@
 
 **Committee reports**
 
-One row per published part of a captured GovInfo committee report package, keyed `(package_id, part_id)`. `bill_id` is the measure the report accompanies, read from the package's own MODS metadata. All columns are stored as VARCHAR.
+One row per published part of a captured GovInfo committee report package, keyed `(package_id, part_id)`. `bill_id` is the measure the report accompanies, read from the package's own MODS metadata.
 
 Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='committee_reports'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
 

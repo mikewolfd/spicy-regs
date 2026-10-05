@@ -4,7 +4,7 @@
 
 **Treaty documents**
 
-One row per treaty document, as the Congress.gov treaty list and detail routes state it, keyed `(congress_received, number, suffix)`. `package_id` is the GovInfo CDOC id by the `CDOC-{congress}tdoc{number}` rule on an unpartitioned treaty. That package's MODS (`https://www.govinfo.gov/metadata/pkg/{package_id}/mods.xml`) states the committee the treaty was referred to, which this table does not carry (CDOC-119tdoc1 and -tdoc2: Foreign Relations); the id is derived by rule, so GovInfo may not have published it yet. All columns are stored as VARCHAR.
+One row per treaty document, as the Congress.gov treaty list and detail routes state it, keyed `(congress_received, number, suffix)`. `package_id` is the GovInfo CDOC id by the `CDOC-{congress}tdoc{number}` rule on an unpartitioned treaty. That package's MODS (`https://www.govinfo.gov/metadata/pkg/{package_id}/mods.xml`) states the committee the treaty was referred to, which this table does not carry (CDOC-119tdoc1 and -tdoc2: Foreign Relations); the id is derived by rule, so GovInfo may not have published it yet.
 
 Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='treaties'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
 

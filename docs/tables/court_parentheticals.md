@@ -4,7 +4,7 @@
 
 **Court opinion parentheticals**
 
-Short summaries of a decision written by the courts that later cite it, the text in parentheses after a citation, such as "(holding that an agency must explain a change in position)". described_opinion_id is the opinion summarized and describing_opinion_id the one that wrote it; join either to court_opinions.opinion_id to reach its decision. score is the publisher's estimate of how descriptive the text is. Rebuilt whole from each quarterly export. All columns are VARCHAR.
+Short summaries of a decision written by the courts that later cite it, the text in parentheses after a citation, such as "(holding that an agency must explain a change in position)". described_opinion_id is the opinion summarized and describing_opinion_id the one that wrote it; join either to court_opinions.opinion_id to reach its decision. score is the publisher's estimate of how descriptive the text is. Rebuilt whole from each quarterly export.
 
 Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='court_parentheticals'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
 
