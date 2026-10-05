@@ -1,5 +1,6 @@
 """The SQL encodings equal the receipt writer's, or mark the text for the row writer."""
 
+import json
 import random
 import sys
 
@@ -9,7 +10,7 @@ import pyarrow.parquet as pq
 import pytest
 
 from spicy_regs import etl_bulk
-from spicy_regs.etl_receipts import DatasetPolicy, ReceiptContext, exact_json, subject_identity, write_dataset
+from spicy_regs.etl_receipts import DatasetPolicy, ReceiptContext, _unpack, exact_json, subject_identity, write_dataset
 
 #: The control characters with no short JSON escape whose ``\\u00XX`` holds a hex letter.
 UPPER_HEX = {0x0B, 0x0E, 0x0F, *range(0x1A, 0x20)}
@@ -32,6 +33,7 @@ def test_every_code_point_encodes_like_the_reference_or_is_marked() -> None:
     for point, value, (text, flagged) in zip(points, values, _encode(values, pa.string())):
         if flagged:
             marked.add(point)
+            assert _unpack(json.loads(text)) == value  # spelled differently, the same value: the row code can read it back
         else:
             assert text == exact_json(value), hex(point)
     assert marked == UPPER_HEX
