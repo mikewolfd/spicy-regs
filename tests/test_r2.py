@@ -259,6 +259,23 @@ def test_public_readback_binds_bytes_to_stable_storage_version(tmp_path, monkeyp
         }
 
 
+def test_public_version_asks_for_the_stored_bytes(monkeypatch):
+    """The custom domain answers a JSON object gzip-encoded, with a weak ETag and no length, unless asked not to."""
+    import httpx
+
+    def head(url, **options):
+        request = httpx.Request("HEAD", url)
+        if url.endswith("/absent.json"):
+            return httpx.Response(404, request=request)
+        if options["headers"].get("Accept-Encoding") != "identity":
+            return httpx.Response(200, headers={"etag": 'W/"fbc6"', "content-encoding": "gzip"}, request=request)
+        return httpx.Response(200, headers={"etag": '"fbc6"', "content-length": "228490"}, request=request)
+
+    monkeypatch.setattr(r2.httpx, "head", head)
+    assert r2.public_object_version("https://public.example/publication.v2.json") == {"etag": '"fbc6"', "bytes": 228490}
+    assert r2.public_object_version("https://public.example/absent.json") is None
+
+
 @pytest.mark.parametrize("code", ["NoSuchKey", "AccessDenied", "InternalError"])
 def test_receipt_and_object_version_only_treat_absence_as_optional(monkeypatch, code):
     from botocore.exceptions import ClientError
