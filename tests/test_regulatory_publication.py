@@ -141,11 +141,12 @@ def test_file_generation_retains_resolvable_inputs_after_source_removal(tmp_path
     assert pq.read_table(restored)['docket_id'].to_pylist() == ['D']
 
 
-def test_file_rewrites_keep_original_api_evidence_after_input_removal(tmp_path):
+def test_file_rewrites_keep_original_api_evidence_in_immutable_prior_after_input_removal(tmp_path):
     from hashlib import sha256
-    from spicy_regs.etl_receipts import ReceiptContext, exact_json, resolve_receipt_witness
-    from spicy_regs.selected_generations import SelectedDataset, SelectedInputs, remember_selection
-    from spicy_regs.transforms.regulations_receipts import write_records
+    from spicy_regs.etl_receipts import ReceiptContext, exact_json, resolve_receipt_witness, decode_exact_json, _digest
+    from spicy_regs.generations import build_generation, verify_generation
+    from spicy_regs.selected_generations import SelectedInputs, remember_generation
+    from spicy_regs.transforms.regulations_receipts import write_records, policy
 
     original = {'source_api': {'id': 'D', 'unmapped': 'evidence'}}
     witness = {'source_id': 'api', 'source_uri': None,
@@ -153,15 +154,41 @@ def test_file_rewrites_keep_original_api_evidence_after_input_removal(tmp_path):
                'locator': 'receipt.values.raw_source_record (canonical exact_json)', 'body_version': 'body-v1'}
     subject, receipts = write_records('dockets', [(original, ReceiptContext('initial', 'api', 'api-reader', [witness]))],
                                       tmp_path / 'initial', project=lambda row: {'docket_id': row['source_api']['id']})
-    remember_selection(tmp_path, [SelectedDataset('dockets', (subject,), receipts, 'initial')])
+    # Select the actual admitted immutable generation. Temporary writer inputs may be removed,
+    # while the original selected member remains the authority for its own raw API evidence.
+    initial = tmp_path / 'generations' / 'initial'
+    artifact = build_generation(initial, family='dockets', files=[subject], expected_keys=[subject.name],
+                                receipt_path=receipts, receipt_policies=[policy('dockets')],
+                                receipt_generation_id='initial')
+    remember_generation(tmp_path, initial, artifact)
+    initial_receipt_bytes = (initial / 'etl_receipts.parquet').read_bytes()
+    [original_receipt] = pq.read_table(initial / 'etl_receipts.parquet').to_pylist()
+    rewritten = []
     for ordinal in range(2):
         source = tmp_path / f'processing-{ordinal}.parquet'
         assert restore_dataset(tmp_path, 'dockets', source)
         finish_dataset(tmp_path, 'dockets', source, publish=False)
         source.unlink()
+        selected = SelectedInputs(tmp_path, tmp_path / f'checked-{ordinal}', public_url='').select('dockets')
+        assert selected is not None
+        [current] = [r for r in pq.read_table(selected.receipts).to_pylist() if r['outcome'] == 'accepted']
+        rewritten.append(current)
     subject.unlink()
     receipts.unlink()
-    selected = SelectedInputs(tmp_path, tmp_path / 'checked', public_url='').select('dockets')
-    assert selected is not None
-    [current] = [r for r in pq.read_table(selected.receipts).to_pylist() if r['outcome'] == 'accepted']
-    assert resolve_receipt_witness(current, witness) == exact_json(original).encode()
+    first, second = rewritten
+    assert first['subject_version'] == original_receipt['subject_version']
+    assert first['processing_json'] != original_receipt['processing_json']
+    assert decode_exact_json(first['diagnostic_json'])['prior_receipt'] == {
+        'receipt_id': original_receipt['receipt_id'], 'generation_id': original_receipt['generation_id'],
+        'processing_sha256': _digest(decode_exact_json(original_receipt['processing_json']))}
+    assert second == first
+    assert 'retained_processing' not in decode_exact_json(first['diagnostic_json'])
+    assert witness not in first['witnesses']
+    for current_witness in second['witnesses']:
+        assert resolve_receipt_witness(second, current_witness)
+    # Exact original source evidence resolves in the pinned original member after alias removal.
+    assert verify_generation(initial, expected_pin=artifact.pin).pin == artifact.pin
+    assert (initial / 'etl_receipts.parquet').read_bytes() == initial_receipt_bytes
+    assert resolve_receipt_witness(original_receipt, witness) == exact_json(original).encode()
+    with pytest.raises(ValueError, match='no retained payload'):
+        resolve_receipt_witness(second, witness)
