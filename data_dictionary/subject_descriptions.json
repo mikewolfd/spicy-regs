@@ -2375,6 +2375,7 @@
       "object_id": "Source-reported identifier of the related entity when present. No identifier is inferred from object_name.",
       "object_type": "Type of related entity expected by the reported relationship.",
       "object_name": "Related name exactly as observed where supplied, including names with no reported identifier.",
+      "value_status": "Whether the source reported a value or an explicit absence such as missing_field, null, empty_string, empty_list or reported_none. Inspect before treating a row as an edge.",
       "cycle": "Election cycle supplied for a bulk observation; current API observations may have no cycle.",
       "candidate_election_year": "Candidate election year reported by the source when available."
     }

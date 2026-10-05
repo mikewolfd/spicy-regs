@@ -24,5 +24,6 @@ Source-stated roles and associations. Explicit absence states (a missing field, 
 | `object_id` | `VARCHAR` | Source-reported identifier of the related entity when present. No identifier is inferred from object_name. |
 | `object_type` | `VARCHAR` | Type of related entity expected by the reported relationship. |
 | `object_name` | `VARCHAR` | Related name exactly as observed where supplied, including names with no reported identifier. |
+| `value_status` | `VARCHAR` | Whether the source reported a value or an explicit absence such as missing_field, null, empty_string, empty_list or reported_none. Inspect before treating a row as an edge. |
 | `cycle` | `INTEGER` | Election cycle supplied for a bulk observation; current API observations may have no cycle. |
 | `candidate_election_year` | `INTEGER` | Candidate election year reported by the source when available. |
