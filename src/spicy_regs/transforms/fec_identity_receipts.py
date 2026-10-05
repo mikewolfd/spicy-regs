@@ -210,8 +210,12 @@ def read_identity_rows(directory, table, *, generation_id):
 
 
 def read_identity_processing(directory, table, *, generation_id):
-    """Read receipt-only source inputs for internal mapping, never a public view."""
-    from spicy_regs.etl_receipts import _unpack
+    """Read receipt-only source inputs for internal mapping, never a public view.
+
+    Rows come back in the order ``IdentityReceiptWriter`` emitted them, which each attempt identity,
+    ``<table>/<emitted count>``, records; a published member orders its receipts by identity instead.
+    """
+    from spicy_regs.etl_receipts import in_recorded_order
 
     policy = dataset_policy(table)
     if not policy.receipt_only:
@@ -221,11 +225,18 @@ def read_identity_processing(directory, table, *, generation_id):
             Path(directory) / "etl_receipts.parquet", Path(temporary) / "receipts.parquet", dataset=table
         )
         validate_receipt_bundle({table: []}, [path], [policy], generation_id=generation_id)
-        with pq.ParquetFile(path) as source:
-            for batch in source.iter_batches(batch_size=512):
-                for receipt in batch.to_pylist():
-                    if receipt["outcome"] == "observed":
-                        yield _unpack(json.loads(receipt["processing_json"]))
+
+        def positioned():
+            with pq.ParquetFile(path) as source:
+                for batch in source.iter_batches(batch_size=512):
+                    for receipt in batch.to_pylist():
+                        if receipt["outcome"] == "observed":
+                            emitted = receipt["attempt_id"].rpartition("/")[2]
+                            if not emitted.isdecimal():
+                                raise ValueError("FEC identity receipt attempt does not record when it was emitted")
+                            yield (int(emitted), 0), receipt
+
+        yield from in_recorded_order(positioned())
 
 
 def seal_identity_context(directory, destination):

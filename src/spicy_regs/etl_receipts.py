@@ -421,6 +421,129 @@ def combine_receipts(paths: Sequence[Path], destination: Path) -> Path:
     return write_rows((row for path in paths for row in _rows(path)), destination, RECEIPT_SCHEMA)
 
 
+#: The published order of a receipt member: each column ascending by UTF-8 bytes, NULL last.
+RECEIPT_ORDER = ("dataset", "record_id", "receipt_id")
+#: Rows per row group of a published member; a group never spans two datasets.
+RECEIPT_ROW_GROUP_ROWS = 2000
+#: DuckDB's memory limit for the sort. Measured 2026-10-05 on published members of 0.8 and 3.3 million rows
+#: (1.0 and 11.6 GB uncompressed): the process peaked at 1.5 and 1.8 GB, and DuckDB refused a 256 MB limit.
+RECEIPT_SORT_MEMORY = "1GB"
+#: The columns whose row-group minima and maxima a published member's footer keeps. The JSON payloads and the
+#: witnesses keep none: no reader filters on them, and a keyed read fetches the whole footer before any row.
+#: Measured 2026-10-05, leaving them out took the sorted sam-entities footer from 2.0 to 0.9 MB and the sorted
+#: scorecards footer from 11.2 to 3.9 MB.
+RECEIPT_STATISTICS = tuple(name for name in RECEIPT_SCHEMA.names if name != "witnesses" and not name.endswith("_json"))
+
+
+def sort_receipts(sources: Sequence[Path], destination: Path, *, resources=None) -> Path:
+    """Write every row of finished receipt files as one member in published order.
+
+    The order is ``dataset``, then ``record_id`` with NULL last in its dataset, then ``receipt_id``. Each row group
+    holds one dataset and at most ``RECEIPT_ROW_GROUP_ROWS`` rows, so its footer statistics bound a narrow
+    ``record_id`` range and a read keyed on ``(dataset, record_id)`` skips to the group that holds the key. No row
+    is changed, added or dropped, and the schema read back is ``RECEIPT_SCHEMA``.
+
+    DuckDB sorts out of core under ``resources`` (``ExportResources``; ``RECEIPT_SORT_MEMORY`` by default), so
+    memory stays bounded. It spills beside ``destination``, uncompressed: about three quarters of the rows'
+    uncompressed size on the two members measured (0.7 and 9.2 GB), and DuckDB raises rather than fill the disk.
+    pyarrow writes the result. ``destination`` may be a source; it is replaced only once every row is written.
+    A source with another schema raises ValueError.
+    """
+    import duckdb
+
+    from spicy_regs.duckdb_settings import ExportResources
+
+    sources = [Path(source) for source in sources]
+    for source in sources:
+        with pq.ParquetFile(source) as parquet:
+            if not parquet.schema_arrow.equals(RECEIPT_SCHEMA):
+                raise ValueError("Receipt schema differs from the shared schema")
+    columns = ", ".join(f'"{name}"' for name in RECEIPT_SCHEMA.names)
+    order = ", ".join(f'"{name}" ASC NULLS LAST' for name in RECEIPT_ORDER)
+    with TemporaryDirectory(dir=destination.parent, prefix=".receipt-sort-") as scratch:
+        temporary = Path(scratch) / RECEIPT_KEY
+        with (
+            pq.ParquetWriter(
+                temporary, RECEIPT_SCHEMA, compression="zstd", write_statistics=list(RECEIPT_STATISTICS)
+            ) as writer,
+            duckdb.connect() as con,
+        ):
+            (resources or ExportResources(memory=RECEIPT_SORT_MEMORY)).configure(con, Path(scratch) / "spill")
+            # read_parquet refuses an empty file list; no source is an empty member.
+            ordered = con.execute(
+                f"SELECT {columns} FROM read_parquet(?) ORDER BY {order}", [[str(source) for source in sources]]
+            ).to_arrow_reader(RECEIPT_ROW_GROUP_ROWS) if sources else ()
+            for group in _dataset_groups(ordered, RECEIPT_ROW_GROUP_ROWS):
+                writer.write_table(
+                    pa.Table.from_batches(group).cast(RECEIPT_SCHEMA), row_group_size=RECEIPT_ROW_GROUP_ROWS
+                )
+        temporary.replace(destination)
+    return destination
+
+
+def _dataset_groups(batches: Iterable[pa.RecordBatch], rows: int) -> Iterable[list[pa.RecordBatch]]:
+    """Regroup a dataset-ordered stream into runs of one dataset and at most ``rows`` rows."""
+    from itertools import groupby
+
+    held: list[pa.RecordBatch] = []
+    count, current = 0, None
+    for batch in batches:
+        start = 0
+        for dataset, run in groupby(batch.column("dataset").to_pylist()):
+            end = start + sum(1 for _ in run)
+            if held and dataset != current:
+                yield held
+                held, count = [], 0
+            current = dataset
+            while start < end:
+                piece = batch.slice(start, min(end - start, rows - count))
+                held.append(piece)
+                count += piece.num_rows
+                start += piece.num_rows
+                if count == rows:
+                    yield held
+                    held, count = [], 0
+    if held:
+        yield held
+
+
+def receipts_sorted(path: ParquetInput) -> bool:
+    """Whether a receipt member's footer shows it in published order, without reading a row.
+
+    True when every row group holds one dataset and consecutive groups ascend by ``(dataset, record_id)``, NULL
+    ``record_id`` last, without overlapping: the property that lets a keyed read skip to one group. Footer
+    statistics cannot show the order of rows inside a group, nor of ``receipt_id`` among equal keys. A group
+    without statistics is reported unsorted; an empty member is sorted. A file with another schema is no receipt
+    member and raises ValueError.
+    """
+    with _parquet(path) as parquet:
+        if not parquet.schema_arrow.equals(RECEIPT_SCHEMA):
+            raise ValueError("Receipt schema differs from the shared schema")
+        metadata = parquet.metadata
+        names = [metadata.schema.column(index).path for index in range(metadata.num_columns)]
+        dataset_column, record_column = names.index("dataset"), names.index("record_id")
+        highest = None
+        for index in range(metadata.num_row_groups):
+            group = metadata.row_group(index)
+            if not group.num_rows:
+                continue
+            datasets, records = group.column(dataset_column).statistics, group.column(record_column).statistics
+            if (
+                datasets is None or records is None
+                or not datasets.has_min_max or datasets.min != datasets.max
+                or not datasets.has_null_count or datasets.null_count
+                or not records.has_null_count
+                or not records.has_min_max and records.null_count != group.num_rows
+            ):
+                return False
+            # (dataset, 1, "") places a NULL record_id after every value of its dataset.
+            lowest = (datasets.min, 0, records.min) if records.has_min_max else (datasets.min, 1, "")
+            if highest is not None and lowest < highest:
+                return False
+            highest = (datasets.min, 1, "") if records.null_count else (datasets.min, 0, records.max)
+        return True
+
+
 @contextmanager
 def _parquet(path):
     # Pinned remote sources supply a seekable context-managed opener.
@@ -697,6 +820,26 @@ def read_attempts(
                     }
 
 
+def in_recorded_order(attempts: Iterable[tuple[tuple[int, int], Mapping]]) -> Iterable[dict]:
+    """Yield each attempt's decoded processing fields by ascending position, through a disk index.
+
+    A published member orders receipts by identity (``sort_receipts``), so a reader that must replay rows in the
+    order a builder emitted them keys each ``read_attempts`` row by the position its attempt identity records.
+    Rows at one position keep the order given.
+    """
+    with TemporaryDirectory(prefix="etl-order-") as temp, sqlite3.connect(str(Path(temp) / "order.db")) as con:
+        con.execute("CREATE TABLE positioned (major INTEGER, minor INTEGER, processing BLOB)")
+        con.executemany(
+            "INSERT INTO positioned VALUES (?,?,?)",
+            (
+                (major, minor, zlib.compress(attempt["processing_json"].encode(), level=1))
+                for (major, minor), attempt in attempts
+            ),
+        )
+        for (body,) in con.execute("SELECT processing FROM positioned ORDER BY major, minor, rowid"):
+            yield _index_processing(body)
+
+
 def _retain_history(prior: Mapping, diagnostics: Mapping) -> dict:
     """Retain source values once by digest, and prior receipt identities as references."""
     body = {k: v for k, v in prior.items() if k != "receipt_id"}
@@ -808,7 +951,10 @@ class ReceiptLineage:
         return inherit_receipt(context, None if row is None else _unpack(json.loads(row[0])))
 
     def inherit_processing(self, context, processing):
-        rows = self.connection.execute("SELECT receipt FROM observations WHERE processing=?", [exact_json(processing)])
+        # Ordered by identity so the inherited witnesses do not depend on the order of the prior file.
+        rows = self.connection.execute(
+            "SELECT receipt FROM observations WHERE processing=? ORDER BY receipt_id", [exact_json(processing)]
+        )
         for row in rows:
             context = inherit_receipt(context, _unpack(json.loads(row[0])))
         return context

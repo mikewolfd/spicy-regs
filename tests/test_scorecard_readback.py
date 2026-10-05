@@ -38,6 +38,15 @@ def native_prior(tmp_path, monkeypatch, selected_evidence):
     )
 
 
+def by_snapshot(rows):
+    """Each table's rows as read, except the receipt-only snapshots, put in snapshot order.
+
+    An admitted receipt member orders rows by receipt identity, so rows that live only in receipts come back in
+    that order rather than the builder's; subject rows keep their table's order.
+    """
+    return rows | {"scorecard_snapshots": sorted(rows["scorecard_snapshots"], key=lambda row: row["snapshot_id"])}
+
+
 @pytest.mark.parametrize("native", [False, True])
 def test_readback_validator_gets_exact_prior_and_persisted_rows_after_validation(tmp_path, monkeypatch, native):
     selected = edition("2025")
@@ -84,7 +93,7 @@ def test_readback_validator_gets_exact_prior_and_persisted_rows_after_validation
 
     def assess(previous, current):
         assert validated[-1] is current
-        assert previous == old
+        assert by_snapshot(previous) == by_snapshot(old)
         assert current == read_family(tmp_path / "build", SOURCE_NAMES)
         assert not any(row["event"] == "scorecard-refresh" for row in journal(e))
         counts = check_preserved(previous, current, scorecard_ids={selected.scorecard_id}, publisher_ids={"lcv"})

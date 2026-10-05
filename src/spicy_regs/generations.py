@@ -244,6 +244,10 @@ def build_generation(
     A successful empty table is a Parquet file with zero rows. An omitted
     output is a failure, never an empty success. No root is written until the
     complete set and all declared schemas have been inspected.
+
+    Subject files are copied byte for byte. The receipt member is the one file
+    rewritten: every row of ``receipt_path`` in published order
+    (``etl_receipts.sort_receipts``), so a keyed read can skip to one row group.
     """
     from rulespec_artifacts import (
         LocalMemberSource,
@@ -275,10 +279,10 @@ def build_generation(
             raise ValueError(f"Output differs from the declared schema: {key}")
     receipt_spec = None
     if receipt_path is not None:
-        from spicy_regs.etl_receipts import RECEIPT_KEY
+        from spicy_regs.etl_receipts import RECEIPT_KEY, sort_receipts
         if not receipt_policies or not receipt_generation_id or RECEIPT_KEY in tables:
             raise ValueError("Receipt admission needs policies and a generation identity")
-        shutil.copyfile(receipt_path, directory / RECEIPT_KEY)
+        sort_receipts([receipt_path], directory / RECEIPT_KEY)
         receipt_spec = {"key": RECEIPT_KEY, "generationId": receipt_generation_id,
                         "policies": [policy.descriptor() for policy in receipt_policies],
                         **_table_info(directory / RECEIPT_KEY)}

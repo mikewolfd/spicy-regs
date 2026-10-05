@@ -26,6 +26,7 @@ from spicy_regs.etl_receipts import (
     ReceiptLineage,
     combine_receipts,
     failure_receipt,
+    in_recorded_order,
     read_attempts,
     read_with_receipts,
     select_receipts,
@@ -245,13 +246,34 @@ def write_legislative_outputs(
     return manifest
 
 
+def _position(attempt_id: str) -> tuple[int, int]:
+    """The member and row a ``write_legislative_outputs`` attempt identity records.
+
+    ``<dataset>/<member>/<row>`` is a source row, ``<dataset>/member/<member>`` a member's file state and
+    ``<dataset>/empty`` the state of an empty partitioned table. Any other identity raises ValueError.
+    """
+    _, *place = attempt_id.split("/")
+    if place == ["empty"]:
+        return 0, 0
+    if len(place) == 2 and place[0] == "member":
+        place = [place[1], "0"]
+    if len(place) != 2 or not all(part.isdecimal() for part in place):
+        raise ValueError("Legislative receipt attempt does not record its source position")
+    return int(place[0]), int(place[1])
+
+
 def _processing_rows(receipts: Path, dataset_policy: DatasetPolicy, generation_id: str) -> Iterable[dict]:
-    """Read receipt-only source observations through the shared verified API."""
+    """Read receipt-only source observations through the shared verified API, in the order they were emitted.
+
+    A published member orders receipts by identity, so the order comes from each attempt's recorded position.
+    """
     validate_receipt_bundle({dataset_policy.dataset: []}, [receipts], [dataset_policy], generation_id=generation_id)
-    for receipt in read_attempts(
-        [receipts], dataset_policy, generation_id=generation_id, outcomes=frozenset({"observed"})
-    ):
-        yield receipt["processing_fields"]
+    return in_recorded_order(
+        (_position(receipt["attempt_id"]), receipt)
+        for receipt in read_attempts(
+            [receipts], dataset_policy, generation_id=generation_id, outcomes=frozenset({"observed"})
+        )
+    )
 
 
 def restore_prior(bundle: Path, destination: Path) -> dict[str, Path]:

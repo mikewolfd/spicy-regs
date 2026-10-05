@@ -655,6 +655,10 @@ def test_attribute_selection_keeps_every_copy_and_same_volatile_tie_choice(tmp_p
     assert restored["D"]["topics"] == ["Air", "Air"]
     attempts = list(read_attempts([selected.receipts], policy("document_attributes"), generation_id="g2"))
     copies_held = [a for a in attempts if a["outcome"] == "observed" and "raw_source_record" in a["processing_fields"]]
+    # An admitted member orders receipts by identity; each copy's attempt, "<attempt>:candidate:<ordinal>", records
+    # the order the candidates arrived in.
+    copies_held.sort(key=lambda a: int(a["attempt_id"].rpartition(":")[2]))
+    assert [a["attempt_id"] for a in copies_held] == [f"{i}:candidate:{i}" for i in range(3)]
     assert [a["processing_fields"]["raw_source_record"] for a in copies_held] == copies
     assert [a["processing_fields"]["raw_conversion_inputs"]["_written_at"] for a in copies_held] == times
     assert sum(a["outcome"] == "refused" for a in attempts) == 1

@@ -13,7 +13,7 @@ import hashlib
 import json
 import shutil
 from contextlib import ExitStack
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -30,11 +30,13 @@ from spicy_regs.etl_receipts import (
     ReceiptLineage,
     combine_receipts,
     failure_receipt,
+    in_recorded_order,
     observation_receipt,
     read_attempts,
     read_with_receipts,
     select_receipts,
     split_record,
+    subject_identity,
     validate_receipt_bundle,
 )
 from spicy_regs.transforms.parquet_rows import write_rows
@@ -240,6 +242,41 @@ def write_congress_dataset(
     return (None if subjects is None else directory / subjects.name, directory / receipts.name)
 
 
+def _source_sequence(attempts: Iterable[Mapping], anchors: Mapping[str, int]) -> tuple[list[dict], dict[str, int]]:
+    """A dataset's retained footers, and the place of each source file among the files its receipts came from.
+
+    An attempt identity, ``<dataset>:<source digest>:<ordinal>``, records a row's place in one source file;
+    nothing records the sequence of several files. A receipt file still in the order its shards were combined
+    states it. A published member is ordered by identity instead, and there the sequence is that of the subject
+    members the files' accepted rows went to: ``anchors`` maps the record identity of each member's first row to
+    that member's place. A file with rows but no accepted one then has no place, and ValueError is raised.
+    """
+    footers, sequence, placed, with_rows = [], {}, {}, set()
+    combined, ordinal = True, -1
+    for receipt in attempts:
+        data = receipt["processing_fields"]
+        source, _, position = receipt["attempt_id"].rpartition(":")
+        started = source not in sequence
+        latest = sequence.setdefault(source, len(sequence)) == len(sequence) - 1
+        if receipt["record_id"] in anchors:
+            placed[source] = min(placed.get(source, len(anchors)), anchors[receipt["record_id"]])
+        if data.get("entry_kind") == "table_metadata":
+            footers.append(data)
+            combined, ordinal = combined and started, -1
+        elif data.get("entry_kind") == "row":
+            if not position.isdecimal():
+                raise ValueError("Congress receipt attempt does not record its source row")
+            combined = combined and latest and not started and int(position) > ordinal
+            ordinal = int(position)
+            if receipt["diagnostics"].get("reason") != "conversion_refused":  # the rows a restore replays
+                with_rows.add(source)
+    if len(sequence) > 1 and not combined:
+        if with_rows - set(placed):
+            raise ValueError("Congress receipts from several source files no longer record the files' sequence")
+        sequence = {source: place for place, source in enumerate(sorted(placed, key=placed.__getitem__))}
+    return footers, sequence
+
+
 def restore_processing_input(
     subject: Path | tuple[Path, ...] | None, receipts: Path, destination: Path, *, dataset: str, generation_id: str
 ) -> Path:
@@ -258,11 +295,15 @@ def restore_processing_input(
         # Exercise the shared exact matching reader before reconstructing original source rows.
         for _ in read_with_receipts(paths, [scoped], selected, generation_id=generation_id):
             pass
-        metadata_rows = []
-        for receipt in read_attempts([scoped], selected, generation_id=generation_id):
-            data = receipt["processing_fields"]
-            if data.get("entry_kind") == "table_metadata":
-                metadata_rows.append(data)
+        anchors = {}
+        for index, path in enumerate(paths):
+            with pq.ParquetFile(path) as member:
+                first = next(member.iter_batches(batch_size=1), None)
+            if first is not None and first.num_rows:
+                anchors[subject_identity(selected, first.to_pylist()[0])[0]] = index
+        metadata_rows, sources = _source_sequence(
+            read_attempts([scoped], selected, generation_id=generation_id), anchors
+        )
         if not metadata_rows or any(row != metadata_rows[0] for row in metadata_rows[1:]):
             raise ValueError("Congress input requires consistent retained source footers")
         retained = metadata_rows[0]
@@ -270,11 +311,15 @@ def restore_processing_input(
         # Source shapers use strings. Preserve discovered source columns and
         # absent columns by reading the exact retained input dictionaries.
         def original_rows():
-            for receipt in read_attempts([scoped], selected, generation_id=generation_id):
-                data = receipt["processing_fields"]
-                diagnostic = receipt["diagnostics"]
-                if data.get("entry_kind") == "row" and diagnostic.get("reason") != "conversion_refused":
-                    yield data["source_fields"]
+            def positioned():
+                for receipt in read_attempts([scoped], selected, generation_id=generation_id):
+                    data = receipt["processing_fields"]
+                    if data.get("entry_kind") == "row" and receipt["diagnostics"].get("reason") != "conversion_refused":
+                        source, _, ordinal = receipt["attempt_id"].rpartition(":")
+                        yield (sources[source], int(ordinal)), receipt
+
+            for data in in_recorded_order(positioned()):
+                yield data["source_fields"]
 
         schema = pa.ipc.read_schema(pa.BufferReader(retained["source_schema"]))
         return write_rows(original_rows(), destination, schema)

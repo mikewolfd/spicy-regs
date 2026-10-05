@@ -61,6 +61,12 @@ def write_checkpoint(name: str, rows, destination: Path, context: ReceiptContext
     return receipt
 
 
+def _place(attempt) -> int:
+    """A retry's ordinal from its attempt identity, ``<attempt>:<ordinal>``; the empty marker sorts first."""
+    ordinal = attempt["attempt_id"].rpartition(":")[2]
+    return int(ordinal) if ordinal.isdecimal() else -1
+
+
 def read_checkpoint(name: str, receipt: Path, *, generation_id: str):
     """Restore one selected active retry set; an empty marker retires old failures."""
     rows = []
@@ -69,6 +75,8 @@ def read_checkpoint(name: str, receipt: Path, *, generation_id: str):
     with TemporaryDirectory(prefix="checkpoint-read-") as temporary:
         scoped = select_receipts(receipt, Path(temporary) / "receipts.parquet", dataset=name)
         attempts = list(read_attempts([scoped], checkpoint_policy(name), generation_id=generation_id))
+    # A published member orders receipts by identity; the order restored is the one ``write_checkpoint`` recorded.
+    attempts.sort(key=_place)
     for attempt in attempts:
         if attempt["outcome"] != "observed":
             raise ValueError("Checkpoint contains an unqualified attempt")
