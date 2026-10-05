@@ -34,3 +34,4 @@ One row per legislator in one capture of the community crosswalk. Split from `me
 | `current_term_state` | `VARCHAR` | State of the latest term. |
 | `current_term_party` | `VARCHAR` | Party of the latest term, as the crosswalk states it for that term. |
 | `current_term_district` | `VARCHAR` | District of the latest term; absent for a Senate term. |
+| `name_nickname` | `VARCHAR` | The nickname stated in the crosswalk's name.nickname field, preserved exactly. NULL means the source states none; the host derives no nickname from another name field. |
