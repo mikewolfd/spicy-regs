@@ -357,3 +357,35 @@ def test_committee_increment_requires_exact_prior_receipts_before_producer(tmp_p
     assert after["witnesses"][: len(before["witnesses"])] == before["witnesses"]
     reference = next(w for w in after["witnesses"] if w["body_version"] == before["receipt_id"])
     assert resolve_receipt_witness(after, reference)
+
+
+def test_committee_history_parent_restores_the_rows_its_builder_wrote(tmp_path, monkeypatch):
+    """org-committee-links reads this parent through SelectedPriors, which refused it as undeclared (2026-10-05)."""
+    from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
+    from spicy_regs.selected_generations import SelectedDataset, remember_selection
+
+    monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
+    blank = dict.fromkeys(REGISTRY["fec_committee_history"]["input_fields"])
+    written = [
+        {**blank, "committee_id": "C00030718", "cycle": "2026", "name": "REALTORS PAC", "connected_organization_name": ""},
+        {**blank, "committee_id": "C00030718", "cycle": "2024", "zip": "060111"},
+    ]
+    bundle = tmp_path / "bundle"
+    with IdentityReceiptWriter(bundle, generation_id="g1", tables=["fec_committee_history", "fec_candidate_history"]) as writer:
+        for row in written:
+            writer.emit("fec_committee_history", row, input_witness=WITNESS)
+        candidate = dict.fromkeys(REGISTRY["fec_candidate_history"]["input_fields"])
+        candidate.update({key: "2024" if key == "cycle" else key for key in REGISTRY["fec_candidate_history"]["identity_fields"]})
+        writer.emit("fec_candidate_history", candidate, input_witness=WITNESS)
+    assert pq.read_table(bundle / "fec_committee_history.parquet")["cycle"].to_pylist() == [2026, 2024]
+    remember_selection(tmp_path, [
+        SelectedDataset(name, (bundle / (name + ".parquet"),), bundle / "etl_receipts.parquet", "g1")
+        for name in ("fec_committee_history", "fec_candidate_history")
+    ])
+    priors = SelectedPriors(tmp_path / "selected", root=tmp_path, public_url="")
+    restored = pq.read_table(priors.get("fec_committee_history"))
+    assert restored.to_pylist() == written
+    assert set(map(str, restored.schema.types)) == {"string"}
+    # A parent with no declared reconstruction still refuses rather than hand a reader converted values.
+    with pytest.raises(ValueError, match="No processing reconstruction declared for fec_candidate_history"):
+        priors.get("fec_candidate_history")
