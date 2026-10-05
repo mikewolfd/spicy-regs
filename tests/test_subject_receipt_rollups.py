@@ -461,3 +461,126 @@ def test_fec_committee_multipart_prior_reads_all_members_without_mutating_select
         p.relative_to(tmp_path / "selected"): p.read_bytes() for p in (tmp_path / "selected").rglob("*") if p.is_file()
     }
     assert after == before
+
+
+def test_selected_input_publication_and_dynamic_parent_use_captured_index(tmp_path, monkeypatch):
+    from spicy_regs.sources import r2
+
+    source = tmp_path / 'source'
+    source.mkdir()
+    writer = MixedRollup()
+    writer.build_receipts(source, mixed_builder)
+    captured = select_bundle(monkeypatch, source, writer)
+    captured['families'][writer.name]['artifactDigest'] = 'sha256:' + 'a' * 64
+    selected = SelectedPriors(tmp_path / 'reader', index=captured)
+    expected = publication.table_pin(captured, 'members.parquet')
+    monkeypatch.setattr(publication, 'current_index', lambda *_: pytest.fail('fresh publication pointer read'))
+    with r2.recorded_reads() as reads:
+        binding = selected.input_provenance('members')
+    assert binding['publication'] == expected
+    assert binding['publicationDisposition'] == 'captured-publication'
+    assert reads['members.parquet'] == expected
+    assert reads['members/etl_receipts.parquet']['sha256'] == binding['receipts']['sha256']
+    assert reads['members.parquet']['sha256'] != binding['processing']['sha256']
+
+
+def test_selected_input_local_witnesses_and_missing_disposition(tmp_path, monkeypatch):
+    from spicy_regs.sources import r2
+
+    monkeypatch.delenv('R2_PUBLIC_URL', raising=False)
+    MixedRollup().build_receipts(tmp_path, mixed_builder)
+    selected = SelectedPriors(tmp_path / 'reader', root=tmp_path, public_url='')
+    with r2.recorded_reads() as reads:
+        binding = selected.input_provenance('members')
+        assert selected.input_provenance('committees') is None
+    assert binding['publication'] is None
+    assert binding['publicationDisposition'] == 'local-selection'
+    assert reads == {
+        'members/subjects/0.parquet': binding['subjects'][0],
+        'members/etl_receipts.parquet': binding['receipts'],
+    }
+    assert all('family' not in pin and 'artifactDigest' not in pin for pin in reads.values())
+
+
+def test_selected_input_unmapped_remote_subject_is_explicit(tmp_path, monkeypatch):
+    from spicy_regs.sources import r2
+
+    source = tmp_path / 'source'
+    source.mkdir()
+    writer = MixedRollup()
+    writer.build_receipts(source, mixed_builder)
+    captured = select_bundle(monkeypatch, source, writer)
+    captured['families'][writer.name]['artifactDigest'] = 'sha256:' + 'a' * 64
+    selected = SelectedPriors(tmp_path / 'reader', index=captured)
+    with r2.recorded_reads() as reads:
+        binding = selected.input_provenance('bill_family_archives')
+    assert binding['publication'] is None
+    assert binding['publicationDisposition'] == 'no-published-subject'
+    assert 'bill_family_archives.parquet' not in reads
+    assert reads['bill_family_archives/etl_receipts.parquet'] == binding['receipts']
+
+
+def test_dynamic_selected_member_is_a_published_generation_parent(tmp_path, monkeypatch):
+    from contextlib import nullcontext
+    from spicy_regs.generations import verify_generation
+
+    source = tmp_path / 'source'
+    source.mkdir()
+    writer = MixedRollup()
+    writer.build_receipts(source, mixed_builder)
+    captured = select_bundle(monkeypatch, source, writer)
+    family = captured['families'][writer.name]
+    family['artifactDigest'] = 'sha256:' + 'a' * 64
+    family['prefix'] = 'generations/' + writer.name + '/' + 'a' * 64
+    family['logicalId'] = 'urn:dynamic-parent-source'
+    for key, table in family['tables'].items():
+        table['columns'] = [[field.name, str(field.type)] for field in pq.read_schema(source / key)]
+    family['etlReceipts']['columns'] = [
+        [field.name, str(field.type)] for field in pq.read_schema(source / 'etl_receipts.parquet')
+    ]
+    expected = publication.table_pin(captured, 'members.parquet')
+    monkeypatch.setattr(publication, 'snapshot', lambda _: nullcontext(captured))
+    monkeypatch.setattr(publication, 'current_index', lambda *_: pytest.fail('fresh publication pointer read'))
+
+    class DynamicMembers(SubjectReceiptRollup):
+        name = 'dynamic-members-read-test'
+        inputs = ()
+        output = 'committees.parquet'
+
+        def build(self, output_dir):
+            def producer(work, *, download_prior, selected_input):
+                assert download_prior('members.parquet', work / 'members.parquet')
+                assert selected_input('members')['publication'] == expected
+                return shaped(work / 'committees.parquet', [{'system_code': 'SSJU'}])
+
+            return self.build_receipts(output_dir, producer)
+
+    output = tmp_path / 'output'
+    DynamicMembers(output_dir=output).run()
+    [directory] = (output / 'generations').iterdir()
+    artifact = verify_generation(directory)
+    assert artifact.root['spec']['parents']['members.parquet'] == expected
+    assert artifact.root['spec']['parents']['members/etl_receipts.parquet']['sha256'].startswith('sha256:')
+
+
+def test_split_selected_publication_parent_preserves_descriptor_authority(tmp_path, monkeypatch):
+    from spicy_regs.sources import r2
+
+    source = tmp_path / 'source'
+    source.mkdir()
+    writer = MixedRollup()
+    writer.build_receipts(source, mixed_builder)
+    members = source / 'members'
+    members.mkdir()
+    (source / 'members.parquet').rename(members / 'part-0.parquet')
+    captured = select_bundle(monkeypatch, source, writer)
+    family = captured['families'][writer.name]
+    family['artifactDigest'] = 'sha256:' + 'a' * 64
+    descriptor = family['tables']['members.parquet']
+    descriptor['byteSize'] = sum(member['byteSize'] for member in descriptor['members'])
+    descriptor['partitionColumns'] = []
+    expected = publication.table_pin(captured, 'members.parquet')
+    with r2.recorded_reads() as reads:
+        binding = SelectedPriors(tmp_path / 'reader', index=captured).input_provenance('members')
+    assert binding['publication'] == reads['members.parquet'] == expected
+    assert 'tableDescriptorDigest' in expected and 'sha256' not in expected

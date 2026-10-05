@@ -163,6 +163,8 @@ class SelectedPriors:
 
     def input_provenance(self, dataset):
         """Bind a restored processing input to the selected native subjects and receipts."""
+        from spicy_regs.sources import publication, r2
+
         source = self.get(dataset)
         if source is None:
             return None
@@ -173,9 +175,23 @@ class SelectedPriors:
                 digest = "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest()
             return {"sha256": digest, "byteSize": path.stat().st_size}
 
-        return {"dataset": dataset, "generationId": generation,
-                "subjects": [pin(path) for path in subjects], "receipts": pin(receipts),
-                "processing": pin(source)}
+        binding = {"dataset": dataset, "generationId": generation,
+                   "subjects": [pin(path) for path in subjects], "receipts": pin(receipts),
+                   "processing": pin(source)}
+        index = self.selected.index
+        key = dataset + ".parquet"
+        published = publication.table_pin(index, key) if index is not None and publication.table_owner(index, key) else None
+        binding["publication"] = published
+        binding["publicationDisposition"] = (
+            "local-selection" if index is None else "captured-publication" if published else "no-published-subject"
+        )
+        if published is not None:
+            r2.note_pinned_read(key, published)
+        else:
+            for ordinal, subject in enumerate(binding["subjects"]):
+                r2.note_pinned_read(f"{dataset}/subjects/{ordinal}.parquet", subject)
+        r2.note_pinned_read(f"{dataset}/etl_receipts.parquet", binding["receipts"])
+        return binding
 
     def download_members(self, key, target):
         source = self.get(key.removesuffix(".parquet"))
