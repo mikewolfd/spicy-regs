@@ -392,3 +392,34 @@ def test_sql_proves_a_text_decodes_only_when_the_row_decoder_accepts_it() -> Non
             mapped += 1
             assert isinstance(held, dict) and set(keys) == set(held), text
     assert decoded > 1000 and mapped > 300
+
+
+def test_missing_file_and_corrupt_pages_fall_back_to_exact_row_error(tmp_path):
+    bundle = build(tmp_path)
+    subjects, receipts, policies = bundle.write(tmp_path / "inputs")
+    missing = tmp_path / "missing.parquet"
+    for files in ([missing], [*receipts, missing]):
+        assert outcome(etl_bulk.validate_bundle, subjects, files, policies, generation_id="g1") == outcome(
+            validate_receipt_bundle, subjects, files, policies, generation_id="g1")
+    damaged = tmp_path / "damaged.parquet"
+    content = bytearray(receipts[0].read_bytes())
+    content[4:12] = b"\xff" * 8
+    damaged.write_bytes(content)
+    def admitted(*args, **kwargs):
+        try:
+            return etl_bulk.validate_bundle(*args, **kwargs)
+        except etl_bulk.NotBulkEligible:
+            return validate_receipt_bundle(*args, **kwargs)
+    assert outcome(admitted, subjects, [damaged], policies, generation_id="g1") == outcome(
+        validate_receipt_bundle, subjects, [damaged], policies, generation_id="g1")
+
+
+def test_scoped_multiple_policies_and_receipt_only(tmp_path):
+    bundle = build(tmp_path)
+    subjects, receipts, policies = bundle.write(tmp_path / "inputs")
+    selected = [p for p in policies if p.dataset in {"things", "reads"}]
+    copied = [select_receipts(receipts[0], tmp_path / (p.dataset + "-selected.parquet"), dataset=p.dataset)
+              for p in selected]
+    wanted = {p.dataset: subjects[p.dataset] for p in selected}
+    assert outcome(etl_bulk.validate_bundle, wanted, receipts, selected, generation_id="g1", scoped=True) is None
+    assert outcome(validate_receipt_bundle, wanted, copied, selected, generation_id="g1") is None

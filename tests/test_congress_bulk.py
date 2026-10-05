@@ -253,3 +253,21 @@ def test_a_typed_or_unknown_source_column_stays_with_the_row_code() -> None:
     assert congress_bulk.eligible("member_votes", pa.schema([(name, pa.string()) for name in names[:5]]))
     assert not congress_bulk.eligible("member_votes", pa.schema([(names[0], pa.int64())]))
     assert not congress_bulk.eligible("member_votes", pa.schema([("not_declared", pa.string())]))
+
+
+@pytest.mark.parametrize("dataset", ["member_votes", "member_vote_terms"])
+def test_partial_source_uses_the_same_missing_columns(tmp_path, dataset):
+    source = tmp_path / "partial.parquet"
+    pq.write_table(pa.table({"vote_id": ["v"], "member_key": ["k"]}), source)
+    row = write_congress_dataset(source, tmp_path / "row", dataset=dataset, generation_id=GENERATION, bulk=False)
+    bulk = write_congress_dataset(source, tmp_path / "bulk", dataset=dataset, generation_id=GENERATION)
+    for reference, actual in zip(row, bulk):
+        assert pq.read_table(reference).equals(pq.read_table(actual))
+
+
+@pytest.mark.parametrize("field", ["locator", "source_uri", "source_id", "body_version"])
+def test_control_character_in_receipt_context_routes_to_reference(tmp_path, monkeypatch, field):
+    witness = {**WITNESS, field: "context\x1b"}
+    _, row, bulk = _both(tmp_path, monkeypatch, "member_votes", _member_votes(5), witnesses=[witness])
+    for reference, actual in zip(row, bulk):
+        assert pq.read_table(reference).equals(pq.read_table(actual))

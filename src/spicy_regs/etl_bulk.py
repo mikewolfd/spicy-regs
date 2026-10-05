@@ -18,7 +18,7 @@ import io
 import json
 import sqlite3
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
-from contextlib import closing
+from contextlib import closing, contextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -59,6 +59,30 @@ _BATCH = 10_000
 
 class NotBulkEligible(Exception):
     """SQL has no proven way to decide this bundle, so ``validate_receipt_bundle`` must."""
+
+
+@contextmanager
+def bulk_connection(directory: Path | None = None):
+    """A private disk-backed DuckDB with bounded CPU, RAM and spill.
+
+    Each operation owns its files. A second statement must never run while a
+    result from this connection is still being consumed.
+    """
+    with TemporaryDirectory(prefix="etl-bulk-", dir=directory) as temp:
+        root = Path(temp)
+        with closing(duckdb.connect(str(root / "work.duckdb"), config={
+            "threads": 4, "memory_limit": "4GB", "max_temp_directory_size": "32GB",
+            "temp_directory": str(root / "spill"),
+        })) as con:
+            yield con, root
+
+
+def _ordinal_file(con, query: str, parameters, path: Path) -> Iterator[int]:
+    """Finish the SQL query before streaming its bounded ordinal batches."""
+    con.execute(f"COPY ({query}) TO {_literal(str(path))} (FORMAT PARQUET)", parameters)
+    with pq.ParquetFile(path) as source:
+        for batch in source.iter_batches(batch_size=_BATCH):
+            yield from batch.column(0).to_pylist()
 
 
 def _literal(text: str) -> str:
@@ -228,8 +252,8 @@ def _subject_insert_sql(policy: DatasetPolicy, number: str) -> str:
     subject = record_json_sql((field.name, field.type) for field in policy.subject_schema)
     missing = " OR ".join(
         '"' + key.replace('"', '""') + '" IS NULL'
-        for key in policy.identity_fields
-        if key not in policy.nullable_identity_fields
+        for key in dict.fromkeys([*(field.name for field in policy.subject_schema if not field.nullable),
+                                  *(key for key in policy.identity_fields if key not in policy.nullable_identity_fields)])
     )
     return (
         f'INSERT INTO subjects SELECT "{number}", {_literal(policy.dataset)}, {record_id}, {version}, {identity},'
@@ -325,14 +349,18 @@ def _held(spans: Iterable[Span], numbers: Iterable[int]) -> Iterator[tuple[list[
             continue
         with _parquet(path) as parquet:
             for group in range(parquet.num_row_groups):
-                last = first + parquet.metadata.row_group(group).num_rows
-                picked = []
-                while wanted is not None and wanted < last:
-                    picked.append(wanted)
-                    wanted = next(numbers, None)
-                if picked:
-                    yield picked, parquet.read_row_group(group).take([number - first for number in picked])
-                first = last
+                stop_group = first + parquet.metadata.row_group(group).num_rows
+                if wanted is not None and wanted < stop_group:
+                    for batch in parquet.iter_batches(batch_size=_BATCH, row_groups=[group]):
+                        last = first + batch.num_rows
+                        picked = []
+                        while wanted is not None and wanted < last:
+                            picked.append(wanted)
+                            wanted = next(numbers, None)
+                        if picked:
+                            yield picked, pa.Table.from_batches([batch]).take([number - first for number in picked])
+                        first = last
+                first = stop_group
 
 
 def _member(table: pa.Table) -> Callable[[], io.BytesIO]:
@@ -393,7 +421,7 @@ def _check_receipts(
     last = min((number for number in (stray, *repeats) if number is not None), default=None)
     # Read to the end before anything else runs on this database: a second statement would end the stream.
     unproven = "SELECT n FROM receipts WHERE unproven AND n <= coalesce(?, n) ORDER BY n"
-    numbers = [n for (n,) in con.execute(unproven, [last]).fetchall()]
+    numbers = _ordinal_file(con, unproven, [last], temp / "unproven-receipts.parquet")
     with closing(sqlite3.connect(str(temp / "reference.db"))) as reference:
         _load_receipts(
             reference,
@@ -410,7 +438,7 @@ def _check_receipts(
 
 
 def _check_subjects(
-    con: duckdb.DuckDBPyConnection, subjects: Mapping[str, Sequence[ParquetInput]], policies: Mapping[str, DatasetPolicy]
+    con: duckdb.DuckDBPyConnection, subjects: Mapping[str, Sequence[ParquetInput]], policies: Mapping[str, DatasetPolicy], temp: Path
 ) -> None:
     """``_joined_subjects`` over whole columns: raise what it would at the first subject, or schema, it refuses."""
     con.execute(
@@ -430,20 +458,24 @@ def _check_subjects(
         spans = _scan(con, paths, start, _subject_insert_sql(policy, number), number=number)
         start = spans[-1][1] if spans else start
         unproven = "SELECT n FROM subjects WHERE unproven AND dataset = ? ORDER BY n"
-        numbers = [n for (n,) in con.execute(unproven, [dataset]).fetchall()]
-        given = []
+        numbers = _ordinal_file(con, unproven, [dataset], temp / "unproven-subjects.parquet")
         for picked, table in _held(spans, numbers):
-            for held, subject in zip(picked, _subjects(policy, table.to_pylist())):
+            given = []
+            for held, raw in zip(picked, table.to_pylist()):
                 try:
+                    try:
+                        subject = _subjects(policy, [raw])[0]
+                    except ValueError as error:
+                        raise NotBulkEligible("The row normalizer must decide subject validation order") from error
                     given.append((held, dataset, *subject_identity(policy, subject), False))
                 except ValueError as error:
                     # The row validator raises this only if every subject before it has its receipt.
                     stopped, before = error, held
                     break
+            if given:
+                con.executemany("INSERT INTO subjects VALUES (?, ?, ?, ?, ?, ?)", given)
             if before is not None:
                 break
-        if given:
-            con.executemany("INSERT INTO subjects VALUES (?, ?, ?, ?, ?, ?)", given)
         if stopped is not None:
             break
     joined = (
@@ -466,6 +498,15 @@ def _check_subjects(
         raise stopped
     if [(used,)] != con.execute("SELECT count(*) FROM receipts WHERE outcome = 'accepted'").fetchall():
         raise ValueError("Accepted receipt has no matching subject")
+
+
+def _nested_nullable(dtype: pa.DataType) -> bool:
+    """Whether nested nulls need no extra validation beyond Arrow decoding."""
+    if pa.types.is_struct(dtype):
+        return all(field.nullable and _nested_nullable(field.type) for field in dtype)
+    if pa.types.is_list(dtype) or pa.types.is_large_list(dtype):
+        return dtype.value_field.nullable and _nested_nullable(dtype.value_type)
+    return True
 
 
 def validate_bundle(
@@ -494,13 +535,15 @@ def validate_bundle(
     try:
         for policy in registered.values():
             if not policy.receipt_only:
+                if not all(_nested_nullable(field.type) for field in policy.subject_schema):
+                    raise NotBulkEligible("Nested nonnullable fields require the row normalizer")
                 _subject_insert_sql(policy, "n")
     except NotImplementedError as error:
         raise NotBulkEligible(str(error)) from error
-    with TemporaryDirectory(prefix="etl-bulk-") as temp, closing(duckdb.connect(str(Path(temp) / "joins.duckdb"))) as con:
+    with bulk_connection() as (con, temp):
         try:
             con.execute("SET preserve_insertion_order = false")
             _check_receipts(con, Path(temp), receipt_paths, registered, generation_id, scoped)
-            _check_subjects(con, subjects, registered)
+            _check_subjects(con, subjects, registered, temp)
         except duckdb.Error as error:
             raise NotBulkEligible(f"DuckDB could not decide the bundle: {error}") from error

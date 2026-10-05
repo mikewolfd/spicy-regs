@@ -21,8 +21,7 @@ module states in SQL: a column passed through as text, a digit string read as an
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
-from itertools import accumulate
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
@@ -92,27 +91,49 @@ def _witnesses_sql(first: Mapping[str, Any], rest: Sequence[Mapping[str, Any]]) 
     return "[" + ", ".join(["{" + own + "}", *others]) + "]"
 
 
-def _source_sql(source: Path, file_schema: pa.Schema, dataset: str, policy: DatasetPolicy) -> str:
+def _source_sql(source: Path, file_schema: pa.Schema, dataset: str, policy: DatasetPolicy, context_reference: bool = False) -> str:
     """The source rows, each with its ordinal, its exact text, whether it has no subject, and whether it is the row code's."""
     integers = [field.name for field in policy.subject_schema if pa.types.is_integer(field.type) and field.name in file_schema.names]
     bad_integer = " OR ".join(f'("{name}" IS NOT NULL AND NOT regexp_full_match("{name}", {_DIGITS}))' for name in integers) or "false"
     no_identity = " OR ".join(
         f'"{name}" IS NULL' if name in file_schema.names else "true" for name in policy.identity_fields if name not in policy.nullable_identity_fields
     ) or "false"
+    no_subject = NO_SUBJECT.get(dataset, "false")
+    for name in INPUT_COLUMNS[dataset]:
+        if name not in file_schema.names:
+            no_subject = no_subject.replace('"' + name + '"', 'CAST(NULL AS VARCHAR)')
     raw = etl_bulk.record_json_sql((name, file_schema.field(name).type) for name in file_schema.names)
-    return f"""SELECT *, ((NOT _rejected AND (({no_identity}) OR ({bad_integer}))) OR {etl_bulk.needs_reference_sql("_raw")}) AS _reference
-               FROM (SELECT *, file_row_number AS _ordinal, {raw} AS _raw, ({NO_SUBJECT.get(dataset, "false")}) AS _rejected
+    return f"""SELECT *, ((NOT _rejected AND (({no_identity}) OR ({bad_integer}))) OR {etl_bulk.needs_reference_sql("_raw")} OR {str(context_reference).lower()}) AS _reference
+               FROM (SELECT *, file_row_number AS _ordinal, {raw} AS _raw, ({no_subject}) AS _rejected
                      FROM read_parquet({_text(source)}, file_row_number = true))"""
 
 
-def routed_ordinals(source: Path, *, dataset: str, policy: DatasetPolicy) -> list[int]:
-    """The ordinals of the source rows :func:`write_bundle` hands to the row code, by the writer's own expression."""
-    import duckdb
+def _context_reference(source, dataset, policy, generation_id, processor, witnesses) -> bool:
+    """Context text with a control escape SQL spells differently routes every row."""
+    controls = "\x0b\x0e\x0f\x1a\x1b\x1c\x1d\x1e\x1f"
+    values = [str(source), dataset, policy.policy_version, generation_id, processor,
+              *(value for witness in witnesses for value in witness.values())]
+    return any(isinstance(value, str) and any(char in value for char in controls) for value in values)
 
+
+def iter_routed_ordinals(source: Path, *, dataset: str, policy: DatasetPolicy,
+                         generation_id: str | None = None, processor: str | None = None,
+                         witnesses: Sequence[Mapping[str, Any]] = ()) -> Iterator[int]:
+    """Every routed source ordinal in file order, with bounded memory.
+
+    Supply the write's context to include routes caused by witness or publisher text.
+    """
     source = Path(source).resolve()
-    with duckdb.connect() as con:
-        query = f"SELECT _ordinal FROM ({_source_sql(source, pq.read_schema(source), dataset, policy)}) WHERE _reference ORDER BY _ordinal"
-        return [ordinal for (ordinal,) in con.execute(query).fetchall()]
+    reference = _context_reference(source, dataset, policy, generation_id, processor, witnesses)
+    with etl_bulk.bulk_connection() as (con, _):
+        query = f"SELECT _ordinal FROM ({_source_sql(source, pq.read_schema(source), dataset, policy, reference)}) WHERE _reference ORDER BY _ordinal"
+        for batch in con.execute(query).to_arrow_reader(_BATCH):
+            yield from batch.column(0).to_pylist()
+
+
+def routed_ordinals(source: Path, *, dataset: str, policy: DatasetPolicy, **context) -> list[int]:
+    """List wrapper for bounded samples; large qualification uses ``iter_routed_ordinals``."""
+    return list(iter_routed_ordinals(source, dataset=dataset, policy=policy, **context))
 
 
 def _rows_in(path: Path, dataset: str | None = None) -> int:
@@ -124,16 +145,16 @@ def _rows_in(path: Path, dataset: str | None = None) -> int:
     return ds.dataset(path, format="parquet").count_rows(filter=ds.field("dataset") == dataset)
 
 
-def _with_insertions(kept: pa.Table, mask: list[bool], insertions: Mapping[int, pa.Table | None]) -> pa.Table:
-    """``kept``, the batch rows whose ``mask`` is true, with each insertion placed where its batch index falls."""
-    before = [0, *accumulate(mask)]  # kept rows ahead of each batch index
-    parts, start = [], 0
-    for index in sorted(insertions):
-        parts.append(kept.slice(start, before[index] - start))
-        start = before[index]
-        if (rows := insertions[index]) is not None:
-            parts.append(rows)
-    return pa.concat_tables([*parts, kept.slice(start)])
+def _with_insertions(kept: pa.Table, mask: list[bool], insertions: Mapping[int, dict | None]) -> pa.Table:
+    """Merge reference rows in original order using one Arrow table per batch."""
+    positions = [index for index, flag in enumerate(mask) if flag]
+    replacements = [(index, row) for index, row in insertions.items() if row is not None]
+    if not replacements:
+        return kept
+    added = pa.Table.from_pylist([row for _, row in replacements], schema=kept.schema)
+    positions.extend(index for index, _ in replacements)
+    order = sorted(range(len(positions)), key=positions.__getitem__)
+    return pa.concat_tables([kept, added]).take(order)
 
 
 def write_bundle(
@@ -156,8 +177,6 @@ def write_bundle(
     (the table-metadata receipt). ``row_receipt(processing_json, ordinal)`` is the row writer's own step for one
     source row, which it reads back out of the processing text built here.
     """
-    import duckdb
-
     source = Path(source).resolve()
     file_schema = pq.read_schema(source)
     subject = policy.subject_schema
@@ -170,8 +189,9 @@ def write_bundle(
     )
     record_id, version, identity = etl_bulk.identity_sql(policy)
     own_witness = {"source_id": "shaped-observation:" + dataset, "source_uri": str(source), "sha256": digest, "body_version": None}
+    reference = _context_reference(source, dataset, policy, generation_id, processor, witnesses)
     query = f"""
-    WITH read AS ({_source_sql(source, file_schema, dataset, policy)}),
+    WITH read AS ({_source_sql(source, file_schema, dataset, policy, reference)}),
     shaped AS (SELECT {columns}, _ordinal, _raw, _rejected, _reference FROM read),
     keyed AS (SELECT *, CASE WHEN NOT _rejected THEN {record_id} END AS record_id, CASE WHEN NOT _rejected THEN {version} END AS subject_version,
                      CASE WHEN NOT _rejected THEN {identity} END AS identity_json,
@@ -180,13 +200,16 @@ def write_bundle(
                        {_text(dataset + ":" + digest + ":")} || _ordinal AS attempt_id, CASE WHEN _rejected THEN 'rejected' ELSE 'accepted' END AS outcome,
                        {_text(processor)} AS processor, {_witnesses_sql(own_witness, witnesses)} AS witnesses,
                        CASE WHEN _rejected THEN '["dict",[["reason",["str","no_domain_subject"]]]]' ELSE '["dict",[]]' END AS diagnostic_json FROM keyed)
-    SELECT {etl_bulk.digest_sql(etl_bulk.receipt_json_sql())} AS receipt_id, *, NOT (_rejected OR _reference) AS _accepted FROM receipt"""
+    SELECT {etl_bulk.digest_sql(etl_bulk.receipt_json_sql())} AS receipt_id, * EXCLUDE (_reference),
+           (_reference OR {etl_bulk.needs_reference_sql(etl_bulk.receipt_json_sql())}) AS _reference,
+           NOT (_rejected OR _reference OR {etl_bulk.needs_reference_sql(etl_bulk.receipt_json_sql())}) AS _accepted FROM receipt"""
     expected, seen, left = _rows_in(source), 0, 0
-    with duckdb.connect() as con, pq.ParquetWriter(subjects_path, subject, compression="zstd") as subjects, \
+    with etl_bulk.bulk_connection() as (con, _), pq.ParquetWriter(subjects_path, subject, compression="zstd") as subjects, \
             pq.ParquetWriter(receipts_path, RECEIPT_SCHEMA, compression="zstd", write_statistics=_STATISTICS) as receipts:
         pending = pa.Table.from_pylist(list(first_receipts), schema=RECEIPT_SCHEMA)
         for batch in con.execute(query).to_arrow_reader(_BATCH):
             table = pa.Table.from_batches([batch])
+            table.validate(full=True)
             ordinals = table["_ordinal"].to_pylist()
             if ordinals != list(range(seen, seen + len(ordinals))):
                 raise RuntimeError(f"{dataset}: source rows did not arrive in file order")
@@ -198,8 +221,8 @@ def write_bundle(
                 texts, row_subjects, row_receipts = table["processing_json"].to_pylist(), {}, {}
                 for index in (index for index, flag in enumerate(flagged) if flag):
                     row_subject, receipt = row_receipt(texts[index], ordinals[index])
-                    row_subjects[index] = None if row_subject is None else pa.Table.from_pylist([row_subject], schema=subject)
-                    row_receipts[index] = pa.Table.from_pylist([receipt], schema=RECEIPT_SCHEMA)
+                    row_subjects[index] = row_subject
+                    row_receipts[index] = receipt
                 left += len(row_receipts)
                 written = _with_insertions(written, [not flag for flag in flagged], row_receipts)
                 kept = _with_insertions(kept, table["_accepted"].to_pylist(), row_subjects)
@@ -227,9 +250,7 @@ def footer_candidates(receipts: Path, *, dataset: str) -> list[str]:
 
     A superset: the text is matched at any depth, so the caller decodes each and keeps the ones that are.
     """
-    import duckdb
-
-    with duckdb.connect() as con:
+    with etl_bulk.bulk_connection() as (con, _):
         return [text for (text,) in con.execute(
             f"SELECT processing_json FROM read_parquet({_text(receipts)}, file_row_number = true) "
             f"WHERE dataset = {_text(dataset)} AND contains(processing_json, {_text(_FOOTER_ENTRY)}) ORDER BY file_row_number"
@@ -269,8 +290,6 @@ def restore_input(
     receipt that is not the plain shape or whose diagnostics mention a refused conversion, and returns None to leave
     the row out. Returns how many receipts went to it.
     """
-    import duckdb
-
     from spicy_regs.native_types import reject_extra_fields
 
     if not all(pa.types.is_string(field.type) for field in schema):
@@ -284,11 +303,12 @@ def restore_input(
           FROM read_parquet({_text(receipts)}, file_row_number = true) WHERE dataset = {_text(dataset)})"""
     expected, seen, last, left = _rows_in(receipts, dataset), 0, -1, 0
     # As ``write_rows`` does: the destination appears only once every row is written.
-    with duckdb.connect() as con, TemporaryDirectory(dir=destination.parent) as scratch:
+    with etl_bulk.bulk_connection() as (con, _), TemporaryDirectory(dir=destination.parent) as scratch:
         temporary = Path(scratch) / "rows.parquet"
         with pq.ParquetWriter(temporary, schema, compression="zstd") as writer:
             for batch in con.execute(query).to_arrow_reader(_BATCH):
                 table = pa.Table.from_batches([batch])
+                table.validate(full=True)
                 positions = table["_position"].to_pylist()
                 if positions != sorted(set(positions)) or (positions and positions[0] <= last):
                     raise RuntimeError(f"{dataset}: receipts did not arrive in file order")
@@ -301,7 +321,7 @@ def restore_input(
                         fields = row_fields(processing[index], diagnostic[index])
                         if fields is not None:
                             reject_extra_fields(fields, schema)
-                        decoded[index] = None if fields is None else pa.Table.from_pylist([dict(fields)], schema=schema)
+                        decoded[index] = None if fields is None else dict(fields)
                     left += len(decoded)
                     rows = _with_insertions(rows, [not flag for flag in flagged], decoded)
                 if rows.num_rows:
