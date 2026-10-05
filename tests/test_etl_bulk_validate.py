@@ -20,10 +20,15 @@ from spicy_regs.etl_receipts import (
     failure_receipt,
     observation_receipt,
     select_receipts,
-    validate_receipt_bundle,
+    validate_receipt_bundle as _validate_receipt_bundle,
     write_dataset,
     combine_receipts,
 )
+
+def validate_receipt_bundle(*args, **kwargs):
+    """Independent reference checks always use the public explicit row oracle."""
+    return _validate_receipt_bundle(*args, **kwargs, bulk=False)
+
 
 SCHEMA = pa.schema([
     ("id", pa.string()), ("part", pa.string()), ("n", pa.int32()), ("kept", pa.bool_()), ("tags", pa.list_(pa.string())),
@@ -401,7 +406,7 @@ def test_missing_file_and_corrupt_pages_fall_back_to_exact_row_error(tmp_path):
     missing = tmp_path / "missing.parquet"
     for files in ([missing], [*receipts, missing]):
         assert outcome(etl_bulk.validate_bundle, subjects, files, policies, generation_id="g1") == outcome(
-            validate_receipt_bundle, subjects, files, policies, generation_id="g1")
+            validate_receipt_bundle as _validate_receipt_bundle, subjects, files, policies, generation_id="g1")
     damaged = tmp_path / "damaged.parquet"
     content = bytearray(receipts[0].read_bytes())
     content[4:12] = b"\xff" * 8
@@ -412,7 +417,7 @@ def test_missing_file_and_corrupt_pages_fall_back_to_exact_row_error(tmp_path):
         except etl_bulk.NotBulkEligible:
             return validate_receipt_bundle(*args, **kwargs)
     assert outcome(admitted, subjects, [damaged], policies, generation_id="g1") == outcome(
-        validate_receipt_bundle, subjects, [damaged], policies, generation_id="g1")
+        validate_receipt_bundle as _validate_receipt_bundle, subjects, [damaged], policies, generation_id="g1")
 
 
 def test_scoped_multiple_policies_and_receipt_only(tmp_path):

@@ -212,7 +212,7 @@ def _stage(con, source, dataset, work, generation, *, prior_receipts=None, bulk=
     try:
         etl_bulk.validate_bundle({dataset: [subject]}, [receipts], [policy(dataset)], generation_id=generation)
     except etl_bulk.NotBulkEligible:
-        validate_receipt_bundle({dataset: [subject]}, [receipts], [policy(dataset)], generation_id=generation)
+        validate_receipt_bundle({dataset: [subject]}, [receipts], [policy(dataset)], generation_id=generation, bulk=False)
     if pq.ParquetFile(subject).metadata.num_rows != pq.ParquetFile(source_path).metadata.num_rows:
         raise CatalogConversionRefused(receipts)
     return subject, receipts
@@ -470,7 +470,7 @@ def export_pair(con, record_type, output_dir, *, generation_id, snapshot=None):
         try:
             etl_bulk.validate_bundle({dataset: [subjects]}, [raw_receipts], [policy(dataset)], generation_id=generation_id)
         except etl_bulk.NotBulkEligible:
-            validate_receipt_bundle({dataset: [subjects]}, [raw_receipts], [policy(dataset)], generation_id=generation_id)
+            validate_receipt_bundle({dataset: [subjects]}, [raw_receipts], [policy(dataset)], generation_id=generation_id, bulk=False)
         # Complete admission precedes filtering, so malformed audit markers cannot
         # hide context or digest errors. Only nonaccepted observations are removed;
         # the already qualified accepted joins and exact receipt values remain.

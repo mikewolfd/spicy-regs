@@ -70,7 +70,7 @@ def _admit(subjects, receipts, policies, *, generation_id, bulk=True):
             return etl_bulk.validate_bundle(subjects, receipts, policies, generation_id=generation_id)
         except etl_bulk.NotBulkEligible:
             pass
-    return validate_receipt_bundle(subjects, receipts, policies, generation_id=generation_id)
+    return validate_receipt_bundle(subjects, receipts, policies, generation_id=generation_id, bulk=False)
 
 
 def _rows(path: Path):

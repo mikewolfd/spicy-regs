@@ -50,7 +50,7 @@ def test_complete_comments_bundle_equals_catalog_row_writer(tmp_path, monkeypatc
     assert set(routed) >= {3, 4, 5, 6, 7}
     for expected, got in zip(reference, actual):
         assert pq.read_table(expected).equals(pq.read_table(got))
-    validate_receipt_bundle({'comments': [actual[0]]}, [actual[1]], [policy('comments')], generation_id='g')
+    validate_receipt_bundle({'comments': [actual[0]]}, [actual[1]], [policy('comments')], generation_id='g', bulk=False)
     etl_bulk.validate_bundle({'comments': [actual[0]]}, [actual[1]], [policy('comments')], generation_id='g')
     from spicy_regs.transforms.regulations_receipts import ReceiptInput, read_internal
     selected = ReceiptInput('comments', (actual[0],), actual[1], 'g')
