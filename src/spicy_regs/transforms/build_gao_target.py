@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import hashlib
 from collections.abc import Mapping
+from importlib.metadata import version
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -168,6 +169,10 @@ def prepare_target_generation(output_dir: Path, *, prior_file: Path, prior_index
         raise ValueError('Select one retained metadata source')
     _verified_member(prior_index, key, prior_file)
     evidence=CaptureEvidence(output_dir,'gao-reports')
+    page_evidence = evidence if retained_product_pages is None else evidence.for_source(
+        'gao-product-pages', 'hash_only', parser_version=version('spicy-docs'),
+        policy_decision_id='gao-product-pages-contacts-hash-only/1',
+    )
     try:
         evidence.inherit(prior_index,public_url=public_url)
         indexes=[]
@@ -177,7 +182,7 @@ def prepare_target_generation(output_dir: Path, *, prior_file: Path, prior_index
             # beside the page id in capitals; every value read under /1 or /2 reads the same).
             index=product_page_metadata(page,page_product)
             digest='sha256:'+hashlib.sha256(page).hexdigest()
-            evidence.retain_bytes(page,stage="gao-retained-product-page",
+            page_evidence.retain_bytes(page,stage="gao-retained-product-page",
                 product_id=page_product,source_url=index.product_url,origin_requests=0)
             evidence.event('retained-product-page-replay',product_id=page_product,sha256=digest,
                 byte_size=len(page),source_url=index.product_url,origin_requests=0,
