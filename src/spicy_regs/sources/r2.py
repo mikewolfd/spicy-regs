@@ -379,7 +379,12 @@ def object_version(remote_key: str) -> dict | None:
 
 
 def public_object_version(url: str) -> dict | None:
-    response = httpx.head(url, follow_redirects=True, timeout=60)
+    """The stored version of a public object, as :func:`object_version` states it; ``None`` when it is absent.
+
+    The request asks for the stored bytes: the public host otherwise answers a JSON object gzip-encoded, with a
+    weak ETag and no length (``publication.v2.json`` on the custom domain, 2026-10-05).
+    """
+    response = httpx.head(url, follow_redirects=True, timeout=60, headers={"Accept-Encoding": "identity"})
     if response.status_code == 404:
         return None
     response.raise_for_status()
