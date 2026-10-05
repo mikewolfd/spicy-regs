@@ -346,6 +346,21 @@ rewrites all 27 tables of the family, the two largest (`fec_receipts`,
 qualified views that read them and forces a full release receipt, for a cleanup
 that changes no result (`phase3-review.md`, round 6, 2026-10-03).
 
+**Debt: both FEC mappers adopt spicy-docs' placeholder predicate when their
+families are next regenerated.** Form 1's `affiliation_status`
+(`fec_identity_observations.map_registry`) and `fec_relationships.value_status`
+read a name as reported none only where it is `NONE` once stripped and
+upper-cased. `schemas.fec_committee_history.is_placeholder_name` is the one
+predicate, which the organization-links build has read since round 6 (its
+second copy, `transforms/fec_placeholders.py`, is gone). Adopting it moves rows
+from a stated name to reported none, so it waits for a regeneration under a
+release receipt that declares them: on 2026-10-04, 2 of 12,311 Form 1 rows of
+fec-query `784b23da` (`N/A`, `NA`) and 2,608 rows of fec-observations
+`9c289dfe` (`BLANK` 1,574, `N/A` 674, `-` 126, `"NONE"` 102 and eleven rarer
+spellings). Both statuses are receipt fields in the native-ETL design
+(`fec_identity_context_fields.json`), so after the conversion they move in
+`etl_receipts`, and the subject rows keep the name as filed.
+
 ## Citation lookup kinds (`resolve_document_citations`)
 
 The tool accepts exactly the keys of `citation_resolution.SOURCE_TABLES`: the

@@ -11,9 +11,11 @@ to the published per-minute limit.
 
 from __future__ import annotations
 
+import json
 import os
 from collections.abc import Iterable, Iterator
 from datetime import date
+from decimal import Decimal
 from typing import Literal
 
 from typing import TYPE_CHECKING
@@ -40,6 +42,24 @@ QUERY_LIMIT = 512
 
 class CourtListenerError(ValueError):
     """The selected CourtListener search cannot be established."""
+
+
+def record_json(value: object) -> str:
+    """A selected record as the JSON text ``json.dumps(value, ensure_ascii=False)`` writes, numbers kept exact.
+
+    The search reader parses publisher numbers as ``Decimal`` (every RECAP result carries ``meta.score.bm25``),
+    which ``json.dumps`` refuses; each is written as its decimal literal rather than rounded through float.
+    """
+    if isinstance(value, Decimal):
+        if not value.is_finite():
+            raise CourtListenerError("CourtListener record holds a non-finite number")
+        return str(value)
+    if isinstance(value, dict):
+        return "{" + ", ".join(f"{json.dumps(key, ensure_ascii=False)}: {record_json(item)}"
+                               for key, item in value.items()) + "}"
+    if isinstance(value, list):
+        return "[" + ", ".join(record_json(item) for item in value) + "]"
+    return json.dumps(value, ensure_ascii=False)
 
 
 def _resolve_api_token() -> str | None:

@@ -15,6 +15,7 @@ from collections import Counter
 from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
+from itertools import groupby
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, Self
 
@@ -33,7 +34,7 @@ from spicy_docs.interpretation.bill_family import (
     build_bill_printings,
 )
 from spicy_docs.interpretation.bill_family import build_bill_family as build_family
-from spicy_docs.interpretation.bill_stage import infer_stage
+from spicy_docs.interpretation.bill_stage import infer_stage, infer_stage_from_action, signed_date
 from spicy_docs.interpretation.bill_summaries import summarize_bill, summarize_diff
 from spicy_docs.interpretation.gemini_call import DEFAULT_MODEL, model_call
 from spicy_docs.interpretation.section_classification import classify_sections
@@ -123,6 +124,8 @@ from spicy_regs.transforms.table_merge import (
     merge_table,
     published_members,
     published_table,
+    set_column,
+    write_in_place,
 )
 
 if TYPE_CHECKING:
@@ -1210,40 +1213,134 @@ def _retained_entry(acquirer: BulkStatusSource, acquisition: Any, congress: int,
     return _archive_row(entry, congress=congress, bill_type=bill_type, observed_at=capture.observed_at)
 
 
-def rederived_stages(actions: Path | None, bill_ids: Collection[str] | None = None) -> dict[str, str]:
-    """Each bill's stage as the running rule reads its published ``bill_actions``, for ``bill_ids`` (all when None).
+def _held_actions(actions: Path, bill_ids: Collection[str] | None = None) -> Iterator[tuple[str, list[dict[str, Any]]]]:
+    """Each bill's published ``bill_actions`` rows, for ``bill_ids`` (all when None), as the stage rule reads them.
 
-    The rows are passed as they are published, in publisher order (``action_index``), newest first, as
-    ``bill_family`` passes a BILLSTATUS list, with the bill's own type: ``infer_stage`` reads published rows, and
-    their ``source_system_name`` and the type are what a chamber-aware rule reads (a Senate bill "Held at the
-    desk." by the House is in the other chamber). So an unchanged bill re-derives the stage this run publishes,
-    and no rule change surfaces as a ``stage_changed`` event. A bill with no published action is absent: no rule
-    read it. A key the bill grammar refuses (16 of the 6th-42nd Congresses) is read without its type.
+    The rows come as they are published, in publisher order (``action_index``), newest first, as ``bill_family``
+    passes a BILLSTATUS list: ``infer_stage`` reads published rows, and their ``source_system_name`` is what a
+    chamber-aware rule reads (a Senate bill "Held at the desk." by the House is in the other chamber). Each row also
+    states its ``action_index`` and its ``file_row_number`` in ``actions``. Streamed a batch at a time, so the
+    table is never one Python list. A bill with no published action yields nothing: no rule read it.
     """
     import duckdb
 
-    if actions is None or not _has_columns(actions, ("bill_id", "action_index", "action_text", "action_date")):
+    if not _has_columns(actions, ("bill_id", "action_index", "action_text", "action_date")):
+        return
+    names = ("action_index", "file_row_number", *(c for c in _STAGE_READ_COLUMNS if _has_columns(actions, (c,))))
+    with duckdb.connect() as con:
+        only = ""
+        if bill_ids is not None:
+            con.execute("CREATE TEMP TABLE wanted AS SELECT UNNEST(?::VARCHAR[]) AS bill_id", [sorted(bill_ids)])
+            only = "SEMI JOIN wanted w ON t.bill_id = w.bill_id"
+        cursor = con.execute(
+            f"SELECT t.bill_id, {', '.join(f't.{name}' for name in names)} "
+            f"FROM read_parquet('{actions}', file_row_number = true) t {only} "
+            "ORDER BY t.bill_id, TRY_CAST(t.action_index AS INTEGER)"
+        )
+        def stream() -> Iterator[tuple[Any, ...]]:
+            while batch := cursor.fetchmany(50_000):
+                yield from batch
+
+        for bill, group in groupby(stream(), key=lambda row: row[0]):
+            yield bill, [dict(zip(names, values)) for _, *values in group]
+
+
+def rederived_stages(actions: Path | None, bill_ids: Collection[str] | None = None) -> dict[str, str]:
+    """Each bill's stage as the running rule reads its published ``bill_actions``, for ``bill_ids`` (all when None).
+
+    With the bill's own type, as ``bill_family`` reads a BILLSTATUS list, so an unchanged bill re-derives the stage
+    this run publishes, and no rule change surfaces as a ``stage_changed`` event. A key the bill grammar refuses (16
+    of the 6th-42nd Congresses) is read without its type.
+    """
+    if actions is None:
         return {}
-    wanted = duckdb.sql("SELECT UNNEST(?::VARCHAR[]) AS bill_id", params=[sorted(bill_ids or ())])  # noqa: F841 — read by name below
-    only = "" if bill_ids is None else "SEMI JOIN wanted w ON t.bill_id = w.bill_id"
-    held_columns = [column for column in _STAGE_READ_COLUMNS if _has_columns(actions, (column,))]
-    relation = duckdb.sql(
-        f"SELECT t.bill_id, {', '.join(f't.{column}' for column in held_columns)} "
-        f"FROM read_parquet('{actions}') t {only} ORDER BY t.bill_id, TRY_CAST(t.action_index AS INTEGER)"
-    )
-    stages: dict[str, str] = {}
-    current, held = None, []
-    for bill, *values in (*relation.fetchall(), (None, *([None] * len(held_columns)))):
-        if bill != current:
-            if current is not None:
-                stages[current] = infer_stage(held, newest_first=True, bill_type=_bill_type(current)).stage
-            current, held = bill, []
-        held.append(dict(zip(held_columns, values)))
-    return stages
+    return {
+        bill: infer_stage(rows, newest_first=True, bill_type=_bill_type(bill)).stage
+        for bill, rows in _held_actions(actions, bill_ids)
+    }
 
 
 #: The published ``bill_actions`` columns the stage rule reads, by their published names.
 _STAGE_READ_COLUMNS = ("action_text", "action_code", "action_type", "action_date", "action_time", "source_system_name")
+
+#: The columns a bill's stage and signing findings fill, by the finding's field, as ``shape_bill`` fills them; the
+#: first three are also what ``shape_bill_action`` publishes for one action's own finding.
+_STAGE_COLUMNS = {
+    "stage": "stage",
+    "stage_rule": "rule",
+    "stage_matcher": "matcher",
+    "stage_action_index": "action_index",
+    "stage_action_date": "action_date",
+    "stage_source_text": "source_text",
+}
+_SIGNING_COLUMNS = {
+    "signed_date": "signed_date",
+    "signed_date_rule": "rule",
+    "signed_date_action_index": "action_index",
+    "signed_date_action_code": "action_code",
+}
+_ACTION_STAGE_COLUMNS = ("stage", "stage_rule", "stage_matcher")
+
+
+def restage_held_rows(bills: Path, actions: Path) -> tuple[int, int]:
+    """Read every merged bill's stage and signing date, and every merged action's stage, again by the running rule.
+
+    A row carries the rule of the run that last read its bill, and a bill is read again only when its BILLSTATUS
+    moves, so a rule change reached a Congress only when a dispatch re-read it (round 6's `cleared` stage, a mention
+    read as no step and a private law's signing date: every Congress from the 108th was re-staged by hand on
+    2026-10-03). The rules read nothing the stored actions do not hold, so each run re-reads them all with
+    spicy-docs' own functions, for no publisher request: a bill this run read comes back as it was shaped, and a held
+    one moves with the rule. The signing date reads the row's own ``law_type`` and ``public_law_number`` as its law
+    entry (a private law states no number). A bill with no stored action keeps its row: no rule read one (the
+    82nd-107th detail-route rows). O(actions), streamed in publisher order; a table is read whole and rewritten
+    only when a row moved. Returns how many bill rows and action rows moved.
+    """
+    import pyarrow.parquet as pq
+
+    per_action = pq.read_table(actions, columns=list(_ACTION_STAGE_COLUMNS)).to_pydict()
+    per_bill = pq.read_table(bills, columns=["bill_id", "law_type", "public_law_number", *_STAGE_COLUMNS,
+                                             *_SIGNING_COLUMNS]).to_pydict()
+    place = {bill: index for index, bill in enumerate(per_bill.pop("bill_id"))}
+    law_types, numbers = per_bill.pop("law_type"), per_bill.pop("public_law_number")
+    moved_bills = moved_actions = 0
+    # One reading per distinct thing the action rule reads (no date: only a bill's stage orders by date): 214,670
+    # of the 931,774 published actions on 2026-10-04, which took the whole pass from 37.8 s to 28.6 s.
+    readings: dict[tuple[Any, ...], dict[str, Any]] = {}
+    for bill, rows in _held_actions(actions):
+        bill_type = _bill_type(bill)
+        for row in rows:
+            read = (bill_type, *(row.get(c) for c in ("action_code", "action_text", "action_type", "source_system_name")))
+            if (values := readings.get(read)) is None:
+                finding = infer_stage_from_action(row, bill_type=bill_type)
+                values = readings[read] = {c: getattr(finding, _STAGE_COLUMNS[c]) for c in _ACTION_STAGE_COLUMNS}
+            moved_actions += _put(per_action, row["file_row_number"], values)
+        index = place.get(bill)
+        if index is None:
+            continue
+        laws = [{"type": law_types[index], "number": numbers[index] or ""}] if law_types[index] else []
+        stage = infer_stage(rows, newest_first=True, bill_type=bill_type)
+        signing = signed_date({"laws": laws, "actions": rows})
+        values = {column: getattr(stage, name) for column, name in _STAGE_COLUMNS.items()}
+        values |= {column: getattr(signing, name) for column, name in _SIGNING_COLUMNS.items()}
+        # A finding's action_index is a place in ``rows``; each row states its own.
+        for column in ("stage_action_index", "signed_date_action_index"):
+            values[column] = None if values[column] is None else rows[values[column]]["action_index"]
+        moved_bills += _put(per_bill, index, {column: text(value) for column, value in values.items()})
+    for path, moved, columns in ((bills, moved_bills, per_bill), (actions, moved_actions, per_action)):
+        if moved:
+            table = pq.read_table(path)
+            for column, values in columns.items():
+                table = set_column(table, column, values)
+            write_in_place(table, path)
+    return moved_bills, moved_actions
+
+
+def _put(columns: dict[str, list[Any]], index: int, values: Mapping[str, Any]) -> bool:
+    """Set row ``index`` of ``columns`` to ``values``; whether any value moved."""
+    moved = any(columns[column][index] != value for column, value in values.items())
+    for column, value in values.items():
+        columns[column][index] = value
+    return moved
 
 
 def _bill_type(bill_id: str) -> str | None:
@@ -2340,6 +2437,11 @@ def build_bill_family(
         )
 
     paths = [publish(contract, getattr(folded, attr)) for contract, attr in FAMILY_TABLES]
+    merged = dict(zip((contract for contract, _ in FAMILY_TABLES), paths, strict=True))
+    restaged = restage_held_rows(merged["congress_bills"], merged["bill_actions"])
+    logger.info("Bill family: the running stage rule moves {:,} held bill rows and {:,} action rows", *restaged)
+    if evidence is not None:
+        evidence.event("held-rows-restaged", bills=restaged[0], actions=restaged[1])
     paths.append(publish("public_activity_events", events))
     # The last two outputs are this repository's own tables, not contracts, so
     # they go through the same merge helper one level down.

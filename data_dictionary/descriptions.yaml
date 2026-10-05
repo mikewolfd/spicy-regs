@@ -555,8 +555,8 @@ tables:
       later than BILLSTATUS's therefore keep that date-only value after the
       re-read, and until BILLSTATUS catches up they read `url_source`
       `billstatus` beside an `update_date` no BILLSTATUS document stated.
-      A row keeps the stage the rule of its last read gave until its Congress
-      is read again. The 26 BILLSTATUS
+      Each run reads stage and signing date again from the stored actions, so
+      a rule change needs no re-read. The 26 BILLSTATUS
       bills of the 108th-111th and 117th that stayed in doubt after every read
       on 2026-09-29 list a printing twice or without a type, so their
       `version_count` exceeds their `bill_versions` rows.
@@ -3949,7 +3949,9 @@ tables:
       bill was considered on each date. Before link rule d06e0bd80ca1
       (2026-09-25) such a volume's links carried its first date
       (CHRG-117shrg56721 states eleven), and rows not re-read since keep
-      held_dates NULL.
+      held_dates NULL. committee_system_code is the first of its
+      hearing's hearing_transcripts.committee_system_codes, set again every
+      run, so a link and its hearing state one committee key.
     columns_from: spicy_docs
 
   cbo_feed_items:
