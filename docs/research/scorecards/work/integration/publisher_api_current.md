@@ -132,5 +132,6 @@ Dated discovery, source-qualified routes and recovery observations retain separa
 | International Justice Mission | active | verified_api | None qualified | Not assigned to recovery review |
 | Radical Middle | active | no_api_found_in_inspected_surfaces | None qualified | Not assigned to recovery review |
 | SMART Transportation Division | active | html_pdf_only_observed | None qualified | Not assigned to recovery review |
+| North Central States Regional Council of Carpenters | active | html_pdf_only_observed | None qualified | Not assigned to recovery review |
 
 The [structured inventory](publisher_api_current.json) links each dated discovery entry and recovery endpoint set to its pinned source file and retains verified routes. Detailed endpoint observations are stored once in those source inventories.

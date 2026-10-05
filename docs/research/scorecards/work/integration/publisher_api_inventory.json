@@ -7440,6 +7440,46 @@
       "rights_status": "unreviewed",
       "next_step": "Adopt reviewed readers, replay retained scopes, publish and verify; recover further editions separately",
       "retirement_status": "not_established"
+    },
+    {
+      "publisher_id": "carpenters_ncsrcc",
+      "publisher_name": "North Central States Regional Council of Carpenters",
+      "source_url": "https://web.archive.org/web/20251121232831id_/https://northcountrycarpenter.org/sites/default/files/documents/2024%20Carpenter%20Economics%20_0.pdf",
+      "homepage_url": "https://northcountrycarpenter.org/",
+      "discovery_status": "html_pdf_only_observed",
+      "observed_at": "2026-10-05T22:53:44.782835+00:00",
+      "search_method": [
+        "Reviewed exact original regional publisher PDF and private source-faithful qualification"
+      ],
+      "inspected_urls": [
+        "https://web.archive.org/web/20251121232831id_/https://northcountrycarpenter.org/sites/default/files/documents/2024%20Carpenter%20Economics%20_0.pdf"
+      ],
+      "evidence_refs": [
+        "a5bf4511-92a6-4936-ae32-e0b5752f8aa9"
+      ],
+      "search_refs": [],
+      "endpoints": [],
+      "acquisition_alternatives": {
+        "observed_or_previously_reported_formats": [
+          "pdf"
+        ],
+        "linked_export_urls": [],
+        "original_source_urls": [
+          "https://web.archive.org/web/20251121232831id_/https://northcountrycarpenter.org/sites/default/files/documents/2024%20Carpenter%20Economics%20_0.pdf"
+        ],
+        "profiles": [],
+        "distinction": "Qualified named PDF does not establish a publisher rating API"
+      },
+      "uninspected_script_urls": [],
+      "blockers": [],
+      "observations": [
+        "Only the North Central States regional council's named2024source; no United Brotherhood of Carpenters national-source continuity or coverage inferred."
+      ],
+      "complete_scorecard_coverage": false,
+      "production_qualified_by_this_inventory": false,
+      "rights_status": "unreviewed",
+      "next_step": "Publish and verify the qualified named regional scope; recover further editions separately",
+      "retirement_status": "not_established"
     }
   ],
   "evidence": {
@@ -15399,6 +15439,13 @@
       "receipt": "publisher_inventory_extension_smart_20261005.json",
       "receipt_sha256": "cbcc0d04430a9ad690c388e6ab718a46c243a7df6ec05c3c53508cf38295aa66",
       "boundary": "The dated pass is preserved; later candidates and evidence are in this pinned supplement"
+    },
+    {
+      "publisher_id": "carpenters_ncsrcc",
+      "observed_at": "2026-10-05T22:53:44.782835+00:00",
+      "receipt": "publisher_inventory_extension_carpenters_ncsrcc_20261005.json",
+      "receipt_sha256": "13469ee592c4b6155ed0c182c0ae6443ef14c53fc16813bf19ecd2ec274ccf2d",
+      "boundary": "The dated pass is preserved; this later separately attributed publisher and its evidence are in the pinned supplement"
     }
   ]
 }

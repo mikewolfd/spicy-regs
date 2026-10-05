@@ -1,11 +1,11 @@
 {
   "dataset": "scorecard_integration_progress",
   "schema_version": "1",
-  "observed_at": "2026-10-05T16:40:47Z",
+  "observed_at": "2026-10-05T22:53:44.782835+00:00",
   "input_pins": {
-    "adapter_inventory.json": "5d7ce442f355c2b7f84d58c6d2df99cbf48574344a101248ee6a04953bf019a4",
-    "publisher_api_inventory.json": "097e102c3af4ebb5ad87731be5d40ea4ad283b8ec21f188b1e7460755755925d",
-    "integration_qualifications.json": "a9a1f0601f10bea40354e9d2f9e01f5037ea2ad0dc4d50727aa21d47cfed5d85",
+    "adapter_inventory.json": "fd7ecf934f0d30abfc9045534cc762cc63e20d766610264536fe413cc75e0ace",
+    "publisher_api_inventory.json": "24cb134d5e23124c44d7dbbb00ec75b0155995c80a2965b1a656f8c7b8eff887",
+    "integration_qualifications.json": "e2697cfdae26f7f55186522154ad85005c02210076d40ea90dace09308394216",
     "publisher_survey_20261005.json": "7e7431dc37bf8564d16df4f044498e1176f7e654cc0cd694b8bdb8a07944c9c1",
     "publisher_implementation_20261005.json": "02c472173923a4a2f3438155e36b76b83a6dd1d9210504ffec2a76abedbdb2f5",
     "publisher_recovery_20261005.json": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
@@ -123,9 +123,9 @@
   "states": {
     "identity_review": 1,
     "published_scope": 72,
-    "qualified_scope": 11,
+    "qualified_scope": 17,
     "retired_confirmed": 1,
-    "unverified_lead": 41
+    "unverified_lead": 36
   },
   "publishers": [
     {
@@ -1464,11 +1464,33 @@
       "publisher_id": "flyersrights",
       "publisher_name": "FlyersRights.org",
       "task_id": "ss-ir9q",
-      "state": "unverified_lead",
+      "state": "qualified_scope",
       "work_status": "active",
       "work_priority": null,
-      "reader": null,
-      "qualified_editions": [],
+      "reader": "flyersrights",
+      "qualified_editions": [
+        {
+          "publisher_id": "flyersrights",
+          "scorecard_id": "flyersrights:2016-original-archived-html",
+          "state": "qualified",
+          "receipt": "qualifications/flyersrights--2016-original-archived-html.json",
+          "receipt_sha256": "e4dd259d94417be4232cfd87da9890706853fa34d7a532595d25e5dc05f8700b"
+        },
+        {
+          "publisher_id": "flyersrights",
+          "scorecard_id": "flyersrights:2016-house-original-archived-xlsx",
+          "state": "qualified",
+          "receipt": "qualifications/flyersrights--2016-house-original-archived-xlsx.json",
+          "receipt_sha256": "541dcff00876acb479d729bc59662cc1014356f6b11d23caaba10635c248fdb5"
+        },
+        {
+          "publisher_id": "flyersrights",
+          "scorecard_id": "flyersrights:2016-senate-original-archived-xlsx",
+          "state": "qualified",
+          "receipt": "qualifications/flyersrights--2016-senate-original-archived-xlsx.json",
+          "receipt_sha256": "c514bcf412788a4a76355b3a58bc038b109b589533335078092086848325132b"
+        }
+      ],
       "verified_api_endpoints": [],
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
@@ -1654,7 +1676,7 @@
           "byte_size": 11216
         }
       },
-      "next_action": "Qualify an explicit 2016 archived HTML reader against the retained third table and methodology, preserving all literal fields, occurrence order and source discrepancies; keep the workbooks as separately named renditions."
+      "next_action": "Integrate remaining available editions and renditions"
     },
     {
       "publisher_id": "food_policy_action",
@@ -6147,11 +6169,19 @@
       "publisher_id": "railway_clerks",
       "publisher_name": "Brotherhood of Railway, Airline and Steamship Clerks, Freight Handlers, Express and Station Employes",
       "task_id": "ss-8tdl",
-      "state": "unverified_lead",
+      "state": "qualified_scope",
       "work_status": "active",
       "work_priority": null,
-      "reader": null,
-      "qualified_editions": [],
+      "reader": "railway_clerks",
+      "qualified_editions": [
+        {
+          "publisher_id": "railway_clerks",
+          "scorecard_id": "railway_clerks:107-1-senate",
+          "state": "qualified",
+          "receipt": "qualifications/railway_clerks--107-1-senate.json",
+          "receipt_sha256": "a0c13d2637573868d5044321c87a3c21cf0f66a3d70038493d153d8f7eb940d4"
+        }
+      ],
       "verified_api_endpoints": [],
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
@@ -6305,17 +6335,32 @@
           "byte_size": 11292
         }
       },
-      "next_action": "Review source-time TCU/RCPL attribution and qualify the pinned first-session 107th Senate scope, preserving R/W, special marks and cumulative fields; keep the incomplete House scopes and named 108th Congress files separate."
+      "next_action": "Integrate remaining available editions and renditions"
     },
     {
       "publisher_id": "bipac",
       "publisher_name": "Business-Industry Political Action Committee",
       "task_id": "ss-vzyo",
-      "state": "unverified_lead",
+      "state": "qualified_scope",
       "work_status": "active",
       "work_priority": null,
-      "reader": null,
-      "qualified_editions": [],
+      "reader": "bipac",
+      "qualified_editions": [
+        {
+          "publisher_id": "bipac",
+          "scorecard_id": "bipac:2012-cop-single-profile-11600",
+          "state": "qualified",
+          "receipt": "qualifications/bipac--2012-cop-single-profile-11600.json",
+          "receipt_sha256": "67f3feedeecb91b4c4d9145ab0ac825a201e9ef4de9f53c67ebd1e8d660036ca"
+        },
+        {
+          "publisher_id": "bipac",
+          "scorecard_id": "bipac:2012-cop-single-profile-20043",
+          "state": "qualified",
+          "receipt": "qualifications/bipac--2012-cop-single-profile-20043.json",
+          "receipt_sha256": "7baec395dad098eebbc3cf95461ded05b970bc43819737a5121f220268c4dc07"
+        }
+      ],
       "verified_api_endpoints": [],
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
@@ -6455,7 +6500,7 @@
           "byte_size": 13158
         }
       },
-      "next_action": "Qualify the two pinned historical profile inputs as a bounded original scope, retaining tenant/member identifiers and literal adjacent rating labels; pursue the retained vr_grid.asp keys for fuller source recovery."
+      "next_action": "Integrate remaining available editions and renditions"
     },
     {
       "publisher_id": "ccrkba",
@@ -9701,11 +9746,19 @@
       "publisher_id": "life_underwriters",
       "publisher_name": "National Association of Life Underwriters",
       "task_id": "ss-wcy0",
-      "state": "unverified_lead",
+      "state": "qualified_scope",
       "work_status": "active",
       "work_priority": null,
-      "reader": null,
-      "qualified_editions": [],
+      "reader": "life_underwriters",
+      "qualified_editions": [
+        {
+          "publisher_id": "life_underwriters",
+          "scorecard_id": "life_underwriters:naifa-frontline-2005-02-15-s5-selected-senate-action",
+          "state": "qualified",
+          "receipt": "qualifications/life_underwriters--naifa-frontline-2005-02-15-s5-selected-senate-action.json",
+          "receipt_sha256": "705c8f3618a565f54588fa052b9f7114d9376c421147fdafbf942b4e4503e974"
+        }
+      ],
       "verified_api_endpoints": [],
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
@@ -9895,7 +9948,7 @@
           "byte_size": 10660
         }
       },
-      "next_action": "Qualify a separately named 2005 Frontline selected-action input, preserving source vote groups and null scores; keep the historical_federal title unresolved and retain SDSU DA 1: B14-F09 as its original-source target."
+      "next_action": "Integrate remaining available editions and renditions"
     },
     {
       "publisher_id": "nam",
@@ -10486,11 +10539,26 @@
       "publisher_id": "now",
       "publisher_name": "National Organization for Women",
       "task_id": "ss-vb7c",
-      "state": "unverified_lead",
+      "state": "qualified_scope",
       "work_status": "active",
       "work_priority": null,
-      "reader": null,
-      "qualified_editions": [],
+      "reader": "now",
+      "qualified_editions": [
+        {
+          "publisher_id": "now",
+          "scorecard_id": "now:110-combined-2008-archived-native",
+          "state": "qualified",
+          "receipt": "qualifications/now--110-combined-2008-archived-native.json",
+          "receipt_sha256": "2fb69a690d12f1ee1ce018b80d85fb5e4741035fc44e76418c2fec595d94578f"
+        },
+        {
+          "publisher_id": "now",
+          "scorecard_id": "now:109-combined-2006-senate-archived-native",
+          "state": "qualified",
+          "receipt": "qualifications/now--109-combined-2006-senate-archived-native.json",
+          "receipt_sha256": "1d69847997c40a5d3fa7206db429de590efbed56084be7b81e7a7e03871a0aba"
+        }
+      ],
       "verified_api_endpoints": [],
       "discovery_api_status": "blocked",
       "discovery_support_status": "unverified_lead",
@@ -10697,7 +10765,7 @@
           "byte_size": 10981
         }
       },
-      "next_action": "Qualify an explicit NOW 110th Congress archived HTML reader against the retained summary and chamber grids, preserving native occurrence IDs and marks with null aggregate ratings; retain every 2006 link occurrence and its role separately."
+      "next_action": "Integrate remaining available editions and renditions"
     },
     {
       "publisher_id": "national_womens_caucus",
@@ -13353,6 +13421,35 @@
         "https://www.smart-union.org/house-budget-votes-place-amtrak-in-the-crosshairs/",
         "https://web.archive.org/web/20150504132237id_/http://utu.org/worksite/washington/PDFs/SMART_Transportation_Scorecard_House_2013-14_(PRINT).pdf",
         "https://web.archive.org/web/20150504132238id_/http://utu.org/worksite/washington/PDFs/SMART_Transportation_Scorecard_US_Senate_2013-14_(PRINT).pdf"
+      ],
+      "survey_finding": null,
+      "implementation_finding": null,
+      "recovery_finding": null,
+      "recovery_api_finding": null,
+      "next_action": "Integrate remaining available editions and renditions"
+    },
+    {
+      "publisher_id": "carpenters_ncsrcc",
+      "publisher_name": "North Central States Regional Council of Carpenters",
+      "task_id": "source-qualified:carpenters_ncsrcc",
+      "state": "qualified_scope",
+      "work_status": "active",
+      "work_priority": null,
+      "reader": "carpenters_ncsrcc",
+      "qualified_editions": [
+        {
+          "publisher_id": "carpenters_ncsrcc",
+          "scorecard_id": "carpenters_ncsrcc:carpenter-economics-2024-regional",
+          "state": "qualified",
+          "receipt": "qualifications/carpenters_ncsrcc--carpenter-economics-2024-regional.json",
+          "receipt_sha256": "5465ba0670d3a9a0a4043fe946ce4813fa338d77cba06cbf497b43a9a1f42fe1"
+        }
+      ],
+      "verified_api_endpoints": [],
+      "discovery_api_status": "html_pdf_only_observed",
+      "discovery_support_status": "verified_unimplemented",
+      "original_source_urls": [
+        "https://web.archive.org/web/20251121232831id_/https://northcountrycarpenter.org/sites/default/files/documents/2024%20Carpenter%20Economics%20_0.pdf"
       ],
       "survey_finding": null,
       "implementation_finding": null,

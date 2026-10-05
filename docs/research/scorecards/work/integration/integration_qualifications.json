@@ -1,6 +1,6 @@
 {
   "schema_version": "1",
-  "observed_at": "2026-10-05T16:40:47Z",
+  "observed_at": "2026-10-05T22:53:44.782835+00:00",
   "input_plan_sha256": "8474f8724146a343f672e35e0e0a78e6cfc35d3bd60c244b0dcdf7a5c1cb1163",
   "readers": {
     "common_cause": "common_cause",
@@ -85,7 +85,13 @@
     "radical_middle": "radical_middle",
     "peace_action": "peace_action",
     "boilermakers": "boilermakers",
-    "freedomworks": "freedomworks"
+    "freedomworks": "freedomworks",
+    "flyersrights": "flyersrights",
+    "now": "now",
+    "railway_clerks": "railway_clerks",
+    "carpenters_ncsrcc": "carpenters_ncsrcc",
+    "bipac": "bipac",
+    "life_underwriters": "life_underwriters"
   },
   "editions": [
     {
@@ -3013,6 +3019,76 @@
       "state": "published",
       "receipt": "publications/87a6e35800a9f983ade179b8d55e3bbdb56548fa52e955afc659d1eac8e18447/fcd5ae49aece9548d045ee3c6115fc55ea4cfefa2bf4c41d3c4764edc049d3c8.json",
       "receipt_sha256": "37a28f9b3aa69b80747cf3cefcd0899b7cb2f9422692ebd110fe8623329b9e91"
+    },
+    {
+      "publisher_id": "flyersrights",
+      "scorecard_id": "flyersrights:2016-original-archived-html",
+      "state": "qualified",
+      "receipt": "qualifications/flyersrights--2016-original-archived-html.json",
+      "receipt_sha256": "e4dd259d94417be4232cfd87da9890706853fa34d7a532595d25e5dc05f8700b"
+    },
+    {
+      "publisher_id": "flyersrights",
+      "scorecard_id": "flyersrights:2016-house-original-archived-xlsx",
+      "state": "qualified",
+      "receipt": "qualifications/flyersrights--2016-house-original-archived-xlsx.json",
+      "receipt_sha256": "541dcff00876acb479d729bc59662cc1014356f6b11d23caaba10635c248fdb5"
+    },
+    {
+      "publisher_id": "flyersrights",
+      "scorecard_id": "flyersrights:2016-senate-original-archived-xlsx",
+      "state": "qualified",
+      "receipt": "qualifications/flyersrights--2016-senate-original-archived-xlsx.json",
+      "receipt_sha256": "c514bcf412788a4a76355b3a58bc038b109b589533335078092086848325132b"
+    },
+    {
+      "publisher_id": "now",
+      "scorecard_id": "now:110-combined-2008-archived-native",
+      "state": "qualified",
+      "receipt": "qualifications/now--110-combined-2008-archived-native.json",
+      "receipt_sha256": "2fb69a690d12f1ee1ce018b80d85fb5e4741035fc44e76418c2fec595d94578f"
+    },
+    {
+      "publisher_id": "now",
+      "scorecard_id": "now:109-combined-2006-senate-archived-native",
+      "state": "qualified",
+      "receipt": "qualifications/now--109-combined-2006-senate-archived-native.json",
+      "receipt_sha256": "1d69847997c40a5d3fa7206db429de590efbed56084be7b81e7a7e03871a0aba"
+    },
+    {
+      "publisher_id": "railway_clerks",
+      "scorecard_id": "railway_clerks:107-1-senate",
+      "state": "qualified",
+      "receipt": "qualifications/railway_clerks--107-1-senate.json",
+      "receipt_sha256": "a0c13d2637573868d5044321c87a3c21cf0f66a3d70038493d153d8f7eb940d4"
+    },
+    {
+      "publisher_id": "carpenters_ncsrcc",
+      "scorecard_id": "carpenters_ncsrcc:carpenter-economics-2024-regional",
+      "state": "qualified",
+      "receipt": "qualifications/carpenters_ncsrcc--carpenter-economics-2024-regional.json",
+      "receipt_sha256": "5465ba0670d3a9a0a4043fe946ce4813fa338d77cba06cbf497b43a9a1f42fe1"
+    },
+    {
+      "publisher_id": "bipac",
+      "scorecard_id": "bipac:2012-cop-single-profile-11600",
+      "state": "qualified",
+      "receipt": "qualifications/bipac--2012-cop-single-profile-11600.json",
+      "receipt_sha256": "67f3feedeecb91b4c4d9145ab0ac825a201e9ef4de9f53c67ebd1e8d660036ca"
+    },
+    {
+      "publisher_id": "bipac",
+      "scorecard_id": "bipac:2012-cop-single-profile-20043",
+      "state": "qualified",
+      "receipt": "qualifications/bipac--2012-cop-single-profile-20043.json",
+      "receipt_sha256": "7baec395dad098eebbc3cf95461ded05b970bc43819737a5121f220268c4dc07"
+    },
+    {
+      "publisher_id": "life_underwriters",
+      "scorecard_id": "life_underwriters:naifa-frontline-2005-02-15-s5-selected-senate-action",
+      "state": "qualified",
+      "receipt": "qualifications/life_underwriters--naifa-frontline-2005-02-15-s5-selected-senate-action.json",
+      "receipt_sha256": "705c8f3618a565f54588fa052b9f7114d9376c421147fdafbf942b4e4503e974"
     }
   ],
   "api_observations": [

@@ -11138,6 +11138,59 @@
       "reviewed_at": "2026-10-05T04:04:54.413681+00:00",
       "pdf_processing_requirement": "Use shared SpicyDocs/DocSpec defaults, Docling/OvisOCR2 and checked data-shaped PDF outcomes",
       "support_status": "implemented_unqualified"
+    },
+    "carpenters_ncsrcc": {
+      "publisher_id": "carpenters_ncsrcc",
+      "publisher_name": "North Central States Regional Council of Carpenters",
+      "source_id": "carpenters_ncsrcc:federal-regional",
+      "task_id": "source-qualified:carpenters_ncsrcc",
+      "catalog_state": {
+        "discovery_status": "verified",
+        "scope_status": "named_original_rendition_qualified",
+        "rights_status": "unreviewed",
+        "last_verified_at": "2026-10-05T22:53:44.782835+00:00"
+      },
+      "implementation_disposition": "named_reader_pending_consumer_publication",
+      "original_evidence_level": "original_edition_document_observed",
+      "formats_observed_or_reported": [
+        "pdf"
+      ],
+      "original_source_urls": [
+        "https://web.archive.org/web/20251121232831id_/https://northcountrycarpenter.org/sites/default/files/documents/2024%20Carpenter%20Economics%20_0.pdf"
+      ],
+      "profile_ids": [],
+      "profile_assessments": [],
+      "source_evidence": [
+        {
+          "capture_id": "a5bf4511-92a6-4936-ae32-e0b5752f8aa9",
+          "requested_url": "https://web.archive.org/web/20251121232831id_/https://northcountrycarpenter.org/sites/default/files/documents/2024%20Carpenter%20Economics%20_0.pdf",
+          "resolved_url": "https://web.archive.org/web/20251121232831id_/https://northcountrycarpenter.org/sites/default/files/documents/2024%20Carpenter%20Economics%20_0.pdf",
+          "http_status": 200,
+          "content_type": "application/pdf",
+          "observed_at": "2026-10-05T13:35:34.576058+00:00",
+          "byte_size": 17608886,
+          "sha256": "306d2222ac22bed1d6923097f84a60fbaaa607215721bfcea5f1b52cff100eb7",
+          "method": "GET",
+          "evidence_policy": "hash_only",
+          "parser_version": "carpenters-ncsrcc-qualified-grid/1",
+          "body_retained_publicly": false,
+          "capture_complete": true,
+          "source_snapshot_complete": true,
+          "request_outcome": "response_received",
+          "review_status": "named_source_qualified",
+          "scope_boundary": "Only the North Central States regional council's named2024source; no United Brotherhood of Carpenters national-source continuity or coverage inferred."
+        }
+      ],
+      "discovery_inputs": [
+        {
+          "kind": "manual_original_publisher_recovery",
+          "url": "https://web.archive.org/web/20251121232831id_/https://northcountrycarpenter.org/sites/default/files/documents/2024%20Carpenter%20Economics%20_0.pdf",
+          "capture_id": "a5bf4511-92a6-4936-ae32-e0b5752f8aa9"
+        }
+      ],
+      "support_status": "verified_unimplemented",
+      "next_action": "Publish and verify the qualified named regional scope; recover further editions separately",
+      "notes": "Only the North Central States regional council's named2024source; no United Brotherhood of Carpenters national-source continuity or coverage inferred."
     }
   },
   "validation": {
@@ -11232,6 +11285,13 @@
       "receipt": "publisher_inventory_extension_smart_20261005.json",
       "receipt_sha256": "cbcc0d04430a9ad690c388e6ab718a46c243a7df6ec05c3c53508cf38295aa66",
       "boundary": "The dated pass is preserved; later candidates and evidence are in this pinned supplement"
+    },
+    {
+      "publisher_id": "carpenters_ncsrcc",
+      "observed_at": "2026-10-05T22:53:44.782835+00:00",
+      "receipt": "publisher_inventory_extension_carpenters_ncsrcc_20261005.json",
+      "receipt_sha256": "13469ee592c4b6155ed0c182c0ae6443ef14c53fc16813bf19ecd2ec274ccf2d",
+      "boundary": "The dated pass is preserved; this later separately attributed publisher and its evidence are in the pinned supplement"
     }
   ]
 }

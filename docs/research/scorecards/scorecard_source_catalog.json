@@ -5397,6 +5397,42 @@
         ],
         "notes": "Named SMART-TD committee assessment and archived SMART Transportation Division House/Senate renditions only. The historical United Transportation Union candidate remains separate; a reused archive host does not establish continuity."
       }
+    },
+    {
+      "source_id": "carpenters_ncsrcc:federal-regional",
+      "publisher_id": "carpenters_ncsrcc",
+      "publisher_name": "North Central States Regional Council of Carpenters",
+      "publisher_aliases": [],
+      "homepage_url": "https://northcountrycarpenter.org/",
+      "scorecard_name": "Congressional Scorecard",
+      "scorecard_index_url": "https://web.archive.org/web/20251121232831id_/https://northcountrycarpenter.org/sites/default/files/documents/2024%20Carpenter%20Economics%20_0.pdf",
+      "archive_url": "https://web.archive.org/web/20251121232831id_/https://northcountrycarpenter.org/sites/default/files/documents/2024%20Carpenter%20Economics%20_0.pdf",
+      "first_known_year": 2024,
+      "last_known_year": 2024,
+      "congresses_available": [],
+      "chamber_scope": "both",
+      "source_format": [
+        "pdf"
+      ],
+      "machine_readable": "partial",
+      "discovered_via": [
+        {
+          "kind": "manual_original_publisher_recovery",
+          "url": "https://web.archive.org/web/20251121232831id_/https://northcountrycarpenter.org/sites/default/files/documents/2024%20Carpenter%20Economics%20_0.pdf",
+          "capture_id": "a5bf4511-92a6-4936-ae32-e0b5752f8aa9"
+        }
+      ],
+      "discovered_at": "2026-10-05T13:35:34.576058+00:00",
+      "last_verified_at": "2026-10-05T22:53:44.782835+00:00",
+      "discovery_status": "verified",
+      "rights_status": "unreviewed",
+      "notes": "Only the North Central States regional council's named2024source; no United Brotherhood of Carpenters national-source continuity or coverage inferred.",
+      "verification_capture_ids": [
+        "a5bf4511-92a6-4936-ae32-e0b5752f8aa9",
+        "d163a180-2151-4d44-bbbd-99e14430d2b6",
+        "a6f27615-023d-48b7-b151-9803fec008eb"
+      ],
+      "scope_status": "named_original_rendition_qualified"
     }
   ],
   "later_inventory_extensions": [
@@ -5406,6 +5442,13 @@
       "receipt": "work/integration/publisher_inventory_extension_smart_20261005.json",
       "receipt_sha256": "cbcc0d04430a9ad690c388e6ab718a46c243a7df6ec05c3c53508cf38295aa66",
       "boundary": "The dated pass is preserved; later candidates and evidence are in this pinned supplement"
+    },
+    {
+      "publisher_id": "carpenters_ncsrcc",
+      "observed_at": "2026-10-05T22:53:44.782835+00:00",
+      "receipt": "publisher_inventory_extension_carpenters_ncsrcc_20261005.json",
+      "receipt_sha256": "13469ee592c4b6155ed0c182c0ae6443ef14c53fc16813bf19ecd2ec274ccf2d",
+      "boundary": "The dated pass is preserved; this later separately attributed publisher and its evidence are in the pinned supplement"
     }
   ],
   "initial_surveyed_at": "2026-10-03T17:48:51.414495+00:00"

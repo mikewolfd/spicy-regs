@@ -747,3 +747,57 @@ sources:
     rights_status: unreviewed
     policy_decision_id: scorecards-research-hash-only-v1
     qualification_id: null
+  - publisher_id: bipac
+    adapter: bipac
+    enabled: false
+    cadence: monthly
+    historical_backfill: false
+    evidence_policy: hash_only
+    rights_status: unreviewed
+    policy_decision_id: scorecards-research-hash-only-v1
+    qualification_id: source-selected-actions-20261005:bipac
+  - publisher_id: carpenters_ncsrcc
+    adapter: carpenters_ncsrcc
+    enabled: false
+    cadence: monthly
+    historical_backfill: false
+    evidence_policy: hash_only
+    rights_status: unreviewed
+    policy_decision_id: scorecards-research-hash-only-v1
+    qualification_id: source-selected-actions-20261005:carpenters_ncsrcc
+  - publisher_id: flyersrights
+    adapter: flyersrights
+    enabled: false
+    cadence: monthly
+    historical_backfill: false
+    evidence_policy: hash_only
+    rights_status: unreviewed
+    policy_decision_id: scorecards-research-hash-only-v1
+    qualification_id: source-selected-actions-20261005:flyersrights
+  - publisher_id: life_underwriters
+    adapter: life_underwriters
+    enabled: false
+    cadence: monthly
+    historical_backfill: false
+    evidence_policy: hash_only
+    rights_status: unreviewed
+    policy_decision_id: scorecards-research-hash-only-v1
+    qualification_id: source-selected-actions-20261005:life_underwriters
+  - publisher_id: now
+    adapter: now
+    enabled: false
+    cadence: monthly
+    historical_backfill: false
+    evidence_policy: hash_only
+    rights_status: unreviewed
+    policy_decision_id: scorecards-research-hash-only-v1
+    qualification_id: source-selected-actions-20261005:now
+  - publisher_id: railway_clerks
+    adapter: railway_clerks
+    enabled: false
+    cadence: monthly
+    historical_backfill: false
+    evidence_policy: hash_only
+    rights_status: unreviewed
+    policy_decision_id: scorecards-research-hash-only-v1
+    qualification_id: source-selected-actions-20261005:railway_clerks

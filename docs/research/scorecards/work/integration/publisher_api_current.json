@@ -1,9 +1,9 @@
 {
   "format_version": "scorecard-publisher-api-current/1",
   "input_pins": {
-    "adapter_inventory.json": "5d7ce442f355c2b7f84d58c6d2df99cbf48574344a101248ee6a04953bf019a4",
-    "publisher_api_inventory.json": "097e102c3af4ebb5ad87731be5d40ea4ad283b8ec21f188b1e7460755755925d",
-    "integration_qualifications.json": "a9a1f0601f10bea40354e9d2f9e01f5037ea2ad0dc4d50727aa21d47cfed5d85",
+    "adapter_inventory.json": "fd7ecf934f0d30abfc9045534cc762cc63e20d766610264536fe413cc75e0ace",
+    "publisher_api_inventory.json": "24cb134d5e23124c44d7dbbb00ec75b0155995c80a2965b1a656f8c7b8eff887",
+    "integration_qualifications.json": "e2697cfdae26f7f55186522154ad85005c02210076d40ea90dace09308394216",
     "publisher_survey_20261005.json": "7e7431dc37bf8564d16df4f044498e1176f7e654cc0cd694b8bdb8a07944c9c1",
     "publisher_implementation_20261005.json": "02c472173923a4a2f3438155e36b76b83a6dd1d9210504ffec2a76abedbdb2f5",
     "publisher_recovery_20261005.json": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
@@ -443,7 +443,7 @@
     {
       "publisher_id": "flyersrights",
       "publisher_name": "FlyersRights.org",
-      "integration_state": "unverified_lead",
+      "integration_state": "qualified_scope",
       "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
@@ -2013,7 +2013,7 @@
     {
       "publisher_id": "railway_clerks",
       "publisher_name": "Brotherhood of Railway, Airline and Steamship Clerks, Freight Handlers, Express and Station Employes",
-      "integration_state": "unverified_lead",
+      "integration_state": "qualified_scope",
       "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
@@ -2075,7 +2075,7 @@
     {
       "publisher_id": "bipac",
       "publisher_name": "Business-Industry Political Action Committee",
-      "integration_state": "unverified_lead",
+      "integration_state": "qualified_scope",
       "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
@@ -3542,7 +3542,7 @@
     {
       "publisher_id": "life_underwriters",
       "publisher_name": "National Association of Life Underwriters",
-      "integration_state": "unverified_lead",
+      "integration_state": "qualified_scope",
       "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
@@ -3957,7 +3957,7 @@
     {
       "publisher_id": "now",
       "publisher_name": "National Organization for Women",
-      "integration_state": "unverified_lead",
+      "integration_state": "qualified_scope",
       "work_status": "active",
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
@@ -5305,6 +5305,21 @@
       "dated_discovery": {
         "source_file": "publisher_api_inventory.json",
         "publisher_id": "smart_transportation",
+        "discovery_status": "html_pdf_only_observed",
+        "endpoint_observation_count": 0
+      },
+      "dated_discovery_routes": [],
+      "qualified_api_endpoints": [],
+      "recovery_review": null
+    },
+    {
+      "publisher_id": "carpenters_ncsrcc",
+      "publisher_name": "North Central States Regional Council of Carpenters",
+      "integration_state": "qualified_scope",
+      "work_status": "active",
+      "dated_discovery": {
+        "source_file": "publisher_api_inventory.json",
+        "publisher_id": "carpenters_ncsrcc",
         "discovery_status": "html_pdf_only_observed",
         "endpoint_observation_count": 0
       },
