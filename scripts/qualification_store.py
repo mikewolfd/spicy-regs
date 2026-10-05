@@ -10,6 +10,7 @@ import base64
 import hashlib
 from pathlib import Path
 import shutil
+from threading import RLock
 from uuid import uuid4
 
 from botocore.exceptions import ClientError
@@ -28,6 +29,12 @@ class DiskStore:
         self.etags: dict[str, str] = {}
         self.uploads: dict[str, dict] = {}
         self.calls: list[dict] = []
+        self.lock = RLock()
+
+    @staticmethod
+    def options(options):
+        if set(options) - {'ContentType', 'CacheControl'}:
+            raise ValueError('Unsupported private store options')
 
     def path(self, bucket, key):
         if (bucket != self.bucket or not key or key.startswith('/') or
@@ -37,14 +44,16 @@ class DiskStore:
 
     def head_object(self, *, Bucket, Key):
         self.path(Bucket, Key)
-        if Key not in self.objects:
-            raise refused('NoSuchKey')
-        return {'ContentLength': self.objects[Key].stat().st_size, 'ETag': self.etags[Key]}
+        with self.lock:
+            if Key not in self.objects:
+                raise refused('NoSuchKey')
+            return {'ContentLength': self.objects[Key].stat().st_size, 'ETag': self.etags[Key]}
 
     def get_object(self, *, Bucket, Key):
-        result = self.head_object(Bucket=Bucket, Key=Key)
-        self.calls.append({'method': 'get_object', 'key': Key})
-        return {**result, 'Body': self.objects[Key].open('rb')}
+        with self.lock:
+            result = self.head_object(Bucket=Bucket, Key=Key)
+            self.calls.append({'method': 'get_object', 'key': Key})
+            return {**result, 'Body': self.objects[Key].open('rb')}
 
     def _condition(self, key, if_match, if_none_match):
         if if_none_match not in (None, '*'):
@@ -56,7 +65,9 @@ class DiskStore:
     def put_object(self, *, Bucket, Key, Body, IfMatch=None, IfNoneMatch=None, ContentMD5=None,
                    ContentLength=None, **kwargs):
         target = self.path(Bucket, Key)
-        self._condition(Key, IfMatch, IfNoneMatch)
+        self.options(kwargs)
+        with self.lock:
+            self._condition(Key, IfMatch, IfNoneMatch)
         temporary = self.root / ('put-' + uuid4().hex)
         digest, size = hashlib.md5(usedforsecurity=False), 0
         with temporary.open('xb') as sink:
@@ -69,11 +80,17 @@ class DiskStore:
                 (ContentLength is not None and ContentLength != size)):
             temporary.unlink()
             raise refused('BadDigest')
-        target.parent.mkdir(parents=True, exist_ok=True)
-        temporary.replace(target)
-        self.objects[Key], self.etags[Key] = target, '"' + digest.hexdigest() + '"'
-        self.calls.append({'method': 'put_object', 'key': Key, 'bytes': size})
-        return {'ETag': self.etags[Key]}
+        try:
+            with self.lock:
+                # A competing writer may have committed while Body was streamed.
+                self._condition(Key, IfMatch, IfNoneMatch)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                temporary.replace(target)
+                self.objects[Key], self.etags[Key] = target, '"' + digest.hexdigest() + '"'
+                self.calls.append({'method': 'put_object', 'key': Key, 'bytes': size})
+                return {'ETag': self.etags[Key]}
+        finally:
+            temporary.unlink(missing_ok=True)
 
     def get_paginator(self, name):
         if name != 'list_objects_v2':
@@ -89,6 +106,7 @@ class DiskStore:
 
     def create_multipart_upload(self, *, Bucket, Key, **kwargs):
         self.path(Bucket, Key)
+        self.options(kwargs)
         identity = uuid4().hex
         directory = self.root / 'multipart' / identity
         directory.mkdir(parents=True)
@@ -121,7 +139,8 @@ class DiskStore:
         wanted = [{name: part[name] for name in ('PartNumber', 'ETag')} for part in upload['parts']]
         if not wanted or MultipartUpload != {'Parts': wanted}:
             raise ValueError('Private multipart completion differs from uploaded parts')
-        self._condition(Key, None, IfNoneMatch)
+        with self.lock:
+            self._condition(Key, None, IfNoneMatch)
         target = self.path(Bucket, Key)
         temporary = upload['directory'] / 'complete'
         with temporary.open('xb') as sink:
@@ -130,11 +149,13 @@ class DiskStore:
                     shutil.copyfileobj(source, sink, 1024 * 1024)
         digest = hashlib.md5(b''.join(part['digest'] for part in upload['parts']), usedforsecurity=False)
         etag = f'"{digest.hexdigest()}-{len(wanted)}"'
-        target.parent.mkdir(parents=True, exist_ok=True)
-        temporary.replace(target)
-        self.objects[Key], self.etags[Key] = target, etag
-        self.abort_multipart_upload(Bucket=Bucket, Key=Key, UploadId=UploadId)
-        return {'ETag': etag}
+        with self.lock:
+            self._condition(Key, None, IfNoneMatch)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            temporary.replace(target)
+            self.objects[Key], self.etags[Key] = target, etag
+            self.abort_multipart_upload(Bucket=Bucket, Key=Key, UploadId=UploadId)
+            return {'ETag': etag}
 
     def abort_multipart_upload(self, *, Bucket, Key, UploadId):
         upload = self._upload(Bucket, Key, UploadId)

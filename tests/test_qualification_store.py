@@ -68,3 +68,35 @@ def test_incomplete_multipart_refuses_before_exposing_bytes(tmp_path):
                                     IfNoneMatch='*')
     with store.get_object(Bucket='private', Key='data')['Body'] as body:
         assert body.read() == raw
+
+
+def test_pointer_condition_is_rechecked_after_streaming_a_competing_write(tmp_path):
+    store = DiskStore(tmp_path / 'store', bucket='private')
+    store.put_object(Bucket='private', Key='pointer', Body=b'old')
+    etag = store.head_object(Bucket='private', Key='pointer')['ETag']
+
+    class Competing(BytesIO):
+        first = True
+
+        def read(self, size=-1):
+            if self.first:
+                self.first = False
+                store.put_object(Bucket='private', Key='pointer', Body=b'competing', IfMatch=etag)
+            return super().read(size)
+
+    with pytest.raises(ClientError, match='PreconditionFailed'):
+        store.put_object(Bucket='private', Key='pointer', Body=Competing(b'stale'), IfMatch=etag)
+    assert store.objects['pointer'].read_bytes() == b'competing'
+    assert not list(store.root.glob('put-*'))
+
+
+@pytest.mark.parametrize('method', ['put_object', 'create_multipart_upload'])
+def test_unsupported_options_refuse_before_writing_private_state(tmp_path, method):
+    store = DiskStore(tmp_path / 'store', bucket='private')
+    arguments: dict[str, object] = {'Bucket': 'private', 'Key': 'data', 'ImaginaryOption': True}
+    if method == 'put_object':
+        arguments['Body'] = b'data'
+    with pytest.raises(ValueError, match='Unsupported private store options'):
+        getattr(store, method)(**arguments)
+    assert store.objects == {} and store.uploads == {}
+    assert not list(store.root.iterdir())
