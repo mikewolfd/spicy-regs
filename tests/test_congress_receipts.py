@@ -169,7 +169,7 @@ def test_missing_subject_key_is_a_retained_refusal(tmp_path):
     assert pq.read_table(receipts)["outcome"].to_pylist() == ["observed", "refused"]
 
 
-def test_next_generation_keeps_prior_witnesses_when_subject_changes(tmp_path):
+def test_changed_subject_names_only_the_direct_prior_receipt(tmp_path):
     first_raw = shaped(tmp_path / "first.parquet", [{"bioguide_id": "X", "name_first": "First"}])
     witness = {
         "source_id": "native-capture",
@@ -193,10 +193,12 @@ def test_next_generation_keeps_prior_witnesses_when_subject_changes(tmp_path):
     after = next(r for r in pq.read_table(next_receipts).to_pylist() if r["outcome"] == "accepted")
     assert after["record_id"] == before["record_id"]
     assert after["subject_version"] != before["subject_version"]
-    assert after["witnesses"][: len(before["witnesses"])] == before["witnesses"]
-    from spicy_regs.etl_receipts import resolve_receipt_witness
-
-    assert resolve_receipt_witness(after, after["witnesses"][len(before["witnesses"])])
+    from spicy_regs.etl_receipts import decode_exact_json, _digest
+    diagnostic = decode_exact_json(after["diagnostic_json"])
+    assert diagnostic["prior_receipt"] == {"receipt_id": before["receipt_id"], "generation_id": "first",
+                                            "processing_sha256": _digest(decode_exact_json(before["processing_json"]))}
+    assert "prior_receipts" not in diagnostic and "retained_processing" not in diagnostic
+    assert len(after["witnesses"]) == 1
     assert after["generation_id"] == "next"
 
 
@@ -410,7 +412,9 @@ def test_scheduled_rebuild_reads_the_prior_pair_and_a_changed_returned_value_is_
         assert {column: row[column] for column in reread} == reread
         # Only a subject column moves the row's version; a receipt-only field would leave it standing.
         assert new["record_id"] == old["record_id"] and new["subject_version"] != old["subject_version"]
-        assert new["witnesses"][: len(old["witnesses"])] == old["witnesses"]
+        from spicy_regs.etl_receipts import decode_exact_json
+        assert decode_exact_json(new["diagnostic_json"])["prior_receipt"]["receipt_id"] == old["receipt_id"]
+        assert len(new["witnesses"]) == 1
 
 
 def test_real_roster_producer_publishes_congress_basis_and_resumes_from_its_native_pair(tmp_path, monkeypatch):

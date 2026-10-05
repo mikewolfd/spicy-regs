@@ -12,9 +12,8 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
-from contextlib import ExitStack
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
@@ -28,8 +27,8 @@ from spicy_regs.etl_receipts import (
     RECEIPT_SCHEMA,
     DatasetPolicy,
     ReceiptContext,
-    ReceiptLineage,
     combine_receipts,
+    carry_receipt_history,
     failure_receipt,
     observation_receipt,
     read_attempts,
@@ -134,6 +133,22 @@ def _build_events(directory: Path, generation_id: str, builder: str, evidence, e
     return write_rows(records(), directory / "acquisition-receipts.parquet", RECEIPT_SCHEMA)
 
 
+def congress_attempt(dataset: str, raw: Mapping, context: ReceiptContext) -> tuple[dict | None, dict]:
+    """The reference attempt for one raw Congress row, shared with qualification."""
+    selected = policy(dataset)
+    try:
+        mapped = map_record(dataset, raw)
+        processing = {"source_fields": mapped.source_fields, "entry_kind": "row"}
+        if mapped.subject is None and not selected.receipt_only:
+            return None, failure_receipt(selected, replace(context, diagnostics={"reason": "no_domain_subject"}),
+                                         outcome="rejected", raw_fields=processing)
+        return split_record(selected, (mapped.subject or {}) | processing, context)
+    except (ValueError, TypeError, OverflowError, pa.ArrowException) as error:
+        return None, failure_receipt(selected, replace(context, diagnostics={"reason": "conversion_refused",
+                                     "error_type": type(error).__name__}), outcome="refused",
+                                     raw_fields={"source_fields": raw, "entry_kind": "row"})
+
+
 def write_congress_dataset(
     source: Path,
     directory: Path,
@@ -151,12 +166,10 @@ def write_congress_dataset(
     witnesses. The first witness never asserts that a shaped file is an original
     publisher response.
 
-    A dataset ``congress_bulk.eligible`` accepts is written in one scan, and its
-    receipts are fresh: ``prior`` is not read and no receipt names a predecessor
-    (owners, 2026-10-05, until readers accept a member that carries unchanged
-    receipts; per-row lineage cost about 640 bytes a receipt on every republish
-    and nothing maintained reads it). ``bulk=False`` is the row loop for any
-    dataset, lineage included: the reference a bulk bundle is checked against.
+    A bulk-eligible dataset is written in one scan. Both paths create fresh
+    attempts, then carry exact unchanged receipt occurrences from the selected
+    prior. Changed accepted records name only their direct predecessor.
+    ``bulk=False`` keeps the row writer available as the reference.
     """
     from rulespec_artifacts import publish_directory_no_replace
 
@@ -165,7 +178,7 @@ def write_congress_dataset(
     selected = policy(dataset)
     digest = _digest(source)
     directory.parent.mkdir(parents=True, exist_ok=True)
-    with TemporaryDirectory(prefix=".congress-", dir=directory.parent) as temporary, ExitStack() as stack:
+    with TemporaryDirectory(prefix=".congress-", dir=directory.parent) as temporary:
         stage = Path(temporary) / "bundle"
         stage.mkdir()
         subjects = None if selected.receipt_only else stage / (dataset + ".parquet")
@@ -179,11 +192,10 @@ def write_congress_dataset(
         footer = dict(pq.read_schema(source).metadata or {})
         in_bulk = bulk and subjects is not None and congress_bulk.eligible(dataset, pq.read_schema(source))
         prior_paths = []
-        if prior is not None and not in_bulk:
+        if prior is not None:
             scoped = select_receipts(prior.receipts, Path(temporary) / "prior.parquet", dataset=dataset)
             _admit({dataset: prior.subjects}, [scoped], [selected], generation_id=prior.generation_id, bulk=bulk)
             prior_paths.append(scoped)
-        lineage = stack.enter_context(ReceiptLineage(prior_paths, dataset=dataset))
 
         def context(ordinal, diagnostics=None, subject=None, processing=None):
             current = ReceiptContext(
@@ -193,37 +205,10 @@ def write_congress_dataset(
                 [{**base_witness, "locator": str(ordinal)}, *witnesses],
                 diagnostics or {},
             )
-            if subject is not None:
-                return lineage.inherit(current, selected, subject)
-            return lineage.inherit_processing(current, processing) if processing is not None else current
+            return current
 
         def attempt(ordinal, raw):
-            """One source row's subject, where it has one, and its receipt."""
-            try:
-                mapped = map_record(dataset, raw)
-                processing = {"source_fields": mapped.source_fields, "entry_kind": "row"}
-                if mapped.subject is None and not selected.receipt_only:
-                    return None, failure_receipt(
-                        selected,
-                        context(ordinal, {"reason": "no_domain_subject"}),
-                        outcome="rejected",
-                        raw_fields=processing,
-                    )
-                return split_record(
-                    selected,
-                    (mapped.subject or {}) | processing,
-                    context(ordinal, subject=mapped.subject, processing=processing),
-                )
-            except (ValueError, TypeError, OverflowError, pa.ArrowException) as error:
-                # Missing identity and bad native values both remain attempts. An integer past
-                # int64 raises OverflowError from Arrow, which is none of the other three.
-                # Arbitrary exception text can contain source content or credentials.
-                return None, failure_receipt(
-                    selected,
-                    context(ordinal, {"reason": "conversion_refused", "error_type": type(error).__name__}),
-                    outcome="refused",
-                    raw_fields={"source_fields": raw, "entry_kind": "row"},
-                )
+            return congress_attempt(dataset, raw, context(ordinal))
 
         metadata = {
             "source_metadata": list(footer.items()),
@@ -264,6 +249,9 @@ def write_congress_dataset(
                 finally:
                     if sw is not None:
                         sw.close()
+        if prior_paths:
+            carried = carry_receipt_history(receipts, prior_paths, stage / "carried-receipts.parquet")
+            carried.replace(receipts)
         _admit(
             {dataset: [] if subjects is None else [subjects]}, [receipts], [selected], generation_id=generation_id, bulk=bulk
         )

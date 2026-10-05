@@ -149,16 +149,14 @@ def test_bulk_restore_equals_the_row_restore(tmp_path, monkeypatch, batch, datas
     assert refused > 2 and restored.num_rows == len(rows) - refused  # every row but the refused conversions
 
 
-def test_a_refresh_writes_fresh_receipts_with_no_lineage(tmp_path, monkeypatch) -> None:
-    """The interim rule: a bulk dataset's refresh names no predecessor; ``bulk=False`` still inherits."""
+def test_refresh_carries_receipts_exactly_in_both_paths(tmp_path, monkeypatch) -> None:
     source, _, (subject, receipts) = _both(tmp_path, monkeypatch, "member_votes", _member_votes(40))
     prior = CongressInput(subject, receipts, GENERATION)
     fresh = write_congress_dataset(source, tmp_path / "next", dataset="member_votes", generation_id="generation-2", prior=prior)
     row = write_congress_dataset(source, tmp_path / "next-row", dataset="member_votes", generation_id="generation-2", prior=prior, bulk=False)
-    first = write_congress_dataset(source, tmp_path / "first", dataset="member_votes", generation_id="generation-2")
-    assert pq.read_table(fresh[1]).to_pylist() == pq.read_table(first[1]).to_pylist()
-    assert not any("prior_receipts" in receipt["diagnostic_json"] for receipt in pq.read_table(fresh[1]).to_pylist())
-    assert any("prior_receipts" in receipt["diagnostic_json"] for receipt in pq.read_table(row[1]).to_pylist())
+    assert pq.read_table(fresh[1]).equals(pq.read_table(receipts))
+    assert pq.read_table(fresh[1]).equals(pq.read_table(row[1]))
+
 
 
 def test_a_scan_cut_short_is_refused(tmp_path, monkeypatch) -> None:
