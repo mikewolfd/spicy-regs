@@ -136,7 +136,9 @@ IDENTITIES = {
     "documents": ("document_id",),
     "federal_register": ("document_number", "publication_date"),
     "feed_summary": ("docket_id",),
-    "fr_docket_links": ("document_number", "publication_date", "docket_source_ordinal"),
+    # Printed positions distinguish repeated labels; a link-only statement has
+    # no position, so its literal docket ID distinguishes the relationship.
+    "fr_docket_links": ("document_number", "publication_date", "docket_source_ordinal", "docket_id"),
     "lifecycle_events": ("lifecycle_event_id",),
     "proceedings": ("proceeding_id",),
     "regulatory_agenda_items": ("agenda_item_id",),

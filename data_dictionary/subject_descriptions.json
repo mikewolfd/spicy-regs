@@ -2620,7 +2620,8 @@
       "agency_slugs": "Federal Register agency slugs for the issuing agencies. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "docket_ids": "The full original docket-ID array, retained so consumers can see the other IDs this FR document links to. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "regulation_id_numbers": "RINs (Native list) claimed by the FR document — the RIN-side join key for a rulemaking. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
-      "executive_order_number": "Executive order number, for presidential documents."
+      "executive_order_number": "Executive order number, for presidential documents.",
+      "link_source": "Which of the Register's statements carries the pair: `printed` (the document's printed docket labels), `regulations_dot_gov_info` (the Register's regulations.gov link, read from `regulations_dot_gov_docket_id` alone, never off a document id) or `both`, where a printed label is that docket id or SpicyDocs' normalizer reads it from the label. Every printed occurrence that carries the pair reads `both`, and the link then adds no row. The current builder writes one of these labels; retained historical rows without a label keep NULL."
     }
   },
   "gao_decisions": {
