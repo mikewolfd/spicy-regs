@@ -112,14 +112,22 @@ def read_internal(selected: ReceiptInput) -> Iterable[dict]:
         yield _processor_input(selected.dataset, row)
 
 
-def materialize_internal(selected: ReceiptInput, destination: Path) -> Path:
+def materialize_internal(selected: ReceiptInput, destination: Path, *, bulk: bool = True) -> Path:
     """Bounded exact retained processor inputs, with qualified file metadata.
 
     File-level placement/aggregation metadata is restored only when every row's
     receipt agrees. This keeps CFR incremental placement from becoming a blind
     full re-read after the split, and never promotes one row's marker to a file.
+    Dockets and documents use a private batch proof before exposing the file;
+    ``bulk=False`` retains the complete row reader as the reference authority.
     """
     from spicy_regs.transforms.parquet_rows import write_rows
+    if bulk and selected.dataset in {'dockets', 'documents'}:
+        from spicy_regs import etl_bulk, regulations_bulk
+        try:
+            return regulations_bulk.materialize_internal(selected, destination)
+        except etl_bulk.NotBulkEligible:
+            pass
 
     rows = iter(_qualified_rows(selected))
     first = next(rows, None)
@@ -256,12 +264,24 @@ def write_held_dataset(
     witnesses: Sequence[Mapping] = (),
     include_source_witness: bool = True,
     prior_receipts: Sequence[Path] = (),
+    bulk: bool = True,
 ) -> tuple[Path, Path]:
     """Convert retained rows with witnesses to their exact receipt-held input.
 
     Existing source metadata (placement rules, omitted dates, evaluation clock)
     goes into each receipt. Neither source bytes nor their metadata are deleted.
+    Dockets and documents can batch declared text inputs; ``bulk=False`` uses
+    the reference writer. Unsupported batch values retain its exact decisions.
     """
+    if bulk and dataset in {'dockets', 'documents'}:
+        from spicy_regs import etl_bulk, regulations_bulk
+        try:
+            return regulations_bulk.write_held_dataset(
+                dataset, source, destination, generation_id=generation_id, processor=processor,
+                witnesses=witnesses, include_source_witness=include_source_witness, prior_receipts=prior_receipts,
+            )
+        except etl_bulk.NotBulkEligible:
+            pass
     parquet = pq.ParquetFile(source)
     metadata = dict(parquet.schema_arrow.metadata or {})
     # The exact input metadata is receipt data, including byte-valued keys.
