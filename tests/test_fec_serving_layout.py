@@ -114,3 +114,65 @@ def test_header_policy_matches_only_the_selected_layout(legacy, version, resolve
     assert (result["association_status"] == "resolved_native_filing_key") == resolved
     assert result["association_policy_version"] == "fec-retained-filing-association/" + ("1" if legacy else "2")
     assert (result["filing_key"] is not None) == resolved
+
+
+@pytest.mark.parametrize("native", [False, True])
+def test_filing_reference_resolution_uses_the_selected_legacy_or_native_schema(native):
+    """The pinned legacy filing-link footer lacks only the new receipt field."""
+    import base64
+    from spicy_regs.fec_receipt_adapter import qualified_views, processing_declarations
+    from spicy_regs.relationship_views.sql_views import install_sql_views
+
+    scope = dict(source_generation_pin=GEN, population="retained fixture", as_of="fixture", namespace_evidence={})
+    native_specs = qualified_views(scope)
+    legacy_specs = qualified_views(scope, legacy_associations=True)
+    index = {"families": {"fec-query": {
+        "tables": {"fec_filing_links.parquet": {}, "fec_filings.parquet": {}},
+        **({"etlReceipts": {"datasets": ["fec_filing_links", "fec_filings"]}} if native else {}),
+    }}}
+    spec = next(s for s in selected_qualified_views(native_specs, legacy_specs, index)
+                if s.view.name == "fec_filing_reference_resolution")
+    declarations = processing_declarations()
+    links_schema = pa.ipc.read_schema(pa.BufferReader(base64.b64decode(declarations["fec_filing_links"]["arrow_schema"])))
+    links_schema = pa.schema([field for field in links_schema if field.name != "source_representation_role"])
+    links = [dict(record_id="link", filing_key="source-key", source_filing_record_id="source",
+                  target_filing_key="target-key", target_resolution_status="pending", relation_type="reported_reference")]
+    filings_schema = pa.ipc.read_schema(pa.BufferReader(base64.b64decode(declarations["fec_filings"]["arrow_schema"])))
+    filings = [dict(record_id=record, filing_key=key, source_authority="fec", source_namespace="filings",
+                    report_number="1", native_filer_id="C00000001", form_type="F3")
+               for record, key in [("source", "source-key"), ("target-a", "target-key"), ("target-b", "target-key")]]
+    with duckdb.connect() as con:
+        con.register("fec_filing_links", pa.Table.from_pylist(links, schema=links_schema))
+        con.register("fec_filings", pa.Table.from_pylist(filings, schema=filings_schema))
+        result = install_sql_views(con, ["fec_filing_links", "fec_filings"], [spec.view])[spec.view.name]
+        if native:
+            assert result["status"] == "unsupported"
+            assert "fec_filing_links.source_representation_role" in result["reason"]
+        else:
+            assert result["status"] == "available", result
+            row = con.sql("SELECT * FROM fec_filing_reference_resolution").to_arrow_table().to_pylist()[0]
+            assert row["record_id"] == "link" and row["relation_type"] == "reported_reference"
+            assert row["target_resolution_status"] == "resolved_native_filing_key"
+            assert row["target_observation_count"] == 2
+            assert "source_representation_role" not in row
+        assert spec.view.query({}) == next(s for s in native_specs if s.view.name == spec.view.name).view.query({})
+
+
+@pytest.mark.parametrize("missing", ["source_filing_record_id", "filing_key", "target_filing_key", "target_resolution_status"])
+def test_legacy_filing_reference_refuses_missing_resolution_inputs(missing):
+    from spicy_regs.fec_receipt_adapter import qualified_views, processing_declarations
+    from spicy_regs.relationship_views.sql_views import install_sql_views
+
+    spec = next(s for s in qualified_views(dict(source_generation_pin=GEN, population="fixture", as_of="fixture",
+                                               namespace_evidence={}), legacy_associations=True)
+                if s.view.name == "fec_filing_reference_resolution")
+    declarations = processing_declarations()
+    with duckdb.connect() as con:
+        for table in spec.view.required:
+            columns = declarations[table]["columns"]
+            con.execute(f"CREATE TABLE {table}(" + ",".join(f'"{n}" {t}' for n, t in columns
+                        if n != "source_representation_role" and not (table == "fec_filing_links" and n == missing)) + ")")
+        result = install_sql_views(con, list(spec.view.required), [spec.view])[spec.view.name]
+        assert result["status"] == "unsupported"
+        assert f"fec_filing_links.{missing}" in result["reason"]
+        assert con.execute("SELECT count(*) FROM information_schema.views WHERE table_name=?", [spec.view.name]).fetchone() == (0,)

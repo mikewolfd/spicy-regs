@@ -373,7 +373,11 @@ def fec_query_views(
     add(
         "fec_filing_reference_resolution",
         {
-            "fec_filing_links": schemas["fec_filing_links"],
+            # Legacy filing links predate this receipt-only processing field.
+            # The SQL passes through the selected columns and never reads it;
+            # native inputs still require the complete restored schema.
+            "fec_filing_links": tuple(column for column in schemas["fec_filing_links"]
+                                      if not (legacy_associations and column == "source_representation_role")),
             "fec_filings": (
                 "record_id",
                 "filing_key",
