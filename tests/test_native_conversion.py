@@ -186,6 +186,28 @@ def test_only_a_named_old_shape_family_with_a_writer_converts(tmp_path, monkeypa
         convert("cfr-sections", tmp_path / "first", publish=True)
 
 
+def test_a_receipt_dataset_another_family_owns_refuses_before_converting(tmp_path, monkeypatch, bucket):
+    """Every Congress.gov family's receipts hold ``congress_acquisition``; the index gives a dataset one owner.
+
+    The first such family converts; the second is refused by publication ("already belongs to family"), which a run
+    without ``--publish`` would never reach. Found rehearsing the small families, 2026-10-05.
+    """
+    from spicy_regs.congress_subjects import INPUT_COLUMNS
+
+    treaty = dict.fromkeys(INPUT_COLUMNS["treaties"]) | {"treaty_id": "119-1", "congress_received": "119"}
+    nomination = dict.fromkeys(INPUT_COLUMNS["nominations"]) | {"citation": "PN1-119", "congress": "119"}
+    publish_old(bucket, monkeypatch, tmp_path, "treaties", {"treaties": [treaty]})
+    old = publish_old(bucket, monkeypatch, tmp_path, "nominations", {"nominations": [nomination]})
+    receipt = convert("treaties", tmp_path / "treaties", publish=True)
+    assert set(receipt["published"]["entry"]["etlReceipts"]["datasets"]) == {"treaties", "congress_acquisition"}
+
+    with pytest.raises(conversion.ConversionRefused,
+                       match=r"would hold \['congress_acquisition'\], which already belongs to family treaties"):
+        convert("nominations", tmp_path / "nominations")
+    assert not (tmp_path / "nominations" / "build").exists()
+    assert publication.current_index(BASE)["families"]["nominations"] == old
+
+
 def test_a_row_the_writer_refuses_stops_the_conversion(tmp_path, monkeypatch, bucket):
     unnamed = CFR[0] | {"granule_id": None}
     old = publish_old(bucket, monkeypatch, tmp_path, "cfr-sections", {"cfr_sections": [CFR[1], unnamed]})
