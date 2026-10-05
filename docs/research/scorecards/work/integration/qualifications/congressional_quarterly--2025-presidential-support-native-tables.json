@@ -1,0 +1,31 @@
+{
+  "format_version": "scorecard-integration-qualified-scope/1",
+  "qualified": true,
+  "publisher_id": "congressional_quarterly",
+  "scorecard_id": "congressional_quarterly:2025-presidential-support-native-tables",
+  "source_url": "https://media.cq.com/pub/table/index.php?id=547",
+  "parser_version": "cq-native-2025-member-tables/1",
+  "reader_sha256": "82651d1945fec3e0f5f560c143bffd5b0b45c3d9b4c389ccfef13111d6beb188",
+  "capture_manifest_sha256": "8305f27eeeacaa3692368cb8f8bfafc103a69839fb9218a7ade5ce3416871303",
+  "native_reference_sha256": "02520309b5f82eb488177173bd237f9a348fe1a421e86b8b6c02ca75da2cf796",
+  "native_reference_kind": "source_table_family",
+  "source_qualification_sha256": "ddb38aee5fe34e39883cd7950a41e1bb1037ffe27ac1434d6d80f26573709252",
+  "completeness_rule": "complete HTML EOF and unpaginated native House/Senate tables; every reviewed state heading and in-year source member occurrence reconciles; all three metric cells per member, including blanks; exact source facts/metadata/context agree on full reread",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 2,
+    "scorecard_metrics": 6,
+    "scorecard_items": 0,
+    "scorecard_metric_items": 0,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 545,
+    "scorecard_member_ratings": 1635,
+    "scorecard_member_item_results": 0
+  },
+  "capture_count": 4,
+  "evidence_policy": "hash_only",
+  "qualification_boundary": "Named source rendition; remaining editions and renditions stay in scope",
+  "published": false
+}

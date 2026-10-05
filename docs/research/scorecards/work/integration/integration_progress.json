@@ -1,18 +1,19 @@
 {
   "dataset": "scorecard_integration_progress",
   "schema_version": "1",
-  "observed_at": "2026-10-05T14:10:27Z",
+  "observed_at": "2026-10-05T15:21:59+00:00",
   "input_pins": {
     "adapter_inventory.json": "5d7ce442f355c2b7f84d58c6d2df99cbf48574344a101248ee6a04953bf019a4",
     "publisher_api_inventory.json": "097e102c3af4ebb5ad87731be5d40ea4ad283b8ec21f188b1e7460755755925d",
-    "integration_qualifications.json": "07afc61a2524853717fcb2025eb10556f522e25741b192125d761affef343009",
+    "integration_qualifications.json": "91f6a8849cd188ad552c72026e3afbb1fa531d48f3f17cb39d254e58fccd3ea8",
     "publisher_survey_20261005.json": "7e7431dc37bf8564d16df4f044498e1176f7e654cc0cd694b8bdb8a07944c9c1"
   },
   "scope": "Every publisher candidate in both inventories; all available editions and renditions remain in scope",
   "states": {
     "identity_review": 1,
     "published_scope": 72,
-    "unverified_lead": 53
+    "qualified_scope": 8,
+    "unverified_lead": 45
   },
   "publishers": [
     {
@@ -955,15 +956,30 @@
       "publisher_id": "dav",
       "publisher_name": "Disabled American Veterans",
       "task_id": "ss-2nn4",
-      "state": "unverified_lead",
-      "reader": null,
-      "qualified_editions": [],
+      "state": "qualified_scope",
+      "reader": "dav",
+      "qualified_editions": [
+        {
+          "publisher_id": "dav",
+          "scorecard_id": "dav:110-2-house-archived-native",
+          "state": "qualified",
+          "receipt": "qualifications/dav--110-2-house-archived-native.json",
+          "receipt_sha256": "cb6da1f2d112543fe0588a1ea672b282e228797ede99a256bb48ef0c1be56ee3"
+        },
+        {
+          "publisher_id": "dav",
+          "scorecard_id": "dav:109-2-both-archived-native",
+          "state": "qualified",
+          "receipt": "qualifications/dav--109-2-both-archived-native.json",
+          "receipt_sha256": "11e57706ecfc9ab7c02da16842f084b6197ea13a4e98310b4537e58bb8b27fa0"
+        }
+      ],
       "verified_api_endpoints": [],
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
       "survey_finding": null,
-      "next_action": "Follow the catalog discovery reference for Disabled American Veterans, find an original publisher edition or attributable archive, and establish federal member-scorecard scope before writing a parser."
+      "next_action": "Integrate remaining available editions and renditions"
     },
     {
       "publisher_id": "defenders_action",
@@ -3630,15 +3646,23 @@
       "publisher_id": "shriver",
       "publisher_name": "Sargent Shriver National Center on Poverty Law",
       "task_id": "ss-crhh",
-      "state": "unverified_lead",
-      "reader": null,
-      "qualified_editions": [],
+      "state": "qualified_scope",
+      "reader": "shriver_2013",
+      "qualified_editions": [
+        {
+          "publisher_id": "shriver",
+          "scorecard_id": "shriver:2013-original-pdf",
+          "state": "qualified",
+          "receipt": "qualifications/shriver--2013-original-pdf.json",
+          "receipt_sha256": "9f19ab963f77b1cbc7ff81c1feb84a37887c2e9113c5362906419db0bef8f302"
+        }
+      ],
       "verified_api_endpoints": [],
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
       "survey_finding": null,
-      "next_action": "Follow the catalog discovery reference for Sargent Shriver National Center on Poverty Law, find an original publisher edition or attributable archive, and establish federal member-scorecard scope before writing a parser."
+      "next_action": "Integrate remaining available editions and renditions"
     },
     {
       "publisher_id": "us_chamber",
@@ -3796,9 +3820,24 @@
       "publisher_id": "american_bakers",
       "publisher_name": "American Bakers Association",
       "task_id": "ss-s9o7",
-      "state": "unverified_lead",
-      "reader": null,
-      "qualified_editions": [],
+      "state": "qualified_scope",
+      "reader": "american_bakers",
+      "qualified_editions": [
+        {
+          "publisher_id": "american_bakers",
+          "scorecard_id": "american_bakers:2351-1541",
+          "state": "qualified",
+          "receipt": "qualifications/american_bakers--2351-1541.json",
+          "receipt_sha256": "57c6463c79b8c23bbfb0d619f791736c2098e405071e9d2bfc35fd5a7d78d943"
+        },
+        {
+          "publisher_id": "american_bakers",
+          "scorecard_id": "american_bakers:2351-1413",
+          "state": "qualified",
+          "receipt": "qualifications/american_bakers--2351-1413.json",
+          "receipt_sha256": "54798acf83f39baff7fc7b153211f45981d086f3fed3bf42a3da2e19a2a12d69"
+        }
+      ],
       "verified_api_endpoints": [],
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
@@ -3822,7 +3861,7 @@
         "inspection_limits": null,
         "next_step": "Integrate 117th then 116th through existing VoterVoice readers with narrow bootstrap extension, exact tenant/stance checks, retained-ID reconciliation and rights decision."
       },
-      "next_action": "Integrate 117th then 116th through existing VoterVoice readers with narrow bootstrap extension, exact tenant/stance checks, retained-ID reconciliation and rights decision."
+      "next_action": "Integrate remaining available editions and renditions"
     },
     {
       "publisher_id": "american_cause",
@@ -3885,15 +3924,23 @@
       "publisher_id": "farm_bureau",
       "publisher_name": "American Farm Bureau Federation",
       "task_id": "ss-rdez",
-      "state": "unverified_lead",
-      "reader": null,
-      "qualified_editions": [],
+      "state": "qualified_scope",
+      "reader": "farm_bureau",
+      "qualified_editions": [
+        {
+          "publisher_id": "farm_bureau",
+          "scorecard_id": "farm_bureau:115-senate-original-archived-key-vote-tables",
+          "state": "qualified",
+          "receipt": "qualifications/farm_bureau--115-senate-original-archived-key-vote-tables.json",
+          "receipt_sha256": "9ec07b93dc47e3a0d9dde07191b1823ac0894ab9f3eccba617f4d7c49af4ca90"
+        }
+      ],
       "verified_api_endpoints": [],
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
       "survey_finding": null,
-      "next_action": "Locate an original edition of 'How Your Congressman/Senator Voted on Major Issues in the Congress' attributed to American Farm Bureau Federation; the CRS locator Printed CRS-3; physical PDF page 11 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
+      "next_action": "Integrate remaining available editions and renditions"
     },
     {
       "publisher_id": "afge",
@@ -4619,9 +4666,24 @@
       "publisher_id": "congressional_quarterly",
       "publisher_name": "Congressional Quarterly, Inc.",
       "task_id": "ss-8zgu",
-      "state": "unverified_lead",
-      "reader": null,
-      "qualified_editions": [],
+      "state": "qualified_scope",
+      "reader": "congressional_quarterly",
+      "qualified_editions": [
+        {
+          "publisher_id": "congressional_quarterly",
+          "scorecard_id": "congressional_quarterly:2025-presidential-support-native-tables",
+          "state": "qualified",
+          "receipt": "qualifications/congressional_quarterly--2025-presidential-support-native-tables.json",
+          "receipt_sha256": "428be29a2c609a98fa77eb0116d86a62d9bc54b000c0074bc2f0ed6fd032b4c6"
+        },
+        {
+          "publisher_id": "congressional_quarterly",
+          "scorecard_id": "congressional_quarterly:2025-participation-native-tables",
+          "state": "qualified",
+          "receipt": "qualifications/congressional_quarterly--2025-participation-native-tables.json",
+          "receipt_sha256": "a6cf26a2a69bbdd5578580b326fb2a0882df853a5ac2f12a95326ee2227eeb0b"
+        }
+      ],
       "verified_api_endpoints": [],
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
@@ -4657,21 +4719,29 @@
         "inspection_limits": "No production reader or table rows created. Offline native HTML shape review only; no paid CQ service access, identifier enumeration, recomputation, PDF extraction or broad history crawl.",
         "next_step": "Build a narrowly scoped CQ 2025 presidential-support HTML reader first, using the captured House/Senate pair, source definitions, explicit footnotes and reviewed row counts. Independently qualify completeness and party formatting. Profile attendance separately because of malformed header styling, blank metrics and source spelling. Keep Datawrapper subset unsupported pending count discrepancy review."
       },
-      "next_action": "Build a narrowly scoped CQ 2025 presidential-support HTML reader first, using the captured House/Senate pair, source definitions, explicit footnotes and reviewed row counts. Independently qualify completeness and party formatting. Profile attendance separately because of malformed header styling, blank metrics and source spelling. Keep Datawrapper subset unsupported pending count discrepancy review."
+      "next_action": "Integrate remaining available editions and renditions"
     },
     {
       "publisher_id": "consumer_federation",
       "publisher_name": "Consumer Federation of America",
       "task_id": "ss-sra5",
-      "state": "unverified_lead",
-      "reader": null,
-      "qualified_editions": [],
+      "state": "qualified_scope",
+      "reader": "consumer_federation",
+      "qualified_editions": [
+        {
+          "publisher_id": "consumer_federation",
+          "scorecard_id": "consumer_federation:2000-november-defeated-senators-lifetime-ratings",
+          "state": "qualified",
+          "receipt": "qualifications/consumer_federation--2000-november-defeated-senators-lifetime-ratings.json",
+          "receipt_sha256": "0cb4595a2d3acc8c984375583e57acb9e4de8ea2c41f6c8e5983ce99ff1bb647"
+        }
+      ],
       "verified_api_endpoints": [],
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
       "survey_finding": null,
-      "next_action": "Locate an original edition of 'CFA Voting Record' attributed to Consumer Federation of America; the CRS locator Printed CRS-8; physical PDF page 16 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
+      "next_action": "Integrate remaining available editions and renditions"
     },
     {
       "publisher_id": "environmental_action",
@@ -4894,29 +4964,45 @@
       "publisher_id": "machinists",
       "publisher_name": "International Association of Machinists & Aerospace Workers",
       "task_id": "ss-t12h",
-      "state": "unverified_lead",
-      "reader": null,
-      "qualified_editions": [],
+      "state": "qualified_scope",
+      "reader": "machinists",
+      "qualified_editions": [
+        {
+          "publisher_id": "machinists",
+          "scorecard_id": "machinists:3709",
+          "state": "qualified",
+          "receipt": "qualifications/machinists--3709.json",
+          "receipt_sha256": "b2bdfcb35d3482ac032d0b59611e206aae2cc7fbd614f6dd99f73add2af31fc6"
+        }
+      ],
       "verified_api_endpoints": [],
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
       "survey_finding": null,
-      "next_action": "Locate an original edition of 'Report Card' attributed to International Association of Machinists & Aerospace Workers; the CRS locator Printed CRS-10; physical PDF page 18 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
+      "next_action": "Integrate remaining available editions and renditions"
     },
     {
       "publisher_id": "teamsters",
       "publisher_name": "International Brotherhood of Teamsters",
       "task_id": "ss-gj1b",
-      "state": "unverified_lead",
-      "reader": null,
-      "qualified_editions": [],
+      "state": "qualified_scope",
+      "reader": "teamsters",
+      "qualified_editions": [
+        {
+          "publisher_id": "teamsters",
+          "scorecard_id": "teamsters:115-2-house-archived-native",
+          "state": "qualified",
+          "receipt": "qualifications/teamsters--115-2-house-archived-native.json",
+          "receipt_sha256": "2724701dd7a5465f49501c88bd7ec79bbb21c4f2b9046d9972db642c0f2ae36c"
+        }
+      ],
       "verified_api_endpoints": [],
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
       "survey_finding": null,
-      "next_action": "Locate an original edition of 'House/Senate Voting Records' attributed to International Brotherhood of Teamsters; the CRS locator Printed CRS-11; physical PDF page 19 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
+      "next_action": "Integrate remaining available editions and renditions"
     },
     {
       "publisher_id": "interreligious_food",

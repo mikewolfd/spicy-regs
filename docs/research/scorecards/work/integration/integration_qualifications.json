@@ -1,7 +1,7 @@
 {
   "schema_version": "1",
-  "observed_at": "2026-10-05T14:10:27Z",
-  "input_plan_sha256": "1b79367a1a8a91b5095e962a8ddad2058cf8c01f17fe82e081eedbe9ede4065c",
+  "observed_at": "2026-10-05T15:21:59+00:00",
+  "input_plan_sha256": "aa0654c774780a9f74ddd68cfe004a658ed9722cddc135a95ab33bf43edb9a40",
   "readers": {
     "common_cause": "common_cause",
     "bread_world": "bread_world",
@@ -24,6 +24,14 @@
     "smart_transportation": "smart_transportation",
     "communication_workers": "communication_workers",
     "drum_major": "drum_major_2005",
+    "dav": "dav",
+    "farm_bureau": "farm_bureau",
+    "machinists": "machinists",
+    "shriver": "shriver_2013",
+    "teamsters": "teamsters",
+    "consumer_federation": "consumer_federation",
+    "congressional_quarterly": "congressional_quarterly",
+    "american_bakers": "american_bakers",
     "afp": "afp",
     "ijm": "ijm",
     "hrc": "hrc",
@@ -664,6 +672,83 @@
       "state": "published",
       "receipt": "publications/87a6e35800a9f983ade179b8d55e3bbdb56548fa52e955afc659d1eac8e18447/6fd4235019473b5ff006e8ec8d7632ea07d40b2a9801fdaff210723968a1009c.json",
       "receipt_sha256": "db71d700b8c5fb8943708547b52b84270657e130b609dce9201ecf418eda1b3a"
+    },
+    {
+      "publisher_id": "dav",
+      "scorecard_id": "dav:110-2-house-archived-native",
+      "state": "qualified",
+      "receipt": "qualifications/dav--110-2-house-archived-native.json",
+      "receipt_sha256": "cb6da1f2d112543fe0588a1ea672b282e228797ede99a256bb48ef0c1be56ee3"
+    },
+    {
+      "publisher_id": "dav",
+      "scorecard_id": "dav:109-2-both-archived-native",
+      "state": "qualified",
+      "receipt": "qualifications/dav--109-2-both-archived-native.json",
+      "receipt_sha256": "11e57706ecfc9ab7c02da16842f084b6197ea13a4e98310b4537e58bb8b27fa0"
+    },
+    {
+      "publisher_id": "farm_bureau",
+      "scorecard_id": "farm_bureau:115-senate-original-archived-key-vote-tables",
+      "state": "qualified",
+      "receipt": "qualifications/farm_bureau--115-senate-original-archived-key-vote-tables.json",
+      "receipt_sha256": "9ec07b93dc47e3a0d9dde07191b1823ac0894ab9f3eccba617f4d7c49af4ca90"
+    },
+    {
+      "publisher_id": "machinists",
+      "scorecard_id": "machinists:3709",
+      "state": "qualified",
+      "receipt": "qualifications/machinists--3709.json",
+      "receipt_sha256": "b2bdfcb35d3482ac032d0b59611e206aae2cc7fbd614f6dd99f73add2af31fc6"
+    },
+    {
+      "publisher_id": "shriver",
+      "scorecard_id": "shriver:2013-original-pdf",
+      "state": "qualified",
+      "receipt": "qualifications/shriver--2013-original-pdf.json",
+      "receipt_sha256": "9f19ab963f77b1cbc7ff81c1feb84a37887c2e9113c5362906419db0bef8f302"
+    },
+    {
+      "publisher_id": "teamsters",
+      "scorecard_id": "teamsters:115-2-house-archived-native",
+      "state": "qualified",
+      "receipt": "qualifications/teamsters--115-2-house-archived-native.json",
+      "receipt_sha256": "2724701dd7a5465f49501c88bd7ec79bbb21c4f2b9046d9972db642c0f2ae36c"
+    },
+    {
+      "publisher_id": "consumer_federation",
+      "scorecard_id": "consumer_federation:2000-november-defeated-senators-lifetime-ratings",
+      "state": "qualified",
+      "receipt": "qualifications/consumer_federation--2000-november-defeated-senators-lifetime-ratings.json",
+      "receipt_sha256": "0cb4595a2d3acc8c984375583e57acb9e4de8ea2c41f6c8e5983ce99ff1bb647"
+    },
+    {
+      "publisher_id": "congressional_quarterly",
+      "scorecard_id": "congressional_quarterly:2025-presidential-support-native-tables",
+      "state": "qualified",
+      "receipt": "qualifications/congressional_quarterly--2025-presidential-support-native-tables.json",
+      "receipt_sha256": "428be29a2c609a98fa77eb0116d86a62d9bc54b000c0074bc2f0ed6fd032b4c6"
+    },
+    {
+      "publisher_id": "congressional_quarterly",
+      "scorecard_id": "congressional_quarterly:2025-participation-native-tables",
+      "state": "qualified",
+      "receipt": "qualifications/congressional_quarterly--2025-participation-native-tables.json",
+      "receipt_sha256": "a6cf26a2a69bbdd5578580b326fb2a0882df853a5ac2f12a95326ee2227eeb0b"
+    },
+    {
+      "publisher_id": "american_bakers",
+      "scorecard_id": "american_bakers:2351-1541",
+      "state": "qualified",
+      "receipt": "qualifications/american_bakers--2351-1541.json",
+      "receipt_sha256": "57c6463c79b8c23bbfb0d619f791736c2098e405071e9d2bfc35fd5a7d78d943"
+    },
+    {
+      "publisher_id": "american_bakers",
+      "scorecard_id": "american_bakers:2351-1413",
+      "state": "qualified",
+      "receipt": "qualifications/american_bakers--2351-1413.json",
+      "receipt_sha256": "54798acf83f39baff7fc7b153211f45981d086f3fed3bf42a3da2e19a2a12d69"
     },
     {
       "publisher_id": "aauw",
