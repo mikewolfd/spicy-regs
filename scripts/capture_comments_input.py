@@ -16,6 +16,7 @@ import re
 import time
 
 import duckdb
+import _duckdb
 import pyarrow as pa
 import pyarrow.parquet as pq
 
@@ -54,12 +55,56 @@ def digest(path: Path) -> str:
         return hashlib.file_digest(source, 'sha256').hexdigest()
 
 
+def runtime_identity(con) -> dict:
+    """Pin installed engine and loaded source extensions without retaining SQL secrets."""
+    extensions = []
+    for name, version, path in con.execute("SELECT extension_name,extension_version,install_path "
+            "FROM duckdb_extensions() WHERE loaded AND extension_name IN ('iceberg','httpfs') "
+            "ORDER BY extension_name").fetchall():
+        extensions.append({'name': name, 'version': version, 'path': path, 'sha256': digest(Path(path))})
+    return {'duckdbVersion': duckdb.__version__, 'duckdbBinarySha256': digest(Path(_duckdb.__file__)),
+            'extensions': extensions}
+
+
+def actual_settings(con) -> dict:
+    return dict(con.execute("SELECT name,value FROM duckdb_settings() WHERE name IN "
+        "('threads','memory_limit','max_temp_directory_size','temp_directory','preserve_insertion_order')").fetchall())
+
+
+def write_original_batches(con, query: str, source: Path, schema: pa.Schema, *,
+                           observed: dict | None = None, progress: Callable = lambda value: None) -> dict:
+    """Bound client batches and writer row groups; upstream query memory remains separate."""
+    batch_rows = 1000
+    observed = {} if observed is None else observed
+    observed.update(batchRows=batch_rows, rows=0, batches=0, maxBatchRows=0, maxBatchBytes=0,
+                    memoryMeaning='Client batches/writer row groups only; upstream memory separate')
+    progress('logical-snapshot-reader-open')
+    with con.sql(query).to_arrow_reader(batch_size=batch_rows) as reader:
+        if not reader.schema.equals(schema, check_metadata=True):
+            raise ValueError('Logical source reader schema differs from original fields')
+        with pq.ParquetWriter(source, schema, compression='zstd') as writer:
+            progress('logical-snapshot-batch-read')
+            for batch in reader:
+                progress('logical-snapshot-batch-schema')
+                if batch.num_rows > batch_rows or not batch.schema.equals(schema, check_metadata=True):
+                    raise ValueError('Logical source batch rows/schema differ from the declared reader')
+                observed['maxBatchRows'] = max(observed['maxBatchRows'], batch.num_rows)
+                observed['maxBatchBytes'] = max(observed['maxBatchBytes'], batch.nbytes)
+                progress('logical-snapshot-batch-write')
+                writer.write_batch(batch, row_group_size=batch_rows)
+                observed['rows'] += batch.num_rows
+                observed['batches'] += 1
+                progress('logical-snapshot-batch-read')
+    return observed
+
+
 def capture(expected: dict, output: Path, *, namespace: str,
-            connect: Callable = iceberg._connect) -> dict:
+            connect: Callable = iceberg._connect, expected_runtime: dict | None = None) -> dict:
     """Fresh output retains failed attempts; fresh end connection checks identity."""
     if not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', namespace):
         raise ValueError('Explicit simple legacy namespace required')
     expected_fields = fields(expected)
+    schema = pa.schema([pa.field(field['name'], pa.string(), nullable=True) for field in expected_fields])
     selected = {key: expected[key] for key in ('tableUuid', 'snapshotId', 'schemaId')}
     if (not isinstance(selected['tableUuid'], str) or not selected['tableUuid']
             or type(selected['snapshotId']) is not int or selected['snapshotId'] < 0
@@ -77,6 +122,11 @@ def capture(expected: dict, output: Path, *, namespace: str,
         con = connect()
         try:
             configure(con, spill)
+            stage = 'source-runtime-pins'
+            report['startRuntime'] = runtime_identity(con)
+            report['actualSourceSettings'] = actual_settings(con)
+            if expected_runtime is not None and report['startRuntime'] != expected_runtime:
+                raise ValueError('Source engine or extension differs from its frozen runtime pins')
             stage = 'start-metadata'
             metadata = iceberg._table_metadata(con, RECORD_TYPES['comments'], namespace=namespace)
             report['startIdentity'] = identity(metadata)
@@ -87,13 +137,21 @@ def capture(expected: dict, output: Path, *, namespace: str,
             report['query'] = query
             stage = 'logical-snapshot-export'
             source = output / 'comments.parquet'
-            con.execute(f"COPY ({query}) TO ? (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 20000)",
-                        [str(source)])
+            report['writer'] = {}
+
+            def export_phase(value):
+                nonlocal stage
+                stage = value
+
+            write_original_batches(con, query, source, schema, observed=report['writer'], progress=export_phase)
         finally:
             con.close()
         stage = 'fresh-end-metadata'
         end = connect()
         try:
+            report['endRuntime'] = runtime_identity(end)
+            if report['endRuntime'] != report['startRuntime']:
+                raise ValueError('Source engine or extension changed during capture')
             metadata = iceberg._table_metadata(end, RECORD_TYPES['comments'], namespace=namespace)
             report['endIdentity'] = identity(metadata)
             if report['endIdentity'] != selected or fields({**expected, 'schemas': metadata['schemas']}) != expected_fields:
@@ -102,17 +160,17 @@ def capture(expected: dict, output: Path, *, namespace: str,
             end.close()
         stage = 'local-source-verification'
         footer = pq.ParquetFile(source)
-        schema = pa.schema([pa.field(field['name'], pa.string(), nullable=True) for field in expected_fields])
-        if footer.schema_arrow != schema:
+        if not footer.schema_arrow.equals(schema, check_metadata=True):
             raise ValueError('Exported original source schema differs')
         with duckdb.connect() as local:
             configure(local, spill)
+            report['actualLocalSettings'] = actual_settings(local)
             local.from_parquet(str(source)).create_view('captured_comments')
             population = local.execute('SELECT count(*), count(comment_id), count(DISTINCT comment_id) '
                                        'FROM captured_comments').fetchone()
             if population is None:
                 raise ValueError('Logical population query returned no row')
-            if population[0] != footer.metadata.num_rows:
+            if population[0] != footer.metadata.num_rows or population[0] != report['writer']['rows']:
                 raise ValueError('Logical and footer populations differ')
             local.execute('COPY (SELECT agency_code, count(*) AS rows FROM captured_comments '
                           'GROUP BY agency_code ORDER BY agency_code NULLS FIRST) TO ? '
