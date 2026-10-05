@@ -155,6 +155,22 @@ class SelectedPriors:
         shutil.copyfile(source, target)
         return True
 
+    def input_provenance(self, dataset):
+        """Bind a restored processing input to the selected native subjects and receipts."""
+        source = self.get(dataset)
+        if source is None:
+            return None
+        subjects, receipts, generation = self.selections[dataset]
+
+        def pin(path):
+            with path.open("rb") as stream:
+                digest = "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest()
+            return {"sha256": digest, "byteSize": path.stat().st_size}
+
+        return {"dataset": dataset, "generationId": generation,
+                "subjects": [pin(path) for path in subjects], "receipts": pin(receipts),
+                "processing": pin(source)}
+
     def download_members(self, key, target):
         source = self.get(key.removesuffix(".parquet"))
         if source is None:
@@ -273,6 +289,8 @@ class SubjectReceiptRollup(NativeReceiptLifecycle):
             kwargs["download_prior"] = prior.download
         if "download_members" in parameters:
             kwargs["download_members"] = prior.download_members
+        if "selected_input" in parameters:
+            kwargs["selected_input"] = prior.input_provenance
         try:
             built = builder(work, **kwargs)
         except Exception as error:

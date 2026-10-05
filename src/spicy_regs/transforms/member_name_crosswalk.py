@@ -294,6 +294,7 @@ def fill_house_name_bioguide_ids(
     download_prior: Callable[[str, Path], bool] = r2.download,
     *,
     evidence: CaptureEvidence | None = None,
+    selected_input: Callable[[str], dict | None] | None = None,
 ) -> int:
     """Set ``bioguide_id`` on every House ``name:`` row of a merged ``member_votes`` from the published crosswalk.
 
@@ -419,6 +420,10 @@ def fill_house_name_bioguide_ids(
         ).fetchall()
         changed = sum(moved for *_, moved in outcomes)
         digests = {name: _digest(path) for name, path in sources.items() if path is not None}
+        bindings = {} if selected_input is None else {name: selected_input(name) for name in SOURCES}
+        for name, binding in bindings.items():
+            if binding is None or binding["processing"]["sha256"] != digests[name]:
+                raise ValueError(f"Crosswalk processing input differs from selected native input: {name}")
         if changed:
             con.execute(
                 f"""
@@ -464,6 +469,7 @@ def fill_house_name_bioguide_ids(
         evidence.event(
             "member-name-crosswalk", rule_version=RULE_VERSION, input_available=True,
             inputs={name: {"sha256": digest, "generation": evidence.published_input(f"{name}.parquet", sha256=digest)}
+                    | ({"selection": bindings[name]} if name in bindings else {})
                     for name, digest in digests.items()},
             nicknames=nicknames, keys=len(resolutions), rows=total, rows_resolved=filled, rows_changed=changed,
             resolved=resolved, unchanged=unchanged, unresolved=unresolved,
