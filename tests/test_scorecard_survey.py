@@ -68,6 +68,30 @@ def test_research_cannot_promote_a_production_adapter(data):
         survey.validate(data)
 
 
+@pytest.mark.parametrize("change", ["missing_notice", "failed_response", "discovery_only"])
+def test_retirement_requires_a_successful_original_closure_notice(data, change):
+    source = next(s for s in data["scorecard_source_catalog.json"]["sources"] if s["publisher_id"] == "liberty_lobby")
+    source["discovery_status"] = "retired"
+    capture = data["capture_receipts.json"]["captures"][0]
+    capture["capture_complete"] = True
+    capture["http_status"] = 200
+    capture["review_status"] = "original_publisher_retirement_notice"
+    source["verification_capture_ids"] = [capture["capture_id"]]
+    source["latest_discovery_outcome"] = {
+        "outcome": "retired_confirmed",
+        "capture_ids": [capture["capture_id"]],
+        "notes": "Publisher closure notice; last rating edition unknown",
+    }
+    if change == "missing_notice":
+        source.pop("latest_discovery_outcome")
+    elif change == "failed_response":
+        capture["http_status"] = 404
+    else:
+        capture["review_status"] = "discovery_only"
+    with pytest.raises(ValueError, match="Retirement needs an original publisher closure notice"):
+        survey.validate(data)
+
+
 def test_row_example_cannot_invent_a_numeric_literal(data):
     case = next(c for c in data["schema_examples.json"]["cases"] if c["profile_id"] == "humane_world_action:2025")
     case["rows"]["scorecard_member_ratings"][0]["value_text"] = "100"

@@ -835,10 +835,10 @@
         "newest_recovered_period": null,
         "related_recovered_period": "2024"
       },
-      "next_missing_item": "An attributable national House/Senate Votes original or central approval of a separate regional publisher identity.",
+      "next_missing_item": "Qualify the complete 2024 regional federal issue-mark grid through the existing metric-free model under distinct North Central States Regional Council of Carpenters attribution; keep the assigned national original unrecovered.",
       "authority": "Explicit regional imprint, not national UBC attribution",
       "canonical_entry_proposal": null,
-      "source_family_readiness": "Named source scopes require independent qualification before package adoption; task completion alone does not authorize row publication"
+      "source_family_readiness": "Current tables support this regional grid without a schema change. Distinct publisher attribution, original-field comparison and canonical retained-batch qualification remain; private parsing is not admission."
     },
     {
       "publisher_id": "ccrkba",
@@ -1426,10 +1426,10 @@
           "unknown": "2000 onward rating coverage remains unestablished for this assigned identity; catalog years do not establish continuous annual coverage."
         }
       },
-      "next_missing_item": "Original issue.pl?dir=spotlight bytes with attributable positions or a complete Liberty Ledger edition.",
-      "authority": null,
+      "next_missing_item": "Retain the dated publisher closure notice; recover only a named historical Liberty Ledger original or attributable issue.pl?dir=spotlight original when useful. Last rating edition remains unknown.",
+      "authority": "Original Spotlight publisher closure notice updated 07/27/01; archived source SHA-256 0c5ffda9105de0d8e855052358d1efabab67e43711decb87ca2ff88e8c363b9c",
       "canonical_entry_proposal": null,
-      "source_family_readiness": "Named source scopes require independent qualification before package adoption; task completion alone does not authorize row publication"
+      "source_family_readiness": "Publisher retirement is confirmed by its original notice updated 07/27/01; no scorecard edition is qualified and no last-rating date is inferred."
     },
     {
       "publisher_id": "life_underwriters",
@@ -1483,10 +1483,10 @@
         "newest_offered_period": "2020 Elections / GEORGIA RUNOFF",
         "newest_recovered_period": "2020 Elections / GEORGIA RUNOFF"
       },
-      "next_missing_item": "Central candidate schema and explicit sister-publisher identity approval; an attributable later original if one exists.",
+      "next_missing_item": "Keep all nine March for Life Action Senate candidate comparisons catalog/private-only. A deliberately scoped candidate-position dataset requires separate publisher and candidate semantics; recover an attributable member-performance original for the assigned historical series.",
       "authority": "March for Life Action - c (4); source homepage expressly names March for Life Education and Defense Fund as sister organization.",
       "canonical_entry_proposal": null,
-      "source_family_readiness": "Named source scopes require independent qualification before package adoption; task completion alone does not authorize row publication"
+      "source_family_readiness": "Candidate-position shape with incumbent/challenger columns and some state-policy content; outside congressional performance tables. Preserve original 2020/runoff labels and annotations without invented grades or federal rolls."
     },
     {
       "publisher_id": "national_alliance_seniors",
@@ -1705,10 +1705,10 @@
           "2016"
         ]
       },
-      "next_missing_item": "Central candidate/endorsement schema approval; a historical Voting Chart original for rating support.",
+      "next_missing_item": "Keep all seven endorsement years catalog/private-only, including the 2026 mixed federal/state candidate lists. Recover a historical Voting Chart original for member-rating support; candidate/endorsement data needs separately defined office and authority semantics.",
       "authority": "National Women’s Political Caucus current source; national PAC/board process and local-caucus authority recorded separately.",
       "canonical_entry_proposal": null,
-      "source_family_readiness": "Named source scopes require independent qualification before package adoption; task completion alone does not authorize row publication"
+      "source_family_readiness": "Election endorsements are distinct from congressional member performance. Federal office labels establish neither incumbency nor scorecard membership; state/local occurrences remain outside federal performance scope."
     },
     {
       "publisher_id": "now",
@@ -2115,10 +2115,10 @@
           "older_catalog_only": "Cornell search lead: Washington Report 1972–1976; original pages not recovered."
         }
       },
-      "next_missing_item": "A complete attributable UTU voting grid and methodology; the linked Congress 2011 acquisition remains unresolved after archived 404.",
+      "next_missing_item": "Recover the full attributable UTU 2011 voting grid if a named original becomes available. Separately consider qualifying the October 2008 publisher-reported Obama 100 percent claim in its exact context; keep 2012 endorsements and SMART successor authorship distinct.",
       "authority": null,
       "canonical_entry_proposal": null,
-      "source_family_readiness": "Named source scopes require independent qualification before package adoption; task completion alone does not authorize row publication"
+      "source_family_readiness": "Complete voting grid remains unrecovered, not a parsing/model failure. The isolated 2008 rating claim is retained as a positive, narrowly scoped lead; its evaluation period, denominator and all-member coverage remain unstated."
     },
     {
       "publisher_id": "us_student_association",
@@ -2333,11 +2333,16 @@
     "predry-grid-repair-independent-review-v1": {
       "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/consumer-followup-release-v3/../predry-grid-repair-independent-review-v1/frozen-review.json",
       "sha256": "59f8f0fc297e72fe07e23be2452389d6ffefc3ff81b872f5f9a7bdceafb7224d"
+    },
+    "held-grid-readiness-review-v1": {
+      "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/held-grid-readiness-review-v1/review.md",
+      "sha256": "08b0816a4ad6fd64b5d7ca732fee59859a8735273bf5a96569c7f2caddb124cd"
     }
   },
   "review_decisions": [
     "Reuse existing PDF completeness and private-retention helpers; corrected callback failures refuse with credential-safe errors. The reviewed repair preserves all private extracted outcomes and does not admit canonical rows.",
     "Regional Carpenters marks fit the existing metric-free model after actual regional publisher attribution and scope qualification. Candidate comparisons and mixed federal/state endorsements require a separate deliberately scoped model.",
-    "Keep catalog probes, source-time identity relationships and unsupported private-grid utilities outside the supported-adapter registry. BIPAC remains unregistered."
+    "Keep catalog probes, source-time identity relationships and unsupported private-grid utilities outside the supported-adapter registry. BIPAC remains unregistered.",
+    "Current disposition reconciliation preserves the original task-result labels. Liberty Lobby retirement has a dated original notice; regional Carpenters needs attribution and qualification, not a schema change; MFL/NWPC remain candidate/endorsement scope; UTU full-grid absence and its isolated 2008 rating claim remain distinct. No new qualification, publication, registry enablement or API claim."
   ]
 }

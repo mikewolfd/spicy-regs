@@ -82,6 +82,20 @@ def validate(data: dict) -> None:
         require(bool(source["discovered_via"]), f"No discovery evidence: {key}")
         ids = source["verification_capture_ids"]
         require(set(ids) <= captures.keys(), f"Unknown verification capture: {key}")
+        if status == "retired":
+            outcome = source.get("latest_discovery_outcome", {})
+            require(
+                outcome.get("outcome") == "retired_confirmed"
+                and bool(outcome.get("capture_ids"))
+                and set(outcome["capture_ids"]) <= set(ids)
+                and any(
+                    captures[k]["capture_complete"]
+                    and captures[k]["http_status"] == 200
+                    and captures[k].get("review_status") == "original_publisher_retirement_notice"
+                    for k in outcome["capture_ids"]
+                ),
+                f"Retirement needs an original publisher closure notice: {key}",
+            )
         if status in {"verified", "profiled"}:
             require(bool(source["scorecard_index_url"] and source["last_verified_at"]), f"Missing verification: {key}")
             require(

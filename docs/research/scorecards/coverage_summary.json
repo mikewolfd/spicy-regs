@@ -1,9 +1,9 @@
 {
-  "surveyed_at": "2026-10-05T04:04:54.413681+00:00",
+  "surveyed_at": "2026-10-05",
   "input_sha256": {
-    "scorecard_source_catalog.json": "58d18b88b3c5bd2f7150f7360481b65e7ef3f0b2b0b639a3d4703c755a225170",
+    "scorecard_source_catalog.json": "9d29743a1a5d5985acbcc6746f7f103aee03d8652c15cc6010f1cfd509e93227",
     "shape_profiles.json": "6339c8189e69b1a9dcb0021c9c70e511e34338e14b66cc85b45102dca25c3ea9",
-    "capture_receipts.json": "4fecf6b1a41a1d443043ce2043e39be285c0f9f4e25c4c0e75e10c3ddb9805a6",
+    "capture_receipts.json": "3698e62f2d8460764a44b3657208224e335e788f7522ce0af68fa049c8096916",
     "schema_breakers.json": "1e0a8cd8e55cc25ae8a2c1465f5fa857b1d416713b24e0f8561021ee58298b06",
     "proposed_schema.json": "ac7f946fb4026a725acd89760db27bbf110e82f08152e03ebfb9199df15546d2",
     "schema_examples.json": "08db294a3d1033f580eac8029688c212809510c4a62a1d5f5fced1f7e00d9932",
@@ -18,9 +18,9 @@
   "distinct_publisher_candidates": 126,
   "status_counts": {
     "blocked": 2,
-    "discovered": 79,
+    "discovered": 78,
     "profiled": 34,
-    "retired": 0,
+    "retired": 1,
     "supported": 0,
     "verified": 11
   },
@@ -46,8 +46,8 @@
     "blocked_undisclosed_formula": 2,
     "not_qualified": 36
   },
-  "captured_responses": 200,
-  "capture_attempts": 204,
+  "captured_responses": 201,
+  "capture_attempts": 205,
   "complete_scorecard_snapshots": 0,
   "research_sample_scopes": 7,
   "schema_frozen": true,

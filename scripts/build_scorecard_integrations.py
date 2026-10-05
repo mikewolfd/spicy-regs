@@ -263,6 +263,8 @@ def generate(directory: Path):
                 if editions
                 else "reader_implemented"
                 if publisher in readers
+                else "retired_confirmed"
+                if implementations.get(publisher, {}).get("task_result") == "verified-retired"
                 else source["support_status"]
             )
         )

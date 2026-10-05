@@ -159,6 +159,51 @@ def test_task_metadata_preserves_qualified_reader_priority(directory):
     assert row["implementation_finding"]["task_result"] == "original-unrecovered"
 
 
+def test_explicit_retirement_updates_disposition_without_qualifying_a_source(directory):
+    implementation_document(directory, "verified-retired")
+    report, _ = integrations.generate(directory)
+    row = report["publishers"][0]
+    assert row["state"] == "retired_confirmed"
+    assert row["reader"] is None and row["qualified_editions"] == []
+    assert row["discovery_support_status"] == "unverified"
+
+
+@pytest.mark.parametrize(
+    "result", ["original-unrecovered", "access-required", "source-recovered-but-unsupported-shape"]
+)
+def test_unavailable_or_held_source_does_not_establish_retirement(directory, result):
+    implementation_document(directory, result)
+    report, _ = integrations.generate(directory)
+    row = report["publishers"][0]
+    assert row["state"] == "unverified"
+    assert row["reader"] is None and row["qualified_editions"] == []
+
+
+def test_retirement_metadata_preserves_existing_reader_priority(directory):
+    implementation_document(directory, "verified-retired")
+    path = directory / "integration_qualifications.json"
+    data = json.loads(path.read_bytes())
+    data["readers"]["example"] = "example_reader"
+    path.write_text(json.dumps(data))
+    report, _ = integrations.generate(directory)
+    assert report["publishers"][0]["state"] == "reader_implemented"
+
+
+@pytest.mark.parametrize("state", ["qualified", "published"])
+def test_retirement_metadata_preserves_existing_edition_priority(directory, monkeypatch, state):
+    implementation_document(directory, "verified-retired")
+    path = directory / "integration_qualifications.json"
+    data = json.loads(path.read_bytes())
+    record = dict(publisher_id="example", scorecard_id="example:2025", state=state, receipt="qualified.json")
+    data["editions"] = [record]
+    path.write_text(json.dumps(data))
+    monkeypatch.setattr(integrations, "read_receipt", lambda *_: {})
+    report, _ = integrations.generate(directory)
+    row = report["publishers"][0]
+    assert row["state"] == f"{state}_scope"
+    assert row["qualified_editions"] == [record]
+
+
 @pytest.mark.parametrize("change", ["duplicate", "unknown", "published", "unknown_status", "wrong_format"])
 def test_invalid_implementation_metadata_is_refused(directory, change):
     path = implementation_document(directory)
