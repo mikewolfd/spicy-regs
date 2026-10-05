@@ -64,9 +64,13 @@ def prepare_snapshot(*, pointer: Path, manifest: Path, sources: Path, destinatio
     retained.mkdir()
     shutil.copyfile(pointer, retained / 'latest.json')
     shutil.copyfile(manifest, retained / 'manifest.json')
+    if digest(retained / 'latest.json') != expected_pointer_sha256 or digest(retained / 'manifest.json') != expected_manifest_sha256:
+        raise ValueError('Retained pointer or manifest changed during capture')
     for name in pipeline.published_outputs:
         shutil.copyfile(sources / name, retained / name)
-        shutil.copyfile(sources / name, destination / name)
+        if digest(retained / name) != old['artifacts'][name]['sha256']:
+            raise ValueError(f'{name}: artifact changed during capture')
+        shutil.copyfile(retained / name, destination / name)
     context = RunContext.resolve(run_id=generation_id, asserted_at=asserted_at, prefix='rulemaking-migration')
     pipeline._classify_outputs(destination, context)
     restored = destination / 'restored'
