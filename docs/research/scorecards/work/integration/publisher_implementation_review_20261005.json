@@ -1,0 +1,21 @@
+{
+  "format_version": "scorecard-task-metadata-integration-review/1",
+  "status": "independently-approved",
+  "consumer_commit": "74346471cc002fc2469c00cd353691fb0a6fb7b7",
+  "frozen_review": {
+    "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/predry-queue-independent-review-v1/frozen-handoff-v1.json",
+    "sha256": "532e7aaff81294df14fb0206fbbbe5525bdbc89779c79fd305dbffad7d267a06"
+  },
+  "scope": "Nine completed task outcomes in publisher work queue; no source qualification, package adoption, publication or refresh change",
+  "validation": {
+    "advertised_file_entries": 2027,
+    "exact_assigned_publishers": 44,
+    "committed_task_worktrees": 9,
+    "focused_integration_and_qualification_tests": 27,
+    "independent_assertions": 6375,
+    "generated_artifact_checks": "passed",
+    "qualified_and_published_priority": "preserved",
+    "legacy_missing_input_behavior": "preserved"
+  },
+  "independent_reviewer_boundary": "Raw task reports remain private; source reader and data-family adoption need separate review and checks."
+}

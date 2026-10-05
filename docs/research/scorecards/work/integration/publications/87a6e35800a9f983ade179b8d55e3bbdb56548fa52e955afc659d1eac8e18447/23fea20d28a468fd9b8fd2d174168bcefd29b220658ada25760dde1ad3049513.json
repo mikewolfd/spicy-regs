@@ -1,0 +1,31 @@
+{
+  "format_version": "scorecard-integration-qualified-scope/1",
+  "qualified": true,
+  "publisher_id": "animal_welfare_institute",
+  "scorecard_id": "animal_welfare_institute:116-House-aggregate",
+  "source_url": "https://www.congressweb.com/AWI/legislators/membercompassionindex?congress_chamber=116-House&framed_parent_url=https%3A%2F%2Fawionline.org%2Ftake-action%2F&framed_parent_is_microsite=false&frame_is_responsive=true&frame_is_websticker=false&frame_hide_menu=false&frame_container_id=iframe&full_height_websticker=false",
+  "parser_version": "awi-original-compassion-aggregate/1",
+  "reader_sha256": "3e619fcbd51bf2f742ee231a2a6dbdd06ba3b4f88b86ce81a64282f3257e9cd2",
+  "capture_manifest_sha256": "cfc9f305f2397643e11acc07a5d560a985864a53f7ef4bf686127489d98fc038",
+  "native_reference_sha256": "c1cbc4457a966613835468bb5d3847d444b319cb2c58f0fdf56958c9778b37b4",
+  "native_reference_kind": "source_table_family",
+  "source_qualification_sha256": "13f53f5b786bece9450777f258968d8ac5dbb9309ee454ba2057ab57f90a89e2",
+  "completeness_rule": "Complete source-defined aggregate table reaches its original closing table/document and terminal footer; every native member/value agrees across rating/name orderings and reread; native edition catalog reread agrees",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 0,
+    "scorecard_metrics": 1,
+    "scorecard_items": 0,
+    "scorecard_metric_items": 0,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 248,
+    "scorecard_member_ratings": 248,
+    "scorecard_member_item_results": 0
+  },
+  "capture_count": 5,
+  "evidence_policy": "hash_only",
+  "qualification_boundary": "Named source rendition; remaining editions and renditions stay in scope",
+  "published": false
+}

@@ -1,0 +1,31 @@
+{
+  "format_version": "scorecard-integration-qualified-scope/1",
+  "qualified": true,
+  "publisher_id": "cpac",
+  "scorecard_id": "cpac:2000",
+  "source_url": "http://ratings.conservative.org",
+  "parser_version": "cpac-legacy-federal-graphql/1",
+  "reader_sha256": "da22a3ad40a32aa3219fcca2de8fffb62676a67db365bb77eb8bb8fa4ee5be6a",
+  "capture_manifest_sha256": "25833ae66d83bbcc48501213de35327242f7439c490caf41724f8a0ac1f24ed4",
+  "native_reference_sha256": "d587f39242cc366bd33ecbd12909b50d0783f43223126adb177afa4793ddf318",
+  "native_reference_kind": "source_table_family",
+  "source_qualification_sha256": "821fe563d751a9b2a56e8b9355a570c9554d5d5e859f246b16dae1655a14c1db",
+  "completeness_rule": "Publisher federal year selected; source annual/lifetime/member/item/vote counts reconcile with complete EOF JSON; unique member/item/result identities reconcile; reported weighted rating counts remain separate from record counts; all selected values and counts are unchanged on reread",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 0,
+    "scorecard_metrics": 7,
+    "scorecard_items": 50,
+    "scorecard_metric_items": 50,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 1659,
+    "scorecard_member_ratings": 7117,
+    "scorecard_member_item_results": 13375
+  },
+  "capture_count": 8,
+  "evidence_policy": "hash_only",
+  "qualification_boundary": "Named source rendition; remaining editions and renditions stay in scope",
+  "published": false
+}

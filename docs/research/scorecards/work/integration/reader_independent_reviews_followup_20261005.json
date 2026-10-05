@@ -1,0 +1,44 @@
+{
+  "format_version": "scorecard-reader-independent-review-summary/1",
+  "status": "approved-named-source-scopes-and-installed-package",
+  "reviewed_consumer_commit": "1982178bf4d4d4157789d928965dcb49dd30907b",
+  "source_commit": "9756d7180f8b77e73a6de261e99c0e3f3ee98207",
+  "source_archive_and_plan_review": {
+    "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/consumer-followup-release-v3/../predry-central-source-review-v1/frozen-review-v1.json",
+    "sha256": "1a4b7436687d735598e56e69bcf23b83fe1b8318a6a4a5cc2ee6bb26ae7e05d0"
+  },
+  "installed_consumer_review": {
+    "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/consumer-followup-release-v3/../followup111-consumer-independent-review-v1/frozen-review-v2.json",
+    "sha256": "379d864ec2a076deaf6bfdd85eb53a287b6ae0e6f2b078ab6bbf36a61e9f9568"
+  },
+  "measured": {
+    "wheel_RECORD_members": 483,
+    "installed_archive_members_exact": 482,
+    "installed_RECORD_hashes_verified": 489,
+    "overlay_imports_exact": 122,
+    "prior_plan_entries_exact": 95,
+    "installed_named_replay_scopes": 111,
+    "selected_manifest_records_hashed": 1880,
+    "new_publisher_readers": 3,
+    "new_qualified_scopes": {
+      "fcnl": 2,
+      "alaska_wilderness_action": 1,
+      "ipaa": 13
+    },
+    "all_prior_ledger_records_exact": 402,
+    "published_editions_unchanged": 391,
+    "published_publishers_unchanged": 72,
+    "independent_API_default_original_captures": 2040,
+    "independent_API_default_raw_locator_checks": 12173,
+    "reviewer_focused_tests_passed": 49,
+    "parent_complete_tests_passed": 6631,
+    "source_network_requests": 0
+  },
+  "publication_boundary": "All prior published receipt pins unchanged; no new source/analysis/serving publication.",
+  "refresh_boundary": "New publishers disabled/hash_only; only existing qualified LCV/AFSCME refresh remains selectable.",
+  "canonical_boundary": "No BIPAC, private-grid or dated catalog adapter; IPAA browser-computed ratings remain unqualified.",
+  "closure_recipe": {
+    "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/consumer-followup-release-v3/../record_followup111_review_closure_v1.py",
+    "sha256": "142704ddca72985138691eec77ae3958dc9f514567edb9bbd0fec0014c74d0d9"
+  }
+}

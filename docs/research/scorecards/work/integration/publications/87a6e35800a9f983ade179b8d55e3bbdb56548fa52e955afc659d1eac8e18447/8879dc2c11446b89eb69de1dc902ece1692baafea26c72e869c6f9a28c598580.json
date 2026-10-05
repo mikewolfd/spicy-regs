@@ -1,0 +1,32 @@
+{
+  "format_version": "scorecard-integration-qualified-scope/1",
+  "qualified": true,
+  "publisher_id": "naacp",
+  "scorecard_id": "naacp:115-final-ratings-items",
+  "source_url": "https://naacp.org/sites/default/files/documents/115th-Final-Report-Card.pdf",
+  "parser_version": "naacp-115-final-ratings-items-qualified-semantic/1",
+  "reader_sha256": "93bfbbf8a86350d39e419a19d6e67cce2b5847f4dbe035415a9c900e90f31b94",
+  "capture_manifest_sha256": "b5382479f8326c765f5121df169cc161388ab9329a585a9164b88368b0dd16ed",
+  "native_reference_sha256": "b86a39ad486c7c5c9a4846d3699ea6a58169dfef4778109763b9acb76a97bcd7",
+  "native_reference_kind": "source_table_family",
+  "source_qualification_sha256": "e685d9f2f0511ee85eeb4bfbce8cad4c57251b4944331c6ca8c1ce1d029f2f94",
+  "completeness_rule": "Complete named ratings/items rendition: all source member pages, printed percent/grade fields, source tenure notes, VP row and dated narrative items. The member action grid is pending qualification and has no published rows; this snapshot does not claim a complete full scorecard. Independent OCR and original images reconcile ratings and item metadata; all candidates, corrections and refusals stay retained. No invented grades, scores, missing districts, party text, sessions or official member actions.",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 65,
+    "scorecard_metrics": 4,
+    "scorecard_items": 64,
+    "scorecard_metric_items": 64,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 556,
+    "scorecard_member_ratings": 1108,
+    "scorecard_member_item_results": 0
+  },
+  "capture_count": 1,
+  "evidence_policy": "hash_only",
+  "qualification_boundary": "Named source rendition; remaining editions and renditions stay in scope",
+  "published": false,
+  "qualified_reader_input_sha256": "7b94e14f470e695e4866efcf95641692c05f89586b3a4b9d4253d73771c87e4b"
+}

@@ -1,0 +1,24 @@
+{
+  "format_version": "scorecard-integration-published-observation/2",
+  "publisher_id": "environment_america",
+  "scorecard_id": "environment_america:2009-original-report-pdf",
+  "parser_version": "environment-america-2009-qualified-original-pdf/1",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 54,
+    "scorecard_metrics": 2,
+    "scorecard_items": 22,
+    "scorecard_metric_items": 22,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 535,
+    "scorecard_member_ratings": 535,
+    "scorecard_member_item_results": 7225
+  },
+  "source_qualification": "publications/87a6e35800a9f983ade179b8d55e3bbdb56548fa52e955afc659d1eac8e18447/fdc77fd82ea614f3c398f669895cd1cbcd0b235bc1adc1c9149e1cf94d005f2c.json",
+  "source_qualification_sha256": "fdc77fd82ea614f3c398f669895cd1cbcd0b235bc1adc1c9149e1cf94d005f2c",
+  "public_readback": "publications/87a6e35800a9f983ade179b8d55e3bbdb56548fa52e955afc659d1eac8e18447/readback.json",
+  "public_readback_sha256": "c7c3927a710c46c75711bc197026de9a2e19fc2451a299646411547d9fdf1af1",
+  "observed_source_generation": "sha256:87a6e35800a9f983ade179b8d55e3bbdb56548fa52e955afc659d1eac8e18447"
+}

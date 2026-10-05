@@ -1,0 +1,31 @@
+{
+  "format_version": "scorecard-integration-qualified-scope/1",
+  "qualified": true,
+  "publisher_id": "nra_pvf",
+  "scorecard_id": "nra_pvf:2026-11-03-general-indiana-federal-incumbents",
+  "source_url": "https://www.nrapvf.org/grades/indiana",
+  "parser_version": "nra-pvf-public-election-federal-incumbents/2",
+  "reader_sha256": "8368eb8586428877d6a71cb44bcb9256973922d2d1834f12f026d1148edd9f54",
+  "capture_manifest_sha256": "9a8193a3842a01d928715678e5a9b707edca638d8be7f746a6caa19ba2e29a57",
+  "native_reference_sha256": "e28aa8311d23eaf6a5f43f0b9d82aeed8d041a8ca8f52816d857be654c8f4968",
+  "native_reference_kind": "source_table_family",
+  "source_qualification_sha256": "1c9ad9d17f99671f6a0d5014fc08b1239693f3ecb670ad6f3c9034d9e94d8e7a",
+  "completeness_rule": "Complete advertised state/election HTML through EOF; every tab, office and candidate context accounted for; exact federal-office/Incumbent filter; source facts and navigation agree on reread. This is the publisher-listed election incumbent cohort, not a complete congressional roster.",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 1,
+    "scorecard_metrics": 1,
+    "scorecard_items": 0,
+    "scorecard_metric_items": 0,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 9,
+    "scorecard_member_ratings": 9,
+    "scorecard_member_item_results": 0
+  },
+  "capture_count": 4,
+  "evidence_policy": "hash_only",
+  "qualification_boundary": "Named source rendition; remaining editions and renditions stay in scope",
+  "published": false
+}

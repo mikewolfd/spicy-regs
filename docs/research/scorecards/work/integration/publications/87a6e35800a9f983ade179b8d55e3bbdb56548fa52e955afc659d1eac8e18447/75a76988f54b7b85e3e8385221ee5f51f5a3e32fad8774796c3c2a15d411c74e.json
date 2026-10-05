@@ -1,0 +1,31 @@
+{
+  "format_version": "scorecard-integration-qualified-scope/1",
+  "qualified": true,
+  "publisher_id": "ntu",
+  "scorecard_id": "ntu:2019-html-ratings-items",
+  "source_url": "https://www.ntu.org/ratecongress/page/ntu-rates-congress-1st-session-of-the-116th-congress",
+  "parser_version": "ntu-historical-native-html/1",
+  "reader_sha256": "4c3ada3b3e3fa1011896edb93f477a49c8545f88d8e081d8ca6cf4068aaa2c5b",
+  "capture_manifest_sha256": "8a828db2aba1faf69098e3744cf06a4d3b630d898ccd1b8ba078d9c281b356cd",
+  "native_reference_sha256": "2a6efb440936b5c89d0111add4788d1e122d96dc4ae99c5b625e96734f9fcc36",
+  "native_reference_kind": "source_table_family",
+  "source_qualification_sha256": "e613da0265c45f11c5b4d3432d0160bd756956f60296c5f81a7c6c27cb446339",
+  "completeness_rule": "Complete named original HTML rendition: every reviewed state group and source member occurrence, reported score/grade and finite native weighted vote-list row is parsed; complete rereads agree. Introductory vote totals are separate literal observations: differences from the native list remain unresolved, and no complete full-edition item methodology or member-action grid is claimed.",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 109,
+    "scorecard_metrics": 4,
+    "scorecard_items": 196,
+    "scorecard_metric_items": 196,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 536,
+    "scorecard_member_ratings": 1072,
+    "scorecard_member_item_results": 0
+  },
+  "capture_count": 6,
+  "evidence_policy": "hash_only",
+  "qualification_boundary": "Named source rendition; remaining editions and renditions stay in scope",
+  "published": false
+}

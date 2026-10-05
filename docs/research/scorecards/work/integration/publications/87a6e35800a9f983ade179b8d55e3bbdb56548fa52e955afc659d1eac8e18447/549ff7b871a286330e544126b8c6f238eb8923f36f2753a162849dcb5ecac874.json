@@ -1,0 +1,31 @@
+{
+  "format_version": "scorecard-integration-qualified-scope/1",
+  "qualified": true,
+  "publisher_id": "nra_pvf",
+  "scorecard_id": "nra_pvf:2026-11-03-general-alaska-federal-incumbents",
+  "source_url": "https://www.nrapvf.org/grades/alaska",
+  "parser_version": "nra-pvf-public-election-federal-incumbents/2",
+  "reader_sha256": "8368eb8586428877d6a71cb44bcb9256973922d2d1834f12f026d1148edd9f54",
+  "capture_manifest_sha256": "cbd030ae82065afe02c31272c7b9809eed04b581d9a2ac23ac0ef5c5c2ab3bda",
+  "native_reference_sha256": "33f16bb2615694a0ae30a532d5a543f295e385faeefbcb6421642b21f8668611",
+  "native_reference_kind": "source_table_family",
+  "source_qualification_sha256": "ae1c9b5b9aae4128b2b2ba93c4e5b5e384b8ebdda8a35343220e384a5ace8238",
+  "completeness_rule": "Complete advertised state/election HTML through EOF; every tab, office and candidate context accounted for; exact federal-office/Incumbent filter; source facts and navigation agree on reread. This is the publisher-listed election incumbent cohort, not a complete congressional roster.",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 1,
+    "scorecard_metrics": 1,
+    "scorecard_items": 0,
+    "scorecard_metric_items": 0,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 2,
+    "scorecard_member_ratings": 2,
+    "scorecard_member_item_results": 0
+  },
+  "capture_count": 4,
+  "evidence_policy": "hash_only",
+  "qualification_boundary": "Named source rendition; remaining editions and renditions stay in scope",
+  "published": false
+}
