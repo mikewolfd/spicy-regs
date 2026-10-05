@@ -105,6 +105,11 @@ class RulemakingDatasetPipeline(MaterializedDatasetPipeline):
                    "receipts": file_witness(receipts)}
             for name, (subjects, receipts, generation) in self._selected_priors.selections.items()
         }
+        index = self._selected_priors.selected.index
+        if index is not None:
+            from spicy_regs.sources.publication import table_pin
+            for name, value in snapshot["native_inputs"].items():
+                value["publication"] = table_pin(index, name + ".parquet")
         return snapshot
 
     def _classify_outputs(self, output_dir, context):

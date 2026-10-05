@@ -60,6 +60,7 @@ def test_pinned_snapshot_migration_preserves_exact_rows_and_prior_ids(tmp_path, 
     result = prepare_snapshot(**kwargs)
     admitted = json.loads(result.read_text())
     assert admitted['inputs']['legacy_snapshot']['manifest'] == old
+    assert admitted['inputs']['retained'] == 'source pins'
     assert admitted['artifacts']['etl_receipts.parquet']['visibility'] == 'internal'
     assert (destination / 'retained' / 'manifest.json').read_bytes() == manifest.read_bytes()
     restored = materialize_internal(ReceiptInput('proceedings', (destination / 'proceedings.parquet',),

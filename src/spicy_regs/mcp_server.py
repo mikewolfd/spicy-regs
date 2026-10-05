@@ -1136,7 +1136,19 @@ def _snapshot_lineage(index: dict, manifest: Mapping) -> dict[str, Any]:
 
     recorded = manifest.get("inputs") or {}
     sources = []
-    for key, source in sorted((recorded.get("sources") or {}).items()):
+    native = {name + ".parquet": value["publication"]
+              for name, value in (recorded.get("native_inputs") or {}).items() if "publication" in value}
+    for key, source in sorted({**(recorded.get("sources") or {}), **native}.items()):
+        if key in native:
+            from spicy_regs.sources.publication import table_pin
+            live = table_owner(index, key)
+            current = table_pin(index, key) if live is not None else None
+            field = "sha256" if "sha256" in source else "tableDescriptorDigest"
+            sources.append({"table": key.removesuffix(".parquet"), "family": source["family"],
+                            "built_from": source["artifactDigest"],
+                            "live": current["artifactDigest"] if current is not None else None,
+                            "input_table_current": None if current is None else source[field] == current.get(field)})
+            continue
         live = table_owner(index, key)
         live_sha = live[1]["tables"][key].get("sha256") if live is not None else None
         built_from = f"sha256:{source['sha256']}"
