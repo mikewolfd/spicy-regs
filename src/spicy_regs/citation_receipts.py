@@ -28,7 +28,7 @@ def install_citation_inputs(connection, adapter, available):
     if "document_citations" not in available or not selected("document_citations"):
         return
     import pyarrow as pa
-    from spicy_regs.legislative_documents import field_registry, map_subject, bill_section_document_key
+    from spicy_regs.legislative_documents import field_registry, map_subject, native_document_key
 
     registry = field_registry()
     tables = {}
@@ -43,13 +43,21 @@ def install_citation_inputs(connection, adapter, available):
             if not isinstance(raw, Mapping):
                 raise ValueError(f"{dataset}: citation source input is missing from the selected receipt")
             mapped = map_subject(dataset, raw)
+            # A serving release must admit the future court body key before its
+            # writer is activated. Both supported keys derive from the same
+            # retained source row; all other subject fields still match exactly.
+            if (dataset == "document_citations" and raw.get("document_kind") == "court_opinion_derived_pdf"
+                    and mapped is not None):
+                body_key = native_document_key(raw["document_kind"], raw.get("document_key"))
+                if row.get("document_key") == body_key:
+                    mapped["document_key"] = body_key
             if mapped is not None and any(row.get(name) != value for name, value in mapped.items()):
                 raise ValueError(f"{dataset}: citation source input differs from its selected native subject")
             result = dict(raw)
             if dataset == "document_citations":
-                result["document_key"] = row["document_key"]
-            elif dataset == "document_citation_reads" and raw.get("document_kind") == "bill_section":
-                result["document_key"] = bill_section_document_key(raw.get("document_key"))
+                result["document_key"] = native_document_key(raw.get("document_kind"), row["document_key"])
+            elif dataset == "document_citation_reads":
+                result["document_key"] = native_document_key(raw.get("document_kind"), raw.get("document_key"))
             return result
 
         tables[table] = adapter.restore_originals(table, schema, original, prefix=PROCESSING_PREFIX)
