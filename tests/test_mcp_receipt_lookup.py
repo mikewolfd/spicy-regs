@@ -438,6 +438,22 @@ class _Recording:
         return Cursor()
 
 
+def test_the_receipts_page_shows_a_call_the_tool_answers(tmp_path, monkeypatch):
+    """The one page that explains receipts leads with this tool; its example is run as written."""
+    from spicy_regs import data_dictionary
+    from spicy_regs.transforms.government_source_shapes import LEGACY_COLUMNS, map_subject
+
+    (example,) = re.findall(r"```json\n(.*?)\n```", data_dictionary.RECEIPT_GUIDE.read_text(encoding="utf-8"), re.DOTALL)
+    arguments = json.loads(example)
+    assert set(arguments) == {"table", "keys", "fields"} and arguments["table"] == "crs_reports"
+    link = "https://www.congress.gov/crs-product/R48641"
+    raw = {**dict.fromkeys(LEGACY_COLUMNS["crs_reports"]), "report_id": arguments["keys"][0]["report_id"], "url": link}
+    one_family(tmp_path, monkeypatch, {"crs_reports": [{**map_subject("crs_reports", raw), "raw_record": raw}]})
+    reply = call(**arguments)
+    assert reply["keys"] == [{"key": arguments["keys"][0], "receipt": "found",
+                              "fields": {"url": {"state": "stated", "value": link}}}]
+
+
 @pytest.mark.parametrize("order", [True, False])
 def test_only_the_row_groups_holding_a_key_are_read_and_a_sorted_member_is_never_scanned(tmp_path, monkeypatch, order):
     """What the tool asks DuckDB for: one statement over the row ranges of the groups its keys are in. A sorted

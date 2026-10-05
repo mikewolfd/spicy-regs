@@ -30,11 +30,32 @@ The word has two other uses in this dictionary, and neither is this table.
 received. A note that cites a "receipt" followed by a folder name points at the
 maintainers' own evidence files, which are not public.
 
+## The quick way: ask for a value by the row's key
+
+The `read_receipt_fields` tool reads values out of receipts for you. Give it
+the table, the keys of the rows you mean and the fields you want. For the link
+to the CRS report `R48641`:
+
+```json
+{"table": "crs_reports", "keys": [{"report_id": "R48641"}], "fields": ["url"]}
+```
+
+`describe_table('crs_reports')` lists, under `receipt_fields`, the table's key
+columns with their types and the fields its receipts hold. A key gives every
+key column its exact value, so a table with two key columns names both:
+`{"committee_id": "C00097238", "cycle": 2012}`. Each row answers `found` or
+says why not, and each field says whether the receipt states a value.
+
+The tool reads up to 100 rows in a call. It does not work on a table with more
+than 2,000,000 receipts, and says so when asked. For such a table, to join
+receipts to a query's rows, or to read a receipt that belongs to no row, use
+the queries below.
+
 ## How to find the receipt for a row
 
-Today this takes a query; there is no one-step lookup. In a table that has
-receipts, every row has exactly one receipt whose `outcome` is `accepted`. You
-find it by the table's name and the row's key.
+Without the tool this takes a query. In a table that has receipts, every row
+has exactly one receipt whose `outcome` is `accepted`. You find it by the
+table's name and the row's key.
 
 1. Ask for the table's key columns. `describe_table('crs_reports')` lists them
    as `identity_columns`; for `crs_reports` that is `report_id`.
