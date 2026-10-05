@@ -136,17 +136,20 @@ def docspec_pins(raw: bytes) -> dict[str, str]:
     return pins
 
 
-def _snapshot_inputs(client, bucket: str) -> tuple[str, dict[str, str]]:
+def _snapshot_inputs(client, bucket: str) -> tuple[str, dict[str, str], dict[str, str]]:
     """The current rulemaking snapshot's id and its source tables' sha256 by table key; empty when none is published."""
     pointer = publication._get_bounded(client, bucket, publication.SNAPSHOT_POINTER)
     if pointer is None:
-        return "", {}
+        return "", {}, {}
     head = json.loads(pointer[0])
     stored = publication._get_bounded(client, bucket, head["manifest_key"])
     if stored is None:
         raise publication.PublicationError(f"Rulemaking pointer names a missing manifest: {head['manifest_key']}")
-    sources = json.loads(stored[0]).get("inputs", {}).get("sources", {})
-    return head["snapshot_id"], {key: f"sha256:{value['sha256']}" for key, value in sources.items()}
+    inputs = json.loads(stored[0]).get("inputs", {})
+    sources = inputs.get("sources", {})
+    native = {name: value["publication"]["artifactDigest"].removeprefix("sha256:")
+              for name, value in inputs.get("native_inputs", {}).items() if "publication" in value}
+    return head["snapshot_id"], {key: f"sha256:{value['sha256']}" for key, value in sources.items()}, native
 
 
 def plan(client, bucket: str, *, notes: Iterable[tuple[str, str]], docspec: Mapping[str, str],
@@ -213,7 +216,11 @@ def plan(client, bucket: str, *, notes: Iterable[tuple[str, str]], docspec: Mapp
         keep(digest, "named in " + ", ".join(sorted(names)))
     for digest, reason in docspec.items():
         keep(digest, reason)
-    snapshot_id, inputs = _snapshot_inputs(client, bucket)
+    snapshot_id, inputs, native_inputs = _snapshot_inputs(client, bucket)
+    for name, digest in native_inputs.items():
+        if digest not in generations or not generations[digest].has_members:
+            raise publication.PublicationError(f"Native rulemaking input generation is missing: {name}/{digest}")
+        keep(digest, f"native input of rulemaking {snapshot_id[:17]} ({name})")
     for key, sha256 in inputs.items():
         for digest, tables in described.items():
             if (tables.get(key) or {}).get("sha256") == sha256:

@@ -178,3 +178,20 @@ def test_a_generation_holding_a_rulemaking_snapshot_input_is_kept(tmp_path, remo
     record = _plan(remote)
     assert _kept(record, "base")[digests[0]] == ["input of rulemaking snapshot_abc (base.parquet)"]
     assert record["delete"] == [f"generations/base/{digests[1]}"]
+
+
+def test_native_snapshot_keeps_exact_source_generation_despite_restored_file_hash(tmp_path, remote):
+    digests = _publish(_Base, tmp_path, remote, 5)
+    manifest = 'materialized/rulemaking/snapshots/native/manifest.json'
+    remote.objects[manifest] = json.dumps({'inputs': {
+        'sources': {'base.parquet': {'sha256': '0' * 64}},
+        'native_inputs': {'base': {'publication': {'family': 'base', 'artifactDigest': 'sha256:' + digests[0]}}},
+    }}).encode()
+    remote.objects[pub.SNAPSHOT_POINTER] = json.dumps({'snapshot_id': 'native', 'manifest_key': manifest}).encode()
+    record = _plan(remote)
+    assert _kept(record, 'base')[digests[0]] == ['native input of rulemaking native (base)']
+    assert record['delete'] == [f'generations/base/{digests[1]}']
+    remote.objects[manifest] = json.dumps({'inputs': {'native_inputs': {'base': {'publication': {
+        'family': 'base', 'artifactDigest': 'sha256:' + '0' * 64}}}}}).encode()
+    with pytest.raises(pub.PublicationError, match='Native rulemaking input generation is missing'):
+        _plan(remote)
