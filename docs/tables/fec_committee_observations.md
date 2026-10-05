@@ -4,7 +4,7 @@
 
 **FEC committee API observations**
 
-One committee result occurrence in a retained API response. Makes captured committee profiles inspectable without replacing the broader fec_committees reference table. Repeated captures, literal arrays and response limitations remain explicit. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. Every row comes from `fec-retained-committee-api`; the source namespace is kept in the receipt.
+One committee result occurrence in a retained API response. Makes captured committee profiles inspectable without replacing the broader fec_committees reference table. Repeated captures, literal arrays and response limitations remain explicit. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. Every row comes from `fec-retained-committee-api`.
 
 **Coverage.** Sampled. Supported observations from retained committee API result pages. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
 

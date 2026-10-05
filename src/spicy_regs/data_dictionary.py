@@ -34,6 +34,7 @@ import hashlib
 import json
 import re
 import sys
+from collections.abc import Iterable
 from datetime import date
 from functools import lru_cache
 import tempfile
@@ -214,6 +215,17 @@ def data_quality_prose_errors(table: str, data_quality: str) -> list[str]:
     return errors
 
 
+def _prose_sentences(entry: dict | None) -> list[tuple[str, str]]:
+    """``(field, sentence)`` for each sentence of one entry's prose; ``field`` as ``pinned_sentences`` names it."""
+    fields = {name: (entry or {}).get(name) for name in ("summary", "coverage", "data_quality")}
+    fields |= {f"columns.{name}": text for name, text in ((entry or {}).get("columns") or {}).items()}
+    return [
+        (field, sentence)
+        for field, text in fields.items()
+        for sentence in re.split(r"(?<=\.)\s+", " ".join(str(text or "").split()))
+    ]
+
+
 def pinned_sentences(tables: dict) -> list[tuple[str, str, str, str]]:
     """``(table, field, pin, sentence)`` for each sentence of the dictionary prose that names a pin.
 
@@ -225,16 +237,76 @@ def pinned_sentences(tables: dict) -> list[tuple[str, str, str, str]]:
     """
     found = []
     for table, entry in tables.items():
-        fields = {name: (entry or {}).get(name) for name in ("summary", "coverage", "data_quality")}
-        fields |= {f"columns.{name}": text for name, text in ((entry or {}).get("columns") or {}).items()}
-        for field, text in fields.items():
-            for sentence in re.split(r"(?<=\.)\s+", " ".join(str(text or "").split())):
-                for what in ("a snapshot id", "a digest or generation pin"):
-                    for match in _DATA_QUALITY_RULES[what].finditer(sentence):
-                        pin = match.group(0).rstrip("…")
-                        pin = pin[: len("snapshot_") + 8] if pin.startswith("snapshot_") else pin[:8]
-                        found.append((table, field, pin, sentence))
+        for field, sentence in _prose_sentences(entry):
+            for what in ("a snapshot id", "a digest or generation pin"):
+                for match in _DATA_QUALITY_RULES[what].finditer(sentence):
+                    pin = match.group(0).rstrip("…")
+                    pin = pin[: len("snapshot_") + 8] if pin.startswith("snapshot_") else pin[:8]
+                    found.append((table, field, pin, sentence))
     return found
+
+
+#: A sentence that sends a reader to a table's ETL receipt. Owner decision, 2026-10-05: one page explains
+#: receipts (``data_dictionary/etl_receipts.md``, rendered to ``docs/tables/etl_receipts.md`` and served by
+#: ``describe_table('etl_receipts')``), and a table mentions them only where its receipt holds something a reader
+#: wants (a source link, a column people queried), in one sentence, and not at all before the table has
+#: published in the native layout. That day every summary of a table with a field policy ended with one
+#: paragraph of pipeline vocabulary, most of them on tables with no receipts yet, and 22 FEC summaries written
+#: the same morning said a value "is kept in the receipt" of a family that had published none.
+#:
+#: The pattern reads the receipt table's name, "ETL receipt", a table's name before "receipts", and a receipt
+#: said to keep or hold something. It cannot see a pointer phrased another way ("the processing record has it"),
+#: and it does not judge whether what the receipt holds is wanted: both are read at review. "receipt" alone is
+#: not matched, because FEC prose uses it for money a committee received and the notes cite maintainers'
+#: evidence folders as receipts (59 such sentences on 2026-10-05, none of them read as a pointer). A view's
+#: summary is a table note too, but it is declared in ``relationship_views`` and the dictionary check does not
+#: read it: ``tests/test_data_dictionary.py`` holds the views to the one-sentence half.
+RECEIPT_POINTER = re.compile(
+    r"etl_receipts|\bETL receipts?\b|\b[a-z0-9]+(?:_[a-z0-9]+)+ receipts\b"
+    r"|\b(?:kept|held|stored|retained|recorded|lives?|remains?|is|are) in (?:(?:the|its|their|each|a) )?"
+    r"(?:[\w']+ ){0,2}?receipts?\b(?! (?:date|schedule|record|notice|line)s?\b)"
+    r"|\b(?:the|its|their|each) (?:[\w']+ )?receipts? (?:keeps?|holds?|carr(?:y|ies))\b",
+    re.IGNORECASE,
+)
+
+
+def receipt_pointers(entry: dict | None) -> list[str]:
+    """The field of each sentence in one table's prose that RECEIPT_POINTER reads as a pointer to its receipt."""
+    return [field for field, sentence in _prose_sentences(entry) if RECEIPT_POINTER.search(sentence)]
+
+
+def receipt_pointer_errors(table: str, entry: dict | None) -> list[str]:
+    """Refuse a table that points readers to its receipt in more than one sentence."""
+    fields = receipt_pointers(entry)
+    if len(fields) <= 1:
+        return []
+    return [
+        f"[{table}] points readers to its receipt in {len(fields)} sentences ({', '.join(fields)}); a table says "
+        "what its receipt holds in one sentence, and etl_receipts explains the rest"
+    ]
+
+
+def published_receipt_datasets(index: dict) -> set[str]:
+    """Every dataset the publication index shows published with receipts: the tables that have converted."""
+    families = index["families"].values()
+    return {name for family in families for name in family.get("etlReceipts", {}).get("datasets", ())}
+
+
+def receipt_index_errors(descriptions: dict, published: Iterable[str], with_receipts: set[str]) -> list[str]:
+    """Refuse a pointer to a receipt on a table the publication index shows published without receipts.
+
+    Whether a table has converted is the index's fact and no declaration's: a field policy says only that the
+    table publishes natively at its next run. So this half of the rule has no offline form, as
+    ``kind_index_errors`` has none for a row count. ``published`` names the tables the publisher holds
+    (:func:`published_row_counts`) and ``with_receipts`` is :func:`published_receipt_datasets`. Like the kind, it
+    follows actual publication: it cannot see a pointer on a table this publisher does not hold at all.
+    """
+    return [
+        f"[{table}] {fields[0]} points readers to its receipt, but the publication index shows this table "
+        "published without receipts; remove the sentence until the table has published in the native layout"
+        for table in sorted(set(published) - with_receipts)
+        if (fields := receipt_pointers(descriptions.get(table)))
+    ]
 
 
 #: A data-quality note that stands in for a fix in the vendored spicy-docs wheel ends "(interim until
@@ -1035,6 +1107,7 @@ def check_descriptions(
         errors.extend(coverage_prose_errors(table, entry.get("coverage") or "", measured_on))
         errors.extend(data_quality_prose_errors(table, entry.get("data_quality") or ""))
         errors.extend(interim_note_errors(table, entry.get("data_quality") or "", installed))
+        errors.extend(receipt_pointer_errors(table, entry))
         if not measured_on:
             errors.append(f"[{table}] missing 'measured_on' beside its coverage statement")
         else:
@@ -1056,14 +1129,17 @@ def check_descriptions(
     return errors
 
 
-def published_row_counts(base_url: str) -> dict[str, int]:
-    """Each published table's pinned row count: the index's families and the rulemaking snapshot's manifest."""
+def published_row_counts(base_url: str, index: dict | None = None) -> dict[str, int]:
+    """Each published table's pinned row count: the index's families and the rulemaking snapshot's manifest.
+
+    ``index`` is the publication index where the caller has already read it.
+    """
     from spicy_regs.sources.publication import load_index, load_rulemaking_snapshot
 
     base = base_url.rstrip("/")
     rows = {
         key.removesuffix(".parquet"): int(table["rows"])
-        for family in load_index(base)["families"].values()
+        for family in (index or load_index(base))["families"].values()
         for key, table in family["tables"].items()
     }
     snapshot = load_rulemaking_snapshot(base)
@@ -1313,8 +1389,15 @@ def cmd_check(args: argparse.Namespace) -> int:
         errors += check_schema_drift(expected, live)
         if args.source == "r2":
             # The kind is derived from the pinned index where the index can be read; offline it is the prose prefix.
+            # Whether a table has receipts to point at is the same index's fact, with no offline fallback.
+            from spicy_regs.sources.publication import load_index
+
             try:
-                errors += kind_index_errors(descriptions, published_row_counts(resolve_r2_base_url(args.base)))
+                base_url = resolve_r2_base_url(args.base)
+                index = load_index(base_url)
+                rows = published_row_counts(base_url, index)
+                errors += kind_index_errors(descriptions, rows)
+                errors += receipt_index_errors(descriptions, rows, published_receipt_datasets(index))
             except (httpx.HTTPError, OSError, PublicationError) as exc:
                 print(f"! Could not read the published row counts: {exc}", file=sys.stderr)
                 unreadable = True

@@ -4,7 +4,7 @@
 
 **FEC committee master observations**
 
-One physical committee-master row within its retained cycle/file capture. Keeps all source snapshots and raw named fields. Unlike the existing committee history table's logical committee/cycle grain, these rows preserve duplicate or overlapping source observations. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. Every row comes from `fec-retained-committee-history`; the source namespace is kept in the receipt.
+One physical committee-master row within its retained cycle/file capture. Keeps all source snapshots and raw named fields. Unlike the existing committee history table's logical committee/cycle grain, these rows preserve duplicate or overlapping source observations. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. Every row comes from `fec-retained-committee-history`.
 
 **Coverage.** Sampled. Supported observations from retained committee-master files and their verified ordered header definitions. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
 

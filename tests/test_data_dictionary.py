@@ -459,6 +459,109 @@ def test_the_receipts_page_states_what_the_writer_does():
 
 
 # --------------------------------------------------------------------------- #
+# A table points at its own receipt in one sentence, and only once the index shows it with receipts.
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "Each report's address on the Congress.gov API is kept in its receipt; see etl_receipts.",
+        "The filing's page on fcc.gov is kept in the filing's receipt, not in this table.",
+        "Every row comes from `fec-bulk-lobbyist`; the source namespace is kept in the receipt.",
+        "Whether the source reported a value is in the row's receipt, not in this table.",
+        "Native lists retain ordered business values; processing evidence lives in the shared ETL receipts.",
+        "Source irregularities and extraction outcomes remain in the law_sections ETL receipts.",
+        "The locator identifies the source record among the fec_source_records receipts.",
+        "A typo in the range cannot be detected; the receipt keeps the date as filed.",
+        "Document filenames as offered. Source URLs and acquisition evidence remain in receipts.",
+        "`SELECT processing_json FROM etl_receipts WHERE dataset = 'fcc_filings'`.",
+    ],
+)
+def test_a_sentence_that_sends_a_reader_to_a_receipt_is_read_as_a_pointer(sentence):
+    """Each is a wording main carried on 2026-10-05, most of them on tables that had published no receipts."""
+    assert dd.receipt_pointers({"summary": sentence}) == ["summary"]
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "An account transfer is not automatically a receipt to the reporting committee.",
+        "Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate.",
+        "A retained original filing contributes only its receipt records.",
+        "The day FEC received the filing is in the receipt date the source states.",
+        "Time to final then runs from the receipt notice.",
+        "Receipt: fork-execution-2026-09-21/discovery-utc/MANUAL-AUDIT.md.",
+        "See `press-release-qualification/` and `press-link-repair/` in the fork execution receipts.",
+        "The comment re-read filled it: on receipt sha256:77a08369… it is set on most rows.",
+    ],
+)
+def test_money_received_and_evidence_folders_are_not_pointers(sentence):
+    """`receipt` has two other meanings in this dictionary, and the rule is about neither."""
+    assert dd.receipt_pointers({"summary": sentence}) == []
+
+
+def test_a_table_points_at_its_receipt_in_at_most_one_sentence():
+    entry = {"summary": "One row per report. Its API address is kept in its receipt; see etl_receipts.",
+             "columns": {"report_id": "CRS report id."}}
+    assert dd.receipt_pointer_errors("crs_reports", entry) == []
+    entry["columns"]["report_id"] += " The former `url` column is kept in the report's receipt."
+    errors = dd.receipt_pointer_errors("crs_reports", entry)
+    assert len(errors) == 1 and "in 2 sentences (summary, columns.report_id)" in errors[0], errors
+    broken = {table: dict(value) for table, value in dd.load_descriptions().items()}
+    broken["crs_reports"] = {**broken["crs_reports"], "data_quality": "Dated 2026-10-05: more is kept in the receipt."}
+    assert any(e.startswith("[crs_reports] points readers to its receipt in 2 sentences")
+               for e in dd.check_descriptions(dd.expected_schemas(), broken))
+
+
+def test_a_pointer_is_refused_until_the_index_shows_the_table_with_receipts():
+    """lobbying_filings told readers to query a receipt while its family had published none (2026-10-05)."""
+    descriptions = {
+        "lobbying_filings": {"columns": {"filing_uuid": "The filing's page is kept in its receipt; see etl_receipts."}},
+        "crs_reports": {"summary": "Each report's API address is kept in its receipt; see etl_receipts."},
+        "dockets": {"summary": "One row per docket."},
+    }
+
+    def with_receipts(*families: str) -> set[str]:
+        entries: dict[str, dict] = {"dockets": {"tables": {"dockets.parquet": {}}}}
+        entries |= {name: {"etlReceipts": {"datasets": [name.replace("-", "_")]}} for name in families}
+        return dd.published_receipt_datasets({"families": entries})
+
+    published = ("lobbying_filings", "crs_reports", "dockets", "not_a_dictionary_table")
+    errors = dd.receipt_index_errors(descriptions, published, with_receipts("crs-reports"))
+    assert len(errors) == 1 and errors[0].startswith("[lobbying_filings] columns.filing_uuid points"), errors
+    assert dd.receipt_index_errors(descriptions, published, with_receipts("crs-reports", "lobbying-filings")) == []
+    # It follows actual publication, as the kind does: a publisher that holds none of these tables is not judged.
+    assert dd.receipt_index_errors(descriptions, (), set()) == []
+
+
+def test_a_view_points_at_a_receipt_in_at_most_one_sentence_too():
+    """A view's summary is a table note as well, and describe_table serves it; the dictionary check does not read it."""
+    import importlib
+    import pkgutil
+
+    import spicy_regs.relationship_views as package
+
+    specs = {}
+    for info in pkgutil.iter_modules(package.__path__):
+        module = importlib.import_module(f"{package.__name__}.{info.name}")
+        for value in vars(module).values():
+            for item in value if isinstance(value, (tuple, list)) else (value,):
+                if hasattr(item, "meaning") and hasattr(item, "name"):
+                    specs[id(item)] = item
+    # Three views that pointed at a receipt on 2026-10-05, in three modules: the search must reach each of them.
+    assert {"house_communication_rins", "org_identity_candidates", "fcc_filing_artifacts"} <= {s.name for s in specs.values()}
+    pointing = set()
+    for spec in specs.values():
+        columns = dict(getattr(spec, "column_descriptions", None) or {})
+        columns |= {name: text for name, _, text in getattr(spec, "details", ())}
+        fields = dd.receipt_pointers({"summary": spec.meaning, "columns": columns})
+        assert len(fields) <= 1, (spec.name, fields)
+        pointing |= {spec.name} if fields else set()
+    # Both read fcc_filings in its native form, so they exist only once it has receipts; its receipt holds the
+    # filing's and each document's fcc.gov address. A view added here needs the same two answers.
+    assert pointing == {"fcc_native_observations", "fcc_filing_artifacts"}
+
+
+# --------------------------------------------------------------------------- #
 # The contract-hosted tables: prose comes from spicy-docs, not from this repo.
 # --------------------------------------------------------------------------- #
 def test_every_hosted_column_has_prose():

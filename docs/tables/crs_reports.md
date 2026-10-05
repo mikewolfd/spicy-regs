@@ -4,7 +4,7 @@
 
 **Congressional Research Service reports**
 
-One row per Congressional Research Service (CRS) report, ingested from the Congress.gov v3 REST API (`/crsreport` list endpoint) by `build_crs_reports`. The nonpartisan policy-analysis layer over the same subjects agencies regulate — complementary to `congress_bills` (the legislative record) and `federal_register` (the rule-publication record). Scope is deliberately list-level only (no per-report detail fetches), so every column comes from the list payload. Incremental by `update_date`, deduped on `report_id`; each query is pooled over whole walks, varying the page size, until one walk is clean or the pool holds exactly the declared count, because the list shifts while it is read.
+One row per Congressional Research Service (CRS) report, ingested from the Congress.gov v3 REST API (`/crsreport` list endpoint) by `build_crs_reports`. The nonpartisan policy-analysis layer over the same subjects agencies regulate — complementary to `congress_bills` (the legislative record) and `federal_register` (the rule-publication record). Scope is deliberately list-level only (no per-report detail fetches), so every column comes from the list payload. Incremental by `update_date`, deduped on `report_id`; each query is pooled over whole walks, varying the page size, until one walk is clean or the pool holds exactly the declared count, because the list shifts while it is read. Each report's address on the Congress.gov API (the former `url` column) is kept in its receipt; see etl_receipts.
 
 **Coverage.** True range: reports whose current version is dated from 1993-10-22 on (`published_date` is the current version's date, not first issue). *(measured 2026-09-23)*
 

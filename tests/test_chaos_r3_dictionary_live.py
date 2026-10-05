@@ -47,6 +47,15 @@ def test_an_empty_kind_means_zero_published_rows_and_zero_rows_mean_empty(base_u
     assert dd.kind_index_errors(dd.load_descriptions(), rows) == []
 
 
+def test_a_table_points_at_its_receipt_only_where_the_index_shows_it_with_receipts(base_url):
+    """A pointer on a table that has published no receipts sends a reader to query nothing (lobbying_filings, 2026-10-05)."""
+    index = publication.load_index(base_url)
+    with_receipts = dd.published_receipt_datasets(index)
+    assert with_receipts, "the index names no receipts"
+    published = dd.published_row_counts(base_url, index)
+    assert dd.receipt_index_errors(dd.load_descriptions(), published, with_receipts) == []
+
+
 def test_comments_coverage_states_no_end_bound_the_data_has_passed(base_url, con):
     """The comments mirror is rebuilt daily; a date in its coverage prose other than the stated floor must not lag the data."""
     entry = dd.table_coverage(dd.load_descriptions())["comments"]

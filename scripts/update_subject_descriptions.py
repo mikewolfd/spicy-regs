@@ -85,7 +85,7 @@ def main():
         'subjects': 'Publisher subject identifiers in source order, preserving repeated entries.',
         'non_monetary_terms': 'Nonmonetary terms stated in the legal matter.',
         'non_monetary_terms_respondents': 'Respondents associated with the source-stated nonmonetary terms.',
-        'record_id': 'Stable identity of this source-derived subject row; joins to its generation-bound ETL receipt.',
+        'record_id': 'Stable identity of this source-derived row.',
         'blocked': 'Whether the source marks the court docket blocked.',
         'date_blocked': 'Source-stated date when the docket was blocked.',
     }
@@ -93,7 +93,7 @@ def main():
     for source,target in maps['summary_attributes'].items():
         field_prose['fec_reported_financial_summaries',target] = f'Publisher financial-summary field {source}; its literal value qualifies the reported summary.'
     for source,target in maps['agency_report_fields'].items():
-        field_prose['fec_agency_reports',target] = f'Publisher report field {source}, retained as substantive report data; original values and field evidence remain in the ETL receipt.'
+        field_prose['fec_agency_reports',target] = f'Publisher report field {source}, retained as substantive report data.'
     extras = {
         'attachments':'attachments_json', 'attachment_records':'attachments_json', 'fr_document_ids':'fr_document_ids_json',
         'is_original':'is_original_raw','agency_codes':'agency_codes_json','links':'links_json','dates':'dates_json',

@@ -26,27 +26,27 @@ One retained agency report edition observation with its source context. Discover
 | `period_end` | `DATE` | Date parsed from the end of the source-defined reporting period. NULL requires the source value and conversion status; capture time is not substituted. |
 | `publication_date` | `DATE` | Date parsed from the source publication date of the agency report. NULL requires the source value and conversion status; capture time is not substituted. |
 | `organizations` | `STRUCT(id VARCHAR, "names" VARCHAR[], abbreviations VARCHAR[], "role" VARCHAR, "label" VARCHAR, "value" VARCHAR, items VARCHAR[])[]` | JSON representation of organizations stated by the agency report, preserving source naming and context. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
-| `published_report_body` | `VARCHAR` | Publisher report field body, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
-| `published_report_field_net_funds_for_better_use` | `VARCHAR` | Publisher report field field-net-funds-for-better-use, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
-| `published_report_field_net_questioned_costs` | `VARCHAR` | Publisher report field field-net-questioned-costs, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
-| `published_report_additional_details` | `VARCHAR` | Publisher report field field-report-additional-details, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
-| `published_report_agency_reviewed` | `VARCHAR` | Publisher report field field-report-agency-reviewed, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
-| `published_report_agency_wide` | `VARCHAR` | Publisher report field field-report-agency-wide, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
-| `published_report_components` | `VARCHAR` | Publisher report field field-report-components, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
-| `published_report_date_issued` | `VARCHAR` | Publisher report field field-report-date-issued, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
-| `published_report_external_entity` | `VARCHAR` | Publisher report field field-report-external-entity, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
-| `published_report_file` | `VARCHAR` | Publisher report field field-report-file, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
-| `published_report_hidden` | `VARCHAR` | Publisher report field field-report-hidden, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
-| `published_report_link` | `VARCHAR` | Publisher report field field-report-link, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
-| `published_report_location` | `VARCHAR` | Publisher report field field-report-location, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
-| `published_report_ndaa_5274` | `VARCHAR` | Publisher report field field-report-ndaa-5274, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
-| `published_report_number` | `VARCHAR` | Publisher report field field-report-number, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
-| `published_report_number_of_recs` | `VARCHAR` | Publisher report field field-report-number-of-recs, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
-| `published_report_other_oigs` | `VARCHAR` | Publisher report field field-report-other-oigs, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
-| `published_report_peer_review_by_oig` | `VARCHAR` | Publisher report field field-report-peer-review-by-oig, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
-| `published_report_special_projects` | `VARCHAR` | Publisher report field field-report-special-projects, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
-| `published_report_submitting_oig` | `VARCHAR` | Publisher report field field-report-submitting-oig, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
-| `published_report_type` | `VARCHAR` | Publisher report field field-report-type, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
-| `published_report_field_sarc_end_date` | `VARCHAR` | Publisher report field field-sarc-end-date, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
-| `published_report_field_sarc_start_date` | `VARCHAR` | Publisher report field field-sarc-start-date, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
-| `published_report_field_title_full` | `VARCHAR` | Publisher report field field-title-full, retained as substantive report data; original values and field evidence remain in the ETL receipt. |
+| `published_report_body` | `VARCHAR` | Publisher report field body, retained as substantive report data. |
+| `published_report_field_net_funds_for_better_use` | `VARCHAR` | Publisher report field field-net-funds-for-better-use, retained as substantive report data. |
+| `published_report_field_net_questioned_costs` | `VARCHAR` | Publisher report field field-net-questioned-costs, retained as substantive report data. |
+| `published_report_additional_details` | `VARCHAR` | Publisher report field field-report-additional-details, retained as substantive report data. |
+| `published_report_agency_reviewed` | `VARCHAR` | Publisher report field field-report-agency-reviewed, retained as substantive report data. |
+| `published_report_agency_wide` | `VARCHAR` | Publisher report field field-report-agency-wide, retained as substantive report data. |
+| `published_report_components` | `VARCHAR` | Publisher report field field-report-components, retained as substantive report data. |
+| `published_report_date_issued` | `VARCHAR` | Publisher report field field-report-date-issued, retained as substantive report data. |
+| `published_report_external_entity` | `VARCHAR` | Publisher report field field-report-external-entity, retained as substantive report data. |
+| `published_report_file` | `VARCHAR` | Publisher report field field-report-file, retained as substantive report data. |
+| `published_report_hidden` | `VARCHAR` | Publisher report field field-report-hidden, retained as substantive report data. |
+| `published_report_link` | `VARCHAR` | Publisher report field field-report-link, retained as substantive report data. |
+| `published_report_location` | `VARCHAR` | Publisher report field field-report-location, retained as substantive report data. |
+| `published_report_ndaa_5274` | `VARCHAR` | Publisher report field field-report-ndaa-5274, retained as substantive report data. |
+| `published_report_number` | `VARCHAR` | Publisher report field field-report-number, retained as substantive report data. |
+| `published_report_number_of_recs` | `VARCHAR` | Publisher report field field-report-number-of-recs, retained as substantive report data. |
+| `published_report_other_oigs` | `VARCHAR` | Publisher report field field-report-other-oigs, retained as substantive report data. |
+| `published_report_peer_review_by_oig` | `VARCHAR` | Publisher report field field-report-peer-review-by-oig, retained as substantive report data. |
+| `published_report_special_projects` | `VARCHAR` | Publisher report field field-report-special-projects, retained as substantive report data. |
+| `published_report_submitting_oig` | `VARCHAR` | Publisher report field field-report-submitting-oig, retained as substantive report data. |
+| `published_report_type` | `VARCHAR` | Publisher report field field-report-type, retained as substantive report data. |
+| `published_report_field_sarc_end_date` | `VARCHAR` | Publisher report field field-sarc-end-date, retained as substantive report data. |
+| `published_report_field_sarc_start_date` | `VARCHAR` | Publisher report field field-sarc-start-date, retained as substantive report data. |
+| `published_report_field_title_full` | `VARCHAR` | Publisher report field field-title-full, retained as substantive report data. |

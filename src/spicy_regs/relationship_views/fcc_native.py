@@ -76,7 +76,8 @@ FCC_NATIVE_VIEWS = (
         _REQUIRED,
         observations,
         "FCC source roles and document metadata in native array order, including repeats and null elements. "
-        "Names do not resolve people. Raw/source URL, parser and acquisition evidence is in etl_receipts.",
+        "Names do not resolve people. Each filing's page address on fcc.gov is kept in the filing's receipt; "
+        "see etl_receipts.",
         ("id_submission", "source_field", "source_ordinal"),
         rule_version=_RULE, column_descriptions=_NATIVE_COLUMNS,
     ),
@@ -112,7 +113,8 @@ FCC_NATIVE_VIEWS = (
         "fcc_filing_artifacts",
         {"fcc_filings": ("id_submission", "documents")},
         artifacts,
-        "Document filenames and descriptions as offered. Source URLs and acquisition evidence remain in receipts.",
+        "Document filenames and descriptions as offered. Each document's address on fcc.gov is kept in the filing's "
+        "receipt; see etl_receipts.",
         ("id_submission", "source_ordinal"),
         rule_version=_RULE, column_descriptions=_NATIVE_COLUMNS,
     ),

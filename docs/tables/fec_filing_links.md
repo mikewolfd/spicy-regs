@@ -4,7 +4,7 @@
 
 **Source-reported filing-version references**
 
-One directed native filing reference from a retained filing observation. Follow explicit source references without selecting a latest report. Unknown target resolution, replacement mode and membership completeness remain visible; absence from a partial amendment does not imply deletion. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. Every row comes from `fec-openfec-file-number`; the source namespace is kept in the receipt.
+One directed native filing reference from a retained filing observation. Follow explicit source references without selecting a latest report. Unknown target resolution, replacement mode and membership completeness remain visible; absence from a partial amendment does not imply deletion. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. Every row comes from `fec-openfec-file-number`.
 
 **Coverage.** Sampled. Supported observations from retained filing metadata amendment and related-file references. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
 

@@ -153,11 +153,13 @@ def test_a_projected_column_inherits_its_source_meaning_and_a_computed_namesake_
 
     candidates, links = meanings("org_identity_candidates"), _dictionary("org_committee_links")
     assert candidates["organization"] == links["organization"]
-    # The match grade is a column of the link table, so the view projects it with its meaning; the names the matcher
-    # compared stay in the receipt, as the summary says.
+    # The match grade is a column of the link table, so the view projects it with its meaning. The names the matcher
+    # compared stay in the receipt, and the summary no longer says so: that receipt holds no link and no column a
+    # tester queried, and a table points at its receipt only for something a reader wants (owner decision, 2026-10-05).
     assert candidates["confidence"] == links["confidence"] and "precision bar" in (links["confidence"] or "")
     assert "organization_norm" not in candidates and "organization_norm" not in links
-    assert "receipt" in relationships["org_identity_candidates"]["metadata"]["summary"]
+    summary = relationships["org_identity_candidates"]["metadata"]["summary"]
+    assert "columns of the source row" in summary and "receipt" not in summary
     assert candidates["decision"].startswith("Always pending")
     parties, terms, affiliations = meanings("member_vote_party_affiliations"), _dictionary("member_vote_terms"), _dictionary("member_party_affiliations")
     assert parties["bioguide_id"] == terms["bioguide_id"] != affiliations["bioguide_id"]

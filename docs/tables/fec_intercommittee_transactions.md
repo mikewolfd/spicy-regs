@@ -4,7 +4,7 @@
 
 **Reported committee-to-committee transaction observations**
 
-One reported intercommittee transaction record version. Preserves reporting committee, counterparty references, literal transaction type, memo and amount. Direction remains unresolved unless source definitions prove it; both sides of a transfer are observations until an explicit flow rule qualifies consolidation. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. Every row has the amount status `exact`; the amount status is kept in the receipt.
+One reported intercommittee transaction record version. Preserves reporting committee, counterparty references, literal transaction type, memo and amount. Direction remains unresolved unless source definitions prove it; both sides of a transfer are observations until an explicit flow rule qualifies consolidation. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. Every row has the amount status `exact`.
 
 **Coverage.** Sampled. Supported observations from retained other-committee transaction bulk files. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
 

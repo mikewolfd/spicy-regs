@@ -139,7 +139,6 @@ NATIVE_CONGRESS_RELATIONSHIPS = tuple(
 NATIVE_COMMUNICATION_RINS = ArrayRelationship(
     'house_communication_rins', 'house_communications', ('congress', 'communication_type', 'number'),
     'rins', 'rin', SCALAR, scalar_valid('[0-9]{4}-[A-Z0-9]{4}'),
-    'Ordered RIN findings on the communication. Repeats remain distinct; original field spans, '
-    'digests and extraction rules are retained in the matching ETL receipt.',
+    'Ordered RIN findings on the communication. Repeats remain distinct.',
     context_columns=('update_date',),
 )

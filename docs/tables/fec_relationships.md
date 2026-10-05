@@ -4,7 +4,7 @@
 
 **Source-reported FEC relationship observations**
 
-Source-stated roles and associations. Explicit absence states (a missing field, null, empty string or list, or a reported none) are rows too, so a row is not by itself an edge. Whether the source reported a value (value_status), the identifier shape statuses, the mapper's source family and the exact evidence (source_sha256, source_url, observed_at, source_locator_json, source_fields_json) are in the row's receipt, not in this table: the etl_receipts row with dataset = 'fec_relationships' and outcome = 'accepted' whose identity_json contains the row's record_id. For example, `regexp_extract(processing_json, '\["value_status",\["str","([^"]*)"', 1)` reads value_status; keep rows where it is `reported` before treating them as edges. A retained-input locator names collection_id and source_record_id, which identify the source record among the fec_source_records receipts.
+Source-stated roles and associations. Explicit absence states (a missing field, null, empty string or list, or a reported none) are rows too, so a row is not by itself an edge.
 
 **Coverage.** Sampled. Relationships mapped from the selected committee, candidate, bulk and original filing inputs. Missing, null, empty and reported-none states remain rows, so this is not a count of positive relationships, and it is not complete family coverage or full FEC history. *(measured 2026-09-21)*
 
@@ -17,7 +17,7 @@ Source-stated roles and associations. Explicit absence states (a missing field, 
 
 | Column | Type | Description |
 | --- | --- | --- |
-| `record_id` | `VARCHAR` | Stable identity of this source-derived subject row; joins to its generation-bound ETL receipt. |
+| `record_id` | `VARCHAR` | Stable identity of this source-derived row. |
 | `subject_id` | `VARCHAR` | Source-reported identifier of the relationship subject. Interpret with subject_type and subject_id_status. |
 | `subject_type` | `VARCHAR` | Source entity type of the subject, such as committee or candidate. |
 | `relationship_type` | `VARCHAR` | Source role or association represented by this observation, preserving distinct reported meanings. |

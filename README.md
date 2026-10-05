@@ -332,7 +332,10 @@ sentences live beside the code that fills each column. Declaring that marker
 and an inline `columns:` together is refused at load.
 
 One page explains ETL receipts: `docs/tables/etl_receipts.md`, whose text is
-`data_dictionary/etl_receipts.md`.
+`data_dictionary/etl_receipts.md`. A table's notes mention its receipt in at
+most one sentence, and only once the table has published in the native layout;
+the header of `descriptions.yaml` states the rule and what to do when a table
+converts, and `check` holds it.
 
 > **Consumers must re-vendor.** `catalog.json` grew from 24 classes to 45 and
 > `congress_bills` from 10 columns to 48, so every copy pinned by

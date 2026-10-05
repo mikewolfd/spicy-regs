@@ -80,8 +80,7 @@ NATIVE_IDENTITY_VIEWS = (
     }, native_candidates,
        'Organization name associations remain pending candidates, not accepted identity. '
        'Candidate IDs bind the selected domain row and publication. The match method, confidence '
-       'label and sponsor-name comparison are columns of the source row; the normalized names the '
-       'matcher compared are available in its separate ETL receipt; date bounds '
+       'label and sponsor-name comparison are columns of the source row; date bounds '
        'describe comments and do not establish validity. Competing counts are native structs.',
        ('candidate_id',), rule_version='native-name-candidates/2', column_descriptions={
            **{name: text for name, text in COLUMNS.items() if name not in {'matcher_evidence_json', 'competing_candidates_json'}},

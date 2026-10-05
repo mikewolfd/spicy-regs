@@ -4,7 +4,7 @@
 
 **FEC lobbyist registration observations**
 
-One native committee registration/lobbyist observation. Preserves literal lobbyist flags and their boolean interpretation status. Image links keep body-processing status; the observation does not infer an unreported affiliation. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. Every row comes from `fec-bulk-lobbyist`; the source namespace is kept in the receipt.
+One native committee registration/lobbyist observation. Preserves literal lobbyist flags and their boolean interpretation status. Image links keep body-processing status; the observation does not infer an unreported affiliation. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. Every row comes from `fec-bulk-lobbyist`.
 
 **Coverage.** Sampled. Supported observations from retained lobbyist registration source records and image references. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
 

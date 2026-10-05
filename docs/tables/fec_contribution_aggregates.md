@@ -4,7 +4,7 @@
 
 **Source-reported contribution aggregates**
 
-One group in a source-defined contribution population and period. Compare reported groups using dimensions_json and aggregate_type. These amounts do not identify individual transactions; a candidate-shaped aggregate code is not a resolved person. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. Every row has the amount status `exact`; the amount status is kept in the receipt.
+One group in a source-defined contribution population and period. Compare reported groups using dimensions_json and aggregate_type. These amounts do not identify individual transactions; a candidate-shaped aggregate code is not a resolved person. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. Every row has the amount status `exact`.
 
 **Coverage.** Sampled. Supported observations from retained contribution geography/size-band tables and inaugural contributor aggregates. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
 

@@ -84,7 +84,7 @@ NATIVE_AFFILIATION_VIEWS = (
     }, lambda p: dated_parties(p, native=True),
        'One row per established vote-to-term assignment. Literal party intervals use start <= vote_day < end; '
        'invalid or missing ends never mean open-ended, overlaps remain ambiguous, and term party is not a fallback. '
-       'Candidates are native structs. Unresolved term attempts and source evidence are in ETL receipts. '
+       'Candidates are native structs. '
        'For the party stated on the vote day, join member_votes.party on (vote_id, member_key).',
        ('vote_id', 'member_key'), column_descriptions={
            **{name: text for name, text in COLUMNS.items() if name != 'affiliation_candidates_json'},
