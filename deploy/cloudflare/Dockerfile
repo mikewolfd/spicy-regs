@@ -47,9 +47,10 @@ COPY pyproject.toml README.md ./
 COPY src ./src
 RUN pip install --no-deps . && python /app/lock/lock_pins.py check /app/lock/uv.lock
 # Fail the build, not the first request, when a module the server imports at
-# request time needs a package this image does not install. etl_receipts and
-# etl_policy_registry are imported inside calls, so they are named here.
-RUN python -c "import spicy_regs.mcp_server, spicy_regs.sources.publication, spicy_regs.local_data; import spicy_regs.etl_receipts, spicy_regs.etl_policy_registry, spicy_regs.fec_receipt_adapter, spicy_regs.citation_receipts; import spicy_regs.subject_catalog; assert spicy_regs.subject_catalog.policies(); import spicy_regs.relationship_views, spicy_regs.citation_resolution, spicy_regs.acquisition_queue; from spicy_regs.vocabulary_mapping import lookup_agency; assert lookup_agency('regulations.gov:agency', 'OPM')['status'] == 'reviewed_mapping'; import duckdb; duckdb.sql(\"SELECT TIMESTAMPTZ '2026-01-01 00:00:00+00'\").fetchall()"
+# request time needs a package this image does not install. pyarrow,
+# etl_receipts and etl_policy_registry are imported inside calls, which
+# importing the calling module does not run, so they are named here.
+RUN python -c "import spicy_regs.mcp_server, spicy_regs.sources.publication, spicy_regs.local_data; import pyarrow, spicy_regs.etl_receipts, spicy_regs.etl_policy_registry, spicy_regs.fec_receipt_adapter, spicy_regs.citation_receipts; import spicy_regs.subject_catalog; assert spicy_regs.subject_catalog.policies(); import spicy_regs.relationship_views, spicy_regs.citation_resolution, spicy_regs.acquisition_queue; from spicy_regs.vocabulary_mapping import lookup_agency; assert lookup_agency('regulations.gov:agency', 'OPM')['status'] == 'reviewed_mapping'; import duckdb; duckdb.sql(\"SELECT TIMESTAMPTZ '2026-01-01 00:00:00+00'\").fetchall()"
 
 # The platform sends traffic to $PORT (default 8080). build_app() mounts the MCP
 # endpoint at /mcp; --factory because build_app is a callable returning the app.
