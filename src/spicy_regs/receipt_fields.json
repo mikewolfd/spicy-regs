@@ -4791,7 +4791,7 @@
       "chamber": "house"
      },
      "empty_unread": false,
-     "basis": "Every captured house vote file states these columns ('' at least), so a NULL in any says the row was published before they were read."
+     "basis": "Every captured house vote file states these columns ('' at least), so a NULL in any says the row was published before they were read. It speaks for these columns only, not for the row's other file-backed fields."
     },
     {
      "columns": [
@@ -4811,7 +4811,7 @@
       "chamber": "senate"
      },
      "empty_unread": false,
-     "basis": "Every captured senate vote file states these columns ('' at least), so a NULL in any says the row was published before they were read."
+     "basis": "Every captured senate vote file states these columns ('' at least), so a NULL in any says the row was published before they were read. It speaks for these columns only, not for the row's other file-backed fields."
     }
    ]
   },

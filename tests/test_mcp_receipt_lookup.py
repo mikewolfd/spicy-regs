@@ -342,6 +342,21 @@ def test_receipts_under_another_identity_definition_are_refused_before_any_key_i
     assert "this server's policy ('government-sources/1') identifies a row by id_submission (text)" in message
 
 
+def test_record_ids_this_server_does_not_reproduce_are_refused_before_any_key_is_called_missing(tmp_path, monkeypatch):
+    """Names and types agree and the ids still differ: the sampled receipt's stored id is recomputed from its own
+    identity, which is the whole statement that this server finds this publication's receipts."""
+    import hashlib
+
+    def another_digest(table: pa.Table) -> pa.Table:
+        ids = [hashlib.sha256(b"another digest:" + value.encode()).hexdigest() for value in table["record_id"].to_pylist()]
+        return table.set_column(table.schema.get_field_index("record_id"), "record_id", pa.array(ids, pa.string()))
+
+    one_family(tmp_path, monkeypatch, {"fcc_filings": [fcc("100")]}, edit=another_digest)
+    message = refused("fcc_filings", [{"id_submission": "100"}], ["filing_url"])
+    assert "written under policy_version 'government-sources/1' hold record ids this server does not reproduce" in message
+    assert "id_submission (text)" in message and "Every key would miss" in message
+
+
 def test_another_policy_version_with_the_same_identity_is_read_and_named(tmp_path, monkeypatch):
     installed = POLICIES["fcc_filings"]
     _under(tmp_path, monkeypatch, [(replace(installed, policy_version="government-sources/0"), [fcc("100")])])
