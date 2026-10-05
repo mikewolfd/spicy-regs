@@ -1,4 +1,4 @@
-"""Measure selected legacy Court/FR output conversion and private serving.
+"""Measure selected legacy output conversion and private serving.
 
 This replays the hash-pinned published population. It does not qualify the
 CourtListener CSV acquisition or Federal Register REST acquisition/merge.
@@ -23,7 +23,7 @@ from scripts.qualification_store import DiskStore
 from scripts.qualify_congress_bulk import compare_files
 from scripts.qualify_receipt_index import assert_pin, bind_key_index_for_qualification, phase, serve
 from scripts.qualify_votes_workflow import capture_code_pins, child, mcp_controls, verify_code_pins
-from spicy_regs import court_receipts, etl_bulk
+from spicy_regs import court_receipts, etl_bulk, regulations_bulk
 from spicy_regs.etl_receipts import carry_receipt_history, validate_receipt_bundle
 from spicy_regs.generations import build_generation
 from spicy_regs.native_types import described_schema
@@ -32,7 +32,81 @@ from spicy_regs.sources import publication
 from spicy_regs.transforms import regulations_receipts as regulations
 
 
-DATASETS = {'court_opinions': 'court-opinions', 'federal_register': 'federal-register'}
+DATASETS = {'court_opinions': 'court-opinions', 'federal_register': 'federal-register',
+            'dockets': 'dockets', 'documents': 'documents'}
+BASE_DATASETS = frozenset({'dockets', 'documents'})
+
+
+@contextmanager
+def observe_base_routes(record, name):
+    """Count completed private adapter calls; an attempted fallback is not a pass."""
+    original = getattr(regulations_bulk, name)
+    record['baseAdapterCalls'] = record['baseAdapterCompleted'] = 0
+
+    def observed(*args, **kwargs):
+        record['baseAdapterCalls'] += 1
+        result = original(*args, **kwargs)
+        record['baseAdapterCompleted'] += 1
+        return result
+
+    setattr(regulations_bulk, name, observed)
+    try:
+        yield
+        if record['baseAdapterCalls'] != 1 or record['baseAdapterCompleted'] != 1:
+            raise ValueError('Required regulatory base adapter did not complete exactly once')
+    finally:
+        setattr(regulations_bulk, name, original)
+
+
+def capture_prerequisites(plan, *, required):
+    """Bind a full base replay to actual reviewed immutable capture evidence."""
+    refs = plan.get('captureEvidence', {})
+    if required and set(refs) != {'plan', 'result', 'qualification', 'review'}:
+        raise ValueError('Full base replay requires exact capture plan, result, qualification and review pins')
+    for item in refs.values():
+        path = Path(item['path'])
+        if path.stat().st_size != item['bytes'] or 'sha256:' + hashlib.sha256(path.read_bytes()).hexdigest() != item['sha256']:
+            raise ValueError('Capture evidence differs from its frozen pin')
+    if required:
+        result = json.loads(Path(refs['result']['path']).read_text())
+        qualified = json.loads(Path(refs['qualification']['path']).read_text())
+        capture_plan = json.loads(Path(refs['plan']['path']).read_text())
+        for item in capture_plan['metadataPins']:
+            path = Path(item['path'])
+            if path.stat().st_size != item['bytes'] or hashlib.sha256(path.read_bytes()).hexdigest() != item['sha256']:
+                raise ValueError('Original capture selection metadata differs from its frozen pin')
+        entry = plan['source']
+        rows = [row for row in qualified['phases'] if row['key'] == 'source:' + entry['dataset'] + '.parquet']
+        if result['state'] != 'passed' or qualified['state'] != 'passed' or len(rows) != 1:
+            raise ValueError('Actual immutable capture did not qualify this source')
+        row = rows[0]
+        if (row['path'], row['bytes'], row['rows'], 'sha256:' + row['sha256']) != (
+                entry.get('localInput'), entry['bytes'], entry['rows'], entry['sha256']):
+            raise ValueError('Selected original source differs from the admitted capture')
+    return refs
+
+
+def handoff(output, dataset, family, generation, declared, entry, plan, frozen):
+    """Describe actual qualified pair bytes for a later selected-input consumer."""
+    directory = output / 'generation'
+    index = json.loads((output / 'private-publication.json').read_text())
+    files = {str(path.relative_to(directory)): publication.file_identity(path)
+             for path in sorted(directory.rglob('*')) if path.is_file()}
+    record = {'state': 'source-pair-and-private-serving-passed-resource-release-not-yet-admitted',
+              'dataset': dataset, 'family': family, 'source': entry,
+              'captureEvidence': plan.get('captureEvidence', {}), 'codePins': frozen,
+              'receiptGenerationId': generation, 'receiptPolicies': [declared.descriptor()],
+              'generationDirectory': str(directory), 'generationMembers': files,
+              'privatePublicationPath': str(output / 'private-publication.json'),
+              'privatePublicationPin': publication.file_identity(output / 'private-publication.json'),
+              'selectedFamily': index['families'][family],
+              'fullComparisonPhases': str(output / 'phases.jsonl'),
+              'resourceReleaseEvidenceRequired': True,
+              'unqualified': ['ordinary next materialization', 'documents annotation and reconciliation input',
+                              'production publication', 'complete regulatory production unit'],
+              'productionActions': []}
+    (output / 'HANDOFF.json').write_text(json.dumps(record, indent=2) + '\n')
+    return record
 
 
 def declared_policy(dataset):
@@ -101,7 +175,7 @@ def capture_source(entry, destination):
     return pin, schema
 
 
-def produce(dataset, source, directory, generation):
+def produce(dataset, source, directory, generation, *, bulk=False):
     if dataset == 'court_opinions':
         subject = court_receipts.write_court_rows(dataset, court_receipts.parquet_rows(source), directory,
             witnesses=[court_receipts.file_witness(source)], generation_id=generation,
@@ -110,7 +184,7 @@ def produce(dataset, source, directory, generation):
         if selected_generation != generation:
             raise ValueError('Court receipt selection differs from the declared generation')
         return subject, receipt
-    return regulations.write_held_dataset(dataset, source, directory, generation_id=generation)
+    return regulations.write_held_dataset(dataset, source, directory, generation_id=generation, bulk=bulk)
 
 
 def populations(dataset, source, subject, receipt):
@@ -121,7 +195,7 @@ def populations(dataset, source, subject, receipt):
     if counts.get('accepted', 0) != rows or pq.read_metadata(subject).num_rows != rows:
         raise ValueError('Selected population contains refused/lost source rows; full qualification stops')
     expected = {'accepted': rows}
-    if dataset == 'federal_register':
+    if dataset != 'court_opinions':
         expected['observed'] = 1
     if counts != expected:
         raise ValueError('Receipt outcomes differ from the complete selected source population')
@@ -130,8 +204,10 @@ def populations(dataset, source, subject, receipt):
 
 def complete_sample(dataset, source, destination, *, bound=2000):
     """Scan all source shapes; retain first eight per shape plus periodic rows."""
-    fields = (('per_curiam', 'page_count', 'author_str') if dataset == 'court_opinions'
-              else ('document_type', 'agencies_json', 'title'))
+    fields = {'court_opinions': ('per_curiam', 'page_count', 'author_str'),
+              'federal_register': ('document_type', 'agencies_json', 'title'),
+              'dockets': ('docket_type', 'rin', 'title'),
+              'documents': ('document_type', 'attachment_records_json', 'title')}[dataset]
     selected, seen = [], {}
     with pq.ParquetFile(source) as parquet:
         ordinal = 0
@@ -153,12 +229,12 @@ def complete_sample(dataset, source, destination, *, bound=2000):
             'referenceScope': 'Complete sample bundle through both public validator modes; actual producer is row-based'}
 
 
-def restore(dataset, source, subject, receipt, destination, generation):
+def restore(dataset, source, subject, receipt, destination, generation, *, bulk=False):
     if dataset == 'court_opinions':
         court_receipts.restore_processing_input(subject, destination, dataset=dataset, schema=pq.read_schema(source),
                                                receipt_path=receipt, generation_id=generation)
         return compare_files(source, destination)
-    regulations.materialize_internal(regulations.ReceiptInput(dataset, (subject,), receipt, generation), destination)
+    regulations.materialize_internal(regulations.ReceiptInput(dataset, (subject,), receipt, generation), destination, bulk=bulk)
     # The real processor emits canonical column order, including rin before the
     # final Regulations.gov fields. Check that separately from original order.
     source_schema = pq.read_schema(source)
@@ -197,12 +273,15 @@ def qualify(plan_path, output, *, fixture=False):
     entry = plan['source']
     dataset, family = entry['dataset'], entry['family']
     if DATASETS.get(dataset) != family:
-        raise ValueError('Explicit Court/FR dataset and complete single-table family required')
+        raise ValueError('Explicit supported dataset and complete single-table family required')
+    base = dataset in BASE_DATASETS
     with phase(log, 'frozen-code-and-dependency-pins') as record:
         frozen = capture_code_pins()
         if not fixture and (frozen['dirty'] or frozen != plan['codePins']):
             raise ValueError('Full qualification requires the exact clean reviewed code/dependencies')
         record.update(frozen, fixture=fixture, planSha256=hashlib.sha256(raw_plan).hexdigest())
+    with phase(log, 'immutable-capture-prerequisites') as record:
+        record['pins'] = capture_prerequisites(plan, required=base and not fixture)
     source = output / 'original.parquet'
     with phase(log, 'complete-original-acquisition-and-admission') as record:
         pin, schema = capture_source(entry, source)
@@ -210,13 +289,27 @@ def qualify(plan_path, output, *, fixture=False):
                       acquisitionScope='Published legacy mapper output; upstream CSV/REST acquisition unqualified')
     declared, generation = declared_policy(dataset), 'qualification-' + family
     with phase(log, 'separate-selected-prior-producer-and-full-admission') as record, observe_validation_routes(record):
-        prior_subject, prior = produce(dataset, source, output / 'selected-prior', generation + '-prior')
+        if base:
+            with observe_base_routes(record, 'write_held_dataset'):
+                prior_subject, prior = produce(dataset, source, output / 'selected-prior', generation + '-prior', bulk=True)
+        else:
+            prior_subject, prior = produce(dataset, source, output / 'selected-prior', generation + '-prior')
         validate_receipt_bundle({dataset: [prior_subject]}, [prior], [declared], generation_id=generation + '-prior')
         record.update(populations(dataset, source, prior_subject, prior))
     with phase(log, 'fresh-current-producer-and-full-admission') as record, observe_validation_routes(record):
-        subject, fresh = produce(dataset, source, output / 'current', generation)
+        if base:
+            with observe_base_routes(record, 'write_held_dataset'):
+                subject, fresh = produce(dataset, source, output / 'current', generation, bulk=True)
+        else:
+            subject, fresh = produce(dataset, source, output / 'current', generation)
         validate_receipt_bundle({dataset: [subject]}, [fresh], [declared], generation_id=generation)
         record.update(populations(dataset, source, subject, fresh))
+    if base:
+        with phase(log, 'full-original-row-producer-and-all-field-equivalence') as record:
+            row_subject, row_receipt = produce(dataset, source, output / 'full-row-reference', generation + '-prior', bulk=False)
+            validate_receipt_bundle({dataset: [row_subject]}, [row_receipt], [declared],
+                                    generation_id=generation + '-prior', bulk=False)
+            record.update(subjectRows=compare_files(row_subject, prior_subject), receiptRows=compare_files(row_receipt, prior))
     with phase(log, 'complete-stratified-public-row-validator-oracle') as record:
         sample = output / 'reference-source.parquet'
         record.update(complete_sample(dataset, source, sample))
@@ -234,7 +327,13 @@ def qualify(plan_path, output, *, fixture=False):
             raise ValueError('History qualification requires distinct separately produced current/prior receipts')
         validate_receipt_bundle({dataset: [subject]}, [carried], [declared], generation_id=generation)
     with phase(log, 'actual-full-processor-restore-original-and-canonical-conservation') as record:
-        record['rows'] = restore(dataset, source, subject, carried, output / 'restored.parquet', generation)
+        if base:
+            with observe_base_routes(record, 'materialize_internal'):
+                record['rows'] = restore(dataset, source, subject, carried, output / 'restored.parquet', generation, bulk=True)
+            restore(dataset, source, subject, carried, output / 'row-restored.parquet', generation, bulk=False)
+            record['rowReaderEquivalentRows'] = compare_files(output / 'row-restored.parquet', output / 'restored.parquet')
+        else:
+            record['rows'] = restore(dataset, source, subject, carried, output / 'restored.parquet', generation)
     directory = output / 'generation'
     with phase(log, 'complete-native-generation-admission'):
         build_generation(directory, family=family, files=[subject], expected_keys=[dataset + '.parquet'],
@@ -273,7 +372,10 @@ def qualify(plan_path, output, *, fixture=False):
         assert_pin(source, pin)
         if entry.get('localInput'):
             assert_pin(Path(entry['localInput']), pin)
+        capture_prerequisites(plan, required=base and not fixture)
     verify_code_pins(log, frozen)
+    if base:
+        handoff(output, dataset, family, generation, declared, entry, plan, frozen)
     result = {'status': 'passed', 'seconds': time.monotonic() - started, 'fixture': fixture,
               'scope': 'Selected published legacy population replay/private DiskStore/actual loopback MCP',
               'unqualified': ['upstream CSV/REST acquisition/merge', 'hosted publication/MCP'], 'productionActions': []}

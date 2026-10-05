@@ -19,11 +19,19 @@ def selected_plan(tmp_path, dataset, *, refused=False):
         rows = [{'opinion_id': None if refused else '1', 'cluster_id': '2', 'author_str': 'café\x00\n',
                  'page_count': '0002', 'per_curiam': 't'},
                 {'opinion_id': '3', 'cluster_id': None, 'author_str': '', 'page_count': None, 'per_curiam': None}]
-    else:
+    elif dataset == 'federal_register':
         # Original order has rin last; the actual processor emits canonical order.
         rows = [{'document_number': '2026-00001', 'publication_date': '2026-01-01', 'title': 'café\x1b\n',
                  'agencies_json': '[]', 'regulations_dot_gov_comments_count': '0007', 'rin': '007'},
                 {'document_number': '2026-00002', 'publication_date': '2026-01-02', 'title': '', 'rin': None}]
+    elif dataset == 'dockets':
+        rows = [{'docket_id': 'FAA-2026-0001', 'title': 'café\x00\n', 'rin': '007'},
+                {'docket_id': 'FAA-2026-0002', 'title': '', 'rin': None}]
+    else:
+        rows = [{'document_id': 'FAA-2026-0001-0001', 'title': 'café\x1b\n', 'withdrawn': 'False',
+                 'attachment_records_json': json.dumps([{'id': 'a', 'type': 'attachments',
+                    'attributes': {'title': 'source', 'agencyNote': None, 'authors': ['a'], 'docOrder': 1}}])},
+                {'document_id': 'FAA-2026-0001-0002', 'title': '', 'withdrawn': None}]
     columns = list(dict.fromkeys(name for row in rows for name in row))
     schema = pa.schema([(name, pa.string()) for name in columns], metadata={b'original': b'line\n'})
     source = tmp_path / 'source.parquet'
@@ -52,10 +60,24 @@ def test_actual_complete_fixture_pipeline(tmp_path, dataset):
         assert admission['sourceRows'] == admission['subjectRows'] == 2
         assert admission['actualBulkSettings']['threads'] == '4'
         assert all(route['fullyConsumed'] for route in admission['validationRoutes'])
+        if dataset in runner.BASE_DATASETS:
+            assert admission['baseAdapterCalls'] == admission['baseAdapterCompleted'] == 1
+    if dataset in runner.BASE_DATASETS:
+        oracle = next(item for item in phases if item['phase'] == 'full-original-row-producer-and-all-field-equivalence')
+        assert oracle['subjectRows'] == 2 and oracle['receiptRows'] == 3
+        restored = next(item for item in phases if item['phase'] == 'actual-full-processor-restore-original-and-canonical-conservation')
+        assert restored['baseAdapterCompleted'] == 1 and restored['rowReaderEquivalentRows'] == 2
     # The history phase verifies every prior field and a distinct actual current file.
     history = next(item for item in phases if item['phase'] == 'full-unchanged-history-and-exact-prior-fields')
     assert history['selectedPrior']['sha256'] != history['current']['sha256']
-    assert history['selectedPrior']['sha256'] == history['carried']['sha256']
+    assert history['rows'] == 2 + (dataset != 'court_opinions')
+    if dataset in runner.BASE_DATASETS:
+        runner.compare_files(output / 'selected-prior' / 'etl_receipts.parquet', output / 'carried-receipts.parquet')
+        handoff = json.loads((output / 'HANDOFF.json').read_text())
+        assert handoff['resourceReleaseEvidenceRequired']
+        assert handoff['receiptGenerationId'] == 'qualification-' + dataset
+        assert dataset + '.parquet' in handoff['generationMembers']
+        assert handoff['receiptPolicies'] == [runner.declared_policy(dataset).descriptor()]
     controls = json.loads((output / 'mcp-controls.json').read_text())
     assert controls['replies'][f'DELETE FROM "{dataset}" WHERE FALSE']['isError']
     assert pq.read_table(source).schema.metadata == {b'original': b'line\n'}
@@ -121,3 +143,46 @@ def test_route_observer_preserves_nonempty_ordinals_and_restores_on_error(tmp_pa
     assert etl_bulk._ordinal_file is original
     assert record['validationRoutes'] == [{'selection': 'selected.parquet', 'selectedRows': 2,
                                           'yieldedRows': 2, 'fullyConsumed': True}]
+
+
+def test_base_capture_requires_actual_selection_and_unchanged_evidence(tmp_path):
+    _, plan, source = selected_plan(tmp_path, 'dockets')
+    with pytest.raises(ValueError, match='requires exact capture'):
+        runner.capture_prerequisites(plan, required=True)
+    entry = plan['source']
+    values = {'plan': {'metadataPins': []}, 'review': {'verdict': 'fixture only'},
+              'result': {'state': 'passed'}, 'qualification': {'state': 'passed', 'phases': [
+                  {'key': 'source:dockets.parquet', 'path': str(source), 'bytes': entry['bytes'],
+                   'rows': entry['rows'], 'sha256': entry['sha256'].removeprefix('sha256:')}]}}
+    evidence = {}
+    for name, value in values.items():
+        path = tmp_path / (name + '.json')
+        path.write_text(json.dumps(value))
+        evidence[name] = {'path': str(path), 'bytes': path.stat().st_size,
+                          'sha256': 'sha256:' + hashlib.sha256(path.read_bytes()).hexdigest()}
+    plan['captureEvidence'] = evidence
+    runner.capture_prerequisites(plan, required=True)
+    with pytest.raises(ValueError, match='differs from the admitted capture'):
+        runner.capture_prerequisites(dict(plan, source=dict(entry, localInput=str(tmp_path / 'substitution'))), required=True)
+    Path(evidence['qualification']['path']).write_text('{}')
+    with pytest.raises(ValueError, match='evidence differs'):
+        runner.capture_prerequisites(plan, required=True)
+
+
+def test_base_route_refuses_completed_row_fallback(monkeypatch):
+    original = runner.regulations_bulk.write_held_dataset
+    def unsupported(*args, **kwargs):
+        raise etl_bulk.NotBulkEligible('fixture unsupported')
+    monkeypatch.setattr(runner.regulations_bulk, 'write_held_dataset', unsupported)
+    record = {}
+    with pytest.raises(ValueError, match='did not complete exactly once'):
+        with runner.observe_base_routes(record, 'write_held_dataset'):
+            try:
+                runner.regulations_bulk.write_held_dataset('dockets', Path('source'), Path('destination'),
+                    generation_id='fixture', processor='fixture', witnesses=(),
+                    include_source_witness=True, prior_receipts=())
+            except etl_bulk.NotBulkEligible:
+                pass
+    assert record == {'baseAdapterCalls': 1, 'baseAdapterCompleted': 0}
+    assert runner.regulations_bulk.write_held_dataset is unsupported
+    monkeypatch.setattr(runner.regulations_bulk, 'write_held_dataset', original)
