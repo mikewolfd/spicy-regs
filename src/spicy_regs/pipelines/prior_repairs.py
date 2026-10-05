@@ -299,6 +299,28 @@ def apply_repair(repair: Repair, priors: Path, output_dir: Path,
 
 def repair_rollup(name: str, repair: Repair) -> type[RollupPipeline]:
     """The partial writer that publishes ``repair`` over its family's current generation."""
+    if name == "rebuild-record-issues":
+        from spicy_regs.pipelines.rollups.subject_receipts import SubjectReceiptRollup
+
+        class RecordIssueRepairRollup(SubjectReceiptRollup):
+            publication_family = repair.family
+            output = "record_issues.parquet"
+            retain_source_evidence = True
+
+            def build(self, output_dir):
+                def builder(work, *, download_prior):
+                    priors = work / ".priors"
+                    priors.mkdir()
+                    counts = apply_repair(repair, priors, work, download_prior)
+                    logger.info("{}: {}", name, json.dumps(counts, sort_keys=True))
+                    if self.source_evidence is not None:
+                        self.source_evidence.event("prior-repair", repair=name, counts=counts)
+                    return work / self.output
+
+                return self.build_receipts(output_dir, builder)
+
+        RecordIssueRepairRollup.name = f"prior-repair-{name}"
+        return RecordIssueRepairRollup
 
     class PriorRepairRollup(RollupPipeline):
         publication_family: ClassVar[str | None] = repair.family
@@ -411,6 +433,11 @@ def dry_run(name: str, *, prior_dir: Path | None = None) -> dict[str, dict[str, 
         priors = work / "priors"
         priors.mkdir()
         with publication.snapshot(public_url):
+            if name == "rebuild-record-issues":
+                from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
+
+                selected = SelectedPriors(work / "selected", public_url=public_url)
+                return apply_repair(repair, priors, work, selected.download)
             return apply_repair(repair, priors, work, r2.download)
 
 
