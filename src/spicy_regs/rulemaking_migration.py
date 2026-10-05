@@ -100,7 +100,7 @@ def prepare_snapshot(*, pointer: Path, manifest: Path, sources: Path, destinatio
             restored / name,
         )
         checks[name] = {'exact_rows_in_order': _exact_rows(retained / name, output)}
-    inputs = {'legacy_snapshot': {'pointer_sha256': expected_pointer_sha256,
+    inputs = {**old.get('inputs', {}), 'legacy_snapshot': {'pointer_sha256': expected_pointer_sha256,
                                   'manifest_sha256': expected_manifest_sha256,
                                   'snapshot_id': snapshot, 'manifest': old},
               'previous_snapshot_id': snapshot}
