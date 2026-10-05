@@ -281,8 +281,13 @@ def _native(dataset, field, value):
             _object(item, ("id", "type", "attributes", "links", "relationships"), field)
             if item.get("type") != "attachments":
                 raise RegulationsShapeError(f"{field}: source record is not an attachment")
+            # Regulations.gov states ten attributes on an attachment (FAA-2016-6907-0001 carries all ten). The subject
+            # keeps the first four; the other six are classified to stay in the receipt's exact source record.
             attrs = _object(
-                item.get("attributes") or {}, ("title", "fileFormats", "restrictReason", "restrictReasonType"), field
+                item.get("attributes") or {},
+                ("title", "fileFormats", "restrictReason", "restrictReasonType",
+                 "agencyNote", "authors", "docAbstract", "docOrder", "modifyDate", "publication"),
+                field,
             )
             item = {
                 "attachment_id": item.get("id"),

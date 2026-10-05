@@ -65,6 +65,74 @@ def test_attachment_order_repeated_url_sizes_and_restrictions_survive():
     assert shaped["attachment_records"][0]["restrict_reason_type"] == "Restricted"
 
 
+#: The attachment records Regulations.gov serves for FAA-2016-6907-0001, as the source repair stored them
+#: (documents.parquet, generation 232d654a, read 2026-10-05). The one document the native mapper refused.
+FAA_2016_6907_0001_ATTACHMENTS = [
+    {
+        "id": "0900006481f8105f",
+        "type": "attachments",
+        "links": {"self": "https://api.regulations.gov/v4/attachments/0900006481f8105f"},
+        "attributes": {
+            "agencyNote": None,
+            "authors": None,
+            "docAbstract": None,
+            "docOrder": 1,
+            "fileFormats": [
+                {"fileUrl": "https://downloads.regulations.gov/FAA-2016-6907-0001/attachment_1.docx",
+                 "format": "docx", "size": 168729},
+                {"fileUrl": "https://downloads.regulations.gov/FAA-2016-6907-0001/attachment_1.pdf",
+                 "format": "pdf", "size": 384005},
+            ],
+            "modifyDate": "2016-05-13T10:59:51Z",
+            "publication": None,
+            "restrictReason": None,
+            "restrictReasonType": None,
+            "title": "Rank Investigation and Protection, Inc. - Exemption/Rulemaking",
+        },
+    },
+    {
+        "id": "0900006481f8105e",
+        "type": "attachments",
+        "links": {"self": "https://api.regulations.gov/v4/attachments/0900006481f8105e"},
+        "attributes": {
+            "agencyNote": None,
+            "authors": None,
+            "docAbstract": None,
+            "docOrder": 1,
+            "fileFormats": None,
+            "modifyDate": "2016-05-13T10:59:51Z",
+            "publication": None,
+            "restrictReason": None,
+            "restrictReasonType": "Confidential Business Information",
+            "title": "Rank Investigation and Protection, Inc. - Steven Rank - Appendix A-G Confidential Information ver 2.0",
+        },
+    },
+]
+
+
+def test_every_attachment_attribute_regulations_gov_states_is_classified():
+    row = {"document_id": "FAA-2016-6907-0001", "attachment_records_json": json.dumps(FAA_2016_6907_0001_ATTACHMENTS)}
+    first, restricted = shape_record("documents", row)["attachment_records"]
+    assert first == {
+        "attachment_id": "0900006481f8105f",
+        "title": "Rank Investigation and Protection, Inc. - Exemption/Rulemaking",
+        "file_formats": [
+            {"url": "https://downloads.regulations.gov/FAA-2016-6907-0001/attachment_1.docx", "format": "docx",
+             "size": 168729},
+            {"url": "https://downloads.regulations.gov/FAA-2016-6907-0001/attachment_1.pdf", "format": "pdf",
+             "size": 384005},
+        ],
+        "restrict_reason": None,
+        "restrict_reason_type": None,
+    }
+    assert restricted["file_formats"] is None
+    assert restricted["restrict_reason_type"] == "Confidential Business Information"
+    # An attribute the publisher does not state is still refused, not dropped.
+    unknown = [{**FAA_2016_6907_0001_ATTACHMENTS[0], "attributes": {"title": "t", "internalNote": "x"}}]
+    with pytest.raises(RegulationsShapeError, match="unexpected object fields"):
+        shape_record("documents", {"document_id": "D", "attachment_records_json": json.dumps(unknown)})
+
+
 def test_timetable_keeps_literal_month_precision_and_non_dates():
     values = [
         {"action": "NPRM", "date": "04/00/2026", "fr_citation": None},
