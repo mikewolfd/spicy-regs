@@ -3595,8 +3595,7 @@
     "source_locator_json": "JSON source coordinates and field names; retained-input rollups also include collection_id and source_record_id for exact parent joins.",
     "source_sha256": "Digest of the exact source bytes supporting this observation.",
     "source_url": "Source URL associated with the retained evidence.",
-    "subject_id_status": "Identifier observation status: source_id_shape, invalid_source_id_shape or not_reported. Shape checks do not establish reference resolution.",
-    "value_status": "Whether the source reported a value or an explicit absence such as missing_field, null, empty_string, empty_list or reported_none. Inspect before treating a row as an edge."
+    "subject_id_status": "Identifier observation status: source_id_shape, invalid_source_id_shape or not_reported. Shape checks do not establish reference resolution."
    }
   },
   "fec_report_metrics": {
