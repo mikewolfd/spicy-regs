@@ -26,6 +26,7 @@ Processing fields, source witnesses, conversion inputs and diagnostics reference
 | `action_text` | `VARCHAR` | The action text exactly as written, whitespace included; NULL when the publisher stated none. |
 | `action_code` | `VARCHAR` | The publisher's action code, which is what the became-law rule keys on. |
 | `action_type` | `VARCHAR` | The publisher's action type (IntroReferral, Floor, BecameLaw...). |
+| `source_system_name` | `VARCHAR` | Name of the system that reported the action. |
 | `recorded_vote_count` | `BIGINT` | How many recordedVote entries this action carries. |
 | `is_latest_action` | `BOOLEAN` | True on the one actions[] entry the publisher's separate latestAction element names. |
 | `stage` | `VARCHAR` | The stage this one action's qualified code and text classify as, in the same vocabulary as congress_bills.stage (`introduced`, `committee`, `calendared`, `passed_chamber`, `other_chamber`, `conference`, `cleared`, `presented`, `law`, or the outcomes `failed` and `vetoed`; never `passed_both`, which is a bill's state, not one action's); `introduced` with stage_rule NULL when no rule classifies the action, as for the desk or a floor step in the bill's own chamber. An action reads `cleared` where its own words complete agreement on one text; a chamber's agreement to a conference report reads `conference` here, and the bill reads `cleared` from the second. One action's classification, not the bill's state. |

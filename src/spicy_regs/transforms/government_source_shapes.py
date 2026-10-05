@@ -22,7 +22,6 @@ RECEIPT_FIELDS = {
     "fcc_filings": ("filing_url", "native_fields_sha256", "pdf_extraction_results_json"),
     "gao_decisions": ("listing_page", "source"),
     "gao_reports": ("url", "source"),
-    "gao_recommendations": ("first_seen", "last_seen"),
     "lobbying_filings": ("url",),
     "usaspending_recipients": ("observed_at", "source_capture_sha256"),
 }
@@ -46,7 +45,9 @@ MONEY_FIELDS = {"lobbying_filings": ("income", "expenses"), "usaspending_recipie
 DATE_FIELDS = {
     "gao_reports": ("published_date",),
     "gao_decisions": ("decision_date",),
-    "gao_recommendations": ("publication_date",),
+    # first_seen and last_seen say when the open-recommendations export first and last listed the row: with
+    # listed_open, they are how a reader dates a recommendation's closure (owner decision, 2026-10-05).
+    "gao_recommendations": ("publication_date", "first_seen", "last_seen"),
     "sam_entities": ("registration_date", "registration_expiration_date"),
 }
 

@@ -268,3 +268,181 @@ def test_bill_subject_producer_keeps_occurrence_order_and_empty_unknown_distinct
     assert rows["119-hr-1"]["subject_count"] == 4
     assert rows["119-hr-2"]["subjects"] == []
     assert "119-hr-3" not in rows
+
+
+#: Receipt fields a reader needs to judge a row, returned to their tables (owner decision, 2026-10-05). Per table:
+#: the returned columns; one row as its producer shapes it, every value text (the rows published 2026-10-04,
+#: abridged); fields of that row which stay in the receipt; and a later read's different answer for one column.
+RETURNED = {
+    "congress_bills": (
+        ("stage_rule", "stage_source_text", "signed_date_rule"),
+        {
+            "bill_id": "119-hr-1",
+            "stage": "law",
+            "stage_rule": "became_law_code",
+            "stage_matcher": "E40000",
+            "stage_action_index": "0",
+            "stage_source_text": "Became Public Law No: 119-21.",
+            "signed_date": "2025-07-04",
+            "signed_date_rule": "public_law_and_became_law_action",
+            "signed_date_action_code": "E40000",
+            "url": "https://www.congress.gov/bill/119th-congress/house-bill/1",
+        },
+        ("stage_matcher", "stage_action_index", "signed_date_action_code", "url"),
+        {"stage_rule": "law"},
+    ),
+    "bill_actions": (
+        ("source_system_name",),
+        {
+            "bill_id": "119-hr-1",
+            "action_index": "2",
+            "action_date": "2025-07-04",
+            "action_text": "Signed by President.",
+            "action_code": "E30000",
+            "source_system_code": "9",
+            "source_system_name": "Library of Congress",
+            "stage": "law",
+            "stage_rule": "law",
+            "stage_matcher": "signed by president",
+        },
+        # stage_rule returned to congress_bills only: an action's own rule stays in its receipt.
+        ("source_system_code", "stage_rule", "stage_matcher"),
+        {"source_system_name": "House floor actions"},
+    ),
+    "committee_assignments": (
+        ("congress_basis",),
+        {
+            "congress": "119",
+            "congress_basis": "caller",
+            "chamber": "senate",
+            "system_code": "spag00",
+            "committee_code": "SPAG00",
+            "bioguide_id": "A000382",
+            "lis_id": "S428",
+            "file_date": "Saturday, October 3, 2026",
+            "observed_at": "2026-10-04T02:30:46.792030Z",
+        },
+        ("file_date", "observed_at"),
+        {"congress_basis": "file"},
+    ),
+}
+
+
+@pytest.mark.parametrize("dataset", RETURNED)
+def test_returned_columns_are_text_columns_of_the_installed_policy_at_its_first_version(dataset):
+    from spicy_regs.etl_policy_registry import installed_policies
+
+    columns, _, kept, _ = RETURNED[dataset]
+    declared = policy(dataset)
+    for column in columns:
+        assert declared.subject_schema.field(column).type == pa.string()
+    assert not set(kept) & set(declared.subject_schema.names)
+    # These tables had not published natively when the columns returned, so no reader holds an earlier schema.
+    assert declared.policy_version == "congress-subjects/1"
+    # Publication admits a generation against the installed declaration, not this module's.
+    assert installed_policies()[dataset].descriptor() == declared.descriptor()
+
+
+@pytest.mark.parametrize("dataset", RETURNED)
+def test_returned_values_are_published_and_the_receipt_still_holds_the_whole_original_row(tmp_path, dataset):
+    from spicy_regs.etl_receipts import decode_exact_json
+
+    columns, raw, kept, _ = RETURNED[dataset]
+    source = shaped(tmp_path / "source.parquet", [raw])
+    subject, receipts = write_congress_dataset(source, tmp_path / "bundle", dataset=dataset, generation_id="g")
+    assert subject is not None
+    published = pq.read_table(subject)
+    for column in columns:
+        assert published.schema.field(column).type == pa.string()
+        assert published[column].to_pylist() == [raw[column]]
+    assert not set(kept) & set(published.schema.names)
+    [accepted] = [r for r in pq.read_table(receipts).to_pylist() if r["outcome"] == "accepted"]
+    assert decode_exact_json(accepted["processing_json"]) == {"source_fields": raw, "entry_kind": "row"}
+    restored = restore_processing_input(
+        subject, receipts, tmp_path / "restored.parquet", dataset=dataset, generation_id="g"
+    )
+    assert pq.read_table(restored).to_pylist() == [raw]
+
+
+def test_scheduled_rebuild_reads_the_prior_pair_and_a_changed_returned_value_is_a_new_version(tmp_path, monkeypatch):
+    """bill-family and committee-rosters resume this way: selected pair, private working rows, next pair."""
+    from spicy_regs.pipelines.rollups.subject_receipts import SubjectReceiptRollup
+
+    class Returned(SubjectReceiptRollup):
+        name = "returned-columns-test"
+        outputs = tuple(dataset + ".parquet" for dataset in RETURNED)
+
+        def build(self, output_dir):
+            raise NotImplementedError
+
+    held = {}
+
+    def builder(directory, *, download_prior):
+        paths = []
+        for dataset, (_, raw, _, reread) in RETURNED.items():
+            path = directory / (dataset + ".parquet")
+            if download_prior(path.name, path):
+                held[dataset] = pq.read_table(path).to_pylist()
+                shaped(path, [raw | reread])
+            else:
+                shaped(path, [raw])
+            paths.append(path)
+        return tuple(paths)
+
+    def accepted():
+        receipts = pq.read_table(tmp_path / "etl_receipts.parquet").to_pylist()
+        return {r["dataset"]: r for r in receipts if r["outcome"] == "accepted"}
+
+    monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
+    Returned().build_receipts(tmp_path, builder)
+    assert not held
+    before = accepted()
+    outputs = Returned().build_receipts(tmp_path, builder)
+    after = accepted()
+    assert {path.stem for path in outputs} == set(RETURNED)
+    for path in outputs:
+        _, raw, _, reread = RETURNED[path.stem]
+        old, new = before[path.stem], after[path.stem]
+        assert held[path.stem] == [raw]
+        [row] = pq.read_table(path).to_pylist()
+        assert {column: row[column] for column in reread} == reread
+        # Only a subject column moves the row's version; a receipt-only field would leave it standing.
+        assert new["record_id"] == old["record_id"] and new["subject_version"] != old["subject_version"]
+        assert new["witnesses"][: len(old["witnesses"])] == old["witnesses"]
+
+
+def test_real_roster_producer_publishes_congress_basis_and_resumes_from_its_native_pair(tmp_path, monkeypatch):
+    from spicy_docs.sources.congress.committee_rosters import CommitteeRosterError
+
+    from spicy_regs.transforms import build_committee_rosters as producer
+    from tests.test_committee_rosters import StubListingReader, StubRosters
+
+    monkeypatch.setattr(producer, "current_congress", lambda: 119)  # the House fixture states the 119th
+
+    def build(generation, rosters, inputs):
+        run = CongressBuild(generation, inputs=inputs)
+        paths = producer.build_committee_rosters(
+            tmp_path, reader=StubListingReader(), rosters=rosters, receipt_build=run
+        )
+        return run, {path.stem: path for path in paths}
+
+    def seats(path, chamber):
+        rows = pq.read_table(path).to_pylist()
+        return {tuple(sorted((k, str(v)) for k, v in row.items())) for row in rows if row["chamber"] == chamber}
+
+    first, published = build("first", StubRosters(), {})
+    assignments = pq.read_table(published["committee_assignments"])
+    assert assignments.schema.field("congress_basis").type == pa.string()
+    assert not {"file_date", "observed_at"} & set(assignments.schema.names)
+    # The House file states its Congress; the Senate file states none, so its rows say the caller supplied it.
+    assert {(row["chamber"], row["congress_basis"]) for row in assignments.to_pylist()} == {
+        ("house", "file"),
+        ("senate", "caller"),
+    }
+    assert first.receipt_path is not None
+    inputs = {name: CongressInput(path, first.receipt_path, "first") for name, path in published.items()}
+    # No Senate file this run: its seats, and their basis, can only come from the prior pair's receipts.
+    _, again = build("second", StubRosters(senate_error=CommitteeRosterError("stub: truncated")), inputs)
+    kept = seats(again["committee_assignments"], "senate")
+    assert kept and kept == seats(published["committee_assignments"], "senate")
+    assert seats(again["committee_assignments"], "house") == seats(published["committee_assignments"], "house")

@@ -188,22 +188,26 @@ INPUT_COLUMNS = {
 
 RECEIPT_ONLY = frozenset(("bill_family_archives", "bill_family_backfills", "bill_family_backfill_walks"))
 
+# Fields kept only in the receipt. Five a reader needs to judge a row are subject columns instead (owner decision,
+# 2026-10-05): the rule that gave congress_bills its stage and the action text it matched (stage_rule,
+# stage_source_text), the rule that gave its signed date (signed_date_rule), the system that entered a bill action
+# (source_system_name), and whether the roster file or the caller stated an assignment's Congress (congress_basis).
 PROCESSING = {
     'amendments': frozenset('url'.split()),
-    'bill_actions': frozenset('source_system_code source_system_name stage_rule stage_matcher'.split()),
+    'bill_actions': frozenset('source_system_code stage_rule stage_matcher'.split()),
     'bill_committees': frozenset('referral_rule referral_signal'.split()),
     'bill_committee_activities': frozenset({'snapshot_update_date'}),
     'cbo_feed_items': frozenset({'feed_url'}),
     'bill_cosponsors': frozenset('input_sha256 sponsorship_date_status sponsorship_withdrawn_date_status source_path source_xml'.split()),
     'bill_subjects': frozenset('carrier enriched_at'.split()),
     'bill_vote_references': frozenset('url observed_at'.split()),
-    'committee_assignments': frozenset('congress_basis file_date observed_at'.split()),
+    'committee_assignments': frozenset('file_date observed_at'.split()),
     'committee_meetings': frozenset('url detail_read'.split()),
     'committees': frozenset('url detail_captured'.split()),
     'congress_bills': frozenset(
-        'url schema_version latest_action_source_system_code latest_action_source_system_name stage_rule '
-        'stage_matcher stage_action_index stage_action_date stage_source_text signed_date_rule '
-        'signed_date_action_index signed_date_action_code money_bill_rule money_bill_reason_codes '
+        'url schema_version latest_action_source_system_code latest_action_source_system_name '
+        'stage_matcher stage_action_index stage_action_date signed_date_action_index '
+        'signed_date_action_code money_bill_rule money_bill_reason_codes '
         'referral_signals cbo_cost_estimates_outcome url_source cosponsors_outcome'
     .split()),
     'house_communications': frozenset(

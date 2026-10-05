@@ -335,6 +335,50 @@ def test_gao_prior_published_without_the_cut_flag_is_read_once_and_rewritten_wit
     assert receipt["witnesses"][0]["source_id"] == "test:listing"
 
 
+def test_gao_recommendations_prior_published_without_its_seen_dates_restores_them(tmp_path):
+    """gao-recommendations published under government-sources/1 on 2026-10-04, first_seen and last_seen in receipts."""
+    import shutil
+    from datetime import date
+
+    from spicy_regs.etl_receipts import ReceiptContext, write_dataset
+    from spicy_regs.transforms.government_receipts import EARLIER_POLICIES
+
+    dataset = "gao_recommendations"
+    [earlier] = EARLIER_POLICIES[dataset]
+    raw = {
+        **dict.fromkeys(_legacy_schema(dataset).names),
+        "recommendation_id": "r-1",
+        "report_id": "GAO-26-1",
+        "first_seen": "2026-09-30",
+        "last_seen": "2026-10-02",
+        "listed_open": "true",
+    }
+    subject = {name: value for name, value in map_subject(dataset, raw).items() if name in earlier.subject_schema.names}
+    witness = {
+        "source_id": "test:export",
+        "source_uri": None,
+        "sha256": "sha256:" + "0" * 64,
+        "locator": None,
+        "body_version": None,
+    }
+    context = ReceiptContext("earlier", dataset + ":0", earlier.policy_version, [witness])
+    held, receipts = write_dataset([({**subject, "raw_record": raw}, context)], tmp_path / "published", earlier)
+    assert held is not None and "first_seen" not in pq.read_schema(held).names
+
+    restored = internal_prior(dataset, held, receipt_path=receipts, generation_id="earlier")
+    assert pq.read_table(restored).to_pylist() == [raw]
+    build = tmp_path / "build"
+    build.mkdir()
+    output = build / (dataset + ".parquet")
+    shutil.copyfile(restored, output)
+    migrate_outputs((output,), generation_id="upgrade")
+    assert pq.read_schema(output).equals(SUBJECT_SCHEMAS[dataset])
+    [row] = pq.read_table(output).to_pylist()
+    assert (row["first_seen"], row["last_seen"]) == (date(2026, 9, 30), date(2026, 10, 2))
+    [receipt] = pq.read_table(build / "etl_receipts.parquet").to_pylist()
+    assert receipt["policy_version"] == POLICIES[dataset].policy_version
+
+
 def test_acquisition_failure_receipt_pins_shared_evidence_without_exception_text(tmp_path):
     from spicy_regs.pipelines.rollups.government import GovernmentReceiptRollup
     from spicy_regs.transforms.government_receipts import _digest

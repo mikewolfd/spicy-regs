@@ -2132,19 +2132,19 @@
         "name": "target_resolved",
         "source_type": "VARCHAR",
         "meaning": "Whether `target_key` is the hosted target's own spelling.  `false` means the rule found the cite but nothing settled the key: a bill with no stated Congress, or a committee name no supplied roster reaches.",
-        "decision": "move-to-receipt",
-        "target": null,
-        "target_type": "receipt exact typed value",
-        "reason": "Processing, source locator, acquisition, quality, or diagnostic evidence; retain the exact original value in the matching shared ETL receipt."
+        "decision": "flatten",
+        "target": "target_resolved",
+        "target_type": "bool",
+        "reason": "Says whether target_key is a settled key or the printed text's canonical form, which a reader needs before joining on it; a subject column by owner decision, 2026-10-05. A declared Boolean; reject unknown spellings, preserve null and retain the original text in the receipt."
       },
       {
         "name": "target_rule",
         "source_type": "VARCHAR",
         "meaning": "How the key was reached. Bill routes distinguish inline_congress, congress_subheading, document_fallback, unstated and document_fallback_refused after the bill_number: prefix. A document fallback is context supplied by the caller, not proof of historical applicability. Other kinds use the rule name except `committee_name`, where it is the resolution route: `exact` and `roster_prefix` are lookups in the roster vocabulary, while `name_prefix` and `sibling_prefix` are inferences from the printed text of this one document.  A consumer wanting only roster lookups filters on this column rather than on `target_resolved`.",
-        "decision": "move-to-receipt",
-        "target": null,
-        "target_type": "receipt exact typed value",
-        "reason": "Processing, source locator, acquisition, quality, or diagnostic evidence; retain the exact original value in the matching shared ETL receipt."
+        "decision": "keep",
+        "target": "target_rule",
+        "target_type": "string",
+        "reason": "Says how target_key was reached, which separates a lookup from an inference a reader may decline; a subject column by owner decision, 2026-10-05. Preserve its literal token; the complete original remains in its receipt."
       },
       {
         "name": "stated_by_index",
@@ -3488,10 +3488,10 @@
         "name": "uslm_outcome",
         "source_type": "VARCHAR",
         "meaning": "captured or captured_partial retain validated native metadata; captured_refused retains a refused capture without unvalidated metadata; request_failed records an attempted read without an accepted body; unavailable records supported source absence; not_requested means no attempt.",
-        "decision": "move-to-receipt",
-        "target": null,
-        "target_type": "receipt exact typed value",
-        "reason": "Processing, source locator, acquisition, quality, or diagnostic evidence; retain the exact original value in the matching shared ETL receipt."
+        "decision": "keep",
+        "target": "uslm_outcome",
+        "target_type": "string",
+        "reason": "Says how to read a NULL in the row's Statutes at Large columns, which a reader needs beside them; a subject column by owner decision, 2026-10-05. Preserve its literal token; the complete original remains in its receipt."
       },
       {
         "name": "uslm_citable_as_json",
@@ -3506,10 +3506,10 @@
         "name": "uslm_reason",
         "source_type": "VARCHAR",
         "meaning": "Bounded outcome reason token; NULL on complete capture or when no read was attempted.",
-        "decision": "move-to-receipt",
-        "target": null,
-        "target_type": "receipt exact typed value",
-        "reason": "Processing, source locator, acquisition, quality, or diagnostic evidence; retain the exact original value in the matching shared ETL receipt."
+        "decision": "keep",
+        "target": "uslm_reason",
+        "target_type": "string",
+        "reason": "Says why uslm_outcome is not a complete capture, which a reader needs beside it; a subject column by owner decision, 2026-10-05. Preserve its literal token; the complete original remains in its receipt."
       },
       {
         "name": "uslm_reader_version",
@@ -3524,10 +3524,10 @@
         "name": "law_text_outcome",
         "source_type": "VARCHAR",
         "meaning": "not_requested, parsed or refused: section reading is separate from validated USLM metadata.",
-        "decision": "move-to-receipt",
-        "target": null,
-        "target_type": "receipt exact typed value",
-        "reason": "Reading outcome, implementation version, source locator or capture evidence; retain only in the ETL receipt."
+        "decision": "keep",
+        "target": "law_text_outcome",
+        "target_type": "string",
+        "reason": "Says whether the law's sections were read, so a law with no law_sections rows is not taken for a law with no text; a subject column by owner decision, 2026-10-05. Preserve its literal token; the complete original remains in its receipt."
       },
       {
         "name": "law_text_reader_version",
@@ -4440,10 +4440,10 @@
         "name": "text_diff_truncated",
         "source_type": "VARCHAR",
         "meaning": "True when the word diff did not fit the cap and entries were dropped from the end.",
-        "decision": "move-to-receipt",
-        "target": null,
-        "target_type": "receipt exact typed value",
-        "reason": "Processing, source locator, acquisition, quality, or diagnostic evidence; retain the exact original value in the matching shared ETL receipt."
+        "decision": "flatten",
+        "target": "text_diff_truncated",
+        "target_type": "bool",
+        "reason": "Says whether text_diff was cut at the byte cap, which a reader needs beside it; a subject column by owner decision, 2026-10-05. A declared Boolean; reject unknown spellings, preserve null and retain the original text in the receipt."
       },
       {
         "name": "financial_from_amounts_json",

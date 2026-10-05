@@ -98,7 +98,9 @@ def test_a_first_run_publishes_every_listed_recommendation_open(tmp_path):
     out = _run(tmp_path / "first")
     table = pq.read_table(out)
     assert table.schema.equals(SUBJECT_SCHEMAS['gao_recommendations'])
-    assert 'first_seen' not in table.column_names and 'last_seen' not in table.column_names
+    assert {(row['first_seen'].isoformat(), row['last_seen'].isoformat()) for row in table.to_pylist()} == {
+        ('2026-09-28', '2026-09-28')
+    }
     assert all(row['listed_open'] is True for row in table.to_pylist())
     rows = literal_table(out).to_pylist()
     assert len(rows) == 35 and len({row["recommendation_id"] for row in rows}) == 35
