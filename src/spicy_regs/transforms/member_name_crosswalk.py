@@ -32,7 +32,7 @@ cannot answer:
 - **The seating day.** One member left: the row is that member's on a day inside a matched term.
   Several left (``+seating_day``; owner decision, 2026-10-05): the row is the one of them a
   matched term seats that day, which separates a successor of the same surname, state and party
-  from the member they followed (the 105th's Capps and Bono, the 107th's Shuster). This comes
+  from the member they followed (the 105th's Capps and Bono, the 107th's Shuster). This also requires a dated former surname to be in force on that day. It comes
   first because it reads nothing but the terms: a member not seated is on no roll call, whatever
   the Clerk printed.
 - **The remaining member** (``+remaining_member``). A label that prints no first name, on a day
@@ -47,7 +47,7 @@ A day that seats none of a key's members stays NULL (``outside_term``), as does 
 several the roll call does not tell apart (``several_seated``), and so do two rows of one roll
 call that resolve to one member (``listed_twice``).
 
-**Measured** on the live tables of 2026-10-04 (roll-call-votes ``e053a851``, members ``a1955f7e``;
+**Historical v3 measurements** on the live tables of 2026-10-04 (roll-call-votes ``e053a851``, members ``a1955f7e``;
 receipt ``~/Work/corpora/fork-execution-2026-09-21/votes-person-crosswalk-2026-10-05/``). From
 2003 the Clerk prints the same labels beside its own ``name-id``, so the rule was run on those
 rows with the id hidden: see ``validation.json`` there for the rows, coverage and every
@@ -91,12 +91,13 @@ from spicy_regs.transforms.table_merge import _duckdb_session, _merge_order, pub
 if TYPE_CHECKING:
     from spicy_regs.source_evidence import CaptureEvidence
 
+#: v4 preserves dated surname bounds on each vote and refuses selected input read failures.
 #: v3 (owner decision, 2026-10-05): a printed first name also agrees with the nickname the crosswalk states, and a
 #: plain label seating several takes the member its roll call's first-named labels leave over. v2: where several
 #: members still answer to a key, a row takes the one seated on its vote's day, and a resolution names a former
 #: surname as such. v1: surname, state and party within the Congress, a first name where several remain, the vote
 #: day inside the matched term, one row per member per roll call. Neither earlier version was published.
-RULE_VERSION = "house-name-crosswalk-v3"
+RULE_VERSION = "house-name-crosswalk-v4"
 
 #: The published tables the rule reads, all written by ``run-rollup-members`` in one generation.
 SOURCES = ("members", "member_terms", "member_party_affiliations")
@@ -251,11 +252,14 @@ def _resolve(key: tuple[str, str, str, str], whole: Mapping[str, list[dict]], pa
     for bioguide in sorted(chosen):
         own = [term for term in of_party if term["bioguide_id"] == bioguide]
         named_by = "surname_part" if part else "former_surname" if all(term["former"] for term in own) else "surname"
-        matched = sorted({(int(term["term_index"]), term["start"], term["end"]) for term in own})
+        matched = sorted({(int(term["term_index"]), term["start"], term["end"],
+                          max(term["start"], term["since"]), min(term["end"], term["until"])) for term in own})
         members[bioguide] = {
             "rule": named_by + steps,
             "terms": [{"term_index": str(index), "term_start": start.isoformat(), "term_end": end.isoformat()}
-                      for index, start, end in matched],
+                      | ({"name_start": since.isoformat(), "name_end": until.isoformat()}
+                         if (since, until) != (start, end) else {})
+                      for index, start, end, since, until in matched],
         }
     return {"reason": None, "candidates": sorted(chosen), "members": members, "first_named": bool(printed_first)}
 
@@ -296,13 +300,11 @@ def fill_house_name_bioguide_ids(
     Held rows included: each run decides every ``name:`` row again and journals the rule version,
     the inputs and whether they state nicknames, the rows left unresolved by key and reason, and each
     key's member whose rows changed with their rule and matched terms (``member-name-crosswalk``).
-    Best-effort like the Senate fill:
-    with any of :data:`SOURCES` unpublished or unreadable the file stays as merged. Returns how
+    With any of :data:`SOURCES` unpublished the file stays as merged. A failure to read a selected
+    input aborts the build, so an unverifiable held id cannot be published. Returns how
     many ``name:`` rows carry an id.
     """
-    import duckdb
     from spicy_docs.schemas import TABLE_CONTRACTS
-    from spicy_docs.transport.credentials import scrub_credential
 
     contract = TABLE_CONTRACTS["member_votes"]
     filled_file = output_dir / f"_{contract.name}_name_filled.parquet"
@@ -352,8 +354,9 @@ def fill_house_name_bioguide_ids(
         text = pa.string()
         con.register("days", pa.Table.from_pylist(days, schema=pa.schema([("vote_date", text), ("day", pa.date32())])))
         con.register("name_terms", pa.Table.from_pylist(
-            [dict(zip(_KEY, key), bioguide_id=bioguide, term_start=date.fromisoformat(term["term_start"]),
-                  term_end=date.fromisoformat(term["term_end"]), first_named=resolution["first_named"],
+            [dict(zip(_KEY, key), bioguide_id=bioguide,
+                  term_start=date.fromisoformat(term.get("name_start", term["term_start"])),
+                  term_end=date.fromisoformat(term.get("name_end", term["term_end"])), first_named=resolution["first_named"],
                   members=len(resolution["members"]))
              for key, resolution in resolutions.items()
              for bioguide, member in resolution["members"].items() for term in member["terms"]],
@@ -415,6 +418,7 @@ def fill_house_name_bioguide_ids(
             """
         ).fetchall()
         changed = sum(moved for *_, moved in outcomes)
+        digests = {name: _digest(path) for name, path in sources.items() if path is not None}
         if changed:
             con.execute(
                 f"""
@@ -427,17 +431,10 @@ def fill_house_name_bioguide_ids(
                 """
             )
             filled_file.replace(out_file)
-        digests = {name: _digest(path) for name, path in sources.items() if path is not None}
-    except (duckdb.Error, OSError) as error:
-        logger.warning(
-            "{}: the name crosswalk failed — name: rows left as merged: {}", contract.name,
-            scrub_credential(str(error), ""),
-        )
-        filled_file.unlink(missing_ok=True)
-        return 0
     finally:
         if con is not None:
             con.close()
+        filled_file.unlink(missing_ok=True)
         for path in sources.values():
             if path is not None:
                 path.unlink(missing_ok=True)
