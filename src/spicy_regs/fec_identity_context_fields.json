@@ -2182,11 +2182,14 @@
       "party_full": "VARCHAR",
       "organization_type_full": "VARCHAR",
       "committee_state": "VARCHAR",
+      "match_method": "VARCHAR",
+      "confidence": "VARCHAR",
       "committee_match_count": "BIGINT",
       "comment_count": "BIGINT",
       "docket_count": "BIGINT",
       "first_comment_date": "TIMESTAMP WITH TIME ZONE",
       "last_comment_date": "TIMESTAMP WITH TIME ZONE",
+      "sponsor_name_match": "VARCHAR",
       "agency_codes": "VARCHAR[]",
       "association_kind": "VARCHAR"
     },
@@ -2198,9 +2201,8 @@
       "organization_norm",
       "organization_core",
       "name_source",
-      "match_method",
-      "confidence",
       "agency_codes_json",
+      "connected_organization_name",
       "conversion_inputs",
       "conversion_diagnostics",
       "source_input"
@@ -2224,7 +2226,9 @@
       "docket_count",
       "agency_codes_json",
       "first_comment_date",
-      "last_comment_date"
+      "last_comment_date",
+      "connected_organization_name",
+      "sponsor_name_match"
     ],
     "native_lists": {
       "agency_codes_json": [

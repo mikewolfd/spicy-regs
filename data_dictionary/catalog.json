@@ -760,7 +760,6 @@
           "asserted_at",
           "supersedes_id",
           "unresolved_fr_references_json",
-          "anchor_kind",
           "raw_conversion_inputs",
           "input_metadata",
           "raw_source_record"
@@ -2764,9 +2763,8 @@
           "organization_norm",
           "organization_core",
           "name_source",
-          "match_method",
-          "confidence",
           "agency_codes_json",
+          "connected_organization_name",
           "conversion_inputs",
           "conversion_diagnostics",
           "source_input"
@@ -3705,6 +3703,7 @@
         "open_date",
         "close_date",
         "opened_by_artifact_ids",
+        "anchor_kind",
         "register_close_date",
         "regulations_gov_close_date"
       ]
@@ -5923,11 +5922,14 @@
         "party_full",
         "organization_type_full",
         "committee_state",
+        "match_method",
+        "confidence",
         "committee_match_count",
         "comment_count",
         "docket_count",
         "first_comment_date",
         "last_comment_date",
+        "sponsor_name_match",
         "agency_codes",
         "association_kind"
       ]

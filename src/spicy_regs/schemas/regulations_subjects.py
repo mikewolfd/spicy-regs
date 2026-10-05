@@ -467,6 +467,8 @@ RECEIPT_COLUMNS = {
     ),
     "cfr_sections": ("url",),
     "comment_attributes": (),
+    # anchor_kind is a subject column: whether a docket, a proceeding or nothing anchors the period is a fact about
+    # the period a reader filters on, not how the row was processed (owner decision, 2026-10-05).
     "comment_periods": (
         "source",
         "evidence_ids_json",
@@ -476,7 +478,6 @@ RECEIPT_COLUMNS = {
         "asserted_at",
         "supersedes_id",
         "unresolved_fr_references_json",
-        "anchor_kind",
     ),
     "comments": ("comment_reference_values_json", "text_extraction_status", "pdf_extraction_results_json"),
     "comments_index": (),

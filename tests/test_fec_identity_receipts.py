@@ -213,6 +213,102 @@ def test_existing_catalog_producer_has_actual_receipt_writing_entrypoint(tmp_pat
     assert all("source_metadata_json" in row for row in rows)
 
 
+def test_organization_links_state_their_match_grade_and_sponsor_comparison_in_the_subject(tmp_path):
+    """Owner decision 2026-10-05: the three columns a reader judges a link by are subject columns, not receipt fields.
+
+    The rows come from the real builder, because a row made from the registry's own input list cannot show a
+    builder column the registry never classified.
+    """
+    import duckdb
+    import pyarrow as pa
+
+    from spicy_regs.etl_receipts import _unpack
+    from spicy_regs.relationship_views import install_relationship_views
+    from spicy_regs.transforms.build_fec_identity_rollup import build_fec_identity_rollup
+    from spicy_regs.transforms.build_org_committee_links import COLUMNS
+    from spicy_regs.transforms.fec_identity_receipts import dataset_policy
+    from tests.test_org_committee_links import _comment, _committee, _history, _write
+
+    table = "org_committee_links"
+    returned = ("match_method", "confidence", "sponsor_name_match")
+    policy = dataset_policy(table)
+    assert [policy.subject_schema.field(name).type for name in returned] == [pa.string()] * 3
+    assert not set(returned) & set(policy.receipt_fields)
+    assert {name for name, _ in COLUMNS} == set(REGISTRY[table]["input_fields"])
+
+    inputs = tmp_path / "inputs"
+    inputs.mkdir()
+    posted = {"posted_date": "2025-03-01T05:00:00Z"}
+    _write(
+        inputs / "comments.parquet",
+        [
+            _comment("C-1", "American Physical Therapy Association", **posted),
+            _comment("C-2", "National Association of Realtors", **posted),
+            _comment("C-3", "Pipeline Safety Trust", **posted),
+        ],
+    )
+    _write(
+        inputs / "fec_committees.parquet",
+        [
+            _committee("C00000001", "Pipeline Safety Trust"),
+            _committee("C00000002", "AMERICAN PHYSICAL THERAPY ASSOCIATION PHYSICAL THERAPY POLITICAL ACTION COMMITTEE"),
+            _committee("C00030718", "NATIONAL ASSOCIATION OF REALTORS POLITICAL ACTION COMMITTEE"),
+        ],
+    )
+    _write(
+        inputs / "fec_committee_history.parquet",
+        [
+            _history("C00000002", "2026", "INTERNATIONAL BROTHERHOOD OF TEAMSTERS - DRIVE"),
+            _history("C00030718", "2026", "NATIONAL ASSOCIATION OF REALTORS"),
+        ],
+    )
+    output = build_fec_identity_rollup(
+        table, tmp_path / "links", generation_id="g1", inputs=sorted(inputs.glob("*.parquet"))
+    )
+    expected = {
+        "American Physical Therapy Association": ("prefix", "medium", "differs"),
+        "National Association of Realtors": ("core", "high", "agrees"),
+        "Pipeline Safety Trust": ("exact", "high", "not_stated"),
+    }
+    stored = pq.read_table(output / (table + ".parquet"))
+    assert stored.schema.equals(policy.subject_schema)
+    assert {row["organization"]: tuple(row[name] for name in returned) for row in stored.to_pylist()} == expected
+    receipts = pq.read_table(output / "etl_receipts.parquet").to_pylist()
+    assert [receipt["outcome"] for receipt in receipts] == ["accepted"] * 3
+    held = [_unpack(json.loads(receipt["processing_json"])) for receipt in receipts]
+    assert all(not set(returned) & set(fields) for fields in held)
+    assert {fields["connected_organization_name"] for fields in held} == {
+        "INTERNATIONAL BROTHERHOOD OF TEAMSTERS - DRIVE",
+        "NATIONAL ASSOCIATION OF REALTORS",
+        None,
+    }
+
+    # The pair restores every column of the builder's file its receipts witness, the returned ones included.
+    built = pq.read_table(receipts[0]["witnesses"][0]["source_uri"]).to_pylist()
+    restored = [
+        {name: row["conversion_inputs"][name] if name in row["conversion_inputs"] else row[name] for name, _ in COLUMNS}
+        for row in read_identity_rows(output, table, generation_id="g1")
+    ]
+    assert restored == built and len(built) == 3
+
+    # The candidate view reads the native table and projects the grade from it.
+    with duckdb.connect() as con:
+        con.from_parquet(str(output / (table + ".parquet"))).create_view(table)
+        view = install_relationship_views(con, [table])["org_identity_candidates"]
+        assert (view["status"], view["metadata"]["rule_version"]) == ("available", "native-name-candidates/2")
+        viewed = con.execute(
+            "SELECT organization, match_method, confidence, sponsor_name_match FROM org_identity_candidates"
+        ).fetchall()
+        assert {row[0]: row[1:] for row in viewed} == expected
+
+    # Each receipt still vouches for the returned values: a changed grade no longer joins.
+    changed = stored.to_pylist()
+    changed[0]["confidence"] = "changed"
+    pq.write_table(pa.Table.from_pylist(changed, schema=stored.schema), output / (table + ".parquet"))
+    with pytest.raises(ValueError, match="subject receipt"):
+        list(read_identity_rows(output, table, generation_id="g1"))
+
+
 def test_committee_increment_requires_exact_prior_receipts_before_producer(tmp_path, monkeypatch):
     import shutil
     import importlib

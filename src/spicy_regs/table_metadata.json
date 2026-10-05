@@ -1515,6 +1515,11 @@
         "description": "Native list of public URLs of the records whose window opens the period on `open_date`. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
       },
       {
+        "column_name": "anchor_kind",
+        "column_type": "VARCHAR",
+        "description": "What anchors the period: `docket` when a docket does, `proceeding` when only a proceeding does, `none` when neither; the rulespec export takes the anchored rows."
+      },
+      {
         "column_name": "register_close_date",
         "column_type": "VARCHAR",
         "description": "Latest `comments_close_on` of its Register records, `YYYY-MM-DD`; NULL when the Register states none."
@@ -10307,6 +10312,16 @@
         "description": "Two-letter state on the matched committee (`fec_committees.state`). Often null."
       },
       {
+        "column_name": "match_method",
+        "column_type": "VARCHAR",
+        "description": "How the pair matched: `exact` (full normalized names equal), `core` (decoration-stripped cores equal), or `prefix` (committee core starts with the whole organization core on a token boundary)."
+      },
+      {
+        "column_name": "confidence",
+        "column_type": "VARCHAR",
+        "description": "`high` for `exact`/`core`; for `prefix`, `medium` when `committee_match_count` <= 5 and `low` above that. Grades the name match alone: it ignores whether the committee still files and the sponsor FEC states (`sponsor_name_match`). Filter on this to pick a precision bar."
+      },
+      {
         "column_name": "committee_match_count",
         "column_type": "BIGINT",
         "description": "How many FEC committees this organization name matched in total, counting the candidate committees and leadership PACs whose links are left out, so it can exceed this string's rows here. A high count does not establish an affiliate network; inspect source evidence alongside the matching rule."
@@ -10330,6 +10345,11 @@
         "column_name": "last_comment_date",
         "column_type": "TIMESTAMP WITH TIME ZONE",
         "description": "Latest `posted_date` across this organization's comments in every agency and year (ISO 8601 string)."
+      },
+      {
+        "column_name": "sponsor_name_match",
+        "column_type": "VARCHAR",
+        "description": "Whether `connected_organization_name` names the commenting organization: `agrees` when it reduces to `organization_core` under the same normalization (read also with PAC words such as `POLITICAL ACTION COMMITTEE` removed, spaces ignored); `differs` otherwise, most often the same organization spelled another way (`ASSN`, inverted words, a typo), a former name or a parent company, sometimes a different sponsor; `not_stated` when FEC names no sponsor. A name comparison, not an identity."
       },
       {
         "column_name": "agency_codes",
@@ -18255,7 +18275,6 @@
           "asserted_at",
           "supersedes_id",
           "unresolved_fr_references_json",
-          "anchor_kind",
           "raw_conversion_inputs",
           "input_metadata",
           "raw_source_record"
@@ -20259,9 +20278,8 @@
           "organization_norm",
           "organization_core",
           "name_source",
-          "match_method",
-          "confidence",
           "agency_codes_json",
+          "connected_organization_name",
           "conversion_inputs",
           "conversion_diagnostics",
           "source_input"

@@ -337,6 +337,7 @@
       "open_date": "Eastern day the period opens: the earliest opening among its records (a document's comment start, else its posting; a Register record's publication), `YYYY-MM-DD`.",
       "close_date": "Maximum non-placeholder normalized close among grouped records, YYYY-MM-DD: the later of register_close_date and regulations_gov_close_date. Not a legally controlling/current deadline or a submission-purpose classification. Search all three dates; see data_quality.",
       "opened_by_artifact_ids": "Native list of public URLs of the records whose window opens the period on `open_date`. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
+      "anchor_kind": "What anchors the period: `docket` when a docket does, `proceeding` when only a proceeding does, `none` when neither; the rulespec export takes the anchored rows.",
       "register_close_date": "Latest `comments_close_on` of its Register records, `YYYY-MM-DD`; NULL when the Register states none.",
       "regulations_gov_close_date": "Latest comment end (Eastern day) of its Regulations.gov documents, `YYYY-MM-DD`; NULL when none states one."
     }
@@ -3005,11 +3006,14 @@
       "party_full": "Human-readable political party of the matched committee. Often null for non-party committees.",
       "organization_type_full": "Sponsoring organization type of the matched committee (e.g. `Trade Association`, `Labor Organization`). Often null.",
       "committee_state": "Two-letter state on the matched committee (`fec_committees.state`). Often null.",
+      "match_method": "How the pair matched: `exact` (full normalized names equal), `core` (decoration-stripped cores equal), or `prefix` (committee core starts with the whole organization core on a token boundary).",
+      "confidence": "`high` for `exact`/`core`; for `prefix`, `medium` when `committee_match_count` <= 5 and `low` above that. Grades the name match alone: it ignores whether the committee still files and the sponsor FEC states (`sponsor_name_match`). Filter on this to pick a precision bar.",
       "committee_match_count": "How many FEC committees this organization name matched in total, counting the candidate committees and leadership PACs whose links are left out, so it can exceed this string's rows here. A high count does not establish an affiliate network; inspect source evidence alongside the matching rule.",
       "comment_count": "Comments filed under this exact organization string in every agency and year the comments table holds (deduplicated on `comment_id`, newest `modify_date` wins — matching the MCP `comments` view). The same value repeats on each committee row of the string; do not sum it across rows.",
       "docket_count": "Distinct dockets this organization string commented on, across every agency and year. Repeats on each committee row of the string.",
       "first_comment_date": "Earliest `posted_date` across this organization's comments in every agency and year (ISO 8601 string).",
       "last_comment_date": "Latest `posted_date` across this organization's comments in every agency and year (ISO 8601 string).",
+      "sponsor_name_match": "Whether `connected_organization_name` names the commenting organization: `agrees` when it reduces to `organization_core` under the same normalization (read also with PAC words such as `POLITICAL ACTION COMMITTEE` removed, spaces ignored); `differs` otherwise, most often the same organization spelled another way (`ASSN`, inverted words, a typo), a former name or a parent company, sometimes a different sponsor; `not_stated` when FEC names no sponsor. A name comparison, not an identity.",
       "agency_codes": "Native list of the distinct agency codes this organization commented to, across every year, sorted. Repeats on each committee row of the string. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "association_kind": "Meaning of the stated organization-to-committee association; no shared legal identity is implied."
     }
