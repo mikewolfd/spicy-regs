@@ -183,12 +183,31 @@ def _prose() -> dict[str, dict[str, str]]:
     return prose
 
 
+def renamed_fields(policy, carried: set[str]) -> dict[str, str]:
+    """Each carried field whose value the table holds under another column name, with that column.
+
+    A list a mapper received serialized as ``<column>_json`` is published as ``<column>``, and FCC filings' lists
+    have legacy names of their own (``FCC_LEGACY_ARRAYS``, the government mapper's map). The receipt still holds
+    the field as received; the table has its value, so ``describe_table`` does not offer it as something the
+    table lacks. Other families' mappers rename through code this does not read: their renamed fields stay on
+    offer until they are declared here.
+    """
+    from spicy_regs.transforms.government_source_shapes import FCC_LEGACY_ARRAYS, LEGACY_COLUMNS
+
+    subject = set(policy.subject_schema.names)
+    renamed = {name: name.removesuffix("_json") for name in carried - subject if name.endswith("_json")}
+    if policy.dataset in LEGACY_COLUMNS:
+        renamed |= FCC_LEGACY_ARRAYS
+    return {name: column for name, column in sorted(renamed.items()) if name in carried - subject and column in subject}
+
+
 def record(policies: Mapping | None = None) -> dict:
     """The bundled declaration for every table with a row identity, from the installed policies.
 
-    Per table: ``containers`` (mapping name to the fields it holds), ``meanings`` for the fields no subject column
-    carries (a column's meaning is the dictionary's, which the server already bundles), and ``read_markers``. A
-    marker naming a field the table's receipts do not carry raises: it would govern nothing and say so nowhere.
+    Per table: ``containers`` (mapping name to the fields it holds), ``renamed`` (``renamed_fields``), ``meanings``
+    for the fields no subject column carries (a column's meaning is the dictionary's, which the server already
+    bundles), and ``read_markers``. A marker naming a field the table's receipts do not carry raises: it would
+    govern nothing and say so nowhere.
     """
     from spicy_regs.etl_policy_registry import installed_policies
 
@@ -206,6 +225,8 @@ def record(policies: Mapping | None = None) -> dict:
         entry: dict = {}
         if containers:
             entry["containers"] = {container: list(names) for container, names in containers.items()}
+        if renamed := renamed_fields(policy, carried):
+            entry["renamed"] = renamed
         meanings = {name: " ".join(text.split()) for name in sorted(carried - set(policy.subject_schema.names))
                     if (text := prose.get(table, {}).get(name))}
         if meanings:

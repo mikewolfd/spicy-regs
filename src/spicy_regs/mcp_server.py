@@ -2388,10 +2388,10 @@ def _tools() -> list[Tool]:
         the table declares a read marker for it, else null_unmarked (nothing
         says whether it was read). receipt_meaning and state_meaning define the
         words a reply uses; fields gives each field's meaning. receipts names
-        the family, generation and policy version read, and whether its rows
-        are sorted by record id: where they are not, the table's record ids
-        are scanned, and a table with more than 2,000,000 receipts is refused.
-        A reply past the reply limit is refused with how many keys fit.
+        the family, generation and policy version read. A lookup reads the
+        record id of every receipt of the table, so a table with more than
+        2,000,000 receipts is refused. A reply past the reply limit is refused
+        with how many keys fit.
         """
         cursor = _get_connection().cursor()
         with _statement_timeout(cursor):

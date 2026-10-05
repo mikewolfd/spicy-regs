@@ -288,6 +288,10 @@
      "congress"
     ]
    },
+   "renamed": {
+    "display_path_json": "display_path",
+    "match_path_json": "match_path"
+   },
    "meanings": {
     "body_sha256": "Digest of body's UTF-8 bytes, so an unchanged section is recognisable without a join.",
     "display_path_json": "The human-facing path the engine composes, as a JSON array.",
@@ -305,6 +309,9 @@
      "carrier",
      "enriched_at"
     ]
+   },
+   "renamed": {
+    "subjects_json": "subjects"
    },
    "meanings": {
     "carrier": "Source reader that answered: govinfo-billstatus from the 108th Congress on, congress-api below it or where the BILLSTATUS file was refused.",
@@ -331,6 +338,9 @@
      "money_bill_kind",
      "frame"
     ]
+   },
+   "renamed": {
+    "top_provisions_json": "top_provisions"
    },
    "meanings": {
     "completed_at": "When the answer came back; the merge prefers the larger value.",
@@ -470,6 +480,13 @@
      "rule_set_version"
     ]
    },
+   "renamed": {
+    "associated_bills_json": "associated_bills",
+    "associated_cfr_parts_json": "associated_cfr_parts",
+    "associated_laws_json": "associated_laws",
+    "associated_statutes_json": "associated_statutes",
+    "associated_usc_sections_json": "associated_usc_sections"
+   },
    "meanings": {
     "associated_bills_json": "Every root-level `<bill>` the MODS names, as a JSON array of objects carrying the bill's natural key and the publisher's own `context` marker, in document order. Published whole because it is the only statement of this edge that carries a Congress: a budget volume's print names a bill without one, so a printed key can be compared with these only congress-blind and can join `congress_bills` not at all.",
     "associated_cfr_parts_json": "Every `<cfr>` part the MODS names, as a JSON array of `{title}-{part}` keys, in document order. Budget volumes are the only sampled collection whose MODS states one at all.",
@@ -507,6 +524,10 @@
      "found_by",
      "title_bill_id_rule"
     ]
+   },
+   "renamed": {
+    "report_citations_json": "report_citations",
+    "restatements_json": "restatements"
    },
    "meanings": {
     "estimate_index": "Zero-based position, in the list the row was read from, of the item this row states: the first one naming this publication on https, else the first one naming it. A BILLSTATUS list keeps the publisher's order, which is a fact nothing here re-sorts. A `cbo_feed` row's list is the feed items naming the bill, oldest first and then by publication id, because the feed runs newest first and its order within one Date changes between captures. Each route's list is its own, so on a bill both routes give rows (8 over the 108th-119th, 2026-09-28) a `billstatus_bulk` and a `cbo_feed` row can share one index.",
@@ -589,6 +610,10 @@
      "zip"
     ]
    },
+   "renamed": {
+    "display_properties_json": "display_properties",
+    "file_formats_json": "file_formats"
+   },
    "meanings": {
     "display_properties_json": "The agency's labels for this record's fields: a JSON array of {label, name, tooltip}, name being the attribute it labels; json_column spelling.",
     "file_formats_json": "Renditions of the comment's own content file, rarely stated: a JSON array of {fileUrl, format, size}; json_column spelling. Attached files are in the thin table's attachments_json."
@@ -616,6 +641,12 @@
      "register_close_date",
      "regulations_gov_close_date"
     ]
+   },
+   "renamed": {
+    "docket_ids_json": "docket_ids",
+    "opened_by_artifact_ids_json": "opened_by_artifact_ids",
+    "proceeding_ids_json": "proceeding_ids",
+    "rins_json": "rins"
    },
    "meanings": {
     "actor_id": "The builder that asserted the row, with its version (`spicy-regs:comment-periods:v<n>`), bumped when its published rows change.",
@@ -659,6 +690,9 @@
      "subtype",
      "duplicate_comments"
     ]
+   },
+   "renamed": {
+    "attachments_json": "attachments"
    },
    "meanings": {
     "attachments_json": "JSON array of the comment's downloadable attachments: `[{title, formats:[{url, format, size}]}]`, from the object's `included` attachments, keeping only formats with a file URL. NULL, never `[]`, when it keeps none, so NULL does not mean no attachments: an attachment regulations.gov lists with no downloadable file (a `restrictReasonType` such as `Copyrighted`) is left out, and a comment whose attachments are all such reads NULL. The source records of EPA-HQ-OW-2022-0114 list 58 such attachments on 16 records, all Copyrighted; -1540, whose only attachment is one, reads NULL. Rows ingested before the extract gained this column (2026-03-15) kept NULL until the comment re-read (cause proven in comments-full-reread-2026-09-28/attachments-root-cause/), which on receipt sha256:77a08369… (2026-10-03) has written 26,414,926 of 26,415,400 rows: a non-NULL `comment_reference_values_json`, which the same extract always writes, marks a row it wrote, though the re-read leaves a column NULL where two copies of the record's version disagree.",
@@ -740,6 +774,16 @@
      "url",
      "detail_read"
     ]
+   },
+   "renamed": {
+    "bill_ids_json": "bill_ids",
+    "committees_json": "committees",
+    "document_urls_json": "document_urls",
+    "hearing_jackets_json": "hearing_jackets",
+    "meeting_documents_json": "meeting_documents",
+    "videos_json": "videos",
+    "witness_documents_json": "witness_documents",
+    "witnesses_json": "witnesses"
    },
    "meanings": {
     "bill_ids_json": "Natural keys of every bill in relatedItems.bills, as a JSON array, in publisher order; a bill named only in a meeting document is not here. NULL where no detail was read or the detail states no relatedItems.bills; `[]` where it states an empty one.",
@@ -862,6 +906,10 @@
      "detail_update_date"
     ]
    },
+   "renamed": {
+    "history_json": "history",
+    "subcommittees_json": "subcommittees"
+   },
    "meanings": {
     "detail_captured": "true when the committee-detail record was captured and folded onto this row.",
     "history_json": "The detail record's history entries, verbatim, as a JSON array in the publisher's order.",
@@ -925,6 +973,10 @@
      "cosponsors_outcome"
     ]
    },
+   "renamed": {
+    "related_bills_json": "related_bills",
+    "subjects_json": "subjects"
+   },
    "meanings": {
     "cbo_cost_estimates_outcome": "BILLSTATUS estimate-block observation: NULL means unread; populated means estimate items were read; requested-empty:absent means no element; requested-empty:present-and-empty means an empty element; requested-empty:unexpected-shape:<shape> names an unsupported XML shape. These are observations of this document, never evidence that no CBO estimate exists. Populated items can still have unkeyable URLs, which the family records as refusals.",
     "cosponsors_outcome": "Source list state: absent, empty or populated; NULL means not read.",
@@ -965,6 +1017,11 @@
    }
   },
   "court_dockets": {
+   "renamed": {
+    "attorneys_json": "attorneys",
+    "firms_json": "firms",
+    "parties_json": "parties"
+   },
    "meanings": {
     "absolute_url": "Absolute URL of the docket page on courtlistener.com.",
     "attorneys_json": "JSON array of attorney names appearing on the docket.",
@@ -1053,6 +1110,12 @@
      "completed_at"
     ]
    },
+   "renamed": {
+    "dollar_changes_json": "dollar_changes",
+    "key_changes_json": "key_changes",
+    "sections_added_json": "sections_added",
+    "sections_removed_json": "sections_removed"
+   },
    "meanings": {
     "completed_at": "When the answer came back; the merge prefers the larger value.",
     "content_hash": "Digest of the diff text the summary was written from, spelled sha256: plus the hex digest.",
@@ -1099,6 +1162,9 @@
      "sub_type",
      "sub_type2"
     ]
+   },
+   "renamed": {
+    "display_properties_json": "display_properties"
    },
    "meanings": {
     "display_properties_json": "The agency's labels for this docket's fields: a JSON array of {label, name, tooltip}; [] when none; json_column spelling."
@@ -1170,6 +1236,9 @@
      "zip"
     ]
    },
+   "renamed": {
+    "display_properties_json": "display_properties"
+   },
    "meanings": {
     "display_properties_json": "The agency's labels for this record's fields: a JSON array of {label, name, tooltip}, name being the attribute it labels; json_column spelling."
    }
@@ -1232,6 +1301,10 @@
      "removed_observed_at"
     ]
    },
+   "renamed": {
+    "attachment_records_json": "attachment_records",
+    "attachments_json": "attachments"
+   },
    "meanings": {
     "attachment_records_json": "Literal records from an explicitly read document attachment relationship, preserving attachment IDs, restrictions and alternative file formats. Null means the relationship was not read; an empty array means a validated complete read returned no attachments. A main document response alone cannot establish attachment absence.",
     "attachments_json": "JSON array of the main document's fileFormats renditions: `[{url, format, size}]`. This compatibility field does not contain separately listed attachment resources. Null when no main renditions were retained.",
@@ -1265,6 +1338,14 @@
      "native_fields_sha256",
      "pdf_extraction_results_json"
     ]
+   },
+   "renamed": {
+    "authors_json": "authors",
+    "bureaus_json": "bureaus",
+    "documents_json": "documents",
+    "filers_json": "filers",
+    "lawfirms_json": "lawfirms",
+    "proceeding_names_json": "proceedings"
    },
    "meanings": {
     "authors_json": "JSON array of author names on the filing, when distinct from the filers. Often empty.",
@@ -1533,6 +1614,9 @@
      "organizations_json",
      "metadata_json"
     ]
+   },
+   "renamed": {
+    "organizations_json": "organizations"
    },
    "meanings": {
     "body_status": "Explicit body availability or processing status. A PDF link remains deferred; metadata does not imply extracted content.",
@@ -1855,6 +1939,12 @@
    }
   },
   "fec_candidate_api_observations": {
+   "renamed": {
+    "cycles_json": "cycles",
+    "election_districts_json": "election_districts",
+    "election_years_json": "election_years",
+    "inactive_election_years_json": "inactive_election_years"
+   },
    "meanings": {
     "active_through_raw": "Literal source value for active_through before conversion; consult active_through_status for interpretation.",
     "active_through_status": "Interpretation of source active_through: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause.",
@@ -1939,6 +2029,12 @@
    }
   },
   "fec_committee_observations": {
+   "renamed": {
+    "candidate_ids_json": "candidate_ids",
+    "cycles_json": "cycles",
+    "sponsor_candidate_ids_json": "sponsor_candidate_ids",
+    "sponsor_candidate_list_json": "sponsor_candidate_list"
+   },
    "meanings": {
     "candidate_ids_json": "Literal JSON array of candidate IDs stated by the committee API; relationships require their own evidence and state checks.",
     "candidate_ids_status": "Source array state for candidate_ids: source_missing, source_null, source_empty, reported or unsupported_array; arrays are independent and preserve order.",
@@ -1984,6 +2080,10 @@
      "first_file_date",
      "last_file_date"
     ]
+   },
+   "renamed": {
+    "candidate_ids_json": "candidate_ids",
+    "cycles_json": "cycles"
    },
    "meanings": {
     "candidate_ids_json": "JSON array of OpenFEC candidate IDs associated with the committee (e.g. `[\"P00008052\"]`). Often `[]`.",
@@ -2513,6 +2613,9 @@
    }
   },
   "fec_filings": {
+   "renamed": {
+    "amendment_chain_json": "amendment_chain"
+   },
    "meanings": {
     "amendment_chain_json": "Native amendment-chain references as retained; completeness and replacement meaning are separate qualifications.",
     "amendment_scope_status": "Whether the affected report/schedule membership and replacement scope have been proved.",
@@ -3300,6 +3403,13 @@
    }
   },
   "fec_postgres_committee_history_observations": {
+   "renamed": {
+    "candidate_ids_json": "candidate_ids",
+    "cycles_has_activity_json": "cycles_has_activity",
+    "cycles_has_financial_json": "cycles_has_financial",
+    "cycles_json": "cycles",
+    "sponsor_candidate_ids_json": "sponsor_candidate_ids"
+   },
    "meanings": {
     "candidate_ids_json": "JSON array of OpenFEC candidate IDs associated with the committee (e.g. `[\"P00008052\"]`). Often `[]`.",
     "candidate_ids_status": "Source array state for candidate_ids: source_missing, source_null, source_empty, reported or unsupported_array; arrays are independent and preserve order.",
@@ -3619,6 +3729,10 @@
    }
   },
   "fec_research_meeting_observations": {
+   "renamed": {
+    "dates_json": "dates",
+    "links_json": "links"
+   },
    "meanings": {
     "collection_id": "Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity.",
     "context_sha256": "Digest of the sealed retained context object used by this mapping; separate from original-source bytes and typed output.",
@@ -3636,6 +3750,9 @@
    }
   },
   "fec_research_source_pages": {
+   "renamed": {
+    "links_json": "links"
+   },
    "meanings": {
     "collection_id": "Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity.",
     "content_status": "Page body disposition: body_extracted, failed_page, empty_page or unsupported_body_boundaries. Filter body_extracted for subject search; every capture retains its source evidence pointer.",
@@ -3707,6 +3824,14 @@
      "corrections_json",
      "significant"
     ]
+   },
+   "renamed": {
+    "agencies_json": "agencies",
+    "cfr_references_json": "cfr_references",
+    "corrections_json": "corrections",
+    "docket_ids_json": "docket_ids",
+    "regulation_id_numbers_json": "regulation_id_numbers",
+    "topics_json": "topics"
    },
    "meanings": {
     "agencies_json": "The issuing agencies as the Register's agency objects, a JSON array.",
@@ -3804,6 +3929,10 @@
      "executive_order_number"
     ]
    },
+   "renamed": {
+    "docket_ids_json": "docket_ids",
+    "regulation_id_numbers_json": "regulation_id_numbers"
+   },
    "meanings": {
     "docket_ids_json": "The full original docket-ID array, retained so consumers can see the other IDs this FR document links to.",
     "docket_normalization_rule": "Digest-pinned owner identifier-normalization rule used to produce candidates.",
@@ -3832,6 +3961,10 @@
      "outcome_rule",
      "b_numbers_truncated"
     ]
+   },
+   "renamed": {
+    "b_numbers_json": "b_numbers",
+    "topics_json": "topics"
    },
    "meanings": {
     "b_numbers_json": "JSON array of the decision's B-numbers: the ones its page's File line states where the page was read, else the ones in `decision_number`, split on commas and semicolons. GAO's listing cuts a few long lists, ending them `et al` or where its number field is full, and a fragment it cut mid-number is left out; b_numbers_truncated says where the list here is still the cut one. `[]` for a docket- or P-numbered decision.",
@@ -3888,6 +4021,13 @@
      "subject_terms_json"
     ]
    },
+   "renamed": {
+    "agencies_json": "agencies",
+    "requester_committees_json": "requester_committees",
+    "requester_members_json": "requester_members",
+    "subject_terms_json": "subject_terms",
+    "topics_json": "topics"
+   },
    "meanings": {
     "agencies_json": "Reserved JSON array of agencies the product covers. The RSS feed carries no structured agency tags, so this is `[]` pending a future enrichment source; NULL on repair, GovInfo (MODS names no agency) and listing rows. Where our own routes leave it NULL, it may come from the CetiAlphaFive/gao R package (GPL-3.0-or-later, commit 6f61230), which fills only empty cells.",
     "requester_committees_json": "JSON array of the requesting congressional committees, as the R package extracted them from the report (e.g. `Committee on Armed Services (Senate)`). NULL where it states none, and on reports issued after its copy.",
@@ -3915,6 +4055,9 @@
      "link_rule_version",
      "held_dates_json"
     ]
+   },
+   "renamed": {
+    "held_dates_json": "held_dates"
    },
    "meanings": {
     "evidence_rule": "Which statement inside that source settled the key, so a consumer can decline the weaker ones. `mods_bill_context` for a cover row; `docs_house_bills_filename`, `docs_house_legis_num` or `docs_house_description` for an agenda row, in that order of preference -- the file name is the publisher's own machine-written form and the description is prose.",
@@ -3953,6 +4096,10 @@
      "held_date",
      "mods_event_id"
     ]
+   },
+   "renamed": {
+    "committee_system_codes_json": "committee_system_codes",
+    "witnesses_json": "witnesses"
    },
    "meanings": {
     "bill_id": "Always NULL here, and NULL for a stated reason: a legislative hearing is held on a *list* of bills -- twelve of them on CHRG-118hhrg56198 -- so a scalar column would have to pick one of twelve. The relationship is one-to-many and `hearing_bill_links` hosts it, one row per hearing, bill and source, the way `event_id` names `committee_meetings`. The column stays because this table shares its shape with `committee_reports`, where a report *is* filed against one bill.",
@@ -4014,6 +4161,13 @@
      "covered_congress_source"
     ]
    },
+   "renamed": {
+    "associated_bills_json": "associated_bills",
+    "associated_laws_json": "associated_laws",
+    "associated_usc_sections_json": "associated_usc_sections",
+    "committees_json": "committees",
+    "related_reports_json": "related_reports"
+   },
    "meanings": {
     "associated_bills_json": "Every root-level `<bill>` the MODS names, as a JSON array of objects carrying the bill's natural key and the publisher's own `context` marker, in document order. The context is kept because document order is not priority order.",
     "associated_laws_json": "Every root-level `<law>` the MODS names, as a JSON array of joined `laws` identities, in document order. Carried because it is what the beyond-index bill and law counts are measured against.",
@@ -4069,6 +4223,10 @@
      "reconstruction_rule_version",
      "detail_read"
     ]
+   },
+   "renamed": {
+    "committees_json": "committees",
+    "matching_requirements_json": "matching_requirements"
    },
    "meanings": {
     "committees_json": "Every committee referral the detail lists, as a JSON array of the publisher's objects. NULL where no detail was read or the detail states no committees; `[]` where it states an empty list. On a `congressional-record-granule` row, one `{name}` object per committee the printed referral tail names, in printed order.",
@@ -4152,6 +4310,9 @@
      "observed_at"
     ]
    },
+   "renamed": {
+    "hierarchy_json": "hierarchy"
+   },
    "meanings": {
     "hierarchy_json": "Source-order structural ancestors with element, namespace-qualified path, native IDs, number and heading.",
     "issues_json": "Observed missing/repeated labels or IDs, unknown elements, excluded nested text and print furniture; these observations do not interpret legal effect.",
@@ -4203,6 +4364,9 @@
      "law_text_url",
      "statutes_at_large_last_page"
     ]
+   },
+   "renamed": {
+    "uslm_citable_as_json": "uslm_citable_as"
    },
    "meanings": {
     "law_text_issues_json": "Document-level reading scope and observations about the main-body remainder; section-specific issues are on law_sections. NULL unless parsed.",
@@ -4260,6 +4424,9 @@
      "government_entities_json"
     ]
    },
+   "renamed": {
+    "government_entities_json": "government_entities"
+   },
    "meanings": {
     "government_entities_json": "JSON array of the government entities contacted for this activity, `{id, name}` objects (e.g. `SENATE`)."
    }
@@ -4300,6 +4467,10 @@
      "government_entities_json",
      "url"
     ]
+   },
+   "renamed": {
+    "government_entities_json": "government_entities",
+    "lobbying_activities_json": "lobbying_activities"
    },
    "meanings": {
     "government_entities_json": "JSON array of the distinct government entities lobbied (`{id, name}`) — the agencies and chambers (e.g. `HOUSE OF REPRESENTATIVES`, `SENATE`) named across the filing's activities.",
@@ -4418,6 +4589,11 @@
      "observed_at"
     ]
    },
+   "renamed": {
+    "bioguide_previous_json": "bioguide_previous",
+    "fec_ids_json": "fec_ids",
+    "other_names_json": "other_names"
+   },
    "meanings": {
     "bioguide_previous_json": "The source list of previous Bioguide ids in its order, as JSON; absent is NULL.",
     "fec_ids_json": "Every FEC candidate id for this person, as a JSON array in the publisher's order.",
@@ -4450,6 +4626,10 @@
      "target_candidates_json",
      "rule_version"
     ]
+   },
+   "renamed": {
+    "target_candidates_json": "target_candidates",
+    "text_runs_json": "text_runs"
    },
    "meanings": {
     "ancestors_json": "The observed element's ancestors from the root to its parent, each a JSON object of its attributes, positional XPath and tag.",
@@ -4493,6 +4673,9 @@
      "first_comment_date",
      "last_comment_date"
     ]
+   },
+   "renamed": {
+    "agency_codes_json": "agency_codes"
    },
    "meanings": {
     "agency_codes_json": "JSON array of the distinct agency codes this organization commented to, across every year, sorted. Repeats on each committee row of the string.",
@@ -4540,6 +4723,9 @@
      "matched_text"
     ]
    },
+   "renamed": {
+    "categories_json": "categories"
+   },
    "meanings": {
     "categories_json": "Every category the item lists, as a JSON array.",
     "channel_copyright": "The channel copyright line, which only the Senate feed states.",
@@ -4584,6 +4770,16 @@
      "unresolved_fr_references_json",
      "rins_json"
     ]
+   },
+   "renamed": {
+    "authority_refs_json": "authority_refs",
+    "cfr_refs_json": "cfr_refs",
+    "cfr_target_iris_json": "cfr_target_iris",
+    "docket_ids_json": "docket_ids",
+    "fr_document_ids_json": "fr_document_ids",
+    "fr_document_numbers_json": "fr_document_numbers",
+    "rins_json": "rins",
+    "stage_events_json": "stage_events"
    },
    "meanings": {
     "actor_id": "The builder that asserted the row, with its version (`spicy-regs:proceedings:v<n>`), bumped when its published rows change.",
@@ -4641,6 +4837,10 @@
      "url",
      "detail_read"
     ]
+   },
+   "renamed": {
+    "entire_issue_json": "entire_issue",
+    "sections_json": "sections"
    },
    "meanings": {
     "articles_url": "The publisher's URL for the issue's article list.",
@@ -4763,6 +4963,12 @@
      "party_totals_json"
     ]
    },
+   "renamed": {
+    "amendments_json": "amendments",
+    "documents_json": "documents",
+    "party_totals_json": "party_totals",
+    "tallies_json": "tallies"
+   },
    "meanings": {
     "amendments_json": "Ordered Senate amendment objects with native number, to_amendment_number, to_amendment_to_amendment_number, to_document_number, to_document_short_title and purpose; [] for captured votes without amendments, NULL for legacy or linkage-only rows. Repeated empty-ID blocks remain separate observations; no document pairing is inferred.",
     "conflict_count": "How many later references disagreed with the one that won; kept, never dropped.",
@@ -4880,6 +5086,9 @@
      "supersedes_id"
     ]
    },
+   "renamed": {
+    "specific_rins_json": "specific_rins"
+   },
    "meanings": {
     "actor_id": "The builder that asserted the row, with its version (`spicy-regs:rulemaking-lifecycles:v<n>`), bumped when its published rows change.",
     "anchored_by_specific_rin": "Whether its proposal or final anchor joined the proceeding by specific RIN (decision 56c).",
@@ -4940,6 +5149,9 @@
    }
   },
   "scorecard_items": {
+   "renamed": {
+    "references_json": "references"
+   },
    "meanings": {
     "capture_id": "Opaque caller-issued identity of the source observation supporting this row.",
     "position_basis": "Whether a publisher position is explicit, inferred by its presentation, or absent.",
@@ -4996,6 +5208,9 @@
    }
   },
   "scorecard_members": {
+   "renamed": {
+    "identifiers_json": "identifiers"
+   },
    "meanings": {
     "capture_id": "Opaque caller-issued identity of the source observation supporting this row.",
     "identifiers_json": "Ordered source-supplied member identifiers, each with scheme and value.",
@@ -5046,6 +5261,9 @@
      "is_primary"
     ]
    },
+   "renamed": {
+    "periods_json": "periods"
+   },
    "meanings": {
     "capture_id": "Opaque caller-issued identity of the source observation supporting this row.",
     "periods_json": "Ordered explicit or relative source periods with occurrence_id, period_text, kind and source_path.",
@@ -5055,6 +5273,9 @@
    }
   },
   "scorecard_publishers": {
+   "renamed": {
+    "aliases_json": "aliases"
+   },
    "meanings": {
     "aliases_json": "JSON array of publisher name aliases as stated by the source.",
     "capture_id": "Opaque caller-issued identity of the source observation supporting this row.",
@@ -5064,6 +5285,9 @@
    }
   },
   "scorecards": {
+   "renamed": {
+    "periods_json": "periods"
+   },
    "meanings": {
     "capture_id": "Opaque caller-issued identity of the source observation supporting this row.",
     "observed_at": "UTC instant at which the supporting source response was observed.",
@@ -5138,6 +5362,14 @@
      "financial_amounts_changed",
      "financial_has_amendment_annotations"
     ]
+   },
+   "renamed": {
+    "display_path_new_json": "display_path_new",
+    "display_path_old_json": "display_path_old",
+    "financial_from_amounts_json": "financial_from_amounts",
+    "financial_to_amounts_json": "financial_to_amounts",
+    "match_path_json": "match_path",
+    "text_diff_json": "text_diff"
    },
    "meanings": {
     "display_path_new_json": "The later printing's display path, as a JSON array.",
@@ -5230,6 +5462,11 @@
      "extraction_rule_version"
     ]
    },
+   "renamed": {
+    "amounts_json": "amounts",
+    "cells_json": "cells",
+    "column_headers_json": "column_headers"
+   },
    "meanings": {
     "amounts_json": "One entry per column: null where the cell states no amount, otherwise every line of that cell that parses, in printed order, as objects carrying the exact printed line and its decimal. A money cell stacks one amount per fiscal year, which is why this is a list and not a scalar, and a line that does not parse is not here and stands unchanged in `cells_json`.",
     "bbox_x0": "Left edge of the table's bounding box, in normalized displayed-page coordinates from a top-left origin. Null with the other three edges where the extraction states no table geometry, as Docling and OCR table observations can.",
@@ -5302,6 +5539,12 @@
      "detail_read"
     ]
    },
+   "renamed": {
+    "countries_json": "countries",
+    "index_terms_json": "index_terms",
+    "related_docs_json": "related_docs",
+    "titles_json": "titles"
+   },
    "meanings": {
     "actions_url": "The publisher's URL for the treaty's action list.",
     "countries_json": "Every country party the detail names, as a JSON array of names. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one.",
@@ -5353,6 +5596,11 @@
      "next_action_date",
      "url"
     ]
+   },
+   "renamed": {
+    "cfr_references_json": "cfr_references",
+    "legal_authority_json": "legal_authority",
+    "timetable_json": "timetable"
    },
    "meanings": {
     "cfr_references_json": "JSON array of CFR citations affected by the rulemaking. The join key to the CFR.",
