@@ -464,7 +464,10 @@
   },
   "qualification_boundary": "FCNL2 selected action tables; AWA /2 one complete linked sheet with unknown period; IPAA13 item/action snapshots with no aggregate or lifetime rating admission. BIPAC and catalog/private-grid utilities remain unregistered.",
   "publication_boundary": "All391 prior published scope records remain unchanged. Added16 are qualified only; automatic refresh disabled. Current source and analysis pointers, server-image baseline, historical evidence and prior wheels remain intact.",
-  "consumer_independent_review": "pending-final-committed-package-review",
+  "consumer_independent_review": {
+    "receipt": "reader_independent_reviews_followup_20261005.json",
+    "sha256": "4c493653edd4a92e11243dd1ba8f8b93deaf3b23c416613fe64eadde52093fa0"
+  },
   "baseline_format_check": {
     "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/consumer-followup-release-v3/../followup111-consumer-baseline-format-v1.json",
     "sha256": "6adb1bf8d941a0d2266af02f709dbe33a23dff55f146e07c9b2154810f3008a7"
@@ -472,5 +475,9 @@
   "recipe": {
     "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/consumer-followup-release-v3/../record_followup111_adoption_v1.py",
     "sha256": "cb567971e33fce8fc8c87fc30198754f435d9154863b94c2c24e3e7064281e5b"
+  },
+  "review_closure_recipe": {
+    "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/consumer-followup-release-v3/../record_followup111_review_closure_v1.py",
+    "sha256": "142704ddca72985138691eec77ae3958dc9f514567edb9bbd0fec0014c74d0d9"
   }
 }

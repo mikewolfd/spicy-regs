@@ -152,7 +152,8 @@
     "spicy_docs/sources/scorecards/teamsters.py",
     "spicy_docs/sources/scorecards/votervoice_public.py"
   ],
-  "scope": "Qualified named source scopes and installed replay; source and complete consumer gates passed. Consumer independent final review and publication remain separate. Released baseline0.57 preserved.",
+  "scope": "Qualified named source scopes and independently approved installed package. Source and complete consumer gates and111-scope replay passed. Public data, source version release and server image remain separate; released0.57 baseline preserved.",
   "source_commit": "9756d7180f8b77e73a6de261e99c0e3f3ee98207",
-  "adoption_receipt": "docs/research/scorecards/work/integration/reader_adoption_followup_20261005.json"
+  "adoption_receipt": "docs/research/scorecards/work/integration/reader_adoption_followup_20261005.json",
+  "independent_review": "docs/research/scorecards/work/integration/reader_independent_reviews_followup_20261005.json"
 }
