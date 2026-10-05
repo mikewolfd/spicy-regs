@@ -570,3 +570,79 @@ def test_a_hearing_read_before_the_committee_codes_column_is_read_once_more():
     assert not complete({"outcome": "complete", "rule_version": before}, "CHRG")
     assert complete({"outcome": "complete", "rule_version": RULE_VERSIONS["CHRG"]}, "CHRG")
     assert "mods" not in RULE_VERSIONS["CRPT"]
+
+
+# --------------------------------------------------------------------------- #
+# hearing_bill_links.committee_system_code, keyed as committees.system_code is (round 6, L16).
+# --------------------------------------------------------------------------- #
+#: House Armed Services, 2025-04-09: the one held hearing MODS whose committee authorityId is upper-case (`HSAS00`;
+#: the committees table keys `hsas00`). It states no cover bill, so the tests add the first COVER element
+#: CHRG-119hhrg60951 states, verbatim, for a link row to exist; the rest is the publisher's record.
+JACKET_61487 = "CHRG-119hhrg61487"
+_HASC = b'<congHASC congress="119" number="11"></congHASC>'
+COVERED_61487 = (FIXTURES / f"mods-{JACKET_61487}.xml").read_bytes().replace(
+    _HASC, _HASC + b'<bill congress="119" context="COVER" number="1676" type="HR"></bill>', 1
+)
+
+
+class Hearing61487(StubDiscovery):
+    IDS = {"CRPT": [], "CHRG": [JACKET_61487]}
+
+
+def _tables(paths) -> dict[str, list[dict]]:
+    return {path.stem: pq.read_table(path).to_pylist() for path in paths}
+
+
+def test_a_hearing_link_keys_its_committee_the_way_the_committees_table_does(tmp_path, monkeypatch):
+    """The link takes its hearing's first committee code as hearing_transcripts states it (spicy-docs' shaper)."""
+    monkeypatch.delenv("COMMITTEE_REPORTS_SINCE", raising=False)
+    assert COVERED_61487.count(b'context="COVER"') == 1
+    tables = _tables(build_committee_reports(
+        tmp_path, reader=Hearing61487(), acquirer=StubBodyAcquirer(mods_bytes=COVERED_61487),
+        hearings=StubHearings(details={}), download_prior=_no_prior,
+    ))
+    assert [row["committee_system_codes_json"] for row in tables["hearing_transcripts"]] == ['["hsas00"]']
+    assert [(row["bill_id"], row["committee_system_code"]) for row in tables["hearing_bill_links"]] == [
+        ("119-hr-1676", "hsas00")]
+
+
+def test_a_held_link_takes_its_hearings_code_without_a_read_and_one_without_codes_keeps_its_own(tmp_path, monkeypatch):
+    """The second run reads nothing: its held 61487 link, published unfolded before this change, takes `hsas00` from
+    the held transcript row; a link whose hearing row predates the codes column (NULL) keeps the code it holds."""
+    import pyarrow as pa
+    from spicy_docs.schemas.committee_report_tables import HEARING_TRANSCRIPTS
+    from spicy_docs.schemas.hearing_bill_link_tables import HEARING_BILL_LINKS
+
+    from spicy_regs.transforms.committee_report_reads import READ_COLUMNS, READS_TABLE
+    from spicy_regs.transforms.table_merge import prior_scratch_path
+
+    monkeypatch.delenv("COMMITTEE_REPORTS_SINCE", raising=False)
+    (tmp_path / "first").mkdir()
+    first = _tables(build_committee_reports(
+        tmp_path / "first", reader=Hearing61487(), acquirer=StubBodyAcquirer(mods_bytes=COVERED_61487),
+        hearings=StubHearings(details={}), download_prior=_no_prior,
+    ))
+    (link,) = first["hearing_bill_links"]
+    (hearing,) = first["hearing_transcripts"]
+    (read,) = first[READS_TABLE]
+    older = {"package_id": CHRG_ID, "last_modified": read["last_modified"]}
+    held = {
+        "hearing_transcripts": (HEARING_TRANSCRIPTS.columns, [hearing, older | {"committee_system_codes_json": None}]),
+        "hearing_bill_links": (HEARING_BILL_LINKS.columns, [link | {"committee_system_code": "HSAS00"},
+                                                           link | {"package_id": CHRG_ID, "committee_system_code": "HSHM00"}]),
+        # Both read completely under the running rule (the first run's detail read was refused, which it retries).
+        READS_TABLE: (READ_COLUMNS, [read | {"outcome": "complete"}, read | {"package_id": CHRG_ID, "outcome": "complete"}]),
+    }
+    second = tmp_path / "second"
+    second.mkdir()
+    for name, (columns, rows) in held.items():
+        schema = pa.schema([(column, pa.string()) for column in columns])
+        pq.write_table(pa.Table.from_pylist(rows, schema=schema), prior_scratch_path(second, name))
+    acquirer = StubBodyAcquirer()
+    tables = _tables(build_committee_reports(
+        second, reader=CrptOnlyDiscovery(), acquirer=acquirer, hearings=StubHearings(details={}),
+        download_prior=_no_prior,
+    ))
+    assert acquirer.requested == [CRPT_ID], "neither hearing is read again"
+    assert sorted((row["package_id"], row["committee_system_code"]) for row in tables["hearing_bill_links"]) == [
+        (JACKET_61487, "hsas00"), (CHRG_ID, "HSHM00")]

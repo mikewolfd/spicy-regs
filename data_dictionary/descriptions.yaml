@@ -3975,7 +3975,9 @@ tables:
       bill was considered on each date. Before link rule d06e0bd80ca1
       (2026-09-25) such a volume's links carried its first date
       (CHRG-117shrg56721 states eleven), and rows not re-read since keep
-      held_dates_json NULL.
+      held_dates_json NULL. committee_system_code is the first of its
+      hearing's hearing_transcripts.committee_system_codes, set again every
+      run, so a link and its hearing state one committee key.
     columns_from: spicy_docs
 
   cbo_feed_items:
