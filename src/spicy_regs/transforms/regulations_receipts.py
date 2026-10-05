@@ -6,8 +6,8 @@ shared receipt member together. It never updates a remote pointer or catalog.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Mapping, Sequence
 from contextlib import ExitStack
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from functools import cache
 from hashlib import file_digest, sha256
@@ -160,6 +160,36 @@ def materialize_internal(selected: ReceiptInput, destination: Path) -> Path:
     return write_rows(restored(), destination, schema)
 
 
+def _shape_regulations_attempt(dataset: str, row: Mapping, context: ReceiptContext, *,
+                            project: Callable[[Mapping], Mapping] | None = None,
+                            input_metadata: Mapping | None = None):
+    """Shape one exact source attempt using the row writer's refusal and diagnostic rules."""
+    declared = policy(dataset)
+    try:
+        shaped = shape_record(dataset, project(row) if project is not None else row)
+        if project is not None:
+            shaped["raw_source_record"] = dict(row)
+        if any(shaped.get(key) is None for key in declared.identity_fields
+               if key not in declared.nullable_identity_fields):
+            raise ValueError(f"{dataset}: missing required subject identity")
+    except (ValueError, TypeError, pa.ArrowException) as error:
+        failed = ReceiptContext(context.generation_id, context.attempt_id, context.processor, context.witnesses,
+                                {**context.diagnostics, "error_type": type(error).__name__, "error": str(error)})
+        return None, failure_receipt(declared, failed, outcome="refused", raw_fields={
+            "raw_conversion_inputs": dict(row), "input_metadata": dict(input_metadata or {})})
+    shaped["input_metadata"] = dict(input_metadata or {})
+    return shaped, None
+
+
+def map_regulations_attempt(dataset: str, row: Mapping, context: ReceiptContext, *,
+                            project: Callable[[Mapping], Mapping] | None = None,
+                            input_metadata: Mapping | None = None):
+    """One row attempt for bounded bulk fallbacks, with the exact writer classification."""
+    from spicy_regs.etl_receipts import split_record
+    shaped, failure = _shape_regulations_attempt(dataset, row, context, project=project, input_metadata=input_metadata)
+    return (None, failure) if shaped is None else split_record(policy(dataset), shaped, context)
+
+
 def write_records(
     dataset: str,
     records: Iterable[tuple[Mapping, ReceiptContext]],
@@ -191,39 +221,13 @@ def write_records(
         def mapped():
             try:
                 for row, context in records:
-                    try:
-                        shaped = shape_record(dataset, project(row) if project is not None else row)
-                        if project is not None:
-                            shaped["raw_source_record"] = dict(row)
-                        if any(
-                            shaped.get(key) is None
-                            for key in declared.identity_fields
-                            if key not in declared.nullable_identity_fields
-                        ):
-                            raise ValueError(f"{dataset}: missing required subject identity")
-                    except (ValueError, TypeError, pa.ArrowException) as error:
-                        failed = ReceiptContext(
-                            context.generation_id,
-                            context.attempt_id,
-                            context.processor,
-                            context.witnesses,
-                            {**context.diagnostics, "error_type": type(error).__name__, "error": str(error)},
-                        )
-                        refused.append(
-                            failure_receipt(
-                                declared,
-                                failed,
-                                outcome="refused",
-                                raw_fields={
-                                    "raw_conversion_inputs": dict(row),
-                                    "input_metadata": dict(input_metadata or {}),
-                                },
-                            )
-                        )
+                    shaped, receipt = _shape_regulations_attempt(dataset, row, context, project=project,
+                                                               input_metadata=input_metadata)
+                    if shaped is None:
+                        refused.append(receipt)
                         if len(refused) >= 2000:
                             flush()
                         continue
-                    shaped["input_metadata"] = dict(input_metadata or {})
                     for lineage in lineages:
                         context = lineage.inherit(context, declared, shaped)
                     yield shaped, context
