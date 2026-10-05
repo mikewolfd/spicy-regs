@@ -589,6 +589,29 @@ def validate_receipt_bundle(
     policies: Sequence[DatasetPolicy],
     *,
     generation_id: str | None = None,
+    bulk: bool = True,
+) -> None:
+    """Validate complete bundles in bounded sets, falling back only when SQL cannot decide.
+
+    ``bulk=False`` selects the stable row validator for independent parity checks.
+    Qualified refusals propagate unchanged; fallback never turns them into acceptance.
+    """
+    if bulk:
+        from spicy_regs.etl_bulk import NotBulkEligible, validate_bundle
+        try:
+            validate_bundle(subjects, receipt_paths, policies, generation_id=generation_id)
+            return
+        except NotBulkEligible:
+            pass
+    _validate_receipt_bundle_rows(subjects, receipt_paths, policies, generation_id=generation_id)
+
+
+def _validate_receipt_bundle_rows(
+    subjects: Mapping[str, Sequence[ParquetInput]],
+    receipt_paths: Sequence[ParquetInput],
+    policies: Sequence[DatasetPolicy],
+    *,
+    generation_id: str | None = None,
 ) -> None:
     """Check native schemas and exact one-to-one accepted joins using a disk index.
 
