@@ -114,7 +114,7 @@ def main() -> None:
     args = parser.parse_args()
     if args.publish and args.index:
         parser.error("--publish always reads the current authoritative R2 index; do not pass --index")
-    if not public_url(args.base_url):
+    if not public_url(args.base_url) or not args.base_url.startswith("https://"):
         parser.error("--base-url must be HTTPS")
     client = None
     bucket = None

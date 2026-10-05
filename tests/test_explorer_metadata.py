@@ -206,3 +206,44 @@ def test_failed_readback_never_reports_success(monkeypatch):
     with pytest.raises(ValueError, match="readback differs"):
         script.publish_bundle(Store(), "test", build_bundle(index(), **args()))
     assert writes == [script.KEY]
+
+
+def test_unmeasured_native_join_is_explicit_and_does_not_gain_a_baseline():
+    options = args()
+    options['join_record']['joins'][0].update(kind='unmeasured', baseline_keys=0, baseline_missing=0,
+                                            reason='Native key measurement is pending.')
+    result = build_bundle(index(), **options)
+    assert result['joins'][0]['kind'] == 'unmeasured'
+    assert result['joins'][0]['baseline_keys'] == 0
+
+
+def test_committed_native_join_is_omitted_when_selected_legacy_schema_lacks_its_fields():
+    options = args()
+    options['descriptions']['parent']['columns'] = [{'column_name': 'native_id', 'column_type': 'VARCHAR'},
+                                                   {'column_name': 'edition', 'column_type': 'VARCHAR'}]
+    options['join_record']['joins'][0]['parent_columns'] = ['native_id', 'edition']
+    result = build_bundle(index(), **options)
+    assert result['joins'] == []
+    assert result['omittedJoins'][0]['missing_columns']['parent'] == ['native_id']
+    assert result['tables']['parent']['publicationSchema'] == [['id', 'VARCHAR'], ['edition', 'VARCHAR']]
+
+
+def test_historical_http_publisher_links_are_preserved_without_guessing_an_https_replacement(monkeypatch):
+    import hashlib
+    import io
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    from spicy_regs.sources.publication import Member
+
+    script = publisher_script()
+    buffer = io.BytesIO()
+    pq.write_table(pa.Table.from_pylist([{'publisher_id': 'historical', 'name': 'Historical Publisher',
+                                        'scorecard_index_url': 'http://example.org/archive/2000',
+                                        'homepage_url': None}]), buffer)
+    raw = buffer.getvalue()
+    member = Member('generations/scorecards/' + 'a' * 64 + '/scorecard_publishers.parquet',
+                    'sha256:' + hashlib.sha256(raw).hexdigest(), len(raw), 1)
+    monkeypatch.setattr(script, 'table_members', lambda *_: [member])
+    monkeypatch.setattr(script, 'get_public', lambda *_: raw)
+    data = {'families': {'scorecards': {'tables': {'scorecard_publishers.parquet': {}}}}}
+    assert script.scorecard_sources(data, 'https://data.example.org')[0]['url'] == 'http://example.org/archive/2000'

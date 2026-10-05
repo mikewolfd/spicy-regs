@@ -29,7 +29,7 @@ def read_json(name: str) -> dict:
 def public_url(value: str) -> bool:
     """Only web links, with no embedded credentials, can be published in the UI."""
     parsed = urlsplit(value)
-    return parsed.scheme == "https" and bool(parsed.hostname) and not parsed.username and not parsed.password
+    return parsed.scheme in {"http", "https"} and bool(parsed.hostname) and not parsed.username and not parsed.password
 
 
 def published_tables(index: dict) -> dict:
@@ -66,7 +66,7 @@ def validate_join(join: dict, schemas: dict[str, list]) -> tuple:
         raise ValueError("Join composite keys must have the same number of columns")
     if join.get("expected_cardinality", "unspecified") not in ("unspecified", "one", "many"):
         raise ValueError("Join cardinality must be one, many, or unspecified")
-    if join.get("kind") not in ("complete", "scope", "design", "empty"):
+    if join.get("kind") not in ("complete", "scope", "design", "empty", "unmeasured"):
         raise ValueError("Unknown join resolution kind")
     return (join["child"], tuple(join["child_columns"]), join["parent"], tuple(join["parent_columns"]))
 
@@ -126,7 +126,9 @@ def build_bundle(index: dict, *, descriptions: dict | None = None, registry: dic
 
     schemas = {name: [[c["column_name"], c["column_type"]] for c in desc.get("columns", [])]
                for name, desc in known.items()}
-    schemas.update({name: entry["schema"] for name, entry in live.items()})
+    for name, entry in live.items():
+        if not schemas.get(name):
+            schemas[name] = entry["schema"]
     joins, omitted, seen = [], [], set()
     for join in join_record["joins"]:
         identity = validate_join(join, schemas)
@@ -136,6 +138,13 @@ def build_bundle(index: dict, *, descriptions: dict | None = None, registry: dic
         if join["child"] not in live or join["parent"] not in live:
             omitted.append({"child": join["child"], "parent": join["parent"],
                             "reason": "One or both tables are outside publication.v2.json."})
+            continue
+        missing = {side: sorted(set(join[f"{side}_columns"]) -
+                               {c[0] for c in live[join[side]]["schema"]}) for side in ("child", "parent")}
+        if any(missing.values()):
+            omitted.append({"child": join["child"], "parent": join["parent"],
+                            "reason": "Selected published schemas do not expose the declared join fields.",
+                            "missing_columns": missing})
             continue
         joins.append(deepcopy(join))
     # Availability belongs to this index, while the audit's evidence belongs to
