@@ -2036,7 +2036,12 @@
     "grain": null,
     "identity_columns": [
       "filing_uuid"
-    ]
+    ],
+    "legacy_column_descriptions": {
+      "lobbying_activities_json": "JSON array of lobbying activities, each `{general_issue_code, general_issue_code_display, description}` — the issue areas lobbied and their free-text descriptions.",
+      "government_entities_json": "JSON array of the distinct government entities lobbied (`{id, name}`) — the agencies and chambers (e.g. `HOUSE OF REPRESENTATIVES`, `SENATE`) named across the filing's activities.",
+      "url": "URL of the filing's printable document page on lda.gov (`filing_document_url`; lda.senate.gov redirects there)."
+    }
   },
   "lobbying_activities": {
     "table": "lobbying_activities",

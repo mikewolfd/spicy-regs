@@ -1,0 +1,75 @@
+{
+  "families": {
+    "lobbying-filings": {
+      "artifactDigest": "sha256:8374129ade6e62dab83f306af89e4ab49a34d1a12c4cee6a490b1a40a59f7315",
+      "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:cc54aeb4ff9305e2cf3a5074ff1bee7312ef1c64f74c51e9572db0a91eca4547",
+      "prefix": "generations/lobbying-filings/8374129ade6e62dab83f306af89e4ab49a34d1a12c4cee6a490b1a40a59f7315",
+      "publishedAt": "2026-10-03T19:47:35Z",
+      "tables": {
+        "lobbying_filings.parquet": {
+          "byteSize": 302737985,
+          "columns": [
+            [
+              "filing_uuid",
+              "VARCHAR"
+            ],
+            [
+              "filing_type",
+              "VARCHAR"
+            ],
+            [
+              "filing_year",
+              "VARCHAR"
+            ],
+            [
+              "filing_period",
+              "VARCHAR"
+            ],
+            [
+              "dt_posted",
+              "VARCHAR"
+            ],
+            [
+              "registrant_name",
+              "VARCHAR"
+            ],
+            [
+              "registrant_id",
+              "VARCHAR"
+            ],
+            [
+              "client_name",
+              "VARCHAR"
+            ],
+            [
+              "client_id",
+              "VARCHAR"
+            ],
+            [
+              "income",
+              "VARCHAR"
+            ],
+            [
+              "expenses",
+              "VARCHAR"
+            ],
+            [
+              "lobbying_activities_json",
+              "VARCHAR"
+            ],
+            [
+              "government_entities_json",
+              "VARCHAR"
+            ],
+            [
+              "url",
+              "VARCHAR"
+            ]
+          ],
+          "rows": 1965066,
+          "sha256": "sha256:9de117c8957c49fc31e18b58ec7de54765338190f8144274d99535987ed1223d"
+        }
+      }
+    }
+  }
+}

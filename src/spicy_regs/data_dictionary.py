@@ -1051,6 +1051,10 @@ def load_descriptions(path: Path = DEFAULT_DESCRIPTIONS) -> dict:
             continue
         entry = tables.setdefault(name, {})
         if name in overrides:
+            if entry.get("legacy_columns"):
+                entry["legacy_column_descriptions"] = {
+                    column: entry["columns"][column] for column in entry["legacy_columns"]
+                }
             entry["columns"] = overrides[name]["columns"]
         entry["identity_columns"] = list(policy.identity_fields)
     return tables
@@ -1636,6 +1640,8 @@ def build_mcp_metadata(descriptions: dict, schemas: dict[str, list[tuple[str, st
                 for name, dtype in schemas[table]
             ],
         }
+        if description.get("legacy_column_descriptions"):
+            result[table]["legacy_column_descriptions"] = description["legacy_column_descriptions"]
         checks = [{"name": check.name, "role": "output" if table == check.output else "input",
                    "grain": list(check.grain), "population": check.population,
                    "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; "
