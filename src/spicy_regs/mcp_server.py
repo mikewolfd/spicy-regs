@@ -46,6 +46,7 @@ from pydantic import Field, ValidationError
 from starlette.requests import Request
 from starlette.responses import Response
 
+from spicy_regs import receipt_lookup
 from spicy_regs._icon import ICON_DATA_URI
 from spicy_regs.citation_resolution import SOURCE_TABLES
 from spicy_regs.duckdb_settings import INTERACTIVE_HTTP_RETRIES, load_public_http, memory_limit
@@ -1424,8 +1425,11 @@ def _legacy_column_meanings(cursor: duckdb.DuckDBPyConnection, table: str, entry
 #: made bill_versions' reply 24,600 bytes, repeated for every table of a ledger family (round 3, S3).
 #: A qualified FEC view also leaves out its release record's inventories (``RELEASE_INVENTORIES``): its
 #: dependency's whole storage descriptor and the acceptance receipts were 13,146 of 21,054 characters
-#: in fec_receipts_net_receipts_decision's reply (round 4, S4).
+#: in fec_receipts_net_receipts_decision's reply (round 4, S4). A table with receipts also leaves out its receipt
+#: fields' meanings (:data:`RECEIPT_FIELD_MEANINGS`): names are enough to ask ``read_receipt_fields``, which states
+#: the meaning of each field it returns.
 DESCRIBE_DETAIL = ("joins[].measurement", "qualification.ledger_statements")
+RECEIPT_FIELD_MEANINGS = "receipt_field_meanings"
 
 
 def _reply_text(result: Any) -> tuple[Any, str]:
@@ -1898,7 +1902,7 @@ class _StrictTool(Tool):
 
 
 def _tools() -> list[Tool]:
-    """The five tools, each run on a worker thread under one limiter and refusing an argument it does not declare."""
+    """The six tools, each run on a worker thread under one limiter and refusing an argument it does not declare."""
     limiter = anyio.CapacityLimiter(TOOL_CONCURRENCY)
     tools: list[Tool] = []
 
@@ -2057,7 +2061,7 @@ def _tools() -> list[Tool]:
         incoming measurements link to the child's detailed description, keeping
         baselines here. Missing expected_cardinality means unspecified; missing
         measured_via means measure the child. detail=false names omissions in
-        detail.omitted.
+        detail.omitted. receipt_fields: what read_receipt_fields takes here.
         A view column preserving a source column inherits its meaning; otherwise
         its declared meaning or null. FEC release_compatibility appears once in
         publication (relationship if unavailable); detail=false keeps pins,
@@ -2116,6 +2120,13 @@ def _tools() -> list[Tool]:
             if table in status["publication"] else {"status": "unavailable"}
         )
         omitted = [] if detail else list(DESCRIBE_DETAIL)
+        # What read_receipt_fields takes for this table, so a reader need not provoke a refusal to learn it. The
+        # names are the same value in both replies; the meanings are a key only the detailed one carries.
+        local = _connection_local_selection(cursor) if DATA_DIR is not None else None
+        receipts = receipt_lookup.describe(table, entry, available=receipt_lookup.selected_member(
+            _connection_index(cursor), local, R2_BASE_URL, table) is not None)
+        if receipts is not None and not detail:
+            omitted.append(RECEIPT_FIELD_MEANINGS)
         # Full release evidence sits once: in publication for an available view, else in relationship.
         held = publication if "release_compatibility" in publication else relationship
         if not detail and "release_compatibility" in held:
@@ -2131,6 +2142,8 @@ def _tools() -> list[Tool]:
             "publication": publication,
             "qualification": scope if qualified is None else {**scope, **qualified[table]},
             "joins": _table_joins(table, measurements=detail),
+            **({"receipt_fields": receipts[0]} if receipts is not None else {}),
+            **({RECEIPT_FIELD_MEANINGS: receipts[1]} if receipts is not None and detail else {}),
             "metadata": {key: [item["dataset"] for item in value] if table == "etl_receipts" and key == "datasets" else value
                          for key, value in entry.items()
                          if key not in {"table", "columns", "column_descriptions", "column_lineage",
@@ -2349,11 +2362,52 @@ def _tools() -> list[Tool]:
         _refuse_oversized_page(reply, page, result["occurrences"], offset)
         return reply
 
+    @tool
+    def read_receipt_fields(
+        table: str,
+        # The maximum is a schema hint, as max_occurrences' is: a longer list is refused in the tool's own words.
+        keys: Annotated[list[dict[str, Any]],
+                        Field(min_length=1, json_schema_extra={"maxItems": receipt_lookup.MAX_KEYS})],
+        fields: Annotated[list[str], Field(min_length=1)],
+    ) -> dict[str, Any]:
+        """Read fields a table keeps in its ETL receipts, for up to 100 rows by key.
+
+        Use this instead of query_sql for a value a table's notes say is kept
+        in the receipt. describe_table's receipt_fields gives a table's
+        identity fields and the fields its receipts carry, which differ by
+        table. Each key is an object giving every identity field its exact
+        value: text is case-sensitive and stays quoted even when it looks
+        numeric; a whole number may be a number. An unknown table or field, a
+        key that does not fit the identity and more than 100 keys are refused,
+        saying what is valid. Values come back decoded. keys answers in request
+        order; receipt is found, ambiguous (several accepted receipts, none
+        chosen), receipt_missing (the table holds the key, no receipt does) or
+        not_in_table. Each field of a found receipt has a state: stated,
+        stated_empty, or for a field with no value unread or not_stated where
+        the table declares a read marker for it, else null_unmarked (nothing
+        says whether it was read). receipt_meaning and state_meaning define the
+        words a reply uses; fields gives each field's meaning. receipts names
+        the family, generation and policy version read, and whether its rows
+        are sorted: an unsorted table's receipts are scanned, and past
+        2,000,000 the call is refused until the table's next publish. A reply
+        past the reply limit is refused with how many keys fit.
+        """
+        cursor = _get_connection().cursor()
+        with _statement_timeout(cursor):
+            reply = receipt_lookup.read_fields(
+                cursor, table=table, keys=keys, fields=fields, index=_connection_index(cursor),
+                local=_connection_local_selection(cursor) if DATA_DIR is not None else None, base_url=R2_BASE_URL,
+                entry=_table_metadata().get(table, {}), plain=_jsonify,
+            )
+        reply = {**_source_details(cursor), **reply}
+        receipt_lookup.refuse_oversized(reply, REPLY_CHARS, lambda value: len(_reply_text(value)[1]))
+        return reply
+
     return tools
 
 
 def build_server() -> MCPServer:
-    """Build the MCP server with discovery, read-only queries and citation lookup; stdio, or HTTP via build_app."""
+    """Build the MCP server with discovery, read-only queries, citation and receipt lookup; stdio, or HTTP via build_app."""
     return MCPServer("spicy-regs", instructions=INSTRUCTIONS, icons=ICONS, tools=_tools())
 
 

@@ -64,7 +64,8 @@ def _tool_names(server) -> set[str]:
 
 def test_build_server_registers_expected_tools():
     server = mcp_server.build_server()
-    assert _tool_names(server) == {"list_sources", "describe_table", "query_sql", "resolve_document_citations", "lookup_agency"}
+    assert _tool_names(server) == {"list_sources", "describe_table", "query_sql", "resolve_document_citations", "lookup_agency",
+                                   "read_receipt_fields"}
 
 
 def _tool_data(server, name, arguments):
