@@ -1260,6 +1260,74 @@ def test_a_file_before_2003_publishes_name_keyed_members_without_bioguide_ids(tm
     assert session_one[0]["member_key"] == "name:Abercrombie" and session_one[0]["state"] == "HI"
 
 
+def test_a_file_before_2003_takes_bioguide_ids_from_the_published_crosswalk_and_keeps_them_when_held(
+    tmp_path, monkeypatch
+):
+    """102-1-1 with the crosswalk published: a label one member of that state, party and Congress answers to carries
+    that member's id under its unchanged ``name:`` key, and every other row stays NULL. Each resolution is journaled
+    with its rule and term; the next run holds the roll call, fetches nothing and changes no id."""
+    from spicy_regs.source_evidence import CaptureEvidence
+
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "102")
+    # The published crosswalk's own rows (2026-10-04): Lent's fusion party, Tauzin a Democrat until 1995, and the
+    # two men the Clerk has printed as Jones (NC) and as Molinari, only one of each seated in the 102nd.
+    terms = [
+        ("A000014", "Neil", "Abercrombie", "1", "1991-01-03", "1993-01-03", "HI", "Democrat"),
+        ("J000256", "Walter", "Jones", "13", "1991-01-03", "1992-09-15", "NC", "Democrat"),
+        ("J000255", "Walter", "Jones", "0", "1995-01-04", "1997-01-03", "NC", "Republican"),
+        ("L000243", "Norman", "Lent", "10", "1991-01-03", "1993-01-03", "NY", "Republican-Conservative"),
+        ("M000842", "Guy", "Molinari", "4", "1989-01-03", "1989-12-31", "NY", "Republican"),
+        ("M000843", "Susan", "Molinari", "1", "1991-01-03", "1993-01-03", "NY", "Republican"),
+        ("T000058", "William", "Tauzin", "6", "1991-01-03", "1993-01-03", "LA", "Democrat"),
+    ]
+    crosswalk = {
+        "members": [{"bioguide_id": b, "name_first": first, "name_last": last} for b, first, last, *_ in terms],
+        "member_terms": [{"bioguide_id": b, "term_index": index, "term_type": "rep", "term_start": start,
+                          "term_end": end, "term_state": state, "term_party": party}
+                         for b, _, _, index, start, end, state, party in terms],
+        "member_party_affiliations": [],
+    }
+
+    def published(carried=_no_prior):
+        def download(remote, local):
+            name = remote.removesuffix(".parquet")
+            if name not in crosswalk:
+                return carried(remote, local)
+            columns = TABLE_CONTRACTS[name].columns
+            pq.write_table(pa.Table.from_pylist([dict.fromkeys(columns) | row for row in crosswalk[name]],
+                                                schema=pa.schema([(c, pa.string()) for c in columns])), local)
+            return True
+
+        return download
+
+    first = tmp_path / "first"
+    first.mkdir()
+    evidence = CaptureEvidence(tmp_path / "audit", "roll-call-votes")
+    acquirer = ArchiveAcquirer({(102, 1, 1): PRE_2003}, house_rolls=(1,))
+    votes, members = _house_run(first, acquirer, published(), evidence=evidence)
+    named = {member["member_name"]: member for member in members if member["session"] == "1"}
+    filled = {name: member["bioguide_id"] for name, member in named.items() if member["bioguide_id"]}
+    assert filled == {"Abercrombie": "A000014", "Jones (NC)": "J000256", "Lent": "L000243", "Molinari": "M000843",
+                      "Tauzin": "T000058"}
+    assert len(named) == 427 and all(member["member_key"] == "name:" + name for name, member in named.items())
+    [event] = _events(evidence, "member-name-crosswalk")
+    assert (event["rule_version"], event["keys"], event["rows_resolved"], event["rows_changed"]) == (
+        "house-name-crosswalk-v1", 427, 5, 5,
+    )
+    assert {(entry["member_name"], entry["bioguide_id"], entry["rule"], entry["terms"][0]["term_index"])
+            for entry in event["resolved"]} == {
+        ("Abercrombie", "A000014", "surname", "1"), ("Jones (NC)", "J000256", "surname", "13"),
+        ("Lent", "L000243", "surname", "10"), ("Molinari", "M000843", "surname", "1"), ("Tauzin", "T000058", "surname", "6"),
+    }
+    assert {entry["reason"] for entry in event["unresolved"]} == {"no_member"} and len(event["unresolved"]) == 422
+
+    second = tmp_path / "second"
+    second.mkdir()
+    resumed = ArchiveAcquirer({(102, 1, 1): PRE_2003}, house_rolls=(1,))
+    assert _house_run(second, resumed, published(_carried(first))) == (votes, members)
+    assert resumed.fetched == []
+
+
 def test_the_backfill_skips_the_session_before_the_clerks_archive_and_refuses_a_scope_it_cannot_read(
     tmp_path, monkeypatch
 ):

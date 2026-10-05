@@ -4,7 +4,7 @@
 
 **Member vote terms**
 
-The term each member vote counts toward (delivery decision 2). A vote on `vote_day` counts toward the term with `term_start <= vote_day < term_end`, so the day one Congress ends and the next begins belongs to the new term. Only where that finds none is an inclusive end accepted, and only if exactly one term qualifies. The term type follows the chamber (`rep`, `sen`); a term with no end date never matches. Built by `build_member_vote_terms` from `member_votes`, `members` (a Senate row's LIS id resolves to its Bioguide id there) and `member_terms`. Join to `member_votes` on (`vote_id`, `member_key`) and to `member_terms` on (`bioguide_id`, `term_index`).
+The term each member vote counts toward (delivery decision 2). A vote on `vote_day` counts toward the term with `term_start <= vote_day < term_end`, so the day one Congress ends and the next begins belongs to the new term. Only where that finds none is an inclusive end accepted, and only if exactly one term qualifies. The term type follows the chamber (`rep`, `sen`); a term with no end date never matches. Built by `build_member_vote_terms` from `member_votes`, whose `bioguide_id` the votes rollup resolves for a Senate row (from its LIS id) and for a House row of 1990-2002 (from its printed label), and `member_terms`. Join to `member_votes` on (`vote_id`, `member_key`) and to `member_terms` on (`bioguide_id`, `term_index`).
 
 Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='member_vote_terms'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
 
@@ -22,7 +22,7 @@ Processing fields, source witnesses, conversion inputs and diagnostics reference
 | `vote_id` | `VARCHAR` | The roll call, as in `member_votes`. |
 | `member_key` | `VARCHAR` | The member's key within the roll call, as in `member_votes`. |
 | `chamber` | `VARCHAR` | `house` or `senate`. |
-| `bioguide_id` | `VARCHAR` | The member's Bioguide id: native for the House, resolved from the LIS id through `members` for the Senate. NULL when the LIS id resolves to no member, and on a House row of 1990-2002, whose `name:` key states none and is never read as a person. |
+| `bioguide_id` | `VARCHAR` | The member's Bioguide id, as `member_votes` carries it: stated by the Clerk for the House from 2003, and resolved at the votes merge from the LIS id for the Senate and from the Clerk's printed label for a House row of 1990-2002. NULL when the LIS id or the label resolves to no one member; a `name:` key is never read as a person. |
 | `vote_day` | `VARCHAR` | The vote's day (YYYY-MM-DD) as the chamber printed it in Eastern time, read from `member_votes.vote_date` by the same rule as `roll_call_votes.vote_day`; NULL when the file prints no date. |
 | `term_index` | `BIGINT` | The matched term's `term_index` in `member_terms`; NULL unless matched. |
 | `term_start` | `VARCHAR` | The matched term's start date; NULL unless matched. |

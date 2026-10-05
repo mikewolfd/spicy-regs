@@ -2932,7 +2932,7 @@
       "vote_id": "The roll call, as in `member_votes`.",
       "member_key": "The member's key within the roll call, as in `member_votes`.",
       "chamber": "`house` or `senate`.",
-      "bioguide_id": "The member's Bioguide id: native for the House, resolved from the LIS id through `members` for the Senate. NULL when the LIS id resolves to no member, and on a House row of 1990-2002, whose `name:` key states none and is never read as a person.",
+      "bioguide_id": "The member's Bioguide id, as `member_votes` carries it: stated by the Clerk for the House from 2003, and resolved at the votes merge from the LIS id for the Senate and from the Clerk's printed label for a House row of 1990-2002. NULL when the LIS id or the label resolves to no one member; a `name:` key is never read as a person.",
       "vote_day": "The vote's day (YYYY-MM-DD) as the chamber printed it in Eastern time, read from `member_votes.vote_date` by the same rule as `roll_call_votes.vote_day`; NULL when the file prints no date.",
       "term_index": "The matched term's `term_index` in `member_terms`; NULL unless matched.",
       "term_start": "The matched term's start date; NULL unless matched.",
