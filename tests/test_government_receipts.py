@@ -379,6 +379,97 @@ def test_gao_recommendations_prior_published_without_its_seen_dates_restores_the
     assert receipt["policy_version"] == POLICIES[dataset].policy_version
 
 
+def test_gao_reports_prior_published_before_the_letter_columns_is_read_once_and_gains_them(tmp_path, monkeypatch):
+    """gao-reports published gao_reports under government-sources/1 to 2026-10-05: no letter column, and no letter
+    field in any receipt's original row either. The daily run reads that prior once and writes government-sources/2
+    with the three columns NULL; a run given the letters' capture then fills them."""
+    import json
+    import shutil
+    from importlib import import_module
+
+    from spicy_regs.etl_receipts import ReceiptContext, select_receipts, write_dataset
+    from spicy_regs.transforms.government_receipts import EARLIER_POLICIES, _digest
+    from tests.test_gao_major_rule_letters import PRODUCTS, capture, page
+
+    module = import_module("spicy_regs.transforms.build_gao_reports")
+    dataset = "gao_reports"
+    added = ("major_rule_agency", "major_rule_rins", "major_rule_fr_citations")
+    [earlier] = EARLIER_POLICIES[dataset]
+    assert earlier.policy_version == "government-sources/1" != POLICIES[dataset].policy_version
+    assert [name for name in SUBJECT_SCHEMAS[dataset].names if name not in earlier.subject_schema.names] == list(added)
+    # The row as that generation's receipt holds it: the columns of the time, none of the later ones.
+    published = module.COLUMNS[: module.COLUMNS.index("subject_terms_json") + 1]
+    raw = {
+        **dict.fromkeys(published),
+        "report_id": "gao-04-193r",
+        "title": "Federal Agency Major Rule Report: Department of Health and Human Services: A Rule",
+        "report_type": "Report",
+        "published_date": "2003-10-27",
+        "topics_json": '["Health Care"]',
+        "url": "https://www.gao.gov/products/gao-04-193r",
+        "source": "gao_listing",
+        "product_type": "Federal Agency Major Rule Report",
+        "report_number": "GAO-04-193R",
+    }
+    subject = {name: value for name, value in map_subject(dataset, raw).items() if name in earlier.subject_schema.names}
+    witness = {
+        "source_id": "test:listing",
+        "source_uri": None,
+        "sha256": "sha256:" + "0" * 64,
+        "locator": None,
+        "body_version": None,
+    }
+    context = ReceiptContext("earlier", dataset + ":0", earlier.policy_version, [witness])
+    held, receipts = write_dataset([({**subject, "raw_record": raw}, context)], tmp_path / "published", earlier)
+    assert held is not None and not set(added) & set(pq.read_schema(held).names)
+    prior = tmp_path / "_gao_prior.parquet"
+    shutil.copyfile(held, prior)
+    (tmp_path / BUILD_METADATA).write_text(
+        json.dumps(
+            {
+                "generation_id": "earlier",
+                "receipt_path": str(receipts),
+                "receipt_sha256": _digest(receipts),
+                "subjects": {dataset: {"path": str(prior), "sha256": _digest(prior)}},
+            }
+        )
+    )
+
+    class NoFeed:
+        def __init__(self, **_):
+            pass
+
+        def iter_records(self):
+            return iter(())
+
+    monkeypatch.setattr(module, "GaoReportsReader", NoFeed)
+    monkeypatch.setattr(module.r2, "download", lambda *_: False)
+
+    output, _ = module.build_gao_reports(tmp_path, receipt_generation_id="upgrade")
+
+    assert pq.read_schema(output).equals(SUBJECT_SCHEMAS[dataset])
+    [row] = pq.read_table(output).to_pylist()
+    assert all(row[name] is None for name in added)
+    assert {name: row[name] for name in earlier.subject_schema.names} == subject
+    selected = tmp_path / "selected.parquet"
+    select_receipts(tmp_path / "etl_receipts.parquet", selected, dataset=dataset)
+    [joined] = read_with_receipts([output], [selected], POLICIES[dataset], generation_id="upgrade")
+    assert {name: joined["raw_record"][name] for name in raw} == raw
+    assert joined["raw_record"]["major_rule_letter_json"] is None
+    [receipt] = pq.read_table(selected).to_pylist()
+    assert receipt["policy_version"] == POLICIES[dataset].policy_version
+    assert receipt["witnesses"][0]["source_id"] == "test:listing"
+
+    # The run that holds the letters' capture: the same row, now under the current policy, takes its letter.
+    output.rename(prior)
+    letters = capture(tmp_path / "letters", {PRODUCTS + "gao-04-193r": page("gao-04-193r")})
+    output, _ = module.build_gao_reports(tmp_path, receipt_generation_id="letters", major_rule_letters=(letters,))
+    [row] = pq.read_table(output).to_pylist()
+    assert (row["major_rule_rins"], row["major_rule_fr_citations"]) == (["0910-AC40"], ["68-58894"])
+    assert row["major_rule_agency"].startswith("Department of Health and Human Services")
+    assert {name: row[name] for name in earlier.subject_schema.names} == subject
+
+
 def test_acquisition_failure_receipt_pins_shared_evidence_without_exception_text(tmp_path):
     from spicy_regs.pipelines.rollups.government import GovernmentReceiptRollup
     from spicy_regs.transforms.government_receipts import _digest

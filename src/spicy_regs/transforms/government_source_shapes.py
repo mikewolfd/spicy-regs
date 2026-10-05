@@ -21,7 +21,9 @@ RECEIPT_FIELDS = {
     "crs_reports": ("url",),
     "fcc_filings": ("filing_url", "native_fields_sha256", "pdf_extraction_results_json"),
     "gao_decisions": ("listing_page", "source"),
-    "gao_reports": ("url", "source"),
+    # How a letter value was read (rule, bytes, spans, each blank's reason) is processing: the values are the
+    # subject columns, and the reading stays with the row's receipt.
+    "gao_reports": ("url", "source", "major_rule_letter_json"),
     "lobbying_filings": ("url",),
     "usaspending_recipients": ("observed_at", "source_capture_sha256"),
 }
@@ -151,6 +153,8 @@ LEGACY_COLUMNS = {
         "source",
         "product_type",
         "report_number",
+        # From the CetiAlphaFive/gao R package (2026-09-29), for the reports it lists; a later GAO product-page
+        # reader fills new reports. NULL where no route states them.
         "requester_type",
         "requester_committees_json",
         "requester_members_json",
@@ -158,6 +162,12 @@ LEGACY_COLUMNS = {
         "matters_for_congress_count",
         "page_count",
         "subject_terms_json",
+        # What a Federal Agency Major Rule Report's letter states of the rule it is on (owner decision 2026-10-04):
+        # the agency clause as printed, every RIN and every Federal Register citation. The two lists are not pairs.
+        "major_rule_agency",
+        "major_rule_rins_json",
+        "major_rule_fr_citations_json",
+        "major_rule_letter_json",
     ),
     "lobbying_activities": (
         "filing_uuid",

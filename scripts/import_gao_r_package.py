@@ -49,6 +49,9 @@ RULE = "gao-r-package-copy/1"
 #: (live ``ac08f37f`` plus GAO's listing, 26,183 rows). Any other set refuses; re-review it before a copy onto
 #: another table.
 ROWS_SHA256 = "sha256:94ad333b3ad52b69678e070f56f939d2fb78007381133dfe0c1297ccd37d309f"
+#: The columns that digest covers: the table's when the additions were reviewed, which are all the package shapes.
+#: Columns the table gained later (the major-rule letter's, 2026-10-05) are no part of it, so it still names the rows.
+DIGEST_COLUMNS = reports.COLUMNS[: reports.COLUMNS.index("subject_terms_json") + 1]
 #: Fill a held row's NULL cells from the package too, never changing a value (owner decision 2026-09-29).
 FILL_NULLS = True
 #: Every column the package states; a held row's other cells are never touched.
@@ -68,9 +71,9 @@ class ImportRefused(ValueError):
 
 
 def rows_digest(rows: Iterable[Mapping[str, Any]]) -> str:
-    """SHA-256 over rows in ``report_id`` order, each a JSON array of the family's columns."""
+    """SHA-256 over rows in ``report_id`` order, each a JSON array of :data:`DIGEST_COLUMNS`."""
     lines = (
-        json.dumps([row[column] for column in reports.COLUMNS], ensure_ascii=False, separators=(",", ":"))
+        json.dumps([row[column] for column in DIGEST_COLUMNS], ensure_ascii=False, separators=(",", ":"))
         for row in sorted(rows, key=lambda row: row["report_id"])
     )
     return "sha256:" + hashlib.sha256("\n".join(lines).encode()).hexdigest()

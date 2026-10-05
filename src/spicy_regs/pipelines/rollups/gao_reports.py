@@ -12,16 +12,31 @@ decisions go to ``gao_decisions.parquet``, which runs without a walk carry forwa
 ``GAO_DECISION_PAGES=<directory>`` adds, to such a run, a local capture of those
 decisions' pages, read by reference: each page's caption completes a cut number list
 and states the decided day (``spicy_regs.sources.gao_decision_pages``).
+
+The major-rule reports of 1996-2008 arrive the same way, from disk, in one run made
+where the walks are held; the published table then carries them, and their letter
+columns, to every later run. ``GAO_MAJOR_RULE_RUN=<directory>`` and
+``GAO_MAJOR_RULE_OLD_INDEX_RUN=<directory>`` add, to a run with ``GAO_LISTING_RUN``,
+finished SpicyDocs walks of "Reports on Major Rules" and of GAO's index of 2000-12-15
+(``spicy_regs.sources.gao_listing``). ``GAO_MAJOR_RULE_LETTERS=<directories>`` names
+captures of the reports' product pages and PDFs, separated as ``PATH`` is, read by
+reference for each report's agency, RINs and Federal Register citations
+(``spicy_regs.sources.gao_major_rule_letters``).
 """
 
 import os
 from pathlib import Path
 from typing import ClassVar
 
-from spicy_regs.env_values import flag_env
+from spicy_regs.env_values import flag_env, text_env
 from spicy_regs.pipelines.rollups.base import make_rollup_app
 from spicy_regs.pipelines.rollups.government import GovernmentReceiptRollup
 from spicy_regs.transforms import build_gao_reports
+
+
+def _directory(name: str) -> Path | None:
+    """The directory an environment variable names, or None when it is unset or blank."""
+    return Path(value) if (value := text_env(name)) else None
 
 
 class GaoReportsRollup(GovernmentReceiptRollup):
@@ -40,8 +55,13 @@ class GaoReportsRollup(GovernmentReceiptRollup):
             evidence=self.source_evidence, receipt_generation_id=self.receipt_generation_id,
             govinfo_history=flag_env("GAO_GOVINFO_HISTORY"),
             govinfo_mods=flag_env("GAO_GOVINFO_MODS"),
-            listing_run=Path(listing) if (listing := os.environ.get("GAO_LISTING_RUN", "").strip()) else None,
-            decision_pages=Path(pages) if (pages := os.environ.get("GAO_DECISION_PAGES", "").strip()) else None,
+            listing_run=_directory("GAO_LISTING_RUN"),
+            decision_pages=_directory("GAO_DECISION_PAGES"),
+            major_rule_run=_directory("GAO_MAJOR_RULE_RUN"),
+            old_index_run=_directory("GAO_MAJOR_RULE_OLD_INDEX_RUN"),
+            major_rule_letters=tuple(
+                Path(part.strip()) for part in (text_env("GAO_MAJOR_RULE_LETTERS") or "").split(os.pathsep) if part.strip()
+            ),
         )
 
 
