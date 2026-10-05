@@ -1140,6 +1140,44 @@ def _publish_verified_generation(
     raise PublicationError("Publication changed concurrently; retry from a fresh snapshot")
 
 
+def restore_family(client, bucket: str, family: str, entry: Mapping, *, expected: Mapping | None) -> dict:
+    """Point ``family`` back at ``entry``, an earlier generation whose objects are still stored; return the index.
+
+    A rollback is a pointer write, never a publish: :func:`publish_generation` refuses a generation that drops
+    receipts. ``expected`` is the generation the family must still name (``None``: whatever it names now), so a
+    generation another writer published since is not discarded unseen. ``entry`` is restored as it was captured,
+    ``publishedAt`` included.
+    """
+    from botocore.exceptions import BotoCoreError, ClientError
+
+    prefix = entry["prefix"]
+    stored = {f"{prefix}/artifact.json": None} | {
+        f"{prefix}/{member['key']}": member["byteSize"]
+        for key, table in entry["tables"].items() for member in table.get("members", [{"key": key, **table}])}
+    for key, size in stored.items():
+        head = _head(client, bucket, key)
+        if head is None or (size is not None and head["ContentLength"] != size):
+            raise PublicationError(f"Cannot restore {family}: {key} is no longer stored as published")
+    for _ in range(_POINTER_ATTEMPTS):
+        index, etag, absent = _stored_index(client, bucket)
+        if absent is not None:
+            raise PublicationError("No version-2 publication index holds this family")
+        current = index["families"].get(family)
+        if current == entry:
+            return index
+        if expected is not None and _generation_entry(current) != _generation_entry(expected):
+            raise PublicationError(f"{family} names another generation than the one being rolled back")
+        updated, raw = _merge_family(index, family, dict(entry))
+        if _put_pointer(client, bucket, INDEX_V2_KEY, raw, etag):
+            try:
+                _write_v1(client, bucket)
+            except (BotoCoreError, ClientError, OSError, PublicationError) as exc:
+                logger.error("publication: {} is behind {}; the next publish rederives it ({}: {})",
+                             INDEX_KEY, INDEX_V2_KEY, type(exc).__name__, exc)
+            return updated
+    raise PublicationError("Publication changed concurrently; retry the rollback")
+
+
 def _partitions(table: Mapping | None) -> set[tuple[tuple[str, str], ...]]:
     """The partitions a split table's members hold, as ``(column, value)`` tuples; none for a single file."""
     return {tuple(member["partition"].items()) for member in (table or {}).get("members", ())}
