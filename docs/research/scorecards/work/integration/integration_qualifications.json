@@ -1,7 +1,7 @@
 {
   "schema_version": "1",
-  "observed_at": "2026-10-05T01:47:27.248165+00:00",
-  "input_plan_sha256": "6ccf7797be570eee02b7bb6027a58c5b2ed2d9822202de68e8f4bbe140300659",
+  "observed_at": "2026-10-05T03:02:44.043892+00:00",
+  "input_plan_sha256": "528ca9721dde2d1ee1e5b7b37b647d1fccf4d810f9c1c32d8910ff402a98217b",
   "readers": {
     "common_cause": "common_cause",
     "bread_world": "bread_world",
@@ -18,6 +18,9 @@
     "drug_policy_action": "drug_policy_action",
     "uaw": "uaw",
     "aft": "aft",
+    "agc": "agc",
+    "global_solutions": "global_solutions",
+    "environment_america": "environment_america",
     "afp": "afp",
     "ijm": "ijm",
     "hrc": "hrc",
@@ -574,6 +577,48 @@
       "state": "qualified",
       "receipt": "qualifications/aft--111-original-pdf.json",
       "receipt_sha256": "0de27cf3e6485cf2913e3f3e5788c6075ea2a93103a60f75faecff086623ca31"
+    },
+    {
+      "publisher_id": "agc",
+      "scorecard_id": "agc:119-aggregate-key-vote-index",
+      "state": "qualified",
+      "receipt": "qualifications/agc--119-aggregate-key-vote-index.json",
+      "receipt_sha256": "ae68e527ab300fe4cb4f09bae1adc4747d31e85d4a411752881efa72a717e187"
+    },
+    {
+      "publisher_id": "agc",
+      "scorecard_id": "agc:118-aggregate-key-vote-index",
+      "state": "qualified",
+      "receipt": "qualifications/agc--118-aggregate-key-vote-index.json",
+      "receipt_sha256": "0c1ed7ec9aadf8685e52960cf37fa6d580b1135a842058374c21b1589d7a0850"
+    },
+    {
+      "publisher_id": "agc",
+      "scorecard_id": "agc:117-aggregate-key-vote-index",
+      "state": "qualified",
+      "receipt": "qualifications/agc--117-aggregate-key-vote-index.json",
+      "receipt_sha256": "44351db950967620bf746ee9d6930b3ac19bd70541b4c979822e5d026b3e0e01"
+    },
+    {
+      "publisher_id": "agc",
+      "scorecard_id": "agc:116-aggregate-key-vote-index",
+      "state": "qualified",
+      "receipt": "qualifications/agc--116-aggregate-key-vote-index.json",
+      "receipt_sha256": "72b88c4c30261706463f65841d048448975d8a4f0ed3d9e5cc301e0a96074246"
+    },
+    {
+      "publisher_id": "global_solutions",
+      "scorecard_id": "global_solutions:2010-original-report-pdf",
+      "state": "qualified",
+      "receipt": "qualifications/global_solutions--2010-original-report-pdf.json",
+      "receipt_sha256": "25dde53e38dfa620019908e2f3a01ad7c4b6483997df81683309f2f9e45b3f13"
+    },
+    {
+      "publisher_id": "environment_america",
+      "scorecard_id": "environment_america:2009-original-report-pdf",
+      "state": "qualified",
+      "receipt": "qualifications/environment_america--2009-original-report-pdf.json",
+      "receipt_sha256": "fdc77fd82ea614f3c398f669895cd1cbcd0b235bc1adc1c9149e1cf94d005f2c"
     },
     {
       "publisher_id": "aauw",

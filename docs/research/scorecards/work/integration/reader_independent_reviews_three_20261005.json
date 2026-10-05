@@ -1,0 +1,55 @@
+{
+  "format_version": "scorecard-reader-independent-review/1",
+  "boundary": "Named retained renditions only; source, installed package, public data and automatic refresh have separate evidence",
+  "reviews": [
+    {
+      "publisher_id": "agc",
+      "status": "approved",
+      "reviewed_source_commit": "7e264067361347176d0c043fdfda894854c7573b",
+      "module_sha256": "8168abeab99240713b1254e6d2df8c9e526dd5a2a5c0b23570c7317f467f05fe",
+      "parser_versions": [
+        "agc-html-aggregate-key-vote-index/1"
+      ],
+      "handoff_sha256": "e001fa33079705999ae90f3bb6fadc5c9cb87f9fceb28e4fe607a8676539f1d3",
+      "report_sha256": "41ffcb615ddc0286d127fe56949a86d910f8d808b0aab79c226bdc45ac35aa03",
+      "scopes": [
+        "agc:119-aggregate-key-vote-index",
+        "agc:118-aggregate-key-vote-index",
+        "agc:117-aggregate-key-vote-index",
+        "agc:116-aggregate-key-vote-index"
+      ],
+      "boundary": "Named original congressional aggregate tables and key-vote indexes; profiles, individual actions, sponsorships and item details remain separate",
+      "final_handoff_binding_sha256": "400b7cb722d4ca64a4f8d788862798cce664c148b2a5b99b208ec312275fe51c"
+    },
+    {
+      "publisher_id": "global_solutions",
+      "status": "approved",
+      "reviewed_source_commit": "c6e3cebe01ca8fec7e3def4627570ba9b8d6032a",
+      "module_sha256": "38aa3a33f16bffbc744f31af6a88b4e28e68280ed4b73a2cf2dbea14e9c18b2f",
+      "parser_versions": [
+        "global-solutions-2010-qualified-original-pdf/2"
+      ],
+      "handoff_sha256": "02d344966a861494e3fdddc9358d4e5941ef36555cc1735ba4cbabdf3f228eb5",
+      "report_sha256": "61b5930fe884866153682f931bea39076d4daa1fdfc4852b8802362717f9fc22",
+      "scopes": [
+        "global_solutions:2010-original-report-pdf"
+      ],
+      "boundary": "Named original report, grades, recognition, weighted items and complete selected grading guide; no individual action ledger or universal reproduction formula"
+    },
+    {
+      "publisher_id": "environment_america",
+      "status": "approved",
+      "reviewed_source_commit": "33a35be108cf0f5bcb0cd2b582157ecbeb4b8b57",
+      "module_sha256": "7a324dfffd89accfbf72f7b11bc6742ffb45a072d1cc5a72a0ddcdc618df4c93",
+      "parser_versions": [
+        "environment-america-2009-qualified-original-pdf/1"
+      ],
+      "handoff_sha256": "2b859563ea41019d40dbd01b80b5143bb15835db2d03ee0150c4c2d447d91f33",
+      "report_sha256": "5261ed4111a0f47921c5f8bffe50c3d2730eb5b03bbeb04b388285c502a70801",
+      "scopes": [
+        "environment_america:2009-original-report-pdf"
+      ],
+      "boundary": "Complete native member/rating/action grids, item narratives and selected period, award, chart, legend, cohort and state contexts; remaining overview, contents and directory prose are outside emitted scope"
+    }
+  ]
+}

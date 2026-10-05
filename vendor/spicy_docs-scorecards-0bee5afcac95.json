@@ -1,11 +1,12 @@
 {
-  "version": "0.54.0+scorecards.dee48d34213a",
-  "baseline_version": "0.54.0+scorecards.0bee5afcac95",
-  "baseline_wheel": "spicy_docs-0.54.0+scorecards.0bee5afcac95-py3-none-any.whl",
-  "baseline_sha256": "acfead5a41fc1313c59e54063925a2430404b60bb7b78b568efee6c09ce56134",
-  "overlay_sha256": "dee48d34213a3281983733c55968b4d3df76f8774d1aaa3997a86c3a7ba4ad6d",
+  "version": "0.54.0+scorecards.0bee5afcac95",
+  "baseline_version": "0.54.0+scorecards.d42c3140cd83",
+  "baseline_wheel": "spicy_docs-0.54.0+scorecards.d42c3140cd83-py3-none-any.whl",
+  "baseline_sha256": "7171c7c821668a4d72c0f9f331a90b51860b3224d2587c675cf2bf5170887198",
+  "overlay_sha256": "0bee5afcac9535928dc63447a10b4b753203e74a902ea0d01e89787d45e612be",
   "modules": {
-    "spicy_docs/sources/scorecards/__init__.py": "3638524e8fff2fb10523969a441c0e30052af3a86bbfb88944807d7a21674410",
+    "spicy_docs/reading/pdf_bytes.py": "889dc357391a000f5857516c8eca7fd75f44607791247e98d1fb80c31e925b4c",
+    "spicy_docs/sources/scorecards/__init__.py": "08ebb4d5f8c554c075330d665938f29eb0761ce9c3a47f27e3ed047013a49c16",
     "spicy_docs/sources/scorecards/aauw.py": "14a7da2be96782fa0cdce1220ec003565cd04196bd2dce6bec43f4c0e2fbb837",
     "spicy_docs/sources/scorecards/acec.py": "1c6bec8cee712e5662108c0fa69e219e96195e774f8a80f0d707a4a8b49c4376",
     "spicy_docs/sources/scorecards/aclu.py": "8604f33d5026530f4ec2a3c186c8b7817387b169c65708a3174f3c92b76a1e04",
@@ -18,7 +19,6 @@
     "spicy_docs/sources/scorecards/afp.py": "120ca60e0718ef69674712978f55c5ee34efa2c618f798befb03b45488963b50",
     "spicy_docs/sources/scorecards/afscme.py": "13b731725e34a81d6f93acebf92555db4932d40b20a4433508d6046f8a8e39ea",
     "spicy_docs/sources/scorecards/aft.py": "39869f831eb10690629ac5e5d5bdb46905f5267611fb4141255c99d2e773c8c4",
-    "spicy_docs/sources/scorecards/agc.py": "8168abeab99240713b1254e6d2df8c9e526dd5a2a5c0b23570c7317f467f05fe",
     "spicy_docs/sources/scorecards/ajp_action.py": "1955c0552ea1dbfb4816015aa8d0ba792f828b4a858fa0ba95799ccf5f8a713c",
     "spicy_docs/sources/scorecards/american_energy_alliance.py": "272185b1557a86ed8f379981b023a7e2c0f42de9b73447677ae6b90f423fdae0",
     "spicy_docs/sources/scorecards/ara.py": "de57c28a08518b2fb58f6a6a3bf2936bf9bd9b45f21d78b275d2f333bb220b17",
@@ -39,7 +39,6 @@
     "spicy_docs/sources/scorecards/defenders_action.py": "f8ab4d4d7e2b10033610e44b18b6e70ab2a59fb62871081ad79249b53dc457e7",
     "spicy_docs/sources/scorecards/drug_policy_action.py": "887b8377d39fc706aeb6022c0237e664ff8899ba3a25ba0d08dca158ec4217f6",
     "spicy_docs/sources/scorecards/end_citizens_united.py": "26ff8c5ea6f357f331bbfaea2f9772db0ab8b3a6d9b311ec4efdc1107bd24c54",
-    "spicy_docs/sources/scorecards/environment_america.py": "7a324dfffd89accfbf72f7b11bc6742ffb45a072d1cc5a72a0ddcdc618df4c93",
     "spicy_docs/sources/scorecards/few.py": "1e22ff88f27f76bc927f68d026e70c0adc70a9eac6d97f4d5aedc59858dc2a44",
     "spicy_docs/sources/scorecards/ffrf_action.py": "380bb28bc9a9eeff9e54908ddb261299d8bd42c24b9dd9db8eebf62c02071149",
     "spicy_docs/sources/scorecards/first_focus.py": "ef5081987949d7aa4bdc0c27b71270a3a7a7798583d5ae624276fcd30668f3a4",
@@ -49,7 +48,6 @@
     "spicy_docs/sources/scorecards/frc_action_pdf.py": "3a0a811aa4072357ea3231eda69aa335b35fa114218835849a599e098c2a5073",
     "spicy_docs/sources/scorecards/freedomworks.py": "13a798f26215abecd64ee1bf0b1c6c6fbf789718a6551b827b995a38ee26513c",
     "spicy_docs/sources/scorecards/freedomworks_wordpress.py": "9208acfdd2d780a4d4d3efd7bf3efe60de8a73175952bb5d5bd5793c1d8729ad",
-    "spicy_docs/sources/scorecards/global_solutions.py": "38aa3a33f16bffbc744f31af6a88b4e28e68280ed4b73a2cf2dbea14e9c18b2f",
     "spicy_docs/sources/scorecards/goa.py": "66b5fbc53f621c293d9e98d932e86ad0356ffbc3c4a5b65b96cdb7792f88c3aa",
     "spicy_docs/sources/scorecards/govtrack_discovery.py": "6dd905d88ceb261dcc2dc059056838850d8e2dc1ef9e22864a46d7f596dec25b",
     "spicy_docs/sources/scorecards/heritage_action.py": "3f56c0eabd81a65131160f75686dde9fa8174400fd3696a708a689fa4106cf85",
@@ -109,18 +107,22 @@
     "spicy_docs/sources/scorecards/wilberforce.py": "c279b59b071c2206645de25cb3be2a5a7abc2c4f1a4bf0bf713aca99b6c5d615",
     "spicy_docs/sources/scorecards/workbooks.py": "7d4481ec02d3f020ea290ead619af46e555680f9450d338bfccf5c0f9d971d11"
   },
-  "explicit_runtime_dependencies": {},
-  "wheel": "spicy_docs-0.54.0+scorecards.dee48d34213a-py3-none-any.whl",
-  "wheel_sha256": "b8313f3c8c7cde81c701ce79cc83f007ec748f8a240bfa0b3cbdc69ee2202c0e",
+  "explicit_runtime_dependencies": {
+    "spicy_docs/reading/pdf_bytes.py": "889dc357391a000f5857516c8eca7fd75f44607791247e98d1fb80c31e925b4c"
+  },
+  "wheel": "spicy_docs-0.54.0+scorecards.0bee5afcac95-py3-none-any.whl",
+  "wheel_sha256": "acfead5a41fc1313c59e54063925a2430404b60bb7b78b568efee6c09ce56134",
   "repeat_build_identical": true,
   "unrelated_runtime_and_dependency_metadata_preserved": true,
   "changed_runtime_files": [
     "spicy_docs/sources/scorecards/__init__.py",
-    "spicy_docs/sources/scorecards/agc.py",
-    "spicy_docs/sources/scorecards/environment_america.py",
-    "spicy_docs/sources/scorecards/global_solutions.py"
+    "spicy_docs/sources/scorecards/aft.py",
+    "spicy_docs/sources/scorecards/drug_policy_action.py",
+    "spicy_docs/sources/scorecards/nra_pvf.py",
+    "spicy_docs/sources/scorecards/uaw.py",
+    "spicy_docs/sources/scorecards/wilberforce.py"
   ],
-  "scope": "Qualified consumer package adoption; complete source and consumer gates and installed retained-input replays passed. Public publication and hosted container remain separate.",
-  "source_commit": "554dfba52246773a103601d3987d46a7755ef7ae",
-  "adoption_receipt": "docs/research/scorecards/work/integration/reader_adoption_three_20261005.json"
+  "scope": "Qualified consumer package adoption; complete source and consumer gates and installed retained-input replays passed. Public edition publication and hosted container remain separate.",
+  "adoption_receipt": "docs/research/scorecards/work/integration/reader_adoption_five_20261004.json",
+  "source_commit": "7358ba8d80456ee4e8264fb964734683fab9ad0c"
 }

@@ -10,6 +10,8 @@ The [verified publication follow-up](release_followup_20261004.md) identifies
 the subsequent source release, the next reader package and remaining work.
 The [subsequent reader package](reader_five_20261004.md) records NRA-PVF,
 21Wilberforce, Drug Policy Action, UAW and AFT qualification and remaining work.
+The [AGC, CGS and Environment America package](reader_three_20261005.md)
+records the next qualified readers, exact source boundaries and remaining work.
 
 The [generated work queue](integration_progress.md) accounts for every publisher
 in the [adapter matrix](adapter_support_matrix.md) and
