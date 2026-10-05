@@ -15,13 +15,14 @@ recorded term, which stay ``unmatched``. Inclusive ends alone would have made 1,
 The day is spicy-docs' ``vote_day`` over ``member_votes.vote_date``, the chamber's printed
 Eastern date; a spelling it cannot read refuses the build, and a vote whose file prints no date is
 ``undated`` with no term rather than matched against a guessed day. The member is the row's own
-``bioguide_id``: a House row from 2003 on states it, and a Senate row carries the one the votes
-rollup resolved from its LIS id through ``members`` at its merge
-(``table_merge.fill_senate_bioguide_ids``), the one place that crosswalk is applied. A NULL is a
-LIS id ``members`` does not hold, or a House row of 1990-2002, whose ``name:`` key identifies the
-row within its roll call, never a person: both are ``unresolved_member`` and no name is matched
-here (a person crosswalk would add party, state and the vote day against service dates; spicy-docs
-0.52.0). Every vote row appears exactly once, matched or not, in ``member_votes``' order.
+``bioguide_id``: a House row from 2003 on states it, and the votes rollup resolves the others at
+its merge, the one place the crosswalk is applied: a Senate row from its LIS id through
+``members`` (``table_merge.fill_senate_bioguide_ids``), and a House row of 1990-2002 from the
+Clerk's printed label, party and state against the members seated that Congress and the vote's
+day (``member_name_crosswalk.fill_house_name_bioguide_ids``). A NULL is a LIS id ``members`` does
+not hold, or a label no one member answers to on that day: both are ``unresolved_member``, and no
+name is matched here, since a ``name:`` key identifies the row within its roll call, never a person.
+Every vote row appears exactly once, matched or not, in ``member_votes``' order.
 
 One DuckDB pass, streamed to Parquet in the same row groups: the day and the member are decided
 once per distinct printed date and per distinct id pair in Python, and joined back. The per-row
