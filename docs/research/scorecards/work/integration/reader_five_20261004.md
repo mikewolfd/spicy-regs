@@ -3,9 +3,9 @@
 The [source commit](https://github.com/mikewolfd/spicy-docs/commit/7358ba8d80456ee4e8264fb964734683fab9ad0c)
 adds NRA-PVF, 21Wilberforce, Drug Policy Action, UAW and AFT readers. Their source
 guides describe the qualified renditions and completeness checks. The current
-[package receipt](../../../../../vendor/spicy_docs-scorecards.json) pins each
+[package receipt](https://github.com/mikewolfd/spicy-regs/blob/43258c19c0eb2eae1530dd31b6ee221edc907891/vendor/spicy_docs-scorecards.json) pins each
 module, the repeatable wheel build and the unchanged shared PDF checks.
-The [prior package receipt](../../../../../vendor/spicy_docs-scorecards-d42c3140cd83.json)
+The [prior package receipt](https://github.com/mikewolfd/spicy-regs/blob/43258c19c0eb2eae1530dd31b6ee221edc907891/vendor/spicy_docs-scorecards-d42c3140cd83.json)
 retains the previously adopted inputs.
 
 NRA-PVF reports grades for its explicitly disclosed federal incumbents in named

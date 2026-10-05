@@ -1033,11 +1033,27 @@
       "command": "uv run --frozen spicy-regs-dict generate",
       "log_sha256": "f8fed3fae07e037a276df9369795409a428d3b047897f4e6d2e54e0e60b401d7",
       "status": "passed"
+    },
+    "documentation_build": {
+      "command": "uv run --frozen --group docs mkdocs build --strict",
+      "log_sha256": "d8fa735a78493d051e576ab58c7335d6e051a63ae0c18aa26e042a7a64730d0b",
+      "status": "passed"
     }
   },
   "independent_reviews": {
     "receipt": "reader_independent_reviews_five_20261004.json",
     "sha256": "71616369efa1959f8b23699c0948c842e7e2436f2a1c560334881d7b370cfe61"
   },
-  "boundary": "Named retained source inputs and installed consumer package; public editions require separate publication readback; automatic refresh and hosted container unchanged"
+  "boundary": "Named retained source inputs and installed consumer package; public editions require separate publication readback; automatic refresh and hosted container unchanged",
+  "source_main_commit": "5c424c6c72bc173cfd7097887305aa9c6fe48f3e",
+  "source_main_gate": {
+    "command": "./scripts/check",
+    "log_sha256": "25da5fe7b5b38547cb450b74c31557e6a08d5650301592e535df3acf1be90f0e",
+    "status": "passed",
+    "changes_after_frozen_source": [
+      "pyproject.toml",
+      "uv.lock"
+    ],
+    "boundary": "Existing source release version change; qualified reader modules remain byte-identical"
+  }
 }

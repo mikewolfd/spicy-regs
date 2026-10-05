@@ -68,7 +68,7 @@ When selecting the reviewed shared PDF validator, freeze
 `src/spicy_docs/reading/pdf_bytes.py` beside the reader modules and add
 `--pdf-bytes-sha256 "$SCORECARD_PDF_BYTES_SHA256"` to the build command. The
 builder checks that exact pin and permits only this explicit additional runtime
-file. The [current package receipt](../../../../../vendor/spicy_docs-scorecards.json)
+file. The [current package receipt](https://github.com/mikewolfd/spicy-regs/blob/43258c19c0eb2eae1530dd31b6ee221edc907891/vendor/spicy_docs-scorecards.json)
 records the selected validator and every installed module.
 Copy the selected wheel to `vendor/`, update the matching dependency and source
 pins in `pyproject.toml`, then run `uv lock` and `uv sync --frozen`. Verify the
