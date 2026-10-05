@@ -7,7 +7,7 @@ fractional digits survive Arrow, Parquet, DuckDB and MCP without rounding.
 grades and exclusions. No grade becomes a number.
 
 This restores the numeric representation stated in the
-[frozen source model](../../../proposed_schema.json) and the SpicyDocs
+[frozen source model](../../proposed_schema.json) and the SpicyDocs
 `scorecard_member_ratings` description: optional exact decimal text. The typed
 serving layer previously used fixed precision. Original ILA detail responses
 exceeded its first fractional bound, and original Machinists JSON exceeded the
