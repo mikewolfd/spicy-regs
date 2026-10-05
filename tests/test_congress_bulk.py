@@ -271,3 +271,44 @@ def test_control_character_in_receipt_context_routes_to_reference(tmp_path, monk
     _, row, bulk = _both(tmp_path, monkeypatch, "member_votes", _member_votes(5), witnesses=[witness])
     for reference, actual in zip(row, bulk):
         assert pq.read_table(reference).equals(pq.read_table(actual))
+
+
+def test_selected_prior_runs_one_bulk_admission_before_restore(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from spicy_regs import etl_bulk
+    from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
+
+    source = _source(tmp_path, "member_votes", _member_votes(5))
+    subject, receipts = write_congress_dataset(source, tmp_path / "bundle", dataset="member_votes", generation_id=GENERATION)
+    monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
+    prior = SelectedPriors(tmp_path / "prior")
+    prior.selected = SimpleNamespace(select=lambda dataset: SimpleNamespace(
+        subjects=(subject,), receipts=receipts, generation_id=GENERATION))
+    calls, real = [], etl_bulk.validate_bundle
+    def counted(*args, **kwargs):
+        calls.append(1)
+        return real(*args, **kwargs)
+    monkeypatch.setattr(etl_bulk, "validate_bundle", counted)
+    restored = prior.get("member_votes")
+    assert pq.read_table(restored).equals(pq.read_table(source))
+    assert calls == [1]
+    assert prior.get("member_votes") == restored
+    assert calls == [1]
+
+
+def test_unproven_bundle_dispatch_uses_exact_row_validator(tmp_path, monkeypatch):
+    from spicy_regs import congress_receipts, etl_bulk
+    from spicy_regs.etl_receipts import DatasetPolicy, write_dataset
+
+    selected = DatasetPolicy("float_test", pa.schema([("id", pa.string()), ("n", pa.float64())]), ("id",), ())
+    subject, receipts = write_dataset([({"id": "one", "n": 1.5}, ReceiptContext(GENERATION, "a", "p", [WITNESS]))],
+                                      tmp_path / "bundle", selected)
+    calls, real = [], congress_receipts.validate_receipt_bundle
+    def counted(*args, **kwargs):
+        calls.append(1)
+        return real(*args, **kwargs)
+    monkeypatch.setattr(congress_receipts, "validate_receipt_bundle", counted)
+    congress_receipts._admit({selected.dataset: [subject]}, [receipts], [selected], generation_id=GENERATION)
+    assert calls == [1]
+    with pytest.raises(etl_bulk.NotBulkEligible):
+        etl_bulk.validate_bundle({selected.dataset: [subject]}, [receipts], [selected], generation_id=GENERATION)

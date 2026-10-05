@@ -46,17 +46,19 @@ def test_real_index_producer_admits_native_subjects_and_resumes_from_receipts(tm
     assert not set(reader.details) & set(next_reader.details)
 
 
-def test_missing_wrong_generation_and_changed_subject_cannot_resume(tmp_path):
+def test_missing_receipts_and_changed_subject_cannot_resume(tmp_path):
     source = shaped(tmp_path / "source.parquet", [{"bioguide_id": "X", "fec_ids_json": "[]", "observed_at": "then"}])
     subject, receipts = write_congress_dataset(source, tmp_path / "bundle", dataset="members", generation_id="g")
     with pytest.raises((ValueError, OSError)):
         CongressInput(subject, tmp_path / "missing-receipts.parquet", "g").materialize(
             "members", tmp_path / "missing.parquet"
         )
-    with pytest.raises(ValueError, match="selected generation"):
-        restore_processing_input(
-            subject, receipts, tmp_path / "wrong.parquet", dataset="members", generation_id="other"
-        )
+    restored = restore_processing_input(
+        subject, receipts, tmp_path / "carried.parquet", dataset="members", generation_id="other"
+    )
+    assert pq.read_table(restored).equals(pq.read_table(source))
+    with pytest.raises(ValueError, match="publisher generation"):
+        restore_processing_input(subject, receipts, tmp_path / "empty.parquet", dataset="members", generation_id="")
     table = pq.read_table(subject)
     changed = table.set_column(table.schema.get_field_index("name_first"), "name_first", pa.array(["different"]))
     pq.write_table(changed, tmp_path / "changed.parquet")

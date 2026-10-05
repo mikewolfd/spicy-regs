@@ -35,6 +35,8 @@ from spicy_regs.etl_receipts import (
     _parquet,
     _subjects,
     subject_identity,
+    receipt_policies,
+    validate_publisher_generation,
 )
 
 #: An upper-case hex letter in a control character's escape: the backslash run before ``u`` is odd, so it is an escape
@@ -204,7 +206,11 @@ def _names_sql(names: Iterable[str]) -> str:
 
 def _by_dataset_sql(policies: Mapping[str, DatasetPolicy], each: Callable[[DatasetPolicy], str], other: str) -> str:
     """``each`` policy's expression for a receipt of its dataset, and ``other`` for a dataset with no policy."""
-    cases = " ".join(f"WHEN {_literal(name)} THEN {each(policy)}" for name, policy in policies.items())
+    cases = " ".join(
+        f"WHEN {_literal(name)} THEN CASE policy_version "
+        + " ".join(f"WHEN {_literal(p.policy_version)} THEN {each(p)}" for p in receipt_policies(policy))
+        + f" ELSE {other} END" for name, policy in policies.items()
+    )
     return f"CASE dataset {cases} ELSE {other} END" if cases else other
 
 
@@ -378,21 +384,6 @@ def _repeated_sql(key: str, where: str) -> str:
     )
 
 
-def _one_generation(con: duckdb.DuckDBPyConnection, generation_id: str | None) -> tuple[str | None, int | None]:
-    """The one generation every receipt must carry, and the first receipt that carries another.
-
-    It is the selected generation or, with none selected, the one the first receipt names.
-    """
-    selected = generation_id
-    if selected is None:
-        named = con.execute("SELECT generation_id FROM receipts ORDER BY n LIMIT 1").fetchall()
-        selected = named[0][0] if named else None
-    [(stray,)] = con.execute(
-        "SELECT min(n) FROM receipts WHERE generation_id IS DISTINCT FROM ?", [selected]
-    ).fetchall()
-    return selected, stray
-
-
 def _check_receipts(
     con: duckdb.DuckDBPyConnection,
     temp: Path,
@@ -402,6 +393,7 @@ def _check_receipts(
     scoped: bool,
 ) -> None:
     """``_load_receipts`` over whole columns: raise what it would at the first row, or schema, it refuses."""
+    validate_publisher_generation(generation_id)
     paths, stopped = _readable(receipt_paths, RECEIPT_SCHEMA, "Receipt schema differs from the shared schema")
     if scoped and stopped is not None:
         raise NotBulkEligible("select_receipts decides a receipt file that is not the shared schema")
@@ -412,13 +404,12 @@ def _check_receipts(
     wanted = frozenset(policies) if scoped else None
     spans = _scan(con, paths, 0, _receipt_insert_sql(policies, scoped), wanted=wanted)
 
-    selected, stray = _one_generation(con, generation_id)
     repeats = (
         con.execute(_repeated_sql("receipt_id", "true")).fetchall()[0][0],
         con.execute(_repeated_sql("dataset, record_id", "outcome = 'accepted' AND record_id IS NOT NULL")).fetchall()[0][0],
     )
-    # The row loader stops at its first refusal, so no row after a stray or repeated one matters.
-    last = min((number for number in (stray, *repeats) if number is not None), default=None)
+    # No row after the first repeated receipt can change the row loader's refusal.
+    last = min((number for number in repeats if number is not None), default=None)
     # Read to the end before anything else runs on this database: a second statement would end the stream.
     unproven = "SELECT n FROM receipts WHERE unproven AND n <= coalesce(?, n) ORDER BY n"
     numbers = _ordinal_file(con, unproven, [last], temp / "unproven-receipts.parquet")
@@ -427,12 +418,11 @@ def _check_receipts(
             reference,
             (_member(table) for _, table in _held(spans, numbers)),
             policies,
-            selected,
+            generation_id,
             retain_processing=False,
         )
     if last is not None:
-        mixed = "Receipts mix or differ from the selected generation"
-        raise ValueError(mixed if last == stray else "Duplicate or ambiguous receipt join")
+        raise ValueError("Duplicate or ambiguous receipt join")
     if stopped is not None:
         raise stopped
 
@@ -451,6 +441,8 @@ def _check_subjects(
         if policy.receipt_only and paths:
             stopped = ValueError("Processing-only dataset cannot publish a subject table")
             break
+        if not paths:
+            continue
         number = "n"
         while number in {name.casefold() for name in policy.subject_schema.names}:
             number += "_"
@@ -534,7 +526,7 @@ def validate_bundle(
     registered = _bundle_policies(subjects, receipt_paths, policies)
     try:
         for policy in registered.values():
-            if not policy.receipt_only:
+            if not policy.receipt_only and subjects[policy.dataset]:
                 if not all(_nested_nullable(field.type) for field in policy.subject_schema):
                     raise NotBulkEligible("Nested nonnullable fields require the row normalizer")
                 _subject_insert_sql(policy, "n")

@@ -211,8 +211,6 @@ REFUSALS = {
     "witness_without_digest_or_version": ("Witness needs source identity", lambda b, d: seal(_first(b, d), witnesses=[{**WITNESS, "sha256": None}])),
     "witness_digest_malformed": ("Invalid witness SHA-256", lambda b, d: seal(_first(b, d), witnesses=[{**WITNESS, "sha256": "AB" * 32}])),
     "witness_digest_empty_beside_version": ("Invalid witness SHA-256", lambda b, d: seal(_first(b, d), witnesses=[{**WITNESS, "sha256": "", "body_version": "v"}])),
-    "generation_differs_from_selected": ("mix or differ", lambda b, d: [seal(r, generation_id="g2") for r in b.receipts[0] if r["dataset"] == d]),
-    "generation_mixed_in_one_dataset": ("mix or differ", lambda b, d: seal(_first(b, d, "observed"), generation_id="g2")),
     "outcome_unknown": ("Invalid receipt outcome", lambda b, d: seal(_first(b, d, "observed"), outcome="skipped")),
     "outcome_null": ("Invalid receipt outcome", lambda b, d: seal(_first(b, d, "observed"), outcome=None)),
     "accepted_without_version": ("Invalid receipt outcome", lambda b, d: seal(_first(b, d), subject_version=None)),
@@ -423,3 +421,44 @@ def test_scoped_multiple_policies_and_receipt_only(tmp_path):
     wanted = {p.dataset: subjects[p.dataset] for p in selected}
     assert outcome(etl_bulk.validate_bundle, wanted, receipts, selected, generation_id="g1", scoped=True) is None
     assert outcome(validate_receipt_bundle, wanted, copied, selected, generation_id="g1") is None
+
+
+@pytest.mark.parametrize("opened", [False, True])
+def test_selected_member_carries_original_receipt_generations(tmp_path, opened):
+    bundle = build(tmp_path, generations={"things": "old-g1", "others": "old-g2", "reads": "old-g3"})
+    seal(bundle.receipt("things", "observed"), generation_id="new-g4")
+    args = bundle.write(tmp_path / "selected", opened)
+    assert outcome(validate_receipt_bundle, *args, generation_id="publisher-now") is None
+    assert outcome(etl_bulk.validate_bundle, *args, generation_id="publisher-now") is None
+
+
+def test_bulk_and_row_accept_explicit_earlier_policy(tmp_path):
+    from spicy_regs.transforms.government_receipts import POLICIES
+    from spicy_regs.etl_receipts import receipt_policies
+    current = POLICIES["gao_decisions"]
+    earlier = receipt_policies(current)[1]
+    context = ReceiptContext("original", "a", "p", [WITNESS])
+    receipts = write_dataset([], tmp_path / "empty", earlier,
+                             failures=[observation_receipt(earlier, context, processing_fields={})])[1]
+    args = ({current.dataset: []}, [receipts], [current])
+    assert outcome(validate_receipt_bundle, *args, generation_id="published") is None
+    assert outcome(etl_bulk.validate_bundle, *args, generation_id="published") is None
+
+
+def test_reference_rows_are_streamed_in_bounded_batches(tmp_path):
+    table = pa.table({"value": list(range(31))})
+    member = tmp_path / "large-group.parquet"
+    pq.write_table(table, member, row_group_size=31)
+    held = list(etl_bulk._held([(0, 31, member)], range(31)))
+    assert [n for numbers, _ in held for n in numbers] == list(range(31))
+    assert max(batch.num_rows for _, batch in held) <= etl_bulk._BATCH
+
+
+def test_nested_nonnullable_subject_requires_reference(tmp_path):
+    dtype = pa.struct([pa.field("required", pa.string(), nullable=False)])
+    selected = DatasetPolicy("nested", pa.schema([("id", pa.string()), ("nested", dtype)]), ("id",), ())
+    subject, receipts = write_dataset([({"id": "one", "nested": {"required": "present"}},
+                                        ReceiptContext("g", "a", "p", [WITNESS]))], tmp_path / "bundle", selected)
+    validate_receipt_bundle({selected.dataset: [subject]}, [receipts], [selected])
+    with pytest.raises(etl_bulk.NotBulkEligible, match="nonnullable"):
+        etl_bulk.validate_bundle({selected.dataset: [subject]}, [receipts], [selected])
