@@ -1037,9 +1037,24 @@
         "description": "The whole bill's interpreted legislative stage: the latest step its actions show under the current rule, not a final outcome. On the ladder: `introduced`, `committee`, `calendared`, `passed_chamber`, `other_chamber`, `passed_both`, `conference`, `cleared`, `presented` or `law` (the terminal rung; the literal is `law`, never `enacted`); or an outcome with no rung, `failed` or `vetoed`. `introduced` is also the default when no rule fires (see stage_rule); NULL where the bill's actions were not examined, which is not a statement about enactment. A number the House reserves for its leadership (title \"Reserved for the Speaker.\") has no actions: it reads `introduced` with stage_rule NULL, or NULL where GovInfo holds no document. A mention is not an event: taking over the sponsorship of a bill \"originally introduced by\" another, a floor action citing the text \"as introduced\" or \"as reported\", a special rule's report or description, and a star print classify nothing, and where the publisher's action code names a step, the code is read before the text. `calendared` is a placement on the Union, House or Senate Legislative Calendar in the bill's own chamber (a reported bill awaiting the floor, or one placed there unreported under Senate Rule XIV or a discharge); a later report, order to report, subcommittee referral or floor step leaves it `calendared`, and only a referral of the bill to a committee lowers it. `passed_chamber` and `other_chamber` both mean the bill's own chamber has passed it; `other_chamber` adds that the other chamber has received it or taken a calendar, desk or floor step on it. A calendar placement, the desk, a motion to proceed or cloture reads `other_chamber` only where the chamber that took it (as the text names it, else the system that entered it) is not the one the bill's type originates in; in its own chamber the desk, a motion to proceed or cloture moves nothing. `passed_both` means both chambers have passed it (the Library of Congress's 8000 and 17000 where the actions carry codes, else the text) but not, as far as the wording shows, in one text: the second passage carried an amendment the other chamber has not agreed to, or names none either way (the House's \"On passage Passed\"). It is read from the passage that completed it. `conference` is a conference requested, held or reported; the Library of Congress's \"Resolving differences\" exchange of amendments is not one. `cleared` means both chambers have agreed to one text: the second chamber passed it as it arrived (the Senate \"without amendment\", or the House on a motion to suspend the rules that names no amendment), a chamber agreed to the other's amendment with no amendment of its own, or both agreed to a conference report; the Library of Congress's \"Cleared for White House.\" (109th-111th Congresses) reads it too. A bill or joint resolution is then ready for the President; a concurrent resolution is complete. `failed` is the latest vote on passage failing in either chamber, a failed two-thirds vote to suspend the rules included: the measure can still pass, and it reads over an earlier passage by the other chamber until a later step. `vetoed` stands until a recorded enactment; a failed override keeps it. The stage never moves back once a chamber has passed the bill: the other chamber's referral or report, a star print or an introduction phrase does not lower it, and only a passage the Senate states it vitiated is undone; where the actions carry publisher codes, the Library of Congress's passage code (8000 House, 17000 Senate) is what holds it. Once `cleared`, no lower rung moves it back. A motion's or a point of order's result (\"motion to proceed ... agreed to in Senate\") is not the measure's passage, and \"disagreed to in Senate\" reads `failed`."
       },
       {
+        "column_name": "stage_rule",
+        "column_type": "VARCHAR",
+        "description": "Which rule fired: a stage's own name where that rule read the action's text (`introduced`, `committee`, `calendared`, `passed_chamber`, `other_chamber`, `conference`, `cleared`, `presented`, `law`), `cleared` also for both chambers' agreement to a conference report, read from the second; `vetoed` for the President's veto; `failed_passage` for a failed vote on passage, a failed veto override included (which leaves the stage `vetoed`); `action_code` where the Library of Congress's passage or presentation code decided it; `became_law_code` for the publisher's became-law code; `passed_both` for the passage that left both chambers' passages standing. NULL when no rule fired and the default stood."
+      },
+      {
+        "column_name": "stage_source_text",
+        "column_type": "VARCHAR",
+        "description": "The full action text the stage rule matched against, never shortened."
+      },
+      {
         "column_name": "signed_date",
         "column_type": "VARCHAR",
         "description": "The date of the publisher's coded became-law action (36000, E40000 or the BecameLaw type) for a public or a private law; NULL where the bill states no law, or states one with no coded action."
+      },
+      {
+        "column_name": "signed_date_rule",
+        "column_type": "VARCHAR",
+        "description": "Which signed-date rule produced that answer: `public_law_and_became_law_action`, `private_law_and_became_law_action`, `public_law_without_became_law_action` (a public law with no coded action, so no date) or `no_public_law` (no law entry, or a private law with no coded action)."
       },
       {
         "column_name": "money_bill_kind",
@@ -12189,6 +12204,11 @@
         "description": "The publisher's action type (IntroReferral, Floor, BecameLaw...)."
       },
       {
+        "column_name": "source_system_name",
+        "column_type": "VARCHAR",
+        "description": "Name of the system that reported the action."
+      },
+      {
         "column_name": "recorded_vote_count",
         "column_type": "BIGINT",
         "description": "How many recordedVote entries this action carries."
@@ -14984,6 +15004,11 @@
         "column_name": "congress",
         "column_type": "VARCHAR",
         "description": "The Congress the assignment belongs to."
+      },
+      {
+        "column_name": "congress_basis",
+        "column_type": "VARCHAR",
+        "description": "`file` when the file states that Congress itself (the House file does), `caller` when it states none and the caller supplied it (the Senate file states only its update date)."
       },
       {
         "column_name": "session",

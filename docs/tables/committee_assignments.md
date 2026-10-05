@@ -20,6 +20,7 @@ Processing fields, source witnesses, conversion inputs and diagnostics reference
 | Column | Type | Description |
 | --- | --- | --- |
 | `congress` | `VARCHAR` | The Congress the assignment belongs to. |
+| `congress_basis` | `VARCHAR` | `file` when the file states that Congress itself (the House file does), `caller` when it states none and the caller supplied it (the Senate file states only its update date). |
 | `session` | `VARCHAR` | The session the House file states; the Senate file states none. |
 | `chamber` | `VARCHAR` | Which file the seat came from: house or senate. |
 | `system_code` | `VARCHAR` | Derived join code: House native standing/select type selects hs/hl; the Senate code is lowercased. House joint codes keep their unresolved legacy spelling and do not establish a Congress.gov join. |
