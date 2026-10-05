@@ -36,6 +36,7 @@ def _member_vote_terms(count: int) -> list[dict]:
                      "term_start": "1989-01-03" if matched else None, "term_end": "1991-01-03" if matched else None})
     rows[4]["term_index"] = "007"       # digits with leading zeros read as 7
     rows[5]["term_index"] = "x1"        # not an integer: the row code refuses it
+    rows[8]["term_index"] = "9" * 19    # past int64: the row code refuses it
     rows[10]["chamber"] = "house\x0b"   # the row code's spelling
     rows[13]["term_match"] = None       # no term and no reason: a subject with a NULL term
     rows[13]["term_index"] = None
@@ -87,7 +88,7 @@ def test_rows_without_a_subject_are_the_mappers(tmp_path) -> None:
     for row in rows:
         try:
             mapped.append(map_record("member_vote_terms", row).subject is None)
-        except ValueError:
+        except (ValueError, OverflowError):
             mapped.append(False)  # refused, not subjectless: the row code's
     assert stated == mapped and True in stated and False in stated
 
