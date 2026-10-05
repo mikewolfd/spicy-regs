@@ -52,6 +52,33 @@ Entries link to the pull request that introduced the change.
 
 ### Changed
 
+- **A House member vote of 1990-2002 carries a `bioguide_id` where one member
+  answers to the Clerk's label** (owner decisions, 2026-10-05; rule
+  `house-name-crosswalk-v3`, `transforms/member_name_crosswalk.py`). Those
+  files name a member by a label, a party letter and a state, so their
+  `member_votes` rows key `name:` and held no id. At the votes merge each
+  distinct (Congress, label, party, state) now resolves to the one member of
+  that surname, state and party with a House term in that Congress, read from
+  `members`, `member_terms` and `member_party_affiliations`. A printed first
+  name chooses among several, by the crosswalk's first name or by the nickname
+  its source states, which is read once `members` publishes that column and
+  ignored until then. A row is filled only on a day inside that member's term
+  and only once per member per roll call. Where several members still answer
+  to a label, as a successor of the same surname does, the row takes the one
+  seated on the vote's day; where the day seats several, a label that prints
+  no first name takes the member left once those the same roll call lists
+  under a first name are set aside. Any other row stays NULL, with its reason
+  in the run's `member-name-crosswalk` journal event, which also records the
+  rule version, the inputs, whether they state nicknames, and each
+  resolution's rule and matched term. `member_key` does not change. Measured
+  on the live tables of 2026-10-04: 3,173,468 of 3,175,523 rows resolve with
+  `members` as published, and 3,175,521 with the source's nicknames;
+  `member_vote_terms` matches a term for them on its next run. Run with the
+  Clerk's ids hidden on the 108th-119th, the rule filled 6,567,134 of
+  6,567,152 rows and differed from the Clerk on two, where the Clerk's file
+  states a dead member's id (109-house-1-239 and -240). Receipt:
+  `~/Work/corpora/fork-execution-2026-09-21/votes-person-crosswalk-2026-10-05/`.
+
 - **SpicyDocs 0.52.0, adopting 0.51.0 with it** (main `b08ac1b`, wheel
   `374b8c20`). What each release entry asks of an importer, and what moves:
 

@@ -2815,10 +2815,36 @@ tables:
       One `bioguide_id` can carry more than one spelling of `member_name`; group
       by `bioguide_id`. The Clerk's files of 1990-2002 (the 101st-107th
       Congresses) name no member by bioguide id: their rows key `name:` plus the
-      Clerk's label (`name:Jones (NC)`) with `bioguide_id` NULL, and that key
-      identifies the row within its roll call, not a person, since at least 21
-      labels of those years name two different members. `member_vote_terms`
-      leaves such a row `unresolved_member`; no name is matched to a member.
+      Clerk's label (`name:Jones (NC)`), and that key identifies the row within
+      its roll call, not a person, since at least 21 labels of those years name
+      two different members. The `bioguide_id` on such a row is resolved at the
+      votes merge, not stated by the Clerk (rule `house-name-crosswalk-v3`): it
+      is the one member of that surname, state and party seated in the House in
+      that Congress, per `members`, `member_terms` and
+      `member_party_affiliations`, and only where the vote's day lies inside
+      that member's term. A printed first name chooses among several members
+      when it equals the crosswalk's, in full, in its first word or as an
+      initial, or when it is the nickname the crosswalk's source states for the
+      member (`Tom` for Thomas Davis), which is read once `members` publishes
+      it. Where several still answer to the label, as a successor of the same
+      surname does (the 105th's Capps and Bono, the 107th's Shuster), the row
+      takes the one of them seated on the vote's day; and on a day that seats
+      several, a label that prints no first name is the member left once those
+      the same roll call lists under a first name are set aside (the 101st's
+      `Smith (OR)` beside `Smith, Denny (OR)`). Anything else stays NULL, and
+      `member_vote_terms` leaves that row `unresolved_member`. Applied to the
+      table published 2026-10-04, the rule resolves 3,173,468 of its 3,175,523
+      such rows with `members` as published, and 3,175,521 with the source's
+      nicknames: the 101st's two Smiths of Oregon and the 107th's `Davis, Tom`
+      (2,053 rows) wait for that column. The two rows then left are one that
+      prints the Speaker `D` (106-house-1-2) and one dated the day after its
+      member died. Run over the rows of 2003 on with the Clerk's own ids hidden
+      and the source's nicknames, the rule filled 6,567,134 of 6,567,152 and
+      differed from the Clerk on two: 109-house-1-239 and -240, which state
+      M000249 (Robert Matsui, who died before that Congress met) on the row of
+      Doris Matsui (M001163), as Voteview records those two votes. Those rows
+      keep the id the Clerk states. Receipt:
+      fork-execution-2026-09-21/votes-person-crosswalk-2026-10-05/.
       Senate rows carry the bioguide id resolved from their LIS id through
       `members` at the votes merge; a Senate row still NULL has a LIS id that
       `members` does not hold, or holds twice (`unresolved_member`).
@@ -2898,15 +2924,16 @@ tables:
       the new term. Only where that finds none is an inclusive end accepted,
       and only if exactly one term qualifies. The term type follows the
       chamber (`rep`, `sen`); a term with no end date never matches. Built by
-      `build_member_vote_terms` from `member_votes`, `members` (a Senate row's
-      LIS id resolves to its Bioguide id there) and `member_terms`. Join to
+      `build_member_vote_terms` from `member_votes`, whose `bioguide_id` the
+      votes rollup resolves for a Senate row (from its LIS id) and for a House
+      row of 1990-2002 (from its printed label), and `member_terms`. Join to
       `member_votes` on (`vote_id`, `member_key`) and to `member_terms` on
       (`bioguide_id`, `term_index`).
     columns:
       vote_id: "The roll call, as in `member_votes`."
       member_key: "The member's key within the roll call, as in `member_votes`."
       chamber: "`house` or `senate`."
-      bioguide_id: "The member's Bioguide id: native for the House, resolved from the LIS id through `members` for the Senate. NULL when the LIS id resolves to no member, and on a House row of 1990-2002, whose `name:` key states none and is never read as a person."
+      bioguide_id: "The member's Bioguide id, as `member_votes` carries it: stated by the Clerk for the House from 2003, and resolved at the votes merge from the LIS id for the Senate and from the Clerk's printed label for a House row of 1990-2002. NULL when the LIS id or the label resolves to no one member; a `name:` key is never read as a person."
       vote_day: "The vote's day (YYYY-MM-DD) as the chamber printed it in Eastern time, read from `member_votes.vote_date` by the same rule as `roll_call_votes.vote_day`; NULL when the file prints no date."
       term_match: "`half_open` (one term with start <= day < end), `inclusive_end` (none half-open, exactly one with the end day included), `ambiguous` (more than one term either way), `unmatched` (none), `unresolved_member`, or `undated` (the file prints no date, so no term is chosen). `undated` wins over `unresolved_member`; such a row still carries `bioguide_id` wherever the member resolves."
       term_index: "The matched term's `term_index` in `member_terms`; NULL unless matched."

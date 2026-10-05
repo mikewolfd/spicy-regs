@@ -33,12 +33,17 @@ any tie-breaker.
 House files before 2003 (the 101st-107th Congresses) name no legislator by
 bioguide id; spicy-docs reads them with ``name:`` member keys and NULL
 ``bioguide_id``, a key that identifies the row within its roll call and never a
-person (``member_vote_terms`` leaves such a row ``unresolved_member``). A
-Senate file names its members by LIS id alone; after the ``member_votes``
-merge, the published ``members`` crosswalk fills each row's ``bioguide_id``
-through it (``table_merge.fill_senate_bioguide_ids``), best-effort, held rows
-included, so the base table carries the id its column promises and
-``member_vote_terms`` reads it rather than resolving again. A vote
+person. A Senate file names its members by LIS id alone. After the
+``member_votes`` merge the published ``members`` crosswalk fills both, best-effort,
+held rows included, so the base table carries the id its column promises and
+``member_vote_terms`` reads it rather than resolving again: a Senate row through
+its LIS id (``table_merge.fill_senate_bioguide_ids``), and a ``name:`` row through
+the one member of that surname, state and party seated in that Congress, on a
+day inside that member's term, or the one of several such members whom the day
+or the roll call's own first-named labels single out
+(``member_name_crosswalk.fill_house_name_bioguide_ids``, which states the rule
+and journals each resolution); a row no one member answers to stays NULL, and
+``member_vote_terms`` leaves it ``unresolved_member``. A vote
 the House vacated before recording a position publishes its row with
 ``member_vote_count`` 0 and no member rows. The Clerk's archive begins in
 1990, so the 101st Congress's first session has no House roll files and is not
@@ -108,6 +113,7 @@ from spicy_regs.transforms.congress_scope import (
     default_congresses,
     sessions_of,
 )
+from spicy_regs.transforms.member_name_crosswalk import fill_house_name_bioguide_ids
 from spicy_regs.transforms.table_merge import fill_senate_bioguide_ids, merge_contract_table, published_table
 
 if TYPE_CHECKING:
@@ -804,6 +810,8 @@ def build_roll_call_votes(
     # The Senate file names its members by LIS id alone; the published ``members`` crosswalk resolves each to the
     # bioguide id the column promises, on held rows as well as this run's. Best-effort, like every merge-time join.
     fill_senate_bioguide_ids(output_dir, members, download_prior)
+    # A Clerk file before 2003 names them by label alone; the same crosswalk and its terms resolve what they can.
+    fill_house_name_bioguide_ids(output_dir, members, download_prior, evidence=evidence)
     outputs = (
         merge_contract_table(output_dir, NAME, vote_rows, prior_present=have_prior, download_prior=download_prior),
         members,
