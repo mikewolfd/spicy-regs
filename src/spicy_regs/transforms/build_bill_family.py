@@ -34,7 +34,7 @@ from spicy_docs.interpretation.bill_family import (
     build_bill_printings,
 )
 from spicy_docs.interpretation.bill_family import build_bill_family as build_family
-from spicy_docs.interpretation.bill_stage import infer_stage, infer_stage_from_action, signed_date
+from spicy_docs.interpretation.bill_stage import infer_stage, infer_stage_from_action, listed_enrolled_text, signed_date
 from spicy_docs.interpretation.bill_summaries import summarize_bill, summarize_diff
 from spicy_docs.interpretation.gemini_call import DEFAULT_MODEL, model_call
 from spicy_docs.interpretation.section_classification import classify_sections
@@ -47,6 +47,7 @@ from spicy_docs.interpretation.vote_matching import (
 from spicy_docs.reading.paged_json import PagedJsonSourceError
 from spicy_docs.schemas import TABLE_CONTRACTS
 from spicy_docs.schemas.activity_events import activity_events, snapshot_from_rows
+from spicy_docs.schemas.bill_version_tables import BILL_VERSION_SOURCES
 from spicy_docs.schemas.tables import bill_congress
 from spicy_docs.schemas.tables import bill_id as bill_key
 from spicy_docs.schemas.tables import text
@@ -76,6 +77,7 @@ from spicy_docs.sources.govinfo.body_acquisition import GovInfoBodyAcquirer
 from spicy_docs.transport.credentials import CredentialRefusedError, scrub_credential
 
 from spicy_regs.generations import spicy_docs_code
+from spicy_regs.legislative_documents import printing_id
 from spicy_regs.source_evidence import SourceEvidenceError
 from spicy_regs.sources import r2
 from spicy_regs.sources.congress_bills import (
@@ -1245,19 +1247,59 @@ def _held_actions(actions: Path, bill_ids: Collection[str] | None = None) -> Ite
             yield bill, [dict(zip(names, values)) for _, *values in group]
 
 
-def rederived_stages(actions: Path | None, bill_ids: Collection[str] | None = None) -> dict[str, str]:
+def rederived_stages(
+    actions: Path | None, bill_ids: Collection[str] | None = None, versions: Path | None = None
+) -> dict[str, str]:
     """Each bill's stage as the running rule reads its published ``bill_actions``, for ``bill_ids`` (all when None).
 
-    With the bill's own type, as ``bill_family`` reads a BILLSTATUS list, so an unchanged bill re-derives the stage
-    this run publishes, and no rule change surfaces as a ``stage_changed`` event. A key the bill grammar refuses (16
-    of the 6th-42nd Congresses) is read without its type.
+    With the bill's own type and its listed enrolled text, as ``bill_family`` reads a BILLSTATUS document, so an
+    unchanged bill re-derives the stage this run publishes, and no rule change surfaces as a ``stage_changed`` event.
+    A key the bill grammar refuses (16 of the 6th-42nd Congresses) is read without its type.
     """
     if actions is None:
         return {}
+    listed = _listed_versions(versions, bill_ids)
     return {
-        bill: infer_stage(rows, newest_first=True, bill_type=_bill_type(bill)).stage
+        bill: infer_stage(rows, newest_first=True, bill_type=_bill_type(bill), text_versions=listed.get(bill, ())).stage
         for bill, rows in _held_actions(actions, bill_ids)
     }
+
+
+def _listed_versions(versions: Path | None, bill_ids: Collection[str] | None = None) -> dict[str, list[dict[str, Any]]]:
+    """Each bill's published ``bill_versions`` rows that list an enrolled text, as the stage rule reads them.
+
+    spicy-docs' ``listed_enrolled_text`` decides which rows (an "Enrolled Bill" label from the BILLSTATUS list:
+    ``source`` congress or govinfo); only those are kept, 4,990 of 226,033 rows on 2026-10-04. Each row is passed
+    with its ``source``, and the rule's ``ValueError`` for a row that states none of the contract's four is the
+    tripwire, never caught: a table read as listing nothing puts a rebuilt bill back to `passed_both`.
+
+    The native layout states no ``source``. Its ``printing_id`` is a digest of the bill, the version code and the
+    source, the row's key and no source (the rule refuses it as one), so here a row's source is the one whose key it
+    carries, and a key no source gives is passed as no source, for the rule to refuse. No table (a cold start) lists
+    nothing. One columnar read, O(rows).
+    """
+    if versions is None:
+        return {}
+    import duckdb
+
+    wanted = None if bill_ids is None else frozenset(bill_ids)
+    sources = sorted(BILL_VERSION_SOURCES)
+    listed: dict[str, list[dict[str, Any]]] = {}
+    with duckdb.connect() as con:
+        present = {str(row[0]) for row in con.execute(f"DESCRIBE SELECT * FROM {_scan(versions)}").fetchall()}
+        native = "source" not in present and "printing_id" in present
+        columns = "version_code, printing_id" if native else "NULL, source"
+        rows = con.execute(f"SELECT bill_id, label, {columns} FROM {_scan(versions)}").fetchall()
+        for bill, label, code, source in rows:
+            if wanted is not None and bill not in wanted:
+                continue
+            if native:
+                key = source
+                source = next((stated for stated in sources if printing_id(bill, code, stated) == key), None)
+            row = {"label": label, "source": source}
+            if listed_enrolled_text([row]) is not None:
+                listed.setdefault(bill, []).append(row)
+    return listed
 
 
 #: The published ``bill_actions`` columns the stage rule reads, by their published names.
@@ -1282,7 +1324,7 @@ _SIGNING_COLUMNS = {
 _ACTION_STAGE_COLUMNS = ("stage", "stage_rule", "stage_matcher")
 
 
-def restage_held_rows(bills: Path, actions: Path) -> tuple[int, int]:
+def restage_held_rows(bills: Path, actions: Path, versions: Path | None = None) -> tuple[int, int]:
     """Read every merged bill's stage and signing date, and every merged action's stage, again by the running rule.
 
     A row carries the rule of the run that last read its bill, and a bill is read again only when its BILLSTATUS
@@ -1290,10 +1332,12 @@ def restage_held_rows(bills: Path, actions: Path) -> tuple[int, int]:
     read as no step and a private law's signing date: every Congress from the 108th was re-staged by hand on
     2026-10-03). The rules read nothing the stored actions do not hold, so each run re-reads them all with
     spicy-docs' own functions, for no publisher request: a bill this run read comes back as it was shaped, and a held
-    one moves with the rule. The signing date reads the row's own ``law_type`` and ``public_law_number`` as its law
-    entry (a private law states no number). A bill with no stored action keeps its row: no rule read one (the
-    82nd-107th detail-route rows). O(actions), streamed in publisher order; a table is read whole and rewritten
-    only when a row moved. Returns how many bill rows and action rows moved.
+    one moves with the rule. The stage reads the bill's published ``bill_versions`` rows as its listed text versions
+    (an enrolled text listed raises `passed_both` to `cleared`, spicy-docs 0.57.0). The signing date reads the row's
+    own ``law_type`` and ``public_law_number`` as its law entry (a private law states no number). A bill with no
+    stored action keeps its row: no rule read one (the 82nd-107th detail-route rows). O(actions + versions), streamed
+    in publisher order; a table is read whole and rewritten only when a row moved. Returns how many bill rows and
+    action rows moved.
     """
     import pyarrow.parquet as pq
 
@@ -1302,6 +1346,7 @@ def restage_held_rows(bills: Path, actions: Path) -> tuple[int, int]:
                                              *_SIGNING_COLUMNS]).to_pydict()
     place = {bill: index for index, bill in enumerate(per_bill.pop("bill_id"))}
     law_types, numbers = per_bill.pop("law_type"), per_bill.pop("public_law_number")
+    listed = _listed_versions(versions)
     moved_bills = moved_actions = 0
     # One reading per distinct thing the action rule reads (no date: only a bill's stage orders by date): 214,670
     # of the 931,774 published actions on 2026-10-04, which took the whole pass from 37.8 s to 28.6 s.
@@ -1318,7 +1363,7 @@ def restage_held_rows(bills: Path, actions: Path) -> tuple[int, int]:
         if index is None:
             continue
         laws = [{"type": law_types[index], "number": numbers[index] or ""}] if law_types[index] else []
-        stage = infer_stage(rows, newest_first=True, bill_type=bill_type)
+        stage = infer_stage(rows, newest_first=True, bill_type=bill_type, text_versions=listed.get(bill, ()))
         signing = signed_date({"laws": laws, "actions": rows})
         values = {column: getattr(stage, name) for column, name in _STAGE_COLUMNS.items()}
         values |= {column: getattr(signing, name) for column, name in _SIGNING_COLUMNS.items()}
@@ -1384,7 +1429,7 @@ def _prior_snapshot(paths: Mapping[str, Path | None], bill_ids: Collection[str])
             .to_pylist()
         )
         logger.info("Bill family: prior {} contributes {:,} rows for this run's bills", name, len(rows[name]))
-    stages = rederived_stages(paths.get("bill_actions"), bill_ids)
+    stages = rederived_stages(paths.get("bill_actions"), bill_ids, paths.get("bill_versions"))
     moved = 0
     for row in rows["congress_bills"]:
         stage = stages.get(row["bill_id"])
@@ -2438,7 +2483,7 @@ def build_bill_family(
 
     paths = [publish(contract, getattr(folded, attr)) for contract, attr in FAMILY_TABLES]
     merged = dict(zip((contract for contract, _ in FAMILY_TABLES), paths, strict=True))
-    restaged = restage_held_rows(merged["congress_bills"], merged["bill_actions"])
+    restaged = restage_held_rows(merged["congress_bills"], merged["bill_actions"], merged["bill_versions"])
     logger.info("Bill family: the running stage rule moves {:,} held bill rows and {:,} action rows", *restaged)
     if evidence is not None:
         evidence.event("held-rows-restaged", bills=restaged[0], actions=restaged[1])

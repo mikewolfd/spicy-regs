@@ -5,6 +5,31 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
+- `spicy_docs-0.57.0`: the SpicyDocs 0.57.0 release, from release commit
+  `080762574c16e5eef2f3b56cfac876f5e09b00a3`. SHA-256
+  `4efc149a18f2222e53dee8e7588cc59fdbd33cadb9a9fcf1851e51329def1dc2`, 2,478,280 bytes;
+  two builds from a clean archive of that commit are byte-identical, and every packaged
+  source file matches the commit. It replaces the local `0.56.0+scorecards.7aed167baa10`
+  build below, an overlay whose scorecard modules came from SpicyDocs `39dbd8a`, an ancestor
+  of the release. The release is a superset: 454 of that build's 464 package files are
+  byte-identical (every scorecard reader and the registry among them), none is removed, one
+  is added (GAO's `report_requesters`, which nothing here imports yet) and ten move forward
+  to later commits of the same files. `bill_stage`, `bill_family` and the bill table
+  contract read a measure both chambers passed as `cleared` where its BILLSTATUS document
+  lists an enrolled text (`stage_rule` `enrolled_text_listed`), so
+  `transforms/build_bill_family.py` passes each bill's published `bill_versions` rows to the
+  stage rule wherever it reads stored rows again; the wheel without that change puts a
+  rebuilt bill back to `passed_both`. `bill_version_tables` declares the four values
+  `bill_versions.source` takes, and its writer and the stage rule refuse any other, a native
+  `printing_id` named `source` among them. GAO's `native`, `listing`, `month_in_review`,
+  `major_rule_reports` and `product_metadata` read a topic-less page's unlabeled date beside
+  the number that names the page (acquisition policy 1.3, page rule `/3`; no value read
+  under the earlier versions changes), and `product_details`, which nothing here imports
+  yet, refuses a page that may not be whole (rule `/2`). Table contract columns and
+  identities, dependencies and entry points are unchanged; eight stage column descriptions
+  change. Earlier wheels and receipts stay as the records of their adoptions. This is a
+  release build, vendored rather than uploaded to a package index.
+
 - `spicy_docs-0.56.0+scorecards.7aed167baa10`: reviewed Drum Major Institute
   readers on the previously qualified scorecard package. The baseline receipt
   remains in `spicy_docs-scorecards-8253a8a31276.json`. See the

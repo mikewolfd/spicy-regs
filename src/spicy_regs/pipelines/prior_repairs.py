@@ -521,13 +521,13 @@ def restore_comment_digests(receipt_dir: Path) -> dict[str, int]:
 # --------------------------------------------------------------------------- #
 
 
-def stage_suppression(bills: Path, actions: Path) -> dict[str, Any]:
+def stage_suppression(bills: Path, actions: Path, versions: Path | None = None) -> dict[str, Any]:
     """How many published stages the running rule moves with no new action: each an event the adopting run suppresses."""
     import duckdb
 
     from spicy_regs.transforms.build_bill_family import rederived_stages
 
-    stages = rederived_stages(actions)
+    stages = rederived_stages(actions, versions=versions)
     published = dict(duckdb.sql(f"SELECT bill_id, stage FROM read_parquet('{bills}')").fetchall())
     moves = Counter((published.get(bill), stage) for bill, stage in stages.items() if published.get(bill) != stage)
     return {
@@ -637,22 +637,25 @@ def respell_comment_digests_command(
 def stage_suppression_command(
     *,
     dry_run_: Annotated[bool, Parameter(name="--dry-run", help="The measurement is all this does")] = True,
-    prior_dir: Annotated[Path | None, Parameter(help="Read congress_bills and bill_actions from here")] = None,
+    prior_dir: Annotated[
+        Path | None, Parameter(help="Read congress_bills, bill_actions and bill_versions from here")
+    ] = None,
 ) -> None:
     """Count the published stages the running rule moves: the stage_changed events the adopting runs do not emit."""
     from spicy_regs.sources import publication, r2
 
+    tables = ("congress_bills", "bill_actions", "bill_versions")
     if prior_dir is not None:
-        _print(stage_suppression(prior_dir / "congress_bills.parquet", prior_dir / "bill_actions.parquet"))
+        _print(stage_suppression(*(prior_dir / f"{table}.parquet" for table in tables)))
         return
     public_url = os.environ.get("R2_PUBLIC_URL")
     if not public_url:
         raise RuntimeError("stage-suppression reads the live generation through R2_PUBLIC_URL, or --prior-dir")
     with TemporaryDirectory(prefix="stage-suppression-") as scratch, publication.snapshot(public_url):
-        paths = {table: Path(scratch) / f"{table}.parquet" for table in ("congress_bills", "bill_actions")}
-        for table, path in paths.items():
-            r2.download(f"{table}.parquet", path)
-        _print(stage_suppression(paths["congress_bills"], paths["bill_actions"]))
+        paths = [Path(scratch) / f"{table}.parquet" for table in tables]
+        for path in paths:
+            r2.download(path.name, path)
+        _print(stage_suppression(*paths))
 
 
 @app.command(name="restore")
