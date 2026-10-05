@@ -1,4 +1,4 @@
-"""SQL that reproduces the receipt writer's exact encoding and digests, a column at a time.
+"""SQL that reproduces the receipt writer's exact encoding and digests, a column at a time, and a validator built on it.
 
 ``etl_receipts.exact_json`` encodes one Python value. These build the DuckDB expression that yields the same text for a
 column of an Arrow type, so a table's identities, versions and receipt ids come from one scan instead of one call per
@@ -7,20 +7,58 @@ row (2026-10-05: 26M comments took about 20 hours by row, and a million of them 
 The row functions stay the reference. DuckDB spells one class of text differently: a control character with no short
 JSON escape is written ``\\u001B`` where Python writes ``\\u001b``. :func:`needs_reference_sql` marks every text that
 holds such an escape, at any depth, and a marked row belongs to the row writer.
+
+:func:`validate_bundle` is ``etl_receipts.validate_receipt_bundle`` over whole columns. SQL may only prove a row good:
+a row it cannot prove is read again by the row reader and decided by the row functions themselves.
 """
 
 from __future__ import annotations
 
+import io
 import json
-from collections.abc import Iterable
+import sqlite3
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from contextlib import closing
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
+import duckdb
 import pyarrow as pa
+import pyarrow.parquet as pq
 
-from spicy_regs.etl_receipts import RECEIPT_SCHEMA, DatasetPolicy
+from spicy_regs.etl_receipts import (
+    RECEIPT_SCHEMA,
+    DatasetPolicy,
+    ParquetInput,
+    _bundle_policies,
+    _load_receipts,
+    _parquet,
+    _subjects,
+    subject_identity,
+)
 
 #: An upper-case hex letter in a control character's escape: the backslash run before ``u`` is odd, so it is an escape
 #: and not a doubled literal backslash followed by the letters.
 _UPPER_HEX_ESCAPE = r"(^|[^\\])(\\\\)*\\u00[01][A-F]"
+#: A JSON string as ``json.loads`` reads one: no raw control character, and only the escapes JSON defines.
+_STRING = r'"(?:[^"\\\x00-\x1f]|\\(?:["\\/bfnrt]|u[0-9a-fA-F]{4}))*"'
+#: The encoded values with nothing inside them. An integer is held to 18 digits, below where ``int`` refuses a text.
+_SCALAR = r'\["null",null\]|\["bool",(?:true|false)\]|\["int",-?(?:0|[1-9][0-9]{0,17})\]|\["str",' + _STRING + r"\]"
+#: A list or a mapping whose members have each already been replaced by the ``chr(1)`` that stands for one value.
+_NESTED = (
+    r'\["list",\[(?:\x01(?:,\x01)*)?\]\]|\["dict",\[(?:\[' + _STRING + r",\x01\](?:,\[" + _STRING + r",\x01\])*)?\]\]"
+)
+#: One member of a mapping whose value is replaced; the key is taken only where its text is its JSON spelling.
+_MEMBER = r'\["([^"\\\x00-\x1f]*)",\x01\]'
+#: How many levels of list and mapping the proof follows. A deeper value is the row reader's to decide.
+_DEPTH = 8
+#: ``ReceiptContext``'s rule for a witness digest.
+_WITNESS_SHA256 = r"(?:sha256:)?[0-9a-f]{64}"
+_BATCH = 10_000
+
+
+class NotBulkEligible(Exception):
+    """SQL has no proven way to decide this bundle, so ``validate_receipt_bundle`` must."""
 
 
 def _literal(text: str) -> str:
@@ -50,13 +88,20 @@ def exact_json_sql(expression: str, dtype: pa.DataType) -> str:
 
 
 def record_json_sql(fields: Iterable[tuple[str, pa.DataType]], *, qualifier: str = "") -> str:
-    """SQL text equal to ``exact_json`` of a mapping of the named columns (or of a struct's fields)."""
+    """SQL text equal to ``exact_json`` of a mapping of the named columns (or of a struct's fields).
+
+    DuckDB matches a name without regard to case, so two fields that differ only by case would both read the first
+    one; they refuse like an unproven type.
+    """
+    fields = list(fields)
+    if len({name.casefold() for name, _ in fields}) != len(fields):
+        raise NotImplementedError("No proven SQL spelling for field names that differ only by case")
     pairs = [
         _literal("[" + json.dumps(name, ensure_ascii=False) + ",")
         + " || "
         + exact_json_sql(qualifier + '"' + name.replace('"', '""') + '"', dtype)
         + " || ']'"
-        for name, dtype in sorted(fields)
+        for name, dtype in sorted(fields, key=lambda field: field[0])
     ]
     return "'[\"dict\",[' || " + " || ',' || ".join(pairs) + " || ']]'" if pairs else "'[\"dict\",[]]'"
 
@@ -94,3 +139,355 @@ def identity_sql(policy: DatasetPolicy) -> tuple[str, str, str]:
 def receipt_json_sql() -> str:
     """SQL text of a receipt row without its id: what ``receipt_id`` is the digest of."""
     return record_json_sql((field.name, field.type) for field in RECEIPT_SCHEMA if field.name != "receipt_id")
+
+
+def reduced_sql(text: str) -> str:
+    """``text`` with each value of the tagged encoding, to ``_DEPTH`` levels, replaced by ``chr(1)``.
+
+    Every replacement stands for a text ``_unpack(json.loads(...))`` returns from without raising, so a text that
+    reduces to one ``chr(1)`` is one such value. That holds only for a text with no ``chr(1)`` of its own, which the
+    caller checks. A float, decimal, date or bytes value is never replaced: its row goes to the reference.
+    """
+    reduced = f"regexp_replace({text}, {_literal(_SCALAR)}, chr(1), 'g')"
+    for _ in range(_DEPTH):
+        reduced = f"regexp_replace({reduced}, {_literal(_NESTED)}, chr(1), 'g')"
+    return reduced
+
+
+def decodes_sql(text: str) -> str:
+    """Whether SQL proves ``_unpack(json.loads(text))`` returns. False or NULL proves nothing either way."""
+    return f"(NOT contains({text}, chr(1)) AND {reduced_sql(text)} = chr(1))"
+
+
+def mapping_keys_sql(text: str) -> str:
+    """The keys of the mapping ``text`` decodes to, or NULL where SQL cannot prove it decodes to one.
+
+    A mapping is its members between a fixed head and tail, so only the members are reduced. A key spelled with an
+    escape is not proven: its text would have to be decoded as ``json.loads`` decodes it.
+    """
+    members = reduced_sql(f"substr({text}, 10, length({text}) - 11)")
+    return (
+        f"CASE WHEN NOT contains({text}, chr(1)) AND length({text}) >= 11 AND starts_with({text}, '[\"dict\",[')"
+        f" AND ends_with({text}, ']]') THEN list_transform([{members}], members -> CASE WHEN"
+        f" regexp_full_match(members, {_literal(f'(?:{_MEMBER}(?:,{_MEMBER})*)?')})"
+        f" THEN regexp_extract_all(members, {_literal(_MEMBER)}, 1) END)[1] END"
+    )
+
+
+def _names_sql(names: Iterable[str]) -> str:
+    return "[" + ", ".join(_literal(name) for name in names) + "]::VARCHAR[]"
+
+
+def _by_dataset_sql(policies: Mapping[str, DatasetPolicy], each: Callable[[DatasetPolicy], str], other: str) -> str:
+    """``each`` policy's expression for a receipt of its dataset, and ``other`` for a dataset with no policy."""
+    cases = " ".join(f"WHEN {_literal(name)} THEN {each(policy)}" for name, policy in policies.items())
+    return f"CASE dataset {cases} ELSE {other} END" if cases else other
+
+
+def _receipt_insert_sql(policies: Mapping[str, DatasetPolicy], scoped: bool) -> str:
+    """Keep each receipt's join fields and whether SQL proved every check ``_load_receipts`` makes of one row.
+
+    The conditions follow that function's order. One that is false or NULL leaves the row unproven; nothing here
+    refuses a row. ``scoped`` leaves out the receipts ``select_receipts`` would not have copied.
+    """
+    witness = (
+        "coalesce(w.source_id <> '', false) AND (coalesce(w.sha256 <> '', false) OR coalesce(w.body_version <> '', false))"
+        f" AND (w.sha256 IS NULL OR regexp_full_match(w.sha256, {_literal(_WITNESS_SHA256)}))"
+    )
+    failed = _by_dataset_sql(policies, lambda policy: _names_sql(sorted(policy.input_fields)), "NULL")
+    passed = _by_dataset_sql(policies, lambda policy: _names_sql(policy.receipt_fields), "NULL")
+    proven = " AND ".join(
+        (
+            _by_dataset_sql(policies, lambda policy: f"policy_version = {_literal(policy.policy_version)}", "false"),
+            f"receipt_id = {digest_sql('body')} AND NOT {needs_reference_sql('body')}",
+            decodes_sql("diagnostic_json"),
+            "generation_id <> '' AND attempt_id <> '' AND processor <> ''",
+            f"len(witnesses) > 0 AND list_bool_and(list_transform(witnesses, w -> {witness}))",
+            "CASE WHEN outcome = 'accepted' THEN subject_version IS NOT NULL AND record_id <> '' AND identity_json <> ''"
+            f" AND {_by_dataset_sql(policies, lambda policy: 'false' if policy.receipt_only else 'true', 'false')}"
+            " WHEN outcome IN ('rejected', 'refused', 'error', 'observed') THEN subject_version IS NULL ELSE false END",
+            f"list_has_all(CASE WHEN outcome IN ('rejected', 'refused', 'error') THEN {failed} ELSE {passed} END, fields)",
+        )
+    )
+    selected = f" WHERE dataset IN ({', '.join(map(_literal, policies)) or 'NULL'})" if scoped else ""
+    return (
+        "INSERT INTO receipts SELECT n, dataset, generation_id, receipt_id, outcome,"
+        " CASE WHEN outcome = 'accepted' THEN record_id END, CASE WHEN outcome = 'accepted' THEN subject_version END,"
+        f" CASE WHEN outcome = 'accepted' THEN identity_json END, ({proven}) IS NOT TRUE FROM (SELECT *,"
+        f" {receipt_json_sql()} AS body, {mapping_keys_sql('processing_json')} AS fields FROM source{selected})"
+    )
+
+
+def _subject_insert_sql(policy: DatasetPolicy, number: str) -> str:
+    """Keep each subject's identity as ``subject_identity`` gives it, and whether the row functions must give it instead.
+
+    They must where the encoding holds an escape SQL spells differently, and where an identity field is NULL without
+    leave, which ``subject_identity`` refuses.
+    """
+    record_id, version, identity = identity_sql(policy)
+    subject = record_json_sql((field.name, field.type) for field in policy.subject_schema)
+    missing = " OR ".join(
+        '"' + key.replace('"', '""') + '" IS NULL'
+        for key in policy.identity_fields
+        if key not in policy.nullable_identity_fields
+    )
+    return (
+        f'INSERT INTO subjects SELECT "{number}", {_literal(policy.dataset)}, {record_id}, {version}, {identity},'
+        f" ({needs_reference_sql(subject)} OR {missing or 'false'}) IS NOT FALSE FROM source"
+    )
+
+
+def _numbered(
+    parquet: pq.ParquetFile, start: int, number: str, wanted: frozenset[str] | None
+) -> pa.RecordBatchReader:
+    """The file's rows as the row reader decodes them, with each row's number from ``start`` in a column ``number``.
+
+    Every batch is validated first: DuckDB hashes an Arrow string without checking that it is UTF-8, where the row
+    reader refuses to decode one that is not. ``wanted`` names the datasets a scoped read keeps; a batch holding none
+    of them is still decoded and validated, as ``select_receipts`` would have read it, and then left out.
+    """
+    schema = parquet.schema_arrow.append(pa.field(number, pa.int64()))
+
+    def batches() -> Iterator[pa.RecordBatch]:
+        first = start
+        for batch in parquet.iter_batches(batch_size=_BATCH):
+            batch.validate(full=True)
+            last = first + batch.num_rows
+            if wanted is None or not wanted.isdisjoint(batch.column("dataset").unique().to_pylist()):
+                yield pa.RecordBatch.from_arrays([*batch.columns, pa.arange(first, last)], schema=schema)
+            first = last
+
+    return pa.RecordBatchReader.from_batches(schema, batches())
+
+
+Span = tuple[int, int, ParquetInput]
+
+
+def _scan(
+    con: duckdb.DuckDBPyConnection,
+    paths: Iterable[ParquetInput],
+    start: int,
+    insert: str,
+    *,
+    number: str = "n",
+    wanted: frozenset[str] | None = None,
+) -> list[Span]:
+    """Run ``insert`` once over each file, numbering rows on from ``start``; each file's row numbers and its input."""
+    spans = []
+    for path in paths:
+        with _parquet(path) as parquet:
+            con.register("source", _numbered(parquet, start, number, wanted))
+            con.execute(insert)
+            con.unregister("source")
+            spans.append((start, start + parquet.metadata.num_rows, path))
+            start += parquet.metadata.num_rows
+    return spans
+
+
+def _readable(
+    paths: Sequence[ParquetInput], schema: pa.Schema, differs: str
+) -> tuple[Sequence[ParquetInput], Exception | None]:
+    """The inputs before the first the row validator stops at for its schema, and what it raises there."""
+    for index, path in enumerate(paths):
+        try:
+            with _parquet(path) as parquet:
+                if parquet.schema_arrow.equals(schema):
+                    continue
+        except Exception as error:
+            return paths[:index], error
+        return paths[:index], ValueError(differs)
+    return paths, None
+
+
+def _held(spans: Iterable[Span], numbers: Iterable[int]) -> Iterator[tuple[list[int], pa.Table]]:
+    """The rows with these ascending numbers, read again as the row reader decodes them, a row group at a time.
+
+    A row group is read once however many of its rows are asked for, and only when one is, so this costs one row
+    group's decode for each row at worst and the row reader's own pass at most.
+    """
+    numbers = iter(numbers)
+    wanted = next(numbers, None)
+    for first, stop, path in spans:
+        if wanted is None or wanted >= stop:
+            continue
+        with _parquet(path) as parquet:
+            for group in range(parquet.num_row_groups):
+                last = first + parquet.metadata.row_group(group).num_rows
+                picked = []
+                while wanted is not None and wanted < last:
+                    picked.append(wanted)
+                    wanted = next(numbers, None)
+                if picked:
+                    yield picked, parquet.read_row_group(group).take([number - first for number in picked])
+                first = last
+
+
+def _member(table: pa.Table) -> Callable[[], io.BytesIO]:
+    sink = io.BytesIO()
+    pq.write_table(table, sink)
+    return lambda: io.BytesIO(sink.getvalue())
+
+
+def _repeated_sql(key: str, where: str) -> str:
+    """The first row that repeats an earlier row's ``key``: where the row loader's unique index refuses an insert."""
+    return (
+        f"SELECT min(n) FROM (SELECT n, row_number() OVER (PARTITION BY {key} ORDER BY n) AS turn FROM receipts"
+        f" WHERE {where} AND ({key}) IN (SELECT {key} FROM receipts WHERE {where} GROUP BY ALL HAVING count(*) > 1))"
+        " WHERE turn > 1"
+    )
+
+
+def _one_generation(con: duckdb.DuckDBPyConnection, generation_id: str | None) -> tuple[str | None, int | None]:
+    """The one generation every receipt must carry, and the first receipt that carries another.
+
+    It is the selected generation or, with none selected, the one the first receipt names.
+    """
+    selected = generation_id
+    if selected is None:
+        named = con.execute("SELECT generation_id FROM receipts ORDER BY n LIMIT 1").fetchall()
+        selected = named[0][0] if named else None
+    [(stray,)] = con.execute(
+        "SELECT min(n) FROM receipts WHERE generation_id IS DISTINCT FROM ?", [selected]
+    ).fetchall()
+    return selected, stray
+
+
+def _check_receipts(
+    con: duckdb.DuckDBPyConnection,
+    temp: Path,
+    receipt_paths: Sequence[ParquetInput],
+    policies: Mapping[str, DatasetPolicy],
+    generation_id: str | None,
+    scoped: bool,
+) -> None:
+    """``_load_receipts`` over whole columns: raise what it would at the first row, or schema, it refuses."""
+    paths, stopped = _readable(receipt_paths, RECEIPT_SCHEMA, "Receipt schema differs from the shared schema")
+    if scoped and stopped is not None:
+        raise NotBulkEligible("select_receipts decides a receipt file that is not the shared schema")
+    con.execute(
+        "CREATE TABLE receipts (n BIGINT, dataset VARCHAR, generation_id VARCHAR, receipt_id VARCHAR, outcome VARCHAR,"
+        " record_id VARCHAR, subject_version VARCHAR, identity_json VARCHAR, unproven BOOLEAN)"
+    )
+    wanted = frozenset(policies) if scoped else None
+    spans = _scan(con, paths, 0, _receipt_insert_sql(policies, scoped), wanted=wanted)
+
+    selected, stray = _one_generation(con, generation_id)
+    repeats = (
+        con.execute(_repeated_sql("receipt_id", "true")).fetchall()[0][0],
+        con.execute(_repeated_sql("dataset, record_id", "outcome = 'accepted' AND record_id IS NOT NULL")).fetchall()[0][0],
+    )
+    # The row loader stops at its first refusal, so no row after a stray or repeated one matters.
+    last = min((number for number in (stray, *repeats) if number is not None), default=None)
+    # Read to the end before anything else runs on this database: a second statement would end the stream.
+    unproven = "SELECT n FROM receipts WHERE unproven AND n <= coalesce(?, n) ORDER BY n"
+    numbers = [n for (n,) in con.execute(unproven, [last]).fetchall()]
+    with closing(sqlite3.connect(str(temp / "reference.db"))) as reference:
+        _load_receipts(
+            reference,
+            (_member(table) for _, table in _held(spans, numbers)),
+            policies,
+            selected,
+            retain_processing=False,
+        )
+    if last is not None:
+        mixed = "Receipts mix or differ from the selected generation"
+        raise ValueError(mixed if last == stray else "Duplicate or ambiguous receipt join")
+    if stopped is not None:
+        raise stopped
+
+
+def _check_subjects(
+    con: duckdb.DuckDBPyConnection, subjects: Mapping[str, Sequence[ParquetInput]], policies: Mapping[str, DatasetPolicy]
+) -> None:
+    """``_joined_subjects`` over whole columns: raise what it would at the first subject, or schema, it refuses."""
+    con.execute(
+        "CREATE TABLE subjects (n BIGINT, dataset VARCHAR, record_id VARCHAR, version VARCHAR, identity VARCHAR,"
+        " unproven BOOLEAN)"
+    )
+    start, stopped, before = 0, None, None
+    for dataset, paths in subjects.items():
+        policy = policies[dataset]
+        if policy.receipt_only and paths:
+            stopped = ValueError("Processing-only dataset cannot publish a subject table")
+            break
+        number = "n"
+        while number in {name.casefold() for name in policy.subject_schema.names}:
+            number += "_"
+        paths, stopped = _readable(paths, policy.subject_schema, f"Subject schema differs from policy: {dataset}")
+        spans = _scan(con, paths, start, _subject_insert_sql(policy, number), number=number)
+        start = spans[-1][1] if spans else start
+        unproven = "SELECT n FROM subjects WHERE unproven AND dataset = ? ORDER BY n"
+        numbers = [n for (n,) in con.execute(unproven, [dataset]).fetchall()]
+        given = []
+        for picked, table in _held(spans, numbers):
+            for held, subject in zip(picked, _subjects(policy, table.to_pylist())):
+                try:
+                    given.append((held, dataset, *subject_identity(policy, subject), False))
+                except ValueError as error:
+                    # The row validator raises this only if every subject before it has its receipt.
+                    stopped, before = error, held
+                    break
+            if before is not None:
+                break
+        if given:
+            con.executemany("INSERT INTO subjects VALUES (?, ?, ?, ?, ?, ?)", given)
+        if stopped is not None:
+            break
+    joined = (
+        "FROM (SELECT * FROM subjects WHERE NOT unproven AND n < coalesce(?, n + 1)) AS s"
+        " LEFT JOIN (SELECT * FROM receipts WHERE outcome = 'accepted') AS r ON s.dataset = r.dataset"
+        " AND s.record_id = r.record_id AND s.version = r.subject_version AND s.identity = r.identity_json"
+    )
+    [(total, matched, used)] = con.execute(
+        f"SELECT count(*), count(r.n), count(DISTINCT r.n) {joined}", [before]
+    ).fetchall()
+    if not total == matched == used:
+        # The first subject with no accepted receipt, or whose receipt an earlier subject already took.
+        [(dataset,)] = con.execute(
+            "SELECT arg_min(dataset, n) FROM (SELECT s.n, s.dataset, r.n AS receipt,"
+            f" row_number() OVER (PARTITION BY r.n ORDER BY s.n) AS turn {joined}) WHERE receipt IS NULL OR turn > 1",
+            [before],
+        ).fetchall()
+        raise ValueError(f"Missing, ambiguous or reused subject receipt: {dataset}")
+    if stopped is not None:
+        raise stopped
+    if [(used,)] != con.execute("SELECT count(*) FROM receipts WHERE outcome = 'accepted'").fetchall():
+        raise ValueError("Accepted receipt has no matching subject")
+
+
+def validate_bundle(
+    subjects: Mapping[str, Sequence[ParquetInput]],
+    receipt_paths: Sequence[ParquetInput],
+    policies: Sequence[DatasetPolicy],
+    *,
+    generation_id: str | None = None,
+    scoped: bool = False,
+) -> None:
+    """``validate_receipt_bundle`` in bulk: accept and refuse the same bundles, raising what it raises.
+
+    Each file is read once, through the row reader's own Parquet decoder, and each row is encoded, hashed and checked
+    once in DuckDB. A row SQL cannot prove (an escape it spells differently, a value type it does not follow, anything
+    malformed) is read again and given to ``_load_receipts`` or ``subject_identity``, so every refusal of one row is
+    the row code's own. The joins the row validator makes through a SQLite index are set operations over a DuckDB
+    file in a temporary directory, which spills there under memory pressure.
+
+    Raises :class:`NotBulkEligible` when SQL cannot decide: a subject type with no proven spelling, or anything DuckDB
+    or the decoder cannot read. The caller then runs the row validator, which decides.
+
+    ``scoped`` ignores receipts of datasets with no policy here, as if ``select_receipts`` had first copied each
+    policy's dataset out of a shared file; the receipts then keep their order in that file.
+    """
+    registered = _bundle_policies(subjects, receipt_paths, policies)
+    try:
+        for policy in registered.values():
+            if not policy.receipt_only:
+                _subject_insert_sql(policy, "n")
+    except NotImplementedError as error:
+        raise NotBulkEligible(str(error)) from error
+    with TemporaryDirectory(prefix="etl-bulk-") as temp, closing(duckdb.connect(str(Path(temp) / "joins.duckdb"))) as con:
+        try:
+            con.execute("SET preserve_insertion_order = false")
+            _check_receipts(con, Path(temp), receipt_paths, registered, generation_id, scoped)
+            _check_subjects(con, subjects, registered)
+        except duckdb.Error as error:
+            raise NotBulkEligible(f"DuckDB could not decide the bundle: {error}") from error
