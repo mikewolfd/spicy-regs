@@ -379,14 +379,14 @@ def test_an_unsorted_member_is_scanned_below_the_bound_and_says_so(tmp_path, mon
     assert "not sorted by record id" in reply["receipts"]["scan"]
 
 
-def test_an_unsorted_member_past_the_bound_is_refused_until_its_next_publish(tmp_path, monkeypatch):
+def test_an_unsorted_member_past_the_bound_is_refused_from_its_footer_alone(tmp_path, monkeypatch):
     rows = [fcc(str(number)) for number in range(100, 109)]
     monkeypatch.setattr(lookup, "SCAN_ROW_BOUND", 8)
     con = one_family(tmp_path, monkeypatch, {"fcc_filings": rows}, row_group=2, edit=_descending)
     recording = _Recording(con)
     monkeypatch.setattr(server, "_get_connection", lambda: recording)
     message = refused("fcc_filings", [{"id_submission": "100"}], ["filing_url"])
-    assert "read_receipt_fields is not available for fcc_filings until its next publish" in message
+    assert "read_receipt_fields is not available for fcc_filings: its receipts are not sorted by record id" in message
     assert "would scan 9 of them, over the 8-receipt bound" in message
     # The refusal is decided from the member's footer: no row of a member too large to scan is read to refuse it.
     assert [sql.split(" FROM ")[1].split("(")[0] for sql, _ in recording.statements
