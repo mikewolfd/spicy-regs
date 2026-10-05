@@ -8,7 +8,8 @@ preparation cannot select a half-initialized dataset. It does not convert the
 prior namespace's rows: that conversion was removed on 2026-10-03 with the other
 legacy paths. The first writer to reach an uninitialized catalog therefore starts
 an empty dataset. Populating it from retained rows is an explicit operator step,
-done through `replace_native` before any scheduled writer runs.
+done before any scheduled writer runs; its order, checks and rollbacks are in
+[the conversion runbook](native-family-conversion.md#the-regulations-unit-pending-the-bulk-writer).
 
 `replace_native` reads the prior subject and receipt in one transaction, compares
 any caller-provided prior and snapshot, converts the replacement, and writes the
