@@ -65,19 +65,25 @@ families).
   the command holds those against the declared native schema instead. A
   column that moves to receipts has no declared type to hold it against.
 
-## One owner for each receipt dataset
+## Shared logs
 
-The index gives every dataset one owning family, receipt-only datasets
-included (`publication.py`, `_merge_family`). Two receipt-only logs are
-declared by many rollups: `congress_acquisition` by every Congress.gov
-family, and `legislative_document_file_states` by every GovInfo document
-family. Publication accepts the first family that holds one and refuses the
-rest: "['congress_acquisition'] already belongs to family amendments". This
-is main's rule, so scheduled runs would meet it too. No such family is native
-yet. The command checks it before converting.
+Every index reader gives each dataset an entry lists one owning family: the
+hosted server, main's server and the library (`publication.py`,
+`parse_index`, `_merge_family`). Two receipt-only logs are written by many
+families: `congress_acquisition` by every Congress.gov family and
+`legislative_document_file_states` by every GovInfo document family. Each is
+declared a shared log (`"shared_log": true` in its `etl_policies/*.json`).
 
-Until that rule is decided, convert none of these families: whichever went
-first would lock out the others, the bill family included.
+A family's rows of a shared log are its own run history. They are in its own
+receipt member and its next run reads them back through its own tables. The
+index entry does not list a shared log, so no family owns one and these
+families convert in any order. The index format is unchanged.
+
+A retry checkpoint or a read marker has the same policy shape and is not a
+shared log: one family owns it and readers find it by name
+(`committee_report_reads`, `document_citation_reads`). A test fails when a
+dataset gains a second family without the marker, or carries the marker
+with one.
 
 ## Families
 
@@ -99,6 +105,26 @@ Safe to convert.
 User SQL on `cfr_sections.part_granule` keeps working with `= 'true'`;
 `lower(part_granule)` and `LIKE` stop working on a BOOLEAN.
 
+These seven hold a shared log and are also safe at any time: no reader on
+main or on the hosted build needs a column that leaves (second audit,
+2026-10-05, same scope). Convert them after the three above, each before its
+next scheduled run.
+
+| Order | Family | What leaves or changes | Next scheduled run | After conversion, on the loopback copy |
+|---|---|---|---|---|
+| 4 | `amendments` | `url` | daily 02:40Z | its scheduled run passed |
+| 5 | `committee-reports` | `text_sha256` becomes `body_version_id`; file and rule columns leave; `committee_report_reads` moves to receipts | daily 03:40Z | its scheduled run passed; the read marker is still found by name |
+| 6 | `record-issues` | four columns become lists; five rule and link columns leave | daily 06:00Z | dry conversion exact; scheduled run not rehearsed |
+| 7 | `treaties` | four `*_json` become lists; `parts_json` becomes `parts_count`; four columns leave | daily 06:10Z | its scheduled run passed |
+| 8 | `nominations` | `nomination_type_json`, `url` leave; `is_civilian` BOOLEAN; `is_military` arrives | daily 06:20Z | its scheduled run passed |
+| 9 | `senate-expenditures` | `text_sha256` becomes `body_version_id`; three `*_json` become lists; nine columns typed | Tuesdays 07:30Z | its scheduled run passed, after a one-line fix to the rollup |
+| 10 | `native-legal-references` | `input_sha256` becomes `body_version_id`; `attributes_json` becomes three columns; its reads table moves to receipts | none; built by hand | dry conversion exact |
+
+Every live table of these families is text today, so each typed column is a
+type change for user SQL: `= 'true'` still works on a BOOLEAN; `lower()`,
+`trim()` and `<> ''` do not. `rebuild-record-issues`, the family's own manual
+repair, reads `entire_issue_json` and would fail on the native table.
+
 `court-docket-groups` names no parents after conversion (the conversion read
 none), so `describe_table` shows no recorded inputs for it until its next
 build. The replaced generation, named in the converted one's read snapshot,
@@ -110,8 +136,7 @@ Held.
 |---|---|---|
 | `unified-agenda` | `materialize-rulemaking` downloads the table raw and requires `timetable_json`, `cfr_references_json`, `legal_authority_json` and `url` (`pipelines/materialized.py:253`, `rulemaking_dataset.py:133`), which all leave the native table. | That reader reads the native table. The same change raises the rollup's 30-minute limit: measured on loopback storage 10 to 14 minutes here and 862.9 s and 476.0 s by the reviewer, so a hosted runner at half the speed lands near it. |
 | `court-opinion-pdf-extractions` | The hosted citation tool keys `court_opinion_derived_pdf` by `(opinion_id, source_sha256)`; natively the table is `opinion_body_id`, `opinion_id`, `cluster_id`, `text_content`. | The release window, below. |
-| `amendments`, `committee-meetings`, `house-communications`, `nominations`, `record-issues`, `treaties`, `members` | The receipt-dataset rule (Congress.gov log). Each converts cleanly in a dry run. | The rule is decided. |
-| `committee-reports`, `senate-expenditures`, `native-legal-references` | The same rule (GovInfo file-state log). | The same. |
+| `committee-meetings`, `house-communications`, `members`, `print-citations` | The hosted server reads columns that leave. | The release window, below. |
 
 Never put these in `--allow` yet. The command would convert each, and none
 has been checked for outside readers.
@@ -120,26 +145,59 @@ has been checked for outside readers.
   `court-citations` (102.0M rows), `court-opinions` (10.8M),
   `court-opinion-clusters` (10.1M), `roll-call-votes` (10.6M),
   `member-vote-terms` (10.6M), `federal-register` (1.0M).
-- Hold a shared log and are not on an approved list: `bill-subjects` (also
-  needs `congress_bills` native first), `committee-rosters`,
-  `press-releases`, `laws`, `print-citations`.
+- Not on an approved list: `bill-subjects` (also needs `congress_bills`
+  native first), `committee-rosters`, `press-releases`, `laws`.
 
 A Congress.gov or GovInfo receipt also records the local path of the file it
 was converted from. Run those conversions from a neutral `--work` path.
 
 ## The release window
 
-The hosted server and main's server need opposite shapes for the citation
-tool's tables, so these families convert only between "the old server stops
+The hosted server needs the old shape of these tables and main's server
+needs the native one, so they convert only between "the old server stops
 serving" and "the new server starts": convert, then the server switches.
 
-| Order | Family | Why it waits | Rollback |
+| Order | Family | Hosted reader that needs the old shape | Main's reader that needs the native one |
 |---|---|---|---|
-| 1 | `court-opinion-pdf-extractions` (3 rows) | parent table of citation kind `court_opinion_derived_pdf` | `--rollback` with its receipt, before the new server starts |
+| 1 | `print-citations` (65,674 rows; 55 s to convert, about 3 minutes with the read-back) | the citation tool orders by `rule_version` and reads `text_sha256`, `pages_read`, `rule_set_version` (`mcp_server.py:2110`, `:1535`) | the citation tool refuses until `document_citations` is native (`citation_receipts.py:28`) |
+| 2 | `court-opinion-pdf-extractions` (3 rows) | kind `court_opinion_derived_pdf` keyed by `(opinion_id, source_sha256)` | the same kind keyed by `opinion_body_id` |
+| 3 | `house-communications` (5,044 rows) | `relationship_views/regulatory.py:14` (`rin_occurrences_json`, `source_route`, `record_package_id`, `record_granule_id`, `detail_read`); `citation_sources.py:33` | the three `communication_*` citation kinds |
+| 4 | `committee-meetings` (6,097 rows) | `relationship_views/congress.py:27` (`*_json`, `detail_read`) | none; it picks the old or native view by table |
+| 5 | `members` (3 tables, 58,364 rows) | `relationship_views/congress.py:68`, `affiliations.py:5` | `member-vote-terms`, `roll-call-votes` and the scorecard analysis refuse an old-shape `members` |
 
-Rehearsal for the window: convert on the loopback copy, then run the
-citation tool's own reader against the result (`install_citation_inputs` in
-`citation_receipts.py`) and replay each citation kind's sample document.
+`print-citations` shares only a log with the bill family and `laws`. It
+reads its own priors and nothing of theirs, so it converts alone and first.
+The citation tool needs each kind's own parent table native and nothing
+else: `print-citations` alone covers 52,823 of 52,895 held rows.
+
+Before the window opens, three things must be true of the new server:
+
+- Its image holds what the citation inputs import. In an environment with
+  only the image's packages plus pyarrow, the connection refuses once
+  `document_citations` is native: `etl_receipts.select_receipts` imports
+  `spicy_regs.transforms`, which imports `sources.r2` and so `boto3`.
+- The two `document_citations` joins have a baseline. After conversion
+  `scripts/check_table_joins.py` reports them `UNBASELINED`, a failing
+  status.
+- The held-citations manual reader (`transforms/held_citations.py:132`)
+  reads `house_communications.record_entry_text`, which leaves the table. It
+  is null in all 5,044 live rows, so nothing is lost today.
+
+Held court-opinion citations are written under `[opinion_id,
+source_sha256]`. The native mapper publishes them under `opinion_body_id`,
+the key main's tool asks with (`legislative_documents.py`,
+`HELD_KEY_TRANSLATIONS`). The other kinds are asked for as they are stored.
+
+Rehearsal for the window: convert each family on the loopback copy, build
+the server's own connection over the result, and call
+`resolve_document_citations` once for each kind that holds rows. The drivers
+and their output are in
+`~/Work/corpora/native-migration-dryrun-20261004/` (`rehearse.py`,
+`server_reader.py`).
+
+Rollback, for each: `--rollback` with its receipt, before the new server
+starts. Once the new server serves, roll the server back first: it cannot
+read the old shape.
 
 ## Before a production run
 
@@ -172,7 +230,7 @@ cd <clean worktree at main>
 UV=/opt/homebrew/bin/uv   # the lock needs uv 0.11 or later; a bare `uv` may be an older shim that cannot read it
 MAIN=$(git rev-parse HEAD)
 WHEEL=$($UV run --frozen python -c "from importlib.metadata import version; print(version('spicy-docs'))")
-ALLOW=courtlistener,court-docket-groups,cfr-sections
+ALLOW=courtlistener,court-docket-groups,cfr-sections   # then the next approved families, in the order above
 RUN=~/Work/corpora/native-conversion-<date>
 BUCKET=<the production bucket's name, typed by hand>
 
@@ -219,6 +277,14 @@ set in the shell that the file contradicts is refused, by name.
 - `publication.v2.json` carries `etlReceipts` for the family.
 - The family's next scheduled run succeeds and moves the generation. A
   failure there leaves the converted generation in place.
+- The table's notes follow the rule in the header of
+  `data_dictionary/descriptions.yaml`: after a table's first native publish,
+  add one sentence only if its receipt holds a link or a column people
+  query, ending "is kept in its receipt; see etl_receipts."
+
+If the command prints its last line and does not return, the work is done
+and `conversion.json` is complete: interrupt it. Seen once in about thirty
+loopback runs, in pyarrow's thread pool at interpreter exit.
 
 ## Roll back
 
