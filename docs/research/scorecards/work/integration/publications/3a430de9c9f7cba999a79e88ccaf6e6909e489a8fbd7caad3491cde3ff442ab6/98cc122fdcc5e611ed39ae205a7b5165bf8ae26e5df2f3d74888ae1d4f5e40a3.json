@@ -1,0 +1,24 @@
+{
+  "format_version": "scorecard-integration-published-observation/2",
+  "publisher_id": "new_american",
+  "scorecard_id": "new_american:report%3A11",
+  "parser_version": "new-american-native-report/2",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 36,
+    "scorecard_metrics": 2,
+    "scorecard_items": 20,
+    "scorecard_metric_items": 20,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 535,
+    "scorecard_member_ratings": 535,
+    "scorecard_member_item_results": 5350
+  },
+  "source_qualification": "publications/3a430de9c9f7cba999a79e88ccaf6e6909e489a8fbd7caad3491cde3ff442ab6/5f95dc55273cbdd7d7f01257f7bdfc49de8ca8bfcf6653b695f136dee34c98ce.json",
+  "source_qualification_sha256": "5f95dc55273cbdd7d7f01257f7bdfc49de8ca8bfcf6653b695f136dee34c98ce",
+  "public_readback": "publications/3a430de9c9f7cba999a79e88ccaf6e6909e489a8fbd7caad3491cde3ff442ab6/readback.json",
+  "public_readback_sha256": "27dec27886403a12b865cfab42f4dcc8b5e34466e9c0abbd9c2624f456d3bc11",
+  "observed_source_generation": "sha256:3a430de9c9f7cba999a79e88ccaf6e6909e489a8fbd7caad3491cde3ff442ab6"
+}

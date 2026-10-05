@@ -1,10 +1,24 @@
 # Publisher coverage priority
 
 The user's October 5 direction prioritizes publisher breadth using scorecard
-editions from 2000 onward. For each remaining publisher, first qualify one
-complete edition in that period, adopt its reader through the shared package,
-and publish it with verified readback. Expand that publisher's archive after
-closing the remaining publisher gaps.
+editions from 2000 onward, starting with each publisher's most recent edition.
+First qualify that complete edition, adopt its reader through the shared
+package, and publish it with verified readback. Work backward while additional
+editions justify their recovery and validation effort. Prefer another uncovered
+publisher when historical work brings little new coverage or source shape.
+
+Inspect the current publisher index or native edition selector before choosing
+an older recovered original. Distinguish newest offered, newest recovered,
+newest qualified and newest published editions; an archived URL's timestamp
+does not establish the edition date or the publisher's latest scorecard.
+Document why a newer offering remains inaccessible or unsupported when choosing
+a recoverable older edition.
+
+Continue the catalog even when ingestion pauses. Record offered edition labels,
+original and archive URLs, observed formats, acquisition results and unresolved
+coverage questions using the existing census and source-recovery metadata.
+Known-but-unrecovered, unqualified and not-yet-searched periods remain distinct.
+A missing route never closes an unknown interval or proves that a series ended.
 
 Retain earlier editions as catalog discoveries when encountered. Preserve their
 originals, source locations, hashes, observed shape and any unfinished work;

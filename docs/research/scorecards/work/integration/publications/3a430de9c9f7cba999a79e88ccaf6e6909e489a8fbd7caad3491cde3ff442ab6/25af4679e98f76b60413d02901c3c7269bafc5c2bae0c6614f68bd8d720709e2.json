@@ -1,0 +1,24 @@
+{
+  "format_version": "scorecard-integration-published-observation/2",
+  "publisher_id": "freedomworks",
+  "scorecard_id": "freedomworks:2012-senate-archived-print",
+  "parser_version": "freedomworks-archived-print/4",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 16,
+    "scorecard_metrics": 1,
+    "scorecard_items": 13,
+    "scorecard_metric_items": 13,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 101,
+    "scorecard_member_ratings": 101,
+    "scorecard_member_item_results": 1313
+  },
+  "source_qualification": "publications/3a430de9c9f7cba999a79e88ccaf6e6909e489a8fbd7caad3491cde3ff442ab6/31c52648fbd1c187cb114154b1c5fe335cf970ec88a74634aac542f55a179ef8.json",
+  "source_qualification_sha256": "31c52648fbd1c187cb114154b1c5fe335cf970ec88a74634aac542f55a179ef8",
+  "public_readback": "publications/3a430de9c9f7cba999a79e88ccaf6e6909e489a8fbd7caad3491cde3ff442ab6/readback.json",
+  "public_readback_sha256": "27dec27886403a12b865cfab42f4dcc8b5e34466e9c0abbd9c2624f456d3bc11",
+  "observed_source_generation": "sha256:3a430de9c9f7cba999a79e88ccaf6e6909e489a8fbd7caad3491cde3ff442ab6"
+}

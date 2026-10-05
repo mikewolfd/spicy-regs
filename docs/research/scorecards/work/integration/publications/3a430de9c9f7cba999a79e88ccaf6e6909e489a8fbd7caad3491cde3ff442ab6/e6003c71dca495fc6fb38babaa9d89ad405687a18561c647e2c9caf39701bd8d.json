@@ -1,0 +1,24 @@
+{
+  "format_version": "scorecard-integration-published-observation/2",
+  "publisher_id": "ntu",
+  "scorecard_id": "ntu:2018-html-ratings-items",
+  "parser_version": "ntu-historical-native-html/1",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 110,
+    "scorecard_metrics": 4,
+    "scorecard_items": 203,
+    "scorecard_metric_items": 203,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 537,
+    "scorecard_member_ratings": 1063,
+    "scorecard_member_item_results": 0
+  },
+  "source_qualification": "publications/3a430de9c9f7cba999a79e88ccaf6e6909e489a8fbd7caad3491cde3ff442ab6/b0df24894c3f7f1bc599c250bab183998f01ab721bc055e2c6e1d7e1c9be0039.json",
+  "source_qualification_sha256": "b0df24894c3f7f1bc599c250bab183998f01ab721bc055e2c6e1d7e1c9be0039",
+  "public_readback": "publications/3a430de9c9f7cba999a79e88ccaf6e6909e489a8fbd7caad3491cde3ff442ab6/readback.json",
+  "public_readback_sha256": "27dec27886403a12b865cfab42f4dcc8b5e34466e9c0abbd9c2624f456d3bc11",
+  "observed_source_generation": "sha256:3a430de9c9f7cba999a79e88ccaf6e6909e489a8fbd7caad3491cde3ff442ab6"
+}

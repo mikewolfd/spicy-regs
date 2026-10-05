@@ -1,0 +1,31 @@
+{
+  "format_version": "scorecard-integration-qualified-scope/1",
+  "qualified": true,
+  "publisher_id": "lugar_mccourt",
+  "scorecard_id": "lugar_mccourt:2015-house-html",
+  "source_url": "https://www.thelugarcenter.org/ourwork-Bipartisan-Index.html",
+  "parser_version": "lugar-mccourt-native-html/1",
+  "reader_sha256": "145434f812e351d7686ccda95b4c949ab037352aa38606ce699b41460eb6a50b",
+  "capture_manifest_sha256": "ed79ca86fe00a1e5a44e343f9e3fbff611e71e113922cf264241b4851c559cb7",
+  "native_reference_sha256": "065dbddfa09b9e2ec70584b5278c1814a160fc45532b184f4e3096a51efc0248",
+  "native_reference_kind": "source_table_family",
+  "source_qualification_sha256": "de63487065d13791701e21b4c0c33766936b05914e40650a81f3c97debe3097b",
+  "completeness_rule": "Every reviewed source table row parsed to EOF; exact native population, column shape and unique member contexts checked; independent alphabetical view retained; selected source facts and method stable on reread",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 4,
+    "scorecard_metrics": 1,
+    "scorecard_items": 0,
+    "scorecard_metric_items": 0,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 438,
+    "scorecard_member_ratings": 438,
+    "scorecard_member_item_results": 0
+  },
+  "capture_count": 2,
+  "evidence_policy": "hash_only",
+  "qualification_boundary": "Named source rendition; remaining editions and renditions stay in scope",
+  "published": false
+}

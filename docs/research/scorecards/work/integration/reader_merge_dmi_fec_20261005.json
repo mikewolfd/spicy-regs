@@ -1,0 +1,35 @@
+{
+  "status": "passed",
+  "observed_at": "2026-10-05T12:22:35.275711+00:00",
+  "consumer_commit": "52eb8278d677ce842e809b6c3fe21bde6e201cb0",
+  "merged_upstream_commit": "be6194e393398cf1f4e4959e562e79a9ce19cb50",
+  "checks": {
+    "pytest": {
+      "status": "passed",
+      "log_sha256": "e8f4eecba11dbe74a7edc8f9e940568a4a59ce60c0ee3bd26b846a37f278909f",
+      "passed": 6547,
+      "skipped": 2,
+      "deselected": 34
+    },
+    "ruff": {
+      "status": "passed",
+      "log_sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+    },
+    "ty": {
+      "status": "passed",
+      "log_sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+    },
+    "dictionary": {
+      "status": "passed",
+      "log_sha256": "49ddbbb360358a4ea39a2a06dc8c9cb4b4013bda47dc683d76b9ca127049fa3a"
+    },
+    "docs": {
+      "status": "passed",
+      "log_sha256": "b257a4c489972980936bd53abb323707588000314368e9d6860ca754b7c90c9f"
+    }
+  },
+  "boundary": "DMI installed package and newer FEC code pass merged consumer checks. Public source generation3a430de9 contains AGC, CGS, Environment America, SMART and CWA; DMI data publication remains pending.",
+  "format_version": "scorecard-reader-consumer-merge/1",
+  "adoption_receipt": "reader_adoption_dmi_20261005.json",
+  "public_source_readback": "publications/3a430de9c9f7cba999a79e88ccaf6e6909e489a8fbd7caad3491cde3ff442ab6/readback.json"
+}

@@ -18,6 +18,8 @@ The [AGC, CGS and Environment America package](reader_three_20261005.md)
 records the next qualified readers, exact source boundaries and remaining work.
 The [Drum Major Institute package](reader_dmi_20261005.md) records the reviewed
 post-2000 originals and their installed package adoption.
+The [October 5 publication follow-up](release_followup_20261005.md) records
+verified source publication and the merged consumer checks.
 
 The [generated work queue](integration_progress.md) accounts for every publisher
 in the [adapter matrix](adapter_support_matrix.md) and
@@ -76,7 +78,7 @@ When selecting the reviewed shared PDF validator, freeze
 `src/spicy_docs/reading/pdf_bytes.py` beside the reader modules and add
 `--pdf-bytes-sha256 "$SCORECARD_PDF_BYTES_SHA256"` to the build command. The
 builder checks that exact pin and permits only this explicit additional runtime
-file. The [current package receipt](https://github.com/mikewolfd/spicy-regs/blob/43258c19c0eb2eae1530dd31b6ee221edc907891/vendor/spicy_docs-scorecards.json)
+file. The [current package receipt](https://github.com/mikewolfd/spicy-regs/blob/main/vendor/spicy_docs-scorecards.json)
 records the selected validator and every installed module.
 Copy the selected wheel to `vendor/`, update the matching dependency and source
 pins in `pyproject.toml`, then run `uv lock` and `uv sync --frozen`. Verify the

@@ -1,0 +1,24 @@
+{
+  "format_version": "scorecard-integration-published-observation/2",
+  "publisher_id": "animal_welfare_institute",
+  "scorecard_id": "animal_welfare_institute:118-Senate-aggregate",
+  "parser_version": "awi-original-compassion-aggregate/1",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 0,
+    "scorecard_metrics": 1,
+    "scorecard_items": 0,
+    "scorecard_metric_items": 0,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 83,
+    "scorecard_member_ratings": 83,
+    "scorecard_member_item_results": 0
+  },
+  "source_qualification": "publications/3a430de9c9f7cba999a79e88ccaf6e6909e489a8fbd7caad3491cde3ff442ab6/17857031e37cfc61178332a73d2f308e4101d6c6650672b13a91fc2639362e65.json",
+  "source_qualification_sha256": "17857031e37cfc61178332a73d2f308e4101d6c6650672b13a91fc2639362e65",
+  "public_readback": "publications/3a430de9c9f7cba999a79e88ccaf6e6909e489a8fbd7caad3491cde3ff442ab6/readback.json",
+  "public_readback_sha256": "27dec27886403a12b865cfab42f4dcc8b5e34466e9c0abbd9c2624f456d3bc11",
+  "observed_source_generation": "sha256:3a430de9c9f7cba999a79e88ccaf6e6909e489a8fbd7caad3491cde3ff442ab6"
+}
