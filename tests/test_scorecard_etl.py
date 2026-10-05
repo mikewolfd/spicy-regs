@@ -22,6 +22,7 @@ def test_native_generation_keeps_exact_provider_rows_and_only_domain_subjects(tm
     directory = tmp_path / "candidate"
     files = write_family(directory, before)
     assert read_family(directory, SOURCE_NAMES) == before
+    assert not list(directory.glob(".scorecard-etl-*"))
     assert not (directory / "scorecard_snapshots.parquet").exists()
     for path in files:
         names = pq.read_schema(path).names

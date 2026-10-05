@@ -8,6 +8,7 @@ import hashlib
 from dataclasses import replace
 import json
 from pathlib import Path
+from shutil import rmtree
 from tempfile import TemporaryDirectory
 from uuid import uuid4
 
@@ -223,6 +224,7 @@ def write_family(
     (directory / "scorecard-etl-build.json").write_text(
         json.dumps({"generation_id": generation_id, "datasets": list(names)}, indent=2) + "\n"
     )
+    rmtree(stage)
     return tuple(paths)
 
 
