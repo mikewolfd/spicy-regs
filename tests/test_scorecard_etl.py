@@ -112,10 +112,7 @@ def test_native_prior_reconstructs_validation_and_preserves_unselected_scope(tmp
                           if r["dataset"] == "scorecards" and r["record_id"] == key)
     after_receipt = next(r for r in pq.read_table(second / "build/etl_receipts.parquet").to_pylist()
                          if r["dataset"] == "scorecards" and r["record_id"] == key)
-    assert after_receipt["generation_id"] != before_receipt["generation_id"]
-    for field in ("processor", "witnesses", "attempt_id", "processing_json", "subject_version"):
-        assert after_receipt[field] == before_receipt[field]
-    assert before_receipt["receipt_id"] in after_receipt["diagnostic_json"]
+    assert after_receipt == before_receipt
     for name, rows in actual.items():
         if name != "scorecard_publishers":
             assert [r for r in rows if r["scorecard_id"] == "lcv:2024"] == [
@@ -180,7 +177,7 @@ def test_historical_rating_policy_is_validated_before_exact_current_rewrite(tmp_
     assert etl.read_indexed_family(first, SOURCE_NAMES, indexed) == before
     assert verify_generation(tmp_path / "old-generation").pin == artifact.pin
     assert etl.read_source_generation(tmp_path / "old-generation") == before
-    with pytest.raises(ValueError, match="matching dataset policy"):
+    with pytest.raises(ValueError, match="Subject schema differs"):
         etl.read_family(first, SOURCE_NAMES)
     restored = etl.read_family(first, SOURCE_NAMES, policies=selected)
     assert restored == before
@@ -195,13 +192,17 @@ def test_historical_rating_policy_is_validated_before_exact_current_rewrite(tmp_
     assert etl.read_indexed_family(second, SOURCE_NAMES, indexed) == before
     old = next(r for r in pq.read_table(first / "etl_receipts.parquet").to_pylist() if r["dataset"] == "scorecard_member_ratings")
     new = next(r for r in pq.read_table(second / "etl_receipts.parquet").to_pylist() if r["dataset"] == "scorecard_member_ratings")
-    assert old["policy_version"] == "scorecards-etl-v1" and new["policy_version"] == "scorecards-etl-ratings-v2"
-    assert old["record_id"] == new["record_id"] and old["witnesses"] == new["witnesses"]
+    assert old["policy_version"] == "scorecards-etl-v1"
+    assert old["record_id"] == new["record_id"]
     assert old["processing_json"] == new["processing_json"]
-    assert (old["subject_version"] == new["subject_version"]) is (numeric is None)
-    from spicy_regs.etl_receipts import _unpack
-
-    assert "carried_from" not in _unpack(json.loads(new["diagnostic_json"]))
+    from spicy_regs.etl_receipts import decode_exact_json
+    if numeric is None:
+        assert new == old
+    else:
+        assert new["policy_version"] == "scorecards-etl-ratings-v2"
+        assert new["subject_version"] != old["subject_version"]
+        assert decode_exact_json(new["diagnostic_json"])["prior_receipt"]["receipt_id"] == old["receipt_id"]
+    assert "retained_processing" not in decode_exact_json(new["diagnostic_json"])
 
 
 @pytest.mark.parametrize("change", ["version", "schema", "classification", "duplicate"])
@@ -244,3 +245,18 @@ def test_exact_decimal_cast_cannot_reinterpret_historical_receipt_hashes(tmp_pat
     policies = [rating if name == "scorecard_member_ratings" else etl.POLICIES[name] for name in SOURCE_NAMES]
     with pytest.raises(ValueError, match="Missing, ambiguous or reused subject receipt"):
         validate_receipt_bundle(subjects, [directory / "etl_receipts.parquet"], policies)
+
+
+def test_malformed_provider_rating_retains_error_attempt_before_refusal(tmp_path):
+    before = tables(edition("2025"))
+    before["scorecard_member_ratings"][0]["value_number"] = "not-a-number"
+    with pytest.raises(ValueError, match="Scorecard conversion refused"):
+        write_family(tmp_path, before, generation_id="bad-rating")
+    [stage] = list(tmp_path.glob(".scorecard-etl-*"))
+    errors = [r for r in pq.read_table(stage / "etl_receipts.parquet").to_pylist() if r["outcome"] == "error"]
+    assert len(errors) == 1
+    from spicy_regs.etl_receipts import decode_exact_json
+    assert errors[0]["dataset"] == "scorecard_member_ratings"
+    assert decode_exact_json(errors[0]["processing_json"])["raw_source"]["value_number"] == "not-a-number"
+    assert decode_exact_json(errors[0]["diagnostic_json"])["reason_code"] == "native_conversion_refused"
+    assert not (tmp_path / "etl_receipts.parquet").exists()

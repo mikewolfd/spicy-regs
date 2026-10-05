@@ -342,6 +342,7 @@ def write_dataset(
     *,
     failures: Iterable[dict] = (),
     batch_size: int = 2000,
+    prior_receipts: Sequence[Path] = (),
 ) -> tuple[Path | None, Path]:
     """Atomically expose a new local directory with subject data and receipts.
 
@@ -405,6 +406,8 @@ def write_dataset(
                 if len(receipts) >= batch_size:
                     flush()
             flush()
+        if prior_receipts:
+            carry_receipt_history(receipt_path, prior_receipts, receipt_path)
         validate_receipt_bundle(
             {policy.dataset: [] if policy.receipt_only else [subject_path]}, [receipt_path], [policy]
         )
@@ -667,30 +670,13 @@ def select_receipts(path: Path, destination: Path, *, dataset: str) -> Path:
 
 
 def rebind_receipt(receipt: Mapping, *, generation_id: str) -> dict:
-    """Carry exact prior processing evidence into a new selected generation.
-
-    Does not reinterpret an old observation as a new acquisition. Original
-    witnesses, processor, attempt and values stay intact; diagnostic lineage
-    records the prior receipt and generation. Admission still checks the row.
-    """
-    if not isinstance(generation_id, str) or not generation_id:
-        raise ValueError("A carried receipt needs the new generation identity")
+    """Verify and carry an immutable receipt; the new publisher never rewrites its original generation."""
+    validate_publisher_generation(generation_id)
     if set(receipt) != set(RECEIPT_SCHEMA.names):
         raise ValueError("Carried receipt fields differ from shared schema")
     if _digest({k: v for k, v in receipt.items() if k != "receipt_id"}) != receipt["receipt_id"]:
         raise ValueError("Carried receipt digest differs from its contents")
-    if generation_id == receipt["generation_id"]:
-        return dict(receipt)
-    diagnostics = _retain_history(
-        receipt,
-        {
-            **_unpack(json.loads(receipt["diagnostic_json"])),
-            "carried_from": {"receipt_id": receipt["receipt_id"], "generation_id": receipt["generation_id"]},
-        },
-    )
-    updated = {**receipt, "generation_id": generation_id, "diagnostic_json": exact_json(diagnostics)}
-    updated["receipt_id"] = _digest({k: v for k, v in updated.items() if k != "receipt_id"})
-    return updated
+    return dict(receipt)
 
 
 def observation_receipt(policy: DatasetPolicy, context: ReceiptContext, *, processing_fields: Mapping) -> dict:
@@ -753,25 +739,16 @@ def _retain_history(prior: Mapping, diagnostics: Mapping) -> dict:
 
 
 def inherit_receipt(context: ReceiptContext, prior: Mapping | None) -> ReceiptContext:
-    """Preserve witnesses, prior receipt identities and exact source/processing values.
-
-    Digest-keyed processing payloads are flat and deduplicated. Receipt history
-    stores identities, not recursively serialized prior receipts.
-    """
+    """Name only the direct accepted predecessor; preserve this attempt's own values and witnesses."""
     if prior is None:
         return context
     from dataclasses import replace
-
-    retained = _retain_history(prior, context.diagnostics)
-    digest = _digest(_unpack(json.loads(prior["processing_json"])))
-    reference = {
-        "source_id": "prior-etl-processing",
-        "source_uri": "receipt-processing:" + digest,
-        "sha256": digest,
-        "locator": "/",
-        "body_version": prior["receipt_id"],
-    }
-    return replace(context, witnesses=[*prior["witnesses"], reference, *context.witnesses], diagnostics=retained)
+    rebind_receipt(prior, generation_id=context.generation_id)
+    diagnostics = {k: v for k, v in context.diagnostics.items()
+                   if k not in {"prior_receipts", "retained_processing", "prior_receipt"}}
+    diagnostics["prior_receipt"] = {"receipt_id": prior["receipt_id"], "generation_id": prior["generation_id"],
+                                    "processing_sha256": _digest(decode_exact_json(prior["processing_json"]))}
+    return replace(context, diagnostics=diagnostics)
 
 
 def resolve_receipt_witness(receipt: Mapping, witness: Mapping) -> bytes:
@@ -803,6 +780,7 @@ class ReceiptLineage:
     """Disk-backed accepted-prior lookup shared by family writers."""
 
     def __init__(self, paths, *, dataset):
+        self.paths = tuple(paths)
         self._temporary = TemporaryDirectory(prefix="receipt-lineage-")
         self.connection = sqlite3.connect(str(Path(self._temporary.name) / "prior.db"))
         self.connection.execute("CREATE TABLE prior (record_id TEXT PRIMARY KEY, receipt TEXT)")

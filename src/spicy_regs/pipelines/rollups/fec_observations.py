@@ -1,6 +1,7 @@
 """Build verified retained FEC tables in a new local generation directory."""
 
 import hashlib
+import os
 from pathlib import Path
 from typing import ClassVar
 import shutil
@@ -10,6 +11,8 @@ import pyarrow.parquet as pq
 from cyclopts import App
 
 from spicy_regs.pipelines.rollups.base import RollupPipeline
+from spicy_regs.etl_receipts import select_receipts, validate_receipt_bundle
+from spicy_regs.selected_generations import SelectedInputs
 from spicy_regs.native_types import described_schema
 from spicy_regs.transforms.fec_identity_receipts import IdentityReceiptWriter, dataset_policy
 from spicy_regs.transforms.build_fec_observations import OUTPUTS, build_fec_observations
@@ -33,6 +36,12 @@ class FecObservationsRollup(RollupPipeline):
         super().__init__(output_dir=output_dir, skip_upload=skip_upload)
         self.manifest = manifest
 
+    def _prime(self, output_dir: Path, snapshot=None):
+        self._selected_receipt_inputs = SelectedInputs(self.output_dir or output_dir,
+                                                      output_dir / ".fec-selected-priors",
+                                                      index=snapshot if os.getenv("R2_PUBLIC_URL") else None)
+        return {}
+
     def build(self, output_dir: Path) -> tuple[Path, ...]:
         retained = (
             self.source_evidence.retain_file(
@@ -45,10 +54,23 @@ class FecObservationsRollup(RollupPipeline):
         )
         work = output_dir / ".fec-observations" / self.receipt_generation_id
         work.mkdir(parents=True)
+        selected = getattr(self, "_selected_receipt_inputs", None)
+        if selected is None:
+            selected = SelectedInputs(self.output_dir or output_dir, work / "selected-priors")
+        prior_receipts = []
+        for policy in self.receipt_policies:
+            prior = selected.select(policy.dataset)
+            if prior is not None:
+                scoped = select_receipts(prior.receipts, work / (policy.dataset + ".prior.parquet"),
+                                         dataset=policy.dataset)
+                validate_receipt_bundle({policy.dataset: prior.subjects}, [scoped], [policy],
+                                        generation_id=prior.generation_id)
+                prior_receipts.append(scoped)
         outputs = build_fec_observations(self.manifest, work / "source")
         native = work / "native"
         with IdentityReceiptWriter(native, generation_id=self.receipt_generation_id,
-                                   tables=[p.dataset for p in self.receipt_policies]) as writer:
+                                   tables=[p.dataset for p in self.receipt_policies],
+                                   prior_receipts=prior_receipts) as writer:
             for path in outputs:
                 with path.open("rb") as stream:
                     digest = "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest()

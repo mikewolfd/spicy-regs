@@ -146,11 +146,16 @@ def test_receipt_pdf_retries_skip_prior_status_and_keep_global_limit(tmp_path):
     assert byid["1"]["text_extraction_status"] == "ok"
     assert byid["2"]["text_extraction_status"] is None
     assert len(restored) == 4
-    from spicy_regs.etl_receipts import resolve_receipt_witness
+    from spicy_regs.etl_receipts import decode_exact_json
+    originals = {r["record_id"]: r for r in pq.read_table(selected.receipts).to_pylist()}
     for receipt in pq.read_table(receipts).to_pylist():
-        if receipt['outcome'] == 'accepted':
-            inherited = [w for w in receipt['witnesses'] if (w['source_uri'] or '').startswith('receipt-processing:')]
-            assert inherited and all(resolve_receipt_witness(receipt, w) for w in inherited)
+        if receipt["outcome"] == "accepted":
+            prior = originals[receipt["record_id"]]
+            if receipt["subject_version"] == prior["subject_version"] and receipt["processing_json"] == prior["processing_json"]:
+                assert receipt == prior
+            else:
+                assert decode_exact_json(receipt["diagnostic_json"])["prior_receipt"]["receipt_id"] == prior["receipt_id"]
+                assert "retained_processing" not in decode_exact_json(receipt["diagnostic_json"])
     assert "text_extraction_status" not in pq.read_schema(subject).names
 
 
@@ -208,11 +213,15 @@ def test_correction_keeps_text_status_and_diagnostics_together(tmp_path):
         '[{"status":"ok"}]',
     )
     assert "pdf_extraction_results_json" not in pq.read_schema(subject).names
-    from spicy_regs.etl_receipts import resolve_receipt_witness
-    [receipt] = [r for r in pq.read_table(receipts).to_pylist() if r['outcome'] == 'accepted']
-    inherited = [w for w in receipt['witnesses'] if (w['source_uri'] or '').startswith('receipt-processing:')]
-    assert len(inherited) == 2
-    assert all(resolve_receipt_witness(receipt, w) for w in inherited)
+    from spicy_regs.etl_receipts import decode_exact_json, _digest
+    [receipt] = [r for r in pq.read_table(receipts).to_pylist() if r["outcome"] == "accepted"]
+    [old] = pq.read_table(prior.receipts).to_pylist()
+    assert decode_exact_json(receipt["diagnostic_json"])["prior_receipt"] == {
+        "receipt_id": old["receipt_id"], "generation_id": old["generation_id"],
+        "processing_sha256": _digest(decode_exact_json(old["processing_json"]))}
+    assert "retained_processing" not in decode_exact_json(receipt["diagnostic_json"])
+    # Both selected input pairs remain independently named as current source witnesses.
+    assert {str(prior.receipts), str(fresh.receipts)} <= {w["source_uri"] for w in receipt["witnesses"]}
 
 
 def test_real_rulemaking_producers_build_native_outputs_from_qualified_inputs(tmp_path):

@@ -447,7 +447,7 @@ def test_carry_rebind_preserves_original_evidence(tmp_path, policy, context, row
     carried = rebind_receipt(original, generation_id="build-2")
     for name in ("witnesses", "processor", "attempt_id", "record_id", "subject_version", "processing_json"):
         assert carried[name] == original[name]
-    assert carried["receipt_id"] != original["receipt_id"]
+    assert carried == original
     pq.write_table(pa.Table.from_pylist([carried], schema=RECEIPT_SCHEMA), receipts)
     assert list(read_with_receipts([subject], [receipts], policy, generation_id="build-2")) == [row]
 
@@ -680,78 +680,53 @@ def test_materialized_publication_checks_declared_receipt_policy_before_upload(
         runner._publish(manifest_path=manifest, pointer_path=pointer, artifact_paths=files)
 
 
-def test_retained_receipt_lineage_resolves_original_values_after_repeated_updates(policy, row, context):
-    from spicy_regs.etl_receipts import inherit_receipt, resolve_receipt_witness, retire_receipt, _unpack
+def test_historical_embedded_processing_still_resolves_when_carried(policy, row, context):
+    from spicy_regs.etl_receipts import _retain_history, rebind_receipt, resolve_receipt_witness
     import hashlib
 
-    original = dict(row)
-    original["amount_raw"] = "00012.30"
-    raw_witness = {
-        "source_id": "amount-literal",
-        "source_uri": None,
-        "sha256": hashlib.sha256(exact_json(original["amount_raw"]).encode()).hexdigest(),
-        "locator": "receipt.values.amount_raw (canonical exact_json)",
-        "body_version": "build-1",
-    }
-    first_context = replace(context, witnesses=[raw_witness, raw_witness])
-    _, first = split_record(policy, original, first_context)
-    second_context = inherit_receipt(replace(context, generation_id="build-2"), first)
-    _, second = split_record(policy, row, second_context)
-    _, third = split_record(policy, row, inherit_receipt(replace(context, generation_id="build-3"), second))
-    assert third["witnesses"][:2] == first["witnesses"]
-    assert resolve_receipt_witness(third, raw_witness) == exact_json("00012.30").encode()
-    prior_ref = next(w for w in third["witnesses"] if w["body_version"] == first["receipt_id"])
-    assert _unpack(json.loads(resolve_receipt_witness(third, prior_ref))) == _unpack(
-        json.loads(first["processing_json"])
-    )
-    identities = _unpack(json.loads(third["diagnostic_json"]))["prior_receipts"]
-    assert first["receipt_id"] in {r["receipt_id"] for r in identities}
-    retired = retire_receipt(third, generation_id="build-4", reason="explicit deletion")
-    assert retired["outcome"] == "observed" and retired["subject_version"] is None
-    assert resolve_receipt_witness(retired, raw_witness) == exact_json("00012.30").encode()
-    with pytest.raises(ValueError, match="digest differs"):
-        inherit_receipt(context, dict(first, processing_json=exact_json({})))
+    original = dict(row, amount_raw="00012.30")
+    witness = {"source_id": "amount-literal", "source_uri": None,
+               "sha256": hashlib.sha256(exact_json(original["amount_raw"]).encode()).hexdigest(),
+               "locator": "receipt.values.amount_raw (canonical exact_json)", "body_version": "build-1"}
+    _, first = split_record(policy, original, replace(context, witnesses=[witness, witness]))
+    # This is an already published historical row, whose embedded evidence must remain readable.
+    historical_context = replace(context, generation_id="old-update", witnesses=[witness, witness],
+                                 diagnostics=_retain_history(first, {}))
+    _, historical = split_record(policy, row, historical_context)
+    carried = rebind_receipt(historical, generation_id="new-publisher")
+    assert carried == historical
+    assert resolve_receipt_witness(carried, witness) == exact_json("00012.30").encode()
 
 
-def test_daily_receipt_carries_have_linear_size_and_resolvable_source_values(policy, row, context):
-    from spicy_regs.etl_receipts import inherit_receipt, resolve_receipt_witness, _unpack
+def test_daily_unchanged_attempts_keep_original_complete_row(tmp_path, policy, row, context):
+    from spicy_regs.etl_receipts import carry_receipt_history
 
     original = dict(row, amount_raw="0" * 8000 + "12.30")
-    _, current = split_record(policy, original, context)
-    first = current
-    sizes = []
+    _, prior = write_dataset([(original, context)], tmp_path / "first", policy)
+    [first] = pq.read_table(prior).to_pylist()
     for number in range(25):
-        _, current = split_record(
-            policy,
-            original,
-            inherit_receipt(replace(context, generation_id=f"day-{number}", attempt_id=f"day-{number}"), current),
-        )
-        sizes.append(len(exact_json(current).encode()))
-    diagnostics = _unpack(json.loads(current["diagnostic_json"]))
-    assert len(diagnostics["retained_processing"]) == 1
-    assert len(diagnostics["prior_receipts"]) == 25
-    assert sizes[24] - sizes[14] < 1.1 * (sizes[14] - sizes[4])
-    witness = next(w for w in current["witnesses"] if w["body_version"] == first["receipt_id"])
-    assert resolve_receipt_witness(current, witness) == first["processing_json"].encode()
+        _, current = write_dataset([(original, replace(context, generation_id=f"day-{number}",
+                                                      attempt_id=f"day-{number}"))],
+                                   tmp_path / f"day-{number}", policy)
+        carry_receipt_history(current, [prior], current)
+        assert pq.read_table(current).to_pylist() == [first]
+        prior = current
 
 
-def test_update_and_rebind_preserve_prior_processing_context(policy, row, context):
-    from spicy_regs.etl_receipts import inherit_receipt, rebind_receipt, _unpack
+def test_update_names_direct_predecessor_and_keeps_current_evidence(policy, row, context):
+    from spicy_regs.etl_receipts import inherit_receipt, rebind_receipt, decode_exact_json, _digest
 
     evidence = {"coverage": "partial", "refusal_kind": "source-declared", "counts": {"seen": 2}}
     _, first = split_record(policy, row, replace(context, diagnostics=evidence))
-    _, second = split_record(policy, row, inherit_receipt(replace(context, generation_id="update"), first))
-    [prior] = _unpack(json.loads(second["diagnostic_json"]))["prior_receipts"]
-    assert prior["diagnostics"] == evidence
-    assert (prior["processor"], prior["attempt_id"], prior["outcome"]) == (
-        context.processor,
-        context.attempt_id,
-        "accepted",
-    )
-    carried = rebind_receipt(first, generation_id="carry")
-    diagnostics = _unpack(json.loads(carried["diagnostic_json"]))
-    assert {key: diagnostics[key] for key in evidence} == evidence
-    assert diagnostics["prior_receipts"][0]["diagnostics"] == evidence
+    fresh = replace(context, generation_id="update", diagnostics={"current": "new"})
+    _, second = split_record(policy, dict(row, amount_raw="different literal"), inherit_receipt(fresh, first))
+    assert second["witnesses"] == fresh.witnesses
+    assert decode_exact_json(second["diagnostic_json"]) == {
+        "current": "new", "prior_receipt": {"receipt_id": first["receipt_id"],
+        "generation_id": first["generation_id"], "processing_sha256": _digest(decode_exact_json(first["processing_json"]))}}
+    assert rebind_receipt(first, generation_id="carry") == first
+    with pytest.raises(ValueError, match="digest differs"):
+        inherit_receipt(context, dict(first, processing_json=exact_json({})))
 
 
 def test_member_carries_receipts_from_original_generations_for_all_outcomes(tmp_path, policy, context, row):

@@ -71,9 +71,10 @@ def witnesses_for(row, evidence, input_witness):
 class IdentityReceiptWriter:
     """Bounded family build; failed admission never replaces an existing output."""
 
-    def __init__(self, output_dir, *, generation_id, tables, batch_size=512):
+    def __init__(self, output_dir, *, generation_id, tables, batch_size=512, prior_receipts=()):
         if type(batch_size) is not int or batch_size < 1:
             raise ValueError("batch_size must be a positive integer")
+        self.prior_receipts = list(prior_receipts)
         self.output_dir = Path(output_dir)
         self.generation_id = generation_id
         self.policies = {name: dataset_policy(name) for name in tables}
@@ -126,8 +127,8 @@ class IdentityReceiptWriter:
             witnesses_for(mapped, evidence, input_witness),
             diagnostics,
         )
-        if lineage is not None and not policy.receipt_only:
-            context = lineage.inherit(context, policy, mapped)
+        if lineage is not None:
+            self.prior_receipts = list(dict.fromkeys((*self.prior_receipts, *lineage.paths)))
         if table == "fec_research_source_pages" and row.get("content_status") != "body_extracted":
             outcome = "refused"
             context = replace(context, diagnostics={**diagnostics, "content_status": row.get("content_status")})
@@ -164,6 +165,10 @@ class IdentityReceiptWriter:
                 for writer in self.subject_writers.values():
                     writer.close()
                 self.receipt_writer.close()
+                if self.prior_receipts:
+                    from spicy_regs.etl_receipts import carry_receipt_history
+                    carry_receipt_history(self.stage / "etl_receipts.parquet", self.prior_receipts,
+                                          self.stage / "etl_receipts.parquet")
                 subjects = {
                     name: [] if policy.receipt_only else [self.stage / (name + ".parquet")]
                     for name, policy in self.policies.items()

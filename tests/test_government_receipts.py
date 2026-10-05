@@ -129,8 +129,7 @@ def test_incremental_money_keeps_original_observation_and_all_witnesses(tmp_path
     assert rows[0]["total_award_amount"] == Decimal("9007199254740993.12")
     assert rows[0]["raw_record"]["observed_at"] == "2026-01-01T00:00:00Z"
     receipts = pq.read_table(tmp_path / "etl_receipts.parquet").to_pylist()
-    assert receipts[0]["witnesses"][:2] == prior_receipts[0]["witnesses"]
-    assert len(receipts[0]["witnesses"]) == 4
+    assert receipts == prior_receipts
 
 
 def test_complete_generation_requires_paired_receipts_and_verifies(tmp_path):
@@ -199,6 +198,7 @@ def test_empty_processing_observations_survive_incremental_rebuild(tmp_path):
     dataset = "crs_reports"
     path = literal(tmp_path, dataset, [])
     migrate_outputs((path,), generation_id="empty-first")
+    before = pq.read_table(tmp_path / "etl_receipts.parquet").to_pylist()
 
     @receipt_builder
     def rebuild(directory):
@@ -208,11 +208,9 @@ def test_empty_processing_observations_survive_incremental_rebuild(tmp_path):
 
     rebuild(tmp_path, receipt_generation_id="empty-second")
     attempts = list(read_attempts([tmp_path / "etl_receipts.parquet"], POLICIES[dataset], generation_id="empty-second"))
-    assert [attempt["outcome"] for attempt in attempts] == ["observed", "observed"]
+    assert [attempt["outcome"] for attempt in attempts] == ["observed"]
     assert pq.ParquetFile(path).metadata.num_rows == 0
-    assert any(
-        attempt["diagnostics"].get("carried_from", {}).get("generation_id") == "empty-first" for attempt in attempts
-    )
+    assert pq.read_table(tmp_path / "etl_receipts.parquet").to_pylist() == before
 
 
 def test_later_listing_keeps_held_gao_caption_and_domain_status(tmp_path, monkeypatch):
@@ -331,7 +329,12 @@ def test_gao_prior_published_without_the_cut_flag_is_read_once_and_rewritten_wit
     assert joined["raw_record"]["b_numbers_truncated"] == "true"
     [receipt] = pq.read_table(tmp_path / "etl_receipts.parquet").to_pylist()
     assert receipt["policy_version"] == POLICIES[dataset].policy_version
-    assert receipt["witnesses"][0]["source_id"] == "test:listing"
+    from spicy_regs.etl_receipts import decode_exact_json, _digest as processing_digest
+    [old_receipt] = pq.read_table(receipts).to_pylist()
+    assert decode_exact_json(receipt["diagnostic_json"])["prior_receipt"] == {
+        "receipt_id": old_receipt["receipt_id"], "generation_id": old_receipt["generation_id"],
+        "processing_sha256": processing_digest(decode_exact_json(old_receipt["processing_json"]))}
+    assert receipt["witnesses"] != old_receipt["witnesses"]
 
 
 def test_gao_recommendations_prior_published_without_its_seen_dates_restores_them(tmp_path):

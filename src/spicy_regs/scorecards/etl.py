@@ -13,15 +13,14 @@ from uuid import uuid4
 
 import pyarrow.parquet as pq
 
+from spicy_regs.earlier_receipt_policies import earlier_policies
 from spicy_regs.etl_receipts import (
     DatasetPolicy,
     ReceiptContext,
     RECEIPT_KEY,
-    RECEIPT_SCHEMA,
     combine_receipts,
     failure_receipt,
     read_receipt_bundle,
-    rebind_receipt,
     read_with_receipts,
     select_receipts,
     validate_receipt_bundle,
@@ -35,7 +34,6 @@ from spicy_regs.scorecards.subject_shapes import (
     INTEGER_FIELDS,
     POLICY_VERSION,
     RATING_POLICY_VERSION,
-    DECIMAL_TYPE,
     SOURCE_COLUMNS,
     map_source_row,
     restore_source_row,
@@ -62,16 +60,9 @@ def policy(name):
 
 
 POLICIES = {name: policy(name) for name in SOURCE_COLUMNS}
-_rating = POLICIES["scorecard_member_ratings"]
-_rating_field = _rating.subject_schema.field("value_number")
-LEGACY_RATING_POLICY = replace(
-    _rating,
-    subject_schema=_rating.subject_schema.set(
-        _rating.subject_schema.get_field_index("value_number"),
-        _rating_field.with_type(DECIMAL_TYPE),
-    ),
-    policy_version=POLICY_VERSION,
-)
+
+EARLIER_POLICIES = {name: earlier_policies(policy) for name, policy in POLICIES.items()}
+LEGACY_RATING_POLICY = EARLIER_POLICIES["scorecard_member_ratings"][0]
 
 
 def admitted_read_policies(names, *, descriptors=None, columns=None):
@@ -205,30 +196,8 @@ def write_family(
             outputs.append(subject)
     shared = combine_receipts(receipts, stage / RECEIPT_KEY)
     if prior_receipts is not None:
-        # The caller already admitted the complete prior family. Carry exact
-        # unchanged observations, including their original witnesses and attempt.
-        # Matching the processing values prevents reusing evidence after a new capture.
-        from collections import defaultdict, deque
-        from spicy_regs.transforms.parquet_rows import write_rows
-
-        def observation_key(receipt):
-            return tuple(receipt[k] for k in (
-                "dataset", "policy_version", "record_id", "subject_version", "outcome", "processing_json"
-            ))
-
-        previous = defaultdict(deque)
-        for batch in pq.ParquetFile(prior_receipts).iter_batches():
-            for receipt in batch.to_pylist():
-                previous[observation_key(receipt)].append(receipt)
-
-        def retained():
-            for batch in pq.ParquetFile(shared).iter_batches():
-                for receipt in batch.to_pylist():
-                    matches = previous.get(observation_key(receipt))
-                    yield rebind_receipt(matches.popleft(), generation_id=generation_id) if matches else receipt
-
-        rebound = write_rows(retained(), stage / "rebound-etl-receipts.parquet", RECEIPT_SCHEMA)
-        shared = rebound
+        from spicy_regs.etl_receipts import carry_receipt_history
+        shared = carry_receipt_history(shared, [prior_receipts], shared)
     validate_receipt_bundle(
         {n: [] if POLICIES[n].receipt_only else [stage / n / (n + ".parquet")] for n in names},
         [shared],

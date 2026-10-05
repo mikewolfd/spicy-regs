@@ -23,7 +23,6 @@ import pyarrow.parquet as pq
 from spicy_regs.etl_receipts import (
     DatasetPolicy,
     ReceiptContext,
-    ReceiptLineage,
     combine_receipts,
     failure_receipt,
     read_attempts,
@@ -208,16 +207,10 @@ def write_legislative_outputs(
                             )
                             manifest["refused_rows"][dataset] += 1
                             continue
-                        yield (
-                            mapped,
-                            lineage.inherit(context, policy(dataset), mapped)
-                            if not policy(dataset).receipt_only
-                            else lineage.inherit_processing(context, mapped),
-                        )
+                        yield mapped, context
 
                 shard_dir = stage / ".shards" / dataset / str(member_index)
-                with ReceiptLineage(prior_receipts, dataset=dataset) as lineage:
-                    subject, receipts = write_dataset(records(), shard_dir, policy(dataset), failures=failures)
+                subject, receipts = write_dataset(records(), shard_dir, policy(dataset), failures=failures)
                 receipt_shards.append(receipts)
                 if subject is not None:
                     final_relative = f"{dataset}/{relative}" if output.is_dir() else f"{dataset}.parquet"
@@ -230,6 +223,9 @@ def write_legislative_outputs(
         _, state_receipts = write_dataset(states, stage / ".shards" / FILE_STATES, FILE_POLICY)
         receipt_shards.append(state_receipts)
         combine_receipts(receipt_shards, stage / manifest["receipt_file"])
+        if prior_receipts:
+            from spicy_regs.etl_receipts import carry_receipt_history
+            carry_receipt_history(stage / manifest["receipt_file"], prior_receipts, stage / manifest["receipt_file"])
         validate_receipt_bundle(
             {name: [stage / f for f in paths] for name, paths in manifest["subjects"].items()} | {FILE_STATES: []},
             [stage / manifest["receipt_file"]],
