@@ -581,14 +581,18 @@ larger families would not fit a runner. The bulk writer keeps builder order
 too, so nothing reads a footer for order. The planned way past the bound is a
 small index beside an untouched member, `(dataset, record_id, row number)` in
 record-id order: built in 2.1 s for sam-entities and 1.5 s for scorecards the
-same day, about 40 bytes a row. It needs a place in the publication index,
-whose `etlReceipts` entry is held to exactly seven keys.
+same day, about 40 bytes a row. The current publication reader accepts an
+optional `etlReceipts.keyIndex` descriptor, and `receipt_key_index` checks
+sidecar pins and reads indexed positions. This tool still uses the bounded
+scan path. Activating an indexed tool path needs its own public-tool
+qualification.
 
 **What the bound counts.** The count compared with `SCAN_ROW_BOUND` is the rows of every row group whose
 `dataset` bounds admit the table's name, so it includes other tables' receipts in a group they share and is
 an upper bound on the table's own. Exact for a table alone in its member; over by at most its shared groups
-otherwise. On 2026-10-05, for every table published with receipts, it refused only the one table whose own
-receipts exceed the bound:
+otherwise. In the retained 2026-10-05 historical publication snapshot used for
+the lookup measurement, it refused only the one table whose own receipts
+exceeded the bound. These counts describe that snapshot, not later publications:
 
 | table | rows | receipts the footer counts | |
 |---|---:|---:|---|
@@ -617,10 +621,10 @@ receipts exceed the bound:
 A table could be refused on other tables' receipts only if its rows were spread through more than a thousand
 shared groups; counting its own rows first would cost a read of the `dataset` column over those groups.
 
-**Policy versions.** Admission refuses a receipt whose `policy_version` is not
-its dataset's policy's, and a carried receipt keeps its version, so a
-published member states one version per dataset. The tool still reads every
-version the footer shows and compares one accepted receipt's stated identity
+**Policy versions.** Admission accepts the current policy and registered
+earlier policies through `etl_receipts.receipt_policies`; a carried receipt
+keeps its version. A dataset can therefore state several versions. The tool
+reads every version the footer shows and compares one accepted receipt's stated identity
 per version with the installed policy: a different version with the same
 identity is read and named; a different identity is refused, since every
 computed id would miss and read as "no receipt".
