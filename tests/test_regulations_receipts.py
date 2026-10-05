@@ -698,3 +698,63 @@ def test_resealed_inconsistent_processor_input_refuses_before_processing(tmp_pat
     validate_receipt_bundle({dataset: list(selected.subjects)}, [selected.receipts], [policy(dataset)], generation_id='g1')
     with pytest.raises(ValueError, match='retained processor input differs'):
         next(iter(read_internal(selected)))
+
+
+def test_scheduled_rulemaking_uses_selected_native_agenda_and_preserves_prior_identity(tmp_path, monkeypatch):
+    import shutil
+    from spicy_regs.pipelines.rulemaking_dataset import RulemakingDatasetPipeline
+    from spicy_regs.selected_generations import SelectedDataset, remember_selection
+    from spicy_regs.sources import r2
+
+    monkeypatch.delenv('R2_PUBLIC_URL', raising=False)
+    source_rows = {
+        'dockets': [{'docket_id': 'EPA-2026-0001', 'agency_code': 'EPA', 'docket_type': 'Rulemaking',
+                     'title': 'A rule', 'rin': '1000-AA00'}],
+        'documents': [{'document_id': 'EPA-2026-0001-0001', 'docket_id': 'EPA-2026-0001',
+                       'agency_code': 'EPA', 'document_type': 'Proposed Rule', 'posted_date': '2026-01-01',
+                       'modify_date': '2026-01-01', 'comment_end_date': '2026-03-01', 'title': 'Proposal'}],
+        'federal_register': [], 'fr_docket_links': [],
+        'unified_agenda': [{'rin': '1000-AA00', 'agenda_edition': '202510', 'title': 'A rule',
+                           'agency_code': '2000', 'rule_stage': 'Proposed Rule', 'timetable_json': '[]',
+                           'legal_authority_json': '["5 U.S.C. 301"]', 'cfr_references_json': '["40 CFR 1"]',
+                           'url': 'https://www.reginfo.gov/public/do/eAgendaViewRule?pubId=202510&RIN=1000-AA00'}],
+    }
+    inputs = [write(tmp_path, name, rows, label=name) for name, rows in source_rows.items()]
+    work = tmp_path / 'scheduled'
+    work.mkdir()
+    remember_selection(work, [SelectedDataset(s.dataset, s.subjects, s.receipts, s.generation_id) for s in inputs])
+    monkeypatch.setattr(r2, 'download', lambda *_: False)
+    RulemakingDatasetPipeline(output_dir=work, run_id='rulemaking-first', asserted_at='2026-10-05T00:00:00Z').run()
+    native = pq.read_table(work / 'proceedings.parquet').to_pylist()
+    assert 'authority_refs' in native[0] and 'authority_refs_json' not in native[0]
+    manifest = json.loads((work / 'rulemaking-dataset-manifest.json').read_text())
+    assert manifest['inputs']['native_inputs']['unified_agenda']['generationId'] == 'g1'
+    assert manifest['etlReceipts']['generationId'] == 'rulemaking-first'
+    assert manifest['artifacts']['etl_receipts.parquet']['visibility'] == 'internal'
+    # Simulate the exact pinned previous materialized generation, including receipts.
+    frozen = tmp_path / 'frozen'
+    frozen.mkdir()
+    for name in ('proceedings.parquet', 'etl_receipts.parquet'):
+        shutil.copyfile(work / name, frozen / name)
+    shutil.copyfile(work / 'rulemaking-dataset-latest.json', work / '_rulemaking_latest.json')
+    shutil.copyfile(work / 'rulemaking-dataset-manifest.json', work / '_rulemaking_previous_manifest.json')
+
+    def download(key, destination):
+        source = frozen / Path(key).name
+        if not source.exists():
+            return False
+        shutil.copyfile(source, destination)
+        return True
+
+    monkeypatch.setattr(r2, 'download', download)
+    RulemakingDatasetPipeline(output_dir=work, run_id='rulemaking-second', asserted_at='2026-10-06T00:00:00Z').run()
+    assert [r['proceeding_id'] for r in pq.read_table(work / 'proceedings.parquet').to_pylist()] == [r['proceeding_id'] for r in native]
+
+
+def test_scheduled_rulemaking_refuses_unselected_agenda_before_stages(tmp_path, monkeypatch):
+    from spicy_regs.pipelines.rulemaking_dataset import RulemakingDatasetPipeline
+
+    monkeypatch.delenv('R2_PUBLIC_URL', raising=False)
+    with pytest.raises(ValueError, match='requires selected native input'):
+        RulemakingDatasetPipeline(output_dir=tmp_path).run()
+    assert not (tmp_path / 'proceedings.parquet').exists()

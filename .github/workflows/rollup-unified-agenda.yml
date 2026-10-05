@@ -17,3 +17,7 @@ jobs:
     with:
       command: run-rollup-unified-agenda
       skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
+      # Retained-copy native rehearsals took 10–14 minutes in the migration
+      # audit; allow the slower hosted runner and next-edition acquisition.
+      # See docs/native-family-conversion.md and its pinned runtime evidence.
+      timeout_minutes: 60
