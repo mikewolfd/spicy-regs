@@ -324,6 +324,7 @@ SOURCE_COLUMNS = {
         ("html_url", "VARCHAR"),
         ("pdf_url", "VARCHAR"),
         ("executive_order_number", "VARCHAR"),
+        ("link_source", "VARCHAR"),
     ],
     "lifecycle_events": [
         ("proceeding_id", "VARCHAR"),

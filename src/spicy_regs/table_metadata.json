@@ -780,14 +780,20 @@
         "column_name": "executive_order_number",
         "column_type": "VARCHAR",
         "description": "Executive order number, for presidential documents."
+      },
+      {
+        "column_name": "link_source",
+        "column_type": "VARCHAR",
+        "description": "Which of the Register's statements carries the pair: `printed` (the document's printed docket labels), `regulations_dot_gov_info` (the Register's regulations.gov link, read from `regulations_dot_gov_docket_id` alone, never off a document id) or `both`, where a printed label is that docket id or SpicyDocs' normalizer reads it from the label. Every printed occurrence that carries the pair reads `both`, and the link then adds no row. The current builder writes one of these labels; retained historical rows without a label keep NULL."
       }
     ],
     "subject": "rulemaking",
-    "grain": "One row per document–docket pair a dated Federal Register record states: each printed docket-array occurrence (identified by document_number, publication_date and docket_source_ordinal), and the Register's regulations.gov docket where no printed label carries it (identified by document_number, publication_date and docket_id). link_source is not part of the identity.",
+    "grain": "One row per document–docket pair a dated Federal Register record states. Native receipt identity uses document_number, publication_date, literal docket_id and docket_source_ordinal: printed-array positions keep repeated labels distinct; the ordinal is NULL for a regulations.gov-only link, whose docket_id distinguishes the relationship. link_source is not part of the identity.",
     "identity_columns": [
       "document_number",
       "publication_date",
-      "docket_source_ordinal"
+      "docket_source_ordinal",
+      "docket_id"
     ]
   },
   "discovery_signals": {
@@ -20062,7 +20068,8 @@
         "identity_columns": [
           "document_number",
           "publication_date",
-          "docket_source_ordinal"
+          "docket_source_ordinal",
+          "docket_id"
         ],
         "processing_fields": [
           "docket_normalization_rule",

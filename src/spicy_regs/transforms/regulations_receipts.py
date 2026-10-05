@@ -44,6 +44,8 @@ NULLABLE_IDENTITIES = {
     "agency_lifecycle_stats": ("agency_code",),
     "agency_monthly_volume": ("agency_code", "document_type"),
     "comments_index": ("agency_code", "docket_id", "year", "month"),
+    # The Register's regulations.gov statement has no printed-array position.
+    "fr_docket_links": ("docket_source_ordinal",),
 }
 
 
