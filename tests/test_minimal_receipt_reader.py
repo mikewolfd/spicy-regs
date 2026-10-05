@@ -25,3 +25,11 @@ runpy.run_path({str(script)!r}, run_name='__main__')
     )
     assert result.returncode == 0, result.stderr
     assert "Native citation receipt selection passed" in result.stdout
+
+
+def test_transform_writer_imports_preserve_public_functions():
+    from spicy_regs import parquet_rows
+    from spicy_regs.transforms import parquet_rows as legacy
+
+    assert legacy.write_rows is parquet_rows.write_rows
+    assert legacy.str_or_none is parquet_rows.str_or_none
