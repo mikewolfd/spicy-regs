@@ -649,3 +649,212 @@ def test_anonymous_readback_uses_one_index_for_subjects_and_receipts(tmp_path, m
     receipt = convert(family, tmp_path / 'work', publish=True)
     assert reads == [True]
     assert receipt['read_back']['artifactDigest'] == receipt['generation']['artifactDigest']
+
+
+def publish_split_sections(tmp_path, monkeypatch, bucket):
+    """Two Congress partitions, repeated bodies and an empty member, through the real legislative writer."""
+    from spicy_regs import etl_policy_registry
+    from spicy_regs.generations import build_generation
+    from spicy_regs.legislative_documents import field_registry
+    from spicy_regs.pipelines.rollups.subject_receipts import SubjectReceiptRollup
+
+    class SectionsRollup(SubjectReceiptRollup):
+        name = "bill-family"
+        inputs = ()
+        outputs = ("bill_sections.parquet",)
+        partitioned = {"bill_sections.parquet": ("congress",)}
+
+        def build(self, output_dir):
+            raise AssertionError("The conversion must not acquire new source data")
+
+    monkeypatch.setattr(conversion, "_rollup_class", lambda family, base=None: SectionsRollup)
+    directory = tmp_path / "old" / "bill_sections"
+    fields = [f["name"] for f in field_registry()["bill_sections"]["fields"]]
+    schema = pa.schema([(name, pa.string()) for name in fields])
+    expected = {}
+    for congress, part, sequences in [(118, 0, [1, 2]), (119, 0, [1]), (119, 1, [])]:
+        relative = f"congress={congress}/part-{part:06d}.parquet"
+        path = directory / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        rows = [dict.fromkeys(fields) | {"bill_id": f"hr1-{congress}", "version_code": "ih", "source": "govinfo",
+                "congress": str(congress), "seq": str(seq), "body": "The same literal body."} for seq in sequences]
+        table = pa.Table.from_pylist(rows, schema=schema.with_metadata({b"checkpoint": relative.encode()}))
+        pq.write_table(table, path)
+        expected[relative] = table
+    with monkeypatch.context() as patch:
+        patch.setattr(etl_policy_registry, "require_registered_receipts", lambda *_: None)
+        build_generation(tmp_path / "old-generation", family="bill-family", files=[directory],
+                         expected_keys=["bill_sections.parquet"], partitioned=SectionsRollup.partitioned)
+        index = publication.publish_generation(tmp_path / "old-generation", client=bucket, bucket=BUCKET,
+                                               prior_index=publication.current_index(BASE))
+    return index["families"]["bill-family"], expected
+
+
+def test_split_legislative_members_convert_and_restore_without_collapsing_partitions(tmp_path, monkeypatch, bucket):
+    from pathlib import Path
+
+    from spicy_regs.legislative_documents import printing_id
+    from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
+
+    old, expected = publish_split_sections(tmp_path, monkeypatch, bucket)
+    receipt = convert("bill-family", tmp_path / "work", publish=True)
+    entry = receipt["published"]["entry"]
+    table = entry["tables"]["bill_sections.parquet"]
+    assert table["partitionColumns"] == ["congress"]
+    assert [(m["key"], m["rows"]) for m in table["members"]] == [
+        (m["key"], m["rows"]) for m in old["tables"]["bill_sections.parquet"]["members"]]
+    assert receipt["read_back"]["anonymous_read_rows"] == {"bill_sections": 3}
+    restored = SelectedPriors(tmp_path / "after", public_url=BASE).get("bill_sections")
+    assert restored.is_dir()
+    assert {p.relative_to(restored).as_posix() for p in restored.rglob("*.parquet")} == set(expected)
+    for relative, original in expected.items():
+        actual = pq.ParquetFile(restored / relative).read()
+        assert actual.equals(original, check_metadata=True)
+        native = pq.ParquetFile(Path(receipt["generation"]["directory"]) / "bill_sections" / relative).read()
+        assert "source" not in native.schema.names and "printing_id" in native.schema.names
+        for row in native.to_pylist():
+            assert row["printing_id"] == printing_id(row["bill_id"], row["version_code"], "govinfo")
+    assert set(receipt["tables"]["bill_sections"]["members"]) == set(expected)
+    conversion.rollback(tmp_path / "work" / conversion.RECEIPT, expect_bucket=BUCKET)
+    assert publication.current_index(BASE)["families"]["bill-family"] == old
+
+
+@pytest.mark.parametrize("damage", [
+    "metadata", "field-metadata", "nullability", "column-order", "drop-empty", "extra-empty", "move-rows", "type", "column", "layout",
+])
+def test_split_restoration_must_preserve_each_member_before_publication(tmp_path, monkeypatch, bucket, damage):
+    """An unchanged union/count is insufficient: partition membership and each footer belong to the source."""
+    from dataclasses import replace
+
+    old, _ = publish_split_sections(tmp_path, monkeypatch, bucket)
+    real = conversion._convert_rollup
+
+    def broken(*args, **kwargs):
+        built = real(*args, **kwargs)
+
+        def restore(dataset):
+            restored = built.restore(dataset)
+            first = restored / "congress=118/part-000000.parquet"
+            second = restored / "congress=119/part-000000.parquet"
+            empty = restored / "congress=119/part-000001.parquet"
+            table = pq.ParquetFile(first).read()
+            if damage == "metadata":
+                pq.write_table(table.replace_schema_metadata({b"checkpoint": b"changed"}), first)
+            elif damage in {"field-metadata", "nullability"}:
+                fields = list(table.schema)
+                fields[0] = (fields[0].with_metadata({b"source-note": b"changed"}) if damage == "field-metadata"
+                             else fields[0].with_nullable(False))
+                pq.write_table(table.cast(pa.schema(fields, metadata=table.schema.metadata)), first)
+            elif damage == "column-order":
+                pq.write_table(table.select(list(reversed(table.column_names))), first)
+            elif damage == "drop-empty":
+                empty.unlink()
+            elif damage == "extra-empty":
+                pq.write_table(pq.ParquetFile(empty).read(), empty.with_name("part-000002.parquet"))
+            elif damage == "move-rows":
+                # Move one row each way, preserving both file counts and the table-wide multiset.
+                other = pq.ParquetFile(second).read()
+                pq.write_table(pa.concat_tables([table.slice(1), other]).replace_schema_metadata(table.schema.metadata), first)
+                pq.write_table(table.slice(0, 1).replace_schema_metadata(other.schema.metadata), second)
+            elif damage == "type":
+                column = table.schema.get_field_index("seq")
+                pq.write_table(table.set_column(column, "seq", table["seq"].cast(pa.int64())), first)
+            elif damage == "column":
+                pq.write_table(table.drop(["source"]), first)
+            elif damage == "layout":
+                return first
+            return restored
+
+        return replace(built, restore=restore)
+
+    monkeypatch.setattr(conversion, "_convert_rollup", broken)
+    written = list(bucket.writes)
+    with pytest.raises(conversion.ConversionRefused, match="does not restore") as refusal:
+        convert("bill-family", tmp_path / "work", publish=True)
+    assert refusal.value.state == conversion.NOTHING_PUBLISHED
+    assert bucket.writes == written
+    assert publication.current_index(BASE)["families"]["bill-family"] == old
+
+
+@pytest.mark.parametrize("partitioned", [{}, {"bill_sections.parquet": ("bill_id",)}])
+def test_split_layout_must_match_the_current_family_writer(tmp_path, monkeypatch, bucket, partitioned):
+    publish_split_sections(tmp_path, monkeypatch, bucket)
+    cls = conversion._rollup_class("bill-family")
+    monkeypatch.setattr(cls, "partitioned", partitioned)
+    written = list(bucket.writes)
+    with pytest.raises(conversion.ConversionRefused, match="partition layout differs"):
+        convert("bill-family", tmp_path / "work", publish=True)
+    assert bucket.writes == written
+    assert not (tmp_path / "work" / "build").exists()
+
+
+def test_split_public_readback_checks_empty_member_and_reports_published_state(tmp_path, monkeypatch, bucket):
+    from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
+
+    old, _ = publish_split_sections(tmp_path, monkeypatch, bucket)
+    real = SelectedPriors.get
+
+    def missing(self, dataset):
+        restored = real(self, dataset)
+        if "read-back" in restored.parts:
+            (restored / "congress=119/part-000001.parquet").unlink()
+        return restored
+
+    monkeypatch.setattr(SelectedPriors, "get", missing)
+    with pytest.raises(conversion.ConversionRefused, match="published native readback changed retained members") as refusal:
+        convert("bill-family", tmp_path / "work", publish=True)
+    assert "IS published" in refusal.value.state
+    assert publication.current_index(BASE)["families"]["bill-family"] != old
+    conversion.rollback(tmp_path / "work" / conversion.RECEIPT, expect_bucket=BUCKET)
+    assert publication.current_index(BASE)["families"]["bill-family"] == old
+
+
+@pytest.mark.parametrize("damage", ["rows", "columns", "unavailable"])
+def test_each_retained_split_member_must_match_its_captured_descriptor(tmp_path, monkeypatch, bucket, damage):
+    from copy import deepcopy
+
+    old, _ = publish_split_sections(tmp_path, monkeypatch, bucket)
+    captured = deepcopy(publication.current_index(BASE))
+    table = captured["families"]["bill-family"]["tables"]["bill_sections.parquet"]
+    if damage == "rows":
+        table["members"][0]["rows"] += 1
+        table["rows"] += 1
+    elif damage == "columns":
+        table["columns"] = [column for column in table["columns"] if column[0] != "source"]
+    else:
+        member = publication.table_members(captured, "bill_sections.parquet")[0]
+        del bucket.objects[member.path]
+    written = list(bucket.writes)
+    with pytest.raises(conversion.ConversionRefused, match="schema or row count|not readable"):
+        conversion._retain_table(BASE, captured, "bill_sections.parquet", tmp_path / "retained")
+    assert bucket.writes == written
+    assert publication.current_index(BASE)["families"]["bill-family"] == old
+
+
+def test_split_support_does_not_authorize_an_incomplete_family(tmp_path, monkeypatch, bucket):
+    from spicy_regs.pipelines.rollups.bill_family import BillFamilyRollup
+
+    old, _ = publish_split_sections(tmp_path, monkeypatch, bucket)
+    monkeypatch.setattr(conversion, "_rollup_class", lambda family, base=None: BillFamilyRollup)
+    written = list(bucket.writes)
+    with pytest.raises(conversion.ConversionRefused, match="convert only a family whose table set main still writes"):
+        convert("bill-family", tmp_path / "work", publish=True)
+    assert bucket.writes == written
+    assert publication.current_index(BASE)["families"]["bill-family"] == old
+
+
+def test_split_support_still_refuses_unlisted_physical_tables(tmp_path, monkeypatch, bucket):
+    old, _ = publish_split_sections(tmp_path, monkeypatch, bucket)
+    real = conversion._convert_rollup
+
+    def extra(*args, **kwargs):
+        built = real(*args, **kwargs)
+        pq.write_table(pa.table({"unexpected": ["row"]}), built.generation / "unlisted.parquet")
+        return built
+
+    monkeypatch.setattr(conversion, "_convert_rollup", extra)
+    written = list(bucket.writes)
+    with pytest.raises(conversion.ConversionRefused, match="physical tables.*differ from its declared tables"):
+        convert("bill-family", tmp_path / "work", publish=True)
+    assert bucket.writes == written
+    assert publication.current_index(BASE)["families"]["bill-family"] == old

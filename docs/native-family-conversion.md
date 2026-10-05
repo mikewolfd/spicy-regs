@@ -26,13 +26,17 @@ for a cheaper writer. Evidence for everything below:
    `--expect-bucket`, and prints the bucket and endpoint host, before it
    converts anything.
 3. Captures the publication index, its ETag and the family's entry, and
-   downloads the family's published tables by their pins.
+   downloads every published member by its hash and byte-size pins. Each
+   member must match its declared physical columns and row count.
 4. Runs the family's own writer over those tables with upload skipped: the
    rollup with its builder replaced by "return the retained tables", or the
    court writer for a court family. Field policies are read at run time.
 5. Refuses unless every row converts (every receipt `accepted` or
    `observed`) and a native read restores each table to exactly the retained
    rows, with the same columns, types and file metadata.
+   Split tables also retain exact relative member names, empty members,
+   per-member row counts, and each member's full Arrow schema and metadata.
+   A table-wide union cannot substitute for this member-by-member check.
 6. Refuses unless a family that carries source evidence still does: the
    converted generation names the one it replaces and one evidence artifact,
    and journals again the events the next run reads back from its prior.
@@ -48,14 +52,16 @@ saved before the pointer write, so `--rollback` works even when the process
 died or lost the write's response.
 
 The command refuses a family outside `--allow`, one that is already native,
-one with a split table, and one with no subject/receipt rollup or court
-writer (the regulations base tables, the derived rollups, FEC and government
-families).
+and one with no subject/receipt rollup or court writer (the regulations
+base tables, the derived rollups, FEC and government families). A split
+table requires a subject/receipt rollup with the same declared partition
+columns. The court converter still refuses split tables.
 
 ### What the checks cannot see
 
-- Row order, column order, `string` against `large_string`, nullability, a
-  timestamp's timezone label, and `-0.0` against `0.0` are not compared.
+- Row order and `-0.0` against `0.0` are not compared. For single-file
+  tables, column order, `string` against `large_string`, nullability, and a
+  timestamp's timezone label are not compared either.
 - On the rollup path the restored table is rebuilt from the receipt's copy
   of each input row. A mapper defect in a public column is therefore
   invisible to the comparison: it proves the next run's prior, not the
@@ -67,17 +73,17 @@ families).
 
 ## One owner for each receipt dataset
 
-The index gives every dataset one owning family, receipt-only datasets
-included (`publication.py`, `_merge_family`). Two receipt-only logs are
-declared by many rollups: `congress_acquisition` by every Congress.gov
-family, and `legislative_document_file_states` by every GovInfo document
-family. Publication accepts the first family that holds one and refuses the
-rest: "['congress_acquisition'] already belongs to family amendments". This
-is main's rule, so scheduled runs would meet it too. No such family is native
-yet. The command checks it before converting.
+The index gives each subject or checkpoint dataset one owning family
+(`publication.py`, `_merge_family`). Two explicitly marked receipt-only
+logs are shared: `congress_acquisition` and
+`legislative_document_file_states`. Each family retains its own log rows
+inside its pinned receipt member, but does not claim the shared dataset in
+the index. A reader must select the family's receipt member for these logs.
 
-Until that rule is decided, convert none of these families: whichever went
-first would lock out the others, the bill family included.
+All other receipt datasets still require one owner. A source checkpoint
+with a policy but no declared writer remains unavailable: shared-log
+support does not assign it an owner or authorize a conversion. Family
+reader checks and a full retained-data rehearsal remain release gates.
 
 ## Families
 
@@ -110,8 +116,8 @@ Held.
 |---|---|---|
 | `unified-agenda` | `materialize-rulemaking` downloads the table raw and requires `timetable_json`, `cfr_references_json`, `legal_authority_json` and `url` (`pipelines/materialized.py:253`, `rulemaking_dataset.py:133`), which all leave the native table. | That reader reads the native table. The same change raises the rollup's 30-minute limit: measured on loopback storage 10 to 14 minutes here and 862.9 s and 476.0 s by the reviewer, so a hosted runner at half the speed lands near it. |
 | `court-opinion-pdf-extractions` | The hosted citation tool keys `court_opinion_derived_pdf` by `(opinion_id, source_sha256)`; natively the table is `opinion_body_id`, `opinion_id`, `cluster_id`, `text_content`. | Verified new hosted server, below. |
-| `amendments`, `committee-meetings`, `house-communications`, `nominations`, `record-issues`, `treaties`, `members` | The receipt-dataset rule (Congress.gov log). Each converts cleanly in a dry run. | The rule is decided. |
-| `committee-reports`, `senate-expenditures`, `native-legal-references` | The same rule (GovInfo file-state log). | The same. |
+| `amendments`, `committee-meetings`, `house-communications`, `nominations`, `record-issues`, `treaties`, `members` | Shared-log ownership is implemented; the historical dry runs do not qualify the current release. | A current retained-data rehearsal and verified readers. |
+| `committee-reports`, `senate-expenditures`, `native-legal-references` | Shared-log ownership is implemented; current writer declarations and outside readers still need qualification. | The same checks, with every published checkpoint declared by its source owner. |
 
 Never put these in `--allow` yet. The command would convert each, and none
 has been checked for outside readers.
@@ -120,7 +126,7 @@ has been checked for outside readers.
   `court-citations` (102.0M rows), `court-opinions` (10.8M),
   `court-opinion-clusters` (10.1M), `roll-call-votes` (10.6M),
   `member-vote-terms` (10.6M), `federal-register` (1.0M).
-- Hold a shared log and are not on an approved list: `bill-subjects` (also
+- Are not on an approved list: `bill-subjects` (also
   needs `congress_bills` native first), `committee-rosters`,
   `press-releases`, `laws`, `print-citations`.
 

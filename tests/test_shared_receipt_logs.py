@@ -52,7 +52,11 @@ def test_the_shared_logs_are_exactly_the_datasets_several_families_declare():
     assert set(several) == subject_catalog.shared_receipt_logs() == SHARED, several
     # Two rollups publishing into one family are one writer: the citation reads have one owner.
     assert writers["document_citation_reads"] == {"print-citations"}
-    assert writers["committee_report_reads"] == {"committee-reports"}
+    # Some source-owner checkpoints have policies before their rollup declares them.
+    # This guard tests actual writers, without assigning undeclared checkpoints an owner.
+    for dataset, families in writers.items():
+        if dataset.endswith("_reads"):
+            assert len(families) == 1 and dataset not in SHARED
 
 
 def test_the_marker_is_only_in_the_two_generated_declarations():

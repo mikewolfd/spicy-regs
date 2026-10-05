@@ -193,6 +193,53 @@ def _journal(evidence, events: Sequence[Mapping]) -> None:
         evidence.event(row["event"], **{name: value for name, value in row.items() if name != "event"})
 
 
+def _table_files(path: Path) -> dict[str, Path]:
+    """The physical layout of one held table; directories never imply extra Hive columns."""
+    if path.is_symlink():
+        raise ValueError(f"A retained table cannot be a symlink: {path}")
+    if path.is_file():
+        return {path.name: path}
+    if not path.is_dir():
+        raise ValueError(f"A retained table is missing: {path}")
+    members = sorted(member for member in path.rglob("*") if member.is_symlink() or not member.is_dir())
+    if any(member.is_symlink() or not member.is_file() or member.suffix != ".parquet" for member in members):
+        raise ValueError(f"A retained split table has an unexpected member: {path}")
+    return {member.relative_to(path).as_posix(): member for member in members}
+
+
+def _table_rows(path: Path) -> int:
+    return sum(pq.ParquetFile(member).metadata.num_rows for member in _table_files(path).values())
+
+
+def _retain_table(base: str, captured: Mapping, key: str, directory: Path) -> Path:
+    """Fetch every pinned member without collapsing its partition or changing its physical schema."""
+    from spicy_regs.generations import _table_info
+
+    descriptor = publication.table_descriptor(captured, key)
+    if descriptor is None:
+        raise ConversionRefused(f"{key}: no captured table descriptor")
+    split = "members" in descriptor
+    table_path = directory / (key.removesuffix(".parquet") if split else key)
+    seen = set()
+    for member in publication.table_members(captured, key):
+        relative = Path(member.key)
+        if relative.is_absolute() or ".." in relative.parts or publication.member_table(member.key) != key:
+            raise ConversionRefused(f"{key}: member lies outside its captured table: {member.key}")
+        if member.key in seen:
+            raise ConversionRefused(f"{key}: duplicate captured member: {member.key}")
+        seen.add(member.key)
+        target = directory / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if not publication.fetch_member(base, member, target, member.path):
+            raise ConversionRefused(f"{member.path} is not readable")
+        observed = _table_info(target)
+        if observed["rows"] != member.rows or observed["columns"] != descriptor["columns"]:
+            raise ConversionRefused(f"{member.path}: retained physical schema or row count differs from its pin")
+    if _table_rows(table_path) != descriptor["rows"]:
+        raise ConversionRefused(f"{key}: retained member rows differ from the captured table")
+    return table_path
+
+
 def _convert_rollup(cls, old: Mapping, retained: Mapping[str, Path], base: str, work: Path,
                     handed_on: Sequence[Mapping]) -> _Built:
     """Run the family's rollup with its builder replaced by "return the retained tables"; everything after is its own."""
@@ -209,7 +256,16 @@ def _convert_rollup(cls, old: Mapping, retained: Mapping[str, Path], base: str, 
     pipeline.inputs = ()
 
     def retained_tables(directory: Path, **_) -> tuple[Path, ...]:
-        return tuple(Path(shutil.copyfile(retained[key], directory / key)) for key in cls.source_outputs)
+        copied = []
+        for key in cls.source_outputs:
+            source = retained[key]
+            target = directory / source.name
+            if source.is_dir():
+                shutil.copytree(source, target)
+            else:
+                shutil.copyfile(source, target)
+            copied.append(target)
+        return tuple(copied)
 
     def build(output_dir: Path):
         if pipeline.source_evidence:  # inherited from the replaced generation just before the build
@@ -222,7 +278,10 @@ def _convert_rollup(cls, old: Mapping, retained: Mapping[str, Path], base: str, 
 
     def read_published(dataset: str, index: Mapping) -> int:
         restored = SelectedPriors(work / "read-back" / uuid4().hex, index=index, public_url=base).get(dataset)
-        return pq.ParquetFile(restored).metadata.num_rows
+        original = retained[dataset + ".parquet"]
+        if original.is_dir() and _has_differences(_table_differences(restored, original)):
+            raise ValueError(f"{dataset}: published native readback changed retained members")
+        return _table_rows(restored)
 
     return _Built(
         generation,
@@ -311,15 +370,17 @@ def _differences(restored: Path, retained: Path) -> dict:
 
     with duckdb.connect() as con:
         described = [dict((name, kind) for name, kind, *_ in con.execute(
-            f"DESCRIBE SELECT * FROM read_parquet({literal(path)})").fetchall()) for path in (restored, retained)]
+            f"DESCRIBE SELECT * FROM read_parquet({literal(path)}, hive_partitioning=false)").fetchall())
+                     for path in (restored, retained)]
         shared = [name for name in described[1] if name in described[0]]
         # A column of one type on both sides is compared as that type. Text is only the common ground for a column
         # whose type changed, which is reported and refused anyway; as text, ['a, b'] and ['a', 'b'] are one value.
         quoted = {name: '"' + name.replace('"', '""') + '"' for name in shared}
         text = ", ".join(quoted[name] if described[0][name] == described[1][name]
                          else f"CAST({quoted[name]} AS VARCHAR) AS {quoted[name]}" for name in shared) or "NULL"
-        either = [con.execute(f"SELECT count(*) FROM (SELECT {text} FROM read_parquet({literal(a)}) EXCEPT ALL "
-                              f"SELECT {text} FROM read_parquet({literal(b)}))").fetchall()[0][0]
+        either = [con.execute(f"SELECT count(*) FROM (SELECT {text} FROM read_parquet({literal(a)}, hive_partitioning=false)"
+                              f" EXCEPT ALL SELECT {text} FROM read_parquet({literal(b)}, hive_partitioning=false))")
+                  .fetchall()[0][0]
                   for a, b in ((restored, retained), (retained, restored))]
     metadata = [pq.read_schema(path).metadata or {} for path in (restored, retained)]
     return {
@@ -332,6 +393,37 @@ def _differences(restored: Path, retained: Path) -> dict:
         "rows_only_in_restored": either[0],
         "rows_only_in_retained": either[1],
     }
+
+
+def _table_differences(restored: Path, retained: Path) -> dict:
+    """Compare each exact member, including empty files and metadata, rather than only a table-wide row union."""
+    if restored.is_dir() != retained.is_dir():
+        raise ValueError("Restored table changed between a single file and a split directory")
+    if not retained.is_dir():
+        return _differences(restored, retained)
+    actual, original = _table_files(restored), _table_files(retained)
+    members = {name: _differences(actual[name], original[name]) for name in sorted(actual.keys() & original.keys())}
+    for name, check in members.items():
+        check["schema_changed"] = not pq.read_schema(actual[name]).equals(pq.read_schema(original[name]), check_metadata=True)
+    only_actual, only_original = sorted(actual.keys() - original.keys()), sorted(original.keys() - actual.keys())
+    return {
+        "members": members, "members_only_in_restored": only_actual, "members_only_in_retained": only_original,
+        "schema_changes": [name for name, check in members.items() if check["schema_changed"]],
+        **{field: [f"{name}:{value}" for name, check in members.items() for value in check[field]]
+           for field in ("metadata_changes", "columns_only_in_restored", "columns_only_in_retained")},
+        "type_changes": {f"{name}:{column}": change for name, check in members.items()
+                         for column, change in check["type_changes"].items()},
+        "rows_only_in_restored": sum(check["rows_only_in_restored"] for check in members.values())
+        + sum(_table_rows(actual[name]) for name in only_actual),
+        "rows_only_in_retained": sum(check["rows_only_in_retained"] for check in members.values())
+        + sum(_table_rows(original[name]) for name in only_original),
+    }
+
+
+def _has_differences(check: Mapping) -> bool:
+    return any(check.get(field) for field in (
+        "members_only_in_restored", "members_only_in_retained", "schema_changes", "metadata_changes", "type_changes",
+        "columns_only_in_restored", "columns_only_in_retained", "rows_only_in_restored", "rows_only_in_retained"))
 
 
 def _target(expected: str | None, action: str) -> dict:
@@ -390,24 +482,23 @@ def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: s
             raise ConversionRefused(f"{family} is not a published family")
         if "etlReceipts" in old:
             raise ConversionRefused(f"{family} already carries ETL receipts: it is native")
-        if split := sorted(key for key, table in old["tables"].items() if "members" in table):
-            raise ConversionRefused(f"{family}: {split} are stored as several files, which this command does not convert")
         (work / "captured-publication.v2.json").write_text(json.dumps(captured, sort_keys=True), encoding="utf-8")
         receipt["captured"] = {"etag": before["etag"], "bytes": before["bytes"], "entry": old}
-        retained = {}
-        for key in old["tables"]:
-            (member,) = publication.table_members(captured, key)
-            retained[key] = work / "retained" / key
-            retained[key].parent.mkdir(parents=True, exist_ok=True)
-            if not publication.fetch_member(base, member, retained[key], member.path):
-                raise ConversionRefused(f"{member.path} is not readable")
+        retained = {key: _retain_table(base, captured, key, work / "retained") for key in old["tables"]}
         from spicy_regs.court_receipts import POLICIES as court_policies
         from spicy_regs.pipelines.rollups.base import RollupPipeline
 
         cls = None
         if all(key.removesuffix(".parquet") in court_policies for key in old["tables"]):
+            if any(path.is_dir() for path in retained.values()):
+                raise ConversionRefused(f"{family}: the court converter has no split-table writer")
             claimed = {key.removesuffix(".parquet") for key in old["tables"]}
         elif (cls := _rollup_class(family)) is not None:
+            for key, table in old["tables"].items():
+                if ("members" in table) != (key in cls.partitioned) or (
+                    "members" in table and tuple(table["partitionColumns"]) != tuple(cls.partitioned[key])
+                ):
+                    raise ConversionRefused(f"{family}: {key} partition layout differs from its maintained writer")
             claimed = {policy.dataset for policy in cls.receipt_policies}
         else:
             raise ConversionRefused(f"{family} has no subject/receipt rollup or court writer to convert it through")
@@ -441,9 +532,10 @@ def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: s
     if unconverted := {name: count for name, count in outcomes.items() if name not in CONVERTED_OUTCOMES}:
         problems.append(f"receipts hold {unconverted}; every retained row must convert")
     for key, table in old["tables"].items():
-        dataset, subject = key.removesuffix(".parquet"), built.generation / key
+        dataset = key.removesuffix(".parquet")
+        subject = built.generation / (dataset if "members" in table else key)
         try:
-            check = _differences(built.restore(dataset), retained[key]) | {"retained_rows": table["rows"]}
+            check = _table_differences(built.restore(dataset), retained[key]) | {"retained_rows": table["rows"]}
         except ValueError as unreadable:
             problems.append(f"{dataset} does not restore: {unreadable}")
             continue
@@ -454,17 +546,33 @@ def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: s
                                       for name in kept.names if name in declared.names
                                       and kept.field(name).type != declared.field(name).type}
         if subject.exists():
-            check["subject_rows"] = pq.ParquetFile(subject).metadata.num_rows
+            check["subject_rows"] = _table_rows(subject)
+            if subject.is_dir():
+                source_members, subject_members = _table_files(retained[key]), _table_files(subject)
+                if source_members.keys() != subject_members.keys() or any(
+                    _table_rows(subject_members[name]) != _table_rows(source_members[name]) for name in source_members
+                    if name in subject_members
+                ):
+                    problems.append(f"{key}: native subject members differ from the retained partition layout or counts")
         elif key not in built.receipt_only_tables:
             problems.append(f"{key} is neither a subject table nor a declared receipt-only table")
         tables[dataset] = check
-        if (check.get("subject_rows", table["rows"]) != table["rows"] or check["type_changes"]
-                or any(check[name] for name in ("columns_only_in_restored", "columns_only_in_retained",
-                                                "rows_only_in_restored", "rows_only_in_retained", "metadata_changes"))):
+        if check.get("subject_rows", table["rows"]) != table["rows"] or _has_differences(check):
             problems.append(f"{dataset} does not restore to its retained table: {check}")
     expected = (set(old["tables"]) | built.added_tables) - built.receipt_only_tables
-    if (subjects := {path.name for path in built.generation.glob("*.parquet")} - {"etl_receipts.parquet"}) != expected:
+    if (subjects := set(artifact["spec"]["tables"])) != expected:
         problems.append(f"the generation holds {sorted(subjects)}; publication expects {sorted(expected)}")
+    # Keep the original physical-file guard as well as the logical membership check.
+    # Receipt indexes are declared auxiliary members, never public subject tables.
+    from spicy_regs.receipt_key_index import KEY as RECEIPT_INDEX_KEY
+
+    auxiliary = {"etl_receipts.parquet"}
+    if artifact["spec"].get("etlReceipts", {}).get("keyIndex"):
+        auxiliary.add(RECEIPT_INDEX_KEY)
+    physical = {publication.member_table(path.relative_to(built.generation).as_posix())
+                for path in built.generation.rglob("*.parquet") if path.relative_to(built.generation).as_posix() not in auxiliary}
+    if physical != subjects:
+        problems.append(f"the generation's physical tables {sorted(physical)} differ from its declared tables {sorted(subjects)}")
     from spicy_regs.source_evidence import INPUT_ROLE, PRIOR_ROLE
 
     lineage = {"replaced_generation_inputs": replaced["inputs"], "inputs": artifact["inputs"], "handed_on_events": len(handed_on)}
