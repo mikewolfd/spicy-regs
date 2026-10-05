@@ -630,6 +630,7 @@ def build_roll_call_votes(
     max_votes: int = MAX_VOTES_PER_RUN,
     overlap: int = OVERLAP_VOTES,
     download_prior: Callable[[str, Path], bool] = r2.download,
+    selected_input: Callable[[str], dict | None] | None = None,
     evidence: CaptureEvidence | None = None,
     open_congresses: Collection[int] | None = None,
     chambers: Sequence[str] | None = None,
@@ -811,7 +812,9 @@ def build_roll_call_votes(
     # bioguide id the column promises, on held rows as well as this run's. Best-effort, like every merge-time join.
     fill_senate_bioguide_ids(output_dir, members, download_prior)
     # A Clerk file before 2003 names them by label alone; the same crosswalk and its terms resolve what they can.
-    fill_house_name_bioguide_ids(output_dir, members, download_prior, evidence=evidence)
+    fill_house_name_bioguide_ids(
+        output_dir, members, download_prior, evidence=evidence, selected_input=selected_input
+    )
     outputs = (
         merge_contract_table(output_dir, NAME, vote_rows, prior_present=have_prior, download_prior=download_prior),
         members,

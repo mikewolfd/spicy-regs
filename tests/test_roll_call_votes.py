@@ -1456,10 +1456,15 @@ def test_a_dispatch_names_its_chambers_and_cap_and_refuses_anything_else(monkeyp
     # The rollup hands the dispatch's cap to the transform.
     monkeypatch.setenv("ROLL_CALL_MAX_VOTES", "7")
     seen = {}
-    monkeypatch.setattr(rollup.RollCallVotesRollup, "build_receipts", lambda self, directory, builder, **kwargs: builder(directory, **kwargs))
+    def binding(dataset):
+        return {"dataset": dataset}
+
+    monkeypatch.setattr(rollup.RollCallVotesRollup, "build_receipts",
+                        lambda self, directory, builder, **kwargs: builder(directory, selected_input=binding, **kwargs))
     monkeypatch.setattr(rollup, "build_roll_call_votes", lambda output_dir, **kwargs: seen.update(kwargs) or ())
     rollup.RollCallVotesRollup().build(Path("unused"))
     assert seen["max_votes"] == 7
+    assert seen["selected_input"] is binding
 
 
 def test_the_dispatch_inputs_reach_the_rollup_through_the_shared_workflow():
