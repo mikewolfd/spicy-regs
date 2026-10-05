@@ -70,10 +70,10 @@ def carry_receipt_history(current_path: Path, prior_paths: Sequence[Path], desti
             written = 0
             for batch in reader:
                 expected_order = pa.array(range(written, written + batch.num_rows), type=pa.int64())
-                if not pc.all(pc.equal(batch.column("current_ordinal"), expected_order)).as_py():
+                if not pc.call_function("all", [pc.call_function("equal", [batch.column("current_ordinal"), expected_order])]).as_py():
                     raise ValueError("Receipt history changed current receipt order")
                 table = pa.Table.from_batches([batch])
-                changed = pc.indices_nonzero(pc.is_valid(table["predecessor_id"]))
+                changed = pc.call_function("indices_nonzero", [pc.call_function("is_valid", [table["predecessor_id"]])])
                 if len(changed):
                     updates = table.take(changed).to_pylist()
                     diagnostics, identities = [], []
@@ -96,8 +96,8 @@ def carry_receipt_history(current_path: Path, prior_paths: Sequence[Path], desti
                         by_position = dict(zip(positions, values))
                         replacements = pa.array([by_position.get(i) for i in range(batch.num_rows)], type=pa.string())
                         table = table.set_column(table.schema.get_field_index(name), name,
-                                                 pc.if_else(pc.is_valid(table["predecessor_id"]),
-                                                            replacements, table[name]))
+                                                 pc.call_function("if_else", [pc.call_function("is_valid", [table["predecessor_id"]]),
+                                                                             replacements, table[name]]))
                 writer.write_table(table.select(RECEIPT_SCHEMA.names).cast(RECEIPT_SCHEMA))
                 written += batch.num_rows
             if written != expected_count:
