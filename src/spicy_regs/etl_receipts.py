@@ -13,7 +13,7 @@ import math
 import re
 import sqlite3
 import zlib
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from contextlib import AbstractContextManager, contextmanager
 from datetime import date, datetime
@@ -246,16 +246,28 @@ def _native(value: Any, dtype: pa.DataType, label: str) -> None:
             raise ValueError(f"{label}: finite native float required")
 
 
+def _subjects(policy: DatasetPolicy, rows: Sequence[Mapping]) -> list[dict]:
+    """Each row's subject fields as Arrow stores them, at one table conversion for the batch.
+
+    A conversion per row cost about a third of a 26M-row write (2026-10-05 profile: three one-row tables per record).
+    """
+    names = set(policy.subject_schema.names)
+    checked = []
+    for row in rows:
+        missing = names - set(row)
+        if missing:
+            raise ValueError(f"{policy.dataset}: missing subject fields {sorted(missing)}")
+        values = {f.name: row[f.name] for f in policy.subject_schema}
+        for item in policy.subject_schema:
+            if values[item.name] is None and not item.nullable:
+                raise ValueError(f"{item.name}: null is not allowed")
+            _native(values[item.name], item.type, item.name)
+        checked.append(values)
+    return pa.Table.from_pylist(checked, schema=policy.subject_schema).to_pylist() if checked else []
+
+
 def _subject(policy: DatasetPolicy, row: Mapping) -> dict:
-    missing = set(policy.subject_schema.names) - set(row)
-    if missing:
-        raise ValueError(f"{policy.dataset}: missing subject fields {sorted(missing)}")
-    values = {f.name: row[f.name] for f in policy.subject_schema}
-    for item in policy.subject_schema:
-        if values[item.name] is None and not item.nullable:
-            raise ValueError(f"{item.name}: null is not allowed")
-        _native(values[item.name], item.type, item.name)
-    return pa.Table.from_pylist([values], schema=policy.subject_schema).to_pylist()[0]
+    return _subjects(policy, [row])[0]
 
 
 def subject_identity(policy: DatasetPolicy, subject: Mapping) -> tuple[str, str, str]:
@@ -294,7 +306,10 @@ def _receipt(policy, context, *, subject, processing, outcome, identity=None):
 def split_record(policy: DatasetPolicy, row: Mapping, context: ReceiptContext) -> tuple[dict | None, dict]:
     """Split one explicitly classified, already mapped record without silently dropping fields."""
     policy.check_fields(row)
-    subject = None if policy.receipt_only else _subject(policy, row)
+    return _split(policy, row, context, None if policy.receipt_only else _subject(policy, row))
+
+
+def _split(policy: DatasetPolicy, row: Mapping, context: ReceiptContext, subject: dict | None) -> tuple[dict | None, dict]:
     processing = {key: row[key] for key in policy.receipt_fields if key in row}
     return subject, _receipt(
         policy,
@@ -365,13 +380,26 @@ def write_dataset(
                     receipt_writer.write_table(pa.Table.from_pylist(receipts, schema=RECEIPT_SCHEMA))
                     receipts.clear()
 
-            for row, context in records:
-                subject, receipt = split_record(policy, row, context)
-                if subject is not None:
-                    subjects.append(subject)
-                receipts.append(receipt)
-                if len(receipts) >= batch_size:
+            pending: list[tuple[Mapping, ReceiptContext]] = []
+
+            def split_pending():
+                for row, _ in pending:
+                    policy.check_fields(row)
+                held = [None] * len(pending) if policy.receipt_only else _subjects(policy, [row for row, _ in pending])
+                for (row, context), subject in zip(pending, held):
+                    subject, receipt = _split(policy, row, context, subject)
+                    if subject is not None:
+                        subjects.append(subject)
+                    receipts.append(receipt)
+                pending.clear()
+
+            # One receipt per record, so a full batch of records fills the receipt batch exactly as one at a time did.
+            for record in records:
+                pending.append(record)
+                if len(receipts) + len(pending) >= batch_size:
+                    split_pending()
                     flush()
+            split_pending()
             for receipt in failures:
                 receipts.append(receipt)
                 if len(receipts) >= batch_size:
@@ -480,6 +508,17 @@ def _index_processing(body):
     return {} if body is None else _unpack(json.loads(zlib.decompress(body)))
 
 
+def _normalized(policy: DatasetPolicy, rows: Iterable[Mapping], batch_size: int = 2000) -> Iterator[dict]:
+    """``_subject`` of each row, converted a batch at a time."""
+    batch: list[Mapping] = []
+    for row in rows:
+        batch.append(row)
+        if len(batch) >= batch_size:
+            yield from _subjects(policy, batch)
+            batch.clear()
+    yield from _subjects(policy, batch)
+
+
 def _joined_subjects(connection, subjects, policies):
     for dataset, paths in subjects.items():
         policy = policies[dataset]
@@ -489,8 +528,7 @@ def _joined_subjects(connection, subjects, policies):
             with _parquet(path) as parquet:
                 if not parquet.schema_arrow.equals(policy.subject_schema):
                     raise ValueError(f"Subject schema differs from policy: {dataset}")
-            for row in _rows(path):
-                row = _subject(policy, row)
+            for row in _normalized(policy, _rows(path)):
                 record_id, version, identity = subject_identity(policy, row)
                 found = connection.execute(
                     "SELECT receipt_id, processing, used FROM receipts WHERE dataset=? "
