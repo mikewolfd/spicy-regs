@@ -1,11 +1,16 @@
 """Bulk dispatch retains a separately callable row oracle and exact fallback refusal."""
-from tests.test_etl_receipts import policy, row, context
+from tests import test_etl_receipts as fixtures
 import pytest
 from spicy_regs import etl_receipts, etl_bulk
+
+policy = fixtures.policy
+row = fixtures.row
+context = fixtures.context
 
 
 def test_default_dispatch_and_explicit_row_oracle(tmp_path, policy, row, context, monkeypatch):
     subject, receipt = etl_receipts.write_dataset([(row, context)], tmp_path / 'bundle', policy)
+    assert subject is not None
     calls = []
     actual = etl_bulk.validate_bundle
     def checked(*args, **kwargs):
@@ -21,6 +26,7 @@ def test_default_dispatch_and_explicit_row_oracle(tmp_path, policy, row, context
 
 def test_only_ineligible_sql_falls_back_and_preserves_row_error(tmp_path, policy, row, context, monkeypatch):
     subject, receipt = etl_receipts.write_dataset([(row, context)], tmp_path / 'bundle', policy)
+    assert subject is not None
     def ineligible(*args, **kwargs):
         raise etl_bulk.NotBulkEligible('unsupported exact spelling')
     monkeypatch.setattr(etl_bulk, 'validate_bundle', ineligible)
