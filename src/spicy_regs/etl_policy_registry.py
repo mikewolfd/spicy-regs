@@ -1,14 +1,17 @@
 """Explicit installed dataset policies; family tasks own the descriptor files.
 
-Each ``etl_policies/*.json`` is one DatasetPolicy.descriptor(). Registering a
-policy makes receipt admission mandatory for new builds and publications of
-that dataset. Historical generation reads continue to use their pinned policy.
+Each ``etl_policies/*.json`` is one DatasetPolicy.descriptor(), plus the
+shared-log marker (``subject_catalog.SHARED_LOG``) on a log no family owns.
+Registering a policy makes receipt admission mandatory for new builds and
+publications of that dataset. Historical generation reads continue to use
+their pinned policy.
 """
 from importlib.resources import files
 from collections.abc import Mapping
 import json
 
 from spicy_regs.etl_receipts import DatasetPolicy
+from spicy_regs.subject_catalog import SHARED_LOG, is_shared_log
 
 
 def installed_policies() -> dict[str, DatasetPolicy]:
@@ -18,7 +21,10 @@ def installed_policies() -> dict[str, DatasetPolicy]:
     policies = {}
     for path in sorted(root.iterdir(), key=lambda p: p.name):
         if path.name.endswith(".json"):
-            policy = DatasetPolicy.from_descriptor(json.loads(path.read_text()))
+            declared = json.loads(path.read_text())
+            # The marker is not part of the policy a generation states, so receipts and manifests do not carry it.
+            is_shared_log(declared)
+            policy = DatasetPolicy.from_descriptor({k: v for k, v in declared.items() if k != SHARED_LOG})
             if path.name != policy.dataset + ".json" or policy.dataset in policies:
                 raise ValueError("Installed field policy filename or identity differs")
             policies[policy.dataset] = policy

@@ -991,7 +991,7 @@ def _publish_evidence(client, bucket: str, path: Path, artifact) -> None:
 
 def publish_generation(directory: Path, *, client, bucket: str, prior_index: Mapping,
                        evidence_directories: tuple[Path, ...] = (), added_tables: frozenset[str] = frozenset(),
-                       receipt_only_tables: frozenset[str] = frozenset()) -> dict:
+                       receipt_only_tables: frozenset[str] = frozenset(), exact_prior: bool = False) -> dict:
     """Verify/upload/verify, then compare-and-swap the publication pointer.
 
     Validation and conditional-write refusals preserve the current pointer.
@@ -1006,6 +1006,7 @@ def publish_generation(directory: Path, *, client, bucket: str, prior_index: Map
     onto it, which equals a first attempt made a moment later; a change to this
     family or its tables refuses as stale and never overwrites the other writer.
     Input provenance and semantic quality are separate checks.
+    ``exact_prior`` also holds the captured publication timestamp unchanged on every pointer retry.
     """
     from rulespec_artifacts import LocalMemberSource
     from spicy_regs.generations import verify_generation
@@ -1014,6 +1015,7 @@ def publish_generation(directory: Path, *, client, bucket: str, prior_index: Map
     return _publish_verified_generation(
         artifact, LocalMemberSource(directory), client=client, bucket=bucket, prior_index=prior_index,
         evidence_directories=evidence_directories, added_tables=added_tables, receipt_only_tables=receipt_only_tables,
+        exact_prior=exact_prior,
         upload_member=lambda prefix, key: _put_immutable(client, bucket, prefix + "/" + key, directory / key),
     )
 
@@ -1021,7 +1023,7 @@ def publish_generation(directory: Path, *, client, bucket: str, prior_index: Map
 def _publish_verified_generation(
     artifact, source, *, upload_member, client, bucket: str, prior_index: Mapping,
     evidence_directories: tuple[Path, ...] = (), added_tables: frozenset[str] = frozenset(),
-    receipt_only_tables: frozenset[str] = frozenset(),
+    receipt_only_tables: frozenset[str] = frozenset(), exact_prior: bool = False,
 ) -> dict:
     """Shared publication gates; both callers fully verify their source first."""
     from botocore.exceptions import BotoCoreError, ClientError
@@ -1037,7 +1039,7 @@ def _publish_verified_generation(
     if not _NAME.fullmatch(family):
         raise PublicationError("Invalid family name")
     index, etag, bootstrap = _stored_index(client, bucket)
-    _assert_family_unchanged(index, prior_index, family)
+    _assert_family_unchanged(index, prior_index, family, exact=exact_prior)
     prefix = f"generations/{family}/{artifact.pin.artifact_digest.removeprefix('sha256:')}"
     members = list(iter_member_descriptors(artifact, source))
     try:
@@ -1071,6 +1073,10 @@ def _publish_verified_generation(
         "artifactDigest": artifact.pin.artifact_digest,
         "tables": tables,
     }
+    from spicy_regs.subject_catalog import shared_receipt_logs
+    # ``datasets`` is the family's claim: every index reader gives each listed name one owning family. A shared log
+    # is in the receipt member and in the generation's stated policies, and is claimed by no family.
+    shared = shared_receipt_logs()
     if "etlReceipts" in artifact.root["spec"]:
         declared_receipt = artifact.root["spec"]["etlReceipts"]
         receipt = next(m for m in members if m.object_key == "etl_receipts.parquet")
@@ -1078,12 +1084,14 @@ def _publish_verified_generation(
                                 "byteSize": receipt.byte_size, "rows": receipt.record_count,
                                 "columns": declared_receipt["columns"],
                                 "generationId": declared_receipt["generationId"],
-                                "datasets": [p["dataset"] for p in declared_receipt["policies"]],
+                                "datasets": [p["dataset"] for p in declared_receipt["policies"]
+                                             if p["dataset"] not in shared],
                                 **({"keyIndex": declared_receipt["keyIndex"]} if "keyIndex" in declared_receipt else {})}
     if old_family and "etlReceipts" in old_family and "etlReceipts" not in entry:
         raise PublicationError("Cannot publish a generation that drops required ETL receipts")
+    # An entry written before logs were shared may still list one; ceasing to list it drops no ownership.
     if old_family and (set(old_family.get("etlReceipts", {}).get("datasets", []))
-                       - set(entry.get("etlReceipts", {}).get("datasets", []))):
+                       - set(entry.get("etlReceipts", {}).get("datasets", [])) - shared):
         raise PublicationError("Cannot publish a generation that drops receipt dataset ownership")
     _merge_family(index, family, entry)
     evidence = [verify_evidence(path) for path in evidence_directories]
@@ -1142,8 +1150,60 @@ def _publish_verified_generation(
             return updated
         logger.info("publication: pointer moved concurrently; merging {} onto the reread index", family)
         index, etag, _ = _stored_index(client, bucket)
-        _assert_family_unchanged(index, prior_index, family)
+        _assert_family_unchanged(index, prior_index, family, exact=exact_prior)
     raise PublicationError("Publication changed concurrently; retry from a fresh snapshot")
+
+
+def stored_family(client, bucket: str, family: str) -> dict | None:
+    """``family``'s entry in the stored index, read with credentials: what the pointer names now, never a cached copy.
+
+    A transport failure after the pointer request leaves the result uncertain (:func:`publish_generation`); this is
+    the reread that settles it.
+    """
+    return _stored_index(client, bucket)[0]["families"].get(family)
+
+
+def rederive_v1(client, bucket: str) -> None:
+    """Write ``publication.json`` from the stored version 2, for a pointer write whose caller did not see it finish."""
+    _write_v1(client, bucket)
+
+
+def restore_family(client, bucket: str, family: str, entry: Mapping, *, expected: Mapping | None) -> dict:
+    """Point ``family`` back at ``entry``, an earlier generation whose objects are still stored; return the index.
+
+    A rollback is a pointer write, never a publish: :func:`publish_generation` refuses a generation that drops
+    receipts. ``expected`` is the generation the family must still name (``None``: whatever it names now), so a
+    generation another writer published since is not discarded unseen. ``entry`` is restored as it was captured,
+    ``publishedAt`` included.
+    """
+    from botocore.exceptions import BotoCoreError, ClientError
+
+    prefix = entry["prefix"]
+    stored = {f"{prefix}/artifact.json": None} | {
+        f"{prefix}/{member['key']}": member["byteSize"]
+        for key, table in entry["tables"].items() for member in table.get("members", [{"key": key, **table}])}
+    for key, size in stored.items():
+        head = _head(client, bucket, key)
+        if head is None or (size is not None and head["ContentLength"] != size):
+            raise PublicationError(f"Cannot restore {family}: {key} is no longer stored as published")
+    for _ in range(_POINTER_ATTEMPTS):
+        index, etag, absent = _stored_index(client, bucket)
+        if absent is not None:
+            raise PublicationError("No version-2 publication index holds this family")
+        current = index["families"].get(family)
+        if current == entry:
+            return index
+        if expected is not None and _generation_entry(current) != _generation_entry(expected):
+            raise PublicationError(f"{family} names another generation than the one being rolled back")
+        updated, raw = _merge_family(index, family, dict(entry))
+        if _put_pointer(client, bucket, INDEX_V2_KEY, raw, etag):
+            try:
+                _write_v1(client, bucket)
+            except (BotoCoreError, ClientError, OSError, PublicationError) as exc:
+                logger.error("publication: {} is behind {}; the next publish rederives it ({}: {})",
+                             INDEX_KEY, INDEX_V2_KEY, type(exc).__name__, exc)
+            return updated
+    raise PublicationError("Publication changed concurrently; retry the rollback")
 
 
 def _partitions(table: Mapping | None) -> set[tuple[tuple[str, str], ...]]:
@@ -1161,14 +1221,20 @@ def _generation_entry(entry: Mapping | None) -> dict | None:
     return None if entry is None else {key: value for key, value in entry.items() if key != "publishedAt"}
 
 
-def _assert_family_unchanged(index: Mapping, prior_index: Mapping, family: str) -> None:
-    """Refuse when the family now names another generation than the build read; a new ``publishedAt`` is no change."""
-    if _generation_entry(index["families"].get(family)) != _generation_entry(prior_index["families"].get(family)):
+def _assert_family_unchanged(index: Mapping, prior_index: Mapping, family: str, *, exact: bool = False) -> None:
+    """Hold the captured generation, or the complete captured entry when ``exact`` includes ``publishedAt``."""
+    before, current = prior_index["families"].get(family), index["families"].get(family)
+    unchanged = current == before if exact else _generation_entry(current) == _generation_entry(before)
+    if not unchanged:
         raise PublicationError("Family changed since the build read its inputs; rebuild before publishing")
 
 
 def _merge_family(index: dict, family: str, entry: dict) -> tuple[dict, bytes]:
-    """Update one family, preserving unique subject and receipt-only dataset ownership."""
+    """Update one family, preserving unique subject and receipt-only dataset ownership.
+
+    Ownership is what an entry lists. A shared log (``subject_catalog.SHARED_LOG``) is never listed, so every other
+    dataset, a retry checkpoint included, keeps exactly one family, by the same rule every index reader applies.
+    """
     from rulespec_artifacts import canonical_json_bytes
 
     datasets = {key.removesuffix(".parquet") for key in entry["tables"]}
@@ -1245,6 +1311,10 @@ def receipt_members(index: Mapping, *, dataset: str | None = None) -> tuple[Memb
     """
     entries = list(index["families"].values())
     if dataset is not None:
+        from spicy_regs.subject_catalog import shared_receipt_logs
+        if dataset in shared_receipt_logs():
+            raise PublicationError(f"{dataset} is a shared log with no owning family: read its rows from the "
+                                   "receipt member of one of the family's own datasets")
         owner = table_owner(index, dataset + ".parquet")
         if owner is not None:
             if dataset not in owner[1].get("etlReceipts", {}).get("datasets", []):
