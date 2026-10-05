@@ -164,3 +164,17 @@ def test_shared_receipts_and_immutable_prior_generations_are_scoped(tmp_path, mo
     actual_restore = materialize_internal(selected, tmp_path/'bulk-restore', bulk=True)
     assert pq.read_table(expected_restore).equals(pq.read_table(actual_restore), check_metadata=True)
     assert regulations_bulk.eligible('dockets', pq.read_schema(dockets))
+
+
+def test_unchanged_callers_keep_row_authority_until_explicit_bulk_opt_in(tmp_path, monkeypatch):
+    from spicy_regs import regulations_bulk
+    source = tmp_path/'source.parquet'
+    pq.write_table(pa.table({'docket_id': ['a'], 'title': ['retained']}), source)
+    def candidate_not_selected(*args, **kwargs):
+        raise AssertionError('Unchanged callers must not activate an unqualified candidate')
+    monkeypatch.setattr(regulations_bulk, 'write_held_dataset', candidate_not_selected)
+    monkeypatch.setattr(regulations_bulk, 'materialize_internal', candidate_not_selected)
+    pair = write_held_dataset('dockets', source, tmp_path/'native', generation_id='g')
+    selected = ReceiptInput('dockets', (pair[0],), pair[1], 'g')
+    restored = materialize_internal(selected, tmp_path/'restored')
+    assert pq.read_table(restored)['title'].to_pylist() == ['retained']

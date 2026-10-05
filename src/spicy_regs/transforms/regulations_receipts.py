@@ -112,7 +112,7 @@ def read_internal(selected: ReceiptInput) -> Iterable[dict]:
         yield _processor_input(selected.dataset, row)
 
 
-def materialize_internal(selected: ReceiptInput, destination: Path, *, bulk: bool = True) -> Path:
+def materialize_internal(selected: ReceiptInput, destination: Path, *, bulk: bool = False) -> Path:
     """Bounded exact retained processor inputs, with qualified file metadata.
 
     File-level placement/aggregation metadata is restored only when every row's
@@ -264,7 +264,7 @@ def write_held_dataset(
     witnesses: Sequence[Mapping] = (),
     include_source_witness: bool = True,
     prior_receipts: Sequence[Path] = (),
-    bulk: bool = True,
+    bulk: bool = False,
 ) -> tuple[Path, Path]:
     """Convert retained rows with witnesses to their exact receipt-held input.
 
