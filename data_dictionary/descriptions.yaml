@@ -3190,7 +3190,7 @@ tables:
       Derived: source-native sections from identity-validated GovInfo public and private
       law XML acquired by the laws rollup. Join law_id to laws.law_id, then
       laws.bill_id to congress_bills.bill_id. A missing section row does not
-      establish that the law has no text: check law_text_outcome and law_section_count in the laws ETL receipts. Coverage follows successfully read XML, not all enacted
+      establish that the law has no text: check law_text_outcome and law_section_count in laws. Coverage follows successfully read XML, not all enacted
       laws. PDF-only sources are outside this reader.
     measured_on: "2026-10-02"
     summary: >-

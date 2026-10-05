@@ -258,6 +258,68 @@ def test_real_rulemaking_producers_build_native_outputs_from_qualified_inputs(tm
     assert pq.read_table(target / "etl_receipts.parquet").num_rows >= 8
 
 
+def test_comment_period_anchor_is_a_subject_column_and_its_receipt_keeps_the_built_row(tmp_path):
+    """Owner decision 2026-10-05: what anchors a period is a column readers filter on, not processing evidence."""
+    from spicy_regs.etl_receipts import _unpack
+    from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
+    from spicy_regs.selected_generations import SelectedDataset, remember_selection
+    from spicy_regs.transforms.regulations_receipts import write_held_dataset
+    from tests.test_comment_periods import _build, _document, _notice
+
+    dataset = "comment_periods"
+    assert subject_schema(dataset).field("anchor_kind").type == pa.string()
+    assert "anchor_kind" not in policy(dataset).receipt_fields
+    source = tmp_path / "built"
+    source.mkdir()
+    built = _build(
+        source,
+        dockets=[("DEA-2026-1519", "Placement of Cipepofol in Schedule IV")],
+        documents=[
+            _document(
+                "DEA-2026-1519-0001", "DEA-2026-1519", "2026-08-27", "2026-09-29T03:59:59Z", fr_doc_num="2026-17536"
+            ),
+            _document("USCG-X-0001", None, "2026-03-02", "2026-04-02T03:59:59Z", fr_doc_num="2026-04100"),
+        ],
+        register=[
+            _notice("2026-17536", "2026-08-27", "2026-09-28", document_type="Rule"),
+            _notice("2026-04100", "2026-03-02", "2026-04-01", document_type="Proposed Rule"),
+            _notice("2026-17546", "2026-08-28", "2026-09-28", document_type="Notice"),
+        ],
+        links=[
+            ("2026-17536", "2026-08-27", "Docket No. DEA 1713"),
+            ("2026-17546", "2026-08-28", "OMB Control Number 1024-0236"),
+        ],
+        proceedings=[
+            {
+                "proceeding_id": "proceeding_uscg",
+                "docket_ids_json": "[]",
+                "fr_document_ids_json": '["2026-04100@2026-03-02"]',
+                "rins_json": '["1625-AC11"]',
+            }
+        ],
+    )
+    anchors = {row["comment_period_id"]: row["anchor_kind"] for row in built}
+    assert sorted(anchors.values()) == ["docket", "none", "proceeding"]
+
+    subject, receipts = write_held_dataset(
+        dataset, source / "comment_periods.parquet", tmp_path / "native", generation_id="g1"
+    )
+    assert pq.read_schema(subject).equals(subject_schema(dataset))
+    assert {row["comment_period_id"]: row["anchor_kind"] for row in pq.read_table(subject).to_pylist()} == anchors
+    # The receipt still holds each whole built row, its anchor included, and no second copy of the field.
+    held = [
+        _unpack(json.loads(receipt["processing_json"]))
+        for receipt in pq.read_table(receipts).to_pylist()
+        if receipt["outcome"] == "accepted"
+    ]
+    assert all("anchor_kind" not in fields for fields in held)
+    assert [fields["raw_conversion_inputs"] for fields in held] == built
+    # A scheduled producer's prior is the builder's own file again.
+    remember_selection(tmp_path / "output", [SelectedDataset(dataset, (subject,), receipts, "g1")])
+    prior = SelectedPriors(tmp_path / "private", root=tmp_path / "output", public_url="").get(dataset)
+    assert pq.read_table(prior).equals(pq.read_table(source / "comment_periods.parquet"))
+
+
 def test_raw_source_staging_keeps_empty_lists_restrictions_and_failed_count(tmp_path):
     from spicy_regs.transforms.regulations_receipts import write_source_records
 

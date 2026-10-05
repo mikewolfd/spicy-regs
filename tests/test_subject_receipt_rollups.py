@@ -102,6 +102,8 @@ def test_mixed_family_restores_both_owners_and_receipt_only_archive(tmp_path, mo
     assert "bill_family_archives.parquet" in first.receipt_only_tables
     assert "observed_at" not in pq.read_schema(first_dir / "members.parquet").names
     assert pq.read_table(first_dir / "members.parquet")["fec_ids"].to_pylist() == [["A", "A"]]
+    # A law's read outcome is published with the law, and restored below from the same row's receipt.
+    assert pq.read_table(first_dir / "laws.parquet")["uslm_outcome"].to_pylist() == ["request_failed"]
     select_bundle(monkeypatch, first_dir, first)
     second_dir = tmp_path / "second"
     second_dir.mkdir()
@@ -261,6 +263,21 @@ def test_actual_bill_family_resumes_both_owners_without_rereading_bodies(tmp_pat
     assert body.requested == []
     assert list((second_dir / "bill_sections").rglob("*.parquet"))
     assert not (second_dir / "bill_family_archives.parquet").exists()
+    # With nothing re-read, the second run's rows are the prior pair's: the columns a reader judges a row by are
+    # in both tables, and the fields left in the receipt are in neither.
+    returned = {
+        "congress_bills": {
+            "stage_rule": ["other_chamber"],
+            "stage_source_text": ["Received in the Senate."],
+            "signed_date_rule": ["no_public_law"],
+        },
+        "bill_actions": {"source_system_name": ["Senate", "House floor actions"]},
+    }
+    for table, columns in returned.items():
+        for directory in (first_dir, second_dir):
+            published = pq.read_table(directory / (table + ".parquet"))
+            assert {name: published[name].to_pylist() for name in columns} == columns
+            assert not {"stage_matcher", "source_system_code", "url"} & set(published.schema.names)
 
 
 def test_local_mixed_rollup_can_build_twice_in_one_output_directory(tmp_path, monkeypatch):

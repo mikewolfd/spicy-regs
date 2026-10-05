@@ -7,6 +7,7 @@ import pytest
 from spicy_regs.etl_receipts import ReceiptContext, read_with_receipts, select_receipts
 from spicy_regs.legislative_documents import field_registry
 from spicy_regs.legislative_receipts import (
+    RAW,
     admit_bundle,
     build_with_receipts,
     write_legislative_outputs,
@@ -45,6 +46,7 @@ def test_roundtrip_preserves_checkpoint_only_rows_and_exact_parquet_metadata(tmp
         law_id="119-public-1",
         uslm_outcome="request_failed",
         uslm_reason="timeout",
+        uslm_reader_version="laws-uslm-v3",
         uslm_citable_as_json="[]",
     )
     law = retained(tmp_path / "source", "laws", [source], {b"checkpoints": b'{"rule":"r1","complete":false}'})
@@ -53,11 +55,62 @@ def test_roundtrip_preserves_checkpoint_only_rows_and_exact_parquet_metadata(tmp
     manifest = write_legislative_outputs([law, read], tmp_path / "bundle", generation_id="g1")
     assert not (tmp_path / "bundle/committee_report_reads.parquet").exists()
     assert manifest["subjects"]["committee_report_reads"] == []
-    assert "uslm_outcome" not in pq.read_schema(tmp_path / "bundle/laws.parquet").names
+    # The outcome a reader judges the row by is published; which reader made the attempt stays in the receipt.
+    [published] = pq.read_table(tmp_path / "bundle/laws.parquet").to_pylist()
+    assert (published["uslm_outcome"], published["uslm_reason"]) == ("request_failed", "timeout")
+    assert "uslm_reader_version" not in published
     restored = restore_prior(tmp_path / "bundle", tmp_path / "prior")
     assert pq.read_table(restored["laws"]).to_pylist() == [source]
     assert pq.read_schema(restored["laws"]).metadata == pq.read_schema(law).metadata
     assert pq.read_table(restored["committee_report_reads"]).to_pylist() == [checkpoint]
+
+
+@pytest.mark.parametrize(
+    "dataset,source,published",
+    [
+        (
+            "laws",
+            dict(congress="119", law_type="private", number="1", law_id="119-private-1", law_text_outcome="parsed",
+                 uslm_outcome="captured_partial", uslm_reason="statutes_citation_not_stated"),
+            dict(uslm_outcome="captured_partial", uslm_reason="statutes_citation_not_stated",
+                 law_text_outcome="parsed"),
+        ),
+        (
+            "document_citations",
+            dict(document_kind="budget_volume", document_key="BUDGET-2027", cite_kind="bill_number", target_key="hr-1",
+                 span_start="4", text_sha256="sha256:" + "c" * 64, target_resolved="false",
+                 target_rule="bill_number:unstated", rule_version="003"),
+            dict(target_resolved=False, target_rule="bill_number:unstated"),
+        ),
+        (
+            "section_diff_items",
+            dict(bill_id="119-hr-1", from_version_code="ih", from_source="govinfo", to_version_code="enr",
+                 to_source="govinfo", seq="0", text_diff_json='["a"]', text_diff_truncated="true", similarity="0.5"),
+            dict(text_diff_truncated=True),
+        ),
+    ],
+)
+def test_returned_columns_are_published_and_the_receipt_keeps_the_whole_original(tmp_path, dataset, source, published):
+    """Owner decision, 2026-10-05: these fields are subject columns again; the receipt's original record is unchanged."""
+    source = row(dataset, **source)
+    assert published.keys() <= source.keys()
+    written = retained(tmp_path / "source", dataset, [source])
+    write_legislative_outputs([written], tmp_path / "bundle", generation_id="g1")
+    subject = tmp_path / f"bundle/{dataset}.parquet"
+    schema = pq.read_schema(subject)
+    assert schema.equals(policy(dataset).subject_schema)
+    assert {name: schema.field(name).type for name in published} == {
+        name: pa.bool_() if isinstance(value, bool) else pa.string() for name, value in published.items()
+    }
+    [row_published] = pq.read_table(subject).to_pylist()
+    assert {name: row_published[name] for name in published} == published
+    receipts = select_receipts(tmp_path / "bundle/etl_receipts.parquet", tmp_path / "selected.parquet", dataset=dataset)
+    [joined] = read_with_receipts([subject], [receipts], policy(dataset), generation_id="g1")
+    # The receipt restores every source field in its original spelling, the returned ones included.
+    assert joined[RAW] == source
+    assert {name: joined[name] for name in published} == published
+    restored = restore_prior(tmp_path / "bundle", tmp_path / "prior")
+    assert pq.read_table(restored[dataset]).to_pylist() == [source]
 
 
 def test_wrong_generation_and_missing_receipt_refuse(tmp_path):
@@ -221,7 +274,12 @@ def test_actual_print_producer_and_native_citations(tmp_path):
         build_print_citations, tmp_path / "run1", tmp_path / "bundle1", generation_id="g1", builder_kwargs=kwargs
     )
     assert not any(manifest["refused_rows"].values())
-    assert pq.read_metadata(tmp_path / "bundle1/document_citations.parquet").num_rows > 0
+    citations = pq.read_table(tmp_path / "bundle1/document_citations.parquet")
+    assert citations.num_rows > 0
+    # Every finding the rules wrote says whether its key was settled and how it was reached.
+    assert citations.schema.field("target_resolved").type == pa.bool_()
+    assert set(citations["target_resolved"].to_pylist()) <= {True, False}
+    assert all(isinstance(rule, str) and rule for rule in citations["target_rule"].to_pylist())
     assert pq.read_metadata(tmp_path / "bundle1/bill_committee_actions.parquet").num_rows > 0
 
 
@@ -240,6 +298,10 @@ def test_actual_bill_producer_preserves_partitioned_sections_and_names_other_own
     assert first["unowned_outputs"]
     assert first["subjects"]["bill_sections"]
     assert not any(first["refused_rows"].values())
+    # The producer's own comparison rows: whether a word diff was cut is published, and unstated where none was made.
+    items = pq.read_table(tmp_path / "bundle1/section_diff_items.parquet")
+    assert items.num_rows and items.schema.field("text_diff_truncated").type == pa.bool_()
+    assert set(items["text_diff_truncated"].to_pylist()) == {None}
     restored = restore_prior(tmp_path / "bundle1", tmp_path / "prior")
     assert restored["bill_sections"].is_dir()
     admit_bundle(tmp_path / "bundle1", tmp_path / "generation")

@@ -58,10 +58,13 @@ def test_list_order_repetition_and_null_items_survive_arrow_round_trip():
 def test_business_status_and_withdrawal_survive_processing_split():
     meeting = map_record('committee_meetings', {'meeting_status': 'Canceled'}).subject
     assert meeting is not None and meeting['meeting_status'] == 'Canceled'
-    bill = map_record('congress_bills', {'stage': 'vetoed', 'stage_rule': 'code', 'cosponsors_outcome': 'empty'})
+    bill = map_record('congress_bills', {
+        'stage': 'vetoed', 'stage_rule': 'code', 'stage_matcher': 'E20000', 'cosponsors_outcome': 'empty'})
     assert bill.subject is not None
-    assert bill.subject['stage'] == 'vetoed'
-    assert 'stage_rule' not in bill.subject and bill.source_fields['cosponsors_outcome'] == 'empty'
+    # The rule that gave the stage is a column beside it; its matcher and the read's outcome stay in the receipt.
+    assert bill.subject['stage'] == 'vetoed' and bill.subject['stage_rule'] == 'code'
+    assert not {'stage_matcher', 'cosponsors_outcome'} & set(bill.subject)
+    assert bill.source_fields['stage_matcher'] == 'E20000' and bill.source_fields['cosponsors_outcome'] == 'empty'
     row = map_record('bill_cosponsors', {'is_original_raw': 'True', 'sponsorship_withdrawn_date': '2026-01-01'})
     assert row.subject is not None
     assert row.subject['is_original'] is True
