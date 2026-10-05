@@ -77,23 +77,26 @@ def capture_prerequisites(plan, *, required):
                 raise ValueError('Original capture selection metadata differs from its frozen pin')
         entry = plan['source']
         rows = [row for row in qualified['phases'] if row['key'] == 'source:' + entry['dataset'] + '.parquet']
-        if result['state'] != 'passed' or qualified['state'] != 'passed' or len(rows) != 1:
+        if (result['state'] != 'passed' or result.get('qualificationEvidenceAdmitted') is not True
+                or result.get('remainingOwnedPids') != [] or result.get('portClosed') is not True
+                or qualified['state'] != 'passed' or len(rows) != 1):
             raise ValueError('Actual immutable capture did not qualify this source')
         row = rows[0]
-        if (row['path'], row['bytes'], row['rows'], 'sha256:' + row['sha256']) != (
-                entry.get('localInput'), entry['bytes'], entry['rows'], entry['sha256']):
+        if (any(type(value) is not int for value in (row['bytes'], row['rows'], entry['bytes'], entry['rows']))
+                or (row['path'], row['bytes'], row['rows'], 'sha256:' + row['sha256']) != (
+                entry.get('localInput'), entry['bytes'], entry['rows'], entry['sha256'])):
             raise ValueError('Selected original source differs from the admitted capture')
     return refs
 
 
-def handoff(output, dataset, family, generation, declared, entry, plan, frozen):
+def handoff(output, dataset, family, generation, declared, entry, plan, frozen, *, fixture):
     """Describe actual qualified pair bytes for a later selected-input consumer."""
     directory = output / 'generation'
     index = json.loads((output / 'private-publication.json').read_text())
     files = {str(path.relative_to(directory)): publication.file_identity(path)
              for path in sorted(directory.rglob('*')) if path.is_file()}
     record = {'state': 'source-pair-and-private-serving-passed-resource-release-not-yet-admitted',
-              'dataset': dataset, 'family': family, 'source': entry,
+              'dataset': dataset, 'family': family, 'source': entry, 'fixture': fixture,
               'captureEvidence': plan.get('captureEvidence', {}), 'codePins': frozen,
               'receiptGenerationId': generation, 'receiptPolicies': [declared.descriptor()],
               'generationDirectory': str(directory), 'generationMembers': files,
@@ -101,6 +104,7 @@ def handoff(output, dataset, family, generation, declared, entry, plan, frozen):
               'privatePublicationPin': publication.file_identity(output / 'private-publication.json'),
               'selectedFamily': index['families'][family],
               'fullComparisonPhases': str(output / 'phases.jsonl'),
+              'fullComparisonPhasesPin': publication.file_identity(output / 'phases.jsonl'),
               'resourceReleaseEvidenceRequired': True,
               'unqualified': ['ordinary next materialization', 'documents annotation and reconciliation input',
                               'production publication', 'complete regulatory production unit'],
@@ -361,8 +365,8 @@ def qualify(plan_path, output, *, fixture=False):
     with phase(log, 'actual-production-mcp-http-and-dataset-correct-controls') as record:
         marker = {'probe': 'actual-mcp-startup-and-controls'}
         with serve({'/' + key: path for key, path in store.objects.items()},
-                   output / 'mcp-requests.jsonl', marker) as base:
-            controls = mcp_controls(base, output, {dataset: subject}, policies={dataset: declared})
+                   output / 'mcp-requests.jsonl', marker) as served_base:
+            controls = mcp_controls(served_base, output, {dataset: subject}, policies={dataset: declared})
         (output / 'mcp-controls.json').write_text(json.dumps(controls, indent=2) + '\n')
         record.update(settings=controls['settings'], transport=controls['transport'], schemeOverride=controls['schemeOverride'])
     with phase(log, 'final-complete-artifact-stored-bytes-and-original-pins'):
@@ -375,7 +379,7 @@ def qualify(plan_path, output, *, fixture=False):
         capture_prerequisites(plan, required=base and not fixture)
     verify_code_pins(log, frozen)
     if base:
-        handoff(output, dataset, family, generation, declared, entry, plan, frozen)
+        handoff(output, dataset, family, generation, declared, entry, plan, frozen, fixture=fixture)
     result = {'status': 'passed', 'seconds': time.monotonic() - started, 'fixture': fixture,
               'scope': 'Selected published legacy population replay/private DiskStore/actual loopback MCP',
               'unqualified': ['upstream CSV/REST acquisition/merge', 'hosted publication/MCP'], 'productionActions': []}

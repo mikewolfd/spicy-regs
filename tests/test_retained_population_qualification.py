@@ -74,10 +74,14 @@ def test_actual_complete_fixture_pipeline(tmp_path, dataset):
     if dataset in runner.BASE_DATASETS:
         runner.compare_files(output / 'selected-prior' / 'etl_receipts.parquet', output / 'carried-receipts.parquet')
         handoff = json.loads((output / 'HANDOFF.json').read_text())
+        assert handoff['fixture'] is True
+        assert handoff['fullComparisonPhasesPin']['sha256'] == 'sha256:' + hashlib.sha256((output / 'phases.jsonl').read_bytes()).hexdigest()
         assert handoff['resourceReleaseEvidenceRequired']
         assert handoff['receiptGenerationId'] == 'qualification-' + dataset
         assert dataset + '.parquet' in handoff['generationMembers']
         assert handoff['receiptPolicies'] == [runner.declared_policy(dataset).descriptor()]
+    else:
+        assert not (output / 'HANDOFF.json').exists()
     controls = json.loads((output / 'mcp-controls.json').read_text())
     assert controls['replies'][f'DELETE FROM "{dataset}" WHERE FALSE']['isError']
     assert pq.read_table(source).schema.metadata == {b'original': b'line\n'}
@@ -151,7 +155,9 @@ def test_base_capture_requires_actual_selection_and_unchanged_evidence(tmp_path)
         runner.capture_prerequisites(plan, required=True)
     entry = plan['source']
     values = {'plan': {'metadataPins': []}, 'review': {'verdict': 'fixture only'},
-              'result': {'state': 'passed'}, 'qualification': {'state': 'passed', 'phases': [
+              'result': {'state': 'passed', 'qualificationEvidenceAdmitted': True,
+                         'remainingOwnedPids': [], 'portClosed': True},
+              'qualification': {'state': 'passed', 'phases': [
                   {'key': 'source:dockets.parquet', 'path': str(source), 'bytes': entry['bytes'],
                    'rows': entry['rows'], 'sha256': entry['sha256'].removeprefix('sha256:')}]}}
     evidence = {}
@@ -162,6 +168,15 @@ def test_base_capture_requires_actual_selection_and_unchanged_evidence(tmp_path)
                           'sha256': 'sha256:' + hashlib.sha256(path.read_bytes()).hexdigest()}
     plan['captureEvidence'] = evidence
     runner.capture_prerequisites(plan, required=True)
+    result_path = Path(evidence['result']['path'])
+    result_path.write_text(json.dumps(dict(values['result'], qualificationEvidenceAdmitted='true')))
+    evidence['result'].update(bytes=result_path.stat().st_size,
+                              sha256='sha256:' + hashlib.sha256(result_path.read_bytes()).hexdigest())
+    with pytest.raises(ValueError, match='did not qualify this source'):
+        runner.capture_prerequisites(plan, required=True)
+    result_path.write_text(json.dumps(values['result']))
+    evidence['result'].update(bytes=result_path.stat().st_size,
+                              sha256='sha256:' + hashlib.sha256(result_path.read_bytes()).hexdigest())
     with pytest.raises(ValueError, match='differs from the admitted capture'):
         runner.capture_prerequisites(dict(plan, source=dict(entry, localInput=str(tmp_path / 'substitution'))), required=True)
     Path(evidence['qualification']['path']).write_text('{}')
