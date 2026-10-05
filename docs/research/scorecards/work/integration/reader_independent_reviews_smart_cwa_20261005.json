@@ -1,0 +1,32 @@
+{
+  "format_version": "scorecard-reader-independent-review/1",
+  "reviews": [
+    {
+      "publisher_id": "smart_transportation",
+      "adapter": "smart_transportation",
+      "status": "approved",
+      "module_sha256": "2ecd7dd804785733c63b8e4a9ea01f1e74534c0d9b541678f6e1a23a4243c2c0",
+      "report_sha256": "f11fc58cbdfb391b295f7b1fbafbe3ef88efff0d3d519d96e9a3c09fd40f3a59",
+      "handoff_sha256": "0972454997f716233471fb9aa519ff7eb7a72402b124e9b2f9a2462b8ce1b8a1",
+      "boundary": "Named original source renditions; installed replay and publication remain separate"
+    },
+    {
+      "publisher_id": "smart_transportation",
+      "adapter": "smart_transportation_2013_14",
+      "status": "approved",
+      "module_sha256": "31d1beca261e4a0ed15cbdfcd022e7045420b283e65a44df7af7b66241049e68",
+      "report_sha256": "b03e6f4f1b242f17aba34a026a8be8830c9365524828de45d356a3af3d308481",
+      "handoff_sha256": "0efdddfe51532c031f0aff8d4f1b4a280f1925650860e513314a9f004fbdf947",
+      "boundary": "Named original source renditions; installed replay and publication remain separate"
+    },
+    {
+      "publisher_id": "communication_workers",
+      "adapter": "communication_workers",
+      "status": "approved",
+      "module_sha256": "d2aafa7a235e002c94e9652ef2b9752e6bc83a61b09346ece498e1dde0573b55",
+      "report_sha256": "76d01c1c5b172d7c5e4db272e053cb9fd853a95ec69fdf5eac4bd1127312b5f1",
+      "handoff_sha256": "b38a94bfff2380bdce98fa9d99c64bac4009b28cb5c9e5269ebd41a7d00a2575",
+      "boundary": "Named original source renditions; installed replay and publication remain separate"
+    }
+  ]
+}

@@ -1,12 +1,11 @@
 {
-  "version": "0.56.0+scorecards.8253a8a31276",
-  "baseline_version": "0.56.0+scorecards.ef0b64b3121f",
-  "baseline_wheel": "spicy_docs-0.56.0+scorecards.ef0b64b3121f-py3-none-any.whl",
-  "baseline_sha256": "d773a2cda22200ee6d49eb24b41c52964085396cde4adea17b25287047d0dc0c",
-  "overlay_sha256": "8253a8a3127699f0179ffa2e044c6a98b4bcca324dfee91b1b706675badc1dd3",
+  "version": "0.56.0+scorecards.ef0b64b3121f",
+  "baseline_version": "0.56.0",
+  "baseline_wheel": "spicy_docs-0.56.0-py3-none-any.whl",
+  "baseline_sha256": "36d28dc6e3255224eed395cfa9dd097fc13872aa53c1625551d78ba71010a144",
+  "overlay_sha256": "ef0b64b3121f80d4118949e30175d2277dd1367d6fde100a220c816f4c2c75d0",
   "modules": {
-    "spicy_docs/reading/pdf_bytes.py": "889dc357391a000f5857516c8eca7fd75f44607791247e98d1fb80c31e925b4c",
-    "spicy_docs/sources/scorecards/__init__.py": "b71c4ed609be58e93fe0fe92996b73983bd0d5cdeee0fa9bca9c982b3863a21a",
+    "spicy_docs/sources/scorecards/__init__.py": "3638524e8fff2fb10523969a441c0e30052af3a86bbfb88944807d7a21674410",
     "spicy_docs/sources/scorecards/aauw.py": "14a7da2be96782fa0cdce1220ec003565cd04196bd2dce6bec43f4c0e2fbb837",
     "spicy_docs/sources/scorecards/acec.py": "1c6bec8cee712e5662108c0fa69e219e96195e774f8a80f0d707a4a8b49c4376",
     "spicy_docs/sources/scorecards/aclu.py": "8604f33d5026530f4ec2a3c186c8b7817387b169c65708a3174f3c92b76a1e04",
@@ -34,7 +33,6 @@
     "spicy_docs/sources/scorecards/club_for_growth.py": "468bcd17f038bb970bc18a8064dcddd9fff091d6455a2ca18bd0d36b975892ec",
     "spicy_docs/sources/scorecards/common.py": "3abbbb53c19c96a41892a66c4bedb617a4e0e872215a8e5272c57b3624332e0d",
     "spicy_docs/sources/scorecards/common_cause.py": "abcf0cffdf1120d4a566cdb24eeeee0c282873ca400c101d39bd3a1024e80dec",
-    "spicy_docs/sources/scorecards/communication_workers.py": "d2aafa7a235e002c94e9652ef2b9752e6bc83a61b09346ece498e1dde0573b55",
     "spicy_docs/sources/scorecards/cpac.py": "da22a3ad40a32aa3219fcca2de8fffb62676a67db365bb77eb8bb8fa4ee5be6a",
     "spicy_docs/sources/scorecards/cpac_current.py": "7881ecbda168f99baef77f256968746d19db84cd3d0d9817b33b4bcf900c5c52",
     "spicy_docs/sources/scorecards/cpac_pdf_2023.py": "20deed359ae52997a195be41fbb282a9bef022a1f2b4450afa9cb918b755f903",
@@ -101,8 +99,6 @@
     "spicy_docs/sources/scorecards/sace_action.py": "cd54bfae773fb7664c5a718f6aeffbab89c9396b75cf7754ada21e1f6f44b86a",
     "spicy_docs/sources/scorecards/sba.py": "e4173969844f83af3984ff588a31b5131d37edd137f28aba013c90a3acd2fbc9",
     "spicy_docs/sources/scorecards/sba_profiles.py": "59af6ee49df0e9f4d1331ab560b39fd17d7a127e0d6984a17079617927535fec",
-    "spicy_docs/sources/scorecards/smart_transportation.py": "2ecd7dd804785733c63b8e4a9ea01f1e74534c0d9b541678f6e1a23a4243c2c0",
-    "spicy_docs/sources/scorecards/smart_transportation_2013_14.py": "31d1beca261e4a0ed15cbdfcd022e7045420b283e65a44df7af7b66241049e68",
     "spicy_docs/sources/scorecards/uaw.py": "f6f0359e4833d2d9ed99ec050b311c1bf782aba3ff8d919985c7121248245a50",
     "spicy_docs/sources/scorecards/us_chamber.py": "5e4b521fbaf70a84c0335c13a746b68a28fa5747cea89b9a622fb235c5419907",
     "spicy_docs/sources/scorecards/us_chamber_2019.py": "ae3c656f19ac91f7bb94311f497c9fac72a64ad5273e663625e7e55134ef468c",
@@ -113,19 +109,18 @@
     "spicy_docs/sources/scorecards/wilberforce.py": "c279b59b071c2206645de25cb3be2a5a7abc2c4f1a4bf0bf713aca99b6c5d615",
     "spicy_docs/sources/scorecards/workbooks.py": "7d4481ec02d3f020ea290ead619af46e555680f9450d338bfccf5c0f9d971d11"
   },
-  "explicit_runtime_dependencies": {
-    "spicy_docs/reading/pdf_bytes.py": "889dc357391a000f5857516c8eca7fd75f44607791247e98d1fb80c31e925b4c"
-  },
-  "wheel": "spicy_docs-0.56.0+scorecards.8253a8a31276-py3-none-any.whl",
-  "wheel_sha256": "0af5441084e70d266e6baa6dc719f66c895c2a27f7508fef76f0472fc45864d9",
+  "explicit_runtime_dependencies": {},
+  "wheel": "spicy_docs-0.56.0+scorecards.ef0b64b3121f-py3-none-any.whl",
+  "wheel_sha256": "d773a2cda22200ee6d49eb24b41c52964085396cde4adea17b25287047d0dc0c",
   "repeat_build_identical": true,
   "unrelated_runtime_and_dependency_metadata_preserved": true,
   "changed_runtime_files": [
     "spicy_docs/sources/scorecards/__init__.py",
-    "spicy_docs/sources/scorecards/communication_workers.py",
-    "spicy_docs/sources/scorecards/smart_transportation.py",
-    "spicy_docs/sources/scorecards/smart_transportation_2013_14.py"
+    "spicy_docs/sources/scorecards/agc.py",
+    "spicy_docs/sources/scorecards/environment_america.py",
+    "spicy_docs/sources/scorecards/global_solutions.py"
   ],
-  "scope": "Qualified SMART and CWA package: independent source reviews, retained installed replays and complete source/consumer gates passed; data publication and hosted runtime remain separate",
-  "source_commit": "d79c02aa0077f7423f87c38f5ebbc188e8b06a7d"
+  "scope": "Qualified consumer package adoption; complete source and consumer gates and installed retained-input replays passed. Public publication and hosted container remain separate.",
+  "source_commit": "554dfba52246773a103601d3987d46a7755ef7ae",
+  "adoption_receipt": "docs/research/scorecards/work/integration/reader_adoption_three_20261005.json"
 }

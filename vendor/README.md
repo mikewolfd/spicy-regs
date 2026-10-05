@@ -5,6 +5,11 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
+- `spicy_docs-0.56.0+scorecards.8253a8a31276`: SMART and CWA reader candidate on
+  the previously qualified scorecard package. The baseline receipt is retained
+  as `spicy_docs-scorecards-ef0b64b3121f.json`. See the
+  [adoption status](https://github.com/mikewolfd/spicy-regs/blob/main/docs/research/scorecards/work/integration/reader_adoption_smart_cwa_20261005.json)
+  for installed replay, independent source checks and complete consumer gates.
 - `spicy_docs-0.56.0+scorecards.ef0b64b3121f`: the released `0.56.0` baseline
   with the qualified AGC, CGS and Environment America readers from SpicyDocs
   `554dfba52246773a103601d3987d46a7755ef7ae`. The

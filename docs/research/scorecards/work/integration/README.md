@@ -168,3 +168,5 @@ work queue. An unavailable route alone does not establish publisher retirement.
 ## Extend publisher coverage
 
 Add later publisher discoveries explicitly across the source catalog, capture receipts, task list, adapter inventory and API inventory. Preserve the records and measurements of each dated discovery pass. Record the previous input hashes, original captures, exact added records, independent review and identity limits in a shared supplement, and reference that supplement from each changed inventory. [SMART extension](publisher_inventory_extension_smart_20261005.json) records this process. Regenerate the survey and integration progress through the existing builders; the candidate identity sets must match before qualification advances.
+
+See [SMART and CWA readers](reader_smart_cwa_20261005.md) for their reviewed source boundaries and consumer check status.

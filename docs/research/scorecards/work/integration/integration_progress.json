@@ -1,19 +1,18 @@
 {
   "dataset": "scorecard_integration_progress",
   "schema_version": "1",
-  "observed_at": "2026-10-05T03:59:13.961676+00:00",
+  "observed_at": "2026-10-05T04:31:41.939169+00:00",
   "input_pins": {
     "adapter_inventory.json": "5d7ce442f355c2b7f84d58c6d2df99cbf48574344a101248ee6a04953bf019a4",
-    "publisher_api_inventory.json": "2a699b880c91a46220ac057f30ba50f9f46b8fc932ec92fb0b57d15fc23ec432",
-    "integration_qualifications.json": "ac15d66a8eddc1dad1157350797fc30b03c1e7a083c4d25ca63c94a1aed9d2ea"
+    "publisher_api_inventory.json": "097e102c3af4ebb5ad87731be5d40ea4ad283b8ec21f188b1e7460755755925d",
+    "integration_qualifications.json": "1f46c5b27d8db770eb4daf7e4350af8b0e7c60c2583a264591ba67446bc821a3"
   },
   "scope": "Every publisher candidate in both inventories; all available editions and renditions remain in scope",
   "states": {
     "identity_review": 1,
-    "implemented_unqualified": 1,
     "published_scope": 66,
-    "qualified_scope": 3,
-    "unverified_lead": 55
+    "qualified_scope": 5,
+    "unverified_lead": 54
   },
   "publishers": [
     {
@@ -3999,14 +3998,22 @@
       "publisher_id": "communication_workers",
       "publisher_name": "Communication Workers of America",
       "task_id": "ss-nuez",
-      "state": "unverified_lead",
-      "reader": null,
-      "qualified_editions": [],
+      "state": "qualified_scope",
+      "reader": "communication_workers",
+      "qualified_editions": [
+        {
+          "publisher_id": "communication_workers",
+          "scorecard_id": "communication_workers:2025-native-descending-lists-and-key-vote-grids",
+          "state": "qualified",
+          "receipt": "qualifications/communication_workers--2025-native-descending-lists-and-key-vote-grids.json",
+          "receipt_sha256": "584485dba4db5c657dad8726885d2ac6e0d495c19c54dc31e5773bd77490d9d1"
+        }
+      ],
       "verified_api_endpoints": [],
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Locate an original edition of 'CWA Rates Congress' attributed to Communication Workers of America; the CRS locator Printed CRS-8; physical PDF page 16 is a discovery lead only. Verify whether it rates federal members or merely reports votes, then capture the actual member table."
+      "next_action": "Integrate remaining available editions and renditions"
     },
     {
       "publisher_id": "congressional_quarterly",
@@ -4702,9 +4709,31 @@
       "publisher_id": "smart_transportation",
       "publisher_name": "SMART Transportation Division",
       "task_id": "ss-o13k",
-      "state": "implemented_unqualified",
-      "reader": null,
-      "qualified_editions": [],
+      "state": "qualified_scope",
+      "reader": "smart_transportation",
+      "qualified_editions": [
+        {
+          "publisher_id": "smart_transportation",
+          "scorecard_id": "smart_transportation:2023-house-thud-committee",
+          "state": "qualified",
+          "receipt": "qualifications/smart_transportation--2023-house-thud-committee.json",
+          "receipt_sha256": "2cac5b2344b3e8a85cba839ea813f9cb219bd35302455c3a09e62c51fb77bb28"
+        },
+        {
+          "publisher_id": "smart_transportation",
+          "scorecard_id": "smart_transportation:2013-14-house-original-pdf",
+          "state": "qualified",
+          "receipt": "qualifications/smart_transportation--2013-14-house-original-pdf.json",
+          "receipt_sha256": "bfc668dfda32ae50217ac8c1497eb66714038edc8ba3a1c51a97f82c2f28e7f6"
+        },
+        {
+          "publisher_id": "smart_transportation",
+          "scorecard_id": "smart_transportation:2013-14-senate-original-pdf",
+          "state": "qualified",
+          "receipt": "qualifications/smart_transportation--2013-14-senate-original-pdf.json",
+          "receipt_sha256": "3537cf9044f91af4f9504f7c91a1fd4e99bde79391ce965e4e267c77ebdda40d"
+        }
+      ],
       "verified_api_endpoints": [],
       "discovery_api_status": "html_pdf_only_observed",
       "discovery_support_status": "implemented_unqualified",
@@ -4713,7 +4742,7 @@
         "https://web.archive.org/web/20150504132237id_/http://utu.org/worksite/washington/PDFs/SMART_Transportation_Scorecard_House_2013-14_(PRINT).pdf",
         "https://web.archive.org/web/20150504132238id_/http://utu.org/worksite/washington/PDFs/SMART_Transportation_Scorecard_US_Senate_2013-14_(PRINT).pdf"
       ],
-      "next_action": "Adopt reviewed readers, replay retained scopes, publish and verify; recover further editions separately"
+      "next_action": "Integrate remaining available editions and renditions"
     }
   ],
   "validation": {
