@@ -70,8 +70,21 @@ def selected_cohort(root, monkeypatch, *, body_keys, damage=None):
 
 
 @pytest.mark.parametrize("body_keys", [False, True])
-def test_server_reads_old_and_future_court_subjects_without_activating_writer(tmp_path, monkeypatch, body_keys):
+@pytest.mark.parametrize("writer_activated", [False, True])
+def test_server_reads_old_and_future_court_subjects_without_activating_writer(
+    tmp_path, monkeypatch, body_keys, writer_activated,
+):
     source, legacy = selected_cohort(tmp_path, monkeypatch, body_keys=body_keys)
+    if writer_activated:
+        from spicy_regs import legislative_documents
+
+        def activated_mapper(dataset, raw):
+            mapped = map_subject(dataset, raw)
+            if mapped is not None and dataset == "document_citations":
+                mapped["document_key"] = native_document_key(raw.get("document_kind"), raw.get("document_key"))
+            return mapped
+
+        monkeypatch.setattr(legislative_documents, "map_subject", activated_mapper)
     monkeypatch.setattr(mcp_server, "DATA_DIR", tmp_path)
     monkeypatch.setattr(mcp_server, "TABLES", ())
     with mcp_server._build_connection() as con:

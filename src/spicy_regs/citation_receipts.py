@@ -49,8 +49,7 @@ def install_citation_inputs(connection, adapter, available):
             if (dataset == "document_citations" and raw.get("document_kind") == "court_opinion_derived_pdf"
                     and mapped is not None):
                 body_key = native_document_key(raw["document_kind"], raw.get("document_key"))
-                if row.get("document_key") == body_key:
-                    mapped["document_key"] = body_key
+                mapped["document_key"] = body_key if row.get("document_key") == body_key else raw["document_key"]
             if mapped is not None and any(row.get(name) != value for name, value in mapped.items()):
                 raise ValueError(f"{dataset}: citation source input differs from its selected native subject")
             result = dict(raw)
