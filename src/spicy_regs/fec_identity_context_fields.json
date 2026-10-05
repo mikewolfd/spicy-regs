@@ -1619,6 +1619,7 @@
       "object_id": "VARCHAR",
       "object_type": "VARCHAR",
       "object_name": "VARCHAR",
+      "value_status": "VARCHAR",
       "cycle": "INTEGER",
       "candidate_election_year": "INTEGER"
     },
@@ -1628,7 +1629,6 @@
     "receipt_fields": [
       "subject_id_status",
       "object_id_status",
-      "value_status",
       "source_family",
       "source_sha256",
       "source_url",
