@@ -305,7 +305,11 @@ def _differences(restored: Path, retained: Path) -> dict:
         described = [dict((name, kind) for name, kind, *_ in con.execute(
             f"DESCRIBE SELECT * FROM read_parquet({literal(path)})").fetchall()) for path in (restored, retained)]
         shared = [name for name in described[1] if name in described[0]]
-        text = ", ".join(f'CAST("{name}" AS VARCHAR) AS "{name}"' for name in shared) or "NULL"
+        # A column of one type on both sides is compared as that type. Text is only the common ground for a column
+        # whose type changed, which is reported and refused anyway; as text, ['a, b'] and ['a', 'b'] are one value.
+        quoted = {name: '"' + name.replace('"', '""') + '"' for name in shared}
+        text = ", ".join(quoted[name] if described[0][name] == described[1][name]
+                         else f"CAST({quoted[name]} AS VARCHAR) AS {quoted[name]}" for name in shared) or "NULL"
         either = [con.execute(f"SELECT count(*) FROM (SELECT {text} FROM read_parquet({literal(a)}) EXCEPT ALL "
                               f"SELECT {text} FROM read_parquet({literal(b)}))").fetchall()[0][0]
                   for a, b in ((restored, retained), (retained, restored))]

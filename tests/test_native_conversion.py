@@ -480,6 +480,15 @@ def test_file_metadata_a_later_run_reads_must_survive(tmp_path, monkeypatch, buc
     assert convert("cfr-sections", tmp_path / "work")["tables"]["cfr_sections"]["metadata_changes"] == []
 
 
+def test_nested_values_are_compared_as_values_not_as_text(tmp_path):
+    """Cast to text, DuckDB prints ['a, b'] and ['a', 'b'] alike; one difference each way must be found."""
+    one, two = tmp_path / "one.parquet", tmp_path / "two.parquet"
+    pq.write_table(pa.table({"names": pa.array([["a, b"]], pa.list_(pa.string()))}), one)
+    pq.write_table(pa.table({"names": pa.array([["a", "b"]], pa.list_(pa.string()))}), two)
+    check = conversion._differences(one, two)
+    assert (check["rows_only_in_restored"], check["rows_only_in_retained"], check["type_changes"]) == (1, 1, {})
+
+
 def test_a_rejected_row_stops_the_conversion_like_a_refused_one():
     assert conversion.CONVERTED_OUTCOMES == {"accepted", "observed"}
     from spicy_regs.etl_receipts import OUTCOMES

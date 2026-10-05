@@ -17,27 +17,53 @@ for a cheaper writer. Evidence for everything below:
 
 1. Refuses unless this checkout is main, clean, and has the SpicyDocs wheel
    main pins, all equal to the values the run was started for
-   (`--expect-main`, `--expect-spicy-docs`).
-2. Captures the publication index, its ETag and the family's entry, and
+   (`--expect-main`, `--expect-spicy-docs`). Clean includes untracked files
+   under `src/` and `scripts/`, which the command could load. Main is read
+   from the remote's URL; a local path is refused. The installed SpicyDocs
+   files are hashed against the vendored wheel, and the wheel against its
+   digest in `uv.lock`.
+2. With `--publish`: checks the credentials and that `R2_BUCKET_NAME` is the
+   `--expect-bucket`, and prints the bucket and endpoint host, before it
+   converts anything.
+3. Captures the publication index, its ETag and the family's entry, and
    downloads the family's published tables by their pins.
-3. Runs the family's own writer over those tables with upload skipped: the
+4. Runs the family's own writer over those tables with upload skipped: the
    rollup with its builder replaced by "return the retained tables", or the
    court writer for a court family. Field policies are read at run time.
-4. Refuses unless every row converts (no `refused` or `error` receipt) and a
-   native read restores each table to exactly the retained rows, with the
-   same columns and types.
-5. With `--publish`: checks main and the wheel again, publishes through the
-   standard conditional pointer write, and reads the result back without
-   credentials: the entry carries `etlReceipts`, row counts match, and the
-   read that refused before now passes.
+5. Refuses unless every row converts (every receipt `accepted` or
+   `observed`) and a native read restores each table to exactly the retained
+   rows, with the same columns, types and file metadata.
+6. Refuses unless a family that carries source evidence still does: the
+   converted generation names the one it replaces and one evidence artifact,
+   and journals again the events the next run reads back from its prior.
+7. With `--publish`: checks main and the wheel again, saves
+   `conversion.json`, then publishes through the standard conditional
+   pointer write and reads the result back without credentials: the entry
+   carries `etlReceipts`, row counts match, and the read that refused before
+   now passes.
 
 Each run writes `conversion.json` in its `--work` directory. It holds the
-captured entry, so `--rollback` can restore it.
+captured entry and the generation the run intends to publish, and it is
+saved before the pointer write, so `--rollback` works even when the process
+died or lost the write's response.
 
 The command refuses a family outside `--allow`, one that is already native,
 one with a split table, and one with no subject/receipt rollup or court
 writer (the regulations base tables, the derived rollups, FEC and government
 families).
+
+### What the checks cannot see
+
+- Row order, column order, `string` against `large_string`, nullability, a
+  timestamp's timezone label, and `-0.0` against `0.0` are not compared.
+- On the rollup path the restored table is rebuilt from the receipt's copy
+  of each input row. A mapper defect in a public column is therefore
+  invisible to the comparison: it proves the next run's prior, not the
+  public table. The public table is checked only by row count and by the
+  writer's own validation.
+- On the court path the restored file takes the retained table's types, so
+  the command holds those against the declared native schema instead. A
+  column that moves to receipts has no declared type to hold it against.
 
 ## One owner for each receipt dataset
 
@@ -55,39 +81,86 @@ first would lock out the others, the bill family included.
 
 ## Families
 
-Convertible now. Their receipts hold only their own datasets.
+A family converts only when every reader of its published table, other than
+its own rollup, still works on the native shape. Two servers read each
+table: the hosted one (branch `3a1d3140`, old layout) until the release, and
+main's afterwards. Audit of 2026-10-05: main's code at `90dfa370`, DocSpec
+and spicyengine by an independent read; the hosted build by the release
+session. Server controls and saved user queries were not checked.
 
-| Order | Family | Next scheduled run | After conversion |
-|---|---|---|---|
-| 1 | `courtlistener` | daily 18:30Z | `run-rollup-courtlistener` passed twice on the converted copy |
-| 2 | `court-docket-groups` | none; built by hand | input `court_dockets` is native after step 1 |
-| 3 | `court-opinion-pdf-extractions` | none; built by hand | |
-| 4 | `unified-agenda` | daily 20:00Z | `run-rollup-unified-agenda` passed on the converted copy in 10 to 14 minutes of its 30 |
-| 5 | `cfr-sections` | daily 20:30Z | limit raised to 60 minutes (`rollup-cfr-sections.yml` says why) |
+Safe to convert.
 
-Held for the receipt-dataset rule. Each converts cleanly in a dry run.
+| Order | Family | Columns that leave the table | Outside readers and what they read | Next scheduled run |
+|---|---|---|---|---|
+| 1 | `courtlistener` | `parties_json`, `attorneys_json`, `firms_json`, `date_created`, `absolute_url` (`parties`, `attorneys`, `firms`, `blocked`, `date_blocked` arrive) | `build_court_docket_groups.py:141` (`cl_docket_id`, `court_id`, `docket_number`); `relationship_views/courts.py:44` and `table_joins.py:797` (`cl_docket_id`); `check_rollup_freshness.py:76` (`date_filed`). Hosted build: one view joins on `cl_docket_id`. | daily 18:30Z; passed on the converted copy, and its journal reads "Inherited pins" |
+| 2 | `court-docket-groups` | `edition`, `rule_version`, `match_basis` | `table_joins.py:797` (`cl_docket_id`, `parent_cl_docket_id`). Hosted build: a plain view. | none; built by hand; its input `court_dockets` is native after step 1 |
+| 3 | `cfr-sections` | `url`; `part_granule` becomes BOOLEAN | `citation_resolution.py:104` (`cfr_ref`, `package_id`, `granule_id`, `section`, and `part_granule = 'true'`, which gives the same rows on both shapes, on main and on the hosted build); `table_joins.py:345` (`title`, `part`); `check_rollup_freshness.py:74` (`last_modified`). Nothing reads `url`. | daily 20:30Z; limit raised to 60 minutes (`rollup-cfr-sections.yml` says why) |
 
-- Congress.gov: `amendments`, `committee-meetings`, `house-communications`,
-  `nominations`, `record-issues`, `treaties`, `members`.
-- GovInfo documents: `committee-reports`, `senate-expenditures`,
-  `native-legal-references`.
+User SQL on `cfr_sections.part_granule` keeps working with `= 'true'`;
+`lower(part_granule)` and `LIKE` stop working on a BOOLEAN.
+
+`court-docket-groups` names no parents after conversion (the conversion read
+none), so `describe_table` shows no recorded inputs for it until its next
+build. The replaced generation, named in the converted one's read snapshot,
+still holds them.
+
+Held.
+
+| Family | Why | What releases it |
+|---|---|---|
+| `unified-agenda` | `materialize-rulemaking` downloads the table raw and requires `timetable_json`, `cfr_references_json`, `legal_authority_json` and `url` (`pipelines/materialized.py:253`, `rulemaking_dataset.py:133`), which all leave the native table. | That reader reads the native table. The same change raises the rollup's 30-minute limit: measured on loopback storage 10 to 14 minutes here and 862.9 s and 476.0 s by the reviewer, so a hosted runner at half the speed lands near it. |
+| `court-opinion-pdf-extractions` | The hosted citation tool keys `court_opinion_derived_pdf` by `(opinion_id, source_sha256)`; natively the table is `opinion_body_id`, `opinion_id`, `cluster_id`, `text_content`. | The release window, below. |
+| `amendments`, `committee-meetings`, `house-communications`, `nominations`, `record-issues`, `treaties`, `members` | The receipt-dataset rule (Congress.gov log). Each converts cleanly in a dry run. | The rule is decided. |
+| `committee-reports`, `senate-expenditures`, `native-legal-references` | The same rule (GovInfo file-state log). | The same. |
+
+Never put these in `--allow` yet. The command would convert each, and none
+has been checked for outside readers.
+
+- Too large for the per-row writer; they wait for the bulk writer:
+  `court-citations` (102.0M rows), `court-opinions` (10.8M),
+  `court-opinion-clusters` (10.1M), `roll-call-votes` (10.6M),
+  `member-vote-terms` (10.6M), `federal-register` (1.0M).
+- Hold a shared log and are not on an approved list: `bill-subjects` (also
+  needs `congress_bills` native first), `committee-rosters`,
+  `press-releases`, `laws`, `print-citations`.
 
 A Congress.gov or GovInfo receipt also records the local path of the file it
 was converted from. Run those conversions from a neutral `--work` path.
 
+## The release window
+
+The hosted server and main's server need opposite shapes for the citation
+tool's tables, so these families convert only between "the old server stops
+serving" and "the new server starts": convert, then the server switches.
+
+| Order | Family | Why it waits | Rollback |
+|---|---|---|---|
+| 1 | `court-opinion-pdf-extractions` (3 rows) | parent table of citation kind `court_opinion_derived_pdf` | `--rollback` with its receipt, before the new server starts |
+
+Rehearsal for the window: convert on the loopback copy, then run the
+citation tool's own reader against the result (`install_citation_inputs` in
+`citation_receipts.py`) and replay each citation kind's sample document.
+
 ## Before a production run
 
 - The owner has approved the run and the list.
-- Tell spicy-stack-54, which replays the server's controls before and after:
-  a converted table changes shape for readers (its field policy is
-  `src/spicy_regs/etl_policies/<table>.json`).
-- Check out main in a clean worktree and `uv sync --frozen`. Take the commit
-  and the wheel version from that checkout; the command re-checks both
-  against the remote immediately before it publishes.
+- Tell the server release session, which replays the server's controls
+  before and after: a converted table changes shape for readers (its field
+  policy is `src/spicy_regs/etl_policies/<table>.json`).
+- Check out main in a clean worktree and sync it with the pinned lock. Take
+  the commit and the wheel version from that checkout; the command re-checks
+  both against the remote immediately before it publishes.
 - No run of the family's own rollup is in flight (`gh run list --workflow
   rollup-<name>.yml`). A concurrent publication is refused, not overwritten.
-- Do not execute a generation-retention plan while a rollback may be wanted:
-  it would delete the captured generation.
+- Know when the rollback closes. `plan-generation-retention.yml` deletes on
+  its own every Sunday at 05:45Z and keeps each family's last three
+  generations. The conversion is one generation and each scheduled run adds
+  one, so for a daily family the captured generation is the fourth by the
+  third run after conversion, and the next Sunday's retention deletes it:
+  for a conversion on 2026-10-05, 2026-10-11. To keep a rollback open
+  longer, disable that workflow's schedule first (`gh workflow disable
+  plan-generation-retention.yml`) and enable it again once the rollback is
+  no longer wanted.
 
 No concurrency group is involved: these conversions write only immutable
 generation objects and the index pointer.
@@ -96,55 +169,71 @@ generation objects and the index pointer.
 
 ```sh
 cd <clean worktree at main>
+UV=/opt/homebrew/bin/uv   # the lock needs uv 0.11 or later; a bare `uv` may be an older shim that cannot read it
 MAIN=$(git rev-parse HEAD)
-WHEEL=$(uv run --frozen python -c "from importlib.metadata import version; print(version('spicy-docs'))")
-ALLOW=courtlistener,court-docket-groups,court-opinion-pdf-extractions,unified-agenda,cfr-sections
+WHEEL=$($UV run --frozen python -c "from importlib.metadata import version; print(version('spicy-docs'))")
+ALLOW=courtlistener,court-docket-groups,cfr-sections
 RUN=~/Work/corpora/native-conversion-<date>
+BUCKET=<the production bucket's name, typed by hand>
 
 # Dry: reads production anonymously, uploads nothing.
-R2_PUBLIC_URL=https://data.spicygov.ai uv run --frozen python scripts/convert_family_to_native.py courtlistener \
+R2_PUBLIC_URL=https://data.spicygov.ai $UV run --frozen python scripts/convert_family_to_native.py courtlistener \
   --allow $ALLOW --work $RUN/courtlistener-dry --expect-main $MAIN --expect-spicy-docs $WHEEL --remote fork
 
 # Publish.
-R2_PUBLIC_URL=https://data.spicygov.ai uv run --frozen python scripts/convert_family_to_native.py courtlistener \
+R2_PUBLIC_URL=https://data.spicygov.ai $UV run --frozen python scripts/convert_family_to_native.py courtlistener \
   --allow $ALLOW --work $RUN/courtlistener --expect-main $MAIN --expect-spicy-docs $WHEEL --remote fork \
-  --env-file <file with the R2 settings> --publish
+  --env-file <file with the R2 settings> --expect-bucket $BUCKET --publish
 
 # Roll back.
-uv run --frozen python scripts/convert_family_to_native.py --rollback $RUN/courtlistener/conversion.json \
-  --env-file <file with the R2 settings>
+$UV run --frozen python scripts/convert_family_to_native.py --rollback $RUN/courtlistener/conversion.json \
+  --env-file <file with the R2 settings> --expect-bucket $BUCKET
 ```
 
 One family per invocation, in the order above. `--remote` names the git
-remote whose `main` is checked (default `origin`). Exit status 1 and a line
-starting `REFUSED:` mean nothing was published, unless the message says the
-family is published and names the receipt to roll back with.
+remote whose `main` is checked (default `origin`).
+
+Every exit that is not a success prints two lines. `REFUSED:` (exit 1) or
+`FAILED:` (exit 2, or 130 when interrupted) says why. `STATE:` says what the
+bucket holds: nothing was published; or the family is published, with the
+rollback command; or a publish was attempted and its result is not known,
+with the command that finds out. A publish whose response was lost is not a
+refusal: the command rereads the stored index, and when it names this
+conversion's generation it finishes the read-back and exits 0.
 
 Settings, by name: a dry run needs only `R2_PUBLIC_URL`. Publishing and
 rolling back need `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_ENDPOINT`
-and `R2_BUCKET_NAME`. `CLOUDFLARE_API_TOKEN` with `CLOUDFLARE_ZONE_ID` purges
-the two index URLs and is optional. Nothing is loaded from a `.env`
-implicitly; `--env-file` names one, and a variable already set wins.
+and `R2_BUCKET_NAME`; no bucket is assumed. `CLOUDFLARE_API_TOKEN` with
+`CLOUDFLARE_ZONE_ID` purges the two index URLs and is optional. Nothing is
+loaded from a `.env` implicitly; `--env-file` names one. A variable already
+set in the shell that the file contradicts is refused, by name.
 
 ## Verify
 
 - The command's last line is "published and read back", and
   `conversion.json` shows `rows_only_in_restored` and `rows_only_in_retained`
-  both 0 for every table and `read_back.anonymous_read_rows` equal to the
-  retained counts.
+  both 0 for every table, no `type_changes` or `metadata_changes`, and
+  `read_back.anonymous_read_rows` equal to the retained counts.
+- `conversion.json` records the bucket and endpoint host under `target`, and
+  under `lineage` the inputs the converted generation names.
 - `publication.v2.json` carries `etlReceipts` for the family.
 - The family's next scheduled run succeeds and moves the generation. A
   failure there leaves the converted generation in place.
 
 ## Roll back
 
-`--rollback` rewrites the family's index entry to the captured one. The
-old-shape objects are still stored, and the command checks that first. The
-converted objects stay, unreferenced. After a rollback the family refuses
-its scheduled runs again, as before the conversion.
+`--rollback` reads the stored index and decides. If the family names this
+conversion's generation, it rewrites the entry to the captured one. If it
+still names the captured generation, there is nothing to do and it says so.
+If it names anything else, a scheduled run or another writer has published
+since: the rollback refuses, because it would discard that run's rows, and
+`--discard-newer` says to do it anyway. `--rollback` takes no conversion
+arguments.
 
-If a scheduled run has published since, the rollback refuses, because it
-would discard that run's rows. `--discard-newer` says to do it anyway.
+The old-shape objects are still stored, and the command checks that first;
+see "Before a production run" for when retention removes them. The converted
+objects stay, unreferenced. After a rollback the family refuses its
+scheduled runs again, as before the conversion.
 
 A family whose receipts are narrower than its rows (the FEC identity tables)
 restores from the subject plus the receipt, never the receipt alone. None is
