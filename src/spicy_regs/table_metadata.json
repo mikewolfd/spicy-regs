@@ -11491,7 +11491,7 @@
       {
         "column_name": "id_submission",
         "column_type": "VARCHAR",
-        "description": "ECFS submission id (e.g. `26109947027`). Primary key / dedup key. The filing's page on fcc.gov (`https://www.fcc.gov/ecfs/filing/<id_submission>`, the former `filing_url` column) is kept in the filing's receipt, not in this table: `SELECT regexp_extract(processing_json, '\\[\"filing_url\",\\[\"str\",\"([^\"]*)\"', 1) FROM etl_receipts WHERE dataset = 'fcc_filings' AND outcome = 'accepted' AND contains(identity_json, '\"<id_submission>\"')`."
+        "description": "ECFS submission id (e.g. `26109947027`). Primary key / dedup key. The filing's page on fcc.gov (`https://www.fcc.gov/ecfs/filing/<id_submission>`, the former `filing_url` column) is kept in the filing's receipt, not in this table: ask `read_receipt_fields` for the field `filing_url`."
       },
       {
         "column_name": "proceedings",

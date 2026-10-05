@@ -312,7 +312,11 @@ def test_describe_omits_only_measurements_and_ledger_statements_by_default_and_s
     assert all({"kind", "reason", "baseline_keys", "baseline_missing", "floor_pct"} <= set(join) for join in joins)
     assert "ledger_statements" not in compact["qualification"]
     assert {"status", "generation", "live_pin", "ledger_pin", "ledger_disposition", "ledger_tasks"} <= set(compact["qualification"])
-    assert compact["detail"] == {"full": False, "omitted": ["joins[].measurement", "qualification.ledger_statements"]}
+    # bill_versions has receipts: its receipt fields' meanings are a third key only the detailed reply carries.
+    assert compact["detail"] == {"full": False, "omitted": ["joins[].measurement", "qualification.ledger_statements",
+                                                            "receipt_field_meanings"]}
+    assert "receipt_field_meanings" not in compact and set(full["receipt_field_meanings"]) <= set(
+        compact["receipt_fields"]["fields"])
     assert full["detail"] == {"full": True, "omitted": []}
     expected = server._table_joins("bill_versions", measurements=True)
     assert full["joins"] == expected
