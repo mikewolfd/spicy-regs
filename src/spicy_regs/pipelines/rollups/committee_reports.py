@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import ClassVar
 
 from spicy_regs.pipelines.rollups.base import make_rollup_app
-from spicy_regs.legislative_rollups import LegislativeReceiptRollup, family_policies
+from spicy_regs.legislative_rollups import LegislativeReceiptRollup
 from spicy_regs.transforms.build_committee_reports import build_committee_reports
 
 
@@ -20,15 +20,15 @@ class CommitteeReportsRollup(LegislativeReceiptRollup):
     name: ClassVar[str] = "committee-reports"
     retain_source_evidence: ClassVar[bool] = True
     inputs: ClassVar[tuple[str, ...]] = ()
-    receipt_policies = family_policies('committee_reports', 'report_sections', 'hearing_transcripts', 'hearing_bill_links', 'committee_report_reads')
+    #: Every table the builder writes. The shared lifecycle derives the policies from this list and, from each
+    #: policy, that the read checkpoint is held in receipts and not published as a table.
     outputs: ClassVar[tuple[str, ...]] = (
         "committee_reports.parquet",
         "report_sections.parquet",
         "hearing_transcripts.parquet",
         "hearing_bill_links.parquet",
+        "committee_report_reads.parquet",
     )
-
-    receipt_only_tables = ("committee_report_reads.parquet",)
 
     def build(self, output_dir: Path) -> tuple[Path, ...]:
         # Comma-separated package ids to re-read alone; unset is the normal discovery run.

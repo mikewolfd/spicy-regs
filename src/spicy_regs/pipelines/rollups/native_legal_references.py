@@ -5,16 +5,15 @@ from typing import ClassVar
 
 from cyclopts import App
 
-from spicy_regs.legislative_rollups import LegislativeReceiptRollup, family_policies
+from spicy_regs.legislative_rollups import LegislativeReceiptRollup
 from spicy_regs.transforms.native_legal_references import build_native_legal_references
 
 
 class NativeLegalReferencesRollup(LegislativeReceiptRollup):
     name: ClassVar[str] = "native-legal-references"
     inputs: ClassVar[tuple[str, ...]] = ()
-    outputs: ClassVar[tuple[str, ...]] = ("native_legal_references.parquet",)
-    receipt_only_tables = ("native_legal_reference_reads.parquet",)
-    receipt_policies = family_policies("native_legal_references", "native_legal_reference_reads")
+    #: Both tables the builder writes; the shared lifecycle holds the read checkpoint in receipts, by its policy.
+    outputs: ClassVar[tuple[str, ...]] = ("native_legal_references.parquet", "native_legal_reference_reads.parquet")
     retain_source_evidence: ClassVar[bool] = True
 
     def __init__(self, *, manifest: Path, output_dir: Path | None = None, skip_upload: bool = True):
