@@ -82,7 +82,7 @@ def records(reply):
     return [dict(zip(data['columns'], row, strict=True)) for row in data['rows']]
 
 
-def mcp_controls(base: str, output: Path, subjects: dict[str, Path]):
+def mcp_controls(base: str, output: Path, subjects: dict[str, Path], *, policies=None):
     import spicy_regs.public_url as public_url
     setattr(public_url, 'resolve_r2_base_url', lambda value=None: base)
     os.environ['SPICY_REGS_MEMORY_LIMIT'] = '4GB'
@@ -123,7 +123,8 @@ def mcp_controls(base: str, output: Path, subjects: dict[str, Path]):
                     first = next(parquet.iter_batches(batch_size=1)).to_pylist()[0]
                 # Exact declared identity selects the source row without relying on SQL scan order.
                 filters = []
-                for name in policy(dataset).identity_fields:
+                declared = policy(dataset) if policies is None else policies[dataset]
+                for name in declared.identity_fields:
                     value = first[name]
                     literal = 'NULL' if value is None else "'" + str(value).replace("'", "''") + "'"
                     filters.append(f'"{name}" IS NOT DISTINCT FROM {literal}')
@@ -131,7 +132,8 @@ def mcp_controls(base: str, output: Path, subjects: dict[str, Path]):
                 if records(row) != [json.loads(json.dumps(first, default=str))]:
                     raise ValueError(f'Native MCP source values differ for {dataset}')
                 replies[dataset] = {'describe': described, 'count': count, 'sourceRow': row}
-            for sql in ("DELETE FROM member_votes WHERE FALSE",
+            present_table = next(iter(subjects))
+            for sql in (f'DELETE FROM "{present_table}" WHERE FALSE',
                         "SELECT * FROM read_parquet('https://unmapped.invalid/forbidden.parquet')"):
                 refusal = call(http, 'query_sql', {'sql': sql})
                 if refusal.get('isError') is not True:
