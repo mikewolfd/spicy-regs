@@ -1,7 +1,8 @@
 """Capture original logical comments from an explicitly pinned legacy snapshot.
 
-Read only: use Iceberg time travel (which applies deletes), never initialize or
-write catalog tables. Preserve every original column without normalization.
+Read only: retain the selected Iceberg time-travel query and frozen reader;
+delete handling needs separate qualification. Never initialize or write catalog
+tables. Preserve every original column without normalization.
 The caller grants the heavy slot and measures the whole process and private disk.
 An exported file is qualified only when RESULT.json reports captured.
 """
@@ -59,7 +60,7 @@ def runtime_identity(con) -> dict:
     """Pin installed engine and loaded source extensions without retaining SQL secrets."""
     extensions = []
     for name, version, path in con.execute("SELECT extension_name,extension_version,install_path "
-            "FROM duckdb_extensions() WHERE loaded AND extension_name IN ('iceberg','httpfs') "
+            "FROM duckdb_extensions() WHERE loaded AND extension_name IN ('avro','iceberg','httpfs') "
             "ORDER BY extension_name").fetchall():
         extensions.append({'name': name, 'version': version, 'path': path, 'sha256': digest(Path(path))})
     return {'duckdbVersion': duckdb.__version__, 'duckdbBinarySha256': digest(Path(_duckdb.__file__)),
@@ -82,6 +83,7 @@ def write_original_batches(con, query: str, source: Path, schema: pa.Schema, *,
     with con.sql(query).to_arrow_reader(batch_size=batch_rows) as reader:
         if not reader.schema.equals(schema, check_metadata=True):
             raise ValueError('Logical source reader schema differs from original fields')
+        progress('logical-snapshot-writer-open')
         with pq.ParquetWriter(source, schema, compression='zstd') as writer:
             progress('logical-snapshot-batch-read')
             for batch in reader:
@@ -95,6 +97,8 @@ def write_original_batches(con, query: str, source: Path, schema: pa.Schema, *,
                 observed['rows'] += batch.num_rows
                 observed['batches'] += 1
                 progress('logical-snapshot-batch-read')
+            progress('logical-snapshot-writer-close')
+        progress('logical-snapshot-reader-close')
     return observed
 
 

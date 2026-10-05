@@ -361,3 +361,53 @@ def test_changed_end_runtime_refuses_complete_file(tmp_path, expected, logical_s
     assert report['status'] == 'refused'
     assert pq.read_metadata(output / 'comments.parquet').num_rows == 4
     assert (output / 'comments.parquet').stat().st_mode & 0o222
+
+
+def test_runtime_identity_includes_manifest_reader_avro(tmp_path):
+    binary = tmp_path / 'avro.extension'
+    binary.write_bytes(b'original-avro')
+
+    class Connection:
+        def execute(self, query):
+            self.selected = [(name, 'fixture-build', str(binary))
+                             for name in ('avro',) if "'" + name + "'" in query]
+            return self
+
+        def fetchall(self):
+            return self.selected
+
+    before = capture.runtime_identity(Connection())
+    assert before['extensions'] == [{'name': 'avro', 'version': 'fixture-build', 'path': str(binary),
+                                     'sha256': capture.digest(binary)}]
+    binary.write_bytes(b'changed-avro')
+    assert capture.runtime_identity(Connection()) != before
+
+
+@pytest.mark.parametrize('where', ['open', 'close'])
+def test_writer_lifecycle_failure_phase_is_precise(tmp_path, expected, logical_source, monkeypatch, where):
+    connect, _, _ = logical_source
+    real = pq.ParquetWriter
+
+    class FailedWriter:
+        def __init__(self, *args, **kwargs):
+            if where == 'open':
+                raise OSError('private-token-do-not-retain')
+            self.inner = real(*args, **kwargs)
+
+        def __enter__(self):
+            return self
+
+        def write_batch(self, *args, **kwargs):
+            self.inner.write_batch(*args, **kwargs)
+
+        def __exit__(self, *args):
+            self.inner.close()
+            raise OSError('private-token-do-not-retain')
+
+    monkeypatch.setattr(pq, 'ParquetWriter', FailedWriter)
+    output = tmp_path / 'writer-lifecycle'
+    with pytest.raises(RuntimeError, match='refused'):
+        capture.capture(expected, output, namespace='default', connect=connect)
+    raw = (output / 'RESULT.json').read_text()
+    assert json.loads(raw)['failedPhase'] == 'logical-snapshot-writer-' + where
+    assert 'private-token' not in raw
