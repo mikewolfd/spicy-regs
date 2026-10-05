@@ -2311,6 +2311,11 @@
         "description": "Related name exactly as observed where supplied, including names with no reported identifier."
       },
       {
+        "column_name": "value_status",
+        "column_type": "VARCHAR",
+        "description": "Whether the source reported a value or an explicit absence such as missing_field, null, empty_string, empty_list or reported_none. Inspect before treating a row as an edge."
+      },
+      {
         "column_name": "cycle",
         "column_type": "INTEGER",
         "description": "Election cycle supplied for a bulk observation; current API observations may have no cycle."
@@ -19743,7 +19748,6 @@
         "processing_fields": [
           "subject_id_status",
           "object_id_status",
-          "value_status",
           "source_family",
           "source_sha256",
           "source_url",

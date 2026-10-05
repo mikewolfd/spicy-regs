@@ -327,3 +327,17 @@ def test_writer_preserves_previous_output_after_late_failure_and_all_columns(tmp
     with pytest.raises(ValueError, match="columns"):
         write_fec_relationship_rows([{**rows[0], "unexpected": "must not disappear"}], target)
     assert target.read_bytes() == prior
+
+
+def test_value_status_is_a_column_of_the_native_table_and_not_a_receipt_field():
+    """Owner decision 2026-10-05: whether a value was reported decides whether a row is an edge, and it varies
+    from row to row (two in five rows read ``reported`` on the published table that day), so readers filter on it."""
+    import pyarrow as pa
+
+    from spicy_regs.subject_catalog import policies
+
+    policy = policies()["fec_relationships"]
+    assert policy.subject_schema.field("value_status").type == pa.string()
+    assert "value_status" not in policy.receipt_fields
+    # The two id-shape statuses were not part of that decision and stay receipt fields.
+    assert {"subject_id_status", "object_id_status"} <= set(policy.receipt_fields)
