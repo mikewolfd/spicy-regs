@@ -259,7 +259,7 @@ def test_real_rulemaking_producers_build_native_outputs_from_qualified_inputs(tm
 
 
 def test_comment_period_anchor_is_a_subject_column_and_its_receipt_keeps_the_built_row(tmp_path):
-    """Owner decision 2026-10-05: what anchors a period is a column readers filter on, not processing evidence."""
+    """Owner decisions 2026-10-05: what anchors a period, and which records state its dates, are columns readers use."""
     from spicy_regs.etl_receipts import _unpack
     from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
     from spicy_regs.selected_generations import SelectedDataset, remember_selection
@@ -268,7 +268,8 @@ def test_comment_period_anchor_is_a_subject_column_and_its_receipt_keeps_the_bui
 
     dataset = "comment_periods"
     assert subject_schema(dataset).field("anchor_kind").type == pa.string()
-    assert "anchor_kind" not in policy(dataset).receipt_fields
+    assert subject_schema(dataset).field("evidence_ids").type == pa.list_(pa.string())
+    assert not {"anchor_kind", "evidence_ids", "evidence_ids_json"} & set(policy(dataset).receipt_fields)
     source = tmp_path / "built"
     source.mkdir()
     built = _build(
@@ -305,7 +306,10 @@ def test_comment_period_anchor_is_a_subject_column_and_its_receipt_keeps_the_bui
         dataset, source / "comment_periods.parquet", tmp_path / "native", generation_id="g1"
     )
     assert pq.read_schema(subject).equals(subject_schema(dataset))
-    assert {row["comment_period_id"]: row["anchor_kind"] for row in pq.read_table(subject).to_pylist()} == anchors
+    stored = pq.read_table(subject).to_pylist()
+    assert {row["comment_period_id"]: row["anchor_kind"] for row in stored} == anchors
+    evidence = {row["comment_period_id"]: json.loads(row["evidence_ids_json"]) for row in built}
+    assert {row["comment_period_id"]: row["evidence_ids"] for row in stored} == evidence and any(evidence.values())
     # The receipt still holds each whole built row, its anchor included, and no second copy of the field.
     held = [
         _unpack(json.loads(receipt["processing_json"]))

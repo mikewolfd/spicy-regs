@@ -1515,6 +1515,11 @@
         "description": "Native list of public URLs of the records whose window opens the period on `open_date`. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
       },
       {
+        "column_name": "evidence_ids",
+        "column_type": "VARCHAR[]",
+        "description": "Native list of every record in the period, each in exactly one period: dated Register record ids (`number@date`), a notice's Register record included when only its copies state a window, and Regulations.gov document ids. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+      },
+      {
         "column_name": "anchor_kind",
         "column_type": "VARCHAR",
         "description": "What anchors the period: `docket` when a docket does, `proceeding` when only a proceeding does, `none` when neither; the rulespec export takes the anchored rows."
@@ -18373,7 +18378,6 @@
         ],
         "processing_fields": [
           "source",
-          "evidence_ids_json",
           "method",
           "actor_id",
           "run_id",

@@ -753,7 +753,6 @@
         ],
         "processing_fields": [
           "source",
-          "evidence_ids_json",
           "method",
           "actor_id",
           "run_id",
@@ -3701,6 +3700,7 @@
         "open_date",
         "close_date",
         "opened_by_artifact_ids",
+        "evidence_ids",
         "anchor_kind",
         "register_close_date",
         "regulations_gov_close_date"
