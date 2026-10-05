@@ -487,3 +487,17 @@ def test_dictionary_mapping_failures_leave_no_output_generation(tmp_path, mutati
     with pytest.raises(ValueError):
         build_fec_observations(_manifest(tmp_path, [item]), tmp_path / "bad")
     assert not (tmp_path / "bad").exists()
+
+
+def test_scheduled_observation_rebuild_keeps_selected_receipt_rows(tmp_path, monkeypatch):
+    from spicy_regs.pipelines.rollups.fec_observations import FecObservationsRollup
+    monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
+    item, _ = _query(tmp_path)
+    manifest = _manifest(tmp_path, [item])
+    root = tmp_path / "outputs"
+    FecObservationsRollup(manifest=manifest, output_dir=root).run()
+    [first] = list((root / "generations").iterdir())
+    original = pq.read_table(first / "etl_receipts.parquet").to_pylist()
+    FecObservationsRollup(manifest=manifest, output_dir=root).run()
+    [second] = [p for p in (root / "generations").iterdir() if p != first]
+    assert pq.read_table(second / "etl_receipts.parquet").to_pylist() == original

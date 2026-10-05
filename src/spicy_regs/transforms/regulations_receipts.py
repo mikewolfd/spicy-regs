@@ -6,7 +6,6 @@ shared receipt member together. It never updates a remote pointer or catalog.
 
 from __future__ import annotations
 
-from contextlib import ExitStack
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from functools import cache
@@ -20,7 +19,6 @@ import pyarrow.parquet as pq
 from spicy_regs.etl_receipts import (
     DatasetPolicy,
     ReceiptContext,
-    ReceiptLineage,
     RECEIPT_SCHEMA,
     combine_receipts,
     failure_receipt,
@@ -207,8 +205,7 @@ def write_records(
     rows require a stable subject identity and exactly one matching receipt.
     """
     declared = policy(dataset)
-    with TemporaryDirectory(prefix="regulations-refusals-") as temp, ExitStack() as stack:
-        lineages = [stack.enter_context(ReceiptLineage([path], dataset=dataset)) for path in prior_receipts]
+    with TemporaryDirectory(prefix="regulations-refusals-") as temp:
         refusal_path = Path(temp) / "refused.parquet"
         writer = pq.ParquetWriter(refusal_path, RECEIPT_SCHEMA, compression="zstd")
         refused = []
@@ -228,8 +225,6 @@ def write_records(
                         if len(refused) >= 2000:
                             flush()
                         continue
-                    for lineage in lineages:
-                        context = lineage.inherit(context, declared, shaped)
                     yield shaped, context
             finally:
                 flush()
@@ -244,7 +239,7 @@ def write_records(
                 yield from batch.to_pylist()
 
         try:
-            subject, receipts = write_dataset(mapped(), destination, declared, failures=failures())
+            subject, receipts = write_dataset(mapped(), destination, declared, failures=failures(), prior_receipts=prior_receipts)
         finally:
             writer.close()
         assert subject is not None
@@ -604,5 +599,5 @@ def merge_native_staging(
             family=dataset,
             witnesses=pins,
             include_source_witness=False,
-            prior_receipts={dataset: [i.receipts for i in [*staged, *([prior] if prior is not None else [])]]},
+            prior_receipts={dataset: [prior.receipts] if prior is not None else []},
         )

@@ -17,7 +17,7 @@ from spicy_regs.court_subjects import (
     IDENTITIES, RECEIPT_FIELDS, SUBJECT_SCHEMAS, normalize_court_row,
 )
 from spicy_regs.etl_receipts import (
-    DatasetPolicy, RECEIPT_SCHEMA, ReceiptContext, ReceiptLineage, combine_receipts, failure_receipt,
+    DatasetPolicy, RECEIPT_SCHEMA, ReceiptContext, combine_receipts, failure_receipt,
     read_with_receipts, select_receipts, split_record, write_dataset,
 )
 
@@ -78,8 +78,7 @@ def write_court_rows(
     output_dir.mkdir(parents=True, exist_ok=True)
     bundle = output_dir / '.court-etl' / uuid4().hex
     bundle.parent.mkdir(exist_ok=True)
-    with ReceiptLineage([] if prior_receipts is None else [prior_receipts], dataset=dataset) as lineage, \
-            TemporaryDirectory(prefix='.court-failures-', dir=output_dir) as temporary:
+    with TemporaryDirectory(prefix='.court-failures-', dir=output_dir) as temporary:
         failures_path = Path(temporary) / 'etl_receipts.parquet'
         with pq.ParquetWriter(failures_path, RECEIPT_SCHEMA, compression='zstd') as writer:
             failures = []
@@ -96,7 +95,6 @@ def write_court_rows(
                             raise ValueError(f'Opinion body unavailable: {reason}')
                         # Validate before inheriting evidence or replacing a subject.
                         split_record(policy, mapped, context)
-                        context = lineage.inherit(context, policy, mapped)
                     except (ValueError, TypeError, KeyError, pa.ArrowException) as error:
                         failed = replace(context, diagnostics={**context.diagnostics,
                             'error_type': type(error).__name__, 'error': str(error)})
@@ -119,7 +117,8 @@ def write_court_rows(
                 writer.close()
 
             try:
-                subject, _ = write_dataset(records(), bundle, policy, failures=parquet_rows(failures_path))
+                subject, _ = write_dataset(records(), bundle, policy, failures=parquet_rows(failures_path),
+                                           prior_receipts=() if prior_receipts is None else (prior_receipts,))
             except Exception as error:
                 try:
                     record_source_failure(dataset, output_dir, witnesses=witnesses, error=error)

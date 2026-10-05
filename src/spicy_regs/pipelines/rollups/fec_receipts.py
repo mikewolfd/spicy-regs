@@ -25,11 +25,7 @@ class FecReceiptRollup(NativeReceiptLifecycle):
     def build_receipts(self, output_dir, **options):
         table = self.output.removesuffix(".parquet")
         work, priors = self._receipt_work(output_dir)
-        prior_bundle, prior_generation = None, None
-        if table == "fec_committees":
-            if priors.get(table) is not None:
-                _, receipt, prior_generation = priors.selections[table]
-                prior_bundle = receipt.parent
+        own = priors.selected.select(table)
         inputs = []
         for key in self.inputs:
             path = priors.get(key.removesuffix(".parquet"))
@@ -41,8 +37,7 @@ class FecReceiptRollup(NativeReceiptLifecycle):
             work / "native",
             generation_id=self.receipt_generation_id,
             inputs=inputs,
-            prior_bundle=prior_bundle,
-            prior_generation_id=prior_generation,
+            prior_selection=own,
             **options,
         )
         for batch in pq.ParquetFile(bundle / "etl_receipts.parquet").iter_batches(columns=["outcome"]):

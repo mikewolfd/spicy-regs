@@ -9,6 +9,14 @@ EARLIER_COLUMNS = {
 
 
 def earlier_policies(policy):
+    if policy.dataset == "scorecard_member_ratings" and policy.policy_version == "scorecards-etl-ratings-v2":
+        import pyarrow as pa
+        schema = policy.subject_schema
+        index = schema.get_field_index("value_number")
+        if index < 0 or schema.field(index).type != pa.decimal128(38, 19):
+            raise ValueError("Current scorecard policy differs from the declared rating promotion")
+        return (replace(policy, subject_schema=schema.set(index, schema.field(index).with_type(pa.decimal128(38, 18))),
+                        policy_version="scorecards-etl-v1"),)
     if policy.policy_version != "government-sources/2" or policy.dataset not in EARLIER_COLUMNS:
         return ()
     schema = policy.subject_schema

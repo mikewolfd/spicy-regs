@@ -350,13 +350,9 @@ def test_committee_increment_requires_exact_prior_receipts_before_producer(tmp_p
     subject = pq.read_table(output / "fec_committees.parquet").to_pylist()[0]
     assert subject["cycles"] == [2024, 2024]
     assert subject["candidate_ids"] is None
-    from spicy_regs.etl_receipts import resolve_receipt_witness
-
     [before] = pq.read_table(prior / "etl_receipts.parquet").to_pylist()
     [after] = pq.read_table(output / "etl_receipts.parquet").to_pylist()
-    assert after["witnesses"][: len(before["witnesses"])] == before["witnesses"]
-    reference = next(w for w in after["witnesses"] if w["body_version"] == before["receipt_id"])
-    assert resolve_receipt_witness(after, reference)
+    assert after == before
 
 
 def test_committee_history_parent_restores_the_rows_its_builder_wrote(tmp_path, monkeypatch):
@@ -458,3 +454,49 @@ def test_registration_statements_publish_the_source_namespace_that_tells_form_1_
     pq.write_table(pa.Table.from_pylist(changed, schema=stored.schema), output / (table + ".parquet"))
     with pytest.raises(ValueError, match="subject receipt"):
         list(read_identity_rows(output, table, generation_id="g1"))
+
+
+@pytest.mark.parametrize("table", ["fec_candidate_history", "fec_committee_history", "fec_source_catalog"])
+def test_scheduled_history_rollup_carries_own_selected_receipts(tmp_path, monkeypatch, table):
+    import importlib
+    import pyarrow as pa
+    from spicy_regs.pipelines.rollups.fec_receipts import FecReceiptRollup
+    monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
+    fields = REGISTRY[table]["input_fields"]
+    row = dict.fromkeys(fields)
+    row.update({key: "2024" if key == "cycle" else key for key in REGISTRY[table]["identity_fields"]})
+    module = importlib.import_module("spicy_regs.transforms.build_" + table)
+
+    def maintained_output(directory, **options):
+        path = directory / (table + ".parquet")
+        pq.write_table(pa.Table.from_pylist([row], schema=pa.schema([(name, pa.string()) for name in fields])), path)
+        return path
+
+    monkeypatch.setattr(module, "build_" + table, maintained_output)
+    class Scheduled(FecReceiptRollup):
+        name = "test-own-history"
+        output = table + ".parquet"
+        inputs = ()
+        def build(self, output_dir):
+            return self.build_receipts(output_dir)
+
+    root = tmp_path / "outputs"
+    Scheduled(output_dir=root).run()
+    [first] = list((root / "generations").iterdir())
+    original = pq.read_table(first / "etl_receipts.parquet").to_pylist()
+    # Selected paths are explicit; readers cannot guess siblings from a receipt parent.
+    import shutil
+    from spicy_regs.selected_generations import SelectedDataset, remember_selection
+    exact = root / "exact-selected-paths"
+    exact.mkdir()
+    receipt = exact / "prior-attempts.parquet"
+    shutil.copyfile(first / "etl_receipts.parquet", receipt)
+    subjects = ()
+    if not REGISTRY[table]["receipt_only"]:
+        subject = exact / "prior-subjects.parquet"
+        shutil.copyfile(first / (table + ".parquet"), subject)
+        subjects = (subject,)
+    remember_selection(root, [SelectedDataset(table, subjects, receipt, "selected-publisher")])
+    Scheduled(output_dir=root).run()
+    [second] = [p for p in (root / "generations").iterdir() if p != first]
+    assert pq.read_table(second / "etl_receipts.parquet").to_pylist() == original
