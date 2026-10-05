@@ -7,6 +7,7 @@ import json
 import httpx
 import pytest
 from spicy_docs.sources.legislators import LegislatorsBudget, LegislatorsSourceError
+from spicy_docs.transport.captured import attached_capture
 
 from spicy_regs.sources.member_rosters import ReviewedMemberRosters, SELECTION
 
@@ -51,7 +52,9 @@ def test_changed_fork_bytes_refuse_before_the_member_producer_uses_them():
     owner, _, _ = reader(capture(), expected=capture() + b" ")
     with owner, pytest.raises(LegislatorsSourceError, match="differ from the approved input") as failure:
         owner.acquire_current()
-    assert failure.value.capture.requested_url.startswith("https://raw.githubusercontent.com/")
+    response = attached_capture(failure.value)
+    assert response is not None
+    assert response.requested_url.startswith("https://raw.githubusercontent.com/")
 
 
 def test_current_roster_still_requires_the_source_readers_lis_postcondition():
@@ -69,4 +72,4 @@ def test_unreviewed_or_mixed_roster_selection_refuses_before_acquisition(change)
         url = selection["historical"]["url"]
         selection["historical"]["url"] = url.replace(url.split("/")[-2], "main" if change == "branch" else "a" * 40)
     with pytest.raises(ValueError):
-        ReviewedMemberRosters(budget=LegislatorsBudget(), selection=selection)
+        ReviewedMemberRosters(budget=LegislatorsBudget(4, 1024 * 1024, 10.0, 0.0), selection=selection)
