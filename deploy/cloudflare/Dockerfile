@@ -36,7 +36,7 @@ WORKDIR /app
 # running those calls with only this image's packages); about 117 MB installed
 # beside the 93 MB the others take. The lock and the check stay in the image,
 # so the binding step can rerun the check inside the pushed image.
-COPY uv.lock deploy/cloudflare/lock_pins.py /app/lock/
+COPY uv.lock deploy/cloudflare/lock_pins.py deploy/cloudflare/runtime_readers.py /app/lock/
 RUN python /app/lock/lock_pins.py constraints /app/lock/uv.lock > /app/lock/constraints.txt \
     && pip install -c /app/lock/constraints.txt mcp duckdb uvicorn loguru httpx pytz pyarrow && pip check
 
@@ -46,6 +46,8 @@ RUN python /app/lock/lock_pins.py constraints /app/lock/uv.lock > /app/lock/cons
 COPY pyproject.toml README.md ./
 COPY src ./src
 RUN pip install --no-deps . && python /app/lock/lock_pins.py check /app/lock/uv.lock
+# Exercise native receipt selection before checking the other runtime imports.
+RUN python /app/lock/runtime_readers.py
 # Fail the build, not the first request, when a module the server imports at
 # request time needs a package this image does not install. pyarrow,
 # etl_receipts and etl_policy_registry are imported inside calls, which
