@@ -402,11 +402,12 @@ def test_refused_refresh_keeps_prior_and_records_rejected_update(tmp_path, monke
     retained = next(r for r in receipts if r['record_id'] == old_receipt['record_id'] and r['outcome'] == 'accepted')
     assert pq.read_table(original_path).to_pylist() == [original]
     assert second.resolve() != original_path
-    assert retained['subject_version'] == old_receipt['subject_version']
-    assert retained['witnesses'][:len(old_receipt['witnesses'])] == old_receipt['witnesses']
-    from spicy_regs.etl_receipts import resolve_receipt_witness
+    assert retained == old_receipt
+    from spicy_regs.etl_receipts import decode_exact_json
+    from pathlib import Path
     from hashlib import sha256
-    prior_witness = next(w for w in retained['witnesses'] if w['body_version'] == old_receipt['receipt_id'])
-    original_processing = old_receipt['processing_json'].encode()
-    assert prior_witness['sha256'] == 'sha256:' + sha256(original_processing).hexdigest()
-    assert resolve_receipt_witness(retained, prior_witness) == original_processing
+    processing = decode_exact_json(retained['processing_json'])
+    assert json.loads(processing['raw_source_record']) == {'docket_id': 1, 'caseName': 'Held', 'party': ['Agency']}
+    for witness in retained['witnesses']:
+        retained_source = Path(witness['source_uri'])
+        assert 'sha256:' + sha256(retained_source.read_bytes()).hexdigest() == witness['sha256']
