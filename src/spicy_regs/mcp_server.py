@@ -1378,6 +1378,19 @@ def _lineage_meanings(lineage: Mapping[str, Sequence[str]]) -> dict[str, str]:
     return meanings
 
 
+def _legacy_column_meanings(cursor: duckdb.DuckDBPyConnection, table: str, entry: Mapping) -> dict[str, str]:
+    """Historical meanings for actual columns of a selected pre-native generation."""
+    from spicy_regs.sources.publication import table_owner
+
+    local = _connection_local_selection(cursor)
+    if local is not None and table in local.get("native", {}):
+        return {}
+    owner = table_owner(_connection_index(cursor), f"{table}.parquet")
+    if owner is None or "etlReceipts" in owner[1]:
+        return {}
+    return dict(entry.get("legacy_column_descriptions", {}))
+
+
 #: What ``describe_table`` leaves out unless asked with ``detail=true``: the measured records that
 #: made bill_versions' reply 24,600 bytes, repeated for every table of a ledger family (round 3, S3).
 #: A qualified FEC view also leaves out its release record's inventories (``RELEASE_INVENTORIES``): its
@@ -2050,6 +2063,7 @@ def _tools() -> list[Tool]:
             entry = _table_metadata().get(table, {"table": table, "columns": []})
         declared = {column["column_name"]: column for column in entry["columns"]}
         actual = {row[0]: row[1] for row in rows}
+        legacy_meanings = _legacy_column_meanings(cursor, table, entry) if available else {}
         scope, qualified = _qualification(cursor, [table], statements=detail)
         differences = (
             {
@@ -2090,12 +2104,14 @@ def _tools() -> list[Tool]:
             "joins": _table_joins(table, measurements=detail),
             "metadata": {key: [item["dataset"] for item in value] if table == "etl_receipts" and key == "datasets" else value
                          for key, value in entry.items()
-                         if key not in {"table", "columns", "column_descriptions", "column_lineage"}},
+                         if key not in {"table", "columns", "column_descriptions", "column_lineage",
+                                        "legacy_column_descriptions"}},
             "metadata_basis": "Dictionary declarations and dated coverage notes; not live population measurements.",
             "schema_matches_declared": not any(differences.values()) if differences is not None else None,
             "schema_differences": differences,
             "columns": [
-                {"column_name": name, "column_type": dtype, "description": declared.get(name, {}).get("description")}
+                {"column_name": name, "column_type": dtype,
+                 "description": declared.get(name, {}).get("description") or legacy_meanings.get(name)}
                 for name, dtype in actual.items()
             ] if available else entry["columns"],
         }

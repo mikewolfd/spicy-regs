@@ -1169,6 +1169,8 @@ tables:
       entity_url: "Entity's self-reported website URL (`coreData.entityInformation.entityURL`). Often null."
   lobbying_filings:
     identity_columns: [filing_uuid]
+    # Historical physical columns, described only while an old generation holds them.
+    legacy_columns: [lobbying_activities_json, government_entities_json, url]
     label: "Lobbying disclosure filings"
     subject: lobbying
     coverage: >-
