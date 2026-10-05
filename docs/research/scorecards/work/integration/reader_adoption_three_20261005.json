@@ -326,6 +326,30 @@
         }
       },
       "boundary": "Unrelated upstream conversion corrections are preserved; qualified scorecard runtime and package bytes are unchanged"
+    },
+    {
+      "status": "passed",
+      "tested_consumer_commit": "efffad864d5d46acc79d81ad26ca6b02c9c30751",
+      "upstream_commit": "219114d5",
+      "qualified_package_and_source_scope_unchanged": true,
+      "checks": {
+        "affected_scorecard_and_shared_etl_tests": {
+          "command": "uv run --frozen pytest tests/test_etl_receipts.py tests/test_mcp_etl_receipts.py tests/test_subject_receipt_rollups.py tests/test_fec_subject_receipts.py tests/test_scorecard_*.py tests/test_mcp_scorecard_guidance.py",
+          "status": "passed",
+          "log_sha256": "300461499ffeb4073fda99e04274f7f6e1d2df620424e215cef3ae626f66cd95"
+        },
+        "ruff": {
+          "command": "uv run --frozen ruff check .",
+          "status": "passed",
+          "log_sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+        },
+        "ty": {
+          "command": "uv run --frozen ty check",
+          "status": "passed",
+          "log_sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+        }
+      },
+      "boundary": "Upstream shared ETL batch normalization retained; affected scorecard and receipt suites verified after the previous complete consumer gate"
     }
   ]
 }
