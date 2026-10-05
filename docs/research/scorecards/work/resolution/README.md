@@ -178,6 +178,19 @@ edition beside the original item and reference in `source_context_json`. This
 qualifies HRC's final 118th Congress cosponsorship citations without modifying
 their source fields.
 
+Rule version `scorecard-resolution-v1.5` recognizes the original NRA-PVF chamber
+labels `US House`, `U.S House` and `US Senate`, numbered `Congressional District`
+labels and `At-Large Congressional District`. These exact spellings constrain
+historical term matching alongside the source state and period. Identical names
+in different districts or chambers remain separate candidates. Source columns
+and the literals retained in `source_context_json` stay unchanged; unknown
+spellings keep their existing unresolved-context notes.
+
+NRA-PVF's `Election held on ...` text describes an election cohort. It is not
+currently a qualified historical term period. Name-only matches with this text
+retain `no_exact_historical_period`; the resolver does not substitute the edition
+year or acquisition timestamp for that explicit source period.
+
 The fallback refuses malformed Congress or chamber assertions, a source roll or
 session context, a separate roll reference, conflicting or unparseable measure
 identifiers, and relative, historical, mixed or unrecognized periods. An asserted

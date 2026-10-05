@@ -91,6 +91,33 @@ def test_exact_historical_context_uses_terms_not_latest_summary():
     assert json.loads(resolved["term_candidates_json"])["A000001"][0]["term_district"] == "7"
 
 
+@pytest.mark.parametrize(
+    "chamber,district,canonical_district,kind",
+    [
+        ("US House", "7th Congressional District", "7", "rep"),
+        ("U.S House", "At-Large Congressional District", "0", "rep"),
+        ("US Senate", None, None, "sen"),
+    ],
+)
+def test_native_chamber_and_district_labels_constrain_exact_historical_identity(
+    chamber, district, canonical_district, kind
+):
+    row = member(chamber_text=chamber)
+    row["district"] = district
+    before = deepcopy(row)
+    data = official(
+        [person(), person("B000001")],
+        [term(district=canonical_district, kind=kind), term("B000001", district="8", kind="rep")],
+    )
+    result = link(row, data)
+    assert result["bioguide_id"] == "A000001"
+    assert result["resolution_rule"] == "exact_historical_name_context"
+    assert result["candidate_count"] == "2"
+    assert row == before
+    context = json.loads(result["source_context_json"])
+    assert context["chamber_text"] == chamber and context["district"] == district
+
+
 def test_bioguide_and_crosswalk_orders_and_literal_state_not_overwritten():
     data = official([person(lis_id="S001", govtrack_id="123", fec_ids_json='["H1CA00001"]')])
     for scheme, value, rule in [
@@ -833,7 +860,7 @@ def test_explicit_edition_congress_qualifies_only_the_unstated_measure_context(f
     assert row[target] == identifier and row["congress"] == "118"
     assert row["vote_id"] is row["session"] is row["roll_number"] is None
     assert row["resolution_rule"].endswith("_edition_congress")
-    assert row["rule_version"] == "scorecard-resolution-v1.4"
+    assert row["rule_version"] == "scorecard-resolution-v1.5"
     assert "explicit_edition_congress_for_measure" in row["reason"]
     context = json.loads(row["source_context_json"])
     assert context["item"].get("congress_text") is None

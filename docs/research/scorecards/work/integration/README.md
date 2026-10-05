@@ -8,6 +8,8 @@ The [reader repin](repin_20261004.md) records adoption of the remaining reviewed
 readers and their shared PDF validator.
 The [verified publication follow-up](release_followup_20261004.md) identifies
 the subsequent source release, the next reader package and remaining work.
+The [subsequent reader package](reader_five_20261004.md) records NRA-PVF,
+21Wilberforce, Drug Policy Action, UAW and AFT qualification and remaining work.
 
 The [generated work queue](integration_progress.md) accounts for every publisher
 in the [adapter matrix](adapter_support_matrix.md) and
@@ -66,7 +68,7 @@ When selecting the reviewed shared PDF validator, freeze
 `src/spicy_docs/reading/pdf_bytes.py` beside the reader modules and add
 `--pdf-bytes-sha256 "$SCORECARD_PDF_BYTES_SHA256"` to the build command. The
 builder checks that exact pin and permits only this explicit additional runtime
-file. The [current package receipt](https://github.com/mikewolfd/spicy-regs/blob/5bcd617240fb6caa90ebce24f103130ea6936888/vendor/spicy_docs-scorecards.json)
+file. The [current package receipt](../../../../../vendor/spicy_docs-scorecards.json)
 records the selected validator and every installed module.
 Copy the selected wheel to `vendor/`, update the matching dependency and source
 pins in `pyproject.toml`, then run `uv lock` and `uv sync --frozen`. Verify the

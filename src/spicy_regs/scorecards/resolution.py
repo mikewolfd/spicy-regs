@@ -16,7 +16,7 @@ import unicodedata
 
 from spicy_docs.sources.congress.votes import vote_day
 
-RULE_VERSION = "scorecard-resolution-v1.4"
+RULE_VERSION = "scorecard-resolution-v1.5"
 SOURCE_TABLES = ("scorecards", "scorecard_members", "scorecard_items")
 OFFICIAL_TABLES = ("members", "member_terms", "congress_bills", "amendments", "roll_call_votes")
 INPUT_TABLES = SOURCE_TABLES + OFFICIAL_TABLES
@@ -133,9 +133,12 @@ _CHAMBERS = {
     "representative": "house",
     "house of representatives": "house",
     "u.s. house of representatives": "house",
+    "us house": "house",
+    "u.s house": "house",
     "senate": "senate",
     "sen": "senate",
     "senator": "senate",
+    "us senate": "senate",
 }
 
 
@@ -185,9 +188,11 @@ def _chamber(value: str | None) -> str | None:
 
 def _district(value: str | None) -> str | None:
     text = _text(value).casefold()
-    if text in {"at-large", "at large", "al"}:
+    if text in {"at-large", "at large", "al", "at-large congressional district"}:
         return "0"
-    return str(int(text)) if text.isdecimal() else None
+    if text.isdecimal():
+        return str(int(text))
+    return _number(text, r"Congressional District")
 
 
 def _number(value: str | None, suffix: str = "") -> str | None:
