@@ -549,40 +549,40 @@ the declared fields of each are offered.
 schema and digested by `etl_receipts.subject_identity`; text is never trimmed,
 folded or read as a number, and a key that does not fit the identity is
 refused, never answered as a miss. `etl_receipts` imports pyarrow, which the
-Cloudflare image does not install: `describe_table`'s `receipt_fields` needs
-none, and a lookup on a server without it is refused saying so.
+Cloudflare image installs for this and the other native readers
+(`deploy/cloudflare/Dockerfile`); `describe_table`'s `receipt_fields` needs
+none. Before any key is looked up, one accepted receipt per policy version has
+its stored record id recomputed from its own identity, and a publication whose
+ids this server does not reproduce is refused.
 
 **One member, read by row range.** Only the receipt member of the family that
 publishes the table is read. Its footer (`parquet_metadata`, cached per pinned
-member) gives each row group's bounds on `dataset`, `record_id` and
-`policy_version`; footers were 2.5 to 4.5 bytes per receipt on 2026-10-05
-(sam-entities 1.98 MB for 797,525 receipts, scorecards 14.9 MB for 3,301,267,
-in 2,000-row groups). Where the dataset's groups are ordered by record id, each
-key's group is read off the footer. Where they are not, the record ids of the
-dataset's rows are scanned once (sam_entities, 797,525 receipts: 399 requests,
-27 MiB, about 1.5 s on 14 threads, 2026-10-05) and a dataset past
-`SCAN_ROW_BOUND` (2,000,000) is refused, from the footer
-alone: no row of a member too large to scan is read to refuse it. Matched
-receipts are then fetched in one statement whose filter is an OR of row
-ranges, which DuckDB 1.5.5 prunes to exactly those groups; one scan per group
-cost a HEAD and a footer read each at bind (11 s for 73 groups against 1.7 s).
-An `IN` list on `record_id` prunes only by the list's overall range, so it is
-never the filter that selects groups. Rows inside a group are not ordered by a
-footer and need not be: the cost of a sorted member is (groups holding a key)
-times (rows per group), so a writer that sorts must keep row groups small.
+member) gives each row group's bounds on `dataset` and `policy_version`;
+footers were 2.5 to 4.5 bytes per receipt on 2026-10-05 (sam-entities 1.98 MB
+for 797,525 receipts, scorecards 14.9 MB for 3,301,267, in 2,000-row groups).
+No published member is ordered by record id, so the record ids of the
+dataset's rows are scanned once to find the keys' rows (sam_entities, 797,525
+receipts: 399 requests, 27 MiB, about 1.5 s on 14 threads, 2026-10-05), and a
+dataset past `SCAN_ROW_BOUND` (2,000,000) is refused, from the footer alone:
+no row of a member too large to scan is read to refuse it. Matched receipts
+are then fetched in one statement whose filter is an OR of row ranges, which
+DuckDB 1.5.5 prunes to exactly those groups; one scan per group cost a HEAD
+and a footer read each at bind (11 s for 73 groups against 1.7 s). An `IN`
+list on `record_id` prunes only by the list's overall range, so it is never
+the filter that selects groups.
 
-No published member is ordered today, and admission does not order them.
-Sorting each member at admission was built and measured on 2026-10-05, then
-withdrawn: the scorecards member (3.3 million receipts, 1.09 GB) took 38 s
-and 9.2 GB of spill, 8.4 times its compressed size, on every publish, came
-out 41% larger because digest order compresses worse, and four readers that
-replay builder order had to sort it back. Receipts run 1.7 to 4.5 times their
-tables' bytes, so the larger families would not fit a runner. The ordered path
-stays for a member a writer happens to order. The planned way past the bound
-is a small index beside an untouched member, `(dataset, record_id, row
-number)` in record-id order: built in 2.1 s for sam-entities and 1.5 s for
-scorecards the same day, about 40 bytes a row. It needs a place in the
-publication index, whose `etlReceipts` entry is held to exactly seven keys.
+Sorting each member at admission, so that a footer could find a key's row
+group, was built and measured on 2026-10-05, then withdrawn: the scorecards
+member (3.3 million receipts, 1.09 GB) took 38 s and 9.2 GB of spill, 8.4
+times its compressed size, on every publish, came out 41% larger because
+digest order compresses worse, and four readers that replay builder order had
+to sort it back. Receipts run 1.7 to 4.5 times their tables' bytes, so the
+larger families would not fit a runner. The bulk writer keeps builder order
+too, so nothing reads a footer for order. The planned way past the bound is a
+small index beside an untouched member, `(dataset, record_id, row number)` in
+record-id order: built in 2.1 s for sam-entities and 1.5 s for scorecards the
+same day, about 40 bytes a row. It needs a place in the publication index,
+whose `etlReceipts` entry is held to exactly seven keys.
 
 **What the bound counts.** The count compared with `SCAN_ROW_BOUND` is the rows of every row group whose
 `dataset` bounds admit the table's name, so it includes other tables' receipts in a group they share and is

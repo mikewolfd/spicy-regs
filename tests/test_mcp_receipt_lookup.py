@@ -88,7 +88,7 @@ def test_a_found_receipt_gives_decoded_plain_values_in_request_order(tmp_path, m
                  ["filing_url", "native_fields_json", "text_data"])
     family = server._connection_index(con.cursor())["families"]["fcc-filings"]
     assert reply["table"] == "fcc_filings" and reply["identity_fields"] == {"id_submission": "VARCHAR"}
-    assert reply["receipts"] == {"family": "fcc-filings", "generation_id": GENERATION, "sorted": True,
+    assert reply["receipts"] == {"family": "fcc-filings", "generation_id": GENERATION,
                                  "artifact_digest": family["artifactDigest"], "policy_version": "government-sources/1"}
     assert [entry["key"] for entry in reply["keys"]] == [{"id_submission": "0427547924954"}, {"id_submission": "100"}]
     leading_zero, hundred = (entry["fields"] for entry in reply["keys"])
@@ -377,38 +377,36 @@ def test_every_version_a_member_holds_is_compared_and_one_differing_identity_ref
     assert "'government-sources/8'" in message and "total_page_count (integer)" in message
 
 
-# Refusal 6 and the scan it bounds: a member not ordered by record id.
+# Refusal 6 and the scan it bounds: no member is ordered by record id.
 
 def _descending(table: pa.Table) -> pa.Table:
     return table.sort_by([("record_id", "descending")])
 
 
-def test_an_unsorted_member_is_scanned_below_the_bound_and_says_so(tmp_path, monkeypatch):
+def test_keys_are_found_wherever_their_receipts_lie_in_the_member(tmp_path, monkeypatch):
     rows = [fcc(str(number)) for number in range(100, 109)]
     one_family(tmp_path, monkeypatch, {"fcc_filings": rows}, row_group=2, edit=_descending)
     keys = [{"id_submission": str(number)} for number in (108, 100, 104, 999)]
     reply = call("fcc_filings", keys, ["filing_url"])
     assert [entry["receipt"] for entry in reply["keys"]] == ["found", "found", "found", "not_in_table"]
     assert [entry["fields"]["filing_url"]["value"][-3:] for entry in reply["keys"][:3]] == ["108", "100", "104"]
-    assert reply["receipts"]["sorted"] is False and reply["receipts"]["scanned_rows"] == 9
-    assert "not sorted by record id" in reply["receipts"]["scan"]
 
 
-def test_an_unsorted_member_past_the_bound_is_refused_from_its_footer_alone(tmp_path, monkeypatch):
+def test_a_table_past_the_bound_is_refused_from_its_footer_alone(tmp_path, monkeypatch):
     rows = [fcc(str(number)) for number in range(100, 109)]
     monkeypatch.setattr(lookup, "SCAN_ROW_BOUND", 8)
     con = one_family(tmp_path, monkeypatch, {"fcc_filings": rows}, row_group=2, edit=_descending)
     recording = _Recording(con)
     monkeypatch.setattr(server, "_get_connection", lambda: recording)
     message = refused("fcc_filings", [{"id_submission": "100"}], ["filing_url"])
-    assert "read_receipt_fields is not available for fcc_filings: its receipts are not sorted by record id" in message
-    assert "would scan 9 of them, over the 8-receipt bound" in message
+    assert "read_receipt_fields is not available for fcc_filings: a lookup reads the record id of every receipt" in message
+    assert "it has 9, over the 8-receipt bound" in message
     # The refusal is decided from the member's footer: no row of a member too large to scan is read to refuse it.
     assert [sql.split(" FROM ")[1].split("(")[0] for sql, _ in recording.statements
             if "read_parquet" in sql or "parquet_metadata" in sql] == ["parquet_metadata"]
 
 
-def test_a_sorted_member_past_the_bound_is_read_from_its_keys_row_groups(tmp_path, monkeypatch):
+def test_two_tables_in_one_member_are_each_read_for_their_own_keys(tmp_path, monkeypatch):
     """Two datasets in one member, as gao-reports publishes: a row group shared at their boundary is read for both."""
     from spicy_regs.transforms.government_source_shapes import LEGACY_COLUMNS, map_subject
 
@@ -419,16 +417,14 @@ def test_a_sorted_member_past_the_bound_is_read_from_its_keys_row_groups(tmp_pat
     reports = [government("gao_reports", report_id=f"GAO-26-{number}", title=f"Report {number}") for number in range(7)]
     decisions = [government("gao_decisions", decision_number=f"B-{number}", url=f"https://www.gao.gov/products/b-{number}",
                             title=f"Decision {number}") for number in range(7)]
-    monkeypatch.setattr(lookup, "SCAN_ROW_BOUND", 8)
-    con = one_family(tmp_path, monkeypatch, {"gao_reports": reports, "gao_decisions": decisions}, order=True, row_group=4)
+    con = one_family(tmp_path, monkeypatch, {"gao_reports": reports, "gao_decisions": decisions}, row_group=4)
     groups = lookup._footer(con.cursor(), member(con, "gao_decisions"))
     assert [group.datasets for group in groups] == [
-        ("gao_decisions", "gao_decisions"), ("gao_decisions", "gao_reports"), ("gao_reports", "gao_reports"),
-        ("gao_reports", "gao_reports")]
+        ("gao_reports", "gao_reports"), ("gao_decisions", "gao_reports"), ("gao_decisions", "gao_decisions"),
+        ("gao_decisions", "gao_decisions")]
     reply = call("gao_decisions", [{"decision_number": f"B-{number}", "url": f"https://www.gao.gov/products/b-{number}"}
                                    for number in range(7)], ["title"])
     assert [entry["fields"]["title"]["value"] for entry in reply["keys"]] == [f"Decision {n}" for n in range(7)]
-    assert reply["receipts"]["sorted"] is True and "scan" not in reply["receipts"]
     reply = call("gao_reports", [{"report_id": f"GAO-26-{number}"} for number in range(7)], ["title"])
     assert [entry["fields"]["title"]["value"] for entry in reply["keys"]] == [f"Report {n}" for n in range(7)]
 
@@ -469,51 +465,28 @@ def test_the_receipts_page_shows_a_call_the_tool_answers(tmp_path, monkeypatch):
                               "fields": {"url": {"state": "stated", "value": link}}}]
 
 
-@pytest.mark.parametrize("order", [True, False])
-def test_only_the_row_groups_holding_a_key_are_read_and_a_sorted_member_is_never_scanned(tmp_path, monkeypatch, order):
-    """What the tool asks DuckDB for: one statement over the row ranges of the groups its keys are in. A sorted
-    member's groups come from the footer; an unsorted one's from a single scan of record ids, never of receipts."""
+def test_one_scan_of_record_ids_then_only_the_row_groups_holding_a_key_are_read(tmp_path, monkeypatch):
+    """What the tool asks DuckDB for: a single scan of record ids, never of receipts, to find its keys' rows, then
+    one statement over the row ranges of the groups they are in."""
     rows = [fcc(str(number)) for number in range(100, 120)]
-    con = one_family(tmp_path, monkeypatch, {"fcc_filings": rows}, order=order, row_group=2,
-                     edit=None if order else _descending)
+    con = one_family(tmp_path, monkeypatch, {"fcc_filings": rows}, row_group=2, edit=_descending)
     recording = _Recording(con)
     monkeypatch.setattr(server, "_get_connection", lambda: recording)
     asked = ["104", "117"]
     reply = call("fcc_filings", [{"id_submission": identifier} for identifier in asked], ["filing_url"])
-    assert [entry["receipt"] for entry in reply["keys"]] == ["found", "found"] and reply["receipts"]["sorted"] is order
+    assert [entry["receipt"] for entry in reply["keys"]] == ["found", "found"]
     held = pq.read_table(member(con, "fcc_filings").location, columns=["record_id"])["record_id"].to_pylist()
     wanted = sorted(held.index(subject_identity(POLICIES["fcc_filings"], {"id_submission": identifier})[0]) // 2
                     for identifier in asked)
     locates = [parameters for sql, parameters in recording.statements if "SELECT record_id, file_row_number" in sql]
     [(fetch, parameters)] = [(sql, parameters) for sql, parameters in recording.statements if "processing_json" in sql]
-    assert len(locates) == (0 if order else 1)
+    assert len(locates) == 1
     ranges = [tuple(parameters[1 + 2 * n:3 + 2 * n]) for n in range(fetch.count("file_row_number >= ?"))]
     assert ranges == [(2 * group, 2 * group + 2) for group in wanted] and len(set(wanted)) == 2
-    # The scan of an unsorted member reads the record ids of the dataset's rows and nothing else.
+    # The scan reads the record ids of the dataset's rows and nothing else.
     for located in locates:
         assert located[1:3] == [0, 20] and "processing_json" not in [sql for sql, _ in recording.statements
                                                                       if "SELECT record_id, file_row_number" in sql][0]
-
-
-def _group(start, datasets, records):
-    return lookup._Group(start, 2, datasets, records, ("v", "v"))
-
-
-@pytest.mark.parametrize(("groups", "ordered"), [
-    ([_group(0, ("t", "t"), ("a", "c")), _group(2, ("t", "t"), ("c", "f"))], True),
-    ([_group(0, ("t", "t"), ("a", "d")), _group(2, ("t", "t"), ("c", "f"))], False),  # record ranges overlap
-    ([_group(0, ("s", "t"), ("a", "z")), _group(2, ("t", "t"), ("b", "c")), _group(4, ("t", "u"), ("a", "z"))], True),
-    ([_group(0, ("t", "t"), ("a", "b")), _group(2, ("s", "u"), ("a", "z")), _group(4, ("t", "t"), ("c", "d"))], False),
-    ([_group(0, ("t", "t"), ("a", "b")), _group(2, ("t", "t"), (None, None)), _group(4, ("t", "t"), ("b", "d"))], True),
-    ([_group(0, ("t", "t"), ("a", "z"))], True),
-])
-def test_order_is_read_off_footer_statistics_alone(groups, ordered):
-    assert lookup._sorted(groups, list(range(len(groups))), "t") is ordered
-
-
-def test_a_dataset_whose_row_groups_are_not_consecutive_is_not_sorted():
-    groups = [_group(0, ("t", "t"), ("a", "b")), _group(2, ("u", "u"), ("a", "b")), _group(4, ("t", "t"), ("c", "d"))]
-    assert lookup._sorted(groups, [0, 2], "t") is False
 
 
 # Refusal 7: a reply past the budget says how many keys fit.
@@ -573,7 +546,9 @@ def test_a_refused_attempt_with_the_key_is_not_an_accepted_receipt(tmp_path, mon
 def test_the_subject_search_for_a_key_without_a_receipt_is_bounded_and_only_run_for_such_keys(tmp_path, monkeypatch):
     rows = [fcc(str(number)) for number in range(100, 109)]
     monkeypatch.setattr(lookup, "SCAN_ROW_BOUND", 8)
-    con = one_family(tmp_path, monkeypatch, {"fcc_filings": rows}, order=True)
+    lost = {subject_identity(POLICIES["fcc_filings"], {"id_submission": "107"})[0]}
+    # A table past the bound with receipts within it: the fault this search exists for, a row whose receipt is gone.
+    con = one_family(tmp_path, monkeypatch, {"fcc_filings": rows}, edit=lambda table: without(table, lost))
     # Every key has a receipt: the 9-row table is not searched, so its size refuses nothing.
     assert len(call("fcc_filings", [{"id_submission": "100"}, {"id_submission": "108"}], ["filing_url"])["keys"]) == 2
     message = refused("fcc_filings", [{"id_submission": "100"}, {"id_submission": "nine"}], ["filing_url"])
@@ -826,7 +801,6 @@ def test_the_tool_reads_through_a_built_connection_under_its_locked_file_access(
         assert con.execute("SELECT current_setting('enable_external_access')").fetchone() == (False,)
         reply = call("fcc_filings", [{"id_submission": "103"}, {"id_submission": "nine"}], ["filing_url"])
         assert [entry["receipt"] for entry in reply["keys"]] == ["found", "not_in_table"]
-        assert reply["receipts"]["sorted"] is False
         described = _tool_data(server.build_server(), "describe_table", {"table": "fcc_filings"})
         assert described["receipt_fields"]["available"] is True
     finally:
@@ -843,11 +817,17 @@ def test_describe_table_names_the_identity_and_receipt_fields_and_gives_meanings
     assert compact["receipt_fields"] == full["receipt_fields"]
     assert compact["receipt_fields"]["tool"] == "read_receipt_fields" and compact["receipt_fields"]["available"]
     assert compact["receipt_fields"]["identity_fields"] == {"id_submission": "VARCHAR"}
-    # The fields no column of the same name carries: a column's value is in the table and described there.
+    # The fields the table lacks: not a column's own name, whose value is in the table and described there, and not
+    # a list's former spelling where the table holds the list.
     held = {column["column_name"] for column in compact["columns"]}
-    assert compact["receipt_fields"]["fields"] == [name for name in carried("fcc_filings") if name not in held]
-    assert {"filing_url", "native_fields_sha256", "proceeding_names_json", "raw_record"} <= set(
-        compact["receipt_fields"]["fields"])
+    offered = compact["receipt_fields"]["fields"]
+    renamed = lookup._declared()["fcc_filings"]["renamed"]
+    assert renamed == {"authors_json": "authors", "bureaus_json": "bureaus", "documents_json": "documents",
+                       "filers_json": "filers", "lawfirms_json": "lawfirms", "proceeding_names_json": "proceedings"}
+    assert offered == [name for name in carried("fcc_filings") if name not in held and name not in renamed]
+    assert {"filing_url", "native_fields_sha256", "native_fields_json", "raw_record"} <= set(offered)
+    assert set(renamed.values()) <= held and not set(renamed) & set(offered)
+    assert set(renamed) <= set(carried("fcc_filings"))  # still answered when asked for by name
     assert "id_submission" not in compact["receipt_fields"]["fields"] and "id_submission" in held
     assert "receipt_field_meanings" not in compact and "receipt_field_meanings" in compact["detail"]["omitted"]
     assert full["detail"]["omitted"] == []
@@ -899,10 +879,14 @@ def test_every_installed_policy_family_has_a_field_registry_and_declared_mapping
         policy = POLICIES[table]
         assert set(entry.get("containers", {})) <= set(policy.receipt_fields), table
         assert not set(entry.get("meanings", {})) & set(policy.subject_schema.names), table
+        # A renamed field is one the receipts carry and the table does not, naming a column the table does hold.
+        renamed = entry.get("renamed", {})
+        assert set(renamed) <= set(carried(table)) - set(policy.subject_schema.names), table
+        assert set(renamed.values()) <= set(policy.subject_schema.names), table
         for marker in entry.get("read_markers", ()):
             assert {*marker["columns"], *marker["fields"], *marker["where"]} <= set(carried(table)), table
     # The families the brief names each place a whole-row or conversion mapping; courts declare none.
-    assert set(bundled["court_dockets"]) <= {"meanings"}
+    assert set(bundled["court_dockets"]) <= {"meanings", "renamed"}
     assert bundled["dockets"]["containers"].keys() == {"raw_conversion_inputs"}
 
 

@@ -23,9 +23,10 @@ from spicy_regs.subject_catalog import descriptors
 
 TOOL = "read_receipt_fields"
 MAX_KEYS = 100
-#: The most receipts a lookup reads where footer statistics cannot narrow it to its keys' row groups, and the most
-#: subject rows it searches for a key no receipt holds (owner decision 2026-10-05). Measured the same day on the
-#: public bucket: sam_entities' 797,525 unsorted receipts cost one lookup 28.6 MiB in 800 range requests.
+#: The most receipts whose record ids a lookup scans to find its keys, and the most subject rows it searches for a
+#: key no receipt holds (owner decision 2026-10-05). No published member is ordered by record id, so the scan is
+#: the only way in. Measured the same day on the public bucket: sam_entities' 797,525 receipts cost one lookup
+#: 28.6 MiB in 800 range requests.
 SCAN_ROW_BOUND = 2_000_000
 
 #: A found field's states. The first four are the field-state views' own (``DETAIL_STATES``), so a row and field
@@ -87,14 +88,18 @@ def describe(table: str, entry: Mapping[str, Any], *, available: bool) -> tuple[
 
     ``entry`` is the table's dictionary entry. The fields named are those no subject column of the same name
     carries: a column's value is in the table, and its description is already in the reply (a receipt that also
-    holds the column's value as its mapper received it answers for it by the column's name all the same). A field
-    the dictionary gives no meaning has none here. ``None`` where the table has no installed row identity.
+    holds the column's value as its mapper received it answers for it by the column's name all the same). Nor is
+    a field the table holds under another column name (the declaration's ``renamed``, such as a list received as
+    ``<column>_json``): the receipt keeps it as received and still answers for it by name, and the table has its
+    value. A field the dictionary gives no meaning has none here. ``None`` where the table has no installed row
+    identity.
     """
     fields = carried_fields(table)
     if fields is None:
         return None
     columns = {column["column_name"]: column for column in entry.get("columns", [])}
-    names = [name for name in fields if name not in columns]
+    renamed = _declared().get(table, {}).get("renamed", {})
+    names = [name for name in fields if name not in columns and renamed.get(name) not in columns]
     return (
         {"tool": TOOL, "available": available,
          "identity_fields": {name: columns.get(name, {}).get("column_type")
@@ -148,12 +153,11 @@ def tables_with_receipts(index: Mapping, local: Mapping | None, base_url: str) -
 
 
 class _Group(NamedTuple):
-    """One row group of a receipt member: its rows' position and the footer's bounds on three columns."""
+    """One row group of a receipt member: its rows' position and the footer's bounds on two columns."""
 
     start: int
     rows: int
     datasets: tuple[str | None, str | None]
-    records: tuple[str | None, str | None]
     versions: tuple[str | None, str | None]
 
     @property
@@ -187,14 +191,14 @@ def _footer(cursor: Any, member: Member) -> tuple[_Group, ...]:
     def read() -> tuple[_Group, ...]:
         bounds = ", ".join(
             f"any_value(stats_{bound}_value) FILTER (path_in_schema = '{column}')"
-            for column in ("dataset", "record_id", "policy_version") for bound in ("min", "max"))
+            for column in ("dataset", "policy_version") for bound in ("min", "max"))
         groups, start = [], 0
         for _, rows, *stats in cursor.execute(
             f"SELECT row_group_id, any_value(row_group_num_rows), {bounds} FROM parquet_metadata(?) "
-            "WHERE path_in_schema IN ('dataset', 'record_id', 'policy_version') "
+            "WHERE path_in_schema IN ('dataset', 'policy_version') "
             "GROUP BY row_group_id ORDER BY row_group_id", [member.location],
         ).fetchall():
-            groups.append(_Group(start, rows, (stats[0], stats[1]), (stats[2], stats[3]), (stats[4], stats[5])))
+            groups.append(_Group(start, rows, (stats[0], stats[1]), (stats[2], stats[3])))
             start += rows
         return tuple(groups)
 
@@ -205,30 +209,6 @@ def _within(bounds: tuple[str | None, str | None], value: str) -> bool:
     """Whether footer ``bounds`` admit ``value``; a group that states none admits everything."""
     low, high = bounds
     return low is None or high is None or low <= value <= high
-
-
-def _sorted(groups: Sequence[_Group], candidates: Sequence[int], dataset: str) -> bool:
-    """Whether footer statistics show the dataset's receipts ordered by record id across its row groups.
-    Its groups must be consecutive, hold only this dataset except the first and last (where a neighbour's rows
-    may share the group), and state record ranges that do not overlap in file order. Rows inside one group are
-    not ordered by a footer and need not be: a lookup reads a whole group.
-    """
-    if candidates and candidates[-1] - candidates[0] + 1 != len(candidates):
-        return False
-    highest = None
-    for position, index in enumerate(candidates):
-        group = groups[index]
-        if group.datasets != (dataset, dataset):
-            if 0 < position < len(candidates) - 1:
-                return False
-            continue
-        low, high = group.records
-        if low is None or high is None:
-            continue
-        if highest is not None and low < highest:
-            return False
-        highest = high
-    return True
 
 
 def _runs(groups: Sequence[_Group], indexes: Sequence[int]) -> list[tuple[int, int]]:
@@ -379,24 +359,18 @@ def _typed_keys(policy: Any, keys: Sequence[Any]) -> list[dict[str, Any]]:
     return typed
 
 
-def _accepted(cursor: Any, member: Member, groups: Sequence[_Group], candidates: Sequence[int], ordered: bool,
+def _accepted(cursor: Any, member: Member, groups: Sequence[_Group], candidates: Sequence[int],
               dataset: str, record_ids: Sequence[str]) -> dict[str, list[str]]:
     """Each record id's accepted receipts, as their ``processing_json``.
 
-    Where the dataset's groups are ordered, each id's group is read off the footer. Where they are not, the
-    record ids of the dataset's rows are scanned once to find the rows, by row range when its groups are
+    The record ids of the dataset's rows are scanned once to find the rows, by row range when its groups are
     consecutive (no column is read to tell datasets apart) and by dataset otherwise. Then only the groups that
     hold a match are read, for three columns: a record id digests its dataset and identity, so neither is read
     back to confirm a match (each column read is a request per row group on a shared host). O(dataset receipts)
     for the scan, O(groups holding a key) for the read.
     """
     wanted: dict[int, set[str]] = {}
-    if ordered:
-        for record_id in record_ids:
-            for index in candidates:
-                if _within(groups[index].records, record_id):
-                    wanted.setdefault(index, set()).add(record_id)
-    elif candidates:
+    if candidates:
         first, last = groups[candidates[0]], groups[candidates[-1]]
         consecutive = candidates[-1] - candidates[0] + 1 == len(candidates)
         starts = [group.start for group in groups]
@@ -529,18 +503,17 @@ def read_fields(cursor: Any, *, table: str, keys: Sequence[Any], fields: Sequenc
     typed = _typed_keys(policy, keys)
     groups = _footer(cursor, member)
     candidates = [i for i, group in enumerate(groups) if _within(group.datasets, table)]
-    ordered = _sorted(groups, candidates, table)
     receipts = sum(groups[i].rows for i in candidates)
     # Decided from the footer alone, before any row is read: the member this refuses is the largest there is.
-    if not ordered and receipts > SCAN_ROW_BOUND:
+    if receipts > SCAN_ROW_BOUND:
         raise ValueError(
-            f"{TOOL} is not available for {table}: its receipts are not sorted by record id, and a lookup would "
-            f"scan {receipts:,} of them, over the {SCAN_ROW_BOUND:,}-receipt bound. describe_table's notes say "
+            f"{TOOL} is not available for {table}: a lookup reads the record id of every receipt of the table, "
+            f"and it has {receipts:,}, over the {SCAN_ROW_BOUND:,}-receipt bound. describe_table's notes say "
             "which of its receipt values a row's own columns give.")
     stated = _stated_identities(cursor, member, groups, candidates, table)
     _refuse_other_identity(policy, stated)
     record_ids = [subject_identity(policy, key)[0] for key in typed]
-    found = _accepted(cursor, member, groups, candidates, ordered, table, list(dict.fromkeys(record_ids)))
+    found = _accepted(cursor, member, groups, candidates, table, list(dict.fromkeys(record_ids)))
     unheld = [key for key, record_id in zip(typed, record_ids, strict=True) if record_id not in found]
     in_table = _held_keys(cursor, policy, list({json.dumps(key): key for key in unheld}.values())) if unheld else set()
     entries, absent = [], set()
@@ -574,10 +547,6 @@ def read_fields(cursor: Any, *, table: str, keys: Sequence[Any], fields: Sequenc
             "family": member.family, "generation_id": member.generation_id,
             "artifact_digest": member.artifact_digest,
             "policy_version": next(iter(stated)) if len(stated) == 1 else sorted(stated) or None,
-            "sorted": ordered,
-            **({} if ordered else {"scanned_rows": receipts,
-                                   "scan": "This generation's receipts are not sorted by record id, so the record "
-                                           "id of every row in the table's row groups was read to find these keys."}),
         },
         "fields": {name: {"meaning": meaning, "kept_in": where[name],
                           **({"read_marker": marker["basis"]} if (marker := next(
