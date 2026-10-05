@@ -201,9 +201,15 @@ def main() -> int:
     parser.add_argument('expected', type=Path)
     parser.add_argument('output', type=Path)
     parser.add_argument('--namespace', required=True)
+    parser.add_argument('--expected-runtime', type=Path, required=True,
+                        help='JSON containing the frozen engine and loaded extension identity')
     args = parser.parse_args()
     try:
-        capture(json.loads(args.expected.read_text()), args.output, namespace=args.namespace)
+        expected_runtime = json.loads(args.expected_runtime.read_text())
+        if not isinstance(expected_runtime, dict):
+            raise ValueError('Frozen runtime must be a JSON object')
+        capture(json.loads(args.expected.read_text()), args.output, namespace=args.namespace,
+                expected_runtime=expected_runtime)
     except Exception as error:
         print('REFUSED: ' + type(error).__name__)
         return 1

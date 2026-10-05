@@ -411,3 +411,46 @@ def test_writer_lifecycle_failure_phase_is_precise(tmp_path, expected, logical_s
     raw = (output / 'RESULT.json').read_text()
     assert json.loads(raw)['failedPhase'] == 'logical-snapshot-writer-' + where
     assert 'private-token' not in raw
+
+
+def test_cli_forwards_explicit_frozen_runtime(tmp_path, monkeypatch):
+    expected = tmp_path / 'expected.json'
+    runtime = tmp_path / 'runtime.json'
+    expected.write_text(json.dumps({'selected': 'original'}))
+    frozen = {'duckdbVersion': 'frozen', 'duckdbBinarySha256': 'frozen-binary', 'extensions': []}
+    runtime.write_text(json.dumps(frozen))
+    calls = []
+    monkeypatch.setattr(capture, 'capture', lambda *args, **kwargs: calls.append((args, kwargs)))
+    monkeypatch.setattr('sys.argv', ['capture', str(expected), str(tmp_path / 'output'),
+                                   '--namespace', 'default', '--expected-runtime', str(runtime)])
+    assert capture.main() == 0
+    assert calls == [(({'selected': 'original'}, tmp_path / 'output'),
+                      {'namespace': 'default', 'expected_runtime': frozen})]
+
+
+def test_cli_missing_frozen_runtime_refuses_before_capture(tmp_path, monkeypatch):
+    expected = tmp_path / 'expected.json'
+    expected.write_text('{}')
+    calls = []
+    monkeypatch.setattr(capture, 'capture', lambda *args, **kwargs: calls.append((args, kwargs)))
+    monkeypatch.setattr('sys.argv', ['capture', str(expected), str(tmp_path / 'output'),
+                                   '--namespace', 'default'])
+    with pytest.raises(SystemExit) as error:
+        capture.main()
+    assert error.value.code == 2
+    assert calls == []
+    assert not (tmp_path / 'output').exists()
+
+
+def test_cli_null_runtime_refuses_before_capture(tmp_path, monkeypatch):
+    expected = tmp_path / 'expected.json'
+    runtime = tmp_path / 'runtime.json'
+    expected.write_text('{}')
+    runtime.write_text('null')
+    calls = []
+    monkeypatch.setattr(capture, 'capture', lambda *args, **kwargs: calls.append((args, kwargs)))
+    monkeypatch.setattr('sys.argv', ['capture', str(expected), str(tmp_path / 'output'),
+                                   '--namespace', 'default', '--expected-runtime', str(runtime)])
+    assert capture.main() == 1
+    assert calls == []
+    assert not (tmp_path / 'output').exists()
