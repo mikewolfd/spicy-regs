@@ -551,3 +551,50 @@ def test_a_converted_family_keeps_its_evidence_lineage(tmp_path, monkeypatch, bu
             assert receipt["lineage"]["handed_on_events"] == 1
             handed = evidence.inherited_event("congress-index-selection", table="treaties")
             assert handed is not None and handed["unevidenced"] == [["119-1"]] and handed["shape_version"] == 2
+
+
+def test_rollback_recovers_a_lost_response_and_rederives_v1(tmp_path, monkeypatch, bucket):
+    from tests.generation_fakes import error
+
+    old = publish_old(bucket, monkeypatch, tmp_path, "cfr-sections", {"cfr_sections": CFR})
+    convert("cfr-sections", tmp_path / "work", publish=True)
+    real, lost = bucket.put_object, []
+
+    def put_object(**kwargs):
+        result = real(**kwargs)
+        if kwargs["Key"] == V2 and not lost:
+            lost.append(True)
+            raise error("InternalError")
+        return result
+
+    monkeypatch.setattr(bucket, "put_object", put_object)
+    path = tmp_path / "work" / conversion.RECEIPT
+    receipt = conversion.rollback(path, expect_bucket=BUCKET)
+    assert receipt["rollback_attempt"]["outcome"] == "restored after lost response"
+    assert receipt["rolled_back"]["entry"] == stored(bucket) == old
+    assert json.loads(bucket.objects[publication.INDEX_KEY]) == publication.derive_v1(publication.parse_index(bucket.objects[V2]))
+    # A retry after an interrupted v1 write repairs that view even if v2 is already restored.
+    bucket.objects[publication.INDEX_KEY] = b'{}'
+    conversion.rollback(path, expect_bucket=BUCKET)
+    assert json.loads(bucket.objects[publication.INDEX_KEY]) == publication.derive_v1(publication.parse_index(bucket.objects[V2]))
+
+
+def test_interrupted_rollback_reports_the_attempt_and_can_be_retried(tmp_path, monkeypatch, bucket, capsys):
+    old = publish_old(bucket, monkeypatch, tmp_path, "cfr-sections", {"cfr_sections": CFR})
+    convert("cfr-sections", tmp_path / "work", publish=True)
+    real = bucket.put_object
+
+    def put_object(**kwargs):
+        result = real(**kwargs)
+        if kwargs["Key"] == V2:
+            raise KeyboardInterrupt()
+        return result
+
+    monkeypatch.setattr(bucket, "put_object", put_object)
+    path = tmp_path / "work" / conversion.RECEIPT
+    assert conversion.main(["--rollback", str(path), "--expect-bucket", BUCKET]) == 130
+    report = capsys.readouterr().err
+    assert "a rollback was attempted" in report and conversion.NOTHING_PUBLISHED not in report
+    assert stored(bucket) == old and json.loads(path.read_text())["rollback_attempt"]["outcome"] == "attempted"
+    monkeypatch.setattr(bucket, "put_object", real)
+    assert conversion.main(["--rollback", str(path), "--expect-bucket", BUCKET]) == 0
