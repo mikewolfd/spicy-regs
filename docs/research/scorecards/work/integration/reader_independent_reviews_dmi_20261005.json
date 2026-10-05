@@ -1,0 +1,23 @@
+{
+  "format_version": "scorecard-reader-independent-review/1",
+  "reviews": [
+    {
+      "publisher_id": "drum_major",
+      "adapter": "drum_major_2005",
+      "status": "approved",
+      "module_sha256": "1376b1d6cc21ffb223ff00501cccad49c63e09b7a87f9a4a6f28d3a95b8e333d",
+      "frozen_review_sha256": "bc5e268d288b315a48b5ebeba61e43f1ca24e92c823b7aae087c4d2507ecca38",
+      "handoff_sha256": "85226bc0263a928b3b9222974c7f7fda8ff37501e931207f77f1ea793faf4987",
+      "boundary": "Named original PDF rendition; installed package adoption and public data publication remain separate"
+    },
+    {
+      "publisher_id": "drum_major",
+      "adapter": "drum_major_2007",
+      "status": "approved",
+      "module_sha256": "b77adcbbaacfe574af3c4ad0a1170b7505a1a3bfbbc191288bcab94a03c264f7",
+      "frozen_review_sha256": "d00790b90b550cff16026a67c22e60b19f9b957a28bd5c151b7a8504382af04d",
+      "handoff_sha256": "269fcc481d1080fdb7021b0faf162cafe60178b8b88654a81aafc3b9c7c3392a",
+      "boundary": "Named original PDF rendition; installed package adoption and public data publication remain separate"
+    }
+  ]
+}

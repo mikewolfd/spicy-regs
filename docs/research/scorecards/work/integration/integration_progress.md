@@ -1,6 +1,6 @@
 # Scorecard integration progress
 
-Generated from pinned inputs at 2026-10-05T04:31:41.939169+00:00.
+Generated from pinned inputs at 2026-10-05T12:02:02.543441+00:00.
 
 Edition receipts supersede the older discovery matrix only for their named scopes. The queue retains every candidate and every remaining rendition.
 
@@ -26,7 +26,7 @@ Edition receipts supersede the older discovery matrix only for their named scope
 | Disabled American Veterans (`dav`) | `unverified_lead` | Pending | `pending` | Follow the catalog discovery reference for Disabled American Veterans, find an original publisher edition or attributable archive, and establish federal member-scorecard scope before writing a parser. |
 | Defenders of Wildlife Action Fund (`defenders_action`) | `published_scope` | [defenders_action:2005](publications/2d5e090daa20e84eeba401e9e861e112e07c84d7de7daff869cfe89e36a22497/e426186e07e342a6c5f8903d9c2b833a3a6d3ec424790cae9afddf19e959fe8e.json), [defenders_action:2005-2006](publications/2d5e090daa20e84eeba401e9e861e112e07c84d7de7daff869cfe89e36a22497/96a57ef0c9706774c7a45113fe0c4cc3db2362c0a95993e784dd91cbd88c9cbd.json) | `defenders_action` | Integrate remaining available editions and renditions |
 | Drug Policy Action (`drug_policy_action`) | `published_scope` | [drug_policy_action:2016-house-all-representatives-archived-html](publications/2d5e090daa20e84eeba401e9e861e112e07c84d7de7daff869cfe89e36a22497/b913a996c7bf0188711681356cae56602b72543fdeb1bd738b80b7a437098309.json) | `drug_policy_action` | Integrate remaining available editions and renditions |
-| Drum Major Institute for Public Policy (`drum_major`) | `unverified_lead` | Pending | `pending` | Follow the catalog discovery reference for Drum Major Institute for Public Policy, find an original publisher edition or attributable archive, and establish federal member-scorecard scope before writing a parser. |
+| Drum Major Institute for Public Policy (`drum_major`) | `qualified_scope` | [drum_major:2005-original-pdf](qualifications/drum_major--2005-original-pdf.json), [drum_major:2007-original-pdf](qualifications/drum_major--2007-original-pdf.json) | `drum_major_2005` | Integrate remaining available editions and renditions |
 | End Citizens United (`end_citizens_united`) | `published_scope` | [end_citizens_united:2026](publications/2d5e090daa20e84eeba401e9e861e112e07c84d7de7daff869cfe89e36a22497/dfae3b705c298196d1453e06ad21460f0261b627cd6481b40d9ebf62d1f3fe6d.json) | `end_citizens_united` | Integrate remaining available editions and renditions |
 | Environment America (`environment_america`) | `qualified_scope` | [environment_america:2009-original-report-pdf](qualifications/environment_america--2009-original-report-pdf.json) | `environment_america` | Integrate remaining available editions and renditions |
 | Federally Employed Women (`few`) | `published_scope` | [few:117-first](publications/2d5e090daa20e84eeba401e9e861e112e07c84d7de7daff869cfe89e36a22497/5e8a02d8a15fe33719244d133a08e00a3d4786801af9b10dae05368e16b13369.json), [few:117-second](publications/2d5e090daa20e84eeba401e9e861e112e07c84d7de7daff869cfe89e36a22497/5ca4f44924a2b63b2e4113061d76c7f39a982a3990c95cb0bb4f9ef606ee6e4d.json) | `few` | Integrate remaining available editions and renditions |

@@ -16,6 +16,8 @@ The [subsequent reader package](reader_five_20261004.md) records NRA-PVF,
 21Wilberforce, Drug Policy Action, UAW and AFT qualification and remaining work.
 The [AGC, CGS and Environment America package](reader_three_20261005.md)
 records the next qualified readers, exact source boundaries and remaining work.
+The [Drum Major Institute package](reader_dmi_20261005.md) records the reviewed
+post-2000 originals and their installed package adoption.
 
 The [generated work queue](integration_progress.md) accounts for every publisher
 in the [adapter matrix](adapter_support_matrix.md) and

@@ -1,12 +1,12 @@
 {
-  "version": "0.56.0+scorecards.7aed167baa10",
-  "baseline_version": "0.56.0+scorecards.8253a8a31276",
-  "baseline_wheel": "spicy_docs-0.56.0+scorecards.8253a8a31276-py3-none-any.whl",
-  "baseline_sha256": "0af5441084e70d266e6baa6dc719f66c895c2a27f7508fef76f0472fc45864d9",
-  "overlay_sha256": "7aed167baa100bce2433ea513223063b14e3d21fb2b4d88165a4c9e811b5d5ff",
+  "version": "0.56.0+scorecards.8253a8a31276",
+  "baseline_version": "0.56.0+scorecards.ef0b64b3121f",
+  "baseline_wheel": "spicy_docs-0.56.0+scorecards.ef0b64b3121f-py3-none-any.whl",
+  "baseline_sha256": "d773a2cda22200ee6d49eb24b41c52964085396cde4adea17b25287047d0dc0c",
+  "overlay_sha256": "8253a8a3127699f0179ffa2e044c6a98b4bcca324dfee91b1b706675badc1dd3",
   "modules": {
     "spicy_docs/reading/pdf_bytes.py": "889dc357391a000f5857516c8eca7fd75f44607791247e98d1fb80c31e925b4c",
-    "spicy_docs/sources/scorecards/__init__.py": "3b47a9d19ad41be3da58a2a3ed8163399c370d8d970168aab85f8c33f7284705",
+    "spicy_docs/sources/scorecards/__init__.py": "b71c4ed609be58e93fe0fe92996b73983bd0d5cdeee0fa9bca9c982b3863a21a",
     "spicy_docs/sources/scorecards/aauw.py": "14a7da2be96782fa0cdce1220ec003565cd04196bd2dce6bec43f4c0e2fbb837",
     "spicy_docs/sources/scorecards/acec.py": "1c6bec8cee712e5662108c0fa69e219e96195e774f8a80f0d707a4a8b49c4376",
     "spicy_docs/sources/scorecards/aclu.py": "8604f33d5026530f4ec2a3c186c8b7817387b169c65708a3174f3c92b76a1e04",
@@ -40,8 +40,6 @@
     "spicy_docs/sources/scorecards/cpac_pdf_2023.py": "20deed359ae52997a195be41fbb282a9bef022a1f2b4450afa9cb918b755f903",
     "spicy_docs/sources/scorecards/defenders_action.py": "f8ab4d4d7e2b10033610e44b18b6e70ab2a59fb62871081ad79249b53dc457e7",
     "spicy_docs/sources/scorecards/drug_policy_action.py": "887b8377d39fc706aeb6022c0237e664ff8899ba3a25ba0d08dca158ec4217f6",
-    "spicy_docs/sources/scorecards/drum_major_2005.py": "1376b1d6cc21ffb223ff00501cccad49c63e09b7a87f9a4a6f28d3a95b8e333d",
-    "spicy_docs/sources/scorecards/drum_major_2007.py": "b77adcbbaacfe574af3c4ad0a1170b7505a1a3bfbbc191288bcab94a03c264f7",
     "spicy_docs/sources/scorecards/end_citizens_united.py": "26ff8c5ea6f357f331bbfaea2f9772db0ab8b3a6d9b311ec4efdc1107bd24c54",
     "spicy_docs/sources/scorecards/environment_america.py": "7a324dfffd89accfbf72f7b11bc6742ffb45a072d1cc5a72a0ddcdc618df4c93",
     "spicy_docs/sources/scorecards/few.py": "1e22ff88f27f76bc927f68d026e70c0adc70a9eac6d97f4d5aedc59858dc2a44",
@@ -118,16 +116,16 @@
   "explicit_runtime_dependencies": {
     "spicy_docs/reading/pdf_bytes.py": "889dc357391a000f5857516c8eca7fd75f44607791247e98d1fb80c31e925b4c"
   },
-  "wheel": "spicy_docs-0.56.0+scorecards.7aed167baa10-py3-none-any.whl",
-  "wheel_sha256": "18834bee6645061301bd3532d51fa049fa5b455ac6aa9472040d2f7f0f125bf4",
+  "wheel": "spicy_docs-0.56.0+scorecards.8253a8a31276-py3-none-any.whl",
+  "wheel_sha256": "0af5441084e70d266e6baa6dc719f66c895c2a27f7508fef76f0472fc45864d9",
   "repeat_build_identical": true,
   "unrelated_runtime_and_dependency_metadata_preserved": true,
   "changed_runtime_files": [
     "spicy_docs/sources/scorecards/__init__.py",
-    "spicy_docs/sources/scorecards/drum_major_2005.py",
-    "spicy_docs/sources/scorecards/drum_major_2007.py"
+    "spicy_docs/sources/scorecards/communication_workers.py",
+    "spicy_docs/sources/scorecards/smart_transportation.py",
+    "spicy_docs/sources/scorecards/smart_transportation_2013_14.py"
   ],
-  "scope": "Qualified DMI 2005 and 2007 readers; independent original-source reviews, installed retained replay and complete consumer gates passed. Public data publication and scheduled refresh remain separate.",
-  "source_commit": "39dbd8aa8a37b4b3ab83de1756f388a190c1074d",
-  "adoption_receipt": "docs/research/scorecards/work/integration/reader_adoption_dmi_20261005.json"
+  "scope": "Qualified SMART and CWA package: independent source reviews, retained installed replays and complete source/consumer gates passed; data publication and hosted runtime remain separate",
+  "source_commit": "d79c02aa0077f7423f87c38f5ebbc188e8b06a7d"
 }

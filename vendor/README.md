@@ -5,7 +5,14 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- `spicy_docs-0.56.0+scorecards.8253a8a31276`: SMART and CWA reader candidate on
+- `spicy_docs-0.56.0+scorecards.7aed167baa10`: reviewed Drum Major Institute
+  readers on the previously qualified scorecard package. The baseline receipt
+  remains in `spicy_docs-scorecards-8253a8a31276.json`. See the
+  [adoption evidence](../docs/research/scorecards/work/integration/reader_adoption_dmi_20261005.json)
+  for named source renditions, independent original-source review, installed
+  replay and consumer checks. Data publication and scheduled refresh remain
+  separate stages.
+- `spicy_docs-0.56.0+scorecards.8253a8a31276`: SMART and CWA readers on
   the previously qualified scorecard package. The baseline receipt is retained
   as `spicy_docs-scorecards-ef0b64b3121f.json`. See the
   [adoption status](https://github.com/mikewolfd/spicy-regs/blob/main/docs/research/scorecards/work/integration/reader_adoption_smart_cwa_20261005.json)

@@ -1,7 +1,7 @@
 {
   "schema_version": "1",
-  "observed_at": "2026-10-05T04:31:41.939169+00:00",
-  "input_plan_sha256": "27832ae0844726e5b5c84b627b09fc038493079c9f3d79cf92bd87e723d7905e",
+  "observed_at": "2026-10-05T12:02:02.543441+00:00",
+  "input_plan_sha256": "1b79367a1a8a91b5095e962a8ddad2058cf8c01f17fe82e081eedbe9ede4065c",
   "readers": {
     "common_cause": "common_cause",
     "bread_world": "bread_world",
@@ -23,6 +23,7 @@
     "environment_america": "environment_america",
     "smart_transportation": "smart_transportation",
     "communication_workers": "communication_workers",
+    "drum_major": "drum_major_2005",
     "afp": "afp",
     "ijm": "ijm",
     "hrc": "hrc",
@@ -649,6 +650,20 @@
       "state": "qualified",
       "receipt": "qualifications/communication_workers--2025-native-descending-lists-and-key-vote-grids.json",
       "receipt_sha256": "584485dba4db5c657dad8726885d2ac6e0d495c19c54dc31e5773bd77490d9d1"
+    },
+    {
+      "publisher_id": "drum_major",
+      "scorecard_id": "drum_major:2005-original-pdf",
+      "state": "qualified",
+      "receipt": "qualifications/drum_major--2005-original-pdf.json",
+      "receipt_sha256": "132697ffeb0f1a8d517c97e35ec454941e199f01baeaa0c75836dd561a6b4f91"
+    },
+    {
+      "publisher_id": "drum_major",
+      "scorecard_id": "drum_major:2007-original-pdf",
+      "state": "qualified",
+      "receipt": "qualifications/drum_major--2007-original-pdf.json",
+      "receipt_sha256": "e813c23f261ed2dcabe0c64e58073fd92bcdbbea2b48d6d5285c9db65cba989d"
     },
     {
       "publisher_id": "aauw",

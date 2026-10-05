@@ -1,18 +1,18 @@
 {
   "dataset": "scorecard_integration_progress",
   "schema_version": "1",
-  "observed_at": "2026-10-05T04:31:41.939169+00:00",
+  "observed_at": "2026-10-05T12:02:02.543441+00:00",
   "input_pins": {
     "adapter_inventory.json": "5d7ce442f355c2b7f84d58c6d2df99cbf48574344a101248ee6a04953bf019a4",
     "publisher_api_inventory.json": "097e102c3af4ebb5ad87731be5d40ea4ad283b8ec21f188b1e7460755755925d",
-    "integration_qualifications.json": "1f46c5b27d8db770eb4daf7e4350af8b0e7c60c2583a264591ba67446bc821a3"
+    "integration_qualifications.json": "3d48ded0782c262e2914c93ce26fbaa336fb9e2ce4bdfc643adbfda7493243f1"
   },
   "scope": "Every publisher candidate in both inventories; all available editions and renditions remain in scope",
   "states": {
     "identity_review": 1,
     "published_scope": 66,
-    "qualified_scope": 5,
-    "unverified_lead": 54
+    "qualified_scope": 6,
+    "unverified_lead": 53
   },
   "publishers": [
     {
@@ -962,14 +962,29 @@
       "publisher_id": "drum_major",
       "publisher_name": "Drum Major Institute for Public Policy",
       "task_id": "ss-1vy4",
-      "state": "unverified_lead",
-      "reader": null,
-      "qualified_editions": [],
+      "state": "qualified_scope",
+      "reader": "drum_major_2005",
+      "qualified_editions": [
+        {
+          "publisher_id": "drum_major",
+          "scorecard_id": "drum_major:2005-original-pdf",
+          "state": "qualified",
+          "receipt": "qualifications/drum_major--2005-original-pdf.json",
+          "receipt_sha256": "132697ffeb0f1a8d517c97e35ec454941e199f01baeaa0c75836dd561a6b4f91"
+        },
+        {
+          "publisher_id": "drum_major",
+          "scorecard_id": "drum_major:2007-original-pdf",
+          "state": "qualified",
+          "receipt": "qualifications/drum_major--2007-original-pdf.json",
+          "receipt_sha256": "e813c23f261ed2dcabe0c64e58073fd92bcdbbea2b48d6d5285c9db65cba989d"
+        }
+      ],
       "verified_api_endpoints": [],
       "discovery_api_status": "no_api_found_in_inspected_surfaces",
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
-      "next_action": "Follow the catalog discovery reference for Drum Major Institute for Public Policy, find an original publisher edition or attributable archive, and establish federal member-scorecard scope before writing a parser."
+      "next_action": "Integrate remaining available editions and renditions"
     },
     {
       "publisher_id": "end_citizens_united",
