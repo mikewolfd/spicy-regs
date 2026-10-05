@@ -4,7 +4,7 @@
 
 **Appropriations press releases**
 
-One row per item in one appropriations committee press-release feed capture. `bill_id` is an inferred candidate when a pattern matches a published bill identifier in the title or description. All columns are stored as VARCHAR.
+One row per item in one appropriations committee press-release feed capture. `bill_id` is an inferred candidate when a pattern matches a published bill identifier in the title or description.
 
 Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='press_releases'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
 

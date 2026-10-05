@@ -4,7 +4,7 @@
 
 **Federal entity registry**
 
-One row per active SAM.gov registration, ingested from the Entity Management API v4 bulk extract (`/entities?format=json`) by `build_sam_entities`. The authoritative federal entity registry, the directory of organizations registered to do business with or receive assistance from the U.S. government. Its UEI is the identity `usaspending_recipients.uei` joins on. Comments carry no UEI, so a commenting organization reaches this table only by a name match on `legal_business_name` or `dba_name`, which is not an identity. Filtered to public active registrations (`registrationStatus=A`); list-level fields only. All columns are stored as VARCHAR.
+One row per active SAM.gov registration, ingested from the Entity Management API v4 bulk extract (`/entities?format=json`) by `build_sam_entities`. The authoritative federal entity registry, the directory of organizations registered to do business with or receive assistance from the U.S. government. Its UEI is the identity `usaspending_recipients.uei` joins on. Comments carry no UEI, so a commenting organization reaches this table only by a name match on `legal_business_name` or `dba_name`, which is not an identity. Filtered to public active registrations (`registrationStatus=A`); list-level fields only.
 
 Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='sam_entities'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
 

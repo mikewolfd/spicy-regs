@@ -4,7 +4,7 @@
 
 **CBO cost-estimate publication index**
 
-One row per bill and CBO publication, using build_bill_family's own cbo_cost_estimates output and spicy-docs' feed builder, merged by `merge_cbo_cost_estimates`: where both routes state one bill and publication, the BILLSTATUS row stands. One publication can stand under two bills, and both rows publish. All columns are stored as VARCHAR.
+One row per bill and CBO publication, using build_bill_family's own cbo_cost_estimates output and spicy-docs' feed builder, merged by `merge_cbo_cost_estimates`: where both routes state one bill and publication, the BILLSTATUS row stands. One publication can stand under two bills, and both rows publish.
 
 Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='cbo_cost_estimates'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
 

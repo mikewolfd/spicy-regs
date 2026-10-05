@@ -10,6 +10,12 @@ installed modules. The
 [previous receipt](https://github.com/mikewolfd/spicy-regs/blob/main/vendor/spicy_docs-scorecards-0bee5afcac95.json)
 preserves the prior package's evidence.
 
+This package extends the released `0.56.0` baseline and keeps its newer source
+readers and dependencies unchanged. The earlier
+[private candidate](reader_adoption_three_baseline054_20261005.json) remains
+available with its exact package and replay evidence; the new adoption receipt
+records the released baseline and fresh installed checks.
+
 AGC's qualified Congress editions contain the original House and Senate
 annual/lifetime aggregate tables and key-vote indexes. Its publisher page
 explicitly embeds the Voxara site, establishing the source relationship.

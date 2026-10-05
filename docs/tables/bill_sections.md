@@ -4,13 +4,13 @@
 
 **Bill sections**
 
-One row per content-bearing node of one bill version, in document order. All columns are stored as VARCHAR. Published as one file per Congress; the server and the publication readers present them as one table, but a raw download holds one file for each Congress.
+One row per content-bearing node of one bill version, in document order. Published as one file per Congress; the server and the publication readers present them as one table, but a raw download holds one file for each Congress.
 
 Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='bill_sections'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
 
 **Coverage.** Sampled: the sections parsed from printings whose bodies the bill family acquired (source govinfo in bill_versions). *(measured 2026-09-28)*
 
-**Data quality.** A printing with no parsed section tree is a counted refusal, never a row with invented values. On the measured cold-start run of the 119th (receipt `d1-measured-run-2026-09-19/`) the family reported **21,466** such refusals against 6,301 published rows — one per printing whose body the 600-per-run fetch cap did not reach, plus those offered only as PDF. The refusal count is therefore a measure of how far the cap is from the corpus, not of anything wrong with the printings; it falls as successive runs spend the cap on ground earlier ones did not reach. A section is keyed on its `seq` within the printing since spicy-docs 0.35.0; the older key (`match_path`, `body_index`) repeats inside a printing. All columns are stored as VARCHAR.
+**Data quality.** A printing with no parsed section tree is a counted refusal, never a row with invented values. On the measured cold-start run of the 119th (receipt `d1-measured-run-2026-09-19/`) the family reported **21,466** such refusals against 6,301 published rows — one per printing whose body the 600-per-run fetch cap did not reach, plus those offered only as PDF. The refusal count is therefore a measure of how far the cap is from the corpus, not of anything wrong with the printings; it falls as successive runs spend the cap on ground earlier ones did not reach. A section is keyed on its `seq` within the printing since spicy-docs 0.35.0; the older key (`match_path`, `body_index`) repeats inside a printing.
 
 - **Parquet file:** `bill_sections.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.

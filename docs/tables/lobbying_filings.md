@@ -4,7 +4,7 @@
 
 **Lobbying disclosure filings**
 
-One row per federal lobbying-disclosure filing, ingested from the U.S. Senate Lobbying Disclosure Act (LDA) REST API (`lda.gov`, formerly `lda.senate.gov`) by `build_lobbying_filings`. Registrants file quarterly reports naming the clients they lobby for, the money involved, the issues raised, and the government entities (agencies/chambers) lobbied — so this table links the comment campaigns in `comments`/`dockets` to the same organizations' *direct* agency lobbying. Primary / dedup key is `filing_uuid`. All columns are stored as VARCHAR; nested/array fields are JSON strings.
+One row per federal lobbying-disclosure filing, ingested from the U.S. Senate Lobbying Disclosure Act (LDA) REST API (`lda.gov`, formerly `lda.senate.gov`) by `build_lobbying_filings`. Registrants file quarterly reports naming the clients they lobby for, the money involved, the issues raised, and the government entities (agencies/chambers) lobbied — so this table links the comment campaigns in `comments`/`dockets` to the same organizations' *direct* agency lobbying. Primary / dedup key is `filing_uuid`.
 
 Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='lobbying_filings'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
 

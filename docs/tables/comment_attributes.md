@@ -24,9 +24,9 @@ Processing fields, source witnesses, conversion inputs and diagnostics reference
 | `country` | `VARCHAR` | The submitter's country, spelled as stated (United States, US, ...). |
 | `display_properties` | `STRUCT("name" VARCHAR, "label" VARCHAR, tooltip VARCHAR)[]` | The agency's labels for this record's fields: a Native list of {label, name, tooltip}, name being the attribute it labels; json_column spelling. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `doc_abstract` | `VARCHAR` | A summary the agency recorded for the comment; rarely stated. |
-| `field1` | `VARCHAR` | An agency-defined field; its meaning is the record's display_properties_json label (“10-Digit HTSUS Item Number for Product of Concern”, “XRIN”, “RTID”, …). |
-| `field2` | `VARCHAR` | An agency-defined field; its meaning is the record's display_properties_json label (“File Date”, “Verbal Description for Product of Concern”, …). |
-| `file_formats` | `STRUCT(url VARCHAR, format VARCHAR, size BIGINT)[]` | Renditions of the comment's own content file, rarely stated: a Native list of {fileUrl, format, size}; json_column spelling. Attached files are in the thin table's attachments_json. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `field1` | `VARCHAR` | An agency-defined field; its meaning is the record's display_properties label (“10-Digit HTSUS Item Number for Product of Concern”, “XRIN”, “RTID”, …). |
+| `field2` | `VARCHAR` | An agency-defined field; its meaning is the record's display_properties label (“File Date”, “Verbal Description for Product of Concern”, …). |
+| `file_formats` | `STRUCT(url VARCHAR, format VARCHAR, size BIGINT)[]` | Renditions of the comment's own content file, rarely stated: a Native list of {fileUrl, format, size}; json_column spelling. Attached files are in the thin table's attachments. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `gov_agency` | `VARCHAR` | The government body that submitted the comment. |
 | `gov_agency_type` | `VARCHAR` | That body's level: Federal, State, Local, Tribal and others. |
 | `legacy_id` | `VARCHAR` | The comment's id in a predecessor system. |

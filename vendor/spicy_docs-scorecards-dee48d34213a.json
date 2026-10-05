@@ -1,9 +1,9 @@
 {
-  "version": "0.56.0+scorecards.ef0b64b3121f",
-  "baseline_version": "0.56.0",
-  "baseline_wheel": "spicy_docs-0.56.0-py3-none-any.whl",
-  "baseline_sha256": "36d28dc6e3255224eed395cfa9dd097fc13872aa53c1625551d78ba71010a144",
-  "overlay_sha256": "ef0b64b3121f80d4118949e30175d2277dd1367d6fde100a220c816f4c2c75d0",
+  "version": "0.54.0+scorecards.dee48d34213a",
+  "baseline_version": "0.54.0+scorecards.0bee5afcac95",
+  "baseline_wheel": "spicy_docs-0.54.0+scorecards.0bee5afcac95-py3-none-any.whl",
+  "baseline_sha256": "acfead5a41fc1313c59e54063925a2430404b60bb7b78b568efee6c09ce56134",
+  "overlay_sha256": "dee48d34213a3281983733c55968b4d3df76f8774d1aaa3997a86c3a7ba4ad6d",
   "modules": {
     "spicy_docs/sources/scorecards/__init__.py": "3638524e8fff2fb10523969a441c0e30052af3a86bbfb88944807d7a21674410",
     "spicy_docs/sources/scorecards/aauw.py": "14a7da2be96782fa0cdce1220ec003565cd04196bd2dce6bec43f4c0e2fbb837",
@@ -110,8 +110,8 @@
     "spicy_docs/sources/scorecards/workbooks.py": "7d4481ec02d3f020ea290ead619af46e555680f9450d338bfccf5c0f9d971d11"
   },
   "explicit_runtime_dependencies": {},
-  "wheel": "spicy_docs-0.56.0+scorecards.ef0b64b3121f-py3-none-any.whl",
-  "wheel_sha256": "d773a2cda22200ee6d49eb24b41c52964085396cde4adea17b25287047d0dc0c",
+  "wheel": "spicy_docs-0.54.0+scorecards.dee48d34213a-py3-none-any.whl",
+  "wheel_sha256": "b8313f3c8c7cde81c701ce79cc83f007ec748f8a240bfa0b3cbdc69ee2202c0e",
   "repeat_build_identical": true,
   "unrelated_runtime_and_dependency_metadata_preserved": true,
   "changed_runtime_files": [

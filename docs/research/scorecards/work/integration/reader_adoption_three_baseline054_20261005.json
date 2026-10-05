@@ -2,14 +2,13 @@
   "format_version": "scorecard-reader-package-adoption/1",
   "status": "qualified-local-adoption",
   "source_commit": "554dfba52246773a103601d3987d46a7755ef7ae",
-  "version": "0.56.0+scorecards.ef0b64b3121f",
-  "baseline_version": "0.56.0",
+  "version": "0.54.0+scorecards.dee48d34213a",
   "wheel": {
     "status": "passed",
-    "candidate_sha256": "d773a2cda22200ee6d49eb24b41c52964085396cde4adea17b25287047d0dc0c",
-    "baseline_sha256": "36d28dc6e3255224eed395cfa9dd097fc13872aa53c1625551d78ba71010a144",
-    "record_entries_verified": 463,
-    "unchanged_baseline_runtime_files": 455,
+    "candidate_sha256": "b8313f3c8c7cde81c701ce79cc83f007ec748f8a240bfa0b3cbdc69ee2202c0e",
+    "baseline_sha256": "acfead5a41fc1313c59e54063925a2430404b60bb7b78b568efee6c09ce56134",
+    "record_entries_verified": 458,
+    "unchanged_baseline_runtime_files": 450,
     "changed_runtime_files": [
       "spicy_docs/sources/scorecards/__init__.py",
       "spicy_docs/sources/scorecards/agc.py",
@@ -24,7 +23,7 @@
   },
   "source_network_requests_during_replay": 0,
   "replay_plan_sha256": "528ca9721dde2d1ee1e5b7b37b647d1fccf4d810f9c1c32d8910ff402a98217b",
-  "replay_summary_sha256": "4d4b5a3c971d3a04a36cf10e7c13dddebe0f278831731ac6174ff0fcdc2ec08a",
+  "replay_summary_sha256": "470c51901908772ade108623dce74f6b1c197a5f8d31bcef7977d30515e657d6",
   "scopes": [
     {
       "scorecard_id": "agc:119-aggregate-key-vote-index",
@@ -233,7 +232,7 @@
     "documentation_build": {
       "command": "uv run --frozen --group docs mkdocs build --strict",
       "status": "passed",
-      "log_sha256": "1f4564707575d4821c96a00f0696ba0ee62636eb1db24a5da16d3ad39df3a237"
+      "log_sha256": "ef5949fdff50744cf0a579f11ba4dbb2ccd741d44d585dfc39fdf65258e0d044"
     },
     "source_gate": {
       "command": "./scripts/check",
@@ -242,9 +241,9 @@
       "source_commit": "d495f94fcadeaaa8c19568834921f0a19b05a210"
     },
     "consumer_pytest": {
-      "command": "uv run --frozen pytest --ignore=site",
+      "command": "uv run --frozen pytest",
       "status": "passed",
-      "log_sha256": "456c78d7abc6c8e4f77b338901875953b0b2e59919772355cc550711d0b724f2"
+      "log_sha256": "831d28b9c2d5ed46a55bd697e74841fa294ba4de498e3991cbf93e53892910ec"
     }
   },
   "source_main_version_change": {
@@ -258,11 +257,6 @@
   "independent_reviews": {
     "receipt": "reader_independent_reviews_three_20261005.json",
     "sha256": "32a8aac2d07e8659c645c51b8e4961ef9a8631215f448baf5b5fba5c46b315b4"
-  },
-  "prior_private_candidate": {
-    "receipt": "reader_adoption_three_baseline054_20261005.json",
-    "sha256": "a9c619a974f7b5e63f88743997235a203acc51cc43258f88a63e09c00834c38c",
-    "boundary": "Earlier qualified private candidate preserved; released 0.56.0 baseline was adopted before external consumer push"
   },
   "boundary": "Named retained-source rendition and installed consumer package; public editions need separate publication and readback; automatic refresh stays disabled"
 }

@@ -4,7 +4,7 @@
 
 **Committee-print bill actions**
 
-One row per action phrase a committee print states about one bill it names in the same sentence: the print's own phrasing, the sealed stage and BILLSTATUS action codes it maps to, and how reliable the pairing is. Joins `document_citations` through `document_key`, `text_sha256` and `mention_span_start` = `span_start`. All columns are stored as VARCHAR.
+One row per action phrase a committee print states about one bill it names in the same sentence: the print's own phrasing, the sealed stage and BILLSTATUS action codes it maps to, and how reliable the pairing is. Joins `document_citations` through `document_key`, `text_sha256` and `mention_span_start` = `span_start`.
 
 Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='bill_committee_actions'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
 

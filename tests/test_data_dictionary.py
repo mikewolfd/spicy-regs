@@ -397,7 +397,7 @@ def test_every_hosted_column_has_prose():
 
 
 def test_hosted_prose_is_the_contract_prose_not_a_copy():
-    """The sentences are read from the wheel, so there is only one copy of them."""
+    """The sentences are read from the wheel, so there is only one copy of them; a list is named as published."""
     from spicy_docs.schemas import TABLE_CONTRACTS
 
     descriptions = dd.load_descriptions()
@@ -406,7 +406,7 @@ def test_hosted_prose_is_the_contract_prose_not_a_copy():
         policy = dd.subject_policies().get(table)
         for field, prose in descriptions[table]["columns"].items():
             if field in source and (policy is None or str(policy.subject_schema.field(field).type) in {"string", "bool", "int64", "int32"}):
-                assert prose == source[field], (table, field)
+                assert prose == dd.native_spelling(source[field]), (table, field)
 
 
 def test_hosted_entries_do_not_list_columns_inline():

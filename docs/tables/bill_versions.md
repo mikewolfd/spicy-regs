@@ -4,7 +4,7 @@
 
 **Bill printings**
 
-One row per printing of a bill, per source that supplied it. The full text is deliberately not a column here: `bill_sections.body` carries it at the grain people query, and the body is re-fetchable by package id and digest. All columns are stored as VARCHAR.
+One row per printing of a bill, per source that supplied it. The full text is deliberately not a column here: `bill_sections.body` carries it at the grain people query, and the body is re-fetchable by package id and digest.
 
 Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='bill_versions'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
 

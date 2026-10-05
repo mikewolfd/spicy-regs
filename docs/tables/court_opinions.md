@@ -4,7 +4,7 @@
 
 **Court opinions (index, no text)**
 
-Every CourtListener opinion's decision, type and author, without its text. It is what connects court_citation_map and court_parentheticals, which name opinions, to court_opinion_clusters, which holds CourtListener's decision records (one decision can have several): join opinion_id from either, then cluster_id to court_opinion_clusters.cluster_id. local_path and download_url locate the original document. Rebuilt whole from each quarterly export, locally rather than on a schedule, because the source export is 54.6 GB. All columns are VARCHAR.
+Every CourtListener opinion's decision, type and author, without its text. It is what connects court_citation_map and court_parentheticals, which name opinions, to court_opinion_clusters, which holds CourtListener's decision records (one decision can have several): join opinion_id from either, then cluster_id to court_opinion_clusters.cluster_id. local_path and download_url locate the original document. Rebuilt whole from each quarterly export, locally rather than on a schedule, because the source export is 54.6 GB.
 
 Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='court_opinions'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
 
