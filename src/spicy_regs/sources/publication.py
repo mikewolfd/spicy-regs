@@ -1069,6 +1069,10 @@ def _publish_verified_generation(
         "artifactDigest": artifact.pin.artifact_digest,
         "tables": tables,
     }
+    from spicy_regs.subject_catalog import shared_receipt_logs
+    # ``datasets`` is the family's claim: every index reader gives each listed name one owning family. A shared log
+    # is in the receipt member and in the generation's stated policies, and is claimed by no family.
+    shared = shared_receipt_logs()
     if "etlReceipts" in artifact.root["spec"]:
         declared_receipt = artifact.root["spec"]["etlReceipts"]
         receipt = next(m for m in members if m.object_key == "etl_receipts.parquet")
@@ -1076,12 +1080,14 @@ def _publish_verified_generation(
                                 "byteSize": receipt.byte_size, "rows": receipt.record_count,
                                 "columns": declared_receipt["columns"],
                                 "generationId": declared_receipt["generationId"],
-                                "datasets": [p["dataset"] for p in declared_receipt["policies"]],
+                                "datasets": [p["dataset"] for p in declared_receipt["policies"]
+                                             if p["dataset"] not in shared],
                                 **({"keyIndex": declared_receipt["keyIndex"]} if "keyIndex" in declared_receipt else {})}
     if old_family and "etlReceipts" in old_family and "etlReceipts" not in entry:
         raise PublicationError("Cannot publish a generation that drops required ETL receipts")
+    # An entry written before logs were shared may still list one; ceasing to list it drops no ownership.
     if old_family and (set(old_family.get("etlReceipts", {}).get("datasets", []))
-                       - set(entry.get("etlReceipts", {}).get("datasets", []))):
+                       - set(entry.get("etlReceipts", {}).get("datasets", [])) - shared):
         raise PublicationError("Cannot publish a generation that drops receipt dataset ownership")
     _merge_family(index, family, entry)
     evidence = [verify_evidence(path) for path in evidence_directories]
@@ -1218,7 +1224,11 @@ def _assert_family_unchanged(index: Mapping, prior_index: Mapping, family: str) 
 
 
 def _merge_family(index: dict, family: str, entry: dict) -> tuple[dict, bytes]:
-    """Update one family, preserving unique subject and receipt-only dataset ownership."""
+    """Update one family, preserving unique subject and receipt-only dataset ownership.
+
+    Ownership is what an entry lists. A shared log (``subject_catalog.SHARED_LOG``) is never listed, so every other
+    dataset, a retry checkpoint included, keeps exactly one family, by the same rule every index reader applies.
+    """
     from rulespec_artifacts import canonical_json_bytes
 
     datasets = {key.removesuffix(".parquet") for key in entry["tables"]}
@@ -1295,6 +1305,10 @@ def receipt_members(index: Mapping, *, dataset: str | None = None) -> tuple[Memb
     """
     entries = list(index["families"].values())
     if dataset is not None:
+        from spicy_regs.subject_catalog import shared_receipt_logs
+        if dataset in shared_receipt_logs():
+            raise PublicationError(f"{dataset} is a shared log with no owning family: read its rows from the "
+                                   "receipt member of one of the family's own datasets")
         owner = table_owner(index, dataset + ".parquet")
         if owner is not None:
             if dataset not in owner[1].get("etlReceipts", {}).get("datasets", []):

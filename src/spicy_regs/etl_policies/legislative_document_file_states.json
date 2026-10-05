@@ -7,5 +7,6 @@
     "file_state"
   ],
   "receipt_only": true,
-  "nullable_identity_fields": []
+  "nullable_identity_fields": [],
+  "shared_log": true
 }
