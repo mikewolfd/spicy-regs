@@ -1,0 +1,31 @@
+{
+  "format_version": "scorecard-integration-qualified-scope/1",
+  "qualified": true,
+  "publisher_id": "afscme",
+  "scorecard_id": "afscme:2025-2026",
+  "source_url": "https://scorecard.afscme.org/",
+  "parser_version": "afscme-app-literals/1",
+  "reader_sha256": "13b731725e34a81d6f93acebf92555db4932d40b20a4433508d6046f8a8e39ea",
+  "capture_manifest_sha256": "3dc6fe671076248295c1b20616b6514b51fc23451c624daa1470e719a72170ee",
+  "native_reference_sha256": "76662962d35fbf3a63ca1c401991a8abd794a5712342e64e87a67559dc05ea3c",
+  "native_reference_kind": "source_table_family",
+  "source_qualification_sha256": "646045dda01e7fd27c080341fbe07add094f25e51b758e245931ca54d090fb43",
+  "completeness_rule": "Original HTML and linked app reach EOF; both complete JSON member exports and every item literal parsed; Bioguide identities unique; every member has every chamber item result; state identifiers checked, including the publisher roster's Puerto Rico row outside its state selector; full index and app facts agree on stable reread",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 20,
+    "scorecard_metrics": 2,
+    "scorecard_items": 18,
+    "scorecard_metric_items": 18,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 540,
+    "scorecard_member_ratings": 540,
+    "scorecard_member_item_results": 4520
+  },
+  "capture_count": 6,
+  "evidence_policy": "hash_only",
+  "qualification_boundary": "Named source rendition; remaining editions and renditions stay in scope",
+  "published": false
+}

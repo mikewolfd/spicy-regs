@@ -1,0 +1,42 @@
+{
+  "format_version": "scorecard-reader-independent-review/1",
+  "boundary": "Named retained-source rendition and corrected module; remaining historical scopes and undisclosed legislative actions remain separate",
+  "reviews": [
+    {
+      "publisher_id": "nra_pvf",
+      "status": "approved",
+      "reviewed_source_commit": "3037e0ad98adf9f5e29415d68825963fc2c9b281",
+      "module_sha256": "8368eb8586428877d6a71cb44bcb9256973922d2d1834f12f026d1148edd9f54",
+      "parser_version": "nra-pvf-public-election-federal-incumbents/2",
+      "handoff_sha256": "bc30e9cf50b25c32169133b0feac71d6d9757a68efd33ff3fa7362c1e42d3ea8",
+      "report_sha256": "d73aaff513513ca2d2628bfb8e75642428b4ac8a146364901b3a7c005abd56bc",
+      "closure_sha256": "d696c0e8fa9c94b8524dab8165b4c05d1f8fdaeeb06301c6ba2ba40ef368f77d",
+      "entry_pins_sha256": "178cc012f5d931e18d9e192b6bdfb4c0d8fab6a0a138dd00078f2adf4d83d004",
+      "source_field_differences": 0,
+      "findings": [],
+      "limitations": [
+        "Wyoming requested-empty cohort refused; prior scope preserved",
+        "Election federal-incumbent cohorts do not establish a complete congressional roster",
+        "Navigation JSON supplies no grades; grades originate in HTML",
+        "Historical editions and legislative item ledger remain unqualified or undisclosed"
+      ]
+    },
+    {
+      "publisher_id": "drug_policy_action",
+      "status": "approved",
+      "reviewed_source_commit": "029accf61f9508c29c8b59aac1a6235ee77c9ca0",
+      "module_sha256": "887b8377d39fc706aeb6022c0237e664ff8899ba3a25ba0d08dca158ec4217f6",
+      "parser_version": "drug-policy-action-archived-house-grades/2",
+      "handoff_sha256": "4a7044f806a9c0eddec531738c6d5ea9bd91bb80814e6c7d73c606c098dfe566",
+      "report_sha256": "26642e3efbbbfcb8323ad63d4b9ba91b1f3d5ccc4b343893199be5898ee69996",
+      "closure_sha256": "6c4fc8ab509b0b217dcf511480e8062e78f99864cf4fc10aed470b4876350c65",
+      "entry_sha256": "9ee77946354ba745e1cb86653f3c7503c0f422bdd389fb19eea33a4556f71154",
+      "source_field_differences": 0,
+      "locator_differences": 0,
+      "findings": [],
+      "limitations": [
+        "Named archived 2016 House grade list; individual action profiles and Senate committee/reference surface remain separate unqualified renditions."
+      ]
+    }
+  ]
+}

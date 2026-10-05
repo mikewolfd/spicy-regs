@@ -1,0 +1,32 @@
+{
+  "format_version": "scorecard-integration-qualified-scope/1",
+  "qualified": true,
+  "publisher_id": "common_cause",
+  "scorecard_id": "common_cause:2024-publisher-linked",
+  "source_url": "https://democracyscorecard.org/wp-content/uploads/2024/09/DemocracyScorecard_2024v6.pdf",
+  "parser_version": "common-cause-named-qualified-original-pdf/1",
+  "reader_sha256": "abcf0cffdf1120d4a566cdb24eeeee0c282873ca400c101d39bd3a1024e80dec",
+  "capture_manifest_sha256": "e8676a29c82b0a5da806e254e872346c9a30dc6daf169861fbeef99872e4dee8",
+  "native_reference_sha256": "7ac778a6dfcb65a7487a430f4bbe07e40727012a999a06f00ea6482b94ca081c",
+  "native_reference_kind": "source_table_family",
+  "source_qualification_sha256": "a4fe8e8e63fd9accfbb1b1403094c0b0a0f28cb911f7a34f97a94fab0c208d58",
+  "completeness_rule": "Complete source-defined original report; every named grid row, literal rating, scoring column and cell; original publisher link verified; exact PDF trailer/hash and byte-identical source reread",
+  "counts": {
+    "scorecard_items": 23,
+    "scorecard_member_item_results": 6482,
+    "scorecard_member_ratings": 521,
+    "scorecard_members": 521,
+    "scorecard_methodologies": 25,
+    "scorecard_metric_components": 0,
+    "scorecard_metric_items": 23,
+    "scorecard_metrics": 2,
+    "scorecard_publishers": 1,
+    "scorecard_snapshots": 1,
+    "scorecards": 1
+  },
+  "capture_count": 4,
+  "evidence_policy": "hash_only",
+  "qualification_boundary": "Named source rendition; remaining editions and renditions stay in scope",
+  "published": false,
+  "qualified_observations_sha256": "a7e719676fdb01f6e2564c3c76b48c89d215c86900510d3cb0d2a7d46e2abcc1"
+}

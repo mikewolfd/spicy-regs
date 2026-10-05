@@ -241,7 +241,10 @@ LEGACY_COLUMNS["gao_decisions"] += (
     "outcome_rule",
     "b_numbers_truncated",
 )
-RECEIPT_FIELDS["gao_decisions"] += ("outcome_rule", "b_numbers_truncated")
+RECEIPT_FIELDS["gao_decisions"] += ("outcome_rule",)
+# Whether GAO's listing cut the row's number list is a fact about the decision as held, which a reader needs
+# beside b_numbers; it is not how the row was processed (owner decision, 2026-10-04).
+BOOLEAN_FIELDS["gao_decisions"] = ("b_numbers_truncated",)
 DATE_FIELDS["gao_decisions"] = ("released_date", "decided_date")
 
 # FCC native observations carry more than the older name-only arrays. IDs remain

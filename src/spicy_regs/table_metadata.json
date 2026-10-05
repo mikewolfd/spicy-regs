@@ -11265,7 +11265,7 @@
       {
         "column_name": "name",
         "column_type": "VARCHAR",
-        "description": "Proceeding (docket) number, e.g. `17-108` or `23-320`. Primary key / dedup key, and the join key to `fcc_filings.proceeding_names_json`."
+        "description": "Proceeding (docket) number, e.g. `17-108` or `23-320`. Primary key / dedup key, and the join key to the `name` of each entry in `fcc_filings.proceedings`."
       },
       {
         "column_name": "id_proceeding",
@@ -11343,7 +11343,7 @@
     "table": "fcc_filings",
     "label": "FCC filings",
     "summary": "One row per FCC ECFS filing — the FCC's comment equivalent: comments, reply comments, ex-parte notices, letters, and other submissions — ingested from the FCC ECFS public API (`/filings`) by `build_fcc_filings`. Requires an api.data.gov key (`DATA_GOV_API_KEY`). Incremental by `date_received`, deduped on `id_submission`; each window is pooled over whole walks until one is clean or the pool holds exactly the count ECFS aggregates for it. Because ECFS holds tens of millions of filings, a first run with no prior table is bounded to the trailing 30 days; deeper history is backfilled in slices via `FCC_SINCE` and/or scoped to specific proceedings via `FCC_PROCEEDINGS`. All columns are stored as VARCHAR, array fields serialized as JSON strings.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fcc_filings'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
-    "coverage": "Window, not the ECFS archive: filings ECFS received on or after 2026-08-24, when this table started, extended by a daily run. Earlier filings are held only for proceedings backfilled on purpose, so a proceeding's count here is not its ECFS total. Attachment text is extracted for a few selected PDFs only. Each daily run re-reads the trailing seven days by `date_received` and nothing older, so a filing ECFS disseminates more than a week after receiving it is missed, and `proceeding_names_json` is the assignment as last read: ECFS later moves filings out of `INBOX-…` placeholders into dockets, and a held filing keeps the placeholder. The newest day is partial, ending at the last run.",
+    "coverage": "Window, not the ECFS archive: filings ECFS received on or after 2026-08-24, when this table started, extended by a daily run. Earlier filings are held only for proceedings backfilled on purpose, so a proceeding's count here is not its ECFS total. Attachment text is extracted for a few selected PDFs only. Each daily run re-reads the trailing seven days by `date_received` and nothing older, so a filing ECFS disseminates more than a week after receiving it is missed, and `proceedings` is the assignment as last read: ECFS later moves filings out of `INBOX-…` placeholders into dockets, and a held filing keeps the placeholder. The newest day is partial, ending at the last run.",
     "kind": "window",
     "measured_on": "2026-09-28",
     "data_quality": null,
@@ -11351,7 +11351,7 @@
       {
         "column_name": "id_submission",
         "column_type": "VARCHAR",
-        "description": "ECFS submission id (e.g. `26109947027`). Primary key / dedup key."
+        "description": "ECFS submission id (e.g. `26109947027`). Primary key / dedup key. The filing's page on fcc.gov (`https://www.fcc.gov/ecfs/filing/<id_submission>`, the former `filing_url` column) is kept in the filing's receipt, not in this table: `SELECT regexp_extract(processing_json, '\\[\"filing_url\",\\[\"str\",\"([^\"]*)\"', 1) FROM etl_receipts WHERE dataset = 'fcc_filings' AND outcome = 'accepted' AND contains(identity_json, '\"<id_submission>\"')`."
       },
       {
         "column_name": "proceedings",
@@ -14411,6 +14411,11 @@
         "column_name": "outcome",
         "column_type": "VARCHAR",
         "description": "The outcome decision_status states, read by a closed table of GAO's exact sentences: `sustained`, `sustained_in_part`, `denied`, `dismissed`, `denied_in_part_dismissed_in_part`, or `request` where the sentence decides only a request (reconsideration, costs, reimbursement, dismissal); a sentence deciding the protest and a request reads the protest's outcome. NULL where no sentence is stated or the table does not read it (an advisory opinion, an appropriations opinion, a wording GAO wrote after the table was made): never a guess."
+      },
+      {
+        "column_name": "b_numbers_truncated",
+        "column_type": "BOOLEAN",
+        "description": "`true` where GAO's listing cut the decision's numbers -- the list ends `et al` or in a separator, or fills the listing's number field (64 characters for decisions released 2009-2011, 252 from 2012) -- and no decision page has completed it, so b_numbers_json holds only what the listing names; `false` otherwise."
       }
     ],
     "subject": "oversight",
@@ -19880,7 +19885,7 @@
       {
         "dataset": "gao_decisions",
         "receipt_only": false,
-        "policy_version": "government-sources/1",
+        "policy_version": "government-sources/2",
         "identity_columns": [
           "decision_number",
           "url"

@@ -12,7 +12,7 @@ wheel inspection, check logs and bounded benchmark cited below.
 ## Selected package
 
 The dependency declarations, lockfile, wheel and
-[package receipt](../../../../../vendor/spicy_docs-scorecards.json) select
+[package receipt](https://github.com/mikewolfd/spicy-regs/blob/cbbe096a2c4d8996d05016b267f12b645b22eb96/vendor/spicy_docs-scorecards.json) select
 `0.54.0+scorecards.1a2bc6409221`, from SpicyDocs commit
 `ae2c71ee55388d4218a5cd8c14c695f7f174067a`.
 The wheel SHA-256 is

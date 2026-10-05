@@ -8,7 +8,7 @@ One row per FCC ECFS filing — the FCC's comment equivalent: comments, reply co
 
 Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fcc_filings'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
 
-**Coverage.** Window, not the ECFS archive: filings ECFS received on or after 2026-08-24, when this table started, extended by a daily run. Earlier filings are held only for proceedings backfilled on purpose, so a proceeding's count here is not its ECFS total. Attachment text is extracted for a few selected PDFs only. Each daily run re-reads the trailing seven days by `date_received` and nothing older, so a filing ECFS disseminates more than a week after receiving it is missed, and `proceeding_names_json` is the assignment as last read: ECFS later moves filings out of `INBOX-…` placeholders into dockets, and a held filing keeps the placeholder. The newest day is partial, ending at the last run. *(measured 2026-09-28)*
+**Coverage.** Window, not the ECFS archive: filings ECFS received on or after 2026-08-24, when this table started, extended by a daily run. Earlier filings are held only for proceedings backfilled on purpose, so a proceeding's count here is not its ECFS total. Attachment text is extracted for a few selected PDFs only. Each daily run re-reads the trailing seven days by `date_received` and nothing older, so a filing ECFS disseminates more than a week after receiving it is missed, and `proceedings` is the assignment as last read: ECFS later moves filings out of `INBOX-…` placeholders into dockets, and a held filing keeps the placeholder. The newest day is partial, ending at the last run. *(measured 2026-09-28)*
 
 - **Parquet file:** `fcc_filings.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -17,7 +17,7 @@ Processing fields, source witnesses, conversion inputs and diagnostics reference
 
 | Column | Type | Description |
 | --- | --- | --- |
-| `id_submission` | `VARCHAR` | ECFS submission id (e.g. `26109947027`). Primary key / dedup key. |
+| `id_submission` | `VARCHAR` | ECFS submission id (e.g. `26109947027`). Primary key / dedup key. The filing's page on fcc.gov (`https://www.fcc.gov/ecfs/filing/<id_submission>`, the former `filing_url` column) is kept in the filing's receipt, not in this table: `SELECT regexp_extract(processing_json, '\["filing_url",\["str","([^"]*)"', 1) FROM etl_receipts WHERE dataset = 'fcc_filings' AND outcome = 'accepted' AND contains(identity_json, '"<id_submission>"')`. |
 | `proceedings` | `STRUCT("name" VARCHAR, id_proceeding VARCHAR, bureau_code VARCHAR, bureau_name VARCHAR, created_date VARCHAR, date_closed VARCHAR, description VARCHAR, description_display VARCHAR, sunshine_start_date VARCHAR, sunshine_end_date VARCHAR, filing_status VARCHAR)[]` | Source-listed FCC proceedings with their names and identifiers; repeated occurrences remain distinct. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `submission_type` | `VARCHAR` | ECFS submission type description, e.g. `COMMENT`, `REPLY TO COMMENTS`, `NOTICE OF EXPARTE`. |
 | `express_comment` | `BOOLEAN` | `1` if the filing is an express comment (text-only, entered in the web form), `0` for standard filings with uploaded documents. |

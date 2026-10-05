@@ -25,7 +25,7 @@ class GovernmentReceiptRollup(RollupPipeline):
                     context = ReceiptContext(
                         self.receipt_generation_id,
                         policy.dataset + ":run-failed",
-                        "government-sources/1",
+                        policy.policy_version,
                         [
                             {
                                 "source_id": pin.logical_id,

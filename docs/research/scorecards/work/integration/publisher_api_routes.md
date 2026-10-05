@@ -77,9 +77,13 @@ and [archived-source guide](https://github.com/mikewolfd/spicy-docs/blob/6771af0
   grades, but search does not establish a complete snapshot. See the
   [source guide](https://github.com/mikewolfd/spicy-docs/blob/6771af03c21ada118fc625c6a19ed7f670940e29/docs/sources/scorecards-new-american.md)
   and [retained search observations](publisher_api_route_additions.json).
-- **NRA-PVF:** verified `Umbraco/api/PublicGradesApi` routes provide election
-  state/year navigation. The observed responses contain no congressional grades;
-  see the [discovery inventory](publisher_api_inventory.md).
+- **NRA-PVF:** `https://www.nrapvf.org/Umbraco/api/PublicGradesApi/GetCurrentStates`
+  supplies native state, election and date navigation. Grades come from the
+  original `/grades/{state}` HTML pages. The qualified rendition selects only
+  publisher-labelled federal incumbents and preserves the source's election
+  cohort; it does not establish a complete congressional roster. See the
+  [named Alabama qualification](qualifications/nra_pvf--2026-11-03-general-alabama-federal-incumbents.json)
+  and [reader guide](https://github.com/mikewolfd/spicy-docs/blob/7f3dabdb5cd2f50aa24e13e8adf73027f85af7f7/docs/sources/scorecards-nra-pvf.md).
 - **NIAC Action:** the original app fetches `/data/scores_wide.csv`,
   `/data/scores_columns_meta.csv` and `/data/manual_scoring_meta.csv`. Its `/api/find-lawmakers` JSON endpoint supports
   address lookup; score acquisition uses the CSV data rather than that lookup.

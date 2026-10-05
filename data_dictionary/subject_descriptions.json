@@ -781,7 +781,7 @@
   },
   "fcc_filings": {
     "columns": {
-      "id_submission": "ECFS submission id (e.g. `26109947027`). Primary key / dedup key.",
+      "id_submission": "ECFS submission id (e.g. `26109947027`). Primary key / dedup key. The filing's page on fcc.gov (`https://www.fcc.gov/ecfs/filing/<id_submission>`, the former `filing_url` column) is kept in the filing's receipt, not in this table: `SELECT regexp_extract(processing_json, '\\[\"filing_url\",\\[\"str\",\"([^\"]*)\"', 1) FROM etl_receipts WHERE dataset = 'fcc_filings' AND outcome = 'accepted' AND contains(identity_json, '\"<id_submission>\"')`.",
       "proceedings": "Source-listed FCC proceedings with their names and identifiers; repeated occurrences remain distinct. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "submission_type": "ECFS submission type description, e.g. `COMMENT`, `REPLY TO COMMENTS`, `NOTICE OF EXPARTE`.",
       "express_comment": "`1` if the filing is an express comment (text-only, entered in the web form), `0` for standard filings with uploaded documents.",
@@ -802,7 +802,7 @@
   },
   "fcc_proceedings": {
     "columns": {
-      "name": "Proceeding (docket) number, e.g. `17-108` or `23-320`. Primary key / dedup key, and the join key to `fcc_filings.proceeding_names_json`.",
+      "name": "Proceeding (docket) number, e.g. `17-108` or `23-320`. Primary key / dedup key, and the join key to the `name` of each entry in `fcc_filings.proceedings`.",
       "id_proceeding": "ECFS numeric identifier, reused across some docket names in retained data (301759 appears with both 17-108 and 87-432). Native filing-to-proceeding joins require name AND id_proceeding; the numeric ID alone is not globally unique. The table's primary key remains name.",
       "description": "Proceeding title/subject (ECFS `description_display`, falling back to `description`), e.g. `Restoring Internet Freedom`. There is no program or topic field, and titles often leave the program out: Universal Service dockets include 13-184 (`Modernizing the E-rate Program for Schools and Libraries.`) and 02-60 (`In the Matter of Rural Health Care Support Mechanism`), neither of which says universal service, and high-cost programs such as the Rural Digital Opportunity Fund (19-126) and the 5G Fund (20-32) use their own names. Search titles together with bureau_code (WC, or CC for older dockets) and known docket numbers, and find related dockets by the proceedings filings name alongside an anchor docket in fcc_filings.proceeding_names_json (for Universal Service, the umbrella docket 96-45 and 10-90). A title search gives a floor, not a complete list.",
       "bureau_code": "Code of the FCC bureau that owns the proceeding (e.g. `WC`).",
@@ -2604,7 +2604,8 @@
       "released_date": "The listing's Publicly Released date (its Published date where it states no release), as an ISO date: when GAO released the decision, not when it decided it (B-424477: decided 2026-08-07, released 2026-08-28). A count by fiscal year counts releases.",
       "decided_date": "The day GAO decided the decision, from the Date line of its page's caption, as an ISO date; NULL where no page was read or the page prints no caption (a letter, a report, a decision GAO posts only as a PDF). GAO releases a decision after deciding it, often days later (B-424477: decided 2026-08-07, released 2026-08-28), so a count by decided_date and one by released_date differ.",
       "decision_status": "GAO's outcome sentence for the decision as its listing states it, word for word with HTML whitespace collapsed (`We deny the protest.`); NULL where the listing states none.",
-      "outcome": "The outcome decision_status states, read by a closed table of GAO's exact sentences: `sustained`, `sustained_in_part`, `denied`, `dismissed`, `denied_in_part_dismissed_in_part`, or `request` where the sentence decides only a request (reconsideration, costs, reimbursement, dismissal); a sentence deciding the protest and a request reads the protest's outcome. NULL where no sentence is stated or the table does not read it (an advisory opinion, an appropriations opinion, a wording GAO wrote after the table was made): never a guess."
+      "outcome": "The outcome decision_status states, read by a closed table of GAO's exact sentences: `sustained`, `sustained_in_part`, `denied`, `dismissed`, `denied_in_part_dismissed_in_part`, or `request` where the sentence decides only a request (reconsideration, costs, reimbursement, dismissal); a sentence deciding the protest and a request reads the protest's outcome. NULL where no sentence is stated or the table does not read it (an advisory opinion, an appropriations opinion, a wording GAO wrote after the table was made): never a guess.",
+      "b_numbers_truncated": "`true` where GAO's listing cut the decision's numbers -- the list ends `et al` or in a separator, or fills the listing's number field (64 characters for decisions released 2009-2011, 252 from 2012) -- and no decision page has completed it, so b_numbers_json holds only what the listing names; `false` otherwise."
     }
   },
   "gao_recommendations": {

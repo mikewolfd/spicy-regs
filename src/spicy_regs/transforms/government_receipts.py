@@ -15,6 +15,7 @@ import re
 import shutil
 import sqlite3
 from contextvars import ContextVar
+from dataclasses import replace
 from functools import wraps
 from pathlib import Path
 from typing import Any
@@ -47,16 +48,32 @@ from spicy_regs.transforms.government_source_shapes import (
 )
 from spicy_regs.transforms.parquet_rows import write_rows
 
+#: A dataset whose subject columns changed after it first published states its own version; the rest keep the
+#: family's. gao_decisions: ``b_numbers_truncated`` returned from the receipt to the subject table (2026-10-05).
+POLICY_VERSIONS = {"gao_decisions": "government-sources/2"}
 POLICIES = {
     dataset: DatasetPolicy(
         dataset,
         schema,
         tuple(IDENTITY_FIELDS[dataset]),
         ("raw_record",),
-        policy_version="government-sources/1",
+        policy_version=POLICY_VERSIONS.get(dataset, "government-sources/1"),
         nullable_identity_fields=("entity_eft_indicator",) if dataset == "sam_entities" else (),
     )
     for dataset, schema in SUBJECT_SCHEMAS.items()
+}
+_gao_decisions = POLICIES["gao_decisions"].subject_schema
+#: Exact policies a published prior may still carry. A prior is read under one only to restore its receipts' whole
+#: original rows; every write uses POLICIES. gao-reports published gao_decisions without ``b_numbers_truncated`` on
+#: 2026-10-04.
+EARLIER_POLICIES = {
+    "gao_decisions": (
+        replace(
+            POLICIES["gao_decisions"],
+            subject_schema=_gao_decisions.remove(_gao_decisions.get_field_index("b_numbers_truncated")),
+            policy_version="government-sources/1",
+        ),
+    )
 }
 _ACTIVE: ContextVar[bool] = ContextVar("government_receipt_build", default=False)
 _INHERITED: ContextVar[dict[str, Path] | None] = ContextVar("government_prior_receipts", default=None)
@@ -99,6 +116,15 @@ def _native(path: Path, dataset: str) -> bool:
             not schema.equals(_legacy_schema(dataset), check_metadata=False)
             and schema.equals(SUBJECT_SCHEMAS[dataset], check_metadata=False)
         )
+    )
+
+
+def _prior_policy(dataset: str, path: Path) -> DatasetPolicy:
+    """The earlier policy whose exact subject schema the prior was written under, else the current one."""
+    schema = pq.read_schema(path)
+    return next(
+        (p for p in EARLIER_POLICIES.get(dataset, ()) if schema.equals(p.subject_schema, check_metadata=False)),
+        POLICIES[dataset],
     )
 
 
@@ -153,7 +179,7 @@ def internal_prior(
             inherited[dataset] = selected
         restored_rows = (
             row["raw_record"]
-            for row in read_with_receipts([path], [selected], POLICIES[dataset], generation_id=generation_id)
+            for row in read_with_receipts([path], [selected], _prior_policy(dataset, path), generation_id=generation_id)
         )
         write_rows(restored_rows, restored, _legacy_schema(dataset))
         return restored
@@ -278,7 +304,7 @@ def migrate_outputs(
                         diagnostics["prior_receipt_id"] = old[1]
                         diagnostics["prior_generation_id"] = old[2]
                     context = ReceiptContext(
-                        generation_id, f"{dataset}:{ordinal}", "government-sources/1", witnesses, diagnostics
+                        generation_id, f"{dataset}:{ordinal}", policy.policy_version, witnesses, diagnostics
                     )
                     try:
                         if mapping_error is not None:
@@ -287,7 +313,7 @@ def migrate_outputs(
                         refused = ReceiptContext(
                             generation_id,
                             f"{dataset}:{ordinal}",
-                            "government-sources/1",
+                            policy.policy_version,
                             witnesses,
                             {**diagnostics, "error_type": type(error).__name__, "message": str(error)},
                         )
@@ -308,7 +334,7 @@ def migrate_outputs(
                             ReceiptContext(
                                 generation_id,
                                 dataset + ":empty",
-                                "government-sources/1",
+                                policy.policy_version,
                                 [
                                     {
                                         "source_id": "spicy-regs:producer-output:" + dataset,
