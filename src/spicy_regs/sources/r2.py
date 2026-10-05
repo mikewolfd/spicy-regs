@@ -40,7 +40,8 @@ def recorded_reads() -> Iterator[dict[str, dict]]:
     """Note every table :func:`download_from_r2` fetches while active, at the bytes fetched.
 
     A managed table is noted by its pin: digest, size, family and generation. Any other object is noted by the digest
-    and size of the file written, and an input read outside the bucket by what :func:`note_read` is given. A read that
+    and size of the file written, and an input read outside the bucket by what :func:`note_read` is given.
+    Native readers use :func:`note_pinned_read` after admission to preserve a captured publication pin. A read that
     found nothing is not noted. What a caller then does with the bytes, including failing to use them, does not change
     the note: the build read them.
     """
@@ -60,6 +61,13 @@ def note_read(key: str, *, sha256: str, byte_size: int) -> None:
     reads = _reads.get()
     if reads is not None:
         reads[key] = {"sha256": sha256, "byteSize": byte_size}
+
+
+def note_pinned_read(key: str, pin: dict) -> None:
+    """Record an admitted input's pin from the build's captured publication index."""
+    reads = _reads.get()
+    if reads is not None:
+        reads[key] = dict(pin)
 
 
 def _note_read(remote_key: str, member, owner, local_path: Path) -> None:
