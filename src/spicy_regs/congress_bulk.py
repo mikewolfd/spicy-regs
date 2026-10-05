@@ -9,7 +9,11 @@ table equal to its source; 5.5 to 8.4 microseconds a row against 577 to 692).
 
 The row code stays the reference and keeps the rows SQL cannot own: a row whose text ``etl_bulk`` spells differently
 from Python, and a row the mapper would refuse. Those come back from the ``row_receipt`` and ``row_fields`` callables
-the caller passes, which are the row code's own functions, so each rule lives in one place.
+the caller passes, which are the row code's own functions, so each rule lives in one place. Such a row's own text
+rides along in the one scan. Nothing here runs a second statement on a connection that is still streaming: that ends
+the stream without an error, and a bundle cut short that way is consistent with itself (2026-10-05: 199,999 of
+1,000,000 rows restored, nothing raised). So each scan also checks that its rows arrive in file order and that it read
+as many as the file's own footer counts.
 
 A dataset is taken only when :func:`eligible` says every rule the mapper applies to it is one of the three this
 module states in SQL: a column passed through as text, a digit string read as an integer, and a row given no subject.
@@ -18,6 +22,7 @@ module states in SQL: a column passed through as text, a digit string read as an
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
+from itertools import accumulate
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
@@ -48,10 +53,16 @@ NO_SUBJECT = {"member_vote_terms": '"term_index" IS NULL AND "term_match" IS NOT
 #: Receipt columns worth a footer bound; the payload and witness columns are never filtered on.
 _STATISTICS = ["dataset", "record_id", "receipt_id", "outcome", "generation_id", "attempt_id", "policy_version"]
 _GROUP = 2000
+#: Rows held in memory at a time; a receipt is about a kilobyte.
+_BATCH = 100_000
 
 
-def eligible(dataset: str, source: pa.Schema) -> bool:
-    """Whether every rule the mapper applies to ``dataset`` is one this module states in SQL."""
+def eligible(dataset: str, source: pa.Schema | None = None) -> bool:
+    """Whether every rule the mapper applies to ``dataset`` is one this module states in SQL.
+
+    Without ``source`` the answer is for the dataset alone, before its source schema is known.
+    """
+    source = pa.schema([]) if source is None else source
     if dataset not in INPUT_COLUMNS or dataset in RECEIPT_ONLY or dataset == "public_activity_events":
         return False
     special = {name for table, name in (*NATIVE, *FLATTEN, *JOINED) if table == dataset} | set(BOOLEANS.get(dataset, ()))
@@ -81,6 +92,50 @@ def _witnesses_sql(first: Mapping[str, Any], rest: Sequence[Mapping[str, Any]]) 
     return "[" + ", ".join(["{" + own + "}", *others]) + "]"
 
 
+def _source_sql(source: Path, file_schema: pa.Schema, dataset: str, policy: DatasetPolicy) -> str:
+    """The source rows, each with its ordinal, its exact text, whether it has no subject, and whether it is the row code's."""
+    integers = [field.name for field in policy.subject_schema if pa.types.is_integer(field.type) and field.name in file_schema.names]
+    bad_integer = " OR ".join(f'("{name}" IS NOT NULL AND NOT regexp_full_match("{name}", {_DIGITS}))' for name in integers) or "false"
+    no_identity = " OR ".join(
+        f'"{name}" IS NULL' if name in file_schema.names else "true" for name in policy.identity_fields if name not in policy.nullable_identity_fields
+    ) or "false"
+    raw = etl_bulk.record_json_sql((name, file_schema.field(name).type) for name in file_schema.names)
+    return f"""SELECT *, ((NOT _rejected AND (({no_identity}) OR ({bad_integer}))) OR {etl_bulk.needs_reference_sql("_raw")}) AS _reference
+               FROM (SELECT *, file_row_number AS _ordinal, {raw} AS _raw, ({NO_SUBJECT.get(dataset, "false")}) AS _rejected
+                     FROM read_parquet({_text(source)}, file_row_number = true))"""
+
+
+def routed_ordinals(source: Path, *, dataset: str, policy: DatasetPolicy) -> list[int]:
+    """The ordinals of the source rows :func:`write_bundle` hands to the row code, by the writer's own expression."""
+    import duckdb
+
+    source = Path(source).resolve()
+    with duckdb.connect() as con:
+        query = f"SELECT _ordinal FROM ({_source_sql(source, pq.read_schema(source), dataset, policy)}) WHERE _reference ORDER BY _ordinal"
+        return [ordinal for (ordinal,) in con.execute(query).fetchall()]
+
+
+def _rows_in(path: Path, dataset: str | None = None) -> int:
+    """How many rows the file itself counts, or how many of ``dataset``'s receipts: read apart from the scan it checks."""
+    import pyarrow.dataset as ds
+
+    if dataset is None:
+        return pq.ParquetFile(path).metadata.num_rows
+    return ds.dataset(path, format="parquet").count_rows(filter=ds.field("dataset") == dataset)
+
+
+def _with_insertions(kept: pa.Table, mask: list[bool], insertions: Mapping[int, pa.Table | None]) -> pa.Table:
+    """``kept``, the batch rows whose ``mask`` is true, with each insertion placed where its batch index falls."""
+    before = [0, *accumulate(mask)]  # kept rows ahead of each batch index
+    parts, start = [], 0
+    for index in sorted(insertions):
+        parts.append(kept.slice(start, before[index] - start))
+        start = before[index]
+        if (rows := insertions[index]) is not None:
+            parts.append(rows)
+    return pa.concat_tables([*parts, kept.slice(start)])
+
+
 def write_bundle(
     source: Path,
     subjects_path: Path,
@@ -92,39 +147,32 @@ def write_bundle(
     processor: str,
     digest: str,
     first_receipts: Sequence[Mapping[str, Any]],
-    row_receipt: Callable[[Mapping[str, Any], int], tuple[dict | None, dict]],
+    row_receipt: Callable[[str, int], tuple[dict | None, dict]],
     witnesses: Sequence[Mapping[str, Any]] = (),
 ) -> int:
     """Write ``dataset``'s subject table and receipts to the two paths; return how many rows went to the row code.
 
     ``digest`` is the source file's, as the row writer computes it. ``first_receipts`` are written ahead of the rows
-    (the table-metadata receipt). ``row_receipt(raw, ordinal)`` is the row writer's own step for one source row.
+    (the table-metadata receipt). ``row_receipt(processing_json, ordinal)`` is the row writer's own step for one
+    source row, which it reads back out of the processing text built here.
     """
     import duckdb
 
     source = Path(source).resolve()
     file_schema = pq.read_schema(source)
     subject = policy.subject_schema
-    integers = [field.name for field in subject if pa.types.is_integer(field.type)]
+    integers = {field.name for field in subject if pa.types.is_integer(field.type)}
     columns = ", ".join(
         f'CAST(NULL AS VARCHAR) AS "{field.name}"' if field.name not in file_schema.names
         else f'CASE WHEN regexp_full_match("{field.name}", {_DIGITS}) THEN CAST("{field.name}" AS BIGINT) END AS "{field.name}"' if field.name in integers
         else f'"{field.name}"'
         for field in subject
     )
-    present = [name for name in integers if name in file_schema.names]
-    bad_integer = " OR ".join(f'("{name}" IS NOT NULL AND NOT regexp_full_match("{name}", {_DIGITS}))' for name in present) or "false"
-    no_identity = " OR ".join(
-        f'"{name}" IS NULL' if name in file_schema.names else "true" for name in policy.identity_fields if name not in policy.nullable_identity_fields
-    ) or "false"
-    no_subject = NO_SUBJECT.get(dataset, "false")
     record_id, version, identity = etl_bulk.identity_sql(policy)
-    raw = etl_bulk.record_json_sql((name, file_schema.field(name).type) for name in file_schema.names)
     own_witness = {"source_id": "shaped-observation:" + dataset, "source_uri": str(source), "sha256": digest, "body_version": None}
     query = f"""
-    WITH read AS (SELECT *, file_row_number AS _ordinal, {raw} AS _raw, ({no_subject}) AS _rejected, ({bad_integer}) AS _bad_integer,
-                         ({no_identity}) AS _no_identity FROM read_parquet({_text(source)}, file_row_number = true)),
-    shaped AS (SELECT {columns}, _ordinal, _raw, _rejected, _bad_integer, _no_identity FROM read),
+    WITH read AS ({_source_sql(source, file_schema, dataset, policy)}),
+    shaped AS (SELECT {columns}, _ordinal, _raw, _rejected, _reference FROM read),
     keyed AS (SELECT *, CASE WHEN NOT _rejected THEN {record_id} END AS record_id, CASE WHEN NOT _rejected THEN {version} END AS subject_version,
                      CASE WHEN NOT _rejected THEN {identity} END AS identity_json,
                      '["dict",[["entry_kind",["str","row"]],["source_fields",' || _raw || ']]]' AS processing_json FROM shaped),
@@ -132,54 +180,77 @@ def write_bundle(
                        {_text(dataset + ":" + digest + ":")} || _ordinal AS attempt_id, CASE WHEN _rejected THEN 'rejected' ELSE 'accepted' END AS outcome,
                        {_text(processor)} AS processor, {_witnesses_sql(own_witness, witnesses)} AS witnesses,
                        CASE WHEN _rejected THEN '["dict",[["reason",["str","no_domain_subject"]]]]' ELSE '["dict",[]]' END AS diagnostic_json FROM keyed)
-    , marked AS (SELECT {etl_bulk.digest_sql(etl_bulk.receipt_json_sql())} AS receipt_id, *,
-                       ((NOT _rejected AND (_no_identity OR _bad_integer)) OR {etl_bulk.needs_reference_sql("processing_json")}) AS _reference
-                FROM receipt)
-    SELECT *, NOT (_rejected OR _reference) AS _accepted FROM marked ORDER BY _ordinal"""
-    left = 0
+    SELECT {etl_bulk.digest_sql(etl_bulk.receipt_json_sql())} AS receipt_id, *, NOT (_rejected OR _reference) AS _accepted FROM receipt"""
+    expected, seen, left = _rows_in(source), 0, 0
     with duckdb.connect() as con, pq.ParquetWriter(subjects_path, subject, compression="zstd") as subjects, \
             pq.ParquetWriter(receipts_path, RECEIPT_SCHEMA, compression="zstd", write_statistics=_STATISTICS) as receipts:
         pending = pa.Table.from_pylist(list(first_receipts), schema=RECEIPT_SCHEMA)
-        for batch in con.execute(query).to_arrow_reader(100_000):
+        for batch in con.execute(query).to_arrow_reader(_BATCH):
             table = pa.Table.from_batches([batch])
-            accepted = table.filter(table["_accepted"])
-            written, kept = table.select(RECEIPT_SCHEMA.names).cast(RECEIPT_SCHEMA), accepted.select(subject.names).cast(subject)
-            flagged = table.filter(table["_reference"])["_ordinal"].to_pylist()
-            if flagged:
-                left += len(flagged)
-                written, kept = _with_row_code(con, source, table, written, flagged, row_receipt, subject)
+            ordinals = table["_ordinal"].to_pylist()
+            if ordinals != list(range(seen, seen + len(ordinals))):
+                raise RuntimeError(f"{dataset}: source rows did not arrive in file order")
+            seen += len(ordinals)
+            flagged = table["_reference"].to_pylist()
+            written = table.filter(pa.array([not flag for flag in flagged])).select(RECEIPT_SCHEMA.names).cast(RECEIPT_SCHEMA)
+            kept = table.filter(table["_accepted"]).select(subject.names).cast(subject)
+            if any(flagged):
+                texts, row_subjects, row_receipts = table["processing_json"].to_pylist(), {}, {}
+                for index in (index for index, flag in enumerate(flagged) if flag):
+                    row_subject, receipt = row_receipt(texts[index], ordinals[index])
+                    row_subjects[index] = None if row_subject is None else pa.Table.from_pylist([row_subject], schema=subject)
+                    row_receipts[index] = pa.Table.from_pylist([receipt], schema=RECEIPT_SCHEMA)
+                left += len(row_receipts)
+                written = _with_insertions(written, [not flag for flag in flagged], row_receipts)
+                kept = _with_insertions(kept, table["_accepted"].to_pylist(), row_subjects)
             pending = pa.concat_tables([pending, written])
-            whole = pending.num_rows - pending.num_rows % _GROUP
-            receipts.write_table(pending.slice(0, whole), row_group_size=_GROUP)
-            pending = pending.slice(whole)
-            subjects.write_table(kept)
+            if whole := pending.num_rows - pending.num_rows % _GROUP:
+                receipts.write_table(pending.slice(0, whole), row_group_size=_GROUP)
+                pending = pending.slice(whole)
+            if kept.num_rows:
+                subjects.write_table(kept)
         if pending.num_rows:
             receipts.write_table(pending, row_group_size=_GROUP)
+    if seen != expected:
+        raise RuntimeError(f"{dataset}: read {seen} of the source's {expected} rows")
     return left
 
 
-def _with_row_code(con, source, table, written, flagged, row_receipt, subject):
-    """Replace the flagged rows' receipts, in place, with the row code's, and rebuild the batch's subjects in order."""
-    placeholders = ", ".join(str(int(ordinal)) for ordinal in flagged)
-    raws = con.execute(
-        f"SELECT * EXCLUDE (file_row_number), file_row_number FROM read_parquet({_text(source)}, file_row_number = true) "
-        f"WHERE file_row_number IN ({placeholders})"
-    ).to_arrow_table().to_pylist()
-    replaced = {}
-    for raw in raws:
-        ordinal = raw.pop("file_row_number")
-        replaced[ordinal] = row_receipt(raw, ordinal)
-    receipts, subjects = written.to_pylist(), []
-    ordinals, rejected = table["_ordinal"].to_pylist(), table["_rejected"].to_pylist()
-    stored = table.select(subject.names).cast(subject).to_pylist()
-    for index, ordinal in enumerate(ordinals):
-        if ordinal in replaced:
-            row_subject, receipts[index] = replaced[ordinal]
-            if row_subject is not None:
-                subjects.append(row_subject)
-        elif not rejected[index]:
-            subjects.append(stored[index])
-    return pa.Table.from_pylist(receipts, schema=RECEIPT_SCHEMA), pa.Table.from_pylist(subjects, schema=subject)
+#: How ``exact_json`` spells a table-metadata entry, at any depth.
+_FOOTER_ENTRY = '["entry_kind",["str","table_metadata"]]'
+#: How it opens a row attempt that holds nothing but its source fields.
+_ROW_OPENING = '["dict",[["entry_kind",["str","row"]],["source_fields",["dict",['
+
+
+def footer_candidates(receipts: Path, *, dataset: str) -> list[str]:
+    """The processing text of every receipt of ``dataset`` that could be a table-metadata entry, in file order.
+
+    A superset: the text is matched at any depth, so the caller decodes each and keeps the ones that are.
+    """
+    import duckdb
+
+    with duckdb.connect() as con:
+        return [text for (text,) in con.execute(
+            f"SELECT processing_json FROM read_parquet({_text(receipts)}, file_row_number = true) "
+            f"WHERE dataset = {_text(dataset)} AND contains(processing_json, {_text(_FOOTER_ENTRY)}) ORDER BY file_row_number"
+        ).fetchall()]
+
+
+def source_fields_sql(schema: pa.Schema) -> tuple[str, str]:
+    """SQL over ``processing_json``: the retained source columns, and whether the text is the plain shape they read.
+
+    Plain is a row attempt holding only ``source_fields``, with exactly ``schema``'s columns, each text or NULL.
+    """
+    names = sorted(schema.names)
+    pairs = "json_extract(processing_json, '$[1][1][1][1]')"
+    plain = " AND ".join(
+        [f"starts_with(processing_json, {_text(_ROW_OPENING)})", "json_array_length(processing_json, '$[1]') = 2",
+         f"json_array_length({pairs}) = {len(names)}"]
+        + [f"json_extract_string({pairs}, '$[{i}][0]') = {_text(name)}" for i, name in enumerate(names)]
+        + [f"json_extract_string({pairs}, '$[{i}][1][0]') IN ('str', 'null')" for i in range(len(names))]
+    )
+    columns = ", ".join(f"json_extract_string({pairs}, '$[{names.index(field.name)}][1][1]') AS \"{field.name}\"" for field in schema)
+    return columns, plain
 
 
 def restore_input(
@@ -188,67 +259,54 @@ def restore_input(
     *,
     dataset: str,
     schema: pa.Schema,
-    row_fields: Callable[[Mapping[str, Any]], Mapping[str, Any] | None],
+    row_fields: Callable[[str, str], Mapping[str, Any] | None],
 ) -> int:
     """Write the source rows ``dataset``'s receipts retain, in builder order, in the retained ``schema``.
 
     Equal to the rows ``restore_processing_input`` yields: every ``row`` attempt's ``source_fields`` except a refused
     conversion's. The caller has validated the bundle and read ``schema`` from its table-metadata receipt.
-    ``row_fields(receipt)`` is the row code's decoding of one receipt, used for a receipt whose copy is not the plain
-    shape read here; it returns None to leave the row out. Returns how many receipts went to the row code.
+    ``row_fields(processing_json, diagnostic_json)`` is the row code's decoding of one receipt. It decides every
+    receipt that is not the plain shape or whose diagnostics mention a refused conversion, and returns None to leave
+    the row out. Returns how many receipts went to it.
     """
     import duckdb
 
-    with duckdb.connect() as con:
-        scope = f"dataset = {_text(dataset)}"
-        names = sorted(schema.names)
-        pairs = "json_extract(processing_json, '$[1][1][1][1]')"
-        plain = " AND ".join(
-            ["json_extract_string(processing_json, '$[1][1][0]') = 'source_fields'", "json_array_length(processing_json, '$[1]') = 2",
-             f"json_array_length({pairs}) = {len(names)}"]
-            + [f"json_extract_string({pairs}, '$[{i}][0]') = {_text(name)}" for i, name in enumerate(names)]
-            + [f"json_extract_string({pairs}, '$[{i}][1][0]') IN ('str', 'null')" for i in range(len(names))]
-        )
-        columns = ", ".join(f"json_extract_string({pairs}, '$[{names.index(field.name)}][1][1]') AS \"{field.name}\"" for field in schema)
-        # A row attempt's processing begins with its entry_kind, the first key in sorted order. A refused conversion
-        # states its reason at the top of its diagnostics; the row code decides any receipt that mentions one.
-        query = f"""
-        SELECT {columns}, file_row_number AS _position,
-               (NOT ({plain}) OR contains(diagnostic_json, 'conversion_refused')) AS _reference
-        FROM read_parquet({_text(receipts)}, file_row_number = true)
-        WHERE {scope} AND processing_json LIKE '["dict",[["entry_kind",["str","row"]]%'
-        ORDER BY file_row_number"""
-        left = 0
-        # As ``write_rows`` does: the destination appears only once every row is written.
-        with TemporaryDirectory(dir=destination.parent) as scratch:
-            temporary = Path(scratch) / "rows.parquet"
-            with pq.ParquetWriter(temporary, schema, compression="zstd") as writer:
-                for batch in con.execute(query).to_arrow_reader(200_000):
-                    table = pa.Table.from_batches([batch])
-                    flagged = table.filter(table["_reference"])["_position"].to_pylist()
-                    rows = table.select(schema.names).cast(schema)
-                    if flagged:
-                        left += len(flagged)
-                        rows = _decoded_by_row_code(con, receipts, table, rows, flagged, row_fields, schema)
+    from spicy_regs.native_types import reject_extra_fields
+
+    if not all(pa.types.is_string(field.type) for field in schema):
+        raise NotImplementedError("Only text source columns are decoded here")
+    columns, plain = source_fields_sql(schema)
+    query = f"""
+    SELECT {columns}, _position, _reference, CASE WHEN _reference THEN processing_json END AS _processing,
+           CASE WHEN _reference THEN diagnostic_json END AS _diagnostic
+    FROM (SELECT *, file_row_number AS _position,
+                 (NOT coalesce({plain}, false) OR contains(diagnostic_json, 'conversion_refused')) AS _reference
+          FROM read_parquet({_text(receipts)}, file_row_number = true) WHERE dataset = {_text(dataset)})"""
+    expected, seen, last, left = _rows_in(receipts, dataset), 0, -1, 0
+    # As ``write_rows`` does: the destination appears only once every row is written.
+    with duckdb.connect() as con, TemporaryDirectory(dir=destination.parent) as scratch:
+        temporary = Path(scratch) / "rows.parquet"
+        with pq.ParquetWriter(temporary, schema, compression="zstd") as writer:
+            for batch in con.execute(query).to_arrow_reader(_BATCH):
+                table = pa.Table.from_batches([batch])
+                positions = table["_position"].to_pylist()
+                if positions != sorted(set(positions)) or (positions and positions[0] <= last):
+                    raise RuntimeError(f"{dataset}: receipts did not arrive in file order")
+                seen, last = seen + len(positions), positions[-1] if positions else last
+                flagged = table["_reference"].to_pylist()
+                rows = table.filter(pa.array([not flag for flag in flagged])).select(schema.names).cast(schema)
+                if any(flagged):
+                    processing, diagnostic, decoded = table["_processing"].to_pylist(), table["_diagnostic"].to_pylist(), {}
+                    for index in (index for index, flag in enumerate(flagged) if flag):
+                        fields = row_fields(processing[index], diagnostic[index])
+                        if fields is not None:
+                            reject_extra_fields(fields, schema)
+                        decoded[index] = None if fields is None else pa.Table.from_pylist([dict(fields)], schema=schema)
+                    left += len(decoded)
+                    rows = _with_insertions(rows, [not flag for flag in flagged], decoded)
+                if rows.num_rows:
                     writer.write_table(rows)
-            temporary.replace(destination)
+        if seen != expected:
+            raise RuntimeError(f"{dataset}: read {seen} of the file's {expected} receipts")
+        temporary.replace(destination)
     return left
-
-
-def _decoded_by_row_code(con, receipts, table, rows, flagged, row_fields, schema):
-    placeholders = ", ".join(str(int(position)) for position in flagged)
-    selected = con.execute(
-        f"SELECT * EXCLUDE (file_row_number), file_row_number FROM read_parquet({_text(receipts)}, file_row_number = true) "
-        f"WHERE file_row_number IN ({placeholders})"
-    ).to_arrow_table().to_pylist()
-    decoded = {}
-    for receipt in selected:
-        position = receipt.pop("file_row_number")
-        decoded[position] = row_fields(receipt)
-    out = []
-    for position, row in zip(table["_position"].to_pylist(), rows.to_pylist()):
-        if position not in decoded:
-            out.append(row)
-        elif decoded[position] is not None:
-            out.append(dict(decoded[position]))
-    return pa.Table.from_pylist(out, schema=schema)

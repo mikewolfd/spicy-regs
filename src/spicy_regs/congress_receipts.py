@@ -132,6 +132,7 @@ def write_congress_dataset(
     generation_id: str,
     witnesses: Sequence[Mapping[str, Any]] = (),
     prior: CongressInput | None = None,
+    bulk: bool = True,
 ) -> tuple[Path | None, Path]:
     """Retain one complete shaped output, including rejected rows and its exact footer.
 
@@ -139,6 +140,13 @@ def write_congress_dataset(
     conversion input; callers can additionally retain ordered native capture
     witnesses. The first witness never asserts that a shaped file is an original
     publisher response.
+
+    A dataset ``congress_bulk.eligible`` accepts is written in one scan, and its
+    receipts are fresh: ``prior`` is not read and no receipt names a predecessor
+    (owners, 2026-10-05, until readers accept a member that carries unchanged
+    receipts; per-row lineage cost about 640 bytes a receipt on every republish
+    and nothing maintained reads it). ``bulk=False`` is the row loop for any
+    dataset, lineage included: the reference a bulk bundle is checked against.
     """
     from rulespec_artifacts import publish_directory_no_replace
 
@@ -159,8 +167,9 @@ def write_congress_dataset(
             "body_version": None,
         }
         footer = dict(pq.read_schema(source).metadata or {})
+        in_bulk = bulk and subjects is not None and congress_bulk.eligible(dataset, pq.read_schema(source))
         prior_paths = []
-        if prior is not None:
+        if prior is not None and not in_bulk:
             scoped = select_receipts(prior.receipts, Path(temporary) / "prior.parquet", dataset=dataset)
             validate_receipt_bundle({dataset: prior.subjects}, [scoped], [selected], generation_id=prior.generation_id)
             prior_paths.append(scoped)
@@ -212,12 +221,13 @@ def write_congress_dataset(
             "entry_kind": "table_metadata",
         }
         first = observation_receipt(selected, context("metadata", processing=metadata), processing_fields=metadata)
-        # One scan for a flat dataset with no prior to inherit; the row loop below is its reference.
-        if prior is None and subjects is not None and congress_bulk.eligible(dataset, pq.read_schema(source)):
+        # One scan for a flat dataset; the row loop below is its reference.
+        if in_bulk:
+            assert subjects is not None
             congress_bulk.write_bundle(
                 source, subjects, receipts, dataset=dataset, policy=selected, generation_id=generation_id,
                 processor=PROCESSOR, digest=digest, first_receipts=[first], witnesses=witnesses,
-                row_receipt=lambda raw, ordinal: attempt(ordinal, raw),
+                row_receipt=lambda text, ordinal: attempt(ordinal, _unpack(json.loads(text))["source_fields"]),
             )
         else:
             with pq.ParquetWriter(receipts, RECEIPT_SCHEMA, compression="zstd") as rw:
@@ -252,13 +262,23 @@ def write_congress_dataset(
 
 
 def restore_processing_input(
-    subject: Path | tuple[Path, ...] | None, receipts: Path, destination: Path, *, dataset: str, generation_id: str
+    subject: Path | tuple[Path, ...] | None,
+    receipts: Path,
+    destination: Path,
+    *,
+    dataset: str,
+    generation_id: str,
+    bulk: bool = True,
 ) -> Path:
     """Restore retained original source fields and schema after exact receipt admission.
 
     Rejected conversion attempts remain available for retry. Technical tables
     and processing events remain receipt-only in the public generation. Footer
     metadata includes bill-family completion scopes and per-reader refusal state.
+
+    A dataset ``congress_bulk.eligible`` accepts is decoded in one scan after the
+    one admission. ``bulk=False`` is the row readers for any dataset: the
+    reference a bulk restore is checked against.
     """
     selected = policy(dataset)
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -266,37 +286,46 @@ def restore_processing_input(
         scoped = select_receipts(receipts, Path(temp) / "receipts.parquet", dataset=dataset)
         paths = () if subject is None else ((subject,) if isinstance(subject, Path) else tuple(subject))
         validate_receipt_bundle({dataset: paths}, [scoped], [selected], generation_id=generation_id)
+
+        def source_fields(data, diagnostic):
+            kept = data.get("entry_kind") == "row" and diagnostic.get("reason") != "conversion_refused"
+            return data["source_fields"] if kept else None
+
+        def retained_schema(metadata_rows):
+            if not metadata_rows or any(row != metadata_rows[0] for row in metadata_rows[1:]):
+                raise ValueError("Congress input requires consistent retained source footers")
+            return pa.ipc.read_schema(pa.BufferReader(metadata_rows[0]["source_schema"]))
+
+        if bulk and congress_bulk.eligible(dataset):
+            # The bundle is admitted above. One scan finds its footers and one decodes its rows; each reader
+            # below admits the whole bundle again before it yields anything.
+            footers = (_unpack(json.loads(text)) for text in congress_bulk.footer_candidates(scoped, dataset=dataset))
+            schema = retained_schema([data for data in footers if data.get("entry_kind") == "table_metadata"])
+            if congress_bulk.eligible(dataset, schema):
+                congress_bulk.restore_input(
+                    scoped, destination, dataset=dataset, schema=schema,
+                    row_fields=lambda processing, diagnostic: source_fields(
+                        _unpack(json.loads(processing)), _unpack(json.loads(diagnostic))
+                    ),
+                )
+                return destination
         # Exercise the shared exact matching reader before reconstructing original source rows.
         for _ in read_with_receipts(paths, [scoped], selected, generation_id=generation_id):
             pass
-        metadata_rows = []
-        for receipt in read_attempts([scoped], selected, generation_id=generation_id):
-            data = receipt["processing_fields"]
-            if data.get("entry_kind") == "table_metadata":
-                metadata_rows.append(data)
-        if not metadata_rows or any(row != metadata_rows[0] for row in metadata_rows[1:]):
-            raise ValueError("Congress input requires consistent retained source footers")
-        retained = metadata_rows[0]
+        schema = retained_schema([
+            receipt["processing_fields"]
+            for receipt in read_attempts([scoped], selected, generation_id=generation_id)
+            if receipt["processing_fields"].get("entry_kind") == "table_metadata"
+        ])
 
         # Source shapers use strings. Preserve discovered source columns and
         # absent columns by reading the exact retained input dictionaries.
         def original_rows():
             for receipt in read_attempts([scoped], selected, generation_id=generation_id):
-                data = receipt["processing_fields"]
-                diagnostic = receipt["diagnostics"]
-                if data.get("entry_kind") == "row" and diagnostic.get("reason") != "conversion_refused":
-                    yield data["source_fields"]
+                fields = source_fields(receipt["processing_fields"], receipt["diagnostics"])
+                if fields is not None:
+                    yield fields
 
-        schema = pa.ipc.read_schema(pa.BufferReader(retained["source_schema"]))
-        if congress_bulk.eligible(dataset, schema):
-
-            def fields(receipt):
-                data, diagnostic = _unpack(json.loads(receipt["processing_json"])), _unpack(json.loads(receipt["diagnostic_json"]))
-                kept = data.get("entry_kind") == "row" and diagnostic.get("reason") != "conversion_refused"
-                return data["source_fields"] if kept else None
-
-            congress_bulk.restore_input(scoped, destination, dataset=dataset, schema=schema, row_fields=fields)
-            return destination
         return write_rows(original_rows(), destination, schema)
 
 
