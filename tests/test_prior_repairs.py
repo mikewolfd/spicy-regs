@@ -431,3 +431,30 @@ def test_comment_digests_respell_in_the_catalog_keep_the_text_and_restore(tmp_pa
     assert repairs.respell_comment_digests()["comments_respelled"] == 0, "a second pass finds nothing"
     assert repairs.restore_comment_digests(receipts) == {"comments_restored": 1, "comments_since_rewritten": 0}
     assert _comments(connect)["ACF-1"] == (derived, "kept")
+
+
+def test_record_issue_repair_restores_receipt_held_inputs_and_writes_native(tmp_path, monkeypatch):
+    from spicy_regs.congress_receipts import write_congress_dataset
+    from spicy_regs.congress_subjects import INPUT_COLUMNS
+    from spicy_regs.selected_generations import SelectedDataset, remember_selection
+
+    monkeypatch.delenv('R2_PUBLIC_URL', raising=False)
+    row: dict[str, str | None] = dict.fromkeys(INPUT_COLUMNS['record_issues'])
+    row.update(volume='171', issue='45', congress='119', issue_date='2025-03-11',
+               entire_issue_json=json.dumps([{'part': '1', 'type': 'PDF',
+                   'url': 'https://www.congress.gov/171/crec/2025/03/11/171/45/CREC-2025-03-11.pdf'}]),
+               package_id='CREC-2025-03-11-bk2', package_id_rule='entire_issue_url_stem')
+    source = tmp_path / 'source.parquet'
+    _table(source, [row])
+    subject, receipts = write_congress_dataset(source, tmp_path / 'native', dataset='record_issues', generation_id='before')
+    assert subject is not None
+    work = tmp_path / 'repair'
+    work.mkdir()
+    remember_selection(work, [SelectedDataset('record_issues', (subject,), receipts, 'before')])
+    rollup = repairs.repair_rollup('rebuild-record-issues', repairs.REPAIRS['rebuild-record-issues'])
+    rollup(output_dir=work, skip_upload=True).run()
+    repaired = pq.read_table(work / 'record_issues.parquet').to_pylist()[0]
+    assert repaired['package_id'] == 'CREC-2025-03-11'
+    assert 'entire_issue' in repaired and 'entire_issue_json' not in repaired
+    assert 'package_id_rule' not in repaired
+    assert (work / 'etl_receipts.parquet').exists()
