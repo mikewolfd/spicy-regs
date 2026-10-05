@@ -11,7 +11,7 @@ from spicy_regs.transforms.regulations_shape import IDENTITIES, SOURCE_COLUMNS, 
 from spicy_regs.transforms.regulations_receipts import ReceiptInput, materialize_internal
 
 
-@pytest.mark.parametrize('damage', [None, 'pointer', 'manifest', 'artifact', 'membership'])
+@pytest.mark.parametrize('damage', [None, 'pointer', 'manifest', 'artifact', 'membership', 'native'])
 def test_pinned_snapshot_migration_preserves_exact_rows_and_prior_ids(tmp_path, damage):
     sources = tmp_path / 'source'
     sources.mkdir()
@@ -35,6 +35,8 @@ def test_pinned_snapshot_migration_preserves_exact_rows_and_prior_ids(tmp_path, 
                                    'manifest_key': 'materialized/rulemaking/snapshots/old/manifest.json'}))
     old = {'dataset': 'rulemaking', 'format_version': 2, 'snapshot_id': 'old', 'run_id': 'prior',
            'inputs': {'retained': 'source pins'}, 'artifacts': artifacts}
+    if damage == 'native':
+        old['etlReceipts'] = {'key': 'etl_receipts.parquet'}
     if damage == 'membership':
         old['artifacts'].pop('comment_periods.parquet')
     manifest.write_text(json.dumps(old))

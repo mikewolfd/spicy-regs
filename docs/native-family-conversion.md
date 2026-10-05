@@ -356,3 +356,28 @@ The dry run fixed the order, which the bulk conversion keeps:
 Rollbacks rehearsed: an agency's rows through `replace_native(...,
 delete_scope=True)`; the whole catalog requires an explicit reviewed recovery plan preserving native tables;
 each family by its index entry.
+
+### Materialized rulemaking snapshots
+
+`materialized/rulemaking/latest.json` selects a separate snapshot. Converting a
+flat `proceedings` family does not migrate that snapshot. The scheduled pipeline
+requires native proceedings and their admitted receipts; an old snapshot
+without receipts refuses before processing. Preserve proceedings IDs through
+explicit migration rather than bootstrap an existing snapshot.
+
+Prepare the migration with `scripts/prepare_rulemaking_snapshot_native.py`.
+Pass retained `--pointer`, `--manifest`, and `--sources`, their exact
+`--expected-pointer-sha256` and `--expected-manifest-sha256`, a fresh
+`--destination`, `--generation-id`, and `--asserted-at`. The command checks
+snapshot membership, each artifact's path, bytes, hash, and rows; it copies the
+complete prior snapshot into `retained/`, classifies its existing outputs, and
+checks restored rows in order, schema, and file metadata. It writes a candidate
+native manifest, pointer, and `migration-checks.json` locally. It performs no
+upload or pointer replacement.
+
+Before production migration, qualify the complete retained snapshot and the
+following scheduled materialization on merged readers and writers. Preserve the
+old pointer and every old snapshot object, verify restore, and include the
+actual retention deadline and compatible server rollback in the same concrete
+run approval package. Scheduled materialization remains held until the native
+snapshot is admitted and the verified consumers read it.
