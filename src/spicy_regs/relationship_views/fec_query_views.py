@@ -207,6 +207,7 @@ def fec_query_views(
     namespace_evidence: Mapping[str, str],
     package_root: Path | None = None,
     processing_schemas: Mapping[str, tuple[str, ...]] | None = None,
+    legacy_associations: bool = False,
 ) -> tuple[QualifiedView, ...]:
     """Build trusted view declarations; leave image/receipt pins and activation unset.
 
@@ -219,6 +220,7 @@ def fec_query_views(
     Each resulting spec captures its SQL now; later caller mutation cannot
     change scope, columns or witnesses. No source processors are imported.
     """
+    association_policy = "fec-retained-filing-association/1" if legacy_associations else ASSOCIATION_POLICY
     proofs = _selected_scope(source_generation_pin, population, as_of, namespace_evidence)
     root = package_root or Path(__file__).resolve().parent.parent
     dictionary = root / "table_metadata.json"
@@ -340,10 +342,10 @@ def fec_query_views(
                     ),
                     "fec_filing_header_associations": _HEADER_COLUMNS,
                 },
-                financial_header_association_sql(table, source_generation_pin),
+                financial_header_association_sql(table, source_generation_pin, legacy=legacy_associations),
                 "One exact physical-header association decision per observation; missing, conflicting and unsupported header metadata stay unresolved. No amendment replacement or current money is inferred.",
                 ("target_table", "target_record_id"),
-                ASSOCIATION_POLICY,
+                association_policy,
                 "relationship_views/fec_filing_associations.py",
                 column_descriptions=HEADER_ASSOCIATION_COLUMNS,
             )
@@ -360,10 +362,10 @@ def fec_query_views(
         add(
             table + "_native_filing_associations",
             {table: columns, "fec_filings": _NUMBER_TARGET_COLUMNS},
-            financial_number_association_sql(table, source_generation_pin, proofs, columns=columns),
+            financial_number_association_sql(table, source_generation_pin, proofs, columns=columns, legacy=legacy_associations),
             "One native-file-number association per retained financial observation. All matching metadata versions remain counted; authority, mapper, filer or target conflicts refuse. Matching file number proves no amendment scope or total.",
             ("target_table", "target_record_id"),
-            ASSOCIATION_POLICY,
+            association_policy,
             "relationship_views/fec_filing_associations.py",
             column_descriptions=NUMBER_ASSOCIATION_COLUMNS,
         )

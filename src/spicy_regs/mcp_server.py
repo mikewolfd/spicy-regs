@@ -51,7 +51,7 @@ from spicy_regs.citation_resolution import SOURCE_TABLES
 from spicy_regs.duckdb_settings import INTERACTIVE_HTTP_RETRIES, load_public_http, memory_limit
 from spicy_regs.fec_release import QUERY_RELEASE_FIELDS, RELEASE_INVENTORIES, release_summary
 from spicy_regs.public_url import resolve_r2_base_url, service_url
-from spicy_regs.fec_receipt_adapter import qualified_views
+from spicy_regs.fec_receipt_adapter import qualified_views, selected_qualified_views
 from spicy_regs.vocabulary_mapping import Namespace
 
 TABLES = (
@@ -287,9 +287,9 @@ DOCUMENT_KIND_TABLES = "Each kind's table: " + "; ".join(
 logger = logging.getLogger(__name__)
 
 DEFAULT_CATALOG_NAMESPACE = "default"
-FEC_QUALIFIED_VIEWS: tuple = qualified_views(
-    json.loads(files("spicy_regs").joinpath("fec_query_scope.json").read_text(encoding="utf-8"))
-)
+FEC_QUERY_SCOPE = json.loads(files("spicy_regs").joinpath("fec_query_scope.json").read_text(encoding="utf-8"))
+FEC_QUALIFIED_VIEWS: tuple = qualified_views(FEC_QUERY_SCOPE)
+FEC_LEGACY_QUALIFIED_VIEWS: tuple = qualified_views(FEC_QUERY_SCOPE, legacy_associations=True)
 
 
 def _parse_timeout_seconds(raw: str) -> float | None:
@@ -833,6 +833,14 @@ def _connection_relationships(cursor: duckdb.DuckDBPyConnection) -> dict:
     return _pinned_record(cursor, "_spicy_relationships") or {}
 
 
+def _selected_fec_views(con):
+    local = _connection_local_selection(con)
+    return selected_qualified_views(
+        FEC_QUALIFIED_VIEWS, FEC_LEGACY_QUALIFIED_VIEWS, _connection_index(con),
+        local.get("native", {}) if local is not None else None,
+    )
+
+
 def _fec_release_configuration(con, publication):
     """Deployment chooses the receipt after image build; runtime identities are measured here."""
     if not FEC_QUALIFIED_VIEWS:
@@ -841,7 +849,7 @@ def _fec_release_configuration(con, publication):
 
     path = os.environ.get("SPICY_REGS_FEC_RELEASE_FILE")
     return capture_configuration(
-        FEC_QUALIFIED_VIEWS,
+        _selected_fec_views(con),
         receipt_digest=os.environ.get("SPICY_REGS_FEC_RELEASE_SHA256"),
         image_digest=os.environ.get("SPICY_REGS_CONSUMER_IMAGE_DIGEST"),
         base_url=R2_BASE_URL, local_path=Path(path) if path else None,
@@ -908,8 +916,8 @@ def _install_relationship_views(con: duckdb.DuckDBPyConnection) -> None:
         if any(spec.view.name in {*status["tables"], *relationships} for spec in FEC_QUALIFIED_VIEWS):
             raise ValueError("Qualified FEC view collides with an existing table or relationship view")
         relationships.update(install_views(
-            con, FEC_QUALIFIED_VIEWS, selected, index, set(status["tables"]) | processing, status["publication"],
-            read_tables=_tables_named, prepare=adapter.prepare,
+            con, _selected_fec_views(con), selected, index, set(status["tables"]) | processing, status["publication"],
+            read_tables=_tables_named, prepare=adapter.prepare_qualified,
         ))
         con.execute("CREATE TABLE _spicy_fec_release (snapshot VARCHAR)")
         con.execute("INSERT INTO _spicy_fec_release VALUES (?)", [json.dumps(selected)])
