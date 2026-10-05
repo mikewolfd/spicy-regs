@@ -155,7 +155,7 @@ class _Built:
     generation: Path
     policies: Mapping[str, str]
     restore: Callable[[str], Path]
-    read_published: Callable[[str], int]
+    read_published: Callable[[str, Mapping], int]
     evidence: tuple[Path, ...] = ()
     added_tables: frozenset[str] = frozenset()
     receipt_only_tables: frozenset[str] = frozenset()
@@ -220,8 +220,8 @@ def _convert_rollup(cls, old: Mapping, retained: Mapping[str, Path], base: str, 
     pipeline.run()
     (generation,) = (work / "build" / "generations").iterdir()
 
-    def read_published(dataset: str) -> int:
-        restored = SelectedPriors(work / "read-back" / uuid4().hex, public_url=base).get(dataset)
+    def read_published(dataset: str, index: Mapping) -> int:
+        restored = SelectedPriors(work / "read-back" / uuid4().hex, index=index, public_url=base).get(dataset)
         return pq.ParquetFile(restored).metadata.num_rows
 
     return _Built(
@@ -239,7 +239,7 @@ def _convert_court(family: str, old: Mapping, captured: Mapping, retained: Mappi
                    work: Path, handed_on: Sequence[Mapping], retain_evidence: bool) -> _Built:
     """Court tables: the shared court writer over each retained table, then the court generation admission."""
     from spicy_regs.court_receipts import (
-        POLICIES, build_court_generation, finish_court_output, prior_receipt_selection, read_court_rows,
+        POLICIES, build_court_generation, finish_court_output, read_court_rows,
         restore_processing_input,
     )
     from spicy_regs.court_subjects import SUBJECT_SCHEMAS
@@ -282,12 +282,20 @@ def _convert_court(family: str, old: Mapping, captured: Mapping, retained: Mappi
         return restore_processing_input(subjects[dataset], target, dataset=dataset,
                                         schema=pq.read_schema(retained[dataset + ".parquet"]).remove_metadata())
 
-    def read_published(dataset: str) -> int:
+    def read_published(dataset: str, index: Mapping) -> int:
         target = work / "read-back" / uuid4().hex / f"{dataset}.parquet"
         target.parent.mkdir(parents=True)
-        (member,) = publication.table_members(publication.current_index(base), dataset + ".parquet")
-        publication.fetch_member(base, member, target, member.path)
-        receipts, selected = prior_receipt_selection(target, dataset=dataset)
+        (member,) = publication.table_members(index, dataset + ".parquet")
+        if not publication.fetch_member(base, member, target, member.path):
+            raise ConversionRefused(f"{dataset}: published subject is unavailable")
+        (receipt_member,) = publication.receipt_members(index, dataset=dataset)
+        receipts = target.parent / "etl_receipts.parquet"
+        if not publication.fetch_member(base, receipt_member, receipts, receipt_member.path):
+            raise ConversionRefused(f"{dataset}: published receipts are unavailable")
+        owner = publication.table_owner(index, dataset + ".parquet")
+        if owner is None:
+            raise ConversionRefused(f"{dataset}: no published subject owner")
+        selected = owner[1]["etlReceipts"]["generationId"]
         return sum(1 for _ in read_court_rows(target, dataset=dataset, receipt_path=receipts, generation_id=selected))
 
     return _Built(generation, {name: POLICIES[name].policy_version for name in subjects}, restore, read_published,
@@ -528,8 +536,9 @@ def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: s
         from spicy_regs.sources.cloudflare import purge_urls
 
         purge_urls([f"{base}/{key}" for key in (publication.INDEX_V2_KEY, publication.INDEX_KEY)])
-        entry = publication.current_index(base)["families"].get(family) or {}
-        read = {dataset: built.read_published(dataset) for dataset in tables}
+        read_index = publication.current_index(base)
+        entry = read_index["families"].get(family) or {}
+        read = {dataset: built.read_published(dataset, read_index) for dataset in tables}
     except Exception as failure:
         raise ConversionRefused(f"{family} could not be read back ({type(failure).__name__}: {failure})",
                                 state=published) from failure
