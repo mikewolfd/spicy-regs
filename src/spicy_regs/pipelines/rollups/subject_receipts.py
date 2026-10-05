@@ -84,9 +84,9 @@ class SelectedPriors:
         subjects, receipt_path, generation = list(selection.subjects), selection.receipts, selection.generation_id
         directory = self.directory / dataset
         directory.mkdir()
-        scoped = select_receipts(receipt_path, directory / "scoped.parquet", dataset=dataset)
-        validate_receipt_bundle({dataset: subjects}, [scoped], [selected_policy], generation_id=generation)
-        self.selections[dataset] = (subjects, receipt_path, generation)
+        if dataset not in CONGRESS:
+            scoped = select_receipts(receipt_path, directory / "scoped.parquet", dataset=dataset)
+            validate_receipt_bundle({dataset: subjects}, [scoped], [selected_policy], generation_id=generation)
         output = directory / "processing" / (dataset + ".parquet")
         if dataset in CONGRESS:
             output.parent.mkdir(parents=True, exist_ok=True)
@@ -142,6 +142,7 @@ class SelectedPriors:
         else:
             output.parent.mkdir(parents=True, exist_ok=True)
             materialize_internal(ReceiptInput(dataset, tuple(subjects), receipt_path, generation), output)
+        self.selections[dataset] = (subjects, receipt_path, generation)
         self.restored[dataset] = output
         return output
 

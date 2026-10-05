@@ -22,7 +22,7 @@ from typing import Any
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from spicy_regs import congress_bulk
+from spicy_regs import congress_bulk, etl_bulk
 from spicy_regs.congress_subjects import IDENTITIES, INPUT_COLUMNS, RECEIPT_ONLY, map_record, subject_schema
 from spicy_regs.etl_receipts import (
     RECEIPT_SCHEMA,
@@ -62,6 +62,16 @@ def policy(dataset: str) -> DatasetPolicy:
         policy_version="congress-subjects/1",
         receipt_only=dataset in RECEIPT_ONLY,
     )
+
+
+def _admit(subjects, receipts, policies, *, generation_id, bulk=True):
+    """Use bulk proof where eligible; the exact row validator decides every fallback."""
+    if bulk:
+        try:
+            return etl_bulk.validate_bundle(subjects, receipts, policies, generation_id=generation_id)
+        except etl_bulk.NotBulkEligible:
+            pass
+    return validate_receipt_bundle(subjects, receipts, policies, generation_id=generation_id)
 
 
 def _rows(path: Path):
@@ -171,7 +181,7 @@ def write_congress_dataset(
         prior_paths = []
         if prior is not None and not in_bulk:
             scoped = select_receipts(prior.receipts, Path(temporary) / "prior.parquet", dataset=dataset)
-            validate_receipt_bundle({dataset: prior.subjects}, [scoped], [selected], generation_id=prior.generation_id)
+            _admit({dataset: prior.subjects}, [scoped], [selected], generation_id=prior.generation_id, bulk=bulk)
             prior_paths.append(scoped)
         lineage = stack.enter_context(ReceiptLineage(prior_paths, dataset=dataset))
 
@@ -254,8 +264,8 @@ def write_congress_dataset(
                 finally:
                     if sw is not None:
                         sw.close()
-        validate_receipt_bundle(
-            {dataset: [] if subjects is None else [subjects]}, [receipts], [selected], generation_id=generation_id
+        _admit(
+            {dataset: [] if subjects is None else [subjects]}, [receipts], [selected], generation_id=generation_id, bulk=bulk
         )
         publish_directory_no_replace(stage, directory)
     return (None if subjects is None else directory / subjects.name, directory / receipts.name)
@@ -285,7 +295,7 @@ def restore_processing_input(
     with TemporaryDirectory(prefix=".congress-read-", dir=destination.parent) as temp:
         scoped = select_receipts(receipts, Path(temp) / "receipts.parquet", dataset=dataset)
         paths = () if subject is None else ((subject,) if isinstance(subject, Path) else tuple(subject))
-        validate_receipt_bundle({dataset: paths}, [scoped], [selected], generation_id=generation_id)
+        _admit({dataset: paths}, [scoped], [selected], generation_id=generation_id, bulk=bulk)
 
         def source_fields(data, diagnostic):
             kept = data.get("entry_kind") == "row" and diagnostic.get("reason") != "conversion_refused"
