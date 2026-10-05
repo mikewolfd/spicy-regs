@@ -39,7 +39,7 @@ _RAW_ITEM = {
 def test_shape_produces_exact_schema():
     row = _shape(_RAW_ITEM)
     assert set(row) == set(COLUMNS)
-    assert len(COLUMNS) == 18
+    assert len(COLUMNS) == 23
     assert row["source"] == "gao_rss"
 
 
@@ -76,9 +76,10 @@ def _repair_row(report_id: str) -> dict:
 
 
 def _run(tmp_path, monkeypatch, *, prior=None, feed=(), history=None, listed=None, evidence=None, decided=None,
-         with_decisions=False, others=(), pages=None):
+         with_decisions=False, others=(), pages=None, stated=None, **more):
     """One build over a local prior and a stubbed feed; ``history`` is the GovInfo listing and ``listed`` GAO's own
-    listing's products, each None for no read."""
+    listing's products, each None for no read. ``stated`` is what the major-rule listings merged into ``listed``
+    state beyond rows; ``more`` goes to the builder."""
     if prior is not None:
         pq.write_table(prior, tmp_path / "_gao_prior.parquet")
 
@@ -90,11 +91,12 @@ def _run(tmp_path, monkeypatch, *, prior=None, feed=(), history=None, listed=Non
             return iter({"product_id": i, "title": f"Feed {i}", "link": f"https://www.gao.gov/products/{i}",
                          "description": "What GAO Found.", "pub_date": "Mon, 21 Sep 2026 10:00:00 -0400"} for i in feed)
 
-    def read_listing(directory, evidence):
+    def read_listing(directory, evidence, *, major_rules=None, old_index=None):
         assert directory == tmp_path / "walk"
+        assert (major_rules, old_index) == (more.get("major_rule_run"), more.get("old_index_run"))
         run = _listing(*(listed or ()), decisions=decided or (), others=others)
         rows, counts = module.gao_listing.listing_rows(run)
-        return rows, counts, run
+        return rows, counts, run, stated or module.gao_listing.MajorRuleReports()
 
     monkeypatch.setattr(module, "GaoReportsReader", Feed)
     monkeypatch.setattr(module.r2, "download", lambda *_: False)
@@ -102,7 +104,7 @@ def _run(tmp_path, monkeypatch, *, prior=None, feed=(), history=None, listed=Non
     out = build_gao_reports(tmp_path, govinfo_history=history is not None,
                             govinfo=ListingReader(history) if history is not None else None,
                             listing_run=tmp_path / "walk" if listed is not None else None, evidence=evidence,
-                            decision_pages=pages)
+                            decision_pages=pages, **more)
     out, decisions = out
     assert pq.read_schema(out).equals(SUBJECT_SCHEMAS['gao_reports'])
     assert pq.read_schema(decisions).equals(SUBJECT_SCHEMAS['gao_decisions'])
@@ -424,3 +426,187 @@ def test_a_walk_without_the_capture_keeps_what_an_earlier_run_read_from_a_page(t
     assert (len(json.loads(row["b_numbers_json"])), row["b_numbers_truncated"], row["decided_date"]) == (
         8, "false", "2010-10-07")
     assert _by_number(rows)["B-412940"]["b_numbers_truncated"] == "true"
+
+
+# The major-rule reports before 2009 and the letter columns (owner decisions 2026-10-04).
+
+MAJOR = "Federal Agency Major Rule Report"
+
+
+def _listing_row(report_id: str, **cells) -> dict:
+    return {**_feed_row(report_id), "abstract": None, "agencies_json": None, "topics_json": '["Health Care"]',
+            "source": "gao_listing", "product_type": MAJOR, "report_number": report_id.upper(), **cells}
+
+
+class _Journal:
+    def __init__(self):
+        self.events = {}
+
+    def event(self, name, **fields):
+        self.events[name] = fields
+
+    def capture(self, capture, *, stage):
+        pass
+
+    def retain_file(self, path, **fields):
+        pass
+
+
+def test_the_listing_makes_whole_a_title_its_own_row_holds_cut_and_no_other(tmp_path, monkeypatch):
+    """The Month in Review cuts a heading at about 200 characters; GAO's major-rule listing states it whole."""
+    whole = f"{MAJOR}: Department of Health: A Rule Whose Heading Runs On Past the Cut"
+    cut = whole[:50] + "..."
+    prior = pa.Table.from_pylist([
+        _listing_row("b-331093", title=cut),
+        _listing_row("b-331094", title=cut),  # the listing states another heading: not this one's cut
+        _listing_row("gao-09-707sp", title=cut, product_type=None),  # cut in the listing read again: still cut
+        {**_feed_row("gao-26-1"), "title": cut},  # the feed's row, not the listing's
+    ], schema=module._SCHEMA)
+    journal = _Journal()
+    rows = _run(tmp_path, monkeypatch, prior=prior, evidence=journal, listed=[
+        _product("b-331093", title=whole), _product("b-331094", title=f"{MAJOR}: Another Heading Altogether"),
+        _product("gao-09-707sp", title=cut), _product("gao-26-1", title=whole)])
+    assert {key: row["title"] for key, row in rows.items()} == {
+        "b-331093": whole, "b-331094": cut, "gao-09-707sp": cut, "gao-26-1": cut}
+    assert rows["b-331093"] == {**dict.fromkeys(COLUMNS), **_listing_row("b-331093", title=whole)}
+    assert journal.events["gao-listing"]["titles_made_whole"] == 1
+
+
+def test_a_report_only_a_major_rule_listing_states_joins_and_takes_a_package_row_over_keeping_its_cells(
+        tmp_path, monkeypatch):
+    """The listing states no topic, so the R package's topic stands; so do its counts and its summary."""
+    package = {**dict.fromkeys(COLUMNS), "report_id": "ogc-00-70", "title": "Social Security Administration: A Rule",
+               "report_type": "Report", "published_date": "2000-09-26", "abstract": "Package summary.",
+               "topics_json": '["Worker and Family Assistance"]', "url": "https://www.gao.gov/products/ogc-00-70",
+               "source": "gao_r_package", "report_number": "OGC-00-70", "recommendation_count": 0, "page_count": 4}
+    prior = pa.Table.from_pylist([package], schema=module._SCHEMA)
+    listed = [
+        _product("ogc-00-70", label=MAJOR, title=f"{MAJOR}: Social Security Administration: A Rule", topics=(),
+                 released=None, published="2000-09-26", scopes=("majrule-index-2000-12-15",)),
+        _product("gao-01-193r", label=MAJOR, topics=(), released=None, published="2000-11-27",
+                 scopes=("reports-on-major-rules",)),
+        _product("aimd-00-159r", label=None, title="An Audit Review", topics=(), released=None,
+                 published="2000-05-05", scopes=("reports-on-major-rules",)),
+    ]
+    rows = _run(tmp_path, monkeypatch, prior=prior, listed=listed)
+    taken = rows["ogc-00-70"]
+    assert (taken["source"], taken["product_type"], taken["title"]) == (
+        "gao_major_rule_index", MAJOR, f"{MAJOR}: Social Security Administration: A Rule")
+    assert (taken["topics_json"], taken["abstract"], taken["recommendation_count"], taken["page_count"]) == (
+        '["Worker and Family Assistance"]', "Package summary.", 0, 4)
+    new = rows["gao-01-193r"]
+    assert (new["source"], new["product_type"], new["published_date"], new["topics_json"]) == (
+        "gao_major_rule_listing", MAJOR, "2000-11-27", None)
+    assert (rows["aimd-00-159r"]["product_type"], rows["aimd-00-159r"]["title"]) == (None, "An Audit Review")
+
+
+def test_a_report_gaos_major_rule_listings_state_is_labelled_whatever_route_holds_its_row(tmp_path, monkeypatch):
+    """The owner's "trust GAO's listing": GovInfo's MODS calls GAO-01-1024R Correspondence, and GAO lists it among
+    its reports on major rules. The row stays GovInfo's in every other cell."""
+    held = {**dict.fromkeys(COLUMNS), "report_id": "gao-01-1024r", "title": "Accuracy of Information in the Agenda",
+            "report_type": "Report", "published_date": "2001-07-27", "url": "https://www.govinfo.gov/x",
+            "source": "govinfo", "product_type": "Correspondence", "report_number": "GAO-01-1024R"}
+    other = {**held, "report_id": "gao-01-999r", "report_number": "GAO-01-999R"}
+    prior = pa.Table.from_pylist([held, other], schema=module._SCHEMA)
+    journal = _Journal()
+    rows = _run(tmp_path, monkeypatch, prior=prior, evidence=journal,
+                listed=[_product("gao-01-1024r", label=MAJOR), _product("gao-01-999r", label=MAJOR)],
+                stated=module.gao_listing.MajorRuleReports(numbers={"gao-01-1024r": "GAO-01-1024R"}))
+    assert rows["gao-01-1024r"] == {**held, "product_type": MAJOR}
+    # A row the Month in Review alone lists keeps the type its own route gave it, as before.
+    assert rows["gao-01-999r"] == other
+    assert journal.events["gao-listing"]["major_rule_labelled"] == 1
+
+
+def test_the_major_rule_listings_are_refused_without_a_month_in_review_walk(tmp_path, monkeypatch):
+    """Their rows are merged into the Month in Review's, whose rows stand first; alone they would not be."""
+    import pytest
+
+    for walk in ("major_rule_run", "old_index_run"):
+        with pytest.raises(ValueError, match="read with a Month in Review walk"):
+            build_gao_reports(tmp_path, **{walk: tmp_path / "walk"})
+
+
+def _letter_capture(tmp_path, *product_ids):
+    from tests.test_gao_major_rule_letters import PRODUCTS, capture, page
+
+    return capture(tmp_path / "letters-capture", {PRODUCTS + product_id: page(product_id) for product_id in product_ids})
+
+
+def test_each_major_rule_report_takes_its_letters_columns_once_and_later_runs_carry_them(tmp_path, monkeypatch):
+    letters = _letter_capture(tmp_path, "gao-04-193r", "gao-01-300r", "b-330560")
+    listed = [_product(product_id, label=MAJOR) for product_id in ("gao-04-193r", "gao-01-300r", "b-330560")]
+    listed.append(_product("gao-26-1"))  # no major-rule report: no letter is looked for
+    listed.append(_product("gao-17-392r", label=MAJOR))  # a major-rule report whose page the capture lacks
+    journal = _Journal()
+    first = _run(tmp_path, monkeypatch, listed=listed, major_rule_letters=(letters,), evidence=journal)
+    assert (first["gao-04-193r"]["major_rule_agency"], first["gao-04-193r"]["major_rule_rins_json"],
+            first["gao-04-193r"]["major_rule_fr_citations_json"]) == (
+        "Department of Health and Human Services, Food and Drug Administration (FDA)", '["0910-AC40"]', '["68-58894"]')
+    # A blank is NULL, and the row's receipt field says why.
+    assert first["gao-01-300r"]["major_rule_rins_json"] is None
+    assert json.loads(first["gao-01-300r"]["major_rule_letter_json"])["rins"]["status"] == "not-stated"
+    assert json.loads(first["b-330560"]["major_rule_letter_json"])["reason"] == "not-this-letter"
+    assert first["gao-26-1"]["major_rule_letter_json"] is None and first["gao-17-392r"]["major_rule_letter_json"] is None
+    event = journal.events["gao-major-rule-letters"]
+    assert (event["reports"], event["read"], event["refused"], event["page_not_held"]) == (4, 2, 1, 1)
+    assert (event["with_major_rule_agency"], event["with_major_rule_rins_json"], event["rins_not-stated"]) == (2, 1, 1)
+    assert [entry["campaign"] for entry in event["captures"]] == [f"{tmp_path.name}/letters-capture"]
+
+    # The published columns are native: one string and two lists, the readings only in the receipt.
+    table = pq.read_table(tmp_path / "gao_reports.parquet")
+    assert "major_rule_letter_json" not in table.column_names
+    by_id = {row["report_id"]: row for row in table.to_pylist()}
+    assert by_id["gao-04-193r"]["major_rule_rins"] == ["0910-AC40"]
+    assert by_id["gao-04-193r"]["major_rule_fr_citations"] == ["68-58894"]
+    assert by_id["gao-01-300r"]["major_rule_rins"] is None
+
+    # The daily run, with no walk and no capture, carries every cell and reading forward.
+    (tmp_path / "gao_reports.parquet").rename(tmp_path / "_gao_prior.parquet")
+    carried = _run(tmp_path, monkeypatch, feed=["gao-26-2"])
+    assert {key: carried[key] for key in first} == first
+
+    # A later run with the capture reads only what the current rule has not read.
+    (tmp_path / "gao_reports.parquet").rename(tmp_path / "_gao_prior.parquet")
+    again = _Journal()
+    rows = _run(tmp_path, monkeypatch, listed=listed, major_rule_letters=(letters,), evidence=again)
+    event = again.events["gao-major-rule-letters"]
+    assert (event["reports"], event["already_read"], event["page_not_held"], event.get("read", 0)) == (4, 3, 1, 0)
+    assert {key: rows[key] for key in first} == first
+
+
+def test_a_report_the_old_index_walked_is_read_from_the_walks_own_page_on_whatever_row_holds_it(tmp_path, monkeypatch):
+    """The 1996-2000 reports' pages are the old index walk's; GovInfo holds a few of those reports' rows."""
+    from tests.test_gao_major_rule_letters import PRODUCTS, page
+
+    held = {**dict.fromkeys(COLUMNS), "report_id": "ogc-97-44", "title": "GAO Report from GAO/OGC-97-44",
+            "report_type": "Report", "published_date": "1997-05-21", "url": "https://www.govinfo.gov/x",
+            "source": "govinfo", "product_type": "Other Written Product", "report_number": "GAO/OGC-97-44"}
+    prior = pa.Table.from_pylist([held], schema=module._SCHEMA)
+    stated = module.gao_listing.MajorRuleReports(numbers={"ogc-97-44": "OGC-97-44"},
+                                                 pages={PRODUCTS + "ogc-97-44": page("ogc-97-44")})
+    rows = _run(tmp_path, monkeypatch, prior=prior, stated=stated,
+                listed=[_product("ogc-97-44", label=MAJOR, scopes=("majrule-index-2000-12-15",))])
+    row = rows["ogc-97-44"]
+    # GovInfo's row, labelled on the listing's word; the letter is read under the number the listing states.
+    assert (row["source"], row["title"], row["report_number"], row["product_type"]) == (
+        "govinfo", "GAO Report from GAO/OGC-97-44", "GAO/OGC-97-44", MAJOR)
+    assert json.loads(row["major_rule_fr_citations_json"]) == ["62-24746", "61-52190"]
+    assert json.loads(row["major_rule_rins_json"]) == ["0579-AA83"]
+
+
+def test_the_rollup_reads_the_major_rule_walks_and_letters_only_when_they_are_named(tmp_path, monkeypatch):
+    import os
+
+    from spicy_regs.pipelines.rollups import gao_reports as rollup
+
+    calls = []
+    monkeypatch.setattr(rollup, "build_gao_reports", lambda *_, **kwargs: calls.append(
+        (kwargs["major_rule_run"], kwargs["old_index_run"], kwargs["major_rule_letters"], kwargs["product_pages"])))
+    rollup.GaoReportsRollup(output_dir=tmp_path).build(tmp_path)
+    monkeypatch.setenv("GAO_MAJOR_RULE_RUN", str(tmp_path / "cra"))
+    monkeypatch.setenv("GAO_MAJOR_RULE_OLD_INDEX_RUN", str(tmp_path / "early"))
+    monkeypatch.setenv("GAO_MAJOR_RULE_LETTERS", os.pathsep.join([str(tmp_path / "letters"), str(tmp_path / "pdfs")]))
+    rollup.GaoReportsRollup(output_dir=tmp_path).build(tmp_path)
+    assert calls == [(None, None, (), False),
+                     (tmp_path / "cra", tmp_path / "early", (tmp_path / "letters", tmp_path / "pdfs"), False)]

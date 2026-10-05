@@ -137,6 +137,16 @@ def test_any_other_set_of_additions_refuses(tmp_path):
                                      tmp_path / "out.parquet", rows_sha256="sha256:0")
 
 
+def test_the_reviewed_digest_covers_the_columns_the_package_shapes_whatever_the_table_gains_later():
+    """ROWS_SHA256 names the reviewed additions over the table's columns of 2026-09-29. Columns the table gained
+    afterwards are no part of a package row, so they are no part of the digest that names those rows."""
+    row = package.shape(_record("https://www.gao.gov/products/24669", "A-24669"))
+    assert row is not None and importer.DIGEST_COLUMNS == tuple(row)
+    assert importer.DIGEST_COLUMNS == module.COLUMNS[: len(importer.DIGEST_COLUMNS)]
+    assert {"major_rule_agency", "major_rule_letter_json"} <= set(module.COLUMNS) - set(importer.DIGEST_COLUMNS)
+    assert importer.rows_digest([row]) == importer.rows_digest([{**dict.fromkeys(module.COLUMNS), **row}])
+
+
 def test_a_route_of_ours_takes_a_package_row_over_and_the_package_fills_its_nulls(tmp_path, monkeypatch):
     from tests.test_gao_listing import _product
 

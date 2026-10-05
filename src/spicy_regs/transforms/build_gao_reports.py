@@ -6,8 +6,10 @@ the rulemakings this dataset tracks. ``source`` names the route that supplied
 each row: ``gao_rss`` (this feed), ``gao_repair`` (an explicit repair,
 :mod:`spicy_regs.transforms.build_gao_target`), ``upstream_copy`` (the one-time
 copy of upstream's rows the fork never captured), ``govinfo`` (GovInfo's closed
-GAOREPORTS collection, :mod:`spicy_regs.sources.gao_govinfo`) or ``gao_listing``
-(GAO's own Month in Review and Annual Index, :mod:`spicy_regs.sources.gao_listing`).
+GAOREPORTS collection, :mod:`spicy_regs.sources.gao_govinfo`), ``gao_listing``
+(GAO's own Month in Review and Annual Index, :mod:`spicy_regs.sources.gao_listing`),
+or ``gao_major_rule_listing`` and ``gao_major_rule_index`` (GAO's two listings of
+its major-rule reports, read with that walk).
 
 **Incremental accumulator.** The GAO RSS feed is a recent-items window, not the
 full archive, and GAO's bulk/search surfaces are bot-blocked (see
@@ -19,6 +21,12 @@ the merge is append-only against a growing table it never shrinks the output,
 so it stays clear of the R2 catastrophic-shrink guard. ``agencies_json`` and
 ``topics_json`` are pinned but reserved: the feed carries no structured
 agency/topic tags, so they default to ``[]`` until a later enrichment pass.
+
+**One read of the prior, one row per product.** The prior table is read once into
+memory, by ``report_id``. Each step below reads a product's row as the run has it
+so far (its own rows over the prior's) and writes a whole row back, so two steps
+that touch one product in one run compose. O(prior) memory and time; only the
+capped MODS and product-page reads make a request per row.
 
 **GovInfo history.** ``govinfo_history`` adds one walk of the GAOREPORTS
 listing (17 keyed requests) to the run. Its rows fill only product ids no row
@@ -49,6 +57,35 @@ holds, the listing fills only a NULL ``report_number``, never a stated one. Its
 legal decisions go to ``gao_decisions`` (:data:`DECISIONS_OUTPUT`), which a run
 without a walk carries forward unchanged.
 
+**GAO's major-rule listings.** ``major_rule_run`` and ``old_index_run`` name
+finished SpicyDocs walks of "Reports on Major Rules" and of GAO's index of
+2000-12-15, read with ``listing_run`` and merged into its products by SpicyDocs
+before the rule above applies (:mod:`spicy_regs.sources.gao_listing`): the
+major-rule reports of 1996-2008 and twelve ordinary products join as rows. Two
+cells of a held row can change. Where the listing's own row holds a heading the
+Month in Review cut (it ends ``...``) and the merged heading goes on from
+there, the title is made whole. And a report those listings state is labelled
+Federal Agency Major Rule Report whatever route holds its row, the owner's
+"trust GAO's listing" (2026-10-04): nine GovInfo rows on 2026-10-05, GAO-01-1024R
+among them, which keep every other GovInfo cell.
+
+**Major-rule letters.** ``major_rule_letters`` names captures of the reports'
+product pages and PDFs, read by reference
+(:mod:`spicy_regs.sources.gao_major_rule_letters`). Every row labelled Federal
+Agency Major Rule Report, and every row GAO's major-rule listings name whatever
+route holds it, takes its agency clause, RINs and Federal Register citations
+from its letter, once per reader rule. The reading itself, each blank's reason
+included, is a receipt field.
+
+**GAO's product pages.** ``product_pages`` reads the newest pending rows' pages
+through Zyte for the counts, page count and subject terms, the page outranking
+the R package (:mod:`spicy_regs.sources.gao_product_pages`), and reads a new
+major-rule report's letter from the same page. Off unless asked for, and then
+only under a reader rule that module admits, after its known pages read as they
+must, and for a product's first week against ``gao_recommendations``, read from
+the published table. ``product_pages_undo`` puts back what a named day's or
+rule's reads replaced.
+
 **GAO's decision pages.** ``decision_pages`` names a local capture of the decision
 pages (:mod:`spicy_regs.sources.gao_decision_pages`), read by reference with the
 walk: each decision's caption completes a number list the listing cut and states
@@ -61,7 +98,9 @@ from __future__ import annotations
 
 import json
 from collections import Counter
+from collections.abc import Iterator, Mapping, Sequence
 from contextlib import nullcontext
+from datetime import date
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -74,38 +113,26 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from loguru import logger
 
-from spicy_regs.sources import gao_govinfo, gao_listing, gao_r_package, r2
+from spicy_regs.sources import (
+    gao_govinfo,
+    gao_listing,
+    gao_major_rule_letters,
+    gao_product_pages,
+    gao_r_package,
+    r2,
+)
 from spicy_regs.transforms.government_receipts import internal_prior, receipt_builder
+from spicy_regs.transforms.government_source_shapes import LEGACY_COLUMNS
 from spicy_regs.sources.gao_decision_pages import DecisionPageCapture
 from spicy_regs.sources.gao_reports import GaoReportsReader
 from spicy_regs.transforms.table_merge import merge_local_prior
 
 OUTPUT = "gao_reports.parquet"
 
-# The published schema: 18 columns in a fixed order, the three counts BIGINT and the rest VARCHAR. ``report_id``
-# is the primary / dedup key.
-COLUMNS = (
-    "report_id",
-    "title",
-    "report_type",
-    "published_date",
-    "abstract",
-    "agencies_json",
-    "topics_json",
-    "url",
-    "source",
-    "product_type",
-    "report_number",
-    # From the CetiAlphaFive/gao R package (2026-09-29), for the reports it lists; a later GAO product-page reader
-    # fills new reports. NULL where no route states them.
-    "requester_type",
-    "requester_committees_json",
-    "requester_members_json",
-    "recommendation_count",
-    "matters_for_congress_count",
-    "page_count",
-    "subject_terms_json",
-)
+#: The rows this builder writes, before they become the native subject and its receipt: one declaration, shared with
+#: the mapper (``government_source_shapes``). The three counts are BIGINT and the rest VARCHAR; ``report_id`` is the
+#: primary / dedup key.
+COLUMNS = LEGACY_COLUMNS["gao_reports"]
 #: The counts are whole numbers; every other column is VARCHAR.
 COUNT_COLUMNS = ("recommendation_count", "matters_for_congress_count", "page_count")
 _SCHEMA = pa.schema([(c, pa.int64() if c in COUNT_COLUMNS else pa.string()) for c in COLUMNS])
@@ -141,6 +168,8 @@ _LOWEST = gao_r_package.SOURCE
 #: MODS reads per run: at the three-a-second pace, about 37 minutes, so two
 #: runs read the whole history and a failed run loses at most one batch.
 MODS_PER_RUN = 6_500
+#: How the Month in Review ends a heading it cut, at about 200 characters.
+_CUT = "..."
 
 
 def _published_date(pub_date: str | None) -> str | None:
@@ -175,33 +204,35 @@ def _shape(item: dict) -> dict:
     }
 
 
-def _fill_only(rows: list[dict], counts: Counter[str], *, prior_file: Path | None, held: set[str]) -> list[dict]:
-    """``rows`` for ids no row holds yet, this run's (``held``) or the prior's; counts the rest as ``already_held``."""
-    held = set(held)
-    if prior_file is not None:
-        prior = pq.read_table(prior_file, columns=["report_id", "source"]).to_pylist()
-        held |= {row["report_id"] for row in prior if row["source"] != _LOWEST}
-    added = [row for row in rows if row["report_id"] not in held]
-    counts["already_held"] = len(rows) - len(added)
-    return added
+def _held_rows(prior_file: Path) -> dict[str, dict]:
+    """The prior table by ``report_id``, read once; a column the prior predates is None."""
+    return {row["report_id"]: {**dict.fromkeys(COLUMNS), **row} for row in pq.read_table(prior_file).to_pylist()}
 
 
-def _over_lowest(prior_file: Path | None, rows: list[dict]) -> tuple[list[dict], int]:
+def _table(held: Mapping[str, dict], changed: Mapping[str, dict]) -> Iterator[dict]:
+    """Every row as the run has it so far: its own, then the prior's it has not touched."""
+    yield from changed.values()
+    yield from (row for report_id, row in held.items() if report_id not in changed)
+
+
+def _unheld(report_id: str, held: Mapping[str, dict], changed: Mapping[str, dict]) -> bool:
+    """Whether no row of ours holds the product: none of this run's, and the prior's only from the lowest route."""
+    return report_id not in changed and (report_id not in held or held[report_id]["source"] == _LOWEST)
+
+
+def _over_lowest(held: Mapping[str, dict], rows: list[dict]) -> tuple[list[dict], int]:
     """Rows of ours for products the lowest route holds, each with its NULL cells filled from that route's row."""
-    if prior_file is None or not rows:
-        return rows, 0
-    ids = {row["report_id"] for row in rows}
-    lowest = {row["report_id"]: row for row in pq.read_table(prior_file).to_pylist()
-              if row["report_id"] in ids and row["source"] == _LOWEST}
+    taken = {row["report_id"] for row in rows
+             if row["source"] != _LOWEST and held.get(row["report_id"], row)["source"] == _LOWEST}
     merged = [
-        {column: row.get(column) if row.get(column) is not None else lowest[row["report_id"]].get(column)
-         for column in COLUMNS} if row["report_id"] in lowest else row
+        {column: row.get(column) if row.get(column) is not None else held[row["report_id"]].get(column)
+         for column in COLUMNS} if row["report_id"] in taken else row
         for row in rows
     ]
-    return merged, sum(row["report_id"] in lowest for row in rows)
+    return merged, len(taken)
 
 
-def _feed_over_held(prior_file: Path | None, rows: list[dict]) -> tuple[list[dict], Counter[str]]:
+def _feed_over_held(held: Mapping[str, dict], rows: list[dict]) -> tuple[list[dict], Counter[str]]:
     """Feed rows, each merged cell by cell over the row already held for its product, if any.
 
     A held row keeps every cell and its ``source``. The feed sets the cells it states: all of them on its own or an
@@ -209,10 +240,6 @@ def _feed_over_held(prior_file: Path | None, rows: list[dict]) -> tuple[list[dic
     It never empties a cell, and never fills one with its placeholders.
     """
     counts: Counter[str] = Counter()
-    if prior_file is None or not rows:
-        return rows, counts
-    ids = {row["report_id"] for row in rows}
-    held = {row["report_id"]: row for row in pq.read_table(prior_file).to_pylist() if row["report_id"] in ids}
     merged = []
     for row in rows:
         old = held.get(row["report_id"])
@@ -230,14 +257,15 @@ def _feed_over_held(prior_file: Path | None, rows: list[dict]) -> tuple[list[dic
 
 
 def _govinfo_additions(
-    prior_file: Path | None,
-    feed_ids: set[str],
+    held: Mapping[str, dict],
+    changed: Mapping[str, dict],
     reader: gao_govinfo.PackageDiscoverySource,
     evidence: CaptureEvidence | None,
 ) -> list[dict]:
     """GovInfo rows for ids no row holds yet."""
     rows, counts = gao_govinfo.read_history(reader)
-    added = _fill_only(rows, counts, prior_file=prior_file, held=feed_ids)
+    added = [row for row in rows if _unheld(row["report_id"], held, changed)]
+    counts["already_held"] = len(rows) - len(added)
     logger.info("GAO reports: GovInfo history {}", dict(counts))
     if evidence:
         evidence.event("govinfo-history", collection=gao_govinfo.COLLECTION, listed_since=gao_govinfo.LISTED_SINCE,
@@ -245,30 +273,57 @@ def _govinfo_additions(
     return added
 
 
-def _listing_rows(
-    prior_file: Path | None, rows_now: list[dict], directory: Path, evidence: CaptureEvidence | None,
-    pages: Path | None = None,
-) -> tuple[list[dict], list[dict]]:
-    """The listing's product rows for ids no row holds yet, held rows whose NULL ``report_number`` it fills, and its
-    decisions, each read against its captured page where ``pages`` names a capture. ``rows_now`` (this run's rows) is
-    filled in place; each listing page read is retained as evidence.
+def _cut_of(held: str | None, whole: str | None) -> bool:
+    """Whether ``held`` is the Month in Review's cut of ``whole``: it ends ``...`` and ``whole`` goes on from there.
+
+    The same cut heading read again is not whole: seven non-major-rule products' headings are cut in the Month in
+    Review itself, and no other listing states them.
     """
-    rows, counts, run = gao_listing.read_listing(directory, evidence)
-    added = _fill_only(rows, counts, prior_file=prior_file, held={row["report_id"] for row in rows_now})
-    numbers = {row["report_id"]: row["report_number"] for row in rows if row["report_number"] is not None}
-    for row in rows_now:
-        if row.get("report_number") is None and row["report_id"] in numbers:
-            row["report_number"] = numbers[row["report_id"]]
+    if not held or not whole or whole == held or not held.endswith(_CUT):
+        return False
+    stem = held.removesuffix(_CUT)
+    return len(whole) > len(stem) and whole.startswith(stem)
+
+
+def _listing_rows(
+    held: Mapping[str, dict],
+    changed: dict[str, dict],
+    directory: Path,
+    evidence: CaptureEvidence | None,
+    pages: Path | None = None,
+    major_rules: Path | None = None,
+    old_index: Path | None = None,
+) -> tuple[list[dict], gao_listing.MajorRuleReports]:
+    """Fold GAO's listings into ``changed``; return their decisions and what the major-rule listings state.
+
+    A listed product no row holds yet joins as the listing's row. On a row already held the listing fills a NULL
+    ``report_number``, makes whole a title its own row holds cut, and labels a report GAO's major-rule listings
+    name. Each decision is read against its captured page where ``pages`` names a capture, and each listing page
+    read is retained as evidence. O(listed products).
+    """
+    rows, counts, run, stated = gao_listing.read_listing(directory, evidence, major_rules=major_rules,
+                                                         old_index=old_index)
+    added = [row for row in rows if _unheld(row["report_id"], held, changed)]
+    counts["already_held"] = len(rows) - len(added)
+    for row in rows:
+        old = changed.get(row["report_id"]) or held.get(row["report_id"])
+        if old is None or old["source"] == _LOWEST:
+            continue  # the listing's own row joins, taking a package row over; see _over_lowest
+        new = {}
+        if old.get("report_number") is None and row["report_number"] is not None:
+            new["report_number"] = row["report_number"]
             counts["report_number_filled"] += 1
-    filled = []
-    if prior_file is not None:
-        now = {row["report_id"] for row in rows_now}
-        for row in pq.read_table(prior_file).to_pylist():
-            if row["source"] == _LOWEST:
-                continue  # the listing's own row takes a package row over; see _over_lowest
-            if row["report_id"] in numbers and row["report_id"] not in now and row.get("report_number") is None:
-                filled.append({**row, "report_number": numbers[row["report_id"]]})
-        counts["report_number_filled"] += len(filled)
+        if old["source"] == gao_listing.SOURCE and _cut_of(old["title"], row["title"]):
+            new["title"] = row["title"]
+            counts["titles_made_whole"] += 1
+        # "Trust GAO's listing" (owner, 2026-10-04): a report its major-rule listings state is one, whatever product
+        # type the route that holds the row gave it (GovInfo's MODS calls GAO-01-1024R Correspondence).
+        if row["report_id"] in stated.numbers and old.get("product_type") != row["product_type"]:
+            new["product_type"] = row["product_type"]
+            counts["major_rule_labelled"] += 1
+        if new:
+            changed[row["report_id"]] = {**old, **new}
+    changed.update((row["report_id"], row) for row in added)
     decisions = _decision_rows(run, pages, evidence)
     counts.update(decision_rows=len(decisions), unnumbered_left_out=sum(o.product_number is None for o in run.others))
     logger.info("GAO reports: GAO listing {} (unfinished scopes left for a later run: {})", dict(counts),
@@ -276,18 +331,192 @@ def _listing_rows(
     if evidence:
         evidence.event("gao-listing", scopes_read=list(run.complete_scopes),
                        scopes_unfinished=list(run.incomplete_scopes), **counts)
-    return added + filled, decisions
+    return decisions, stated
 
 
-def _mods_reads(prior_file: Path, acquirer: Any, evidence: CaptureEvidence | None) -> list[dict]:
-    """The next :data:`MODS_PER_RUN` unread history rows, each updated from its package's MODS."""
+def _letter_reads(
+    held: Mapping[str, dict],
+    changed: dict[str, dict],
+    letters: gao_major_rule_letters.LetterPages,
+    named: Mapping[str, str],
+    evidence: CaptureEvidence | None,
+) -> None:
+    """Read each major-rule report's letter not yet read under the current rule, where ``letters`` holds its page.
+
+    A report is a row labelled Federal Agency Major Rule Report, whatever route holds it: the listing step has
+    labelled every report GAO's major-rule listings name. The letter must carry the number those listings state
+    (``named``, by id) where they state one, since a GovInfo row prints its number another way (``GAO/OGC-97-44``).
+    O(rows) to find the reports, one page read per unread report.
+    """
+    from spicy_docs.sources.gao.major_rule_letters import LETTER_RULE
+    from spicy_docs.sources.gao.month_in_review import MAJOR_RULE_REPORT
+    from spicy_docs.sources.gao.native import gao_product_url
+
+    counts: Counter[str] = Counter()
+    for row in list(_table(held, changed)):
+        report_id = row["report_id"]
+        if row.get("product_type") != MAJOR_RULE_REPORT:
+            continue
+        counts["reports"] += 1
+        if not gao_major_rule_letters.unread(row):
+            counts["already_read"] += 1
+            continue
+        number = named.get(report_id) or row.get("report_number")
+        page = letters.body(gao_product_url(report_id))
+        if page is None or number is None:
+            counts["page_not_held"] += 1
+            continue
+        cells = gao_major_rule_letters.letter_cells(page, product_id=report_id, product_number=number, pages=letters)
+        gao_major_rule_letters.tally(counts, cells)
+        changed[report_id] = {**row, **cells}
+    captures = letters.record()
+    logger.info("GAO reports: major-rule letters under {} {} from {}", LETTER_RULE, dict(counts), captures)
+    if evidence:
+        evidence.event(gao_major_rule_letters.STAGE, rule=LETTER_RULE, captures=captures, **counts)
+
+
+def _product_page_reads(
+    held: Mapping[str, dict],
+    changed: dict[str, dict],
+    acquirer: Any,
+    evidence: CaptureEvidence | None,
+    *,
+    on: date,
+    export: gao_product_pages.OpenRecommendations | None,
+) -> None:
+    """Read the known pages, then the newest pending rows' product pages, each setting what it states.
+
+    The pass commits whole or not at all: a known page that reads otherwise stops it before a row is asked for, and
+    a second refusal that says a table may not be whole stops it with nothing it read written. ``on`` is the day,
+    and ``export`` GAO's open recommendations as the host holds them, for a product's first week. O(rows) to choose
+    the pending ones, then at most :data:`gao_product_pages.PAGES_PER_RUN` requests, one per row.
+    """
+    from spicy_docs.sources.gao.month_in_review import MAJOR_RULE_REPORT
+    from spicy_docs.sources.gao.product_details import (
+        PRODUCT_PAGE_DETAILS_RULE,
+        GaoProductDetailsError,
+        GaoProductPageUnavailableError,
+    )
+
+    def stop(why: str, **fields: Any) -> None:
+        logger.error("GAO reports: product pages under {} stopped, nothing written: {}", PRODUCT_PAGE_DETAILS_RULE, why)
+        if evidence:
+            evidence.event(gao_product_pages.STAGE, rule=PRODUCT_PAGE_DETAILS_RULE, stopped=why, **fields)
+
+    for product_id, expected in gao_product_pages.KNOWN_PAGES:
+        failure, witness = gao_product_pages.known_page_failure(acquirer, product_id, expected)
+        if evidence and isinstance(witness, Exception):
+            evidence.refusal(witness, stage=gao_product_pages.KNOWN_STAGE)
+        elif evidence:
+            evidence.capture(witness, stage=gao_product_pages.KNOWN_STAGE)
+        if failure is not None:
+            return stop(f"known page {failure}")
+    wanted = gao_product_pages.newest_first(_table(held, changed))
+    counts: Counter[str] = Counter(pending=len(wanted))
+    read: dict[str, dict] = {}
+    refusals: list[dict[str, str]] = []
+    failures = requests = not_whole = 0
+    for row in wanted:
+        if requests >= gao_product_pages.PAGES_PER_RUN:
+            break
+        report_id = row["report_id"]
+        if (wait := gao_product_pages.not_yet(row, on, export)) is not None:
+            counts[wait] += 1
+            continue
+        requests += 1
+        try:
+            details, capture = acquirer.acquire_details(report_id)
+        except GaoProductPageUnavailableError as error:
+            failures = 0
+            counts[gao_product_pages.UNAVAILABLE] += 1
+            if evidence:
+                evidence.refusal(error, stage=gao_product_pages.STAGE)
+            read[report_id] = {**row, **gao_product_pages.unavailable_cells(error.capture)}
+            continue
+        except GaoProductDetailsError as error:
+            reason = getattr(error, "reason", gao_product_pages.ACQUISITION)
+            if reason == gao_product_pages.ACQUISITION:
+                if evidence:
+                    evidence.refusal(error, stage=gao_product_pages.STAGE)
+                counts["failed"] += 1
+                failures += 1
+                if failures >= gao_product_pages.MAX_CONSECUTIVE_FAILURES:
+                    counts["stopped_after_failures"] = 1
+                    break
+                continue
+            # A refusal writes nothing for the product and leaves it for a later run; its reason is journaled.
+            failures = 0
+            counts[gao_product_pages.REFUSED] += 1
+            refusals.append({"report_id": report_id, "reason": reason})
+            if evidence:
+                evidence.refusal(error, stage=gao_product_pages.STAGE)
+            not_whole += reason in gao_product_pages.THEME_REASONS
+            if not_whole > 1:
+                return stop("more than one page refused as not whole: GAO's theme may have changed",
+                            refusals=refusals, read_and_discarded=len(read))
+            continue
+        failures = 0
+        if evidence:
+            evidence.capture(capture, stage=gao_product_pages.STAGE)
+        if not gao_product_pages.agrees(row, details, on, export):
+            counts["export_disagrees"] += 1
+            continue
+        cells = gao_product_pages.page_cells(row, details, capture)
+        counts[gao_product_pages.READ] += 1
+        for column in gao_product_pages.FILL_COLUMNS:
+            counts[f"set_{column}"] += column in cells
+            counts[f"outranked_{column}"] += column in cells and row.get(column) not in (None, cells[column])
+        # A major-rule report listed after the letters' capture: the page just read prints its letter.
+        if (row.get("product_type") == MAJOR_RULE_REPORT and row.get("report_number")
+                and gao_major_rule_letters.unread(row)):
+            cells |= gao_major_rule_letters.letter_cells(capture.body, product_id=report_id,
+                                                         product_number=row["report_number"])
+            reading = json.loads(cells[gao_product_pages.RECEIPT])
+            reading["letter_before"] = {key: row.get(key) for key in
+                                         (*gao_major_rule_letters.CELLS, gao_major_rule_letters.RECEIPT)}
+            reading["letter_written"] = cells[gao_major_rule_letters.RECEIPT]
+            cells[gao_product_pages.RECEIPT] = json.dumps(reading, ensure_ascii=False)
+            counts["letters_read"] += 1
+        read[report_id] = {**row, **cells}
+    changed.update(read)
+    counts["left_pending"] = counts["pending"] - len(read)
+    logger.info("GAO reports: product pages under {} {} refusals {}", PRODUCT_PAGE_DETAILS_RULE, dict(counts),
+                refusals)
+    if evidence:
+        evidence.event(gao_product_pages.STAGE, rule=PRODUCT_PAGE_DETAILS_RULE,
+                       per_run=gao_product_pages.PAGES_PER_RUN, on=on.isoformat(),
+                       export_as_of=None if export is None else export.as_of, refusals=refusals, **counts)
+
+
+def _undo_page_reads(
+    held: Mapping[str, dict], changed: dict[str, dict], selector: str, evidence: CaptureEvidence | None
+) -> None:
+    """Put back what every product-page read ``selector`` names replaced: a rule's, or a day's. O(rows), no request."""
+    counts: Counter[str] = Counter()
+    for row in list(_table(held, changed)):
+        restored = gao_product_pages.undone(row, selector)
+        if restored is None:
+            continue
+        counts["rows"] += 1
+        counts["letters"] += row.get(gao_major_rule_letters.RECEIPT) != restored.get(gao_major_rule_letters.RECEIPT)
+        for column in gao_product_pages.FILL_COLUMNS:
+            counts[f"restored_{column}"] += row.get(column) != restored.get(column)
+        changed[row["report_id"]] = restored
+    logger.info("GAO reports: product-page reads named by {} undone {}", selector, dict(counts))
+    if evidence:
+        evidence.event("gao-product-page-undo", selector=selector, **counts)
+
+
+def _mods_reads(
+    held: Mapping[str, dict], changed: dict[str, dict], acquirer: Any, evidence: CaptureEvidence | None
+) -> None:
+    """The prior's next :data:`MODS_PER_RUN` unread history rows, each updated from its package's MODS."""
     from spicy_regs.sources.gao_govinfo_mods import GaoModsUnavailableError
 
-    prior = pq.read_table(prior_file).to_pylist()
-    pending = sorted((row for row in prior if row["source"] == gao_govinfo.SOURCE and row.get("report_number") is None),
+    pending = sorted((changed.get(report_id, row) for report_id, row in held.items()
+                      if row["source"] == gao_govinfo.SOURCE and row.get("report_number") is None),
                      key=lambda row: row["report_id"])
     counts: Counter[str] = Counter(pending=len(pending))
-    read = []
     for row in pending[:MODS_PER_RUN]:
         package_id = gao_govinfo.package_id_of(row)
         try:
@@ -299,19 +528,19 @@ def _mods_reads(prior_file: Path, acquirer: Any, evidence: CaptureEvidence | Non
             continue
         if evidence:
             evidence.capture(capture, stage="govinfo-mods")
-        read.append({**row, "abstract": facts.abstract, "product_type": facts.product_type,
-                     "report_number": facts.report_number,
-                     "topics_json": json.dumps(list(facts.topics), ensure_ascii=False) if facts.topics else None})
+        read = {**row, "abstract": facts.abstract, "product_type": facts.product_type,
+                "report_number": facts.report_number,
+                "topics_json": json.dumps(list(facts.topics), ensure_ascii=False) if facts.topics else None}
+        changed[row["report_id"]] = read
         counts["read"] += 1
         for column in ("abstract", "product_type", "report_number", "topics_json"):
-            counts[f"with_{column}"] += read[-1][column] is not None
+            counts[f"with_{column}"] += read[column] is not None
         if counts["read"] % 500 == 0:
             logger.info("GAO reports: read {:,} of {:,} selected MODS", counts["read"], min(len(pending), MODS_PER_RUN))
     counts["left_unread"] = len(pending) - counts["read"]
     logger.info("GAO reports: GovInfo MODS {}", dict(counts))
     if evidence:
         evidence.event("govinfo-mods", per_run=MODS_PER_RUN, **counts)
-    return read
 
 
 @receipt_builder
@@ -326,6 +555,13 @@ def build_gao_reports(
     mods: Any = None,
     listing_run: Path | None = None,
     decision_pages: Path | None = None,
+    major_rule_run: Path | None = None,
+    old_index_run: Path | None = None,
+    major_rule_letters: Sequence[Path] = (),
+    product_pages: bool = False,
+    pages: Any = None,
+    product_pages_undo: str | None = None,
+    today: date | None = None,
 ) -> tuple[Path, Path]:
     """Build ``gao_reports.parquet`` (append-only merge with the prior table).
 
@@ -334,10 +570,21 @@ def build_gao_reports(
     next batch of history rows' MODS, through ``mods`` when a caller supplies it;
     ``listing_run`` also reads a finished walk of GAO's own listing from that directory,
     and ``decision_pages`` a capture of its decisions' pages, read with that walk.
+    ``major_rule_run`` and ``old_index_run`` are finished walks of GAO's two major-rule
+    listings, read with ``listing_run`` and refused without it; ``major_rule_letters``
+    are captures of those reports' pages and PDFs. ``product_pages`` reads pending rows'
+    product pages, through ``pages`` when a caller supplies the acquirer, and only under a
+    reader rule the pass admits; ``today`` is the day that pass takes it to be, GAO's
+    own unless a caller states one. ``product_pages_undo`` names a reader rule, a day,
+    or a day and hour, whose product-page reads are put back first.
     Returns ``gao_reports.parquet`` and ``gao_decisions.parquet``.
     """
     import duckdb
 
+    if listing_run is None and (major_rule_run is not None or old_index_run is not None):
+        raise ValueError("GAO's major-rule listings are read with a Month in Review walk, whose rows stand first")
+    if product_pages_undo is not None:
+        product_pages_undo = gao_product_pages.undo_selector(product_pages_undo)
     out_file = output_dir / OUTPUT
     prior_file = output_dir / "_gao_prior.parquet"
 
@@ -349,27 +596,46 @@ def build_gao_reports(
         logger.info("GAO reports: accumulating onto prior table {}", prior_file)
     else:
         logger.info("GAO reports: no prior table found — starting fresh")
+    held = _held_rows(prior_file) if have_prior else {}
 
-    # 2. Fetch + shape the current feed window (and GovInfo's history when asked) into a "new rows" parquet.
+    # 2. Fetch + shape the current feed window, then each route asked for, into this run's rows by product.
     reader = GaoReportsReader(max_records=max_records, evidence=evidence)
-    rows, feed_counts = _feed_over_held(prior_file if have_prior else None, [_shape(item) for item in reader.iter_records()])
+    rows, feed_counts = _feed_over_held(held, [_shape(item) for item in reader.iter_records()])
     logger.info("GAO reports: fetched {:,} items this run {}", len(rows), dict(feed_counts))
+    changed = {row["report_id"]: row for row in rows}
+    if product_pages_undo is not None:
+        _undo_page_reads(held, changed, product_pages_undo, evidence)
     if govinfo_history:
-        feed_ids = {row["report_id"] for row in rows}
         with nullcontext(govinfo) if govinfo is not None else gao_govinfo.discovery_reader(evidence) as source:
-            rows += _govinfo_additions(prior_file if have_prior else None, feed_ids, source, evidence)
+            changed.update((row["report_id"], row) for row in _govinfo_additions(held, changed, source, evidence))
     if govinfo_mods and have_prior:
         if mods is None:
             from spicy_regs.sources.gao_govinfo_mods import GaoModsAcquirer
 
             mods = GaoModsAcquirer()
         with mods as acquirer:
-            rows += _mods_reads(prior_file, acquirer, evidence)
+            _mods_reads(held, changed, acquirer, evidence)
     decisions: list[dict] = []
+    stated = gao_listing.MajorRuleReports()
     if listing_run is not None:
-        listed, decisions = _listing_rows(prior_file if have_prior else None, rows, listing_run, evidence, decision_pages)
-        rows += listed
-    rows, taken_over = _over_lowest(prior_file if have_prior else None, rows)
+        decisions, stated = _listing_rows(held, changed, listing_run, evidence, decision_pages, major_rule_run,
+                                          old_index_run)
+    letters = gao_major_rule_letters.LetterPages(major_rule_letters, stated.pages)
+    if letters:
+        _letter_reads(held, changed, letters, stated.numbers, evidence)
+    if product_pages and (refusal := gao_product_pages.reader_refusal()) is not None:
+        # Asked for, and not run: the switch alone does not turn the pass on.
+        logger.warning("GAO reports: product pages not read: {}", refusal)
+        if evidence:
+            evidence.event(gao_product_pages.STAGE, not_run=refusal)
+    elif product_pages:
+        # Bind before constructing the acquirer: root failure handling must also withhold page bodies.
+        page_evidence = gao_listing.product_page_evidence(evidence)
+        export = gao_product_pages.open_recommendations(output_dir)
+        with nullcontext(pages) if pages is not None else gao_product_pages.page_acquirer(evidence) as acquirer:
+            _product_page_reads(held, changed, acquirer, page_evidence, on=today or gao_product_pages.today(),
+                                export=export)
+    rows, taken_over = _over_lowest(held, list(changed.values()))
     if taken_over:
         logger.info("GAO reports: {:,} rows of ours take over the R package's rows, which fill their NULLs", taken_over)
     new_file = output_dir / "_gao_new.parquet"

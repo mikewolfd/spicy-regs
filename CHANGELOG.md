@@ -7,6 +7,49 @@ Entries link to the pull request that introduced the change.
 
 ## [Unreleased]
 
+### Added
+
+- **`gao_reports`: GAO's major-rule reports from 1996, and what each report's
+  letter states of its rule** (owner decisions 2026-10-04; SpicyDocs 0.57.0's
+  readers).
+  - **Rows.** A run given finished walks of GAO's "Reports on Major Rules"
+    (`GAO_MAJOR_RULE_RUN`) and of its index of 2000-12-15
+    (`GAO_MAJOR_RULE_OLD_INDEX_RUN`), with the Month in Review walk
+    (`GAO_LISTING_RUN`), adds the major-rule reports of 1996 to 2008 under the
+    routes `gao_major_rule_listing` and `gao_major_rule_index`, and the AIMD-
+    and GGD- products that listing also states as ordinary rows. A title the
+    Month in Review cut is made whole, and a report GAO's listings state is
+    labelled Federal Agency Major Rule Report whatever route holds its row.
+  - **Columns.** `major_rule_agency`, `major_rule_rins` and
+    `major_rule_fr_citations`, read from each report's letter in a capture
+    named by `GAO_MAJOR_RULE_LETTERS`. The lists are not pairs. A blank is NULL
+    and its reason is in the row's receipt, with each value's place in the
+    letter. `gao_reports` moves to policy `government-sources/2`; a prior
+    published under `/1` is read once and rewritten. Every retained row's
+    `subject_version` changes because its subject gains three keys, even
+    when their values are NULL; `record_id` and identity stay stable.
+  - **Evidence.** Product pages, including old-index pages, known-page
+    checks and refused pages, publish only hashes and request metadata.
+    Their original local captures remain intact. GAO listing pages retain
+    their bodies.
+  - **Route changes.** Where a major-rule listing takes over an R-package
+    row, its title replaces the package title and its route replaces
+    `gao_r_package`; the package fills only cells the listing leaves NULL.
+    A GovInfo row keeps its title and route but takes the major-rule label
+    where GAO lists it as such.
+  - **Product pages, built and off.** `GAO_PRODUCT_PAGES=true` reads the
+    newest rows missing a count, a page count or subject terms from GAO's
+    product pages through Zyte, a bounded number a run, the page outranking
+    the R package. `rollup-gao-reports.yml` passes `false`, and the pass
+    refuses to run under a reader rule before `gao-product-page-details/2`
+    (SpicyDocs 0.57.0). When on, each run reads two pages whose values are
+    known first and stops if either reads otherwise; a refusal writes
+    nothing; a product is not read on its release day, and in its first
+    week only where its page agrees with `gao_recommendations`. A read
+    records what it replaced, and `GAO_PRODUCT_PAGES_UNDO` puts a day's or a
+    rule's reads back. The rollup's cron moves from 17:00 to 17:20 UTC, after
+    `rollup-gao-recommendations`.
+
 ### Changed
 
 - **SpicyDocs 0.52.0, adopting 0.51.0 with it** (main `b08ac1b`, wheel

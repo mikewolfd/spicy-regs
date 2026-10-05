@@ -50,8 +50,13 @@ from spicy_regs.transforms.parquet_rows import write_rows
 
 #: A dataset whose subject columns changed after it first published states its own version; the rest keep the
 #: family's. Columns returned from the receipt to the subject table on 2026-10-05: gao_decisions
-#: ``b_numbers_truncated``; gao_recommendations ``first_seen`` and ``last_seen``.
-POLICY_VERSIONS = {"gao_decisions": "government-sources/2", "gao_recommendations": "government-sources/2"}
+#: ``b_numbers_truncated``; gao_recommendations ``first_seen`` and ``last_seen``. Columns added on 2026-10-05 (owner
+#: decision 2026-10-04): gao_reports ``major_rule_agency``, ``major_rule_rins`` and ``major_rule_fr_citations``.
+POLICY_VERSIONS = {
+    "gao_decisions": "government-sources/2",
+    "gao_recommendations": "government-sources/2",
+    "gao_reports": "government-sources/2",
+}
 POLICIES = {
     dataset: DatasetPolicy(
         dataset,
@@ -66,7 +71,7 @@ POLICIES = {
 
 
 def _without(dataset: str, *columns: str) -> DatasetPolicy:
-    """The dataset's ``government-sources/1`` policy: today's subject schema less the columns returned since."""
+    """The dataset's ``government-sources/1`` policy: today's subject schema less the columns returned or added since."""
     schema = POLICIES[dataset].subject_schema
     for column in columns:
         schema = schema.remove(schema.get_field_index(column))
@@ -75,10 +80,12 @@ def _without(dataset: str, *columns: str) -> DatasetPolicy:
 
 #: Exact policies a published prior may still carry. A prior is read under one only to restore its receipts' whole
 #: original rows; every write uses POLICIES. On 2026-10-04 gao-reports published gao_decisions without
-#: ``b_numbers_truncated`` and gao-recommendations published without ``first_seen`` and ``last_seen``.
+#: ``b_numbers_truncated`` and gao-recommendations published without ``first_seen`` and ``last_seen``; gao-reports
+#: published gao_reports to 2026-10-05 without the three major-rule letter columns, which no receipt held either.
 EARLIER_POLICIES = {
     "gao_decisions": (_without("gao_decisions", "b_numbers_truncated"),),
     "gao_recommendations": (_without("gao_recommendations", "first_seen", "last_seen"),),
+    "gao_reports": (_without("gao_reports", "major_rule_agency", "major_rule_rins", "major_rule_fr_citations"),),
 }
 _ACTIVE: ContextVar[bool] = ContextVar("government_receipt_build", default=False)
 _INHERITED: ContextVar[dict[str, Path] | None] = ContextVar("government_prior_receipts", default=None)

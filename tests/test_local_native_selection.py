@@ -133,3 +133,48 @@ def test_empty_native_table_has_its_declared_columns(tmp_path, monkeypatch):
         assert con.execute("SELECT bioguide_id FROM members").fetchall() == []
     finally:
         con.close()
+
+
+@pytest.mark.parametrize("damage", [None, "unknown_schema", "mixed_schema"])
+def test_earlier_gao_selection_reads_original_fields_and_refuses_unknown_or_mixed_schemas(tmp_path, monkeypatch, damage):
+    import duckdb
+    import pyarrow as pa
+    from spicy_regs.etl_receipts import ReceiptContext, receipt_policies, write_dataset
+    from spicy_regs.etl_policy_registry import installed_policies
+    from spicy_regs.fec_receipt_adapter import ReceiptAdapter
+
+    monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
+    current, earlier = receipt_policies(installed_policies()["gao_reports"])
+    original = {**dict.fromkeys(earlier.subject_schema.names), "report_id": "gao-26-1", "title": "As published"}
+    witness = {"source_id": "original", "source_uri": None, "sha256": "sha256:" + "0" * 64,
+               "locator": None, "body_version": None}
+    context = ReceiptContext("original", "report", "original-reader", [witness])
+    subject, receipts = write_dataset([({**original, "raw_record": {"literal": "unchanged"}}, context)],
+                                     tmp_path / "old", earlier)
+    assert subject is not None
+    from spicy_regs.generations import build_generation
+    # A new artifact declaring /2 must never admit the older subject shape.
+    with pytest.raises(ValueError, match="Subject schema differs"):
+        build_generation(tmp_path / "false-current", family="gao-reports", files=[subject],
+                         expected_keys=[subject.name], receipt_path=receipts, receipt_policies=[current],
+                         receipt_generation_id="original")
+    paths = [subject]
+    if damage == "unknown_schema":
+        pq.write_table(pq.read_table(subject).append_column("unknown", pa.array(["value"])), subject)
+    elif damage == "mixed_schema":
+        newer, _ = write_dataset([({**dict.fromkeys(current.subject_schema.names), **original,
+                                  "report_id": "gao-26-2"}, context)], tmp_path / "new", current)
+        assert newer is not None
+        paths.append(newer)
+    remember_selection(tmp_path, [SelectedDataset("gao_reports", tuple(paths), receipts, "original")])
+    if damage:
+        with pytest.raises(ValueError, match="schema|Mixed subject policies"):
+            local_selection(tmp_path)
+        return
+    selection = local_selection(tmp_path)
+    selected = selection.native["gao_reports"]
+    assert pq.read_table(selection.paths("gao_reports")[0]).to_pylist() == [original]
+    with duckdb.connect() as con:
+        adapter = ReceiptAdapter(con, {}, "", local_native={"gao_reports": {
+            "subjects": selected.subjects, "receipts": selected.receipts, "generation_id": selected.generation_id}})
+        assert list(adapter.selected_rows("gao_reports")) == [{**original, "raw_record": {"literal": "unchanged"}}]

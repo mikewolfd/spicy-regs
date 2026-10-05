@@ -58,6 +58,27 @@ def bodies(evidence):
     return [path.read_bytes() for path in (evidence.artifact_dir / "blobs" / "sha256").iterdir()]
 
 
+def test_gao_rss_contact_body_is_hash_only_while_source_values_survive(tmp_path):
+    from spicy_regs.sources.gao_reports import GaoReportsReader, RSS_URL
+    from tests.test_reference_source_failures import FEED
+
+    raw = FEED.replace(b"Native text", b"Native text contact@example.test")
+    evidence = CaptureEvidence(tmp_path, "gao-reports")
+    reader = GaoReportsReader(evidence=evidence, transport=httpx.MockTransport(
+        lambda _: httpx.Response(200, stream=httpx.ByteStream(raw), headers={"content-type": "application/rss+xml"})))
+    [item] = list(reader.iter_records())
+    assert item["description"] == "Native text contact@example.test"
+    [event] = [e for e in journal(evidence) if e.get("event") == "capture"]
+    assert event["requested_url"] == RSS_URL
+    assert event["sha256"] == "sha256:" + hashlib.sha256(raw).hexdigest()
+    assert event["byte_size"] == len(raw)
+    assert event["evidence_policy"] == "hash_only" and event["body_retained"] is False
+    assert "blob_member" not in event
+    assert not (evidence.artifact_dir / "blobs" / "sha256" / hashlib.sha256(raw).hexdigest()).exists()
+    artifact = evidence.seal(outcome="build-complete")
+    assert verify_evidence(evidence.artifact_dir, expected_pin=artifact.pin).pin == artifact.pin
+
+
 def test_exact_capture_metadata_and_request_bytes_are_admitted(tmp_path):
     evidence = CaptureEvidence(tmp_path, "test")
     raw = capture(request_body=b'{"selection": 1}')

@@ -151,7 +151,7 @@ def _native_selection(root: Path) -> LocalSelection:
     from tempfile import TemporaryDirectory
     from spicy_regs.selected_generations import SelectedInputs
     from spicy_regs.etl_policy_registry import installed_policies
-    from spicy_regs.etl_receipts import select_receipts, validate_receipt_bundle
+    from spicy_regs.etl_receipts import select_receipts, selected_subject_policy, validate_receipt_bundle
 
     policies = installed_policies()
     native, visible, parts, signatures = {}, {}, {}, {}
@@ -166,7 +166,8 @@ def _native_selection(root: Path) -> LocalSelection:
             for path in paths:
                 signatures[str(path)] = file_signature(path)
             scoped = select_receipts(selected.receipts, Path(temporary) / f"{name}.parquet", dataset=name)
-            validate_receipt_bundle({name: selected.subjects}, [scoped], [policies[name]],
+            policy = selected_subject_policy(policies[name], selected.subjects)
+            validate_receipt_bundle({name: selected.subjects}, [scoped], [policy],
                                     generation_id=selected.generation_id)
             if not policies[name].receipt_only:
                 # Empty multipart tables have no invented member or partition.

@@ -771,12 +771,13 @@ def test_member_carries_receipts_from_original_generations_for_all_outcomes(tmp_
     assert pq.read_table(receipts).to_pylist()[0] == accepted
 
 
-def test_only_declared_earlier_policies_are_admitted(tmp_path):
+@pytest.mark.parametrize("dataset", ["gao_decisions", "gao_recommendations", "gao_reports"])
+def test_only_declared_earlier_policies_are_admitted(tmp_path, dataset):
     from spicy_regs.etl_receipts import receipt_policies, validate_receipt_row
     from spicy_regs.transforms.government_receipts import POLICIES, EARLIER_POLICIES
-    current = POLICIES["gao_decisions"]
-    assert receipt_policies(current)[1:] == EARLIER_POLICIES["gao_decisions"]
-    prior = EARLIER_POLICIES["gao_decisions"][0]
+    current = POLICIES[dataset]
+    assert receipt_policies(current)[1:] == EARLIER_POLICIES[dataset]
+    prior = EARLIER_POLICIES[dataset][0]
     witness = {"source_id": "test", "source_uri": "https://source.test", "sha256": "a" * 64, "locator": "/"}
     context = ReceiptContext("old", "attempt", "test", [witness])
     failed = failure_receipt(prior, context, outcome="rejected", raw_fields={"raw_record": {}})

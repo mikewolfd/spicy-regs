@@ -89,7 +89,7 @@ class ReceiptAdapter:
 
     def selected_rows(self, table):
         """Read one dataset's exact native subjects and verified processing values."""
-        from .etl_receipts import DatasetPolicy, read_with_receipts, read_attempts, select_receipts
+        from .etl_receipts import DatasetPolicy, read_with_receipts, read_attempts, select_receipts, selected_subject_policy
         from .subject_catalog import descriptors
         from .sources.publication import receipt_members, receipt_key_members, table_members
 
@@ -136,7 +136,8 @@ class ReceiptAdapter:
                 yield from (row["processing_fields"] for row in read_attempts(
                     [receipt], policy, generation_id=generation, outcomes=frozenset({"observed"})))
             else:
-                yield from read_with_receipts(subjects, [receipt], policy, generation_id=generation)
+                yield from read_with_receipts(subjects, [receipt], selected_subject_policy(policy, subjects),
+                                             generation_id=generation)
 
     def restore_originals(self, table, schema, original, *, prefix):
         """Materialize bounded verified inputs privately, shared by connection cursors."""

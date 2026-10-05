@@ -64,8 +64,15 @@ class GaoReportsReader(Reader):
         )
         transport = self.transport
         if self.evidence:
-            self.evidence.event("selection", stage="gao", url=RSS_URL, max_records=self.max_records)
-            transport = self.evidence.transport(transport, stage="gao-response", max_bytes=budget.max_bytes)
+            from importlib.metadata import version
+            # Feed descriptions include contact details. Retain their exact digest
+            # and request metadata while keeping the body out of public evidence.
+            evidence = self.evidence.for_source(
+                "gao-reports-rss", "hash_only", parser_version=version("spicy-docs"),
+                policy_decision_id="gao-reports-rss-contacts-hash-only/1",
+            )
+            evidence.event("selection", stage="gao", url=RSS_URL, max_records=self.max_records)
+            transport = evidence.transport(transport, stage="gao-response", max_bytes=budget.max_bytes)
         with GaoFeedAcquirer(budget=budget, transport=transport) as reader:
             feed = reader.acquire_reports_feed().feed
         items = feed.items if self.max_records is None else feed.items[: self.max_records]
