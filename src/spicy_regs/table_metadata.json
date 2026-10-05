@@ -17356,6 +17356,16 @@
         "description": "The topic the export files it under, as last listed; NULL where it states none."
       },
       {
+        "column_name": "first_seen",
+        "column_type": "DATE",
+        "description": "The date the status-as-of stamp states on the first export read that listed it: when this table first saw it open, not when GAO made it."
+      },
+      {
+        "column_name": "last_seen",
+        "column_type": "DATE",
+        "description": "The date the status-as-of stamp states on the latest export read that listed it."
+      },
+      {
         "column_name": "listed_open",
         "column_type": "BOOLEAN",
         "description": "Whether the latest export read lists it under this key. `false` says only that it is no longer listed: GAO closing it is the usual cause, but an edit to its number, text or agency, or a defective export, reads the same."
@@ -19897,7 +19907,7 @@
       {
         "dataset": "gao_recommendations",
         "receipt_only": false,
-        "policy_version": "government-sources/1",
+        "policy_version": "government-sources/2",
         "identity_columns": [
           "recommendation_id"
         ],

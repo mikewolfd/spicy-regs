@@ -2467,7 +2467,7 @@
       {
         "dataset": "gao_recommendations",
         "receipt_only": false,
-        "policy_version": "government-sources/1",
+        "policy_version": "government-sources/2",
         "identity_columns": [
           "recommendation_id"
         ],
@@ -7922,6 +7922,8 @@
         "priority",
         "comments",
         "topics",
+        "first_seen",
+        "last_seen",
         "listed_open",
         "status_as_of"
       ]
