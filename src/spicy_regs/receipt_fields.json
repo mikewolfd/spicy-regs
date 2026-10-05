@@ -137,7 +137,7 @@
    "meanings": {
     "source_system_code": "Code of the system that reported the action.",
     "stage_matcher": "The matched text pattern, publisher code or vote-result reading used by the named rule.",
-    "stage_rule": "Which stage rule fired on this action (the names congress_bills.stage_rule lists, but never passed_both), or NULL when none did."
+    "stage_rule": "Which stage rule fired on this action (the names congress_bills.stage_rule lists, but never passed_both or enrolled_text_listed), or NULL when none did."
    }
   },
   "bill_committee_actions": {
@@ -644,6 +644,7 @@
    },
    "renamed": {
     "docket_ids_json": "docket_ids",
+    "evidence_ids_json": "evidence_ids",
     "opened_by_artifact_ids_json": "opened_by_artifact_ids",
     "proceeding_ids_json": "proceeding_ids",
     "rins_json": "rins"
@@ -989,9 +990,9 @@
     "schema_version": "The BILLSTATUS schema version the document declared (3.0.0 today).",
     "signed_date_action_code": "The publisher's action code on that became-law action.",
     "signed_date_action_index": "Position of the became-law action the signing date was read from.",
-    "stage_action_date": "Date of the action the stage was read from.",
-    "stage_action_index": "Position in the publisher's action list of the action the stage was read from; the list runs newest first, so 0 is the bill's latest action.",
-    "stage_matcher": "The matched text pattern, publisher code or vote-result reading used by the named rule.",
+    "stage_action_date": "Date of the action the stage was read from. NULL for enrolled_text_listed: BILLSTATUS dates few enrolled texts, some with the first chamber's day rather than the agreement's (bill_versions.version_date keeps the publisher's date).",
+    "stage_action_index": "Position in the publisher's action list of the action the stage was read from; the list runs newest first, so 0 is the bill's latest action. NULL where no action is the source: the default stage, or enrolled_text_listed.",
+    "stage_matcher": "The matched text pattern, publisher code or vote-result reading used by the named rule; for enrolled_text_listed, the listed printing's version code (enrolled-bill, as bill_versions.version_code).",
     "subjects_json": "Every legislative subject term the publisher lists, as a JSON array in publisher order.",
     "url": "The publisher's own legislation URL for this measure.",
     "url_source": "Who stated url, and so which kind of URL it is: billstatus (the BILLSTATUS legislationUrl, the congress.gov page), congress_api (the Congress.gov detail record's legislationUrl, the same page), congress_api_list (the Congress.gov list route's url, the API resource), or inherited (this observation stated none and a host merge kept an earlier observation's value; its lineage is that earlier source, not a fresh read). NULL when url is NULL or the row predates this label."
