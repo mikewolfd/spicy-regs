@@ -1,0 +1,12 @@
+{
+  "source_commit": "ca3a9bd84ca01e296c54856ed20ea71339b6ce57",
+  "source_tag": "v0.58.0",
+  "version": "0.58.0",
+  "filename": "spicy_docs-0.58.0-py3-none-any.whl",
+  "sha256": "952bae11f8353caa8a367dc62f98cae94692a15d6b70f5c04a33ae1a8154b144",
+  "byte_size": 2537948,
+  "source_completion_receipt_sha256": "901bfa0874b6e413aac0f1eb7fc3a805d4912a7e05e947a03c52124d704b68df",
+  "wheel_distribution": "vendored exact independently reviewed source-release wheel; no public registry publication claimed",
+  "source_state": "source main and annotated release tag published by coordinated source owner",
+  "member_adoption": "requires matching name_nickname field policy and new native members publication; prior native schema refuses resume"
+}
