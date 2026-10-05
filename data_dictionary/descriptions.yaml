@@ -2758,7 +2758,7 @@ tables:
       Clerk's label (`name:Jones (NC)`), and that key identifies the row within
       its roll call, not a person, since at least 21 labels of those years name
       two different members. The `bioguide_id` on such a row is resolved at the
-      votes merge, not stated by the Clerk (rule `house-name-crosswalk-v3`): it
+      votes merge, not stated by the Clerk (rule `house-name-crosswalk-v4`): it
       is the one member of that surname, state and party seated in the House in
       that Congress, per `members`, `member_terms` and
       `member_party_affiliations`, and only where the vote's day lies inside

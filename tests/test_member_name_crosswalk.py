@@ -215,7 +215,7 @@ def test_a_label_no_member_answers_to_stays_unresolved_with_its_reason(key, reas
 
 
 def test_a_whole_surname_wins_over_a_part_and_a_party_change_needs_its_affiliation():
-    assert RULE_VERSION == "house-name-crosswalk-v3", "a rule change moves the version on purpose, and says why"
+    assert RULE_VERSION == "house-name-crosswalk-v4", "a rule change moves the version on purpose, and says why"
     assert list(_resolve("104", "Lee", "D", "TX")["members"]) == ["X000002"], "Lee is not Jackson Lee while a Lee sits"
     assert _resolve("104", "Lee", "D", "TX", only={"J000032"})["members"]["J000032"]["rule"] == "surname_part"
     # With one Davis seated the first name decides nothing, so the rule does not claim it did.
@@ -493,6 +493,21 @@ def test_a_day_two_terms_of_one_member_share_seats_one_member(tmp_path):
     assert (count, ids) == (1, {("102-house-2-150", "name:Twice"): "X000007"})
 
 
+def test_expired_former_surname_withdraws_a_held_id_on_the_votes_day(tmp_path):
+    rows = [
+        _row("107-house-2-100", "Quill", "D", "WA", "1-Jun-2002"),
+        _row("107-house-2-101", "Quill", "D", "WA", "2-Jul-2002", bioguide="X000009"),
+    ]
+    evidence = _evidence(tmp_path)
+    count, ids = _fill(tmp_path, rows, evidence=evidence)
+    assert count == 1
+    assert ids[("107-house-2-100", "name:Quill")] == "X000009"
+    assert ids[("107-house-2-101", "name:Quill")] is None
+    assert [(entry["member_name"], entry["reason"], entry["rows"]) for entry in _event(evidence)["unresolved"]] == [
+        ("Quill", "outside_term", 1),
+    ]
+
+
 def test_two_rows_of_one_roll_call_that_resolve_to_one_member_both_stay_null(tmp_path):
     """The Clerk lists a member once. With the crosswalk holding only one of Virginia's two Davises, both of the
     Clerk's labels resolve to her; one of them is someone else, so neither is filled, on that roll call only."""
@@ -533,3 +548,19 @@ def test_a_table_with_no_name_rows_asks_for_no_crosswalk(tmp_path):
     count, ids = _fill(tmp_path, [row for row in ROWS if not (row["chamber"] == "house" and row["member_key"].startswith("name:"))], download)
     assert (count, download.asked) == (0, [])
     assert ids == {("108-house-1-5", "A000014"): "A000014", ("102-senate-1-1", "name:Abercrombie"): None}
+
+
+def test_a_selected_input_read_failure_aborts_instead_of_publishing_held_ids(tmp_path):
+    held = [_row("105-house-1-640", "Capps", "D", "CA", "13-Nov-1997", bioguide="C000134")]
+    out = tmp_path / "member_votes.parquet"
+    _write(out, held, VOTES)
+    before = out.read_bytes()
+
+    def missing_receipt(key, destination):
+        raise FileNotFoundError("selected members receipt is missing")
+
+    with pytest.raises(FileNotFoundError, match="receipt is missing"):
+        fill_house_name_bioguide_ids(tmp_path, out, missing_receipt)
+    assert out.read_bytes() == before
+    assert not (tmp_path / "_member_votes_name_filled.parquet").exists()
+
