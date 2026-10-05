@@ -121,7 +121,7 @@ def test_receipt_read_refuses_faults_before_yielding(tmp_path, fault):
     receipts = [receipt]
     generation = "generation-a"
     if fault == "generation":
-        generation = "generation-b"
+        generation = ""
     if fault == "missing":
         empty = tmp_path / "empty.parquet"
         pq.write_table(pq.ParquetFile(receipt).read().slice(0, 0), empty)

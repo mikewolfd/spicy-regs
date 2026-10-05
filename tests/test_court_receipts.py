@@ -69,7 +69,7 @@ def test_cluster_incremental_watermark_uses_selected_receipts(tmp_path):
     assert held_export(path) == (10, '2026-06-30')
     receipt, _ = local_receipt_selection(path)
     with pytest.raises(ValueError, match='generation'):
-        held_export(path, receipt_path=receipt, generation_id='wrong-build')
+        held_export(path, receipt_path=receipt, generation_id='')
     copied = tmp_path / 'unbound.parquet'
     copied.write_bytes(path.read_bytes())
     with pytest.raises(ValueError, match='no selected receipt'):

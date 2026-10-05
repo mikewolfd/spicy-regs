@@ -23,6 +23,8 @@ class SelectedDataset:
     subjects: tuple[Path, ...]
     receipts: Path
     generation_id: str
+    key_index: Path | None = None
+    key_index_descriptor: dict | None = None
 
 
 def unique_build_directory(root: Path) -> Path:
@@ -46,6 +48,8 @@ def remember_selection(root: Path, selections) -> None:
             "generation_id": selected.generation_id,
             "subjects": [member(p) for p in selected.subjects],
             "receipts": member(selected.receipts),
+            **({"key_index": member(selected.key_index), "key_index_descriptor": selected.key_index_descriptor}
+               if selected.key_index is not None else {}),
         }
     temporary = target.with_name(target.name + "." + uuid4().hex)
     temporary.write_text(json.dumps(values))
@@ -89,6 +93,8 @@ class SelectedInputs:
                 tuple(checked(p) for p in value["subjects"]),
                 checked(value["receipts"]),
                 value["generation_id"],
+                checked(value["key_index"]) if "key_index" in value else None,
+                value.get("key_index_descriptor"),
             )
         else:
             owner = publication.table_owner(self.index, dataset + ".parquet")
@@ -118,7 +124,21 @@ class SelectedInputs:
             receipts = publication.receipt_members(self.index, dataset=dataset)
             if len(receipts) != 1:
                 raise ValueError(f"{dataset}: ambiguous selected receipt member")
-            result = SelectedDataset(dataset, subjects, fetch(receipts[0]), owners[0]["etlReceipts"]["generationId"])
+            specification = owners[0]["etlReceipts"]
+            indexes = publication.receipt_key_members(self.index, dataset=dataset)
+            result = SelectedDataset(dataset, subjects, fetch(receipts[0]), specification["generationId"],
+                                     fetch(indexes[0]) if indexes else None, specification.get("keyIndex"))
+        if (result.key_index is None) != (result.key_index_descriptor is None):
+            raise ValueError("Selected receipt key index declaration is incomplete")
+        if result.key_index is not None:
+            import duckdb
+            import pyarrow.parquet as pq
+            assert result.key_index_descriptor is not None
+            from spicy_regs.receipt_key_index import check_reader
+            with duckdb.connect() as con:
+                check_reader(con, str(result.key_index), result.key_index_descriptor,
+                             {"sha256": _pin(result.receipts), "byteSize": result.receipts.stat().st_size,
+                              "rows": pq.ParquetFile(result.receipts).metadata.num_rows})
         self.cache[dataset] = result
         return result
 
@@ -140,9 +160,11 @@ def remember_generation(root: Path, directory: Path, artifact) -> None:
             key = member.object_key
             if key is None:
                 raise ValueError("Native generation member has no object key")
-            if key != specification["key"] and member_table(key) == dataset + ".parquet":
+            if key not in {specification["key"], specification.get("keyIndex", {}).get("key")} and member_table(key) == dataset + ".parquet":
                 subjects.append(directory / key)
         selected.append(
-            SelectedDataset(dataset, tuple(subjects), directory / specification["key"], specification["generationId"])
+            SelectedDataset(dataset, tuple(subjects), directory / specification["key"], specification["generationId"],
+                            directory / specification["keyIndex"]["key"] if "keyIndex" in specification else None,
+                            specification.get("keyIndex"))
         )
     remember_selection(root, selected)
