@@ -13923,6 +13923,11 @@
         "column_name": "current_term_district",
         "column_type": "VARCHAR",
         "description": "District of the latest term; absent for a Senate term."
+      },
+      {
+        "column_name": "name_nickname",
+        "column_type": "VARCHAR",
+        "description": "The nickname stated in the crosswalk's name.nickname field, preserved exactly. NULL means the source states none; the host derives no nickname from another name field."
       }
     ],
     "subject": "congress",

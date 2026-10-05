@@ -23,6 +23,19 @@ def shaped(path, rows, metadata=None):
     return path
 
 
+@pytest.mark.parametrize("nickname", [None, "Tom", "  Denny  ", "of Carrollton"])
+def test_member_nickname_preserves_exact_source_value_through_native_restore(tmp_path, nickname):
+    source = shaped(tmp_path / "source.parquet", [
+        {"bioguide_id": "X", "name_first": "Thomas", "name_nickname": nickname},
+    ])
+    subject, receipts = write_congress_dataset(source, tmp_path / "bundle", dataset="members", generation_id="g")
+    assert pq.read_table(subject)["name_nickname"].to_pylist() == [nickname]
+    restored = restore_processing_input(
+        subject, receipts, tmp_path / "restored.parquet", dataset="members", generation_id="g"
+    )
+    assert pq.read_table(restored).equals(pq.read_table(source), check_metadata=True)
+
+
 @pytest.mark.parametrize("name", INDEX_SPECS)
 def test_real_index_producer_admits_native_subjects_and_resumes_from_receipts(tmp_path, name):
     first = CongressBuild("first")
