@@ -564,3 +564,37 @@ def test_a_selected_input_read_failure_aborts_instead_of_publishing_held_ids(tmp
     assert out.read_bytes() == before
     assert not (tmp_path / "_member_votes_name_filled.parquet").exists()
 
+
+def test_native_selection_is_bound_to_the_restored_crosswalk_bytes(tmp_path):
+    from spicy_regs.congress_receipts import write_congress_dataset
+    from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
+    from spicy_regs.selected_generations import SelectedDataset, remember_selection
+
+    selected = []
+    for name, (rows, columns) in _Published(nicknames=False).tables.items():
+        raw = tmp_path / (name + "-raw.parquet")
+        _write(raw, [dict.fromkeys(columns) | row for row in rows], columns)
+        subject, receipt = write_congress_dataset(raw, tmp_path / (name + "-native"), dataset=name, generation_id="native")
+        selected.append(SelectedDataset(name, (subject,), receipt, "native"))
+    remember_selection(tmp_path, selected)
+    prior = SelectedPriors(tmp_path / "reader", root=tmp_path, public_url="")
+    work = tmp_path / "work"
+    work.mkdir()
+    out = work / "member_votes.parquet"
+    _write(out, [_row("102-house-1-1", "Abercrombie", "D", "HI", "3-JAN-1991")], VOTES)
+    evidence = _evidence(tmp_path)
+    assert fill_house_name_bioguide_ids(
+        work, out, prior.download, evidence=evidence, selected_input=prior.input_provenance
+    ) == 1
+    for name, entry in _event(evidence)["inputs"].items():
+        binding = entry["selection"]
+        assert (binding["dataset"], binding["generationId"]) == (name, "native")
+        assert binding["processing"]["sha256"] == entry["sha256"]
+        assert len(binding["subjects"]) == 1 and binding["receipts"]["byteSize"] > 0
+
+    before = out.read_bytes()
+    with pytest.raises(ValueError, match="differs from selected native input"):
+        fill_house_name_bioguide_ids(
+            work, out, prior.download, selected_input=lambda _: {"processing": {"sha256": "wrong"}}
+        )
+    assert out.read_bytes() == before

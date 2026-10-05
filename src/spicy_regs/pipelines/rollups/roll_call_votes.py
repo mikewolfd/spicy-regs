@@ -46,9 +46,9 @@ class RollCallVotesRollup(RollupPipeline):
     retain_source_evidence: ClassVar[bool] = True
 
     def build(self, output_dir: Path) -> tuple[Path, ...]:
-        def builder(work, **kwargs):
+        def builder(work, *, selected_input, **kwargs):
             try:
-                return build_roll_call_votes(work, **kwargs)
+                return build_roll_call_votes(work, selected_input=selected_input, **kwargs)
             except ChamberListingRefused as refused:
                 # Seal the successful chamber and its receipts before the run reports the refusal.
                 self.deferred_failure = refused
