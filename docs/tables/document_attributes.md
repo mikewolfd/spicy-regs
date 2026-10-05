@@ -34,8 +34,8 @@ Processing fields, source witnesses, conversion inputs and diagnostics reference
 | `exhibit_location` | `VARCHAR` | Where a physical exhibit is held. |
 | `exhibit_type` | `VARCHAR` | The exhibit's type. |
 | `fax` | `VARCHAR` | The submitter's fax number. |
-| `field1` | `VARCHAR` | An agency-defined field; its meaning is the record's display_properties_json label (“Answer Date”, “XRIN”, “RTID”, …). |
-| `field2` | `VARCHAR` | An agency-defined field; its meaning is the record's display_properties_json label (labelled “File Date”). |
+| `field1` | `VARCHAR` | An agency-defined field; its meaning is the record's display_properties label (“Answer Date”, “XRIN”, “RTID”, …). |
+| `field2` | `VARCHAR` | An agency-defined field; its meaning is the record's display_properties label (labelled “File Date”). |
 | `first_name` | `VARCHAR` | The submitter's given name. |
 | `fr_vol_num` | `VARCHAR` | The Federal Register volume or citation, free text as stated. |
 | `gov_agency` | `VARCHAR` | The government body that submitted the document. |

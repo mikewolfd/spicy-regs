@@ -4,7 +4,7 @@
 
 **Document citation link table**
 
-One row per occurrence of one cited key in one document's text: the key, the exact characters that named it, and the character span it was read at. Citation kinds run from bill numbers and public laws to RINs, agency dockets and GAO product ids (`SELECT DISTINCT cite_kind` lists them). One shared link table over every document family, written by exactly one rollup. All columns are stored as VARCHAR.
+One row per occurrence of one cited key in one document's text: the key, the exact characters that named it, and the character span it was read at. Citation kinds run from bill numbers and public laws to RINs, agency dockets and GAO product ids (`SELECT DISTINCT cite_kind` lists them). One shared link table over every document family, written by exactly one rollup.
 
 Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='document_citations'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
 

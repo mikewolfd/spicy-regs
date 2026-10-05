@@ -4,7 +4,7 @@
 
 **House and Senate roll-call votes**
 
-One row per roll call: the publisher's own tally, and the bill it refers to. The four tally columns are the publisher's own counts, NULL on a candidate election (a Speaker vote), whose choices `tallies_json` keeps under their own labels. A Senate count element the file leaves empty or omits (`<present/>`, `<absent/>`) is read as 0, which is what the Senate means by it (119-senate-1-15: 50 yea, 50 nay, 0 present, 0 absent). All columns are stored as VARCHAR.
+One row per roll call: the publisher's own tally, and the bill it refers to. The four tally columns are the publisher's own counts, NULL on a candidate election (a Speaker vote), whose choices `tallies` keeps under their own labels. A Senate count element the file leaves empty or omits (`<present/>`, `<absent/>`) is read as 0, which is what the Senate means by it (119-senate-1-15: 50 yea, 50 nay, 0 present, 0 absent).
 
 Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='roll_call_votes'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
 
@@ -31,7 +31,7 @@ Processing fields, source witnesses, conversion inputs and diagnostics reference
 | `nay` | `BIGINT` | Nay votes, from the Clerk's nay-total or the Senate's nays; a blank Senate count reads 0 (see present). |
 | `present` | `BIGINT` | Present votes, as each publisher counts them. A Senate count element the file leaves empty or omits (`<present/>`) reads 0, which is what the Senate means by it: 119-senate-1-15 states 50 yeas, 50 nays and empty present and absent, 100 positions. |
 | `not_voting` | `BIGINT` | Members not voting: the Clerk's not-voting-total, or the Senate's absent, folded to one column. A blank Senate `<absent/>` reads 0, as for present. |
-| `tallies` | `STRUCT(choice VARCHAR, count BIGINT)[]` | The overall totals the publisher stated, under the publisher's own names, as a Native structure; the Clerk's totals by party are party_totals_json. Candidate elections keep literal choice labels here and leave the four ordinary tally columns NULL. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `tallies` | `STRUCT(choice VARCHAR, count BIGINT)[]` | The overall totals the publisher stated, under the publisher's own names, as a Native structure; the Clerk's totals by party are party_totals. Candidate elections keep literal choice labels here and leave the four ordinary tally columns NULL. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `member_vote_count` | `BIGINT` | How many member positions the file carried; the member_votes row count for this roll call. |
 | `bill_id` | `VARCHAR` | The bill this roll call refers to: from a bill action's recorded-vote reference, a vote-list reference, or the vote file's own statement of its measure. |
 | `tally_kind` | `VARCHAR` | positions for ordinary totals, candidates for native named-choice totals; NULL on legacy or linkage-only rows. |

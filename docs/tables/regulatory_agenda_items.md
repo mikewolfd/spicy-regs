@@ -4,7 +4,7 @@
 
 **Regulatory Agenda items**
 
-One row per Regulation Identifier Number: the durable Regulatory Agenda item a RIN identifies, with how many proceedings evidence links it to and whether its scope is resolved. Keyed `agenda_item_id` (`urn:rkaf:us:rin:<rin>`), one per `rin`; joined by `agenda_item_proceedings` on `agenda_item_id`, and to `unified_agenda` on `rin`. Built by `build_regulatory_agenda`; all columns are VARCHAR.
+One row per Regulation Identifier Number: the durable Regulatory Agenda item a RIN identifies, with how many proceedings evidence links it to and whether its scope is resolved. Keyed `agenda_item_id` (`urn:rkaf:us:rin:<rin>`), one per `rin`; joined by `agenda_item_proceedings` on `agenda_item_id`, and to `unified_agenda` on `rin`. Built by `build_regulatory_agenda`.
 
 Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='regulatory_agenda_items'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
 

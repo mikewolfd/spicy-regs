@@ -4,7 +4,7 @@
 
 **Bill committee referrals**
 
-One row per committee or subcommittee a bill reached, as its BILLSTATUS document names it. `referral_signal` is set only for the six appropriations committees the money-bill classifier keys on; it is NULL elsewhere rather than absent. It names committees, not what they did: the committee activities BILLSTATUS lists under each committee (Referred To, Markup By, Reported By, with their dates) are not published, so find a committee's report in `bill_actions`. `bill_committee_actions` is a different source, the House committees' activity-report prints, filed at the end of each Congress, so it holds no rows for the sitting Congress. All columns are stored as VARCHAR.
+One row per committee or subcommittee a bill reached, as its BILLSTATUS document names it. `referral_signal` is set only for the six appropriations committees the money-bill classifier keys on; it is NULL elsewhere rather than absent. It names committees, not what they did: the committee activities BILLSTATUS lists under each committee (Referred To, Markup By, Reported By, with their dates) are not published, so find a committee's report in `bill_actions`. `bill_committee_actions` is a different source, the House committees' activity-report prints, filed at the end of each Congress, so it holds no rows for the sitting Congress.
 
 Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='bill_committees'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
 

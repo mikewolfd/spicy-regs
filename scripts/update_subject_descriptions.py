@@ -130,6 +130,9 @@ def main():
                 prose+=' Stored as native nested values; list order, repeated values, null and empty collections remain distinct.'
             columns[name]=prose
         overrides[table] = {'columns': columns}
+    # Carried prose may still name a list by its former serialized spelling, in its own table or another.
+    for item in overrides.values():
+        item['columns'] = {name: dd.native_spelling(prose) for name, prose in item['columns'].items()}
     if unresolved:
         print('Unresolved field prose:',unresolved)
         raise SystemExit(1)

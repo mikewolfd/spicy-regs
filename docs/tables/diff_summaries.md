@@ -4,7 +4,7 @@
 
 **Change summaries (model)**
 
-One row per model-written summary of the change between two printings of a bill. All columns are stored as VARCHAR.
+One row per model-written summary of the change between two printings of a bill.
 
 Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='diff_summaries'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
 
@@ -23,7 +23,7 @@ Processing fields, source witnesses, conversion inputs and diagnostics reference
 | `to_version_code` | `VARCHAR` | The later printing's version code. |
 | `to_printing_id` | `VARCHAR` | Which acquisition path supplied the later printing. |
 | `headline` | `VARCHAR` | One sentence naming the most important change. |
-| `key_changes` | `VARCHAR[]` | The bullet points describing the most significant changes, as a Native list in the model's order. The prompt asks for at most five and nothing enforces it -- unlike bill_summaries.top_provisions_json, whose cap is checked before the row is stored -- because the ported answer schema states no maximum either, so a longer list is the model's answer and not a defect to hide. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `key_changes` | `VARCHAR[]` | The bullet points describing the most significant changes, as a Native list in the model's order. The prompt asks for at most five and nothing enforces it -- unlike bill_summaries.top_provisions, whose cap is checked before the row is stored -- because the ported answer schema states no maximum either, so a longer list is the model's answer and not a defect to hide. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `sections_added` | `VARCHAR[]` | Section headings that were added, as a Native list. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `sections_removed` | `VARCHAR[]` | Section headings that were removed, as a Native list. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `dollar_changes` | `VARCHAR[]` | Notable dollar-amount changes in prose, as a Native list. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |

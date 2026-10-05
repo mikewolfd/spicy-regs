@@ -4,11 +4,11 @@
 
 **Dollar-figure changes**
 
-One row per aligned pair of dollar figures in a section whose amounts changed. `pairing_claim` names how the two figures were aligned; it is word alignment, not a semantic match. All columns are stored as VARCHAR.
+One row per aligned pair of dollar figures in a section whose amounts changed. `pairing_claim` names how the two figures were aligned; it is word alignment, not a semantic match.
 
 Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='financial_changes'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
 
-**Coverage.** Empty by owner decision 34: the amount pairing that would fill it is not run (spicy-docs `pair_amounts=False`), so no row is produced; `section_diff_items.financial_from_amounts_json` and `financial_to_amounts_json` carry the figures. *(measured 2026-10-03)*
+**Coverage.** Empty by owner decision 34: the amount pairing that would fill it is not run (spicy-docs `pair_amounts=False`), so no row is produced; `section_diff_items.financial_from_amounts` and `financial_to_amounts` carry the figures. *(measured 2026-10-03)*
 
 - **Parquet file:** `financial_changes.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.

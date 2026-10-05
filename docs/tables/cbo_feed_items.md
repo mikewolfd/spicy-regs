@@ -4,7 +4,7 @@
 
 **CBO cost-estimate feed items**
 
-One row per CBO publication as its feed lists it: the Congress, the date as `cbo_cost_estimates.pub_date` spells it, the title, link and description, and the `Bill_Number` exactly as stated (empty where CBO names no bill). Joined to `cbo_cost_estimates` on `publication_id`, the items with no estimate row are the ones naming no bill: CBO's weekly estimates of the bills the House takes up under suspension of the rules, a committee's reconciliation recommendations, and estimates filed under no number. All columns are stored as VARCHAR.
+One row per CBO publication as its feed lists it: the Congress, the date as `cbo_cost_estimates.pub_date` spells it, the title, link and description, and the `Bill_Number` exactly as stated (empty where CBO names no bill). Joined to `cbo_cost_estimates` on `publication_id`, the items with no estimate row are the ones naming no bill: CBO's weekly estimates of the bills the House takes up under suspension of the rules, a committee's reconciliation recommendations, and estimates filed under no number.
 
 Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='cbo_feed_items'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
 

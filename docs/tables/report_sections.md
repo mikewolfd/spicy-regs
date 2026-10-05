@@ -4,7 +4,7 @@
 
 **Committee report heading and text blocks**
 
-One row per heading or unheaded text block in one part of a committee report, keyed `(package_id, part_id, seq)`. `heading` preserves the source title; agency identity fields remain unresolved. `pattern` records which header pattern fired, which is this table's provenance column. All columns are stored as VARCHAR.
+One row per heading or unheaded text block in one part of a committee report, keyed `(package_id, part_id, seq)`. `heading` preserves the source title; agency identity fields remain unresolved. `pattern` records which header pattern fired, which is this table's provenance column.
 
 Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='report_sections'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
 

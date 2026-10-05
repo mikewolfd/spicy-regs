@@ -4,7 +4,7 @@
 
 **Committee meetings**
 
-One row per scheduled committee meeting, as the Congress.gov committee-meeting list and detail routes state it, keyed `(congress, chamber, event_id)`. The detail carries the hearing transcript jackets (`hearing_transcripts` joins on `event_id`), the related bills, the witnesses and every document URL. All columns are stored as VARCHAR.
+One row per scheduled committee meeting, as the Congress.gov committee-meeting list and detail routes state it, keyed `(congress, chamber, event_id)`. The detail carries the hearing transcript jackets (`hearing_transcripts` joins on `event_id`), the related bills, the witnesses and every document URL.
 
 Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='committee_meetings'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
 
@@ -33,18 +33,18 @@ The publisher's `NoChamber` value is stored as `nochamber`, matching its detail 
 | `location_building` | `VARCHAR` | The building the detail names. |
 | `location_room` | `VARCHAR` | The room the detail names. |
 | `committee_system_code` | `VARCHAR` | System code of the first committee the detail lists. |
-| `committee_count` | `BIGINT` | How many committees the detail lists; every one is in committees_json, and NULL where it is NULL. |
+| `committee_count` | `BIGINT` | How many committees the detail lists; every one is in committees, and NULL where it is NULL. |
 | `committees` | `STRUCT("name" VARCHAR, systemCode VARCHAR, url VARCHAR)[]` | Every committee the detail lists, as a Native list of the publisher's objects. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `hearing_jacket` | `VARCHAR` | The first hearing transcript jacket number the detail lists, where it lists any. |
-| `hearing_jacket_count` | `BIGINT` | How many transcript jackets the detail lists; every one is in hearing_jackets_json, and NULL where it is NULL. |
+| `hearing_jacket_count` | `BIGINT` | How many transcript jackets the detail lists; every one is in hearing_jackets, and NULL where it is NULL. |
 | `hearing_jackets` | `VARCHAR[]` | Every transcript jacket number the detail lists, as a Native list of strings. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
-| `bill_count` | `BIGINT` | How many bills the detail relates to the meeting; every one is in bill_ids_json, and NULL where it is NULL. |
+| `bill_count` | `BIGINT` | How many bills the detail relates to the meeting; every one is in bill_ids, and NULL where it is NULL. |
 | `bill_ids` | `VARCHAR[]` | Natural keys of every bill in relatedItems.bills, as a Native list, in publisher order; a bill named only in a meeting document is not here. NULL where no detail was read or the detail states no relatedItems.bills; `[]` where it states an empty one. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
-| `witness_count` | `BIGINT` | How many witness entries the detail lists, repeats included; not a count of people. NULL where witnesses_json is NULL. |
+| `witness_count` | `BIGINT` | How many witness entries the detail lists, repeats included; not a count of people. NULL where witnesses is NULL. |
 | `witnesses` | `STRUCT("name" VARCHAR, "position" VARCHAR, organization VARCHAR)[]` | Every witness entry the detail lists, as a Native list of the publisher's objects, in publisher order and as published: an entry can repeat within one meeting, so count people by name, not entries. NULL where no detail was read or the detail states no witnesses (the Senate and NoChamber details retained so far omit the key: no witness list, not an empty one); `[]` where it states an empty one. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
-| `witness_document_count` | `BIGINT` | How many witness documents the detail lists; NULL where witness_documents_json is NULL. |
+| `witness_document_count` | `BIGINT` | How many witness documents the detail lists; NULL where witness_documents is NULL. |
 | `witness_documents` | `STRUCT(documentType VARCHAR, format VARCHAR, url VARCHAR)[]` | Every witness document the detail lists, as a Native list of the publisher's objects. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
-| `meeting_document_count` | `BIGINT` | How many meeting documents the detail lists; NULL where meeting_documents_json is NULL. |
+| `meeting_document_count` | `BIGINT` | How many meeting documents the detail lists; NULL where meeting_documents is NULL. |
 | `meeting_documents` | `STRUCT(description VARCHAR, documentType VARCHAR, format VARCHAR, "name" VARCHAR, url VARCHAR)[]` | Every meeting document the detail lists, as a Native list of the publisher's objects. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `document_urls` | `VARCHAR[]` | The URL of every document the meeting lists, witness documents first then meeting documents, in publisher order: what the map's meeting-to-documents edge resolves. NULL where neither list is stated (or no detail was read); `[]` where the stated lists carry no URL. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `videos` | `STRUCT("name" VARCHAR, url VARCHAR)[]` | Every video link the detail lists, as a Native list of the publisher's objects. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |

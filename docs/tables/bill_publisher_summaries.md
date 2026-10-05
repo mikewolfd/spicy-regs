@@ -4,7 +4,7 @@
 
 **CRS bill summaries (publisher)**
 
-One row per CRS summary the publisher states on a bill, at the version and action it describes. `summary_html` is kept exactly as the publisher escaped it. All columns are stored as VARCHAR.
+One row per CRS summary the publisher states on a bill, at the version and action it describes. `summary_html` is kept exactly as the publisher escaped it.
 
 Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='bill_publisher_summaries'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
 

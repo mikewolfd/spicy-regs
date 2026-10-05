@@ -4,7 +4,7 @@
 
 **FEC candidates by cycle**
 
-One row per FEC candidate per two-year cycle, as that cycle's bulk candidate master states it: name, party, election year, office, status and principal committee. Read by the `fec-candidate-history` rollup through SpicyDocs' candidate-master reader, which verifies each file by digest and checks the publisher's header. Codes stay literal. All columns are stored as VARCHAR.
+One row per FEC candidate per two-year cycle, as that cycle's bulk candidate master states it: name, party, election year, office, status and principal committee. Read by the `fec-candidate-history` rollup through SpicyDocs' candidate-master reader, which verifies each file by digest and checks the publisher's header. Codes stay literal.
 
 Processing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='fec_candidate_history'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.
 
