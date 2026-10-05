@@ -11,7 +11,7 @@ from spicy_regs.transforms.government_source_shapes import map_subject
 import pytest
 
 module = importlib.import_module("spicy_regs.transforms.build_fcc_ecfs")
-row_writer = importlib.import_module("spicy_regs.transforms.parquet_rows")
+row_writer = importlib.import_module("spicy_regs.parquet_rows")
 
 
 def filing(identifier, *, text="fresh", received="2026-09-25", **extra):

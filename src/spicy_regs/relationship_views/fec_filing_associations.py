@@ -47,7 +47,7 @@ def _pin(value):
     return value
 
 
-def financial_number_association_sql(table, source_generation_pin, namespace_evidence, *, columns):
+def financial_number_association_sql(table, source_generation_pin, namespace_evidence, *, columns, legacy=False):
     """Derive the bounded mapper's decisions without materializing a large copy.
 
     ``columns`` comes from the admitted typed table schema. An absent optional
@@ -59,6 +59,8 @@ def financial_number_association_sql(table, source_generation_pin, namespace_evi
     (target_table, target_record_id); no redundant stored association ID is made.
     Release admission validates those source IDs and literal locator JSON.
     """
+    policy_version = "fec-retained-filing-association/1" if legacy else POLICY_VERSION
+    target_mapping = "fec-identity-observations/1" if legacy else TARGET_MAPPING_VERSION
     _pin(source_generation_pin)
     names = set(columns)
     required = {
@@ -107,7 +109,7 @@ def financial_number_association_sql(table, source_generation_pin, namespace_evi
             bool_and(COALESCE(source_authority = 'official-fec'
                 AND source_namespace = 'fec-openfec-file-number'
                 AND identity_version = {literal(TARGET_IDENTITY_VERSION)}
-                AND mapping_version = {literal(TARGET_MAPPING_VERSION)}
+                AND mapping_version = {literal(target_mapping)}
                 AND regexp_full_match(report_number, '-?[1-9][0-9]*')
                 AND filing_key = {literal(_KEY_PREFIX)} || report_number, FALSE)) AS identity_valid,
             count(DISTINCT NULLIF(native_filer_id, '')) AS filer_count,
@@ -140,7 +142,7 @@ def financial_number_association_sql(table, source_generation_pin, namespace_evi
                  ELSE 'resolved_native_filing_key' END AS decided_status,
             COALESCE(f.n, 0) AS target_count, COALESCE(f.witness_ids, []::VARCHAR[]) AS target_ids
         FROM source s LEFT JOIN targets f ON s.referenced_key = f.filing_key
-    ) SELECT {literal(POLICY_VERSION)} AS policy_version, {literal(table)} AS target_table,
+    ) SELECT {literal(policy_version)} AS policy_version, {literal(table)} AS target_table,
         record_id AS target_record_id, {literal(source_generation_pin)} AS source_generation_pin,
         collection_id, source_record_id, source_sha256, source_authority, source_locator_json,
         'native-file-number' AS association_basis, decided_status AS association_status,
@@ -156,13 +158,14 @@ def financial_number_association_sql(table, source_generation_pin, namespace_evi
         FROM decisions"""
 
 
-def financial_header_association_sql(table, source_generation_pin):
+def financial_header_association_sql(table, source_generation_pin, *, legacy=False):
     """One association decision per typed row, preserving original money columns.
 
     The caller registers the bounded header output as fec_filing_header_associations.
     Exact physical keys and generation bind the join. Duplicate association rows
     refuse instead of expanding a money-bearing row into several observations.
     """
+    policy_version = "fec-retained-filing-association/1" if legacy else POLICY_VERSION
     _pin(source_generation_pin)
     return f"""WITH h AS (
         SELECT collection_id, source_sha256, source_authority, header_record_id,
@@ -174,7 +177,7 @@ def financial_header_association_sql(table, source_generation_pin):
         WHERE source_generation_pin = {literal(source_generation_pin)}
         GROUP BY collection_id, source_sha256, source_authority, header_record_id
     ), checked AS (
-        SELECT *, policy_version = {literal(POLICY_VERSION)}
+        SELECT *, policy_version = {literal(policy_version)}
             AND association_basis = 'native-api-original-url'
             AND association_status IN ('resolved_native_filing_key', 'unresolved_source_authority',
                 'unresolved_archive_member_identity', 'unresolved_redirect_identity',
@@ -188,7 +191,7 @@ def financial_header_association_sql(table, source_generation_pin):
         FROM h
     ) SELECT t.record_id AS target_record_id, {literal(table)} AS target_table,
         t.collection_id, t.source_record_id, t.source_sha256, t.source_authority,
-        t.filing_header_record_id, {literal(POLICY_VERSION)} AS association_policy_version,
+        t.filing_header_record_id, {literal(policy_version)} AS association_policy_version,
         CASE WHEN h.n = 1 THEN h.association_record_id END AS association_record_id,
         CASE WHEN h.n = 1 THEN h.policy_version END AS header_association_policy_version,
         CASE WHEN h.n = 1 THEN h.association_status END AS header_association_status,
@@ -196,7 +199,7 @@ def financial_header_association_sql(table, source_generation_pin):
                   AND t.filing_header_locator_json = h.header_locator_json THEN h.filing_key END AS filing_key,
         CASE WHEN h.n IS NULL THEN 'unresolved_header_association_absent'
              WHEN h.n > 1 THEN 'unresolved_header_association_ambiguous'
-             WHEN h.policy_version IS DISTINCT FROM {literal(POLICY_VERSION)} THEN 'unresolved_header_policy_version'
+             WHEN h.policy_version IS DISTINCT FROM {literal(policy_version)} THEN 'unresolved_header_policy_version'
              WHEN NOT COALESCE(h.supported_association, FALSE) THEN 'unresolved_header_policy_semantics'
              WHEN t.filing_header_locator_json IS DISTINCT FROM h.header_locator_json THEN 'unresolved_header_locator_mismatch'
              ELSE h.association_status END AS association_status,

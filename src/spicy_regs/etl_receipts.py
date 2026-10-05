@@ -416,7 +416,7 @@ def write_dataset(
 
 def combine_receipts(paths: Sequence[Path], destination: Path) -> Path:
     """Combine dataset shards, keeping every row and witness, with the shared schema."""
-    from spicy_regs.transforms.parquet_rows import write_rows
+    from spicy_regs.parquet_rows import write_rows
 
     return write_rows((row for path in paths for row in _rows(path)), destination, RECEIPT_SCHEMA)
 
@@ -636,7 +636,7 @@ def read_with_receipts(
 
 def select_receipts(path: Path, destination: Path, *, dataset: str) -> Path:
     """Select a dataset's receipt rows without losing failed attempts."""
-    from spicy_regs.transforms.parquet_rows import write_rows
+    from spicy_regs.parquet_rows import write_rows
 
     return write_rows((row for row in _rows(path) if row["dataset"] == dataset), destination, RECEIPT_SCHEMA)
 

@@ -16,10 +16,10 @@ def processing_declarations():
     return json.loads(files("spicy_regs").joinpath("fec_processing_schemas.json").read_text())
 
 
-def qualified_views(scope):
+def qualified_views(scope, *, legacy_associations=False):
     from .relationship_views.fec_query_views import fec_query_views
     schemas = {name: tuple(c[0] for c in item["columns"]) for name, item in processing_declarations().items()}
-    specs = fec_query_views(**scope, processing_schemas=schemas)
+    specs = fec_query_views(**scope, processing_schemas=schemas, legacy_associations=legacy_associations)
     root = Path(__file__).parent
     return tuple(replace(spec, identities={**spec.identities, "policies": {
         **spec.identities["policies"], "fec-receipt-adapter/1": root / "fec_receipt_adapter.py",
@@ -34,6 +34,25 @@ def receipt_owner(index, table):
     if len(owners) > 1:
         raise ValueError(f"Ambiguous receipt ownership: {table}")
     return owners[0] if owners else None
+
+
+def selected_qualified_views(native_specs, legacy_specs, index, local_native=None):
+    """Choose old filing rules only for inputs with no selected native layout.
+
+    The release receipt binds the resulting SQL and policy as well as the exact
+    subject membership. Partial native selection stays native and is refused by
+    prepare_qualified before any restoration.
+    """
+    from .sources.publication import table_owner
+
+    local_native = local_native or {}
+    legacy = {spec.view.name: spec for spec in legacy_specs}
+    def native(table):
+        owner = table_owner(index, table + ".parquet")
+        return (table in local_native or receipt_owner(index, table) is not None
+                or (owner is not None and "etlReceipts" in owner[1]))
+    return tuple(spec if any(native(table) for table in spec.view.required)
+                 else legacy.get(spec.view.name, spec) for spec in native_specs)
 
 
 class ReceiptAdapter:
@@ -162,6 +181,22 @@ class ReceiptAdapter:
             return {name: conversion[name] if name in conversion else row.get(name) for name in schema.names}
 
         return self.restore_originals(table, schema, original, prefix="_spicy_fec_processing_")
+
+    def prepare_qualified(self, spec, sql):
+        """Serve exact receipt-bound legacy inputs, or restore every native input.
+
+        A selected native owner with missing or malformed receipts never takes
+        the legacy path. Mixed dependencies use require_selected before writes.
+        """
+        from .sources.publication import table_owner
+
+        def native(table):
+            owner = table_owner(self.index, table + ".parquet")
+            return (table in self.local_native or receipt_owner(self.index, table) is not None
+                    or (owner is not None and "etlReceipts" in owner[1]))
+        if not any(native(table) for table in spec.required):
+            return spec
+        return self.prepare(spec, sql)
 
     def prepare(self, spec, sql):
         self.require_selected(spec.required)
