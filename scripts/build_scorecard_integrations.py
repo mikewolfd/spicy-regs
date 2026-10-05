@@ -13,6 +13,93 @@ import re
 from typing import Any
 
 
+SURVEY_FILE = "publisher_survey_20261005.json"
+IMPLEMENTATION_FILE = "publisher_implementation_20261005.json"
+
+
+def implementation_findings(document, inventory):
+    """Retain task outcomes while qualification remains receipt-backed."""
+    entries = document.get("publishers", [])
+    identifiers = [entry["publisher_id"] for entry in entries]
+    summary = document.get("summary", {})
+    statuses = {
+        "implemented",
+        "source-recovered-but-unsupported-shape",
+        "access-required",
+        "original-unrecovered",
+        "existing-reader-attribution",
+        "verified-retired",
+    }
+    if (
+        document.get("format_version") != "scorecard-publisher-implementation-aggregate/1"
+        or summary.get("newly_published_editions") != 0
+        or summary.get("assigned_publishers") != len(entries)
+        or len(set(identifiers)) != len(identifiers)
+        or not set(identifiers) <= set(inventory)
+        or any(entry.get("task_result") not in statuses for entry in entries)
+    ):
+        raise ValueError("Implementation metadata must describe distinct known publishers without publication")
+    return {
+        entry["publisher_id"]: {
+            "observed_on": document["observed_on"],
+            "source_file": IMPLEMENTATION_FILE,
+            **{
+                field: entry.get(field)
+                for field in (
+                    "group",
+                    "task_result",
+                    "integration_state",
+                    "period_fields",
+                    "next_missing_item",
+                    "authority",
+                    "source_document",
+                    "source_manifest",
+                )
+            },
+        }
+        for entry in entries
+    }
+
+
+def survey_findings(document, inventory):
+    """Select discovery metadata; no finding establishes qualification or support."""
+    entries = document.get("publishers", [])
+    identifiers = [entry["publisher_id"] for entry in entries]
+    summary = document.get("summary", {})
+    if (
+        document.get("format_version") != "scorecard-publisher-survey-aggregate/1"
+        or summary.get("newly_qualified_editions") != 0
+        or summary.get("surveyed_publishers") != len(entries)
+        or len(set(identifiers)) != len(identifiers)
+        or not set(identifiers) <= set(inventory)
+    ):
+        raise ValueError("Survey must describe distinct known publishers and discovery only")
+    findings = {}
+    for entry in entries:
+        survey = entry["survey"]
+        if not isinstance(survey.get("next_step"), str) or not survey["next_step"].strip():
+            raise ValueError("Survey needs a concrete discovery or integration next step")
+        findings[entry["publisher_id"]] = {
+            "observed_on": document["observed_on"],
+            "source_file": SURVEY_FILE,
+            "task_id": entry["task_id"],
+            "assessment": entry["assessment"],
+            **{
+                name: survey.get(name)
+                for name in (
+                    "latest_publication",
+                    "latest_offered",
+                    "newest_recovered",
+                    "year_intervals",
+                    "unknown_year_intervals",
+                    "inspection_limits",
+                    "next_step",
+                )
+            },
+        }
+    return findings
+
+
 def pinned_document(directory, relative, pin):
     path = (directory / relative).resolve()
     if Path(relative).is_absolute() or not path.is_relative_to(directory.resolve()):
@@ -57,7 +144,8 @@ def read_receipt(directory, record):
             or readback.get("format_version") != "scorecard-family-publication-readback/1"
             or readback.get("status") != "passed"
             or readback.get("source_generation") != receipt.get("observed_source_generation")
-            or scope != dict(
+            or scope
+            != dict(
                 publisher_id=record["publisher_id"],
                 parser_version=qualification["parser_version"],
                 counts=qualification["counts"],
@@ -119,12 +207,20 @@ def read_receipt(directory, record):
 def generate(directory: Path):
     names = ("adapter_inventory.json", "publisher_api_inventory.json", "integration_qualifications.json")
     raw = {name: (directory / name).read_bytes() for name in names}
+    if (directory / SURVEY_FILE).exists():
+        raw[SURVEY_FILE] = (directory / SURVEY_FILE).read_bytes()
+    if (directory / IMPLEMENTATION_FILE).exists():
+        raw[IMPLEMENTATION_FILE] = (directory / IMPLEMENTATION_FILE).read_bytes()
     data = {name: json.loads(body) for name, body in raw.items()}
     inventory = data[names[0]]["publishers"]
     apis = {row["publisher_id"]: row for row in data[names[1]]["publishers"]}
     ledger = data[names[2]]
     if set(inventory) != set(apis):
         raise ValueError("Publisher inventories differ; reconcile candidates before generating coverage")
+    findings = survey_findings(data[SURVEY_FILE], inventory) if SURVEY_FILE in data else {}
+    implementations = (
+        implementation_findings(data[IMPLEMENTATION_FILE], inventory) if IMPLEMENTATION_FILE in data else {}
+    )
     qualifications = {}
     scopes = set()
     for record in ledger["editions"]:
@@ -187,10 +283,18 @@ def generate(directory: Path):
                 "discovery_api_status": apis[publisher]["discovery_status"],
                 "discovery_support_status": source["support_status"],
                 "original_source_urls": source["original_source_urls"],
+                "survey_finding": findings.get(publisher),
+                "implementation_finding": implementations.get(publisher),
                 "next_action": "Integrate remaining available editions and renditions"
                 if editions
                 else "Qualify original source through the implemented reader"
                 if publisher in readers
+                else implementations[publisher]["next_missing_item"]
+                if publisher in implementations
+                and isinstance(implementations[publisher].get("next_missing_item"), str)
+                and implementations[publisher]["next_missing_item"].strip()
+                else findings[publisher]["next_step"]
+                if publisher in findings
                 else source.get("next_action")
                 or (
                     "Implement source-specific reader using verified endpoints"
@@ -217,18 +321,32 @@ def generate(directory: Path):
         "",
         "Edition receipts supersede the older discovery matrix only for their named scopes. The queue retains every candidate and every remaining rendition.",
         "",
-        "| Publisher | Stage | Qualified editions | Reader | Next action |",
-        "|---|---|---|---|---|",
+        "| Publisher | Stage | Qualified editions | Reader | Next action | Latest survey | Implementation result |",
+        "|---|---|---|---|---|---|---|",
     ]
     for r in rows:
         editions = ", ".join(f"[{e['scorecard_id']}]({e['receipt']})" for e in r["qualified_editions"]) or "Pending"
+        finding = r["survey_finding"]
+        survey_note = (
+            f"[{finding['assessment']['finding'].replace('|', r'\|')}]({SURVEY_FILE.replace('.json', '.md')})"
+            if finding
+            else "Pending"
+        )
+        implementation = r["implementation_finding"]
+        implementation_note = (
+            f"[{implementation['task_result']}]({IMPLEMENTATION_FILE.replace('.json', '.md')})"
+            if implementation
+            else "Pending"
+        )
         markdown.append(
-            f"| {r['publisher_name']} (`{r['publisher_id']}`) | `{r['state']}` | {editions} | `{r['reader'] or 'pending'}` | {r['next_action']} |"
+            f"| {r['publisher_name']} (`{r['publisher_id']}`) | `{r['state']}` | {editions} | `{r['reader'] or 'pending'}` | {r['next_action'].replace('|', r'\|')} | {survey_note} | {implementation_note} |"
         )
     markdown.extend(
         [
             "",
             "See [observed API routes](publisher_api_routes.md) for rating JSON, JSON containing HTML, embedded JSON and navigation-only distinctions.",
+            "Survey findings guide remaining work. Qualification and publication stages come only from their separate receipts.",
+            "Implementation outcomes record completed task work and exact missing inputs. Their metadata preserves the separate source qualification and publication stages.",
         ]
     )
     return report, "\n".join(markdown) + "\n"
