@@ -6,7 +6,8 @@
     "adapter_inventory.json": "5d7ce442f355c2b7f84d58c6d2df99cbf48574344a101248ee6a04953bf019a4",
     "publisher_api_inventory.json": "097e102c3af4ebb5ad87731be5d40ea4ad283b8ec21f188b1e7460755755925d",
     "integration_qualifications.json": "91f6a8849cd188ad552c72026e3afbb1fa531d48f3f17cb39d254e58fccd3ea8",
-    "publisher_survey_20261005.json": "7e7431dc37bf8564d16df4f044498e1176f7e654cc0cd694b8bdb8a07944c9c1"
+    "publisher_survey_20261005.json": "7e7431dc37bf8564d16df4f044498e1176f7e654cc0cd694b8bdb8a07944c9c1",
+    "publisher_implementation_20261005.json": "576f536238f310ded181460a25fe78eb2c47876fe9b13f23f036abe7ae02ef27"
   },
   "scope": "Every publisher candidate in both inventories; all available editions and renditions remain in scope",
   "states": {
@@ -38,6 +39,7 @@
         "https://www.aauwaction.org/wp-content/uploads/2024/10/CVR-2024-FINAL-VERSION-2.pdf"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -64,6 +66,7 @@
         "https://www.acec.org/wp-content/uploads/2023/03/Senate_Issues.pdf"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -88,6 +91,7 @@
         "https://www.aclu.org/congressional-scorecards"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -114,6 +118,7 @@
         "https://adaction.org/wp-content/uploads/2017/11/1947.pdf"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -143,6 +148,7 @@
         "https://aflcio.org/scorecard/votes/2025/house/letter-president-trump-demanding-reinstatement-nlrb-member-gwynn-wilcox"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -183,6 +189,7 @@
         "https://americansforprosperity.org/national-scorecard/"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -207,6 +214,7 @@
         "https://scorecard.afscme.org/"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -231,6 +239,7 @@
         "https://ajpaction.org/scorecard2026/"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -283,6 +292,7 @@
         "inspection_limits": "Marginal leads are historical holdings, unavailable renditions or separately integrated successor sources; no exhaustive absence claim.",
         "next_step": "Recover the named 2016 PDF if an alternate original rendition appears; otherwise qualify the retained 2015 PDF as an explicitly historical rendition. Qualify the complete 2015 PDF with retained page observations and independent review; preserve signed/out-of-range percentages, N/A, glyphs, weights, excusals and credit/debit actions. Inspect the later archived spreadsheet rendition before choosing a PDF-only reader."
       },
+      "implementation_finding": null,
       "next_action": "Recover the named 2016 PDF if an alternate original rendition appears; otherwise qualify the retained 2015 PDF as an explicitly historical rendition. Qualify the complete 2015 PDF with retained page observations and independent review; preserve signed/out-of-range percentages, N/A, glyphs, weights, excusals and credit/debit actions. Inspect the later archived spreadsheet rendition before choosing a PDF-only reader."
     },
     {
@@ -371,6 +381,7 @@
         "https://awionline.org/compassion-index"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -396,6 +407,7 @@
         "https://retiredamericans.org/wp-content/uploads/2026/03/2025-Congressional-Voting-Record.pdf"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -421,6 +433,7 @@
         "https://www.artsactionfund.org/partners"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -467,6 +480,7 @@
         "https://boilermakers.org/news/leap/democrats-take-control-of-house-of-representatives"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -498,6 +512,7 @@
         "https://c4ip.org/wp-content/uploads/2024/03/2024-Congressional-Innovation-Scorecard.pdf"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -522,6 +537,7 @@
         "https://www.childrensdefense.org/cdf-action-council-releases-report/"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -548,6 +564,7 @@
         "https://www.clubforgrowth.org/scorecards/app/?party=all&chamber=H&yr=2025&state=all&rep"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -950,6 +967,7 @@
         "https://dea0d469-c1d7-4068-bddd-0a3895cc096b.usrfiles.com/ugd/dea0d4_1fbfb19d94774b4a889fd895daf6b73c.pdf"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -979,6 +997,7 @@
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -1008,6 +1027,7 @@
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -1030,6 +1050,7 @@
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -1059,6 +1080,7 @@
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -1083,6 +1105,7 @@
         "https://www.endcitizensunited.org/end-citizens-united-scorecard"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -1105,6 +1128,7 @@
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -1134,6 +1158,7 @@
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -1161,6 +1186,7 @@
         "https://ffrfaction.org/senate-scorecard-calculations/"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -1192,6 +1218,7 @@
         "https://www.ffccscorecard.org/"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -1237,6 +1264,50 @@
         },
         "next_step": "Resolve the catalog’s underlying attribution to a dated FlyersRights original; inspect a targeted archived news edition once located. Current and alternate-site negative searches do not establish nonpublication."
       },
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "cms-publications",
+        "task_result": "original-unrecovered",
+        "integration_state": "catalog_metadata_only",
+        "period_fields": {
+          "newest_known": {
+            "period": "2016 / 114th Congress",
+            "certainty": "secondary office-directory attribution only"
+          },
+          "newest_offered": {
+            "period": null,
+            "certainty": "no original scorecard offered in inspected surfaces"
+          },
+          "newest_recovered": {
+            "period": null,
+            "certainty": "no post-2000 original federal scorecard recovered"
+          },
+          "period_uncertainty": "Newest known is a secondary 2016 / 114th Congress attribution; newest published, offered original and recovered original remain unknown."
+        },
+        "next_missing_item": {
+          "unknown_intervals": [
+            "2000-2026 original federal scorecard coverage outside any explicit secondary leads"
+          ],
+          "missing_item": "The original FlyersRights 2016 114th Congress Legislative Scorecard grid and methodology.",
+          "inspection_bounds": {
+            "original_bodies": 4,
+            "followup_bodies": 2,
+            "original_edition_pages_reviewed": 0,
+            "stop": "Dated secondary lead resolved only to homepage; downloads inventory and focused 114th/2016 queries yielded no original."
+          },
+          "pre_2000": "catalog metadata only; no rating extraction"
+        },
+        "authority": null,
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/cms-publications/implementation.json",
+          "sha256": "64c5b2a1a81d49a6cf083f120abd3e2a8688778c58a905f9bbdbc54763ecb475"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/cms-publications/handoff-manifest.json",
+          "sha256": "a503ca1537185df8a9896a897046261ec7f0436deae132ddbed83e30719101be"
+        }
+      },
       "next_action": "Resolve the catalog’s underlying attribution to a dated FlyersRights original; inspect a targeted archived news edition once located. Current and alternate-site negative searches do not establish nonpublication."
     },
     {
@@ -1259,6 +1330,7 @@
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -1283,6 +1355,7 @@
         "https://www.fp4america.org/wp-content/uploads/2025/04/FP4A-118th-Congress-Legislative-Scorecard.pdf"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -1328,6 +1401,7 @@
         "https://www.frcaction.org/scorecard"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -1584,6 +1658,7 @@
         "https://fw-d7-freedomworks-org.s3.amazonaws.com/KVN_3_28_2017_YES_S.J.Res_.34.pdf"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -1606,6 +1681,7 @@
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -1658,6 +1734,7 @@
         "https://www.gunowners.org/grades/"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -1704,6 +1781,7 @@
         "https://heritageaction.com/dist/assets/app-f5c22e41.js"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -1730,6 +1808,7 @@
         "https://hrc-prod-requests.s3-us-west-2.amazonaws.com/files/documents/111thCongressional_Scorecard.pdf"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -1757,6 +1836,7 @@
         "https://humaneaction.org/2024_scorecard_final"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -1779,6 +1859,7 @@
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -1838,6 +1919,7 @@
         "https://www.limitedgov.org/just-announced-2026-limited-government-index-and-awardees/"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -1869,6 +1951,7 @@
         "https://www.lcv.org/congressional-scorecard/members-of-congress/?chamber=senate&session_year=2025&include_former=1"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -1893,6 +1976,7 @@
         "https://civilrights.org/wp-content/uploads/2024/10/Voting-Record-118th-Congress.pdf"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -2127,6 +2211,7 @@
         "https://www.thelugarcenter.org/ourwork-41.html"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -2152,6 +2237,7 @@
         "https://naacp.org/sites/default/files/documents/115th-Final-Report-Card.pdf"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -2174,6 +2260,7 @@
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -2261,6 +2348,7 @@
         "https://nationalparksaction.org/scorecard/"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -2287,6 +2375,7 @@
         "https://www.nea.org/sites/default/files/2026-01/119th-congress-session-1-scored-votes.pdf"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -2312,6 +2401,7 @@
         "https://media.networklobby.org/uploads/2026/01/2025-NETWORK-Voting-Record.pdf"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -2700,6 +2790,7 @@
         "https://thenewamerican.com/freedom%20index/"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -2738,6 +2829,7 @@
         "https://www.nfib.com/how-congress-voted/"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -2769,6 +2861,7 @@
         "https://niacouncil.org/congressional-scorecard-117th-congress/"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -2795,6 +2888,7 @@
         "https://norml.org/blog/2016/09/27/norml-releases-updated-and-revised-2016-congressional-scorecard/"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -3171,6 +3265,7 @@
         "https://www.nrapvf.org/grades/texas"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -3231,6 +3326,7 @@
         "https://nrf.com/advocacy/action-center/vv-congressional-scorecard/2391-1848/senate"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -3299,6 +3395,7 @@
         "https://www.ntu.org/library/doclib/2025/11/2024-NTURC.pdf"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -3352,6 +3449,7 @@
         "https://grades.numbersusa.com/search/"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -3467,6 +3565,7 @@
         "https://www.peaceaction.org/know-the-score/"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -3526,6 +3625,7 @@
         "https://www.plannedparenthoodaction.org/congressional-scorecard"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -3557,6 +3657,7 @@
         "https://reproductivefreedomforall.org/lawmaker/ted-budd/"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -3609,6 +3710,7 @@
         "https://www.cleanenergyactionfund.org/wp-content/uploads/2013/08/SACEAF2012scorecardfinal.pdf"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -3640,6 +3742,7 @@
         "https://sbaprolife.org/scorecard"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -3662,6 +3765,7 @@
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -3742,6 +3846,7 @@
         "https://www.uschamber.com/congressional-scorecard-and-legislative-leadership-list"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -3768,6 +3873,7 @@
         "https://irfscorecard.org/"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -3814,7 +3920,47 @@
         ],
         "next_step": "Use collection 5619/033 and historical title to identify a precise folder/item through the archive; retain catalog-only lead until original publication is available."
       },
-      "next_action": "Use collection 5619/033 and historical title to identify a precise folder/item through the archive; retain catalog-only lead until original publication is available."
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "labor-archives",
+        "task_result": "access-required",
+        "integration_state": "catalog_metadata_only",
+        "period_fields": {
+          "newest_known_scorecard": {
+            "period": null,
+            "certainty": "unknown"
+          },
+          "newest_offered_scorecard": {
+            "period": null,
+            "certainty": "unknown"
+          },
+          "newest_recovered_scorecard": {
+            "period": null,
+            "certainty": "no complete attributable scorecard recovered"
+          },
+          "newest_recovered_related_material": {
+            "period": null,
+            "kind": null,
+            "certainty": "no complete scorecard recovered"
+          },
+          "known_and_unknown_intervals": {
+            "known_catalog_scope": "1947–2002 collection, not scorecard coverage",
+            "unknown": "All 2000–2026 rating editions; historical Record of the Congress remains unrecovered."
+          }
+        },
+        "next_missing_item": "An exact Record of the Congress folder/item and attributable original, including its publication date.",
+        "authority": null,
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/labor-archives/implementation.json",
+          "sha256": "4c4f60b797aa0f0ac059072133f1f67e7b0e461da4fec18db64fdadf30821099"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/labor-archives/handoff-manifest.json",
+          "sha256": "302549b91acada892ca301b9d52c3d2d2734b4c84f59bcd196f95dd8ec585ac1"
+        }
+      },
+      "next_action": "An exact Record of the Congress folder/item and attributable original, including its publication date."
     },
     {
       "publisher_id": "american_bakers",
@@ -3861,6 +4007,7 @@
         "inspection_limits": null,
         "next_step": "Integrate 117th then 116th through existing VoterVoice readers with narrow bootstrap extension, exact tenant/stance checks, retained-ID reconciliation and rights decision."
       },
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -3918,7 +4065,49 @@
         },
         "next_step": "Use the Murphy organization and exact directory title to locate an original imprint; keep Buchanan website out of the historical publisher’s source list unless continuity is documented."
       },
-      "next_action": "Use the Murphy organization and exact directory title to locate an original imprint; keep Buchanan website out of the historical publisher’s source list unless continuity is documented."
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "political-archives",
+        "task_result": "original-unrecovered",
+        "integration_state": "catalog_metadata_only",
+        "period_fields": {
+          "newest_known_publication": {
+            "edition": null,
+            "certainty": "unknown",
+            "reason": "No verified latest original rating publication for this historical publisher identity."
+          },
+          "newest_offered_edition": {
+            "edition": null,
+            "certainty": "unknown"
+          },
+          "newest_recovered_rating_edition": null,
+          "period_uncertainty": {
+            "known_or_leads": [
+              {
+                "years": "1976",
+                "kind": "pinned CRS directory lead, not recovered edition"
+              },
+              {
+                "years": "1993",
+                "kind": "founding year of similarly named current organization, not scorecard coverage"
+              }
+            ],
+            "unknown": "2000 onward rating coverage remains unestablished for this assigned identity; catalog years do not establish continuous annual coverage."
+          }
+        },
+        "next_missing_item": "An original Murphy-era imprint and an attributable edition from 2000 onward.",
+        "authority": null,
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/political-archives/implementation.json",
+          "sha256": "55fc1783bb270e86a770d5b1b0efe5de07d281b4543422e9ce80eeb756d6d4c3"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/political-archives/final-handoff-manifest.json",
+          "sha256": "8af26e93d783acd86e4ab22e4dbb760d55f5e0df055f1851f37e3ce7fa70a30e"
+        }
+      },
+      "next_action": "An original Murphy-era imprint and an attributable edition from 2000 onward."
     },
     {
       "publisher_id": "farm_bureau",
@@ -3940,6 +4129,7 @@
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -3992,6 +4182,7 @@
         "https://www.afge.org/globalassets/documents/issue-papers/2015-voting-record.pdf"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -4016,6 +4207,7 @@
         "https://www.aft.org/sites/default/files/media/2014/oc_fall2014.pdf"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -4045,7 +4237,38 @@
         "inspection_limits": null,
         "next_step": "Follow exact historical title and original post-2000 editions. Do not equate a modern policy punch list with a member scorecard."
       },
-      "next_action": "Follow exact historical title and original post-2000 editions. Do not equate a modern policy punch list with a member scorecard."
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "advocacy-platforms",
+        "task_result": "original-unrecovered",
+        "integration_state": "catalog_metadata_only",
+        "period_fields": {
+          "newest_related_document": {
+            "label": "March 2014 chapter newsletter",
+            "is_scorecard": false,
+            "evidence": "aia:4"
+          },
+          "scorecard_periods": {
+            "newest_known": null,
+            "newest_offered": null,
+            "newest_recovered": null,
+            "certainty": "unknown; no post-2000 scorecard original recovered",
+            "unknown_interval": "2000-2026 and any later or earlier unverified periods"
+          }
+        },
+        "next_missing_item": "A dated post-2000 original Congressional Punch List with federal-member ratings or a complete publisher-selected action grid, plus its scope and legend.",
+        "authority": null,
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/advocacy-platforms/implementation.json",
+          "sha256": "512d24815253d443d453ff9d37b4c6d3ef76259375b1d95158007a144bb32a8c"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/advocacy-platforms/final-handoff-manifest.json",
+          "sha256": "ed2451cb670c5f7242f4406bd0f3b929c7be239a5758acb1c3753504b5b75a63"
+        }
+      },
+      "next_action": "A dated post-2000 original Congressional Punch List with federal-member ratings or a complete publisher-selected action grid, plus its scope and legend."
     },
     {
       "publisher_id": "american_parents",
@@ -4102,7 +4325,49 @@
         },
         "next_step": "Use Georgetown MCH/NARA holdings and the exact CRS voting-record title to locate a later edition; do not interpret newsletter legislation summaries as member ratings."
       },
-      "next_action": "Use Georgetown MCH/NARA holdings and the exact CRS voting-record title to locate a later edition; do not interpret newsletter legislation summaries as member ratings."
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "political-archives",
+        "task_result": "original-unrecovered",
+        "integration_state": "catalog_metadata_only",
+        "period_fields": {
+          "newest_known_publication": {
+            "edition": null,
+            "certainty": "unknown",
+            "reason": "No verified latest original rating publication for this historical publisher identity."
+          },
+          "newest_offered_edition": {
+            "edition": null,
+            "certainty": "unknown"
+          },
+          "newest_recovered_rating_edition": null,
+          "period_uncertainty": {
+            "known_or_leads": [
+              {
+                "years": "1963",
+                "kind": "newsletter catalog entry, not rating coverage"
+              },
+              {
+                "years": "1976",
+                "kind": "pinned directory series locator, not recovered edition"
+              }
+            ],
+            "unknown": "2000 onward rating coverage remains unestablished for this assigned identity; catalog years do not establish continuous annual coverage."
+          }
+        },
+        "next_missing_item": "An original edition of the exact voting-record series from 2000 onward.",
+        "authority": null,
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/political-archives/implementation.json",
+          "sha256": "55fc1783bb270e86a770d5b1b0efe5de07d281b4543422e9ce80eeb756d6d4c3"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/political-archives/final-handoff-manifest.json",
+          "sha256": "8af26e93d783acd86e4ab22e4dbb760d55f5e0df055f1851f37e3ce7fa70a30e"
+        }
+      },
+      "next_action": "An original edition of the exact voting-record series from 2000 onward."
     },
     {
       "publisher_id": "american_security_council",
@@ -4156,7 +4421,46 @@
         },
         "next_step": "Retain ASC and ASCF as separate names with unresolved series authority; pursue publisher archive holdings for National Security Voting Index editions later than 1974 before choosing a reader."
       },
-      "next_action": "Retain ASC and ASCF as separate names with unresolved series authority; pursue publisher archive holdings for National Security Voting Index editions later than 1974 before choosing a reader."
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "political-archives",
+        "task_result": "original-unrecovered",
+        "integration_state": "catalog_metadata_only",
+        "period_fields": {
+          "newest_known_publication": {
+            "edition": null,
+            "certainty": "unknown",
+            "reason": "No verified latest original rating publication for this historical publisher identity."
+          },
+          "newest_offered_edition": {
+            "edition": null,
+            "certainty": "unknown"
+          },
+          "newest_recovered_rating_edition": null,
+          "period_uncertainty": {
+            "known_or_leads": [
+              {
+                "years": "1974",
+                "kind": "prior assigned catalog discovery only",
+                "recovered_this_survey": false
+              }
+            ],
+            "unknown": "2000 onward rating coverage remains unestablished for this assigned identity; catalog years do not establish continuous annual coverage."
+          }
+        },
+        "next_missing_item": "An original post-2000 National Security Voting Index and its publisher/methodology pages.",
+        "authority": null,
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/political-archives/implementation.json",
+          "sha256": "55fc1783bb270e86a770d5b1b0efe5de07d281b4543422e9ce80eeb756d6d4c3"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/political-archives/final-handoff-manifest.json",
+          "sha256": "8af26e93d783acd86e4ab22e4dbb760d55f5e0df055f1851f37e3ce7fa70a30e"
+        }
+      },
+      "next_action": "An original post-2000 National Security Voting Index and its publisher/methodology pages."
     },
     {
       "publisher_id": "americans_constitutional_action",
@@ -4213,7 +4517,49 @@
         },
         "next_step": "Locate the cited 1984 ACARI imprint or catalog record and verify continuity to ACA from its title and methodology pages. Keep all pre-2000 work catalog-only."
       },
-      "next_action": "Locate the cited 1984 ACARI imprint or catalog record and verify continuity to ACA from its title and methodology pages. Keep all pre-2000 work catalog-only."
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "political-archives",
+        "task_result": "original-unrecovered",
+        "integration_state": "catalog_metadata_only",
+        "period_fields": {
+          "newest_known_publication": {
+            "edition": null,
+            "certainty": "unknown",
+            "reason": "No verified latest original rating publication for this historical publisher identity."
+          },
+          "newest_offered_edition": {
+            "edition": null,
+            "certainty": "unknown"
+          },
+          "newest_recovered_rating_edition": null,
+          "period_uncertainty": {
+            "known_or_leads": [
+              {
+                "years": "1961",
+                "kind": "archive catalog edition locator"
+              },
+              {
+                "years": "1981–1984",
+                "kind": "secondary publication/continuity lead, not recovered editions"
+              }
+            ],
+            "unknown": "2000 onward rating coverage remains unestablished for this assigned identity; catalog years do not establish continuous annual coverage."
+          }
+        },
+        "next_missing_item": "An ACARI title-page catalog locator and original evidence of any post-2000 edition.",
+        "authority": null,
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/political-archives/implementation.json",
+          "sha256": "55fc1783bb270e86a770d5b1b0efe5de07d281b4543422e9ce80eeb756d6d4c3"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/political-archives/final-handoff-manifest.json",
+          "sha256": "8af26e93d783acd86e4ab22e4dbb760d55f5e0df055f1851f37e3ce7fa70a30e"
+        }
+      },
+      "next_action": "An ACARI title-page catalog locator and original evidence of any post-2000 edition."
     },
     {
       "publisher_id": "agc",
@@ -4256,6 +4602,7 @@
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -4285,7 +4632,34 @@
         "inspection_limits": null,
         "next_step": "Follow CRS source record and archival series for post-2000 original ratings, if any. Do not substitute PAC finance records or assume retirement."
       },
-      "next_action": "Follow CRS source record and archival series for post-2000 original ratings, if any. Do not substitute PAC finance records or assume retirement."
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "identity-catalogs",
+        "task_result": "original-unrecovered",
+        "integration_state": "catalog_metadata_only",
+        "period_fields": {
+          "newest_known_rating_period": null,
+          "newest_offered_rating_period": null,
+          "newest_recovered_rating_period": null,
+          "latest_period_uncertainty": {
+            "catalog_period": "[1981..1982]",
+            "meaning": "civic packet date, no rating title verified"
+          },
+          "unknown_interval": "All rating periods, including post-2000 continuation; absence and retirement not established"
+        },
+        "next_missing_item": "An original rating title, publisher attribution, edition date and complete post-2000 voting tables.",
+        "authority": "The civic packet describes communication with elected officials; ARCO retail proves no program continuity.",
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/identity-catalogs/implementation.json",
+          "sha256": "1051e1725e0be6ccbd10c90476fcc70bf50020d8fb91b8b70de978c78dadedbd"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/identity-catalogs/final-handoff-manifest.json",
+          "sha256": "c22722218f221fd7a2a4126b7d530594d761d442eb007e119ee4976fcee46f8a"
+        }
+      },
+      "next_action": "An original rating title, publisher attribution, edition date and complete post-2000 voting tables."
     },
     {
       "publisher_id": "bread_world",
@@ -4307,6 +4681,7 @@
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -4353,7 +4728,47 @@
         ],
         "next_step": "Resolve current Cornell BRAC finding-aid location and locate the RCPL voting-record item. Record pre-2000 holdings only; pursue any distinct 2000-onward publication without substituting IAM."
       },
-      "next_action": "Resolve current Cornell BRAC finding-aid location and locate the RCPL voting-record item. Record pre-2000 holdings only; pursue any distinct 2000-onward publication without substituting IAM."
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "labor-archives",
+        "task_result": "original-unrecovered",
+        "integration_state": "catalog_metadata_only",
+        "period_fields": {
+          "newest_known_scorecard": {
+            "period": null,
+            "certainty": "unknown"
+          },
+          "newest_offered_scorecard": {
+            "period": null,
+            "certainty": "unknown"
+          },
+          "newest_recovered_scorecard": {
+            "period": null,
+            "certainty": "no complete attributable scorecard recovered"
+          },
+          "newest_recovered_related_material": {
+            "period": null,
+            "kind": null,
+            "certainty": "no complete scorecard recovered"
+          },
+          "known_and_unknown_intervals": {
+            "older_catalog_only": "March 1974 publication; 93rd Congress first-session record according to bookseller description",
+            "unknown": "All 2000–2026 editions; no original RCPL table recovered."
+          }
+        },
+        "next_missing_item": "The original RCPL voting-record item, its source-time author and period; no post-2000 original is established.",
+        "authority": null,
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/labor-archives/implementation.json",
+          "sha256": "4c4f60b797aa0f0ac059072133f1f67e7b0e461da4fec18db64fdadf30821099"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/labor-archives/handoff-manifest.json",
+          "sha256": "302549b91acada892ca301b9d52c3d2d2734b4c84f59bcd196f95dd8ec585ac1"
+        }
+      },
+      "next_action": "The original RCPL voting-record item, its source-time author and period; no post-2000 original is established."
     },
     {
       "publisher_id": "bipac",
@@ -4382,7 +4797,32 @@
         "inspection_limits": null,
         "next_step": "Follow Review of the Congress provenance and authorized member-portal/archive access; do not substitute another mplatform tenant."
       },
-      "next_action": "Follow Review of the Congress provenance and authorized member-portal/archive access; do not substitute another mplatform tenant."
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "momentum",
+        "task_result": "original-unrecovered",
+        "integration_state": "catalog_metadata_only",
+        "period_fields": {
+          "latest_publication": "unknown",
+          "newest_offered": "unknown",
+          "newest_recovered": "no congressional rating edition"
+        },
+        "next_missing_item": "An original edition-identifiable Review of the Congress or explicitly authorized member-portal scorecard export. No specific gated scorecard has been proved.",
+        "authority": {
+          "tenant": "bipac",
+          "site_id": 2221
+        },
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/momentum/implementation.json",
+          "sha256": "9fa6de047cf577e860e70728e2a5787c1de7d55a49efa6e6ab603376b527df6a"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/momentum/handoff-manifest.json",
+          "sha256": "44b5f5b5b0d4ba4f1dc65bfff8ef271bfd302f36d793620c8e0a2528c6de8cf4"
+        }
+      },
+      "next_action": "An original edition-identifiable Review of the Congress or explicitly authorized member-portal scorecard export. No specific gated scorecard has been proved."
     },
     {
       "publisher_id": "ccrkba",
@@ -4426,6 +4866,50 @@
           "stopping_reason": "Original surfaced renditions profiled; remaining discovery returns low-value generic or historical leads."
         },
         "next_step": "Find a dated original CCRKBA Congressional Ratings publication in newsletter archives; do not substitute NRA, GOA, ACU or other groups with similar subject matter."
+      },
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "cms-publications",
+        "task_result": "original-unrecovered",
+        "integration_state": "catalog_metadata_only",
+        "period_fields": {
+          "newest_known": {
+            "period": null,
+            "certainty": "unknown for scorecards"
+          },
+          "newest_offered": {
+            "period": null,
+            "certainty": "no original scorecard offered in inspected surfaces"
+          },
+          "newest_recovered": {
+            "period": null,
+            "certainty": "no post-2000 original federal scorecard recovered"
+          },
+          "period_uncertainty": "Current CMS news pages; no scorecard period established."
+        },
+        "next_missing_item": {
+          "unknown_intervals": [
+            "2000-2026 original federal scorecard coverage outside any explicit secondary leads"
+          ],
+          "missing_item": "A dated original CCRKBA Congressional Ratings publication, with federal member table and methodology.",
+          "inspection_bounds": {
+            "original_bodies": 3,
+            "followup_bodies": 1,
+            "original_edition_pages_reviewed": 0,
+            "stop": "Exact title query plus focused site search returned no original lead."
+          },
+          "pre_2000": "catalog metadata only; no rating extraction"
+        },
+        "authority": null,
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/cms-publications/implementation.json",
+          "sha256": "64c5b2a1a81d49a6cf083f120abd3e2a8688778c58a905f9bbdbc54763ecb475"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/cms-publications/handoff-manifest.json",
+          "sha256": "a503ca1537185df8a9896a897046261ec7f0436deae132ddbed83e30719101be"
+        }
       },
       "next_action": "Find a dated original CCRKBA Congressional Ratings publication in newsletter archives; do not substitute NRA, GOA, ACU or other groups with similar subject matter."
     },
@@ -4484,7 +4968,49 @@
         },
         "next_step": "Retain DG 138 voting-record and errata folder locators. Ask the archive for edition-level availability only in a separately authorized follow-up; first seek any post-2000 offerings under the verified 1988 name."
       },
-      "next_action": "Retain DG 138 voting-record and errata folder locators. Ask the archive for edition-level availability only in a separately authorized follow-up; first seek any post-2000 offerings under the verified 1988 name."
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "political-archives",
+        "task_result": "original-unrecovered",
+        "integration_state": "catalog_metadata_only",
+        "period_fields": {
+          "newest_known_publication": {
+            "edition": null,
+            "certainty": "unknown",
+            "reason": "No verified latest original rating publication for this historical publisher identity."
+          },
+          "newest_offered_edition": {
+            "edition": null,
+            "certainty": "unknown"
+          },
+          "newest_recovered_rating_edition": null,
+          "period_uncertainty": {
+            "known_or_leads": [
+              {
+                "years": "1977–1979, 1981–1986",
+                "kind": "explicit original-document archival folder labels; 1980 not established in inspected matching labels"
+              },
+              {
+                "years": "1969–1988",
+                "kind": "collection date range, not annual scorecard coverage"
+              }
+            ],
+            "unknown": "2000 onward rating coverage remains unestablished for this assigned identity; catalog years do not establish continuous annual coverage."
+          }
+        },
+        "next_missing_item": "An attributable post-2000 offering under the documented Coalition for a New Foreign Policy name.",
+        "authority": null,
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/political-archives/implementation.json",
+          "sha256": "55fc1783bb270e86a770d5b1b0efe5de07d281b4543422e9ce80eeb756d6d4c3"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/political-archives/final-handoff-manifest.json",
+          "sha256": "8af26e93d783acd86e4ab22e4dbb760d55f5e0df055f1851f37e3ce7fa70a30e"
+        }
+      },
+      "next_action": "An attributable post-2000 offering under the documented Coalition for a New Foreign Policy name."
     },
     {
       "publisher_id": "committee_education_funding",
@@ -4518,7 +5044,29 @@
         "inspection_limits": "Marginal leads are historical holdings, unavailable renditions or separately integrated successor sources; no exhaustive absence claim.",
         "next_step": "Resolve the historical name and locate the named voting-record title in archival/library holdings; avoid substituting CEF budget books or awards for congressional ratings."
       },
-      "next_action": "Resolve the historical name and locate the named voting-record title in archival/library holdings; avoid substituting CEF budget books or awards for congressional ratings."
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "social-archives",
+        "task_result": "original-unrecovered",
+        "integration_state": "catalog_metadata_only",
+        "period_fields": {
+          "newest_known_period": null,
+          "newest_offered_period": null,
+          "newest_recovered_period": null
+        },
+        "next_missing_item": "An original dated voting record with its title and source-time publishing organization stated.",
+        "authority": null,
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/social-archives/implementation.json",
+          "sha256": "1368af62de2f16a29db8e6b53b8468cd08605f7ba20422cb6f66a19f355818d4"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/social-archives/handoff-manifest.json",
+          "sha256": "7e60431f037f11c448512958f10de523638a661b4cf8c71dee7f86ab47142498"
+        }
+      },
+      "next_action": "An original dated voting record with its title and source-time publishing organization stated."
     },
     {
       "publisher_id": "free_congress_survival",
@@ -4575,7 +5123,49 @@
         },
         "next_step": "Resolve publisher and series identity using the title page in DA 1: B58-F03, then seek post-2000 offerings under verified names. No pre-2000 extraction is authorized here."
       },
-      "next_action": "Resolve publisher and series identity using the title page in DA 1: B58-F03, then seek post-2000 offerings under verified names. No pre-2000 extraction is authorized here."
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "political-archives",
+        "task_result": "original-unrecovered",
+        "integration_state": "catalog_metadata_only",
+        "period_fields": {
+          "newest_known_publication": {
+            "edition": null,
+            "certainty": "unknown",
+            "reason": "No verified latest original rating publication for this historical publisher identity."
+          },
+          "newest_offered_edition": {
+            "edition": null,
+            "certainty": "unknown"
+          },
+          "newest_recovered_rating_edition": null,
+          "period_uncertainty": {
+            "known_or_leads": [
+              {
+                "years": "1976",
+                "kind": "pinned Conservative Register directory locator"
+              },
+              {
+                "years": "1985",
+                "kind": "related-name voting-record folder locator"
+              }
+            ],
+            "unknown": "2000 onward rating coverage remains unestablished for this assigned identity; catalog years do not establish continuous annual coverage."
+          }
+        },
+        "next_missing_item": "A title-page locator resolving DA 1: B58-F03's imprint, then a verified post-2000 offering.",
+        "authority": null,
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/political-archives/implementation.json",
+          "sha256": "55fc1783bb270e86a770d5b1b0efe5de07d281b4543422e9ce80eeb756d6d4c3"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/political-archives/final-handoff-manifest.json",
+          "sha256": "8af26e93d783acd86e4ab22e4dbb760d55f5e0df055f1851f37e3ce7fa70a30e"
+        }
+      },
+      "next_action": "A title-page locator resolving DA 1: B58-F03's imprint, then a verified post-2000 offering."
     },
     {
       "publisher_id": "common_cause",
@@ -4638,6 +5228,7 @@
         "https://democracyscorecard.org/wp-content/uploads/2024/09/DemocracyScorecard_2024v6.pdf"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -4660,6 +5251,7 @@
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -4719,6 +5311,7 @@
         "inspection_limits": "No production reader or table rows created. Offline native HTML shape review only; no paid CQ service access, identifier enumeration, recomputation, PDF extraction or broad history crawl.",
         "next_step": "Build a narrowly scoped CQ 2025 presidential-support HTML reader first, using the captured House/Senate pair, source definitions, explicit footnotes and reviewed row counts. Independently qualify completeness and party formatting. Profile attendance separately because of malformed header styling, blank metrics and source spelling. Keep Datawrapper subset unsupported pending count discrepancy review."
       },
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -4741,6 +5334,7 @@
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -4775,7 +5369,29 @@
         "inspection_limits": "Marginal leads are historical holdings, unavailable renditions or separately integrated successor sources; no exhaustive absence claim.",
         "next_step": "Locate the University of Pittsburgh Environmental Action archival finding aid and exact Dirty Dozen publication; establish year and selected cohort before any reader. No pre-2000 extraction in this campaign."
       },
-      "next_action": "Locate the University of Pittsburgh Environmental Action archival finding aid and exact Dirty Dozen publication; establish year and selected cohort before any reader. No pre-2000 extraction in this campaign."
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "social-archives",
+        "task_result": "original-unrecovered",
+        "integration_state": "catalog_metadata_only",
+        "period_fields": {
+          "newest_known_period": null,
+          "newest_offered_period": null,
+          "newest_recovered_period": null
+        },
+        "next_missing_item": "An original Dirty Dozen issue with date and selected cohort; magazine collection URL: https://digital.library.pitt.edu/islandora/object/pitt%3A666953190/viewer. Do not substitute League of Conservation Voters editions or infer all-member ratings.",
+        "authority": null,
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/social-archives/implementation.json",
+          "sha256": "1368af62de2f16a29db8e6b53b8468cd08605f7ba20422cb6f66a19f355818d4"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/social-archives/handoff-manifest.json",
+          "sha256": "7e60431f037f11c448512958f10de523638a661b4cf8c71dee7f86ab47142498"
+        }
+      },
+      "next_action": "An original Dirty Dozen issue with date and selected cohort; magazine collection URL: https://digital.library.pitt.edu/islandora/object/pitt%3A666953190/viewer. Do not substitute League of Conservation Voters editions or infer all-member ratings."
     },
     {
       "publisher_id": "food_beverage_trades",
@@ -4821,7 +5437,47 @@
         ],
         "next_step": "Use Cornell AUF 6046 box 470 folder 2 and Illinois vertical-file holdings as catalog leads to locate the actual Voting Record; source-specific syntax remains unknown."
       },
-      "next_action": "Use Cornell AUF 6046 box 470 folder 2 and Illinois vertical-file holdings as catalog leads to locate the actual Voting Record; source-specific syntax remains unknown."
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "labor-archives",
+        "task_result": "access-required",
+        "integration_state": "catalog_metadata_only",
+        "period_fields": {
+          "newest_known_scorecard": {
+            "period": null,
+            "certainty": "unknown"
+          },
+          "newest_offered_scorecard": {
+            "period": null,
+            "certainty": "unknown"
+          },
+          "newest_recovered_scorecard": {
+            "period": null,
+            "certainty": "no complete attributable scorecard recovered"
+          },
+          "newest_recovered_related_material": {
+            "period": null,
+            "kind": null,
+            "certainty": "no complete scorecard recovered"
+          },
+          "known_and_unknown_intervals": {
+            "older_catalog_only": "Departmental material circa 1977–1981; not scorecard edition coverage",
+            "unknown": "All 2000–2026 ratings and latest offered year."
+          }
+        },
+        "next_missing_item": "An original departmental Voting Record with date and complete congressional table; current locators describe other publications.",
+        "authority": null,
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/labor-archives/implementation.json",
+          "sha256": "4c4f60b797aa0f0ac059072133f1f67e7b0e461da4fec18db64fdadf30821099"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/labor-archives/handoff-manifest.json",
+          "sha256": "302549b91acada892ca301b9d52c3d2d2734b4c84f59bcd196f95dd8ec585ac1"
+        }
+      },
+      "next_action": "An original departmental Voting Record with date and complete congressional table; current locators describe other publications."
     },
     {
       "publisher_id": "fcnl",
@@ -4884,6 +5540,7 @@
         },
         "next_step": "Integrate a bounded FCNL selected-action reader using quorum_public.decode. Add explicit House District handling and preserve mixed periods/current cohort. Refuse automatic reconciliation of introductory SJ Res 83 versus sheet SJ Res 93. Preserve source stance separately from an inferred publisher rating."
       },
+      "implementation_finding": null,
       "next_action": "Integrate a bounded FCNL selected-action reader using quorum_public.decode. Add explicit House District handling and preserve mixed periods/current cohort. Refuse automatic reconciliation of introductory SJ Res 83 versus sheet SJ Res 93. Preserve source stance separately from an inferred publisher rating."
     },
     {
@@ -4926,7 +5583,30 @@
         "inspection_limits": "Homepage, one relevant 2009 article and bounded name/title/current-year searches; no exhaustive site archive or paywalled print archive searched.",
         "next_step": "Link this discovery to ACU/CPAC source research as an attributed republishing occurrence. Locate a native Human Events edition before creating any separate reader."
       },
-      "next_action": "Link this discovery to ACU/CPAC source research as an attributed republishing occurrence. Locate a native Human Events edition before creating any separate reader."
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "existing-attribution",
+        "task_result": "existing-reader-attribution",
+        "integration_state": "catalog_metadata_only",
+        "period_fields": {
+          "own_latest_known_publication": null,
+          "own_latest_offered": null,
+          "own_newest_recovered": null,
+          "period_uncertainty": "No complete own-rating edition recovered for this assigned identity; successor and attributed occurrences stay separate."
+        },
+        "next_missing_item": "An original Human Events own-rating edition. The 2009 article is an editorial subset attributed to ACU 2008, not a complete ACU edition or a Human Events scoring method.",
+        "authority": null,
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/existing-attribution/implementation.json",
+          "sha256": "040ad5226bb5dcc61dc6f217cbdef2b16bd09b1f2b3b8f2addbc503f5a6f93ea"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/existing-attribution/handoff-manifest.json",
+          "sha256": "722b747f80aea08c9c2716216a3b160eef2640793797991ca41c7d01daa1ffb7"
+        }
+      },
+      "next_action": "An original Human Events own-rating edition. The 2009 article is an editorial subset attributed to ACU 2008, not a complete ACU edition or a Human Events scoring method."
     },
     {
       "publisher_id": "ipaa",
@@ -4958,7 +5638,37 @@
         "inspection_limits": null,
         "next_step": "Define a narrow mplatform source shape and capture the publisher-rendered scores with explicit member/item reconciliation, or retain item evidence only. Do not recompute aggregate ratings."
       },
-      "next_action": "Define a narrow mplatform source shape and capture the publisher-rendered scores with explicit member/item reconciliation, or retain item evidence only. Do not recompute aggregate ratings."
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "momentum",
+        "task_result": "implemented",
+        "integration_state": "independent_reader_review_pending",
+        "period_fields": {
+          "latest_publication": "unknown outside surveyed source",
+          "newest_offered": "119th Congress FH and FS, ongoing at capture",
+          "newest_recovered": "119th Congress native item/member arrays, not a complete rendered aggregate or lifetime rating table",
+          "known_offered_intervals": [
+            "113th Congress FH",
+            "114th through 119th Congress FH and FS"
+          ]
+        },
+        "next_missing_item": "Complete publisher-rendered score table, including all pages, session/lifetime cells and member/item/roster reconciliation, before rating admission.",
+        "authority": {
+          "tenant": "ipaa1",
+          "site_id": 1144,
+          "index_url": "https://ipaagrassroots.org/voting-records"
+        },
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/momentum/implementation.json",
+          "sha256": "9fa6de047cf577e860e70728e2a5787c1de7d55a49efa6e6ab603376b527df6a"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/momentum/handoff-manifest.json",
+          "sha256": "44b5f5b5b0d4ba4f1dc65bfff8ef271bfd302f36d793620c8e0a2528c6de8cf4"
+        }
+      },
+      "next_action": "Complete publisher-rendered score table, including all pages, session/lifetime cells and member/item/roster reconciliation, before rating admission."
     },
     {
       "publisher_id": "machinists",
@@ -4980,6 +5690,7 @@
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -5002,6 +5713,7 @@
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -5036,7 +5748,29 @@
         "inspection_limits": "Marginal leads are historical holdings, unavailable renditions or separately integrated successor sources; no exhaustive absence claim.",
         "next_step": "Use the archival publication title and holdings to locate the exact Hunger Issues in the Congress: How Members Voted issue. Record collection access and rights before acquisition of a relevant edition."
       },
-      "next_action": "Use the archival publication title and holdings to locate the exact Hunger Issues in the Congress: How Members Voted issue. Record collection access and rights before acquisition of a relevant edition."
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "social-archives",
+        "task_result": "original-unrecovered",
+        "integration_state": "catalog_metadata_only",
+        "period_fields": {
+          "newest_known_period": null,
+          "newest_offered_period": null,
+          "newest_recovered_period": null
+        },
+        "next_missing_item": "A catalog item or original for the exact Hunger Issues in the Congress: How Members Voted title, with issue date and publisher attribution; then establish any post-2000 offering.",
+        "authority": null,
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/social-archives/implementation.json",
+          "sha256": "1368af62de2f16a29db8e6b53b8468cd08605f7ba20422cb6f66a19f355818d4"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/social-archives/handoff-manifest.json",
+          "sha256": "7e60431f037f11c448512958f10de523638a661b4cf8c71dee7f86ab47142498"
+        }
+      },
+      "next_action": "A catalog item or original for the exact Hunger Issues in the Congress: How Members Voted title, with issue date and publisher attribution; then establish any post-2000 offering."
     },
     {
       "publisher_id": "john_birch_historical",
@@ -5117,7 +5851,75 @@
         },
         "next_step": "Integrate identity evidence as an explicit historical-series relationship to new_american. Run the existing report reader for report:254 with card/table reconciliation and start/end rereads; do not create duplicate JBS rating rows."
       },
-      "next_action": "Integrate identity evidence as an explicit historical-series relationship to new_american. Run the existing report reader for report:254 with card/table reconciliation and start/end rereads; do not create duplicate JBS rating rows."
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "existing-attribution",
+        "task_result": "existing-reader-attribution",
+        "integration_state": "catalog_metadata_only",
+        "period_fields": {
+          "own_latest_known_publication": null,
+          "own_latest_offered": null,
+          "own_newest_recovered": null,
+          "period_uncertainty": "No complete own-rating edition recovered for this assigned identity; successor and attributed occurrences stay separate.",
+          "shared_series_newest_offered": [
+            {
+              "publisher_id": "new_american",
+              "edition_id": "report:255",
+              "source_url": "https://freedomindex.us/us/report/255/",
+              "title": "Scorecard 119-3",
+              "year": null,
+              "congress": "119",
+              "chamber": "both",
+              "is_current": true
+            },
+            {
+              "publisher_id": "new_american",
+              "edition_id": "report:254",
+              "source_url": "https://freedomindex.us/us/report/254/",
+              "title": "Freedom Index 119-3",
+              "year": null,
+              "congress": "119",
+              "chamber": "both",
+              "is_current": true
+            }
+          ],
+          "shared_series_newest_recovered": {
+            "edition": "Freedom Index 119-3",
+            "table_reconciliation": {
+              "House": {
+                "source_sha256": "c65f485e808ffa6b8fd68a667364dc94983c2d52497641d102831249c6cb1669",
+                "source_declared_member_total": null,
+                "parsed_member_count": 432,
+                "native_item_count": 10,
+                "parsed_result_count": 4320,
+                "all_member_fields_native_item_fields_and_glyphs_match": true
+              },
+              "Senate": {
+                "source_sha256": "5707a2d46257fb5222d5191250d7ea09a04bc83dab6152dad6498d783643af6f",
+                "source_declared_member_total": null,
+                "parsed_member_count": 100,
+                "native_item_count": 10,
+                "parsed_result_count": 1000,
+                "all_member_fields_native_item_fields_and_glyphs_match": true
+              }
+            },
+            "pdf_sha256": "b534036b32bdf70699e5f5e8abc832dc64258f73d9d5916318d315a3cdc24313",
+            "pdf_extracted_this_task": false
+          }
+        },
+        "next_missing_item": "An original separately attributable historical JBS edition and its source-time publisher. Series continuity does not establish legal-publisher continuity or duplicate-edition equivalence.",
+        "authority": null,
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/existing-attribution/implementation.json",
+          "sha256": "040ad5226bb5dcc61dc6f217cbdef2b16bd09b1f2b3b8f2addbc503f5a6f93ea"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/existing-attribution/handoff-manifest.json",
+          "sha256": "722b747f80aea08c9c2716216a3b160eef2640793797991ca41c7d01daa1ffb7"
+        }
+      },
+      "next_action": "An original separately attributable historical JBS edition and its source-time publisher. Series continuity does not establish legal-publisher continuity or duplicate-edition equivalence."
     },
     {
       "publisher_id": "joint_center",
@@ -5151,6 +5953,63 @@
         ],
         "inspection_limits": "Homepage, first FOCUS archive page, two search queries, two historical essays and one linked 2011 PDF captured. No PDF text, image or model extraction; no complete archive walk.",
         "next_step": "Inspect the historical congressional-vote series catalog and FOCUS issue contents only after identifying a relevant edition/page. Continue archive pagination for post-2000 scorecard titles before requesting representative DefaultReader pages."
+      },
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "cms-publications",
+        "task_result": "original-unrecovered",
+        "integration_state": "catalog_metadata_only",
+        "period_fields": {
+          "newest_known": {
+            "period": null,
+            "certainty": "unknown for scorecards"
+          },
+          "newest_offered": {
+            "period": null,
+            "certainty": "no original scorecard offered in inspected surfaces"
+          },
+          "newest_recovered": {
+            "period": null,
+            "certainty": "no post-2000 original federal scorecard recovered"
+          },
+          "period_uncertainty": "November-December 2011 is an offered/recovered magazine date only; rating periods unknown."
+        },
+        "next_missing_item": {
+          "unknown_intervals": [
+            "2000-2026 original federal scorecard coverage outside any explicit secondary leads"
+          ],
+          "missing_item": "An exact post-2000 FOCUS issue and page, or dated original of historical congressional-vote series.",
+          "inspection_bounds": {
+            "original_bodies": 7,
+            "followup_bodies": 1,
+            "archive_pages_read": [
+              1,
+              2
+            ],
+            "archive_terminal_page_label": "31",
+            "pdf_total_pages": 20,
+            "pdf_pages_native_read": [
+              1,
+              2
+            ],
+            "pdf_pages_visually_reviewed": [
+              1
+            ],
+            "pdf_unreviewed_pages": "3-20",
+            "stop": "Displayed title/cover leads are general magazine subjects; further archive pages and full issue inspection not undertaken without a relevant title/page."
+          },
+          "pre_2000": "catalog metadata only; no rating extraction"
+        },
+        "authority": null,
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/cms-publications/implementation.json",
+          "sha256": "64c5b2a1a81d49a6cf083f120abd3e2a8688778c58a905f9bbdbc54763ecb475"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/cms-publications/handoff-manifest.json",
+          "sha256": "a503ca1537185df8a9896a897046261ec7f0436deae132ddbed83e30719101be"
+        }
       },
       "next_action": "Inspect the historical congressional-vote series catalog and FOCUS issue contents only after identifying a relevant edition/page. Continue archive pagination for post-2000 scorecard titles before requesting representative DefaultReader pages."
     },
@@ -5199,7 +6058,29 @@
         },
         "next_step": "Inspect national LWV archival publication indexes for post-2000 voting records; request a specific digitized original only if an edition is located."
       },
-      "next_action": "Inspect national LWV archival publication indexes for post-2000 voting records; request a specific digitized original only if an edition is located."
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "social-archives",
+        "task_result": "original-unrecovered",
+        "integration_state": "catalog_metadata_only",
+        "period_fields": {
+          "newest_known_period": null,
+          "newest_offered_period": null,
+          "newest_recovered_period": null
+        },
+        "next_missing_item": "An original national Political Accountability Rating edition dated 2000 or later, if one exists.",
+        "authority": null,
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/social-archives/implementation.json",
+          "sha256": "1368af62de2f16a29db8e6b53b8468cd08605f7ba20422cb6f66a19f355818d4"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/social-archives/handoff-manifest.json",
+          "sha256": "7e60431f037f11c448512958f10de523638a661b4cf8c71dee7f86ab47142498"
+        }
+      },
+      "next_action": "An original national Political Accountability Rating edition dated 2000 or later, if one exists."
     },
     {
       "publisher_id": "liberty_lobby",
@@ -5256,7 +6137,49 @@
         },
         "next_step": "Preserve the dated closure notice and Capitol Advantage source identity. Next probe the actually linked /cgi-bin/issue.pl?dir=spotlight archive route for explicit publisher positions or rating tables; do not replace the publisher with modern same-title newsletters."
       },
-      "next_action": "Preserve the dated closure notice and Capitol Advantage source identity. Next probe the actually linked /cgi-bin/issue.pl?dir=spotlight archive route for explicit publisher positions or rating tables; do not replace the publisher with modern same-title newsletters."
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "political-archives",
+        "task_result": "verified-retired",
+        "integration_state": "catalog_metadata_only",
+        "period_fields": {
+          "newest_known_publication": {
+            "edition": null,
+            "certainty": "unknown",
+            "reason": "No verified latest original rating publication for this historical publisher identity."
+          },
+          "newest_offered_edition": {
+            "edition": null,
+            "certainty": "unknown"
+          },
+          "newest_recovered_rating_edition": null,
+          "period_uncertainty": {
+            "known_or_leads": [
+              {
+                "years": "1986",
+                "kind": "bookseller discovery-only edition lead"
+              },
+              {
+                "years": "2000–2001",
+                "kind": "recovered publisher website pages, not rating-edition coverage"
+              }
+            ],
+            "unknown": "2000 onward rating coverage remains unestablished for this assigned identity; catalog years do not establish continuous annual coverage."
+          }
+        },
+        "next_missing_item": "Original issue.pl?dir=spotlight bytes with attributable positions or a complete Liberty Ledger edition.",
+        "authority": null,
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/political-archives/implementation.json",
+          "sha256": "55fc1783bb270e86a770d5b1b0efe5de07d281b4543422e9ce80eeb756d6d4c3"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/political-archives/final-handoff-manifest.json",
+          "sha256": "8af26e93d783acd86e4ab22e4dbb760d55f5e0df055f1851f37e3ce7fa70a30e"
+        }
+      },
+      "next_action": "Original issue.pl?dir=spotlight bytes with attributable positions or a complete Liberty Ledger edition."
     },
     {
       "publisher_id": "march_for_life",
@@ -5315,7 +6238,29 @@
         },
         "next_step": "Create an explicit election-candidate comparison record and publisher mapping; retain 2020 Georgia runoff period as source wording. Qualify all linked Senate renditions and annotation-to-cell links before complete-series ingestion."
       },
-      "next_action": "Create an explicit election-candidate comparison record and publisher mapping; retain 2020 Georgia runoff period as source wording. Qualify all linked Senate renditions and annotation-to-cell links before complete-series ingestion."
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "reviewed-grids",
+        "task_result": "source-recovered-but-unsupported-shape",
+        "integration_state": "catalog_metadata_only",
+        "period_fields": {
+          "newest_known_period": null,
+          "newest_offered_period": "2020 Elections / GEORGIA RUNOFF",
+          "newest_recovered_period": "2020 Elections / GEORGIA RUNOFF"
+        },
+        "next_missing_item": "Central candidate schema and explicit sister-publisher identity approval; an attributable later original if one exists.",
+        "authority": "March for Life Action - c (4); source homepage expressly names March for Life Education and Defense Fund as sister organization.",
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/reviewed-grids/implementation.json",
+          "sha256": "6e7276cb3b34281a8e2c67cebd00b0490e2eb1c4733c170b22bcb3a0fa92a016"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/reviewed-grids/handoff-manifest.json",
+          "sha256": "12f3e004e465c6c0fce5d08fe932acd380fd640ad029aa04ad139a96cd9b30aa"
+        }
+      },
+      "next_action": "Central candidate schema and explicit sister-publisher identity approval; an attributable later original if one exists."
     },
     {
       "publisher_id": "national_alliance_seniors",
@@ -5353,7 +6298,29 @@
         "inspection_limits": "Marginal leads are historical holdings, unavailable renditions or separately integrated successor sources; no exhaustive absence claim.",
         "next_step": "Record 1980 archival original candidate and catalog locator only; seek post-2000 original publication if any. Do not backfill the pre-2000 packet or infer retirement."
       },
-      "next_action": "Record 1980 archival original candidate and catalog locator only; seek post-2000 original publication if any. Do not backfill the pre-2000 packet or infer retirement."
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "social-archives",
+        "task_result": "original-unrecovered",
+        "integration_state": "catalog_metadata_only",
+        "period_fields": {
+          "newest_known_period": null,
+          "newest_offered_period": null,
+          "newest_recovered_period": null
+        },
+        "next_missing_item": "An original Golden Age Index dated 2000 or later, if offered; the 1980 original remains catalog-only.",
+        "authority": null,
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/social-archives/implementation.json",
+          "sha256": "1368af62de2f16a29db8e6b53b8468cd08605f7ba20422cb6f66a19f355818d4"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/social-archives/handoff-manifest.json",
+          "sha256": "7e60431f037f11c448512958f10de523638a661b4cf8c71dee7f86ab47142498"
+        }
+      },
+      "next_action": "An original Golden Age Index dated 2000 or later, if offered; the 1980 original remains catalog-only."
     },
     {
       "publisher_id": "national_associated_businessmen",
@@ -5389,7 +6356,34 @@
         "inspection_limits": "Bounded exact-name, title and year searches; one archive PDF plus a failed candidate landing URL. No live publisher domain established or guessed; no old-table extraction.",
         "next_step": "Retain archival candidate and establish an authoritative publisher/successor catalog covering 2000 onward. Do not build a reader for this pre-2000-only finding in this campaign."
       },
-      "next_action": "Retain archival candidate and establish an authoritative publisher/successor catalog covering 2000 onward. Do not build a reader for this pre-2000-only finding in this campaign."
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "identity-catalogs",
+        "task_result": "original-unrecovered",
+        "integration_state": "catalog_metadata_only",
+        "period_fields": {
+          "newest_known_rating_period": null,
+          "newest_offered_rating_period": null,
+          "newest_recovered_rating_period": null,
+          "latest_period_uncertainty": {
+            "discovery_period": "1967/1968",
+            "meaning": "Economy Voting Record candidate; PDF signature/digest only; no page extraction or original table verification"
+          },
+          "unknown_interval": "All rating periods, including post-2000 continuation; absence and retirement not established"
+        },
+        "next_missing_item": "An authoritative edition catalog and post-2000 original; distinguish National Alliance of Businessmen.",
+        "authority": "The 1967/1968 Economy Voting Record is a discovery-only candidate in WHSF17-14.pdf; not extracted.",
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/identity-catalogs/implementation.json",
+          "sha256": "1051e1725e0be6ccbd10c90476fcc70bf50020d8fb91b8b70de978c78dadedbd"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/identity-catalogs/final-handoff-manifest.json",
+          "sha256": "c22722218f221fd7a2a4126b7d530594d761d442eb007e119ee4976fcee46f8a"
+        }
+      },
+      "next_action": "An authoritative edition catalog and post-2000 original; distinguish National Alliance of Businessmen."
     },
     {
       "publisher_id": "life_underwriters",
@@ -5418,7 +6412,38 @@
         "inspection_limits": null,
         "next_step": "Find original Voting Report or authorized member archive; verify federal-member rating shape before selecting a reader."
       },
-      "next_action": "Find original Voting Report or authorized member archive; verify federal-member rating shape before selecting a reader."
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "advocacy-platforms",
+        "task_result": "original-unrecovered",
+        "integration_state": "catalog_metadata_only",
+        "period_fields": {
+          "newest_related_document": {
+            "label": "2025-2026 State of Advocacy",
+            "is_scorecard": false,
+            "evidence": "life_underwriters:state-of-advocacy"
+          },
+          "scorecard_periods": {
+            "newest_known": null,
+            "newest_offered": null,
+            "newest_recovered": null,
+            "certainty": "unknown; no post-2000 scorecard original recovered",
+            "unknown_interval": "2000-2026 and any later or earlier unverified periods"
+          }
+        },
+        "next_missing_item": "A dated original Voting Report with its congressional member population and source-defined rating/action fields; verify NALU or NAIFA attribution on that original.",
+        "authority": null,
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/advocacy-platforms/implementation.json",
+          "sha256": "512d24815253d443d453ff9d37b4c6d3ef76259375b1d95158007a144bb32a8c"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/advocacy-platforms/final-handoff-manifest.json",
+          "sha256": "ed2451cb670c5f7242f4406bd0f3b929c7be239a5758acb1c3753504b5b75a63"
+        }
+      },
+      "next_action": "A dated original Voting Report with its congressional member population and source-defined rating/action fields; verify NALU or NAIFA attribution on that original."
     },
     {
       "publisher_id": "nam",
@@ -5443,6 +6468,7 @@
         "https://www.nam.org/votingrecord"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -5495,6 +6521,7 @@
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -5530,7 +6557,40 @@
         "inspection_limits": "One original successor history page and bounded name/title/current-scorecard searches; no unverified ratings API probing.",
         "next_step": "Search ICIA/InfoComm/AVIXA publication catalogs for the exact historical education-funding title and its co-publishing attribution; qualify original member tables only if a post-2000 edition is found."
       },
-      "next_action": "Search ICIA/InfoComm/AVIXA publication catalogs for the exact historical education-funding title and its co-publishing attribution; qualify original member tables only if a post-2000 edition is found."
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "identity-catalogs",
+        "task_result": "original-unrecovered",
+        "integration_state": "catalog_metadata_only",
+        "period_fields": {
+          "newest_known_rating_period": null,
+          "newest_offered_rating_period": null,
+          "newest_recovered_rating_period": null,
+          "latest_period_uncertainty": {
+            "identity_dates": [
+              "1939",
+              "1949",
+              "1983",
+              "2005",
+              "2017"
+            ],
+            "meaning": "organizational history, not editions"
+          },
+          "unknown_interval": "All rating periods, including post-2000 continuation; absence and retirement not established"
+        },
+        "next_missing_item": "The education-funding voting record, exact title/date, co-publisher attribution and post-2000 continuation.",
+        "authority": "NAVED/NAVA/ICIA/InfoComm/AVIXA organizational history establishes no voting-series continuity.",
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/identity-catalogs/implementation.json",
+          "sha256": "1051e1725e0be6ccbd10c90476fcc70bf50020d8fb91b8b70de978c78dadedbd"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/identity-catalogs/final-handoff-manifest.json",
+          "sha256": "c22722218f221fd7a2a4126b7d530594d761d442eb007e119ee4976fcee46f8a"
+        }
+      },
+      "next_action": "The education-funding voting record, exact title/date, co-publisher attribution and post-2000 continuation."
     },
     {
       "publisher_id": "national_council_seniors",
@@ -5564,7 +6624,35 @@
         "inspection_limits": "Marginal leads are historical holdings, unavailable renditions or separately integrated successor sources; no exhaustive absence claim.",
         "next_step": "Use ara.py for the separately named ARA 2025 rendition and retain the NCSC predecessor relation. Locate an original NCSC 2000 Voting Record through archival catalogs; verify access restrictions at folder level."
       },
-      "next_action": "Use ara.py for the separately named ARA 2025 rendition and retain the NCSC predecessor relation. Locate an original NCSC 2000 Voting Record through archival catalogs; verify access restrictions at folder level."
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "existing-attribution",
+        "task_result": "existing-reader-attribution",
+        "integration_state": "catalog_metadata_only",
+        "period_fields": {
+          "own_latest_known_publication": null,
+          "own_latest_offered": null,
+          "own_newest_recovered": null,
+          "period_uncertainty": "No complete own-rating edition recovered for this assigned identity; successor and attributed occurrences stay separate.",
+          "newest_known_lead": {
+            "period": "2000",
+            "authority": "Vote Smart search result, secondary lead only",
+            "original_recovered": false
+          }
+        },
+        "next_missing_item": "Original NCSC 2000 voting record; Vote Smart is a lead, not an original. JHU's 1973-1994 folder is catalog metadata; folder-level access remains unverified.",
+        "authority": null,
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/existing-attribution/implementation.json",
+          "sha256": "040ad5226bb5dcc61dc6f217cbdef2b16bd09b1f2b3b8f2addbc503f5a6f93ea"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/existing-attribution/handoff-manifest.json",
+          "sha256": "722b747f80aea08c9c2716216a3b160eef2640793797991ca41c7d01daa1ffb7"
+        }
+      },
+      "next_action": "Original NCSC 2000 voting record; Vote Smart is a lead, not an original. JHU's 1973-1994 folder is catalog metadata; folder-level access remains unverified."
     },
     {
       "publisher_id": "national_farmers_organization",
@@ -5592,6 +6680,59 @@
         "unknown_year_intervals": "All periods outside the explicitly recovered scope remain unknown; no empty response is treated as retirement.",
         "inspection_limits": null,
         "next_step": "Use narrow magazine index/page inspection if justified; trace historical series through finding aid. Avoid bulk magazine ingestion and pre-2000 extraction."
+      },
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "cms-publications",
+        "task_result": "original-unrecovered",
+        "integration_state": "catalog_metadata_only",
+        "period_fields": {
+          "newest_known": {
+            "period": null,
+            "certainty": "unknown for scorecards"
+          },
+          "newest_offered": {
+            "period": null,
+            "certainty": "no original scorecard offered in inspected surfaces"
+          },
+          "newest_recovered": {
+            "period": null,
+            "certainty": "no post-2000 original federal scorecard recovered"
+          },
+          "period_uncertainty": "September-October 2026 is magazine availability only; 1982 is a finding-aid folder date, not qualified rating coverage."
+        },
+        "next_missing_item": {
+          "unknown_intervals": [
+            "2000-2026 original federal scorecard coverage outside any explicit secondary leads"
+          ],
+          "missing_item": "A dated post-2000 NFO Voting Record original or exact magazine issue/page. NFO must remain distinct from NFU.",
+          "inspection_bounds": {
+            "original_bodies": 5,
+            "followup_bodies": 1,
+            "pdf_total_pages": 8,
+            "pdf_pages_native_read": [
+              1,
+              2
+            ],
+            "pdf_pages_visually_reviewed": [
+              1,
+              2
+            ],
+            "pdf_unreviewed_pages": "3-8",
+            "stop": "Index, cover/front matter and focused voting-record query supply no exact rating page; bulk magazine ingestion not justified."
+          },
+          "pre_2000": "catalog metadata only; no rating extraction"
+        },
+        "authority": null,
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/cms-publications/implementation.json",
+          "sha256": "64c5b2a1a81d49a6cf083f120abd3e2a8688778c58a905f9bbdbc54763ecb475"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/cms-publications/handoff-manifest.json",
+          "sha256": "a503ca1537185df8a9896a897046261ec7f0436deae132ddbed83e30719101be"
+        }
       },
       "next_action": "Use narrow magazine index/page inspection if justified; trace historical series through finding aid. Avoid bulk magazine ingestion and pre-2000 extraction."
     },
@@ -5637,6 +6778,67 @@
           "stopping_reason": "Original surfaced renditions profiled; remaining discovery returns low-value generic or historical leads."
         },
         "next_step": "Follow the historical House/Senate Voting Record title in NOW publication archives; keep external organizations and House staff reports attributed to their actual authors."
+      },
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "cms-publications",
+        "task_result": "original-unrecovered",
+        "integration_state": "catalog_metadata_only",
+        "period_fields": {
+          "newest_known": {
+            "period": null,
+            "certainty": "unknown for scorecards"
+          },
+          "newest_offered": {
+            "period": null,
+            "certainty": "no original scorecard offered in inspected surfaces"
+          },
+          "newest_recovered": {
+            "period": null,
+            "certainty": "no post-2000 original federal scorecard recovered"
+          },
+          "period_uncertainty": "2016 report and 112th-Congress external staff-report link are attribution evidence, not NOW rating editions."
+        },
+        "next_missing_item": {
+          "unknown_intervals": [
+            "2000-2026 original federal scorecard coverage outside any explicit secondary leads"
+          ],
+          "missing_item": "A dated NOW House/Senate Voting Record original. Do not relabel external authors or inherit their editions.",
+          "inspection_bounds": {
+            "original_bodies": 5,
+            "followup_bodies": 1,
+            "pdf_pages_native_read": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13
+            ],
+            "pdf_pages_visually_reviewed": [
+              13
+            ],
+            "stop": "Relevant report section explicitly redirects scoring to other publishers; no own scorecard witness."
+          },
+          "pre_2000": "catalog metadata only; no rating extraction"
+        },
+        "authority": null,
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/cms-publications/implementation.json",
+          "sha256": "64c5b2a1a81d49a6cf083f120abd3e2a8688778c58a905f9bbdbc54763ecb475"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/cms-publications/handoff-manifest.json",
+          "sha256": "a503ca1537185df8a9896a897046261ec7f0436deae132ddbed83e30719101be"
+        }
       },
       "next_action": "Follow the historical House/Senate Voting Record title in NOW publication archives; keep external organizations and House staff reports attributed to their actual authors."
     },
@@ -5691,7 +6893,37 @@
         },
         "next_step": "Record an unsupported election-endorsement shape; separately locate the historical voting chart. Do not assign an incumbent identity to challengers or merge state and federal cohorts."
       },
-      "next_action": "Record an unsupported election-endorsement shape; separately locate the historical voting chart. Do not assign an incumbent identity to challengers or merge state and federal cohorts."
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "reviewed-grids",
+        "task_result": "source-recovered-but-unsupported-shape",
+        "integration_state": "catalog_metadata_only",
+        "period_fields": {
+          "newest_known_scorecard_period": null,
+          "newest_offered_period": "2026 endorsements",
+          "newest_recovered_period": "2026 endorsements",
+          "offered_past_periods": [
+            "2025",
+            "2024",
+            "2022",
+            "2020",
+            "2018",
+            "2016"
+          ]
+        },
+        "next_missing_item": "Central candidate/endorsement schema approval; a historical Voting Chart original for rating support.",
+        "authority": "National Women’s Political Caucus current source; national PAC/board process and local-caucus authority recorded separately.",
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/reviewed-grids/implementation.json",
+          "sha256": "6e7276cb3b34281a8e2c67cebd00b0490e2eb1c4733c170b22bcb3a0fa92a016"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/reviewed-grids/handoff-manifest.json",
+          "sha256": "12f3e004e465c6c0fce5d08fe932acd380fd640ad029aa04ad139a96cd9b30aa"
+        }
+      },
+      "next_action": "Central candidate/endorsement schema approval; a historical Voting Chart original for rating support."
     },
     {
       "publisher_id": "write_congressman",
@@ -5720,7 +6952,34 @@
         "inspection_limits": null,
         "next_step": "Obtain authorized publisher access and clarify ratings versus plain vote records before further acquisition."
       },
-      "next_action": "Obtain authorized publisher access and clarify ratings versus plain vote records before further acquisition."
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "advocacy-platforms",
+        "task_result": "access-required",
+        "integration_state": "catalog_metadata_only",
+        "period_fields": {
+          "newest_related_document": null,
+          "scorecard_periods": {
+            "newest_known": null,
+            "newest_offered": null,
+            "newest_recovered": null,
+            "certainty": "unknown; no post-2000 scorecard original recovered",
+            "unknown_interval": "2000-2026 and any later or earlier unverified periods"
+          }
+        },
+        "next_missing_item": "Publisher authorization covering automated retrieval and intended reuse, authorized account/API access, and a representative dated voting-record export with field definitions and completeness witness. Determine plain voting records versus publisher ratings from that original.",
+        "authority": null,
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/advocacy-platforms/implementation.json",
+          "sha256": "512d24815253d443d453ff9d37b4c6d3ef76259375b1d95158007a144bb32a8c"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/advocacy-platforms/final-handoff-manifest.json",
+          "sha256": "ed2451cb670c5f7242f4406bd0f3b929c7be239a5758acb1c3753504b5b75a63"
+        }
+      },
+      "next_action": "Publisher authorization covering automated retrieval and intended reuse, authorized account/API access, and a representative dated voting-record export with field definitions and completeness witness. Determine plain voting records versus publisher ratings from that original."
     },
     {
       "publisher_id": "public_citizen",
@@ -5752,6 +7011,7 @@
         "https://www.citizen.org/vchart00/map.htm"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -5798,7 +7058,47 @@
         ],
         "next_step": "Add evidence-backed identity review note and locate exact historical title in archival holdings; require explicit attribution before considering any successor rating edition."
       },
-      "next_action": "Add evidence-backed identity review note and locate exact historical title in archival holdings; require explicit attribution before considering any successor rating edition."
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "labor-archives",
+        "task_result": "original-unrecovered",
+        "integration_state": "catalog_metadata_only",
+        "period_fields": {
+          "newest_known_scorecard": {
+            "period": null,
+            "certainty": "unknown"
+          },
+          "newest_offered_scorecard": {
+            "period": null,
+            "certainty": "unknown"
+          },
+          "newest_recovered_scorecard": {
+            "period": null,
+            "certainty": "no complete attributable scorecard recovered"
+          },
+          "newest_recovered_related_material": {
+            "period": null,
+            "kind": null,
+            "certainty": "no complete scorecard recovered"
+          },
+          "known_and_unknown_intervals": {
+            "identity_date": "1979 merger, from successor original history",
+            "unknown": "2000–2026 historical-publisher editions; no original Voting Records of U.S. Senators and Representatives recovered."
+          }
+        },
+        "next_missing_item": "The named historical voting-record original with explicit author, date and complete tables.",
+        "authority": null,
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/labor-archives/implementation.json",
+          "sha256": "4c4f60b797aa0f0ac059072133f1f67e7b0e461da4fec18db64fdadf30821099"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/labor-archives/handoff-manifest.json",
+          "sha256": "302549b91acada892ca301b9d52c3d2d2734b4c84f59bcd196f95dd8ec585ac1"
+        }
+      },
+      "next_action": "The named historical voting-record original with explicit author, date and complete tables."
     },
     {
       "publisher_id": "ripon_society",
@@ -5834,6 +7134,54 @@
         "inspection_limits": "Homepage, archive index, September 2026 issue, search shell and one historical PDF captured. No exhaustive issue-content crawl, pre-2000 extraction or rating reconstruction.",
         "next_step": "Use the archive index to locate post-2000 issues explicitly containing member ratings; qualify a relevant representative page before selecting PDF observations. Historical 1972 candidate stays catalog-only."
       },
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "cms-publications",
+        "task_result": "original-unrecovered",
+        "integration_state": "catalog_metadata_only",
+        "period_fields": {
+          "newest_known": {
+            "period": null,
+            "certainty": "unknown for scorecards"
+          },
+          "newest_offered": {
+            "period": null,
+            "certainty": "no original scorecard offered in inspected surfaces"
+          },
+          "newest_recovered": {
+            "period": null,
+            "certainty": "no post-2000 original federal scorecard recovered"
+          },
+          "period_uncertainty": "September 2026 newest displayed Forum issue, not newest scorecard. 1972 original PDF candidate retained but unextracted."
+        },
+        "next_missing_item": {
+          "unknown_intervals": [
+            "2000-2026 original federal scorecard coverage outside any explicit secondary leads"
+          ],
+          "missing_item": "A dated post-2000 Ripon congressional ratings issue and exact page; historical candidate requires separate catalog treatment.",
+          "inspection_bounds": {
+            "original_bodies": 6,
+            "followup_bodies": 1,
+            "issue_contents_read": [
+              "September 2026",
+              "America 250"
+            ],
+            "pre_2000_extracted_pages": 0,
+            "stop": "Newest contents identify commentary, profiles and demographic charts; no ratings page selected; historical PDF catalog-only."
+          },
+          "pre_2000": "catalog metadata only; no rating extraction"
+        },
+        "authority": null,
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/cms-publications/implementation.json",
+          "sha256": "64c5b2a1a81d49a6cf083f120abd3e2a8688778c58a905f9bbdbc54763ecb475"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/cms-publications/handoff-manifest.json",
+          "sha256": "a503ca1537185df8a9896a897046261ec7f0436deae132ddbed83e30719101be"
+        }
+      },
       "next_action": "Use the archive index to locate post-2000 issues explicitly containing member ratings; qualify a relevant representative page before selecting PDF observations. Historical 1972 candidate stays catalog-only."
     },
     {
@@ -5868,7 +7216,35 @@
         "inspection_limits": "Marginal leads are historical holdings, unavailable renditions or separately integrated successor sources; no exhaustive absence claim.",
         "next_step": "Reuse peace_action.py for its separately named successor edition after its full route/member/vote/EOF checks. Historical SANE remains an archive-discovery record; do not create duplicate successor ratings under sane_historical."
       },
-      "next_action": "Reuse peace_action.py for its separately named successor edition after its full route/member/vote/EOF checks. Historical SANE remains an archive-discovery record; do not create duplicate successor ratings under sane_historical."
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "existing-attribution",
+        "task_result": "existing-reader-attribution",
+        "integration_state": "catalog_metadata_only",
+        "period_fields": {
+          "own_latest_known_publication": null,
+          "own_latest_offered": null,
+          "own_newest_recovered": null,
+          "period_uncertainty": "No complete own-rating edition recovered for this assigned identity; successor and attributed occurrences stay separate.",
+          "newest_known_lead": {
+            "period": "1980-1982",
+            "authority": "archive search result; pre-2000 metadata only",
+            "original_recovered": false
+          }
+        },
+        "next_missing_item": "Original SANE voting record. The 1980-1982 archival lead is metadata only; direct and Zyte archive access failed. Post-2000 editions under SANE remain unknown.",
+        "authority": null,
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/existing-attribution/implementation.json",
+          "sha256": "040ad5226bb5dcc61dc6f217cbdef2b16bd09b1f2b3b8f2addbc503f5a6f93ea"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/existing-attribution/handoff-manifest.json",
+          "sha256": "722b747f80aea08c9c2716216a3b160eef2640793797991ca41c7d01daa1ffb7"
+        }
+      },
+      "next_action": "Original SANE voting record. The 1980-1982 archival lead is metadata only; direct and Zyte archive access failed. Post-2000 editions under SANE remain unknown."
     },
     {
       "publisher_id": "taxation_representation",
@@ -5902,7 +7278,29 @@
         "inspection_limits": "Marginal leads are historical holdings, unavailable renditions or separately integrated successor sources; no exhaustive absence claim.",
         "next_step": "Locate original House/Senate Rated issues through tax-policy archival holdings; preserve committee versus floor action scope. Stop before parser work until original member tables are recovered."
       },
-      "next_action": "Locate original House/Senate Rated issues through tax-policy archival holdings; preserve committee versus floor action scope. Stop before parser work until original member tables are recovered."
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "social-archives",
+        "task_result": "original-unrecovered",
+        "integration_state": "catalog_metadata_only",
+        "period_fields": {
+          "newest_known_period": null,
+          "newest_offered_period": null,
+          "newest_recovered_period": null
+        },
+        "next_missing_item": "An original House Rated or Senate Rated issue with source-defined period, item kinds and member tables.",
+        "authority": null,
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/social-archives/implementation.json",
+          "sha256": "1368af62de2f16a29db8e6b53b8468cd08605f7ba20422cb6f66a19f355818d4"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/social-archives/handoff-manifest.json",
+          "sha256": "7e60431f037f11c448512958f10de523638a661b4cf8c71dee7f86ab47142498"
+        }
+      },
+      "next_action": "An original House Rated or Senate Rated issue with source-defined period, item kinds and member tables."
     },
     {
       "publisher_id": "us_student_association",
@@ -5948,7 +7346,47 @@
         ],
         "next_step": "Preserve domain-mismatch and identity evidence; locate the named Legislative Scorecard in NSA/USSA holdings, with explicit publication author and date."
       },
-      "next_action": "Preserve domain-mismatch and identity evidence; locate the named Legislative Scorecard in NSA/USSA holdings, with explicit publication author and date."
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "labor-archives",
+        "task_result": "access-required",
+        "integration_state": "catalog_metadata_only",
+        "period_fields": {
+          "newest_known_scorecard": {
+            "period": null,
+            "certainty": "unknown"
+          },
+          "newest_offered_scorecard": {
+            "period": null,
+            "certainty": "unknown"
+          },
+          "newest_recovered_scorecard": {
+            "period": null,
+            "certainty": "no complete attributable scorecard recovered"
+          },
+          "newest_recovered_related_material": {
+            "period": null,
+            "kind": null,
+            "certainty": "no complete scorecard recovered"
+          },
+          "known_and_unknown_intervals": {
+            "known_catalog_scope": "1946–1983, predominantly 1946–1953; identity merge described for 1978",
+            "unknown": "All 2000–2026 rating editions; named Legislative Scorecard not recovered."
+          }
+        },
+        "next_missing_item": "The named Legislative Scorecard item with author and publication date; no current publisher domain or post-2000 edition is verified.",
+        "authority": null,
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/labor-archives/implementation.json",
+          "sha256": "4c4f60b797aa0f0ac059072133f1f67e7b0e461da4fec18db64fdadf30821099"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/labor-archives/handoff-manifest.json",
+          "sha256": "302549b91acada892ca301b9d52c3d2d2734b4c84f59bcd196f95dd8ec585ac1"
+        }
+      },
+      "next_action": "The named Legislative Scorecard item with author and publication date; no current publisher domain or post-2000 edition is verified."
     },
     {
       "publisher_id": "uaw",
@@ -5970,6 +7408,7 @@
       "discovery_support_status": "unverified_lead",
       "original_source_urls": [],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -6044,7 +7483,30 @@
         ],
         "next_step": "Resolve regional-versus-national publisher identity, then review all cells on physical page 12 with exact colored header/legend mapping and preserve no aggregate score. Register an unsupported-shape/profile record until those gates pass."
       },
-      "next_action": "Resolve regional-versus-national publisher identity, then review all cells on physical page 12 with exact colored header/legend mapping and preserve no aggregate score. Register an unsupported-shape/profile record until those gates pass."
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "reviewed-grids",
+        "task_result": "source-recovered-but-unsupported-shape",
+        "integration_state": "catalog_metadata_only",
+        "period_fields": {
+          "newest_known_period": null,
+          "newest_offered_period": null,
+          "newest_recovered_period": null,
+          "related_recovered_period": "2024"
+        },
+        "next_missing_item": "An attributable national House/Senate Votes original or central approval of a separate regional publisher identity.",
+        "authority": "Explicit regional imprint, not national UBC attribution",
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/reviewed-grids/implementation.json",
+          "sha256": "6e7276cb3b34281a8e2c67cebd00b0490e2eb1c4733c170b22bcb3a0fa92a016"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/reviewed-grids/handoff-manifest.json",
+          "sha256": "12f3e004e465c6c0fce5d08fe932acd380fd640ad029aa04ad139a96cd9b30aa"
+        }
+      },
+      "next_action": "An attributable national House/Senate Votes original or central approval of a separate regional publisher identity."
     },
     {
       "publisher_id": "united_church_christ",
@@ -6089,7 +7551,48 @@
         },
         "next_step": "Inspect original Washington office publication archives and a dated Voting Record. Historical UCC 1995 catalogue lead is retained in search-discovery.json; no pre-2000 extraction."
       },
-      "next_action": "Inspect original Washington office publication archives and a dated Voting Record. Historical UCC 1995 catalogue lead is retained in search-discovery.json; no pre-2000 extraction."
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "advocacy-platforms",
+        "task_result": "original-unrecovered",
+        "integration_state": "catalog_metadata_only",
+        "period_fields": {
+          "catalog_periods": [
+            {
+              "period_literal": "1995",
+              "title_literal": "United Church of Christ Voting Record",
+              "locator": "Box 189. Folder 29.",
+              "evidence": "united_church_christ:historical-finding-aid",
+              "original_recovered": false,
+              "policy": "pre-2000 catalog metadata only"
+            }
+          ],
+          "newest_related_document": {
+            "label": "JPANet October 2026 Newsletter index listing",
+            "is_scorecard": false,
+            "evidence": "united_church_christ:newsletter-index"
+          },
+          "scorecard_periods": {
+            "newest_known": null,
+            "newest_offered": null,
+            "newest_recovered": null,
+            "certainty": "unknown; no post-2000 scorecard original recovered",
+            "unknown_interval": "2000-2026 and any later or earlier unverified periods"
+          }
+        },
+        "next_missing_item": "A dated post-2000 original UCC Washington-office Voting Record, or a publisher-selected public JAWM scorecard application and edition. The 1995 archive listing supplies no original grid.",
+        "authority": null,
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/advocacy-platforms/implementation.json",
+          "sha256": "512d24815253d443d453ff9d37b4c6d3ef76259375b1d95158007a144bb32a8c"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/advocacy-platforms/final-handoff-manifest.json",
+          "sha256": "ed2451cb670c5f7242f4406bd0f3b929c7be239a5758acb1c3753504b5b75a63"
+        }
+      },
+      "next_action": "A dated post-2000 original UCC Washington-office Voting Record, or a publisher-selected public JAWM scorecard application and edition. The 1995 archive listing supplies no original grid."
     },
     {
       "publisher_id": "united_mine_workers",
@@ -6134,6 +7637,50 @@
           "No production reader, registry, ticket, shared tracked file, dependency, commit, or publication changed."
         ],
         "next_step": "Use publisher-linked collection catalog and journal archive to locate the named congressional voting-record publication before adding any scorecard adapter; retain current result as bounded original-site inspection, not retirement."
+      },
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "cms-publications",
+        "task_result": "original-unrecovered",
+        "integration_state": "catalog_metadata_only",
+        "period_fields": {
+          "newest_known": {
+            "period": null,
+            "certainty": "unknown for scorecards"
+          },
+          "newest_offered": {
+            "period": null,
+            "certainty": "no original scorecard offered in inspected surfaces"
+          },
+          "newest_recovered": {
+            "period": null,
+            "certainty": "no post-2000 original federal scorecard recovered"
+          },
+          "period_uncertainty": "Current journal article dates do not establish scorecard periods."
+        },
+        "next_missing_item": {
+          "unknown_intervals": [
+            "2000-2026 original federal scorecard coverage outside any explicit secondary leads"
+          ],
+          "missing_item": "A dated original The U.S. Congress: (year) publication or exact public journal issue/page containing its federal table.",
+          "inspection_bounds": {
+            "original_bodies": 5,
+            "followup_bodies": 2,
+            "original_edition_pages_reviewed": 0,
+            "stop": "Exact-title and voting-record searches yielded advocacy; collections shell and unvisited member areas do not locate an original."
+          },
+          "pre_2000": "catalog metadata only; no rating extraction"
+        },
+        "authority": null,
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/cms-publications/implementation.json",
+          "sha256": "64c5b2a1a81d49a6cf083f120abd3e2a8688778c58a905f9bbdbc54763ecb475"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/cms-publications/handoff-manifest.json",
+          "sha256": "a503ca1537185df8a9896a897046261ec7f0436deae132ddbed83e30719101be"
+        }
       },
       "next_action": "Use publisher-linked collection catalog and journal archive to locate the named congressional voting-record publication before adding any scorecard adapter; retain current result as bounded original-site inspection, not retirement."
     },
@@ -6203,7 +7750,54 @@
         ],
         "next_step": "Record predecessor/successor evidence with an explicit no-edition-inheritance rule. Pursue the original Washington Report or a named pre-SMART voting grid; candidate endorsements need a separate supported shape and scope decision."
       },
-      "next_action": "Record predecessor/successor evidence with an explicit no-edition-inheritance rule. Pursue the original Washington Report or a named pre-SMART voting grid; candidate endorsements need a separate supported shape and scope decision."
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "labor-archives",
+        "task_result": "source-recovered-but-unsupported-shape",
+        "integration_state": "catalog_metadata_only",
+        "period_fields": {
+          "newest_known_scorecard": {
+            "period": null,
+            "certainty": "unknown"
+          },
+          "newest_offered_scorecard": {
+            "period": null,
+            "certainty": "unknown"
+          },
+          "newest_recovered_scorecard": {
+            "period": null,
+            "certainty": "no complete attributable scorecard recovered"
+          },
+          "newest_recovered_related_material": {
+            "period": "October 2012 UTU News",
+            "kind": "candidate endorsements, not scorecard edition",
+            "certainty": "original rendered and directly reviewed; later 2013/2014 original is SMART identity evidence only"
+          },
+          "known_and_unknown_intervals": {
+            "known_original_materials": [
+              2002,
+              2008,
+              2011,
+              2012,
+              "2013/2014 successor"
+            ],
+            "unknown_rating_coverage": "2000–2013 and any later historical UTU renditions; no automatic carry of SMART editions",
+            "older_catalog_only": "Cornell search lead: Washington Report 1972–1976; original pages not recovered."
+          }
+        },
+        "next_missing_item": "A complete attributable UTU voting grid and methodology; the linked Congress 2011 acquisition remains unresolved after archived 404.",
+        "authority": null,
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/labor-archives/implementation.json",
+          "sha256": "4c4f60b797aa0f0ac059072133f1f67e7b0e461da4fec18db64fdadf30821099"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/labor-archives/handoff-manifest.json",
+          "sha256": "302549b91acada892ca301b9d52c3d2d2734b4c84f59bcd196f95dd8ec585ac1"
+        }
+      },
+      "next_action": "A complete attributable UTU voting grid and methodology; the linked Congress 2011 acquisition remains unresolved after archived 404."
     },
     {
       "publisher_id": "woman_activist",
@@ -6240,7 +7834,35 @@
         "inspection_limits": "Bounded exact-title/Flora Crater/archive/year searches and two catalog records; no pre-2000 newsletter extraction or outreach.",
         "next_step": "Use Library of Virginia Box 5 Folder 24 and Smithsonian item locator to locate the exact voting-analysis issue; ask archive catalog staff about post-2000 holdings only in a separately authorized outreach step."
       },
-      "next_action": "Use Library of Virginia Box 5 Folder 24 and Smithsonian item locator to locate the exact voting-analysis issue; ask archive catalog staff about post-2000 holdings only in a separately authorized outreach step."
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "identity-catalogs",
+        "task_result": "original-unrecovered",
+        "integration_state": "catalog_metadata_only",
+        "period_fields": {
+          "newest_known_rating_period": null,
+          "newest_offered_rating_period": null,
+          "newest_recovered_rating_period": null,
+          "latest_period_uncertainty": {
+            "holdings": "1973, 1989-1995",
+            "related_item": "1978 December",
+            "meaning": "newsletter holdings and candidate guide, not recovered voting analysis"
+          },
+          "unknown_interval": "All rating periods, including post-2000 continuation; absence and retirement not established"
+        },
+        "next_missing_item": "Votes of Women Members of Congress on National Issues: exact issue, author/date and post-2000 continuation.",
+        "authority": "Newsletter holdings and a candidate guide are not the named congressional voting analysis.",
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/identity-catalogs/implementation.json",
+          "sha256": "1051e1725e0be6ccbd10c90476fcc70bf50020d8fb91b8b70de978c78dadedbd"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/identity-catalogs/final-handoff-manifest.json",
+          "sha256": "c22722218f221fd7a2a4126b7d530594d761d442eb007e119ee4976fcee46f8a"
+        }
+      },
+      "next_action": "Votes of Women Members of Congress on National Issues: exact issue, author/date and post-2000 continuation."
     },
     {
       "publisher_id": "womens_lobby",
@@ -6276,7 +7898,35 @@
         "inspection_limits": "Bounded exact-name/title/year searches, SMU and Harvard finding aids and one archived interview. No original newsletter page extraction, outreach or inference of retirement.",
         "next_step": "Use SMU Box 64 Folder 14 and Harvard MC 1042 as precise catalog leads to locate the named Women's Lobby Voting Chart and any post-2000 continuation. No reader until original chart content is recovered."
       },
-      "next_action": "Use SMU Box 64 Folder 14 and Harvard MC 1042 as precise catalog leads to locate the named Women's Lobby Voting Chart and any post-2000 continuation. No reader until original chart content is recovered."
+      "implementation_finding": {
+        "observed_on": "2026-10-05",
+        "source_file": "publisher_implementation_20261005.json",
+        "group": "identity-catalogs",
+        "task_result": "original-unrecovered",
+        "integration_state": "catalog_metadata_only",
+        "period_fields": {
+          "newest_known_rating_period": null,
+          "newest_offered_rating_period": null,
+          "newest_recovered_rating_period": null,
+          "latest_period_uncertainty": {
+            "collection_dates": "1971-2018 (inclusive), 1971-1977 (bulk)",
+            "related_item": "1974 November",
+            "meaning": "research collection and Quarterly, not a voting chart"
+          },
+          "unknown_interval": "All rating periods, including post-2000 continuation; absence and retirement not established"
+        },
+        "next_missing_item": "Women's Lobby Voting Chart: exact item, author/date, complete cohort and post-2000 continuation.",
+        "authority": "MC 1042 collection dates and the November 1974 Quarterly do not date or establish a Voting Chart.",
+        "source_document": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/identity-catalogs/implementation.json",
+          "sha256": "1051e1725e0be6ccbd10c90476fcc70bf50020d8fb91b8b70de978c78dadedbd"
+        },
+        "source_manifest": {
+          "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/parallel-publisher-implementation-20261005/identity-catalogs/final-handoff-manifest.json",
+          "sha256": "c22722218f221fd7a2a4126b7d530594d761d442eb007e119ee4976fcee46f8a"
+        }
+      },
+      "next_action": "Women's Lobby Voting Chart: exact item, author/date, complete cohort and post-2000 continuation."
     },
     {
       "publisher_id": "american_energy_alliance",
@@ -6300,6 +7950,7 @@
         "https://www.americanenergyalliance.org/american-energy-scorecard/"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -6345,6 +7996,7 @@
         "https://scorecard.ijm.org/wp-content/plugins/rds-bt50-scorecard/public/./js/bt50-scorecard-common.js?ver=1.1.01b-federal"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -6383,6 +8035,7 @@
         "https://radicalmiddle.com/x_scorecard04.htm"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     },
     {
@@ -6423,6 +8076,7 @@
         "https://web.archive.org/web/20150504132238id_/http://utu.org/worksite/washington/PDFs/SMART_Transportation_Scorecard_US_Senate_2013-14_(PRINT).pdf"
       ],
       "survey_finding": null,
+      "implementation_finding": null,
       "next_action": "Integrate remaining available editions and renditions"
     }
   ],

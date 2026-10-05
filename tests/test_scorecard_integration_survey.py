@@ -109,3 +109,71 @@ def test_older_inventory_without_survey_still_generates(directory):
     report, _ = integrations.generate(directory)
     assert report["publishers"][0]["next_action"] == "Find a source"
     assert report["publishers"][0]["survey_finding"] is None
+
+
+def implementation_document(directory, result="implemented"):
+    document = {
+        "format_version": "scorecard-publisher-implementation-aggregate/1",
+        "observed_on": "2026-10-05",
+        "summary": {"assigned_publishers": 1, "newly_published_editions": 0},
+        "publishers": [
+            {
+                "publisher_id": "example",
+                "task_result": result,
+                "integration_state": "independent_reader_review_pending",
+                "period_fields": {"newest_recovered": "2025"},
+                "next_missing_item": "Independently compare the exact original action table",
+                "source_document": {"path": "/private/implementation.json", "sha256": "a" * 64},
+                "source_manifest": {"path": "/private/handoff.json", "sha256": "b" * 64},
+                "group": "example-group",
+            }
+        ],
+    }
+    path = directory / "publisher_implementation_20261005.json"
+    path.write_text(json.dumps(document))
+    return path
+
+
+def test_completed_implementation_guides_queue_without_qualifying_it(directory):
+    path = implementation_document(directory)
+    report, markdown = integrations.generate(directory)
+    row = report["publishers"][0]
+    assert row["state"] == "unverified"
+    assert row["reader"] is None and row["qualified_editions"] == []
+    assert row["implementation_finding"]["task_result"] == "implemented"
+    assert row["next_action"] == "Independently compare the exact original action table"
+    assert report["input_pins"][path.name] == sha256(path.read_bytes()).hexdigest()
+    assert "publisher_implementation_20261005.md" in markdown
+
+
+def test_task_metadata_preserves_qualified_reader_priority(directory):
+    implementation_document(directory, "original-unrecovered")
+    path = directory / "integration_qualifications.json"
+    data = json.loads(path.read_bytes())
+    data["readers"]["example"] = "example_reader"
+    path.write_text(json.dumps(data))
+    report, _ = integrations.generate(directory)
+    row = report["publishers"][0]
+    assert row["state"] == "reader_implemented"
+    assert row["next_action"] == "Qualify original source through the implemented reader"
+    assert row["implementation_finding"]["task_result"] == "original-unrecovered"
+
+
+@pytest.mark.parametrize("change", ["duplicate", "unknown", "published", "unknown_status", "wrong_format"])
+def test_invalid_implementation_metadata_is_refused(directory, change):
+    path = implementation_document(directory)
+    data = json.loads(path.read_text())
+    if change == "duplicate":
+        data["publishers"].append(deepcopy(data["publishers"][0]))
+        data["summary"]["assigned_publishers"] = 2
+    elif change == "unknown":
+        data["publishers"][0]["publisher_id"] = "unknown"
+    elif change == "published":
+        data["summary"]["newly_published_editions"] = 1
+    elif change == "unknown_status":
+        data["publishers"][0]["task_result"] = "production_supported"
+    else:
+        data["format_version"] = "unknown/1"
+    path.write_text(json.dumps(data))
+    with pytest.raises(ValueError, match="Implementation"):
+        integrations.generate(directory)
