@@ -122,7 +122,7 @@ def test_wrong_generation_and_missing_receipt_refuse(tmp_path):
     with pytest.raises(ValueError, match="generation"):
         list(
             read_with_receipts(
-                [tmp_path / "bundle/table3_records.parquet"], [receipts], policy("table3_records"), generation_id="g2"
+                [tmp_path / "bundle/table3_records.parquet"], [receipts], policy("table3_records"), generation_id=""
             )
         )
     pq.write_table(pq.read_table(receipts).slice(0, 0), receipts)

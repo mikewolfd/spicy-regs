@@ -438,7 +438,7 @@ def test_receipt_fault_refuses_before_any_publication(publication, monkeypatch, 
         else:
             metadata = json.loads(result["generation"].read_text())
             if fault == "generation":
-                metadata["generation_id"] = "wrong-generation"
+                metadata["generation_id"] = ""
             else:
                 metadata["snapshot"]["snapshot_id"] += 1
             result["generation"].write_text(json.dumps(metadata))
