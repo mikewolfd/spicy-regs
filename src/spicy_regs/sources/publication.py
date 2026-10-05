@@ -1140,6 +1140,20 @@ def _publish_verified_generation(
     raise PublicationError("Publication changed concurrently; retry from a fresh snapshot")
 
 
+def stored_family(client, bucket: str, family: str) -> dict | None:
+    """``family``'s entry in the stored index, read with credentials: what the pointer names now, never a cached copy.
+
+    A transport failure after the pointer request leaves the result uncertain (:func:`publish_generation`); this is
+    the reread that settles it.
+    """
+    return _stored_index(client, bucket)[0]["families"].get(family)
+
+
+def rederive_v1(client, bucket: str) -> None:
+    """Write ``publication.json`` from the stored version 2, for a pointer write whose caller did not see it finish."""
+    _write_v1(client, bucket)
+
+
 def restore_family(client, bucket: str, family: str, entry: Mapping, *, expected: Mapping | None) -> dict:
     """Point ``family`` back at ``entry``, an earlier generation whose objects are still stored; return the index.
 
