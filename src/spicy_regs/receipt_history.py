@@ -16,41 +16,43 @@ def carry_receipt_history(current_path: Path, prior_paths: Sequence[Path], desti
     import duckdb
     import pyarrow as pa
     import pyarrow.parquet as pq
+    import pyarrow.compute as pc
     from spicy_regs.etl_receipts import RECEIPT_SCHEMA, _digest, decode_exact_json, exact_json
 
     destination = Path(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    with TemporaryDirectory(prefix="receipt-history-", dir=destination.parent) as temporary, duckdb.connect(
-            str(Path(temporary) / "history.duckdb")) as con:
+    with TemporaryDirectory(prefix="receipt-history-", dir=destination.parent) as temporary, duckdb.connect() as con:
         con.execute("SET threads=4")
         con.execute("SET memory_limit='1GB'")
         con.execute("SET max_temp_directory_size='32GB'")
         con.execute("SET temp_directory=?", [str(Path(temporary) / "spill")])
         con.execute("SET preserve_insertion_order=true")
-        con.execute("CREATE TABLE current AS SELECT *, file_row_number AS ordinal FROM read_parquet(?, "
-                    "file_row_number=true, hive_partitioning=false)", [str(current_path)])
-        con.execute("ALTER TABLE current DROP COLUMN file_row_number")
-        con.execute("CREATE TABLE prior AS SELECT * FROM current WHERE false")
-        offset = 0
+        def quoted(path):
+            return "'" + str(path).replace("'", "''") + "'"
+        con.execute("CREATE VIEW current AS SELECT * EXCLUDE(file_row_number), file_row_number AS ordinal "
+                    f"FROM read_parquet({quoted(current_path)}, file_row_number=true, hive_partitioning=false)")
+        offset, parts = 0, []
         for path in prior_paths:
-            count = pq.ParquetFile(path).metadata.num_rows
-            con.execute("INSERT INTO prior SELECT * EXCLUDE(file_row_number), file_row_number+? AS ordinal "
-                        "FROM read_parquet(?, file_row_number=true, hive_partitioning=false)", [offset, str(path)])
+            with pq.ParquetFile(path) as parquet:
+                count = parquet.metadata.num_rows
+            parts.append(f"SELECT * EXCLUDE(file_row_number), file_row_number+{offset} AS ordinal "
+                         f"FROM read_parquet({quoted(path)}, file_row_number=true, hive_partitioning=false)")
             offset += count
+        con.execute("CREATE VIEW prior AS " + (" UNION ALL ".join(parts) if parts else "SELECT * FROM current WHERE false"))
         duplicate = con.execute("SELECT EXISTS(SELECT 1 FROM prior WHERE outcome='accepted' "
                        "GROUP BY dataset,record_id HAVING count(*)>1)").fetchone()
         assert duplicate is not None
         if duplicate[0]:
             raise ValueError("Conflicting selected prior receipts")
         for name in ("current", "prior"):
-            con.execute(f"CREATE TABLE {name}_ranked AS SELECT *, row_number() OVER(PARTITION BY dataset,outcome,"
+            con.execute(f"CREATE VIEW {name}_ranked AS SELECT *, row_number() OVER(PARTITION BY dataset,outcome,"
                         "processing_json, CASE WHEN outcome='accepted' THEN record_id END, "
                         "CASE WHEN outcome='accepted' THEN subject_version END, "
                         "CASE WHEN outcome<>'accepted' THEN diagnostic_json END ORDER BY ordinal) AS occurrence "
                         f"FROM {name}")
         fields = ",".join(f'CASE WHEN p.ordinal IS NULL THEN c."{n}" ELSE p."{n}" END AS "{n}"'
                           for n in RECEIPT_SCHEMA.names)
-        query = f"""SELECT {fields},
+        query = f"""SELECT {fields}, c.ordinal AS current_ordinal,
             CASE WHEN p.ordinal IS NULL AND c.outcome='accepted' THEN predecessor.receipt_id END AS predecessor_id,
             CASE WHEN p.ordinal IS NULL AND c.outcome='accepted' THEN predecessor.generation_id END AS predecessor_generation,
             CASE WHEN p.ordinal IS NULL AND c.outcome='accepted' THEN predecessor.processing_json END AS predecessor_processing
@@ -64,20 +66,41 @@ def carry_receipt_history(current_path: Path, prior_paths: Sequence[Path], desti
         reader = con.execute(query).to_arrow_reader(batch_size=2000)
         target = Path(temporary) / "receipts.parquet"
         with pq.ParquetWriter(target, RECEIPT_SCHEMA, compression="zstd") as writer:
+            expected_count = pq.ParquetFile(current_path).metadata.num_rows
+            written = 0
             for batch in reader:
-                rows = batch.to_pylist()
-                for row in rows:
-                    predecessor = row.pop("predecessor_id")
-                    generation = row.pop("predecessor_generation")
-                    processing = row.pop("predecessor_processing")
-                    if predecessor is not None:
-                        diagnostics = decode_exact_json(row["diagnostic_json"])
-                        diagnostics = {k: v for k, v in diagnostics.items()
-                                       if k not in {"prior_receipts", "retained_processing", "prior_receipt"}}
-                        diagnostics["prior_receipt"] = {"receipt_id": predecessor, "generation_id": generation,
-                                                       "processing_sha256": _digest(decode_exact_json(processing))}
-                        row["diagnostic_json"] = exact_json(diagnostics)
-                        row["receipt_id"] = _digest({k: v for k, v in row.items() if k != "receipt_id"})
-                writer.write_table(pa.Table.from_pylist(rows, schema=RECEIPT_SCHEMA))
+                expected_order = pa.array(range(written, written + batch.num_rows), type=pa.int64())
+                if not pc.all(pc.equal(batch.column("current_ordinal"), expected_order)).as_py():
+                    raise ValueError("Receipt history changed current receipt order")
+                table = pa.Table.from_batches([batch])
+                changed = pc.indices_nonzero(pc.is_valid(table["predecessor_id"]))
+                if len(changed):
+                    updates = table.take(changed).to_pylist()
+                    diagnostics, identities = [], []
+                    for row in updates:
+                        predecessor = row.pop("predecessor_id")
+                        generation = row.pop("predecessor_generation")
+                        processing = row.pop("predecessor_processing")
+                        row.pop("current_ordinal")
+                        values = decode_exact_json(row["diagnostic_json"])
+                        values = {k: v for k, v in values.items()
+                                  if k not in {"prior_receipts", "retained_processing", "prior_receipt"}}
+                        values["prior_receipt"] = {"receipt_id": predecessor, "generation_id": generation,
+                                                 "processing_sha256": _digest(decode_exact_json(processing))}
+                        row["diagnostic_json"] = exact_json(values)
+                        diagnostics.append(row["diagnostic_json"])
+                        identities.append(_digest({k: v for k, v in row.items() if k != "receipt_id"}))
+                    # Replace only changed accepted rows. Every unchanged row stays Arrow, with no Python decoding.
+                    positions = changed.to_pylist()
+                    for name, values in (("diagnostic_json", diagnostics), ("receipt_id", identities)):
+                        by_position = dict(zip(positions, values))
+                        replacements = pa.array([by_position.get(i) for i in range(batch.num_rows)], type=pa.string())
+                        table = table.set_column(table.schema.get_field_index(name), name,
+                                                 pc.if_else(pc.is_valid(table["predecessor_id"]),
+                                                            replacements, table[name]))
+                writer.write_table(table.select(RECEIPT_SCHEMA.names).cast(RECEIPT_SCHEMA))
+                written += batch.num_rows
+            if written != expected_count:
+                raise ValueError("Receipt history changed current receipt count")
         target.replace(destination)
     return destination
