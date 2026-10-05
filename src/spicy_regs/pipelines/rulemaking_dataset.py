@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from functools import cache
 from pathlib import Path
+import shutil
 from typing import Annotated, ClassVar
 
 from cyclopts import App, Parameter
@@ -11,6 +12,7 @@ from cyclopts import App, Parameter
 from spicy_regs.ontology.common import RunContext
 from spicy_regs.ontology.federal_register import FederalRegisterIndex
 from spicy_regs.pipelines.materialized import DatasetStage, MaterializedDatasetPipeline
+from spicy_regs.transforms.regulations_receipts import policy
 from spicy_regs.transforms import (
     build_agency_lifecycle_stats,
     build_comment_periods,
@@ -48,7 +50,10 @@ class RulemakingDatasetPipeline(MaterializedDatasetPipeline):
         "unified_agenda.parquet",
         "fr_docket_links.parquet",
     )
-    prior_outputs: ClassVar[tuple[tuple[str, str], ...]] = (("proceedings.parquet", "_proceedings_prior.parquet"),)
+    prior_outputs: ClassVar[tuple[tuple[str, str], ...]] = (
+        ("proceedings.parquet", "_proceedings_native_prior.parquet"),
+        ("etl_receipts.parquet", "_proceedings_receipts.parquet"),
+    )
     published_outputs: ClassVar[tuple[str, ...]] = (
         "rule_targets.parquet",
         "proceedings.parquet",
@@ -59,6 +64,68 @@ class RulemakingDatasetPipeline(MaterializedDatasetPipeline):
         "lifecycle_events.parquet",
         "agency_lifecycle_stats.parquet",
     )
+    receipt_policies: ClassVar[tuple] = tuple(policy(Path(name).stem) for name in published_outputs)
+
+    def _prime_sources(self, output_dir: Path) -> None:
+        """Restore stage inputs from one selected native subject/receipt index."""
+        from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
+        from spicy_regs.selected_generations import unique_build_directory
+
+        self._selected_priors = SelectedPriors(unique_build_directory(output_dir), root=output_dir)
+        for key in self.source_inputs:
+            if not self._selected_priors.download(key, output_dir / key):
+                raise ValueError(f"Rulemaking requires selected native input {key}")
+
+    def _prime_previous_generation(self, output_dir: Path) -> dict | None:
+        """Restore proceedings identity only from its admitted materialized pair."""
+        from spicy_regs.transforms.regulations_receipts import ReceiptInput, materialize_internal
+
+        manifest = super()._prime_previous_generation(output_dir)
+        if manifest is not None:
+            expected = {"key": "etl_receipts.parquet", "generationId": manifest["run_id"],
+                        "policies": [p.descriptor() for p in self.receipt_policies]}
+            if manifest.get("etlReceipts") != expected:
+                raise ValueError("Prior rulemaking requires native subjects and their declared receipts; migrate explicitly")
+            materialize_internal(
+                ReceiptInput("proceedings", (output_dir / "_proceedings_native_prior.parquet",),
+                             output_dir / "_proceedings_receipts.parquet", manifest["run_id"]),
+                output_dir / "_proceedings_prior.parquet",
+            )
+        else:
+            (output_dir / "_proceedings_prior.parquet").unlink(missing_ok=True)
+        return manifest
+
+    def _input_snapshot(self, output_dir: Path, previous_manifest: dict | None) -> dict:
+        from spicy_regs.court_receipts import file_witness
+
+        snapshot = super()._input_snapshot(output_dir, previous_manifest)
+        snapshot["native_inputs"] = {
+            name: {"generationId": generation, "subjects": [file_witness(p) for p in subjects],
+                   "receipts": file_witness(receipts)}
+            for name, (subjects, receipts, generation) in self._selected_priors.selections.items()
+        }
+        return snapshot
+
+    def _classify_outputs(self, output_dir, context):
+        """Classify every stage output before materialized admission or upload."""
+        from spicy_regs.etl_receipts import combine_receipts
+        from spicy_regs.selected_generations import unique_build_directory
+        from spicy_regs.transforms.regulations_receipts import write_held_dataset
+
+        candidate = unique_build_directory(output_dir)
+        receipts, subjects = [], []
+        prior = output_dir / "_proceedings_receipts.parquet"
+        for key in self.published_outputs:
+            subject, receipt = write_held_dataset(
+                Path(key).stem, output_dir / key, candidate / Path(key).stem,
+                generation_id=context.run_id, prior_receipts=[prior] if prior.exists() else (),
+            )
+            subjects.append((subject, output_dir / key))
+            receipts.append(receipt)
+        combined = combine_receipts(receipts, candidate / "etl_receipts.parquet")
+        for source, target in subjects:
+            shutil.copyfile(source, target)
+        shutil.copyfile(combined, output_dir / "etl_receipts.parquet")
 
     def build_native(self, inputs, destination: Path, *, generation_id: str, prior=None):
         """Build the whole local rulemaking generation from qualified native inputs.
@@ -83,7 +150,7 @@ class RulemakingDatasetPipeline(MaterializedDatasetPipeline):
         def build(work):
             if prior is not None:
                 (work / "proceedings.parquet").rename(work / "_proceedings_prior.parquet")
-            for stage in self.stages():
+            for stage in self._processing_stages():
                 stage.build(work, context)
 
         return build_from_receipts(
@@ -152,7 +219,7 @@ class RulemakingDatasetPipeline(MaterializedDatasetPipeline):
             ),
         }
 
-    def stages(self) -> tuple[DatasetStage, ...]:
+    def _processing_stages(self) -> tuple[DatasetStage, ...]:
         # Every stage reads the one federal_register snapshot, so its index is built once
         # per generation rather than once per stage.
         @cache
@@ -225,6 +292,13 @@ class RulemakingDatasetPipeline(MaterializedDatasetPipeline):
                 build=agency_lifecycle_stats,
             ),
         )
+
+
+    def stages(self) -> tuple[DatasetStage, ...]:
+        return (*self._processing_stages(), DatasetStage(
+            name="native-outputs", depends_on=("agency-lifecycle-stats", "comment-periods"),
+            outputs=("etl_receipts.parquet",), build=self._classify_outputs,
+        ))
 
 
 app = App(
