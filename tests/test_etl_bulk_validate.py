@@ -334,6 +334,19 @@ def test_what_sql_cannot_decide_is_not_bulk_eligible(tmp_path) -> None:
         etl_bulk.validate_bundle(subjects, paths, policies)
 
 
+def test_a_row_lost_on_the_way_to_sql_is_not_accepted(tmp_path, monkeypatch) -> None:
+    args = build(tmp_path).write(tmp_path / "bundle")
+    numbered = etl_bulk._numbered
+
+    def lossy(parquet, start, number, wanted, read):
+        reader = numbered(parquet, start, number, wanted, read)
+        return pa.RecordBatchReader.from_batches(reader.schema, list(reader)[:-1])
+
+    monkeypatch.setattr(etl_bulk, "_numbered", lossy)
+    with pytest.raises(etl_bulk.NotBulkEligible, match="every row"):
+        etl_bulk.validate_bundle(*args, generation_id="g1")
+
+
 def test_sql_proves_a_text_decodes_only_when_the_row_decoder_accepts_it() -> None:
     """Damage canonical encodings at random: SQL may fail to prove one the decoder accepts, never the reverse."""
     import json
