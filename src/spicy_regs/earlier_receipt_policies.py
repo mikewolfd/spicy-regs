@@ -3,6 +3,7 @@ from dataclasses import replace
 
 # Exact columns promoted from receipts to subjects in government-sources/2.
 EARLIER_COLUMNS = {
+    "gao_reports": ("major_rule_agency", "major_rule_rins", "major_rule_fr_citations"),
     "gao_decisions": ("b_numbers_truncated",),
     "gao_recommendations": ("first_seen", "last_seen"),
 }

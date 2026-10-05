@@ -210,7 +210,7 @@ def test_a_rollup_that_swallows_a_retention_failure_publishes_no_generation(tmp_
 
 
 @pytest.mark.parametrize('kind', ['crs', 'gao', 'court'])
-def test_native_shape_refusal_retains_html_before_parse(tmp_path, kind):
+def test_native_shape_refusal_retains_evidence_before_parse(tmp_path, kind):
     evidence = CaptureEvidence(tmp_path, kind)
     raw = b'<!DOCTYPE html><html>not a native API response</html>'
     transport = httpx.MockTransport(lambda r: httpx.Response(200, content=raw, headers={'content-type': 'text/html'}))
@@ -222,7 +222,14 @@ def test_native_shape_refusal_retains_html_before_parse(tmp_path, kind):
         source = CourtListenerReader(transport=transport, evidence=evidence)
     with pytest.raises(ValueError) as raised:
         list(source.iter_records())
-    assert any(payload(evidence, c) == raw for c in captures(evidence))
+    if kind == 'gao':
+        [capture] = captures(evidence)
+        assert capture['sha256'] == 'sha256:' + hashlib.sha256(raw).hexdigest()
+        assert capture['byte_size'] == len(raw) and capture['body_retained'] is False
+        assert capture['evidence_policy'] == 'hash_only' and 'blob_member' not in capture
+        assert not (evidence.artifact_dir / 'blobs/sha256' / capture['sha256'][7:]).exists()
+    else:
+        assert any(payload(evidence, c) == raw for c in captures(evidence))
     evidence.finish(raised.value)
     with pytest.raises(SourceEvidenceError, match='completed-build'):
         verify_evidence(evidence.artifact_dir)

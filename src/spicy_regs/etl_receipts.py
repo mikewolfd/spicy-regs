@@ -544,6 +544,25 @@ def _normalized(policy: DatasetPolicy, rows: Iterable[Mapping], batch_size: int 
     yield from _subjects(policy, batch)
 
 
+def selected_subject_policy(policy: DatasetPolicy, paths: Sequence[ParquetInput]) -> DatasetPolicy:
+    """Choose one exact declared schema for historical reads; never relabel its rows.
+
+    New generation admission remains strict against its declared policy. Only
+    readers of already selected inputs use this explicit earlier-policy choice.
+    """
+    selected = None
+    for path in paths:
+        with _parquet(path) as parquet:
+            matches = [candidate for candidate in receipt_policies(policy)
+                       if parquet.schema_arrow.equals(candidate.subject_schema)]
+        if len(matches) != 1:
+            raise ValueError(f"Subject schema differs from policy: {policy.dataset}")
+        if selected is not None and matches[0] != selected:
+            raise ValueError(f"Mixed subject policies in dataset: {policy.dataset}")
+        selected = matches[0]
+    return selected or policy
+
+
 def _joined_subjects(connection, subjects, policies):
     for dataset, paths in subjects.items():
         policy = policies[dataset]
