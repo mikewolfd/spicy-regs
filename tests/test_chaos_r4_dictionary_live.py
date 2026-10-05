@@ -113,7 +113,22 @@ def test_the_always_claims_are_found():
 @pytest.mark.parametrize(("table", "column", "value"), _always_claims())
 def test_a_column_described_as_always_empty_is_empty(urls, con, table, column, value):
     """Regression guard: the published column holds what its prose says it always holds."""
-    quoted = '"' + column.replace('"', '""') + '"'
-    condition = f"{quoted} IS NOT NULL" if value == "NULL" else f"{quoted} IS DISTINCT FROM '[]'"
-    (found,) = con.execute(f"SELECT count(*) FROM {_scan(urls, table)} WHERE {condition}").fetchone()
+    scan = _scan(urls, table)
+    condition = _empty_condition(con, scan, table, column, value)
+    (found,) = con.execute(f"SELECT count(*) FROM {scan} WHERE {condition}").fetchone()
     assert found == 0, f"{table}.{column}: {found} rows contradict 'always {value}'"
+
+
+def _empty_condition(con, scan, table, column, value):
+    """Check the same claim on the published schema using only the maintained field mapping."""
+    names = {row[0] for row in con.execute(f"DESCRIBE SELECT * FROM {scan}").fetchall()}
+    if column not in names:
+        from spicy_regs.transforms.regulations_shape import NATIVE_FIELDS
+
+        originals = [source for source, (native, _) in NATIVE_FIELDS.get(table, {}).items()
+                     if native == column and source in names]
+        if len(originals) != 1:
+            raise ValueError(f"{table}.{column}: no published column or declared source field for the claim")
+        column = originals[0]
+    quoted = '"' + column.replace('"', '""') + '"'
+    return f"{quoted} IS NOT NULL" if value == "NULL" else f"{quoted} IS DISTINCT FROM '[]'"
