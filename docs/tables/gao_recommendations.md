@@ -31,5 +31,7 @@ Processing fields, source witnesses, conversion inputs and diagnostics reference
 | `priority` | `BOOLEAN` | Whether GAO designates it a priority recommendation, as last listed: `true` or `false`. |
 | `comments` | `VARCHAR` | GAO's comments on the agency's progress as last listed, untrimmed; NULL where it states none. |
 | `topics` | `VARCHAR` | The topic the export files it under, as last listed; NULL where it states none. |
+| `first_seen` | `DATE` | The date the status-as-of stamp states on the first export read that listed it: when this table first saw it open, not when GAO made it. |
+| `last_seen` | `DATE` | The date the status-as-of stamp states on the latest export read that listed it. |
 | `listed_open` | `BOOLEAN` | Whether the latest export read lists it under this key. `false` says only that it is no longer listed: GAO closing it is the usual cause, but an edit to its number, text or agency, or a defective export, reads the same. |
 | `status_as_of` | `VARCHAR` | The export's own status-as-of stamp, verbatim, from the latest export that listed it; GAO labels it EST year round, though it is Eastern local time. Text in GAO's spelling (`Sep 30, 2026 at 1:18 PM EST`), not sortable: last_seen carries the same stamp's date in ISO form, so order and filter by it. |

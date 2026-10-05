@@ -1037,9 +1037,24 @@
         "description": "The whole bill's interpreted legislative stage: the latest step its actions show under the current rule, not a final outcome. On the ladder: `introduced`, `committee`, `calendared`, `passed_chamber`, `other_chamber`, `passed_both`, `conference`, `cleared`, `presented` or `law` (the terminal rung; the literal is `law`, never `enacted`); or an outcome with no rung, `failed` or `vetoed`. `introduced` is also the default when no rule fires (see stage_rule); NULL where the bill's actions were not examined, which is not a statement about enactment. A number the House reserves for its leadership (title \"Reserved for the Speaker.\") has no actions: it reads `introduced` with stage_rule NULL, or NULL where GovInfo holds no document. A mention is not an event: taking over the sponsorship of a bill \"originally introduced by\" another, a floor action citing the text \"as introduced\" or \"as reported\", a special rule's report or description, and a star print classify nothing, and where the publisher's action code names a step, the code is read before the text. `calendared` is a placement on the Union, House or Senate Legislative Calendar in the bill's own chamber (a reported bill awaiting the floor, or one placed there unreported under Senate Rule XIV or a discharge); a later report, order to report, subcommittee referral or floor step leaves it `calendared`, and only a referral of the bill to a committee lowers it. `passed_chamber` and `other_chamber` both mean the bill's own chamber has passed it; `other_chamber` adds that the other chamber has received it or taken a calendar, desk or floor step on it. A calendar placement, the desk, a motion to proceed or cloture reads `other_chamber` only where the chamber that took it (as the text names it, else the system that entered it) is not the one the bill's type originates in; in its own chamber the desk, a motion to proceed or cloture moves nothing. `passed_both` means both chambers have passed it (the Library of Congress's 8000 and 17000 where the actions carry codes, else the text) but not, as far as the wording shows, in one text: the second passage carried an amendment the other chamber has not agreed to, or names none either way (the House's \"On passage Passed\"). It is read from the passage that completed it. `conference` is a conference requested, held or reported; the Library of Congress's \"Resolving differences\" exchange of amendments is not one. `cleared` means both chambers have agreed to one text: the second chamber passed it as it arrived (the Senate \"without amendment\", or the House on a motion to suspend the rules that names no amendment), a chamber agreed to the other's amendment with no amendment of its own, or both agreed to a conference report; the Library of Congress's \"Cleared for White House.\" (109th-111th Congresses) reads it too. A bill or joint resolution is then ready for the President; a concurrent resolution is complete. `failed` is the latest vote on passage failing in either chamber, a failed two-thirds vote to suspend the rules included: the measure can still pass, and it reads over an earlier passage by the other chamber until a later step. `vetoed` stands until a recorded enactment; a failed override keeps it. The stage never moves back once a chamber has passed the bill: the other chamber's referral or report, a star print or an introduction phrase does not lower it, and only a passage the Senate states it vitiated is undone; where the actions carry publisher codes, the Library of Congress's passage code (8000 House, 17000 Senate) is what holds it. Once `cleared`, no lower rung moves it back. A motion's or a point of order's result (\"motion to proceed ... agreed to in Senate\") is not the measure's passage, and \"disagreed to in Senate\" reads `failed`."
       },
       {
+        "column_name": "stage_rule",
+        "column_type": "VARCHAR",
+        "description": "Which rule fired: a stage's own name where that rule read the action's text (`introduced`, `committee`, `calendared`, `passed_chamber`, `other_chamber`, `conference`, `cleared`, `presented`, `law`), `cleared` also for both chambers' agreement to a conference report, read from the second; `vetoed` for the President's veto; `failed_passage` for a failed vote on passage, a failed veto override included (which leaves the stage `vetoed`); `action_code` where the Library of Congress's passage or presentation code decided it; `became_law_code` for the publisher's became-law code; `passed_both` for the passage that left both chambers' passages standing. NULL when no rule fired and the default stood."
+      },
+      {
+        "column_name": "stage_source_text",
+        "column_type": "VARCHAR",
+        "description": "The full action text the stage rule matched against, never shortened."
+      },
+      {
         "column_name": "signed_date",
         "column_type": "VARCHAR",
         "description": "The date of the publisher's coded became-law action (36000, E40000 or the BecameLaw type) for a public or a private law; NULL where the bill states no law, or states one with no coded action."
+      },
+      {
+        "column_name": "signed_date_rule",
+        "column_type": "VARCHAR",
+        "description": "Which signed-date rule produced that answer: `public_law_and_became_law_action`, `private_law_and_became_law_action`, `public_law_without_became_law_action` (a public law with no coded action, so no date) or `no_public_law` (no law entry, or a private law with no coded action)."
       },
       {
         "column_name": "money_bill_kind",
@@ -1498,6 +1513,11 @@
         "column_name": "opened_by_artifact_ids",
         "column_type": "VARCHAR[]",
         "description": "Native list of public URLs of the records whose window opens the period on `open_date`. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+      },
+      {
+        "column_name": "anchor_kind",
+        "column_type": "VARCHAR",
+        "description": "What anchors the period: `docket` when a docket does, `proceeding` when only a proceeding does, `none` when neither; the rulespec export takes the anchored rows."
       },
       {
         "column_name": "register_close_date",
@@ -10292,6 +10312,16 @@
         "description": "Two-letter state on the matched committee (`fec_committees.state`). Often null."
       },
       {
+        "column_name": "match_method",
+        "column_type": "VARCHAR",
+        "description": "How the pair matched: `exact` (full normalized names equal), `core` (decoration-stripped cores equal), or `prefix` (committee core starts with the whole organization core on a token boundary)."
+      },
+      {
+        "column_name": "confidence",
+        "column_type": "VARCHAR",
+        "description": "`high` for `exact`/`core`; for `prefix`, `medium` when `committee_match_count` <= 5 and `low` above that. Grades the name match alone: it ignores whether the committee still files and the sponsor FEC states (`sponsor_name_match`). Filter on this to pick a precision bar."
+      },
+      {
         "column_name": "committee_match_count",
         "column_type": "BIGINT",
         "description": "How many FEC committees this organization name matched in total, counting the candidate committees and leadership PACs whose links are left out, so it can exceed this string's rows here. A high count does not establish an affiliate network; inspect source evidence alongside the matching rule."
@@ -10315,6 +10345,16 @@
         "column_name": "last_comment_date",
         "column_type": "TIMESTAMP WITH TIME ZONE",
         "description": "Latest `posted_date` across this organization's comments in every agency and year (ISO 8601 string)."
+      },
+      {
+        "column_name": "connected_organization_name",
+        "column_type": "VARCHAR",
+        "description": "The committee's connected organization (its sponsor) as FEC states it, verbatim from `fec_committee_history.connected_organization_name` in the latest filing year that names one. NULL when no year names one: FEC's placeholders (`NONE`, `N/A`, `NA`, `BLANK`, `0`, punctuation alone), which that table keeps verbatim, are read as naming none. Filers sometimes write the PAC's own name, a former name or a parent company here."
+      },
+      {
+        "column_name": "sponsor_name_match",
+        "column_type": "VARCHAR",
+        "description": "Whether `connected_organization_name` names the commenting organization: `agrees` when it reduces to `organization_core` under the same normalization (read also with PAC words such as `POLITICAL ACTION COMMITTEE` removed, spaces ignored); `differs` otherwise, most often the same organization spelled another way (`ASSN`, inverted words, a typo), a former name or a parent company, sometimes a different sponsor; `not_stated` when FEC names no sponsor. A name comparison, not an identity."
       },
       {
         "column_name": "agency_codes",
@@ -12189,6 +12229,11 @@
         "description": "The publisher's action type (IntroReferral, Floor, BecameLaw...)."
       },
       {
+        "column_name": "source_system_name",
+        "column_type": "VARCHAR",
+        "description": "Name of the system that reported the action."
+      },
+      {
         "column_name": "recorded_vote_count",
         "column_type": "BIGINT",
         "description": "How many recordedVote entries this action carries."
@@ -12823,6 +12868,11 @@
         "column_name": "text_diff",
         "column_type": "VARCHAR[]",
         "description": "The engine's word-level diff as a Native list, capped at the published byte limit. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+      },
+      {
+        "column_name": "text_diff_truncated",
+        "column_type": "BOOLEAN",
+        "description": "True when the word diff did not fit the cap and entries were dropped from the end."
       },
       {
         "column_name": "financial_from_amounts",
@@ -14545,9 +14595,24 @@
         "description": "The USLM meta's dc:title, where the PLAW was captured."
       },
       {
+        "column_name": "uslm_outcome",
+        "column_type": "VARCHAR",
+        "description": "captured or captured_partial retain validated native metadata; captured_refused retains a refused capture without unvalidated metadata; request_failed records an attempted read without an accepted body; unavailable records supported source absence; not_requested means no attempt."
+      },
+      {
         "column_name": "uslm_citable_as",
         "column_type": "VARCHAR[]",
         "description": "Every literal native USLM meta citableAs value, source order retained. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+      },
+      {
+        "column_name": "uslm_reason",
+        "column_type": "VARCHAR",
+        "description": "Bounded outcome reason token; NULL on complete capture or when no read was attempted."
+      },
+      {
+        "column_name": "law_text_outcome",
+        "column_type": "VARCHAR",
+        "description": "not_requested, parsed or refused: section reading is separate from validated USLM metadata."
       },
       {
         "column_name": "law_section_count",
@@ -14582,7 +14647,7 @@
     "table": "law_sections",
     "label": "Published law sections",
     "summary": "One row per native section occurrence in a published law's main body. These are the law's own words, including amendment instructions, not a consolidated statement of current law. Section numbers and publisher IDs can repeat or be absent; (law_id, seq) identifies each occurrence and native_path locates it in the source XML. is_quoted marks sections inside quotedContent; parent_seq alone does not imply a quotation. Body excludes its own number and heading, print furniture, and nested sections' text; query the child rows as well. laws.law_body_remainder retains text outside all numbered sections, including appropriation blocks. Hierarchy retains the source context; source irregularities and extraction outcomes remain in the law_sections ETL receipts. Boolean and numeric observations use native types.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='law_sections'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
-    "coverage": "Derived: source-native sections from identity-validated GovInfo public and private law XML acquired by the laws rollup. Join law_id to laws.law_id, then laws.bill_id to congress_bills.bill_id. A missing section row does not establish that the law has no text: check law_text_outcome and law_section_count in the laws ETL receipts. Coverage follows successfully read XML, not all enacted laws. PDF-only sources are outside this reader.",
+    "coverage": "Derived: source-native sections from identity-validated GovInfo public and private law XML acquired by the laws rollup. Join law_id to laws.law_id, then laws.bill_id to congress_bills.bill_id. A missing section row does not establish that the law has no text: check law_text_outcome and law_section_count in laws. Coverage follows successfully read XML, not all enacted laws. PDF-only sources are outside this reader.",
     "kind": "derived",
     "measured_on": "2026-10-02",
     "data_quality": null,
@@ -14984,6 +15049,11 @@
         "column_name": "congress",
         "column_type": "VARCHAR",
         "description": "The Congress the assignment belongs to."
+      },
+      {
+        "column_name": "congress_basis",
+        "column_type": "VARCHAR",
+        "description": "`file` when the file states that Congress itself (the House file does), `caller` when it states none and the caller supplied it (the Senate file states only its update date)."
       },
       {
         "column_name": "session",
@@ -17011,6 +17081,16 @@
         "description": "The exact characters the rule matched, so a false positive is readable from the row without the document in hand."
       },
       {
+        "column_name": "target_resolved",
+        "column_type": "BOOLEAN",
+        "description": "Whether `target_key` is the hosted target's own spelling.  `false` means the rule found the cite but nothing settled the key: a bill with no stated Congress, or a committee name no supplied roster reaches.  A shape check, not an existence check: a resolved key can name nothing the target table holds; join the target table to learn whether it is held."
+      },
+      {
+        "column_name": "target_rule",
+        "column_type": "VARCHAR",
+        "description": "How the key was reached. Bill routes distinguish inline_congress, congress_subheading, document_fallback, unstated and document_fallback_refused after the bill_number: prefix. A document fallback is context supplied by the caller, not proof of historical applicability. Other kinds use the rule name except `committee_name`, where it is the resolution route: `exact` and `roster_prefix` are lookups in the roster vocabulary, while `name_prefix` and `sibling_prefix` are inferences from the printed text of this one document.  A consumer wanting only roster lookups filters on this column rather than on `target_resolved`."
+      },
+      {
         "column_name": "stated_by_index",
         "column_type": "BOOLEAN",
         "description": "Whether a keyed index record for this document already states this target key -- the package MODS's own `<bill>`, `<law>` and `<USCode>` section elements and its authoring committee.  NULL where no index record was supplied.  This is the owner's do-not-recreate rule, carried per row: where it is `true` the row's value is the evidence span, not the key, and `WHERE stated_by_index IS NOT TRUE` selects the kinds that are genuinely new."
@@ -17354,6 +17434,16 @@
         "column_name": "topics",
         "column_type": "VARCHAR",
         "description": "The topic the export files it under, as last listed; NULL where it states none."
+      },
+      {
+        "column_name": "first_seen",
+        "column_type": "DATE",
+        "description": "The date the status-as-of stamp states on the first export read that listed it: when this table first saw it open, not when GAO made it."
+      },
+      {
+        "column_name": "last_seen",
+        "column_type": "DATE",
+        "description": "The date the status-as-of stamp states on the latest export read that listed it."
       },
       {
         "column_name": "listed_open",
@@ -18190,7 +18280,6 @@
           "asserted_at",
           "supersedes_id",
           "unresolved_fr_references_json",
-          "anchor_kind",
           "raw_conversion_inputs",
           "input_metadata",
           "raw_source_record"
@@ -19897,7 +19986,7 @@
       {
         "dataset": "gao_recommendations",
         "receipt_only": false,
-        "policy_version": "government-sources/1",
+        "policy_version": "government-sources/2",
         "identity_columns": [
           "recommendation_id"
         ],
@@ -20194,8 +20283,6 @@
           "organization_norm",
           "organization_core",
           "name_source",
-          "match_method",
-          "confidence",
           "agency_codes_json",
           "conversion_inputs",
           "conversion_diagnostics",

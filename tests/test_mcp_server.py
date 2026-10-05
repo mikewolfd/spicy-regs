@@ -88,7 +88,7 @@ def test_discovery_reports_actual_parquet_schema_and_dictionary_caveats(tmp_path
     path = str(tmp_path / "org_committee_links.parquet").replace("'", "''")
     con.execute(
         "CREATE TABLE source_rows AS SELECT 'Example group' AS organization, "
-        "'C00000001' AS committee_id, 'prefix' AS match_method, "
+        "'C00000001' AS committee_id, 'prefix' AS match_method, 'EXAMPLE GROUP' AS organization_norm, "
         "3::INTEGER AS committee_match_count, 'unmapped value' AS new_field"
     )
     con.execute(f"COPY source_rows TO '{path}' (FORMAT PARQUET)")
@@ -106,7 +106,8 @@ def test_discovery_reports_actual_parquet_schema_and_dictionary_caveats(tmp_path
     result = _tool_data(server, "describe_table", {"table": "org_committee_links"})
     assert result["available"] is True
     assert result["schema_matches_declared"] is False
-    assert result["schema_differences"]["unexpected_columns"] == ["match_method", "new_field"]
+    # organization_norm is a receipt field of the native table; match_method is one of its columns.
+    assert result["schema_differences"]["unexpected_columns"] == ["organization_norm", "new_field"]
     assert result["schema_differences"]["type_differences"] == [
         {"column": "committee_match_count", "declared": "BIGINT", "actual": "INTEGER"}
     ]
@@ -115,6 +116,7 @@ def test_discovery_reports_actual_parquet_schema_and_dictionary_caveats(tmp_path
     assert result["metadata"]["identity_columns"] == ["organization", "committee_id"]
     actual_columns = {column["column_name"]: column for column in result["columns"]}
     assert "fec_committees.committee_id" in actual_columns["committee_id"]["description"]
+    assert "`prefix`" in actual_columns["match_method"]["description"]
     assert actual_columns["new_field"]["description"] is None
     queried = _tool_data(server, "query_sql", {"sql": "SELECT committee_id FROM org_committee_links"})
     assert _records(queried) == [{"committee_id": "C00000001"}]

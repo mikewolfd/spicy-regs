@@ -760,7 +760,6 @@
           "asserted_at",
           "supersedes_id",
           "unresolved_fr_references_json",
-          "anchor_kind",
           "raw_conversion_inputs",
           "input_metadata",
           "raw_source_record"
@@ -2467,7 +2466,7 @@
       {
         "dataset": "gao_recommendations",
         "receipt_only": false,
-        "policy_version": "government-sources/1",
+        "policy_version": "government-sources/2",
         "identity_columns": [
           "recommendation_id"
         ],
@@ -2764,8 +2763,6 @@
           "organization_norm",
           "organization_core",
           "name_source",
-          "match_method",
-          "confidence",
           "agency_codes_json",
           "conversion_inputs",
           "conversion_diagnostics",
@@ -3555,7 +3552,10 @@
         "law_type",
         "statutes_at_large_cite",
         "stage",
+        "stage_rule",
+        "stage_source_text",
         "signed_date",
+        "signed_date_rule",
         "money_bill_kind",
         "fiscal_year",
         "appropriations_subcommittee",
@@ -3702,6 +3702,7 @@
         "open_date",
         "close_date",
         "opened_by_artifact_ids",
+        "anchor_kind",
         "register_close_date",
         "regulations_gov_close_date"
       ]
@@ -5920,11 +5921,15 @@
         "party_full",
         "organization_type_full",
         "committee_state",
+        "match_method",
+        "confidence",
         "committee_match_count",
         "comment_count",
         "docket_count",
         "first_comment_date",
         "last_comment_date",
+        "connected_organization_name",
+        "sponsor_name_match",
         "agency_codes",
         "association_kind"
       ]
@@ -6506,6 +6511,7 @@
         "action_text",
         "action_code",
         "action_type",
+        "source_system_name",
         "recorded_vote_count",
         "is_latest_action",
         "stage"
@@ -6692,6 +6698,7 @@
         "from_text_chars",
         "to_text_chars",
         "text_diff",
+        "text_diff_truncated",
         "financial_from_amounts",
         "financial_to_amounts",
         "financial_amounts_changed",
@@ -7185,7 +7192,10 @@
         "statutes_at_large_page",
         "approved_date",
         "uslm_title",
+        "uslm_outcome",
         "uslm_citable_as",
+        "uslm_reason",
+        "law_text_outcome",
         "law_section_count",
         "law_body_remainder",
         "law_text_url",
@@ -7196,7 +7206,7 @@
       "table": "law_sections",
       "label": "Published law sections",
       "summary": "One row per native section occurrence in a published law's main body. These are the law's own words, including amendment instructions, not a consolidated statement of current law. Section numbers and publisher IDs can repeat or be absent; (law_id, seq) identifies each occurrence and native_path locates it in the source XML. is_quoted marks sections inside quotedContent; parent_seq alone does not imply a quotation. Body excludes its own number and heading, print furniture, and nested sections' text; query the child rows as well. laws.law_body_remainder retains text outside all numbered sections, including appropriation blocks. Hierarchy retains the source context; source irregularities and extraction outcomes remain in the law_sections ETL receipts. Boolean and numeric observations use native types.\n\nProcessing fields, source witnesses, conversion inputs and diagnostics referenced here are stored separately in etl_receipts with dataset='law_sections'. Join through the declared subject identity and exact subject_version within the selected generation; receipt processing outcomes are distinct from publisher business statuses.",
-      "coverage": "Derived: source-native sections from identity-validated GovInfo public and private law XML acquired by the laws rollup. Join law_id to laws.law_id, then laws.bill_id to congress_bills.bill_id. A missing section row does not establish that the law has no text: check law_text_outcome and law_section_count in the laws ETL receipts. Coverage follows successfully read XML, not all enacted laws. PDF-only sources are outside this reader.",
+      "coverage": "Derived: source-native sections from identity-validated GovInfo public and private law XML acquired by the laws rollup. Join law_id to laws.law_id, then laws.bill_id to congress_bills.bill_id. A missing section row does not establish that the law has no text: check law_text_outcome and law_section_count in laws. Coverage follows successfully read XML, not all enacted laws. PDF-only sources are outside this reader.",
       "kind": "derived",
       "measured_on": "2026-10-02",
       "data_quality": null,
@@ -7311,6 +7321,7 @@
       "data_quality": "A row is a seat the file listed on its `file_date`: a seat the file no longer lists is gone on the next capture. The House file states its Congress and the reader proves it; the Senate file states none, so its rows carry the caller's Congress with `congress_basis` = `caller`. A House vacancy has no member and no row, and a seated member whose only assignment is the file's `<committee rank=\"\"/>` placeholder has none either (nine placeholders on 2026-09-19). Only a file captured this run replaces its chamber's rows; a chamber whose file was not established keeps its prior rows. House `system_code` derives its prefix from the native committee type and parent context; `committee_code` preserves the literal source identifier. Join matching `system_code` values to `committees` and `bioguide_id` to `members`. Rows whose `system_code` matches no committee stay listed and are never matched by name (the Joint Economic Committee has three Congress.gov codes). On 2026-09-23 that is 28 rows: 25 House seats on the Clerk's four joint committees (`EC00`, `IT00`, `JL00`, `JP00`, typed `joint` in the Clerk file with no Congress.gov code), and three Senate seats on `JSIK00`, the 2024 inaugural committee, which Congress.gov does not list in any Congress.",
       "columns": [
         "congress",
+        "congress_basis",
         "session",
         "chamber",
         "system_code",
@@ -7832,6 +7843,8 @@
         "span_start",
         "span_end",
         "matched_text",
+        "target_resolved",
+        "target_rule",
         "stated_by_index",
         "body_version_id"
       ]
@@ -7922,6 +7935,8 @@
         "priority",
         "comments",
         "topics",
+        "first_seen",
+        "last_seen",
         "listed_open",
         "status_as_of"
       ]

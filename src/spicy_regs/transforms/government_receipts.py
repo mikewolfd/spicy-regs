@@ -49,8 +49,9 @@ from spicy_regs.transforms.government_source_shapes import (
 from spicy_regs.transforms.parquet_rows import write_rows
 
 #: A dataset whose subject columns changed after it first published states its own version; the rest keep the
-#: family's. gao_decisions: ``b_numbers_truncated`` returned from the receipt to the subject table (2026-10-05).
-POLICY_VERSIONS = {"gao_decisions": "government-sources/2"}
+#: family's. Columns returned from the receipt to the subject table on 2026-10-05: gao_decisions
+#: ``b_numbers_truncated``; gao_recommendations ``first_seen`` and ``last_seen``.
+POLICY_VERSIONS = {"gao_decisions": "government-sources/2", "gao_recommendations": "government-sources/2"}
 POLICIES = {
     dataset: DatasetPolicy(
         dataset,
@@ -62,18 +63,22 @@ POLICIES = {
     )
     for dataset, schema in SUBJECT_SCHEMAS.items()
 }
-_gao_decisions = POLICIES["gao_decisions"].subject_schema
+
+
+def _without(dataset: str, *columns: str) -> DatasetPolicy:
+    """The dataset's ``government-sources/1`` policy: today's subject schema less the columns returned since."""
+    schema = POLICIES[dataset].subject_schema
+    for column in columns:
+        schema = schema.remove(schema.get_field_index(column))
+    return replace(POLICIES[dataset], subject_schema=schema, policy_version="government-sources/1")
+
+
 #: Exact policies a published prior may still carry. A prior is read under one only to restore its receipts' whole
-#: original rows; every write uses POLICIES. gao-reports published gao_decisions without ``b_numbers_truncated`` on
-#: 2026-10-04.
+#: original rows; every write uses POLICIES. On 2026-10-04 gao-reports published gao_decisions without
+#: ``b_numbers_truncated`` and gao-recommendations published without ``first_seen`` and ``last_seen``.
 EARLIER_POLICIES = {
-    "gao_decisions": (
-        replace(
-            POLICIES["gao_decisions"],
-            subject_schema=_gao_decisions.remove(_gao_decisions.get_field_index("b_numbers_truncated")),
-            policy_version="government-sources/1",
-        ),
-    )
+    "gao_decisions": (_without("gao_decisions", "b_numbers_truncated"),),
+    "gao_recommendations": (_without("gao_recommendations", "first_seen", "last_seen"),),
 }
 _ACTIVE: ContextVar[bool] = ContextVar("government_receipt_build", default=False)
 _INHERITED: ContextVar[dict[str, Path] | None] = ContextVar("government_prior_receipts", default=None)

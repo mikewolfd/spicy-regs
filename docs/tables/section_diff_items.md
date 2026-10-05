@@ -35,6 +35,7 @@ Processing fields, source witnesses, conversion inputs and diagnostics reference
 | `from_text_chars` | `BIGINT` | Character length of the earlier body text. |
 | `to_text_chars` | `BIGINT` | Character length of the later body text. |
 | `text_diff` | `VARCHAR[]` | The engine's word-level diff as a Native list, capped at the published byte limit. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `text_diff_truncated` | `BOOLEAN` | True when the word diff did not fit the cap and entries were dropped from the end. |
 | `financial_from_amounts` | `DECIMAL(38,2)[]` | Every dollar figure the earlier body states, as a Native list. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `financial_to_amounts` | `DECIMAL(38,2)[]` | Every dollar figure the later body states, as a Native list. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `financial_amounts_changed` | `BOOLEAN` | True when the two multisets of figures differ; needs no account model to be true. |

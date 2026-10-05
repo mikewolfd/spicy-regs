@@ -43,7 +43,10 @@ A validated row with parsed text is read again when its listing or metadata/text
 | `statutes_at_large_page` | `VARCHAR` | The page part of that citation. |
 | `approved_date` | `VARCHAR` | The USLM meta's approvedDate, where the PLAW was captured. |
 | `uslm_title` | `VARCHAR` | The USLM meta's dc:title, where the PLAW was captured. |
+| `uslm_outcome` | `VARCHAR` | captured or captured_partial retain validated native metadata; captured_refused retains a refused capture without unvalidated metadata; request_failed records an attempted read without an accepted body; unavailable records supported source absence; not_requested means no attempt. |
 | `uslm_citable_as` | `VARCHAR[]` | Every literal native USLM meta citableAs value, source order retained. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `uslm_reason` | `VARCHAR` | Bounded outcome reason token; NULL on complete capture or when no read was attempted. |
+| `law_text_outcome` | `VARCHAR` | not_requested, parsed or refused: section reading is separate from validated USLM metadata. |
 | `law_section_count` | `BIGINT` | Native section occurrences emitted by a successful read, including quoted nested sections; NULL unless parsed. |
 | `law_body_remainder` | `VARCHAR` | Main-body text outside every native section subtree, including hierarchy headings and enacting formula; block-spaced like section body. Empty string means parsed with no remainder; NULL means not parsed. Print furniture (page numbers, running heads and, from law_text_reader_version law-sections-uslm-v2, the margin notes: the approval date, the bill number, the short-title note) is excluded with an issue in law_text_issues_json. |
 | `law_text_url` | `VARCHAR` | Actual resolved XML acquisition URL for an attempted law-text read, distinct from the bill API url. Supplied from capture evidence, never inferred; NULL when unattempted or the caller retained no URL. A refused read does not validate the target's law identity. |
