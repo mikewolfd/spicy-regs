@@ -62,3 +62,17 @@ def test_a_read_checkpoint_is_a_declared_output_held_in_receipts():
     for rollup in (CommitteeReportsRollup, NativeLegalReferencesRollup):
         assert {policy.dataset + ".parquet" for policy in rollup.receipt_policies if policy.dataset.endswith("_reads")} \
             == set(rollup.receipt_only_tables)
+
+
+def test_the_senate_expenditures_rollup_returns_its_one_table(tmp_path, monkeypatch):
+    """``build_receipts`` returns a single-output rollup's table itself; indexing it raised TypeError on a Path.
+
+    Found by the first scheduled run on a native prior (loopback rehearsal, 2026-10-05): the family's last
+    successful run predates receipts, so the line had never run.
+    """
+    from spicy_regs.pipelines.rollups.senate_expenditures import SenateExpendituresRollup
+
+    table = tmp_path / "senate_expenditures.parquet"
+    rollup = SenateExpendituresRollup(output_dir=tmp_path, skip_upload=True)
+    monkeypatch.setattr(rollup, "build_receipts", lambda output_dir, builder, **_: table)
+    assert rollup.build(tmp_path) == table
