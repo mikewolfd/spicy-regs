@@ -3,6 +3,7 @@
 import json
 import random
 import sys
+from decimal import Decimal
 
 import duckdb
 import pyarrow as pa
@@ -81,6 +82,32 @@ def test_nested_values_integers_and_nulls() -> None:
 def test_an_unproven_type_refuses() -> None:
     with pytest.raises(NotImplementedError, match="double"):
         etl_bulk.exact_json_sql('"v"', pa.float64())
+
+
+@pytest.mark.parametrize(("precision", "scale"), [(precision, scale) for precision in (1, 9, 18, 38)
+                                                for scale in range(7) if scale <= precision])
+def test_fixed_point_decimal_spelling_matches_arrow_reference(precision, scale):
+    rng = random.Random(20261006)
+    integers = [0, 1, -1, 10**precision - 1, -(10**precision - 1)]
+    integers += [rng.randrange(-(10**precision - 1), 10**precision) for _ in range(100)]
+    values = [None] + [Decimal((int(n < 0), tuple(map(int, str(abs(n)))), -scale)) for n in integers]
+    dtype = pa.decimal128(precision, scale)
+    stored = pa.array(values, type=dtype).to_pylist()
+    assert _encode(values, dtype) == [(exact_json(value), False) for value in stored]
+
+
+def test_nested_decimal_lists_preserve_nulls_and_exact_versions():
+    dtype = pa.list_(pa.struct([("amounts", pa.list_(pa.decimal128(38, 2)))]))
+    values = [None, [], [None], [{"amounts": None}], [{"amounts": []}],
+              [{"amounts": [None, Decimal("0.00"), Decimal("-0.01"), Decimal("999999999999999999999999999999999999.99")]}]]
+    stored = pa.array(values, type=dtype).to_pylist()
+    assert _encode(values, dtype) == [(exact_json(value), False) for value in stored]
+
+
+@pytest.mark.parametrize("dtype", [pa.decimal128(38, 7), pa.decimal128(38, -2), pa.decimal256(76, 2)])
+def test_unproven_decimal_spelling_remains_reference_only(dtype):
+    with pytest.raises(NotImplementedError, match="No proven SQL spelling"):
+        etl_bulk.exact_json_sql('"v"', dtype)
 
 
 def test_identities_and_receipt_ids_of_a_written_bundle(tmp_path) -> None:

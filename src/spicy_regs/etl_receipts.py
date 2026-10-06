@@ -707,6 +707,7 @@ def read_with_receipts(
     policy: DatasetPolicy,
     *,
     generation_id: str,
+    bulk: bool = True,
 ) -> Iterable[dict]:
     """Reconstruct internal processing columns after complete validation; no legacy fallback.
 
@@ -714,7 +715,21 @@ def read_with_receipts(
     when reading the shared member; unrelated datasets never weaken admission.
     Only accepted subjects are returned. Processing-only checkpoints, successful
     empty reads and failed attempts are available through ``read_attempts``.
+    ``bulk=False`` keeps the row reader as an independent reference. Unsupported
+    schemas use that reader before any reconstructed row is returned.
     """
+    if bulk:
+        from spicy_regs.etl_bulk import NotBulkEligible, read_with_receipts as read_bulk
+        try:
+            yield from read_bulk(subject_paths, receipt_paths, policy, generation_id=generation_id)
+            return
+        except NotBulkEligible:
+            pass
+    yield from _read_with_receipts_rows(subject_paths, receipt_paths, policy, generation_id=generation_id)
+
+
+def _read_with_receipts_rows(subject_paths, receipt_paths, policy, *, generation_id):
+    """Reference admission and replay, including complete validation before yielding."""
     with TemporaryDirectory(prefix="etl-read-") as temp, sqlite3.connect(str(Path(temp) / "joins.db")) as con:
         _load_receipts(con, receipt_paths, {policy.dataset: policy}, generation_id)
         for _ in _match_subjects(con, {policy.dataset: subject_paths}, {policy.dataset: policy}):
@@ -766,7 +781,8 @@ def observation_receipt(policy: DatasetPolicy, context: ReceiptContext, *, proce
 
 
 def read_attempts(
-    receipt_paths: Sequence[Path], policy: DatasetPolicy, *, generation_id: str, outcomes: frozenset[str] | None = None
+    receipt_paths: Sequence[Path], policy: DatasetPolicy, *, generation_id: str, outcomes: frozenset[str] | None = None,
+    bulk: bool = True,
 ) -> Iterable[dict]:
     """Read decoded processing evidence including successful-empty and failed reads.
 
@@ -775,6 +791,18 @@ def read_attempts(
     """
     if outcomes is not None and not outcomes <= OUTCOMES:
         raise ValueError("Unknown attempt outcome")
+    if bulk:
+        from spicy_regs.etl_bulk import NotBulkEligible, read_attempts as read_bulk
+        try:
+            yield from read_bulk(receipt_paths, policy, generation_id=generation_id, outcomes=outcomes)
+            return
+        except NotBulkEligible:
+            pass
+    yield from _read_attempts_rows(receipt_paths, policy, generation_id=generation_id, outcomes=outcomes)
+
+
+def _read_attempts_rows(receipt_paths, policy, *, generation_id, outcomes):
+    """Reference receipt-only admission and exact evidence decoding."""
     with TemporaryDirectory(prefix="etl-attempts-") as temp, sqlite3.connect(str(Path(temp) / "joins.db")) as con:
         _load_receipts(con, receipt_paths, {policy.dataset: policy}, generation_id, retain_processing=False)
         for path in receipt_paths:

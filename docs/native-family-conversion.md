@@ -307,14 +307,20 @@ source evidence and the exact stored predecessor before publication.
 Leave `publish` false to prepare without publication credentials. The run
 retains the sealed family under the `native-family-<family>` artifact, and its
 invocation, logs and observed process resources in a separate evidence
-artifact. Preparation has a 180-minute command timeout; publication has a
-90-minute timeout inside the 300-minute job, leaving time to retain failed
+artifact. Preparation has a 240-minute command timeout; publication has a
+90-minute timeout inside the 360-minute job, leaving time to retain failed
 outputs. The former 45-minute preparation bound interrupted normal work in
 [court](https://github.com/mikewolfd/spicy-regs/actions/runs/37448262153),
 [votes](https://github.com/mikewolfd/spicy-regs/actions/runs/37448264683),
 [vote terms](https://github.com/mikewolfd/spicy-regs/actions/runs/37448267222)
 and [bills](https://github.com/mikewolfd/spicy-regs/actions/runs/37448753043).
 Publication also needs time for complete restoration and anonymous readback.
+The [later bill run](https://github.com/mikewolfd/spicy-regs/actions/runs/37455256044)
+finished mapping and combining its legislative receipts after about 165 minutes,
+then reached its 180-minute limit during validation. Decimal fields forced the
+entire bundle onto the reference row validator. The corrected fresh run requires
+the proven decimal encoder and maintained batch restoration; additional time
+alone does not qualify the interrupted bytes.
 The runner, disk floor, thread limits and acceptance checks remain unchanged.
 Hosted limits do not establish that a larger family fits the runner.
 
