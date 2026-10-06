@@ -1,4 +1,5 @@
 """Actual Iceberg position-delete fixtures and exact original-field capture checks."""
+from collections.abc import Mapping
 import json
 from pathlib import Path
 from uuid import uuid4
@@ -35,7 +36,7 @@ class DeleteManifestWriter(ManifestWriterV2):
 
 
 def make_fixture(root: Path, *, delete_type=DataFileContent.POSITION_DELETES, rows_count=12,
-                 delete_sequence=2, evolved=False, empty_first=False):
+                 delete_sequence=2, evolved=False, empty_first=False, metrics=False):
     root.mkdir()
     io = PyArrowFileIO()
     names = ['comment_id', 'docket_id', 'agency_code', 'first_name', 'last_name', 'organization',
@@ -57,8 +58,19 @@ def make_fixture(root: Path, *, delete_type=DataFileContent.POSITION_DELETES, ro
                 row[names[-1]] = row[names[-2]] = None
         pq.write_table(pa.Table.from_pylist(part, schema=pa.schema(list(arrow)[:-2]) if evolved and i == 1 else arrow),
                        file, row_group_size=2)
+        data_metrics = {}
+        if metrics:
+            footer = pq.ParquetFile(file).metadata
+            values = [row['comment_id'].encode() for row in part if row['comment_id'] is not None]
+            data_metrics = {'column_sizes': {1: sum(footer.row_group(group).column(0).total_compressed_size
+                                                    for group in range(footer.num_row_groups))},
+                            'value_counts': {1: len(part)}, 'null_value_counts': {1: len(part) - len(values)},
+                            'lower_bounds': {1: min(values)}, 'upper_bounds': {1: max(values)}}
         data = DataFile.from_args(content=DataFileContent.DATA, file_path=file.resolve().as_uri(), file_format=FileFormat.PARQUET,
-                                  partition=Record(), record_count=len(part), file_size_in_bytes=file.stat().st_size)
+                                  partition=Record(), record_count=len(part), file_size_in_bytes=file.stat().st_size,
+                                  column_sizes=data_metrics.get('column_sizes'), value_counts=data_metrics.get('value_counts'),
+                                  null_value_counts=data_metrics.get('null_value_counts'),
+                                  lower_bounds=data_metrics.get('lower_bounds'), upper_bounds=data_metrics.get('upper_bounds'))
         data.spec_id = 0
         files.append(data)
     # Same-file positions, duplicated entry, and a second file: position 1 is deleted once.
@@ -73,9 +85,14 @@ def make_fixture(root: Path, *, delete_type=DataFileContent.POSITION_DELETES, ro
         pq.write_table(pa.Table.from_pylist([{'file_path': file, 'pos': pos} for file, pos in targets], schema=delete_schema), path)
     else:
         pq.write_table(pa.Table.from_pylist([rows[0]], schema=arrow), path)
+    delete_metrics = {'value_counts': {2147483546: len(targets)},
+                      'lower_bounds': {2147483546: min(file for file, _ in targets).encode()},
+                      'upper_bounds': {2147483546: max(file for file, _ in targets).encode()}} if metrics else {}
     delete = DataFile.from_args(content=delete_type, file_path=path.resolve().as_uri(), file_format=FileFormat.PARQUET,
                                partition=Record(), record_count=len(targets) if delete_type == DataFileContent.POSITION_DELETES else 1, file_size_in_bytes=path.stat().st_size,
-                               equality_ids=[1] if delete_type == DataFileContent.EQUALITY_DELETES else None)
+                               equality_ids=[1] if delete_type == DataFileContent.EQUALITY_DELETES else None,
+                               value_counts=delete_metrics.get('value_counts'), lower_bounds=delete_metrics.get('lower_bounds'),
+                               upper_bounds=delete_metrics.get('upper_bounds'))
     delete.spec_id = 0
     snapshots = []
     data_manifest = None
@@ -135,6 +152,29 @@ def test_actual_equality_deletes_refuse_before_output(tmp_path):
     result = json.loads((tmp_path / 'out/RESULT.json').read_text())
     assert result['status'] == 'refused'
     assert not (tmp_path / 'out/comments.parquet').exists()
+
+
+def test_manifest_metric_mappings_are_pinned_and_resume_preserves_values(tmp_path):
+    table, _, after = make_fixture(tmp_path / 'fixture', metrics=True)
+    task = next(iter(table.scan(snapshot_id=22).plan_files()))
+    assert isinstance(task.file.column_sizes, Mapping) and not isinstance(task.file.column_sizes, dict)
+    pin = capture.task_pin(task)
+    assert pin['data']['column_sizes'] == {str(key): value for key, value in task.file.column_sizes.items()}
+    assert pin['data']['lower_bounds'] == {
+        str(key): {'bytesHex': value.hex()} for key, value in task.file.lower_bounds.items()}
+    assert pin['deletes'][0]['lower_bounds'] == {
+        str(key): {'bytesHex': value.hex()} for key, value in next(iter(task.delete_files)).lower_bounds.items()}
+    expected, runtime = capture.selection(table), capture.reader_runtime()
+    output = tmp_path / 'out'
+    first = capture.capture(expected, output, namespace='default', expected_runtime=runtime,
+                            loader=lambda _: table, max_tasks=1)
+    assert first['status'] == 'checkpointed'
+    frozen = (output / 'CHECKPOINT.json').read_bytes()
+    final = capture.capture(expected, output, namespace='default', expected_runtime=runtime,
+                            loader=lambda _: table, resume=True)
+    assert final['status'] == 'captured' and final['reusedTasks'] == 1
+    assert (output / 'CHECKPOINT.json').read_bytes() == frozen
+    assert pq.read_table(output / 'comments.parquet').to_pylist() == after
 
 
 def test_runtime_refusal_does_not_load_source(tmp_path):
