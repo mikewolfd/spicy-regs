@@ -83,6 +83,36 @@ class PublicationError(RuntimeError):
     """Publication or resolution cannot establish one complete generation."""
 
 
+class NativeConversionProof(NamedTuple):
+    """In-memory result of this invocation's complete processing restoration checks.
+
+    Only native_conversion creates this after checking every captured table's
+    schema, metadata, ordered values and repetitions, plus native receipts and
+    family membership. A saved receipt or a row count cannot supply this proof.
+    """
+
+    logical_id: str
+    artifact_digest: str
+    prior_entry: bytes
+    restored_tables: frozenset[str]
+
+
+def _conversion_tables(proof: NativeConversionProof | None, artifact, prior: Mapping | None) -> frozenset[str]:
+    """Bind the restoration proof to the admitted candidate and the complete live prior."""
+    if proof is None:
+        return frozenset()
+    from rulespec_artifacts import canonical_json_bytes
+
+    if (not isinstance(proof, NativeConversionProof) or prior is None or "etlReceipts" in prior
+            or not artifact.root["spec"].get("etlReceipts")
+            or proof.logical_id != artifact.pin.logical_id or proof.artifact_digest != artifact.pin.artifact_digest
+            or proof.prior_entry != canonical_json_bytes(prior)
+            or proof.restored_tables != frozenset(prior["tables"])
+            or artifact.root["spec"]["readSnapshot"]["families"].get(artifact.root["spec"]["family"]) != prior):
+        raise PublicationError("Native conversion proof differs from the candidate or complete captured family")
+    return proof.restored_tables
+
+
 def empty_index() -> dict:
     return {"format": "spicy-regs-publication", "version": 1, "families": {}}
 
@@ -1026,7 +1056,8 @@ def _publish_evidence(client, bucket: str, path: Path, artifact) -> None:
 
 def publish_generation(directory: Path, *, client, bucket: str, prior_index: Mapping,
                        evidence_directories: tuple[Path, ...] = (), added_tables: frozenset[str] = frozenset(),
-                       receipt_only_tables: frozenset[str] = frozenset(), exact_prior: bool = False) -> dict:
+                       receipt_only_tables: frozenset[str] = frozenset(), exact_prior: bool = False,
+                       conversion_proof: NativeConversionProof | None = None) -> dict:
     """Verify/upload/verify, then compare-and-swap the publication pointer.
 
     Validation and conditional-write refusals preserve the current pointer.
@@ -1042,6 +1073,8 @@ def publish_generation(directory: Path, *, client, bucket: str, prior_index: Map
     family or its tables refuses as stale and never overwrites the other writer.
     Input provenance and semantic quality are separate checks.
     ``exact_prior`` also holds the captured publication timestamp unchanged on every pointer retry.
+    ``conversion_proof`` replaces the byte-size heuristic only for original tables
+    completely restored by this native-conversion invocation; it also requires the exact prior on every retry.
     """
     from rulespec_artifacts import LocalMemberSource
     from spicy_regs.generations import verify_generation
@@ -1050,7 +1083,7 @@ def publish_generation(directory: Path, *, client, bucket: str, prior_index: Map
     return _publish_verified_generation(
         artifact, LocalMemberSource(directory), client=client, bucket=bucket, prior_index=prior_index,
         evidence_directories=evidence_directories, added_tables=added_tables, receipt_only_tables=receipt_only_tables,
-        exact_prior=exact_prior,
+        exact_prior=exact_prior, conversion_proof=conversion_proof,
         upload_member=lambda prefix, key: _put_immutable(client, bucket, prefix + "/" + key, directory / key),
     )
 
@@ -1059,6 +1092,7 @@ def _publish_verified_generation(
     artifact, source, *, upload_member, client, bucket: str, prior_index: Mapping,
     evidence_directories: tuple[Path, ...] = (), added_tables: frozenset[str] = frozenset(),
     receipt_only_tables: frozenset[str] = frozenset(), exact_prior: bool = False,
+    conversion_proof: NativeConversionProof | None = None,
 ) -> dict:
     """Shared publication gates; both callers fully verify their source first."""
     from botocore.exceptions import BotoCoreError, ClientError
@@ -1074,7 +1108,9 @@ def _publish_verified_generation(
     if not _NAME.fullmatch(family):
         raise PublicationError("Invalid family name")
     index, etag, bootstrap = _stored_index(client, bucket)
+    exact_prior = exact_prior or conversion_proof is not None
     _assert_family_unchanged(index, prior_index, family, exact=exact_prior)
+    converted = _conversion_tables(conversion_proof, artifact, index["families"].get(family))
     prefix = f"generations/{family}/{artifact.pin.artifact_digest.removeprefix('sha256:')}"
     members = list(iter_member_descriptors(artifact, source))
     try:
@@ -1090,8 +1126,9 @@ def _publish_verified_generation(
         if missing := _partitions(prior) - _partitions(table):
             raise PublicationError(f"{key} lacks partitions its prior generation holds: "
                                    + ", ".join("/".join(f"{c}={v}" for c, v in p) for p in sorted(missing)))
-        old_size = prior["byteSize"] if prior else _get_remote_size(client, bucket, key)
-        _assert_upload_safe(table["byteSize"], old_size, key)
+        if key not in converted:
+            old_size = prior["byteSize"] if prior else _get_remote_size(client, bucket, key)
+            _assert_upload_safe(table["byteSize"], old_size, key)
     old_family = index["families"].get(family)
     # The table set may change only by an explicit migration: exactly the declared added tables join, none leave.
     # A union, so the declaration is inert once those tables are published.
