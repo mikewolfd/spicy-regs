@@ -49,6 +49,22 @@ def record_invocation(*, family: str, expected_entry: str, publish: bool, source
     return record
 
 
+def check_prepared_prior(*, family: str, expected_entry: str, receipt_path: Path) -> dict:
+    """Bind the converter's later capture to the requested entry without changing its seal."""
+    if family not in FAMILIES or not re.fullmatch(r"sha256:[0-9a-f]{64}", expected_entry):
+        raise ValueError("Require one supported family and the SHA-256 of its complete prior entry")
+    raw = receipt_path.read_bytes()
+    receipt = json.loads(raw)
+    if not isinstance(receipt, dict) or receipt.get("family") != family:
+        raise ValueError("Prepared artifact belongs to a different family")
+    captured = receipt.get("captured")
+    entry = captured.get("entry") if isinstance(captured, dict) else None
+    if not isinstance(entry, dict) or entry_digest(entry) != expected_entry:
+        raise ValueError("Prepared artifact captured a different complete prior entry; publication is refused")
+    return {"family": family, "expectedEntrySha256": expected_entry,
+            "receiptPath": str(receipt_path), "receiptSha256": sha256(raw).hexdigest()}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--family", required=True)
@@ -57,7 +73,14 @@ def main():
     parser.add_argument("--source-run-id", default="")
     parser.add_argument("--expect-bucket", default="")
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--prepared-receipt", type=Path)
     args = parser.parse_args()
+    if args.prepared_receipt is not None:
+        check = check_prepared_prior(family=args.family, expected_entry=args.entry_sha256,
+                                    receipt_path=args.prepared_receipt)
+        args.output.mkdir(parents=True, exist_ok=True)
+        (args.output / "prepared-prior.json").write_text(json.dumps(check, indent=2) + "\n")
+        return
     from spicy_regs.sources.publication import current_index
 
     record_invocation(family=args.family, expected_entry=args.entry_sha256, publish=args.publish,

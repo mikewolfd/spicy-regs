@@ -291,8 +291,12 @@ reader compatibility and concurrent ordinary writers.
 
 Bind `expected_entry_sha256` to the complete observed family entry with
 `scripts.native_conversion_invocation.entry_digest(entry)`. This digest
-includes timestamps, schemas and every table member. A changed entry refuses
-before conversion. The converter separately checks clean current main, the
+includes timestamps, schemas and every table member. The workflow checks it
+before conversion, then checks the prepared or downloaded artifact's captured
+entry against the same digest before publication. The first check does not
+lock the publication index; a change before the converter captures it makes
+the later check fail, retaining the candidate without publishing it.
+The converter separately checks clean current main, the
 installed locked wheel, complete processing restoration, source evidence and
 the exact stored predecessor before publication.
 

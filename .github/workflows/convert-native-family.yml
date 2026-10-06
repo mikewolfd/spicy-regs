@@ -87,6 +87,12 @@ jobs:
               --allow "$FAMILY" --work "$GITHUB_WORKSPACE/output/native/$FAMILY" \
               --expect-main "$GITHUB_SHA" --expect-spicy-docs "$WHEEL" --remote origin \
               2>&1 | tee output/logs/prepare.log
+      - name: Check the prepared artifact captured the exact requested prior
+        run: |
+          set -euo pipefail
+          uv run --frozen python scripts/native_conversion_invocation.py \
+            --family "$FAMILY" --entry-sha256 "$ENTRY_SHA256" --output output/invocation \
+            --prepared-receipt "$GITHUB_WORKSPACE/output/native/$FAMILY/conversion.json"
       - name: Publish those same prepared bytes and read them back anonymously
         if: inputs.publish
         env:
