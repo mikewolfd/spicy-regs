@@ -35,6 +35,8 @@ def test_actual_producer_local_upload_and_locked_http(tmp_path):
     result = json.loads((output/'RESULT.json').read_text())
     assert result['status'] == 'passed' and result['scope'] == 'local-simulation'
     assert result['productionActions'] == []
+    assert (output/'scratch/duckdb-home').is_dir()
+    assert list((output/'scratch/duckdb-extensions').rglob('httpfs.duckdb_extension'))
     phases = [json.loads(line) for line in (output/'phases.jsonl').read_text().splitlines()]
     completed = [phase for phase in phases if phase['status'] == 'passed']
     assert len(completed) == 6

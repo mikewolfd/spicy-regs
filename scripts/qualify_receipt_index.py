@@ -213,7 +213,7 @@ def serve(objects: dict[str, Path], request_log: Path, marker: dict[str, str]):
         worker.join()
 
 
-def connection(paths: list[str], *, remote: bool):
+def connection(paths: list[str], *, remote: bool, scratch: Path):
     from spicy_regs.mcp_server import _apply_security_settings
     con = duckdb.connect()
     try:
@@ -222,6 +222,12 @@ def connection(paths: list[str], *, remote: bool):
         con.execute("SET max_temp_directory_size='32GB'")
         con.execute('SET allow_persistent_secrets=false')
         if remote:
+            home = scratch / 'duckdb-home'
+            extensions = scratch / 'duckdb-extensions'
+            home.mkdir(exist_ok=True)
+            extensions.mkdir(exist_ok=True)
+            con.execute('SET home_directory=?', [str(home)])
+            con.execute('SET extension_directory=?', [str(extensions)])
             load_public_http(con, retries={})
             con.execute('SET http_timeout=60')
         _apply_security_settings(con, paths)
@@ -279,7 +285,7 @@ def main():
         (args.output/'descriptor.json').write_text(json.dumps(descriptor, indent=2)+'\n')
     with phase(log, 'sample-keys-and-local-locked-oracle') as record:
         probes = requests(args.output/KEY, args.dataset, scratch)
-        with connection([str(args.receipts), str(args.output/KEY)], remote=False) as con:
+        with connection([str(args.receipts), str(args.output/KEY)], remote=False, scratch=scratch) as con:
             expected = [lookup_receipts(con.cursor(), str(args.receipts), str(args.output/KEY), descriptor,
                 receipt, dataset=args.dataset, record_ids=probe) for probe in probes]
         if [len(rows) for rows in expected[-1]] != [1, 0, 1] or expected[-1][0] != expected[-1][2]:
@@ -303,7 +309,7 @@ def main():
             locations = {member['source']: base+member['route'] for member in members}
             receipt_url, index_url = locations[str(args.receipts)], locations[str(args.output/KEY)]
             before = time.monotonic()
-            with connection([receipt_url, index_url], remote=True) as con:
+            with connection([receipt_url, index_url], remote=True, scratch=scratch) as con:
                 check_reader(con.cursor(), index_url, descriptor, receipt)
                 record['coldAdmissionSeconds'] = time.monotonic()-before
                 record['lookups'] = []
