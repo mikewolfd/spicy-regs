@@ -81,6 +81,7 @@ def test_exact_identity_keeps_api_observations_and_receipt_roundtrip(tmp_path):
     for name in ("abstract", "report_nature", "source_route", "update_date"):
         assert [row[name] for row in rows] == [row[name] for row in before]
     subject, receipts = write_congress_dataset(output, tmp_path / "native", dataset="house_communications", generation_id="new")
+    assert subject is not None
     restored = tmp_path / "restored.parquet"
     restore_processing_input((subject,), receipts, restored, dataset="house_communications", generation_id="new")
     assert pq.read_table(restored).to_pylist() == rows
@@ -366,6 +367,7 @@ def test_actual_receipt_build_injects_selected_issue_pin_through_house_wrapper(t
         "issue_date":"2026-09-17T04:00:00Z", "package_id":package, "update_date":"2026-09-17T00:00:00Z", "detail_read":"true"}
     pq.write_table(pa.Table.from_pylist([value], schema=schema), issue)
     subject, receipts = write_congress_dataset(issue, tmp_path / "selected-native-issues", dataset="record_issues", generation_id="record-pinned")
+    assert subject is not None
     remember_selection(tmp_path, [SelectedDataset("record_issues", (subject,), receipts, "record-pinned")])
     pipeline = HouseCommunicationsRollup(output_dir=tmp_path)
     pipeline.source_evidence = args["evidence"]
