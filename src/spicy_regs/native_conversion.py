@@ -288,8 +288,18 @@ def _rollup_built(cls, generation: Path, retained: Mapping[str, Path], base: str
                   evidence: tuple[Path, ...], selection_root: Path | None = None) -> _Built:
     from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
 
+    def exact(dataset: str, restored: Path) -> Path:
+        if cls.name in {"roll-call-votes", "member-vote-terms"}:
+            _check_processing_restore(retained[dataset + ".parquet"], restored, label="Congress")
+        return restored
+
+    def restore(dataset: str) -> Path:
+        restored = SelectedPriors(work / "restored" / uuid4().hex,
+                                  root=selection_root or work / "build", public_url="").get(dataset)
+        return exact(dataset, restored)
+
     def read_published(dataset: str, index: Mapping) -> int:
-        restored = SelectedPriors(work / "read-back" / uuid4().hex, index=index, public_url=base).get(dataset)
+        restored = exact(dataset, SelectedPriors(work / "read-back" / uuid4().hex, index=index, public_url=base).get(dataset))
         original = retained[dataset + ".parquet"]
         if original.is_dir() and _has_differences(_table_differences(restored, original)):
             raise ValueError(f"{dataset}: published native readback changed retained members")
@@ -298,7 +308,7 @@ def _rollup_built(cls, generation: Path, retained: Mapping[str, Path], base: str
     return _Built(
         generation,
         {policy.dataset: policy.policy_version for policy in cls.receipt_policies},
-        lambda dataset: SelectedPriors(work / "restored" / uuid4().hex, root=selection_root or work / "build", public_url="").get(dataset),
+        restore,
         read_published,
         evidence,
         frozenset(cls.added_tables),
@@ -388,6 +398,19 @@ def _convert_regulatory_base(cls, captured: Mapping, retained: Mapping[str, Path
                                   (evidence.artifact_dir,) if evidence else ())
 
 
+def _check_processing_restore(original: Path, restored: Path, *, label: str) -> Path:
+    """Refuse any change in complete processing schema, metadata, ordered values or repetitions."""
+    from itertools import zip_longest
+
+    expected, actual = pq.ParquetFile(original), pq.ParquetFile(restored)
+    if not expected.schema_arrow.equals(actual.schema_arrow, check_metadata=True):
+        raise ValueError(f"{label} processing schema or metadata changed")
+    for before, after in zip_longest(expected.iter_batches(batch_size=1000), actual.iter_batches(batch_size=1000)):
+        if before is None or after is None or not before.equals(after):
+            raise ValueError(f"{label} processing values, order or repetitions changed")
+    return restored
+
+
 def _regulatory_base_built(cls, generation: Path, retained: Mapping[str, Path], base: str, work: Path,
                            generation_id: str, evidence: tuple[Path, ...]) -> _Built:
     from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
@@ -396,15 +419,7 @@ def _regulatory_base_built(cls, generation: Path, retained: Mapping[str, Path], 
     dataset = cls.output.removesuffix(".parquet")
 
     def exact(restored: Path) -> Path:
-        original, actual = pq.ParquetFile(retained[cls.output]), pq.ParquetFile(restored)
-        if not original.schema_arrow.equals(actual.schema_arrow, check_metadata=True):
-            raise ValueError("Regulatory processing schema or metadata changed")
-        from itertools import zip_longest
-
-        for expected, observed in zip_longest(original.iter_batches(batch_size=1000), actual.iter_batches(batch_size=1000)):
-            if expected is None or observed is None or not expected.equals(observed):
-                raise ValueError("Regulatory processing values, order or repetitions changed")
-        return restored
+        return _check_processing_restore(retained[cls.output], restored, label="Regulatory")
 
     def restore(name: str) -> Path:
         if name != dataset:

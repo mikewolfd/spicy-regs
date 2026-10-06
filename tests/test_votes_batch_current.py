@@ -272,9 +272,9 @@ def test_control_character_in_receipt_context_routes_to_reference(tmp_path, monk
         assert pq.read_table(reference).equals(pq.read_table(actual))
 
 
-def test_selected_prior_preserves_current_row_restore_and_cached_source(tmp_path, monkeypatch):
+def test_selected_prior_batches_exact_current_restore_and_caches_source(tmp_path, monkeypatch):
     from types import SimpleNamespace
-    from spicy_regs import congress_bulk
+    from spicy_regs.congress_receipts import restore_processing_input as public_restore
     from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
 
     source = _source(tmp_path, "member_votes", _member_votes(5))
@@ -283,14 +283,18 @@ def test_selected_prior_preserves_current_row_restore_and_cached_source(tmp_path
     prior = SelectedPriors(tmp_path / "prior")
     prior.selected = SimpleNamespace(select=lambda dataset: SimpleNamespace(  # ty: ignore[invalid-assignment]
         subjects=(subject,), receipts=receipts, generation_id=GENERATION))
-    def unexpected_batch_restore(*args, **kwargs):
-        raise AssertionError("Current SelectedPriors must preserve its public row restore")
-    monkeypatch.setattr(congress_bulk, "restore_input", unexpected_batch_restore)
+    taken = _taken(monkeypatch, "restore_input")
+    reference = public_restore(subject, receipts, tmp_path / "reference.parquet",
+                               dataset="member_votes", generation_id=GENERATION)
+    assert taken == []  # The public API still defaults to the row reader.
     restored = prior.get("member_votes")
+    assert taken == ["restore_input"]
+    assert pq.read_table(restored).equals(pq.read_table(reference), check_metadata=True)
     assert pq.read_table(restored).equals(pq.read_table(source), check_metadata=True)
     original = restored.read_bytes()
     assert prior.get("member_votes") == restored
     assert restored.read_bytes() == original
+    assert taken == ["restore_input"]
 
 
 def test_unproven_bundle_dispatch_uses_exact_row_validator(tmp_path, monkeypatch):
